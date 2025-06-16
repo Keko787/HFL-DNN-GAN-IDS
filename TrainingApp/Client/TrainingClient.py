@@ -13,6 +13,7 @@ if 'TF_USE_LEGACY_KERAS' in os.environ:
 import flwr as fl
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
+
 # other plugins
 # import math
 # import glob

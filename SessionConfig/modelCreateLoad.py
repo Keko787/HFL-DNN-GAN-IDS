@@ -31,10 +31,10 @@ from sklearn.utils import shuffle
 # import seaborn as sns
 # import pickle
 # import joblib
-from ModelStructures.NIDS.NIDS_Struct import create_CICIOT_Model, create_IOTBOTNET_Model, cnn_lstm_gru_model_multiclass, cnn_lstm_gru_model_binary, cnn_lstm_gru_model_multiclass_dynamic, create_optimized_NIDS_model
-from ModelStructures.GAN.discriminatorStruct import create_discriminator_binary, create_discriminator_binary_optimized, create_discriminator_binary, build_AC_discriminator, create_discriminator
-from ModelStructures.GAN.generatorStruct import create_generator, create_generator_optimized, build_AC_generator
-from ModelStructures.GAN.ganStruct import create_model, load_GAN_model, create_model_binary, create_model_binary_optimized, create_model_W_binary, load_and_merge_ACmodels, create_model_AC
+from modelStructures.NIDS.NIDS_Struct import create_CICIOT_Model, create_IOTBOTNET_Model, cnn_lstm_gru_model_multiclass, cnn_lstm_gru_model_binary, cnn_lstm_gru_model_multiclass_dynamic, create_optimized_NIDS_model
+from modelStructures.GAN.discriminatorStruct import create_discriminator_binary, create_discriminator_binary_optimized, create_discriminator_binary, build_AC_discriminator, create_discriminator
+from modelStructures.GAN.generatorStruct import create_generator, create_generator_optimized, build_AC_generator
+from modelStructures.GAN.ganStruct import create_model, load_GAN_model, create_model_binary, create_model_binary_optimized, create_model_W_binary, load_and_merge_ACmodels, create_model_AC
 
 
 def modelCreateLoad(modelType, train_type, pretrainedNids, pretrainedGan, pretrainedGenerator, pretrainedDiscriminator,
