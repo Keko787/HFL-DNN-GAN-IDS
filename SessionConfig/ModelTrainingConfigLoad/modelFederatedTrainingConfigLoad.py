@@ -7,7 +7,7 @@ import os
 import random
 from datetime import datetime
 import argparse
-sys.path.append(os.path.abspath('..'))
+sys.path.append(os.path.abspath('../..'))
 # TensorFlow & Flower
 if 'TF_USE_LEGACY_KERAS' in os.environ:
     del os.environ['TF_USE_LEGACY_KERAS']
@@ -31,15 +31,15 @@ from sklearn.utils import shuffle
 # import pickle
 # import joblib
 
-from ClientModelTrainingConfig.HFLClientModelTrainingConfig.NIDS.NIDSModelClientConfig import FlNidsClient
-from ClientModelTrainingConfig.HFLClientModelTrainingConfig.GAN.FullModel.GANBinaryModelClientConfig import GanBinaryClient
-from ClientModelTrainingConfig.HFLClientModelTrainingConfig.GAN.Discriminator.DiscBinaryModelClientConfig import BinaryDiscriminatorClient
-from ClientModelTrainingConfig.HFLClientModelTrainingConfig.GAN.Generator.GenModelClientConfig import GeneratorClient
-from ClientModelTrainingConfig.HFLClientModelTrainingConfig.GAN.FullModel.WGANBinaryClientTrainingConfig import BinaryWGanClient
-from ClientModelTrainingConfig.HFLClientModelTrainingConfig.GAN.Discriminator.WGAN_DiscriminatorBinaryClientTrainingConfig import BinaryWDiscriminatorClient
-from ClientModelTrainingConfig.HFLClientModelTrainingConfig.GAN.Generator.WGAN_GeneratorBinaryClientTrainingConfig import BinaryWGeneratorClient
-from ClientModelTrainingConfig.HFLClientModelTrainingConfig.GAN.FullModel.ACGANClientTrainingConfig import ACGanClient
-from ClientModelTrainingConfig.HFLClientModelTrainingConfig.GAN.Discriminator.AC_DiscModelClientConfig import ACDiscriminatorClient
+from ModelTrainingConfig.ClientModelTrainingConfig.HFLClientModelTrainingConfig.NIDS.NIDSModelClientConfig import FlNidsClient
+from ModelTrainingConfig.ClientModelTrainingConfig.HFLClientModelTrainingConfig.GAN.FullModel.GANBinaryModelClientConfig import GanBinaryClient
+from ModelTrainingConfig.ClientModelTrainingConfig.HFLClientModelTrainingConfig.GAN.Discriminator.DiscBinaryModelClientConfig import BinaryDiscriminatorClient
+from ModelTrainingConfig.ClientModelTrainingConfig.HFLClientModelTrainingConfig.GAN.Generator.GenModelClientConfig import GeneratorClient
+from ModelTrainingConfig.ClientModelTrainingConfig.HFLClientModelTrainingConfig.GAN.FullModel.WGANBinaryClientTrainingConfig import BinaryWGanClient
+from ModelTrainingConfig.ClientModelTrainingConfig.HFLClientModelTrainingConfig.GAN.Discriminator.WGAN_DiscriminatorBinaryClientTrainingConfig import BinaryWDiscriminatorClient
+from ModelTrainingConfig.ClientModelTrainingConfig.HFLClientModelTrainingConfig.GAN.Generator.WGAN_GeneratorBinaryClientTrainingConfig import BinaryWGeneratorClient
+from ModelTrainingConfig.ClientModelTrainingConfig.HFLClientModelTrainingConfig.GAN.FullModel.ACGANClientTrainingConfig import ACGanClient
+from ModelTrainingConfig.ClientModelTrainingConfig.HFLClientModelTrainingConfig.GAN.Discriminator.AC_DiscModelClientConfig import ACDiscriminatorClient
 
 def modelFederatedTrainingConfigLoad(nids, discriminator, generator, GAN, dataset_used, model_type, train_type,
                                    earlyStopEnabled, DP_enabled, lrSchedRedEnabled, modelCheckpointEnabled, X_train_data,
