@@ -9,7 +9,7 @@ import time
 from datetime import datetime
 import argparse
 
-
+sys.path.append(os.path.abspath('../../../..'))
 if 'TF_USE_LEGACY_KERAS' in os.environ:
     del os.environ['TF_USE_LEGACY_KERAS']
 
@@ -45,7 +45,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler, RobustScaler, PowerTransformer, LabelEncoder, MinMaxScaler
 from sklearn.utils import shuffle
 
-from idsSystem.detectIntrusions import predict_and_act
+from InferenceApp.Detection.detectIntrusions import predict_and_act
 ################################################################################################################
 #                                       NIDS Training                                       #
 ################################################################################################################
