@@ -7,7 +7,7 @@ import os
 import random
 from datetime import datetime
 import argparse
-sys.path.append(os.path.abspath('../..'))
+sys.path.append(os.path.abspath('../../..'))
 # TensorFlow & Flower
 if 'TF_USE_LEGACY_KERAS' in os.environ:
     del os.environ['TF_USE_LEGACY_KERAS']

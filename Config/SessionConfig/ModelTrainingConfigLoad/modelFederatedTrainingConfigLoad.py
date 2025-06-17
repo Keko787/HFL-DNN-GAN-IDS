@@ -6,30 +6,27 @@ import sys
 import os
 import random
 from datetime import datetime
-import argparse
-sys.path.append(os.path.abspath('../..'))
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from numpy import expand_dims
+
+sys.path.append(os.path.abspath('../../..'))
+
 # TensorFlow & Flower
 if 'TF_USE_LEGACY_KERAS' in os.environ:
     del os.environ['TF_USE_LEGACY_KERAS']
+
 import flwr as fl
 import tensorflow as tf
 from tensorflow.keras.metrics import AUC, Precision, Recall
 from tensorflow.keras.losses import LogCosh
 from tensorflow.keras.optimizers import Adam
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
+
 # other plugins
-import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
-from numpy import expand_dims
 from sklearn.model_selection import train_test_split
 from sklearn.utils import shuffle
-# import math
-# import glob
-# from tqdm import tqdm
-# import seaborn as sns
-# import pickle
-# import joblib
 
 from ModelTrainingConfig.ClientModelTrainingConfig.HFLClientModelTrainingConfig.NIDS.NIDSModelClientConfig import FlNidsClient
 from ModelTrainingConfig.ClientModelTrainingConfig.HFLClientModelTrainingConfig.GAN.FullModel.GANBinaryModelClientConfig import GanBinaryClient
@@ -40,6 +37,10 @@ from ModelTrainingConfig.ClientModelTrainingConfig.HFLClientModelTrainingConfig.
 from ModelTrainingConfig.ClientModelTrainingConfig.HFLClientModelTrainingConfig.GAN.Generator.WGAN_GeneratorBinaryClientTrainingConfig import BinaryWGeneratorClient
 from ModelTrainingConfig.ClientModelTrainingConfig.HFLClientModelTrainingConfig.GAN.FullModel.ACGANClientTrainingConfig import ACGanClient
 from ModelTrainingConfig.ClientModelTrainingConfig.HFLClientModelTrainingConfig.GAN.Discriminator.AC_DiscModelClientConfig import ACDiscriminatorClient
+
+################################################################################################################
+#                      Federation TRAINING CONFIG CLIENT CLASS OBJECT LOADER                                      #
+################################################################################################################
 
 def modelFederatedTrainingConfigLoad(nids, discriminator, generator, GAN, dataset_used, model_type, train_type,
                                    earlyStopEnabled, DP_enabled, lrSchedRedEnabled, modelCheckpointEnabled, X_train_data,

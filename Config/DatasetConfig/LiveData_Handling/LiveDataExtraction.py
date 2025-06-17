@@ -157,7 +157,7 @@ def extract_features(pcap_file):
 
 
 # Usage Example:
-df = extract_features("../../../datasets/LIVEDATA/PCAP/test3.pcapng")
+df = extract_features("../../../../datasets/LIVEDATA/PCAP/test3.pcapng")
 print(df.head())
 
 # Save the extracted features to a CSV file
