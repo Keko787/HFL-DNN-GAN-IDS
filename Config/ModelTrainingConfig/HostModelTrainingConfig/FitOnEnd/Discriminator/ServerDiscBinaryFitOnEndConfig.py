@@ -133,7 +133,7 @@ class DiscriminatorSyntheticStrategy(fl.server.strategy.FedAvg):
             print(f'Epoch {epoch + 1}, Validation D Loss: {val_disc_loss}')
 
         # Save the fine-tuned model
-        self.discriminator.save("disc_model_fine_tuned.h5")
+        self.discriminator.save("../../../../../ModelArchive/disc_model_fine_tuned.h5")
         print(f"Model fine-tuned and saved after round {server_round}.")
 
         # Send updated weights back to clients

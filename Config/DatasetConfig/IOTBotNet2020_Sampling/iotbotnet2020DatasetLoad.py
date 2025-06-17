@@ -53,19 +53,19 @@ def loadIOTBOTNET(poisonedDataType=None):
     sample_size = 1
 
     if poisonedDataType == "LF33":
-        DATASET_DIRECTORY = '/root/datasets/IOTBOTNET2020_POISONEDLF33'
+        DATASET_DIRECTORY = '../../../../datasets/IOTBOTNET2020_POISONEDLF33'
 
     elif poisonedDataType == "LF66":
-        DATASET_DIRECTORY = '/root/datasets/IOTBOTNET2020_POISONEDLF66'
+        DATASET_DIRECTORY = '../../../../datasets/IOTBOTNET2020_POISONEDLF66'
 
     elif poisonedDataType == "FN33":
-        DATASET_DIRECTORY = '/root/datasets/IOTBOTNET2020_POISONEDFN33'
+        DATASET_DIRECTORY = '../../../../datasets/IOTBOTNET2020_POISONEDFN33'
 
     elif poisonedDataType == "FN66":
-        DATASET_DIRECTORY = '/root/datasets/IOTBOTNET2020_POISONEDFN66'
+        DATASET_DIRECTORY = '../../../../datasets/IOTBOTNET2020_POISONEDFN66'
 
     else:
-        DATASET_DIRECTORY = '/root/datasets/IOTBOTNET2020'
+        DATASET_DIRECTORY = '../../../../datasets/IOTBOTNET2020'
 
     # ---                   IOTBOTNET relevant features/attribute mappings                    --- #
     relevant_features_iotbotnet = [

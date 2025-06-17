@@ -28,15 +28,15 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 from sklearn.model_selection import train_test_split
 from sklearn.utils import shuffle
 
-from ModelTrainingConfig.ClientModelTrainingConfig.HFLClientModelTrainingConfig.NIDS.NIDSModelClientConfig import FlNidsClient
-from ModelTrainingConfig.ClientModelTrainingConfig.HFLClientModelTrainingConfig.GAN.FullModel.GANBinaryModelClientConfig import GanBinaryClient
-from ModelTrainingConfig.ClientModelTrainingConfig.HFLClientModelTrainingConfig.GAN.Discriminator.DiscBinaryModelClientConfig import BinaryDiscriminatorClient
-from ModelTrainingConfig.ClientModelTrainingConfig.HFLClientModelTrainingConfig.GAN.Generator.GenModelClientConfig import GeneratorClient
-from ModelTrainingConfig.ClientModelTrainingConfig.HFLClientModelTrainingConfig.GAN.FullModel.WGANBinaryClientTrainingConfig import BinaryWGanClient
-from ModelTrainingConfig.ClientModelTrainingConfig.HFLClientModelTrainingConfig.GAN.Discriminator.WGAN_DiscriminatorBinaryClientTrainingConfig import BinaryWDiscriminatorClient
-from ModelTrainingConfig.ClientModelTrainingConfig.HFLClientModelTrainingConfig.GAN.Generator.WGAN_GeneratorBinaryClientTrainingConfig import BinaryWGeneratorClient
-from ModelTrainingConfig.ClientModelTrainingConfig.HFLClientModelTrainingConfig.GAN.FullModel.ACGANClientTrainingConfig import ACGanClient
-from ModelTrainingConfig.ClientModelTrainingConfig.HFLClientModelTrainingConfig.GAN.Discriminator.AC_DiscModelClientConfig import ACDiscriminatorClient
+from Config.ModelTrainingConfig.ClientModelTrainingConfig.HFLClientModelTrainingConfig.NIDS.NIDSModelClientConfig import FlNidsClient
+from Config.ModelTrainingConfig.ClientModelTrainingConfig.HFLClientModelTrainingConfig.GAN.FullModel.GANBinaryModelClientConfig import GanBinaryClient
+from Config.ModelTrainingConfig.ClientModelTrainingConfig.HFLClientModelTrainingConfig.GAN.Discriminator.DiscBinaryModelClientConfig import BinaryDiscriminatorClient
+from Config.ModelTrainingConfig.ClientModelTrainingConfig.HFLClientModelTrainingConfig.GAN.Generator.GenModelClientConfig import GeneratorClient
+from Config.ModelTrainingConfig.ClientModelTrainingConfig.HFLClientModelTrainingConfig.GAN.FullModel.WGANBinaryClientTrainingConfig import BinaryWGanClient
+from Config.ModelTrainingConfig.ClientModelTrainingConfig.HFLClientModelTrainingConfig.GAN.Discriminator.WGAN_DiscriminatorBinaryClientTrainingConfig import BinaryWDiscriminatorClient
+from Config.ModelTrainingConfig.ClientModelTrainingConfig.HFLClientModelTrainingConfig.GAN.Generator.WGAN_GeneratorBinaryClientTrainingConfig import BinaryWGeneratorClient
+from Config.ModelTrainingConfig.ClientModelTrainingConfig.HFLClientModelTrainingConfig.GAN.FullModel.ACGANClientTrainingConfig import ACGanClient
+from Config.ModelTrainingConfig.ClientModelTrainingConfig.HFLClientModelTrainingConfig.GAN.Discriminator.AC_DiscModelClientConfig import ACDiscriminatorClient
 
 ################################################################################################################
 #                      Federation TRAINING CONFIG CLIENT CLASS OBJECT LOADER                                      #

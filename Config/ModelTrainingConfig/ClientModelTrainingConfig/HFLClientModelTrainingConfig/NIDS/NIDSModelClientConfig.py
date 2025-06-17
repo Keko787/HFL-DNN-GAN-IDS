@@ -12,7 +12,7 @@ from numpy import expand_dims
 import pandas as pd
 import matplotlib.pyplot as plt
 
-sys.path.append(os.path.abspath('../../../../..'))
+sys.path.append(os.path.abspath('../../../../../..'))
 
 if 'TF_USE_LEGACY_KERAS' in os.environ:
     del os.environ['TF_USE_LEGACY_KERAS']
@@ -30,7 +30,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler, RobustScaler, PowerTransformer, LabelEncoder, MinMaxScaler
 from sklearn.utils import shuffle
 
-from InferenceApp.Detection.detectIntrusions import predict_and_act
+from App.InferenceApp.Detection.detectIntrusions import predict_and_act
 ################################################################################################################
 #                                       NIDS Training                                       #
 ################################################################################################################
@@ -269,7 +269,7 @@ class FlNidsClient(fl.client.NumPyClient):
             f.write("\n")
 
     def save(self, save_name):
-        self.model.save(f"../../../../ModelArchive/fed_NIDS_{save_name}.h5")
+        self.model.save(f"../../../../../../ ModelArchive/fed_NIDS_{save_name}.h5")
 
 
 def recordConfig(name, dataset_used, DP_enabled, adversarialTrainingEnabled, regularizationEnabled, input_dim, epochs,

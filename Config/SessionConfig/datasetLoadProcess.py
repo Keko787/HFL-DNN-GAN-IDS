@@ -1,8 +1,8 @@
-from DatasetConfig.CICIOT2023_Sampling.ciciot2023DatasetLoadV2 import (loadCICIOT)
-from DatasetConfig.IOTBotNet2020_Sampling.iotbotnet2020DatasetLoad import loadIOTBOTNET
-from DatasetConfig.IoT_Handling.IotDatasetLoadProcess import load_and_preprocess_data, feature_selection, prepare_data, prepare_data_min_max
-from DatasetConfig.LiveData_Handling.loadLiveData import loadLiveCaptureData
-from DatasetConfig.Dataset_Preprocessing.datasetPreprocess import preprocess_dataset, preprocess_AC_dataset, preprocess_live_dataset
+from Config.DatasetConfig.CICIOT2023_Sampling.ciciot2023DatasetLoadV2 import (loadCICIOT)
+from Config.DatasetConfig.IOTBotNet2020_Sampling.iotbotnet2020DatasetLoad import loadIOTBOTNET
+from Config.DatasetConfig.IoT_Handling.IotDatasetLoadProcess import load_and_preprocess_data, feature_selection, prepare_data, prepare_data_min_max
+from Config.DatasetConfig.LiveData_Handling.loadLiveData import loadLiveCaptureData
+from Config.DatasetConfig.Dataset_Preprocessing.datasetPreprocess import preprocess_dataset, preprocess_AC_dataset, preprocess_live_dataset
 
 
 # --- Load Data ---#
@@ -60,7 +60,7 @@ def datasetLoadProcess(dataset_used, dataset_preprocessing):
     elif dataset_used == "IOT":
         '''Load IOT -- Bishwas's Dataset loading function'''
         # -- file path to preprocessed dataset
-        file_path = 'datasets/50000_5000_IOT112andAllfields_Preprocessed.csv'
+        file_path = '../../../../datasets/IOT/50000_5000_IOT112andAllfields_Preprocessed.csv'
         # file_path = 'datasets/combined_edgeIIot_500k_custom_DDos.csv'
         X, y = load_and_preprocess_data(file_path)
 

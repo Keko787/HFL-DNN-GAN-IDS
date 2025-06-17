@@ -10,7 +10,7 @@ from sklearn.utils import shuffle
 
 # ---                   IOTBOTNET relevant features/attribute mappings CONSTANTS                   --- #
 SAMPLE_SIZE = 1
-DATASET_DIRECTORY_BASE = '/root/datasets/IOTBOTNET2020'
+DATASET_DIRECTORY_BASE = '../../../../datasets/IOTBOTNET2020'
 
 # RELEVANT_ATTRIBUTES_IOTBOTNET = [
 #         'Src_Port', 'Pkt_Size_Avg', 'Bwd_Pkts/s', 'Pkt_Len_Mean', 'Dst_Port', 'Bwd_IAT_Max', 'Flow_IAT_Mean',

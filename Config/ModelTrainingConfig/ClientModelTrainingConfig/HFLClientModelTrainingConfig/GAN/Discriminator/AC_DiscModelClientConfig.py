@@ -619,4 +619,4 @@ class ACDiscriminatorClient(fl.client.NumPyClient):
 
     def save(self, save_name):
         # Save each submodel separately
-        self.discriminator.save(f"../../../../../ModelArchive/discriminator_fed_ACGAN_{save_name}.h5")
+        self.discriminator.save(f"../../../../../../ModelArchive/discriminator_fed_ACGAN_{save_name}.h5")

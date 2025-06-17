@@ -270,4 +270,4 @@ class BinaryWGeneratorClient(fl.client.NumPyClient):
         }
 
     def save(self, save_name):
-        self.generator.save(f"../../../../../ModelArchive/generator_fed_WGANGP_{save_name}.h5")
+        self.generator.save(f"../../../../../../ ModelArchive/generator_fed_WGANGP_{save_name}.h5")

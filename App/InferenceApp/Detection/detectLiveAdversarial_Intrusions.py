@@ -11,7 +11,7 @@ from sklearn.metrics import precision_score, recall_score, f1_score, classificat
 sys.path.append(os.path.abspath('..'))
 
 # Import preprocessing and dataset functions
-from datasetHandling.datasetLoadProcess import datasetLoadProcess
+from Config.SessionConfig.datasetLoadProcess import datasetLoadProcess
 
 
 # Load the trained models (NIDS and discriminator)

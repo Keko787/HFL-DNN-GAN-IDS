@@ -101,7 +101,7 @@ def load_data(file_path, current_size=None, data_limit=None):
 def loadLiveCaptureData(verbose=True, sample_size=1, dataset_size=1000):
 
     # INIT
-    DATASET_DIRECTORY = '../../datasets/LIVEDATA/CSV'
+    DATASET_DIRECTORY = '../../../../datasets/LIVEDATA/CSV'
 
     # --- File Paths for samples --- #
     if verbose:

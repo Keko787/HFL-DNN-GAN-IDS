@@ -255,7 +255,7 @@ class CentralNidsClient:
             f.write("\n")
 
     def save(self, save_name):
-        self.model.save(f"../../../../ModelArchive/local_NIDS_{save_name}.h5")
+        self.model.save(f"../../../../../../ModelArchive/local_NIDS_{save_name}.h5")
 
 
 def recordConfig(name, dataset_used, DP_enabled, regularizationEnabled, input_dim, epochs,

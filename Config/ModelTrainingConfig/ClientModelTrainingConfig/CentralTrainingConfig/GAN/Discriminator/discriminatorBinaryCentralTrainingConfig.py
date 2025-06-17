@@ -236,4 +236,4 @@ class CentralBinaryDiscriminator:
         return avg_disc_loss, len(self.x_test_ds), {}
 
     def save(self, save_name):
-        self.discriminator.save(f"../../../../../ModelArchive/discriminator_local_GAN_{save_name}.h5")
+        self.discriminator.save(f"../../../../../../ModelArchive/discriminator_local_GAN_{save_name}.h5")

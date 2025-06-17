@@ -11,7 +11,7 @@ from numpy import expand_dims
 import pandas as pd
 import matplotlib.pyplot as plt
 
-sys.path.append(os.path.abspath('..'))
+sys.path.append(os.path.abspath('../../..'))
 
 # TensorFlow & Flower
 if 'TF_USE_LEGACY_KERAS' in os.environ:
@@ -28,17 +28,17 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 from sklearn.model_selection import train_test_split
 from sklearn.utils import shuffle
 
-from ModelTrainingConfig.ClientModelTrainingConfig.CentralTrainingConfig.NIDS.nidsModelCentralTrainingConfig import CentralNidsClient, recordConfig
-from ModelTrainingConfig.ClientModelTrainingConfig.CentralTrainingConfig.GAN.Generator.generatorModelCentralTrainingConfig import CentralGenerator
-from ModelTrainingConfig.ClientModelTrainingConfig.CentralTrainingConfig.GAN.Discriminator.discriminatorBinaryCentralTrainingConfig import CentralBinaryDiscriminator
-from ModelTrainingConfig.ClientModelTrainingConfig.CentralTrainingConfig.GAN.FullModel.GANBinaryCentralTrainingConfig import CentralBinaryGan
-from ModelTrainingConfig.ClientModelTrainingConfig.CentralTrainingConfig.GAN.FullModel.WGANBinaryCentralTrainingConfig import CentralBinaryWGan
-from ModelTrainingConfig.ClientModelTrainingConfig.CentralTrainingConfig.GAN.Generator.WGenBinaryCentralTrainingConfig import CentralBinaryWGen
-from ModelTrainingConfig.ClientModelTrainingConfig.CentralTrainingConfig.GAN.Discriminator.WDiscBinaryCentralTrainingConfig import CentralBinaryWDisc
-from ModelTrainingConfig.ClientModelTrainingConfig.CentralTrainingConfig.GAN.FullModel.ACGANCentralTrainingConfig import CentralACGan
-from ModelTrainingConfig.ClientModelTrainingConfig.CentralTrainingConfig.GAN.Generator.ACGenCentralTrainingConfig import CentralACGenerator
-from ModelTrainingConfig.ClientModelTrainingConfig.CentralTrainingConfig.GAN.Discriminator.ACDiscREALCentralTrainingConfig import CentralACDiscREAL
-from ModelTrainingConfig.ClientModelTrainingConfig.CentralTrainingConfig.GAN.Discriminator.ACDiscCentralTrainingConfig import CentralACDisc
+from Config.ModelTrainingConfig.ClientModelTrainingConfig.CentralTrainingConfig.NIDS.nidsModelCentralTrainingConfig import CentralNidsClient, recordConfig
+from Config.ModelTrainingConfig.ClientModelTrainingConfig.CentralTrainingConfig.GAN.Generator.generatorModelCentralTrainingConfig import CentralGenerator
+from Config.ModelTrainingConfig.ClientModelTrainingConfig.CentralTrainingConfig.GAN.Discriminator.discriminatorBinaryCentralTrainingConfig import CentralBinaryDiscriminator
+from Config.ModelTrainingConfig.ClientModelTrainingConfig.CentralTrainingConfig.GAN.FullModel.GANBinaryCentralTrainingConfig import CentralBinaryGan
+from Config.ModelTrainingConfig.ClientModelTrainingConfig.CentralTrainingConfig.GAN.FullModel.WGANBinaryCentralTrainingConfig import CentralBinaryWGan
+from Config.ModelTrainingConfig.ClientModelTrainingConfig.CentralTrainingConfig.GAN.Generator.WGenBinaryCentralTrainingConfig import CentralBinaryWGen
+from Config.ModelTrainingConfig.ClientModelTrainingConfig.CentralTrainingConfig.GAN.Discriminator.WDiscBinaryCentralTrainingConfig import CentralBinaryWDisc
+from Config.ModelTrainingConfig.ClientModelTrainingConfig.CentralTrainingConfig.GAN.FullModel.ACGANCentralTrainingConfig import CentralACGan
+from Config.ModelTrainingConfig.ClientModelTrainingConfig.CentralTrainingConfig.GAN.Generator.ACGenCentralTrainingConfig import CentralACGenerator
+from Config.ModelTrainingConfig.ClientModelTrainingConfig.CentralTrainingConfig.GAN.Discriminator.ACDiscREALCentralTrainingConfig import CentralACDiscREAL
+from Config.ModelTrainingConfig.ClientModelTrainingConfig.CentralTrainingConfig.GAN.Discriminator.ACDiscCentralTrainingConfig import CentralACDisc
 
 ################################################################################################################
 #                      CENTRAL/Local TRAINING CONFIG CLIENT CLASS OBJECT LOADER                                #

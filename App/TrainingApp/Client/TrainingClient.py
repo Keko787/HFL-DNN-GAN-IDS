@@ -22,11 +22,11 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 # import pickle
 # import joblib
 
-from SessionConfig.datasetLoadProcess import datasetLoadProcess
-from SessionConfig.hyperparameterLoading import hyperparameterLoading
-from SessionConfig.modelCreateLoad import modelCreateLoad
-from SessionConfig.ModelTrainingConfigLoad.modelCentralTrainingConfigLoad import modelCentralTrainingConfigLoad
-from SessionConfig.ModelTrainingConfigLoad.modelFederatedTrainingConfigLoad import modelFederatedTrainingConfigLoad
+from Config.SessionConfig.datasetLoadProcess import datasetLoadProcess
+from Config.SessionConfig.hyperparameterLoading import hyperparameterLoading
+from Config.SessionConfig.modelCreateLoad import modelCreateLoad
+from Config.SessionConfig.ModelTrainingConfigLoad.modelCentralTrainingConfigLoad import modelCentralTrainingConfigLoad
+from Config.SessionConfig.ModelTrainingConfigLoad.modelFederatedTrainingConfigLoad import modelFederatedTrainingConfigLoad
 
 ################################################################################################################
 #                                                   Execute                                                   #

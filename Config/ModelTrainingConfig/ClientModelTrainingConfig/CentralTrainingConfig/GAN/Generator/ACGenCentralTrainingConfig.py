@@ -612,4 +612,4 @@ class CentralACGenerator:
 
     def save(self, save_name):
         # Save each submodel separately
-        self.generator.save(f"../../../../../ModelArchive/generator_local_ACGAN_{save_name}.h5")
+        self.generator.save(f"../../../../../../ModelArchive/generator_local_ACGAN_{save_name}.h5")

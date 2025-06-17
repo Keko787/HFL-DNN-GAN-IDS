@@ -2,7 +2,6 @@ import os
 import random
 import pandas as pd
 from sklearn.utils import shuffle
-from sklearn.cluster import KMeans
 
 
 #---                 Constants               ---#
@@ -253,7 +252,7 @@ def loadCICIOT(poisonedDataType=None, verbose=True, train_sample_size=25, test_s
                training_dataset_size=220000, testing_dataset_size=80000, attack_eval_samples_ratio=0.1, random_seed=47):
 
     # -- INIT Critical Variables -- #
-    DATASET_DIRECTORY = f'/root/datasets/CICIOT2023_POISONED{poisonedDataType}' if poisonedDataType else '../../datasets/CICIOT2023'
+    DATASET_DIRECTORY = f'../../../../datasets/CICIOT2023_POISONED{poisonedDataType}' if poisonedDataType else '../../../../datasets/CICIOT2023'
 
     training_benign_size = training_dataset_size // 2
     testing_benign_size = testing_dataset_size // 2

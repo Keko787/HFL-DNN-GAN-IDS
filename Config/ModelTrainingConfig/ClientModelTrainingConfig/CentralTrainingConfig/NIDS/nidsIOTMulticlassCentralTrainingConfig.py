@@ -34,7 +34,7 @@ class NidsIoTBinaryCentralConfig:
         plt.close()
 
     def save(self):
-        model.save('../../../../ModelArchive/cnn_lstm_gru_model_binary_working.h5')
+        model.save('../../../../../../ ModelArchive/cnn_lstm_gru_model_binary_working.h5')
 
 
     def train_and_evaluate(self, model, X_train, y_train, X_val, y_val, X_test, y_test):

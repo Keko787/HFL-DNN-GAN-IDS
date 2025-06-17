@@ -173,7 +173,7 @@ class WDiscriminatorSyntheticStrategy(fl.server.strategy.FedAvg):
                 print(f'Epoch {epoch + 1}, Validation NIDS Loss: {val_nids_loss:.4f}')
 
         # Save the fine-tuned model
-        self.discriminator.save("../../../../ModelArchive/Wdisc_model_fine_tuned.h5")
+        self.discriminator.save("../../../../../ModelArchive/Wdisc_model_fine_tuned.h5")
         print(f"Model fine-tuned and saved after round {server_round}.")
 
         # Send updated weights back to clients

@@ -715,8 +715,8 @@ class ACGanClient(fl.client.NumPyClient):
         return d_loss_total, len(self.x_test), {}
 
     def save(self, save_name):
-        self.GAN.save(f"../../../../../ModelArchive/fed_ACGAN_{save_name}.h5")
+        self.GAN.save(f"../../../../../../ ModelArchive/fed_ACGAN_{save_name}.h5")
 
         # Save each submodel separately
-        self.generator.save(f"../../../../../ModelArchive/generator_fed_ACGAN_{save_name}.h5")
-        self.discriminator.save(f"../../../../../ModelArchive/discriminator_fed_ACGAN_{save_name}.h5")
+        self.generator.save(f"../../../../../../ ModelArchive/generator_fed_ACGAN_{save_name}.h5")
+        self.discriminator.save(f"../../../../../../ ModelArchive/discriminator_fed_ACGAN_{save_name}.h5")

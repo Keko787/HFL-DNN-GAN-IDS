@@ -447,12 +447,12 @@ class CentralBinaryGan:
         return avg_disc_loss, len(self.x_test_ds), {}
 
     def save(self, save_name):
-        self.gan.save(f"../../../../../ModelArchive/local_GAN_{save_name}.h5")
+        self.gan.save(f"../../../../../../ModelArchive/local_GAN_{save_name}.h5")
 
         # Assuming `model` is the GAN model created with Sequential([generator, discriminator])
         generator = self.gan.layers[0]
         discriminator = self.gan.layers[1]
 
         # Save each submodel separately
-        generator.save(f"../../../../../ModelArchive/generator_local_GAN_{save_name}.h5")
-        discriminator.save(f"../../../../../ModelArchive/discriminator_local_GAN_{save_name}.h5")
+        generator.save(f"../../../../../../ModelArchive/generator_local_GAN_{save_name}.h5")
+        discriminator.save(f"../../../../../../ModelArchive/discriminator_local_GAN_{save_name}.h5")

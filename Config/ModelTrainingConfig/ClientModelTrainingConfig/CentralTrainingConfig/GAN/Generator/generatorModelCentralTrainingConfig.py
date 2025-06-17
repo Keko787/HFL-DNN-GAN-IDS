@@ -179,4 +179,4 @@ class CentralGenerator:
         return float(gen_loss.numpy())
 
     def save(self, save_name):
-        self.generator.save(f"../../../../../ModelArchive/generator_local_GAN_{save_name}.h5")
+        self.generator.save(f"../../../../../../ModelArchive/generator_local_GAN_{save_name}.h5")

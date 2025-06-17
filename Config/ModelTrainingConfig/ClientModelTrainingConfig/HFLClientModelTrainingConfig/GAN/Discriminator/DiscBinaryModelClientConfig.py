@@ -223,4 +223,4 @@ class BinaryDiscriminatorClient(fl.client.NumPyClient):
         return avg_disc_loss, len(self.x_test), {}
 
     def save(self, save_name):
-        self.discriminator.save(f"../../../../../ModelArchive/discriminator_fed_GAN_{save_name}.h5")
+        self.discriminator.save(f"../../../../../../ModelArchive/discriminator_fed_GAN_{save_name}.h5")

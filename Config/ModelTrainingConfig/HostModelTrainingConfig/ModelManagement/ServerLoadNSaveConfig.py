@@ -5,7 +5,7 @@ from flwr.common import ndarrays_to_parameters, parameters_to_ndarrays
 
 # Load an existing pre-trained model, Save that model after training to the host
 class LoadSaveModelFedAvg(fl.server.strategy.FedAvg):
-    def __init__(self, model=None, model_save_path="global_model.h5", **kwargs):
+    def __init__(self, model=None, model_save_path="../../../../../ModelArchive/global_model.h5", **kwargs):
         super().__init__(**kwargs)
         self.model_save_path = model_save_path
         self.model = model

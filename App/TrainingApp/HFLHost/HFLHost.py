@@ -6,13 +6,15 @@ import sys
 import os
 from datetime import datetime
 import argparse
-sys.path.append(os.path.abspath('..'))
+sys.path.append(os.path.abspath('../../..'))
+
 # TensorFlow & Flower
 if 'TF_USE_LEGACY_KERAS' in os.environ:
     del os.environ['TF_USE_LEGACY_KERAS']
 import flwr as fl
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
+
 # other plugins
 # import math
 # import glob
@@ -21,20 +23,20 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 # import pickle
 # import joblib
 
-from SessionConfig.datasetLoadProcess import datasetLoadProcess
-from SessionConfig.hyperparameterLoading import hyperparameterLoading
-from SessionConfig.modelCreateLoad import modelCreateLoad
+from Config.SessionConfig.datasetLoadProcess import datasetLoadProcess
+from Config.SessionConfig.hyperparameterLoading import hyperparameterLoading
+from Config.SessionConfig.modelCreateLoad import modelCreateLoad
 
 # Load and Saving Configs
-from ModelTrainingConfig.HostModelTrainingConfig.ModelManagement.ServerSaveOnlyConfig import SaveModelFedAvg
-from ModelTrainingConfig.HostModelTrainingConfig.ModelManagement.ServerLoadOnlyConfig import LoadModelFedAvg
-from ModelTrainingConfig.HostModelTrainingConfig.ModelManagement.ServerLoadNSaveConfig import LoadSaveModelFedAvg
+from Config.ModelTrainingConfig.HostModelTrainingConfig.ModelManagement.ServerSaveOnlyConfig import SaveModelFedAvg
+from Config.ModelTrainingConfig.HostModelTrainingConfig.ModelManagement.ServerLoadOnlyConfig import LoadModelFedAvg
+from Config.ModelTrainingConfig.HostModelTrainingConfig.ModelManagement.ServerLoadNSaveConfig import LoadSaveModelFedAvg
 
 # Fit on End configs
-from ModelTrainingConfig.HostModelTrainingConfig.FitOnEnd.ServerNIDSFitOnEndConfig import NIDSFitOnEndStrategy
-from ModelTrainingConfig.HostModelTrainingConfig.FitOnEnd.ServerDiscBinaryFitOnEndConfig import DiscriminatorSyntheticStrategy
-from ModelTrainingConfig.HostModelTrainingConfig.FitOnEnd.ServerWDiscFitOnEndConfig import WDiscriminatorSyntheticStrategy
-from ModelTrainingConfig.HostModelTrainingConfig.FitOnEnd.ServerACDiscFitOnEndConfig import ACDiscriminatorSyntheticStrategy
+from Config.ModelTrainingConfig.HostModelTrainingConfig.FitOnEnd.ServerNIDSFitOnEndConfig import NIDSFitOnEndStrategy
+from Config.ModelTrainingConfig.HostModelTrainingConfig.FitOnEnd.ServerDiscBinaryFitOnEndConfig import DiscriminatorSyntheticStrategy
+from Config.ModelTrainingConfig.HostModelTrainingConfig.FitOnEnd.ServerWDiscFitOnEndConfig import WDiscriminatorSyntheticStrategy
+from Config.ModelTrainingConfig.HostModelTrainingConfig.FitOnEnd.ServerACDiscFitOnEndConfig import ACDiscriminatorSyntheticStrategy
 
 ################################################################################################################
 #                                                   Execute                                                   #

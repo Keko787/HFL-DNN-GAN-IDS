@@ -246,4 +246,4 @@ class CentralBinaryWGen:
         }
 
     def save(self, save_name):
-        self.generator.save(f"../../../../../ModelArchive/generator_local_WGANGP_{save_name}.h5")
+        self.generator.save(f"../../../../../../ModelArchive/generator_local_WGANGP_{save_name}.h5")

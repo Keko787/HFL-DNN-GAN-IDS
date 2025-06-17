@@ -284,5 +284,5 @@ class BinaryWDiscriminatorClient(fl.client.NumPyClient):
         }
 
     def save(self, save_name):
-        self.discriminator.save(f"../../../../../ModelArchive/discriminator_fed_WGANGP_{save_name}.h5")
+        self.discriminator.save(f"../../../../../../ModelArchive/discriminator_fed_WGANGP_{save_name}.h5")
 

@@ -4,14 +4,14 @@
 
 import sys
 import os
-sys.path.append(os.path.abspath('../../..'))
+sys.path.append(os.path.abspath('../../../..'))
 import random
 import time
 from datetime import datetime
 import argparse
 
-from modelStructures.GAN.discriminatorStruct import create_discriminator, create_discriminator_binary_optimized, create_discriminator_binary, create_discriminator_binary_optimized_spectral, create_W_discriminator_binary_optimized, build_AC_discriminator
-from modelStructures.GAN.generatorStruct import create_generator, create_generator_optimized, create_W_generator, build_AC_generator
+from Config.modelStructures.GAN.discriminatorStruct import create_discriminator, create_discriminator_binary_optimized, create_discriminator_binary, create_discriminator_binary_optimized_spectral, create_W_discriminator_binary_optimized, build_AC_discriminator
+from Config.modelStructures.GAN.generatorStruct import create_generator, create_generator_optimized, create_W_generator, build_AC_generator
 
 if 'TF_USE_LEGACY_KERAS' in os.environ:
     del os.environ['TF_USE_LEGACY_KERAS']

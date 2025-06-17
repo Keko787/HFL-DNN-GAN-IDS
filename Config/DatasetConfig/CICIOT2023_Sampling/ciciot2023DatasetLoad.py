@@ -57,20 +57,20 @@ def loadCICIOT(poisonedDataType=None):
     ciciot_label_class = "1+1"
 
     if poisonedDataType == "LF33":
-        DATASET_DIRECTORY = '/root/datasets/CICIOT2023_POISONEDLF33'
+        DATASET_DIRECTORY = '../../../../datasets/CICIOT2023_POISONEDLF33'
 
     elif poisonedDataType == "LF66":
-        DATASET_DIRECTORY = '/root/datasets/CICIOT2023_POISONEDLF66'
+        DATASET_DIRECTORY = '../../../../datasets/CICIOT2023_POISONEDLF66'
 
     elif poisonedDataType == "FN33":
-        DATASET_DIRECTORY = '/root/datasets/CICIOT2023_POISONEDFN33'
+        DATASET_DIRECTORY = '../../../../datasets/CICIOT2023_POISONEDFN33'
 
     elif poisonedDataType == "FN66":
-        DATASET_DIRECTORY = '/root/datasets/CICIOT2023_POISONEDFN66'
+        DATASET_DIRECTORY = '../../../../datasets/CICIOT2023_POISONEDFN66'
 
     else:
         # directory of the stored data samples
-        DATASET_DIRECTORY = '../../datasets/CICIOT2023'
+        DATASET_DIRECTORY = '../../../../datasets/CICIOT2023'
 
     # ---    CICIOT Feature Mapping for numerical and categorical features       --- #
 

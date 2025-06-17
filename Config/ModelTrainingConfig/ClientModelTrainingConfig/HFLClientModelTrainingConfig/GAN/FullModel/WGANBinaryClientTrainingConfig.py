@@ -330,13 +330,13 @@ class BinaryWGanClient(fl.client.NumPyClient):
         }
 
     def save(self, save_name):
-        self.model.save(f"../../../../../ModelArchive/fed_WGANGP_{save_name}.h5")
+        self.model.save(f"../../../../../../ ModelArchive/fed_WGANGP_{save_name}.h5")
 
         # Assuming `model` is the GAN model created with Sequential([generator, discriminator])
         generator = self.model.layers[0]
         discriminator = self.model.layers[1]
 
         # Save each submodel separately
-        generator.save(f"../../../../../ModelArchive/generator_fed_WGANGP_{save_name}.h5")
-        discriminator.save(f"../../../../../ModelArchive/discriminator_fed_WGANGP_{save_name}.h5")
+        generator.save(f"../../../../../../ ModelArchive/generator_fed_WGANGP_{save_name}.h5")
+        discriminator.save(f"../../../../../../ ModelArchive/discriminator_fed_WGANGP_{save_name}.h5")
 

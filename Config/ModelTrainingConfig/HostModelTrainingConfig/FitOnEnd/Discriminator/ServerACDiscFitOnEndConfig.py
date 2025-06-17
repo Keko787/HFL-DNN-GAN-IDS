@@ -179,7 +179,7 @@ class ACDiscriminatorSyntheticStrategy(fl.server.strategy.FedAvg):
                 self.discriminator.set_weights(aggregated_weights)
         # EoF Set global weights
         # save model before synthetic contextualization
-        model_save_path = "../../../../ModelArchive/discriminator_GLOBAL_B4Fit_ACGAN.h5"
+        model_save_path = "../../../../../ModelArchive/discriminator_GLOBAL_B4Fit_ACGAN.h5"
         self.discriminator.save(model_save_path)
         print(f"Model saved at: {model_save_path}")
 

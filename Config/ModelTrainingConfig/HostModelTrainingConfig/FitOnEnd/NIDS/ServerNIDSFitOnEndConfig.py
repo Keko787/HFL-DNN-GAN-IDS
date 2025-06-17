@@ -108,7 +108,7 @@ class NIDSFitOnEndStrategy(fl.server.strategy.FedAvg):
         # saving
         self.save_name = save_name
         self.serverLoad = serverLoad
-        self.file_name = f"../../../../ModelArchive/NIDS_AT_{self.save_name}"
+        self.file_name = f"../../../../../ModelArchive/NIDS_AT_{self.save_name}"
 
         # counters
         self.roundCount = 0
