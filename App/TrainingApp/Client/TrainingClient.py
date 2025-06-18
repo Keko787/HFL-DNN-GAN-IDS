@@ -75,7 +75,7 @@ def main():
     print()
 
     # --- 4 Model Loading & Creation ---#
-    print("🧠 Creating and loading models...")
+    print("🧠 Creating and/or loading models...")
     nids, discriminator, generator, GAN = modelCreateLoad(args.model_type, args.model_training, args.pretrained_nids,
                                                           args.pretrained_GAN, args.pretrained_generator,
                                                           args.pretrained_discriminator, args.dataset,
