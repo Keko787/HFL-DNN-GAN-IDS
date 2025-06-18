@@ -6,10 +6,13 @@ import sys
 import os
 from datetime import datetime
 import argparse
+
 sys.path.append(os.path.abspath('../../..'))
+
 # TensorFlow & Flower
 if 'TF_USE_LEGACY_KERAS' in os.environ:
     del os.environ['TF_USE_LEGACY_KERAS']
+
 import flwr as fl
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
