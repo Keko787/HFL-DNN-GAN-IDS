@@ -211,8 +211,8 @@ def parse_HFL_Host_args():
                                  "WGAN-GP", "AC-GAN"],
                         help='Model architecture: NIDS variants, GAN variants')
 
-    parser.add_argument('--model_training', type=str, choices=["NIDS", "Discriminator", "Both"],
-                        default="Both",
+    parser.add_argument('--model_training', type=str, choices=["NIDS", "Discriminator", "GAN"],
+                        default="GAN",
                         help='Training focus: NIDS, Discriminator, or Both components')
 
     # ─── Training Session Parameters ───
