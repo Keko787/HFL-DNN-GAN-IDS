@@ -150,6 +150,7 @@ def main():
 
     # --- 8 Locally Save Model After Training ---#
         client.save(args.save_name)
+    # -- EOF Central/Local TRAINING -- #
 
 
 ################################################################################################################
