@@ -102,3 +102,69 @@ def parse_training_client_args():
     args.node = 1
 
     return args
+
+
+def display_training_client_opening_message(args, timestamp):
+    """
+    Display an enhanced opening message for the Training Client
+    """
+    print("=" * 80)
+    print("🚀 MACHINE LEARNING TRAINING CLIENT")
+    print("=" * 80)
+    print(f"📅 Session Started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"🆔 Session ID: {timestamp}")
+    print("-" * 80)
+
+    # Training Mode Section
+    training_mode = "🌐 FEDERATED" if args.trainingArea == "Federated" else "🏠 CENTRALIZED"
+    print(f"⚙️  Training Mode: {training_mode}")
+
+    # Dataset & Model Information
+    print(f"📊 Dataset: {args.dataset}")
+    print(f"🔄 Preprocessing: {args.dataset_processing}")
+    print(f"🧠 Model Type: {args.model_type}")
+    print(f"🎯 Training Method: {args.model_training}")
+    print(f"🔢 Epochs: {args.epochs}")
+
+    # Pre-trained Models Section
+    if any([args.pretrained_GAN, args.pretrained_generator, args.pretrained_discriminator, args.pretrained_nids]):
+        print("-" * 40)
+        print("📥 PRE-TRAINED MODELS:")
+        if args.pretrained_GAN:
+            print(f"   • GAN Model: {args.pretrained_GAN}")
+        if args.pretrained_generator:
+            print(f"   • Generator: {args.pretrained_generator}")
+        if args.pretrained_discriminator:
+            print(f"   • Discriminator: {args.pretrained_discriminator}")
+        if args.pretrained_nids:
+            print(f"   • NIDS Model: {args.pretrained_nids}")
+
+    # Save Configuration
+    if args.save_name:
+        print("-" * 40)
+        print(f"💾 Output Model Name: {args.save_name}")
+
+    # Federated Training Specific Info
+    if args.trainingArea == "Federated":
+        print("-" * 40)
+        print("🌐 FEDERATED LEARNING CONFIG:")
+        if args.custom_host:
+            print(f"   • Custom Server: {args.custom_host}:8080")
+        else:
+            if args.host == "4":
+                server_address = "192.168.129.8:8080"
+            elif args.host == "3":
+                server_address = "192.168.129.7:8080"
+            elif args.host == "2":
+                server_address = "192.168.129.6:8080"
+            elif args.host == "1":
+                server_address = "192.168.129.3:8080"
+            else:  # custom address failsafe
+                server_address = f"{args.host}:8080"
+            print(f"✓ Using server: {server_address}")
+            print(f"   • Server Address: {server_address}")
+        print(f"   • Node ID: {args.node}")
+
+    print("=" * 80)
+    print("🔄 Initializing training pipeline...")
+    print()
