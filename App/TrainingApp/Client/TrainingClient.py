@@ -48,7 +48,14 @@ def main():
 
     # --- 2 Load & Preprocess Data ---#
     print("📊 Loading and preprocessing dataset...")
-    X_train_data, X_val_data, y_train_data, y_val_data, X_test_data, y_test_data = datasetLoadProcess( args.dataset, args.dataset_processing)
+    X_train_data, X_val_data, y_train_data, y_val_data, X_test_data, y_test_data = datasetLoadProcess(dataset_used=args.dataset,
+                                                                                                      dataset_preprocessing=args.dataset_processing,
+                                                                                                      ciciot_train_sample_size=args.ciciot_train_sample_size,
+                                                                                                      ciciot_test_sample_size=args.ciciot_test_sample_size,
+                                                                                                      ciciot_training_dataset_size=args.ciciot_training_dataset_size,
+                                                                                                      ciciot_testing_dataset_size=args.ciciot_testing_dataset_size,
+                                                                                                      ciciot_attack_eval_samples_ratio=args.ciciot_attack_eval_samples_ratio,
+                                                                                                      ciciot_random_seed=args.ciciot_random_seed)
 
     print("✅ Dataset loaded successfully!")
     print(f"   • Training samples: {len(X_train_data)}")

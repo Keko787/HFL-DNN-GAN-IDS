@@ -7,7 +7,9 @@ from Config.DatasetConfig.Dataset_Preprocessing.datasetPreprocess import preproc
 
 # --- Load Data ---#
 
-def datasetLoadProcess(dataset_used, dataset_preprocessing):
+def datasetLoadProcess(dataset_used, dataset_preprocessing, ciciot_train_sample_size, ciciot_test_sample_size,
+                       ciciot_training_dataset_size, ciciot_testing_dataset_size, ciciot_attack_eval_samples_ratio,
+                       ciciot_random_seed):
 
     # --- 1 LOAD DATASET ---#
     # Initiate CICIOT

@@ -26,6 +26,25 @@ def parse_training_client_args():
     parser.add_argument('--dataset_processing', type=str, choices=["Default", "MM[-1,-1]", "AC-GAN, IOT", "IOT-MinMax"],
                         default="Default", help='Datasets to use: Default, MM[-1,1], AC-GAN, IOT')
 
+    # ─── CICIOT2023 Dataset Settings ───
+    parser.add_argument("--ciciot_train_sample_size", type=int, default=50,
+                        help="Number of Sample Files to load for the CICIOT2023 Training Dataset.")
+
+    parser.add_argument("--ciciot_test_sample_size", type=int, default=15,
+                        help="Number of Sample Files to load for the CICIOT2023 Testing Dataset.")
+
+    parser.add_argument("--ciciot_training_dataset_size", type=int, default=400000,
+                        help="Number of entries to load for the CICIOT2023 Training Dataset.")
+
+    parser.add_argument("--ciciot_testing_dataset_size", type=int, default=80000,
+                        help="Number of entries to load for the CICIOT2023 Testing Dataset.")
+
+    parser.add_argument("--ciciot_attack_eval_samples_ratio", type=float, default=1.0,
+                        help="Amount of attack data samples to load for CICIOT2023 Evaluation Dataset Ratioed "
+                             "against the benign samples.")
+
+    parser.add_argument("--ciciot_random_seed", type=int, default=110, help="Dataset file sampling consistency.")
+
     # ─── Federation Settings ───
     parser.add_argument('--trainingArea', type=str, choices=["Central", "Federated"], default="Central",
                         help='Please select Central, Federated as the place to train the model')
