@@ -47,7 +47,7 @@ def main():
     display_training_client_opening_message(args, timestamp)
 
     # --- 2 Load & Preprocess Data ---#
-    print("📊 Loading and preprocessing dataset...")
+    print("📊 Loading & Preprocessing Dataset...")
     X_train_data, X_val_data, y_train_data, y_val_data, X_test_data, y_test_data = datasetLoadProcess(dataset_used=args.dataset,
                                                                                                       dataset_preprocessing=args.dataset_processing,
                                                                                                       ciciot_train_sample_size=args.ciciot_train_sample_size,
@@ -57,14 +57,14 @@ def main():
                                                                                                       ciciot_attack_eval_samples_ratio=args.ciciot_attack_eval_samples_ratio,
                                                                                                       ciciot_random_seed=args.ciciot_random_seed)
 
-    print("✅ Dataset loaded successfully!")
+    print("✅ Dataset Loaded Successfully!")
     print(f"   • Training samples: {len(X_train_data)}")
     print(f"   • Validation samples: {len(X_val_data)}")
     print(f"   • Test samples: {len(X_test_data)}")
     print()
 
     # --- 3 Model Hyperparameter & Training Parameters ---#
-    print("⚙️  Loading hyperparameters and training configuration...")
+    print("⚙️  Loading Hyperparameters & Training Configuration...")
     (BATCH_SIZE, noise_dim, steps_per_epoch, input_dim, num_classes, latent_dim, betas, learning_rate, l2_alpha,
      l2_norm_clip, noise_multiplier, num_microbatches, metric_to_monitor_es, es_patience, restor_best_w,
      metric_to_monitor_l2lr, l2lr_patience, save_best_only,
@@ -73,23 +73,25 @@ def main():
                                                                     args.earlyStopEnabled, args.lrSchedRedEnabled,
                                                                     args.modelCheckpointEnabled)
 
-    print("✅ Hyperparameters configured!")
+    print("✅ Hyperparameters Configured!")
     print(f"   • Batch Size: {BATCH_SIZE}")
     print(f"   • Steps per Epoch: {steps_per_epoch}")
     print(f"   • Input Dimension: {input_dim}")
     if num_classes:
         print(f"   • Number of Classes: {num_classes}")
+    if latent_dim:
+        print(f"   • Latent Dimension: {latent_dim}")
     print()
 
     # --- 4 Model Loading & Creation ---#
-    print("🧠 Creating and/or loading models...")
+    print("🧠 Creating // Loading Models...")
     nids, discriminator, generator, GAN = modelCreateLoad(args.model_type, args.model_training, args.pretrained_nids,
                                                           args.pretrained_GAN, args.pretrained_generator,
                                                           args.pretrained_discriminator, args.dataset,
                                                           input_dim, noise_dim, args.regularizationEnabled,
                                                           args.DP_enabled, l2_alpha, latent_dim, num_classes)
 
-    print("✅ Models initialized successfully!")
+    print("✅ Models Initialized Successfully!")
     print()
 
     # --- 5A Load Training Config ---#

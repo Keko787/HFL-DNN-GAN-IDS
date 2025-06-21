@@ -24,13 +24,12 @@ def hyperparameterLoading(model_type, X_train_data, regularizationEnabled, DP_en
     BATCH_SIZE = None
     input_dim = None
 
-
     if model_type == 'NIDS':
         input_dim = X_train_data.shape[1]  # dependant for feature size
 
         BATCH_SIZE = 64  # 32 - 128; try 64, 96, 128; maybe intervals of 16, maybe even 256
 
-        epochs = 5  # 1, 2 , 3 or 5 epochs
+        #epochs = 5  # 1, 2 , 3 or 5 epochs
 
         # steps_per_epoch = (len(X_train_data) // batch_size) // epochs  # dependant  # debug
         # dependant between sample size of the dataset and the batch size chosen
@@ -55,7 +54,7 @@ def hyperparameterLoading(model_type, X_train_data, regularizationEnabled, DP_en
             noise_multiplier = 0.3  # need to optimize noise budget and determine if noise is properly added
             l2_norm_clip = 1.5  # determine if l2 needs to be tuned as well 1.0 - 2.0
 
-            epochs = 10
+            #epochs = 10
             learning_rate = 0.0007  # will be optimized
 
             print("\nDifferential Privacy Parameters:")
@@ -104,7 +103,7 @@ def hyperparameterLoading(model_type, X_train_data, regularizationEnabled, DP_en
 
         print("\nBase Hyperparameters:")
         print("Input Dim (Feature Size):", input_dim)
-        print("Epochs:", epochs)
+        #print("Epochs:", epochs)
         print("Batch Size:", BATCH_SIZE)
         print(f"Steps per epoch (({len(X_train_data)} // {BATCH_SIZE})):", steps_per_epoch)
         # print(f"Steps per epoch (({len(X_train_data)} // {batch_size}) // {epochs}):", steps_per_epoch)  ## Debug
@@ -131,14 +130,13 @@ def hyperparameterLoading(model_type, X_train_data, regularizationEnabled, DP_en
         noise_dim = 100
         steps_per_epoch = len(X_train_data) // BATCH_SIZE
         input_dim = X_train_data.shape[1]
-
         learning_rate = 0.0001
+
     elif model_type == 'WGAN-GP':
         BATCH_SIZE = 256
         noise_dim = 100
         steps_per_epoch = len(X_train_data) // BATCH_SIZE
         input_dim = X_train_data.shape[1]
-
         learning_rate = 0.0001
 
     elif model_type == 'AC-GAN':
@@ -149,26 +147,20 @@ def hyperparameterLoading(model_type, X_train_data, regularizationEnabled, DP_en
         latent_dim = 256  # OG 100; range 128 - 512; recomend 256 - 512; (128, 256, 512)
         input_dim = X_train_data.shape[1]
         steps_per_epoch = max(1, len(X_train_data) // BATCH_SIZE)  # ensures that there is at least 1 step
-
         # Classes
         # num_classes = len(np.unique(y_train_categorical))
         num_classes = 2
 
-        # Regularization
-        # l2_alpha = 0.0015  # Fine-tuned from 0.01 for better regularization without overly constraining
-
-        # beta values for Adam optimizer
-        betas = [0.5, 0.999]  # First moment decay rate reduced to 0.5 for GAN stability
-
-        # Reduced learning rates with slower decay
-        gen_learning_rate = 0.00005  # Reduced from 0.0001
-        disc_learning_rate = 0.00008  # Reduced from 0.0001
-        learning_rate = 0.00008  # General learning rate;  (0.0001, 0.00008, 0.00007, 0.00005, 0.00002, 0.00001)
-
-        # Learning rate scheduler settings
-        lr_decay_steps = 10000  # (15000, 12500, 10000)
-        lr_decay_rate = 0.97  # Changed from (0.98, 0.95)
-
     return (BATCH_SIZE, noise_dim, steps_per_epoch, input_dim, num_classes, latent_dim, betas, learning_rate, l2_alpha,
             l2_norm_clip, noise_multiplier, num_microbatches, metric_to_monitor_es, es_patience, restor_best_w,
             metric_to_monitor_l2lr, l2lr_patience, save_best_only, metric_to_monitor_mc, checkpoint_mode)
+
+    # Main Parameters for most models (including NIDS)
+    # BATCH_SIZE, noise_dim, steps_per_epoch, input_dim, num_classes, latent_dim
+
+    # --- THIS IS FOR NIDS and maybe some others---
+    # Optional Model Params
+    # betas, learning_rate, l2_alpha,l2_norm_clip, (DP) [noise_multiplier, num_microbatches]
+    # Optional Callback flags
+    # etric_to_monitor_es, es_patience, restor_best_w,
+    #             metric_to_monitor_l2lr, l2lr_patience, save_best_only, metric_to_monitor_mc, checkpoint_mode

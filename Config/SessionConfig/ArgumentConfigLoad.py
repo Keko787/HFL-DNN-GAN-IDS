@@ -70,31 +70,30 @@ def parse_training_client_args():
 
     # ─── Model Training Session Settings ───
     parser.add_argument("--epochs", type=int, default=5, help="Number of epochs to train the model")
-    parser.add_argument("--custom-batch_size", type=int, default=None, help="Batch size for training. Recommended: [32!, 64!, 96, 128!, 256!, 512]. Excamation == Better Results.")
 
-    # ─── GAN Model Training Session Settings ───
-    # ── GAN Discriminator Model Training Session Settings ──
-    parser.add_argument("--disc_learning_rate", type=float, default=0.00001, help="Initial learning rate for discriminator training. Default: 0.0001")
-    parser.add_argument("--disc_decay_steps", type=int, default=10000, help="Decay steps for discriminator training. Default: 10000")
-    parser.add_argument("--disc_decay_rate", type=float, default=0.97, help="Decay rate for discriminator training. Default: 0.97")
-    parser.add_argument("--disc_staircase", type=bool, default=False, help="Statically staircase for discriminator training. Default: False")
-    parser.add_argument("--disc_beta_1", type=float, default=0.5, help="Beta 1 value for discriminator training. Default: 0.5")
-    parser.add_argument("--disc_beta_2", type=float, default=0.999, help="Beta 2 value for discriminator training. Default: 0.999")
-    parser.add_argument("--d_to_g_ratio", type=int, default=1, help="How many time the Discriminator loops over the batch per step, respect against the generator. Default [D (Input):G (Always 1)]: 1:1")
-    parser.add_argument("--disc_valid_smoothing_factor", type=float, default=0.08, help="Valid Data smoothing factor for discriminator training. Default: 0.08")
-    parser.add_argument("--disc_fake_smoothing_factor", type=float, default=0.05, help="Fake Data smoothing factor for discriminator training. Default: 0.05")
-    parser.add_argument("--disc_attack_weight", type=float, default=0.5, help="Batch size for training. Default: 0.5")
-    parser.add_argument("--disc_benign_weight", type=float, default=0.5, help="Batch size for training. Default: 0.5")
-    parser.add_argument("--disc_validity_weight", type=float, default=0.5, help="Batch size for training. Default: 0.5")
-    parser.add_argument("--disc_class_weight", type=float, default=0.5, help="Batch size for training. Default: 0.5")
+    # ───AC GAN Model Training Session Settings ───
+    # ──AC GAN Discriminator Model Training Session Settings ──
+    parser.add_argument("--AC_disc_learning_rate", type=float, default=0.00001, help="Initial learning rate for discriminator training. Default: 0.0001")
+    parser.add_argument("--AC_disc_decay_steps", type=int, default=10000, help="Decay steps for discriminator training. Default: 10000")
+    parser.add_argument("--AC_disc_decay_rate", type=float, default=0.97, help="Decay rate for discriminator training. Default: 0.97")
+    parser.add_argument("--AC_disc_staircase", type=bool, default=False, help="Statically staircase for discriminator training. Default: False")
+    parser.add_argument("--AC_disc_beta_1", type=float, default=0.5, help="Beta 1 value for discriminator training. Default: 0.5")
+    parser.add_argument("--AC_disc_beta_2", type=float, default=0.999, help="Beta 2 value for discriminator training. Default: 0.999")
+    parser.add_argument("--AC_d_to_g_ratio", type=int, default=1, help="How many time the Discriminator loops over the batch per step, respect against the generator. Default [D (Input):G (Always 1)]: 1:1")
+    parser.add_argument("--AC_disc_valid_smoothing_factor", type=float, default=0.08, help="Valid Data smoothing factor for discriminator training. Default: 0.08")
+    parser.add_argument("--AC_disc_fake_smoothing_factor", type=float, default=0.05, help="Fake Data smoothing factor for discriminator training. Default: 0.05")
+    parser.add_argument("--AC_disc_attack_weight", type=float, default=0.5, help="Batch size for training. Default: 0.5")
+    parser.add_argument("--AC_disc_benign_weight", type=float, default=0.5, help="Batch size for training. Default: 0.5")
+    parser.add_argument("--AC_disc_validity_weight", type=float, default=0.5, help="Batch size for training. Default: 0.5")
+    parser.add_argument("--AC_disc_class_weight", type=float, default=0.5, help="Batch size for training. Default: 0.5")
     # ── GAN Generator Model Training Session Settings ──
-    parser.add_argument("--gen_learning_rate", type=float, default=0.00003, help="Initial learning rate for generator training. Default:")
-    parser.add_argument("--gen_decay_steps", type=int, default=10000, help="Decay steps for generator training. Default: 10000")
-    parser.add_argument("--gen_decay_rate", type=float, default=0.97, help="Decay rate for generator training. Default: 0.97")
-    parser.add_argument("--gen_staircase", type=bool, default=False, help="Statically staircase for generator training. Default: False")
-    parser.add_argument("--gen_beta_1", type=float, default=0.5, help="Beta 1 value for generator training. Default: 0.5")
-    parser.add_argument("--gen_beta_2", type=float, default=0.999, help="Beta 2 value for generator training. Default: 0.999")
-    parser.add_argument("--gen_smoothing_factor", type=float, default=0.08, help="Smoothing factor for generator training. Default: 0.08")
+    parser.add_argument("--AC_gen_learning_rate", type=float, default=0.00003, help="Initial learning rate for generator training. Default:")
+    parser.add_argument("--AC_gen_decay_steps", type=int, default=10000, help="Decay steps for generator training. Default: 10000")
+    parser.add_argument("--AC_gen_decay_rate", type=float, default=0.97, help="Decay rate for generator training. Default: 0.97")
+    parser.add_argument("--AC_gen_staircase", type=bool, default=False, help="Statically staircase for generator training. Default: False")
+    parser.add_argument("--AC_gen_beta_1", type=float, default=0.5, help="Beta 1 value for generator training. Default: 0.5")
+    parser.add_argument("--AC_gen_beta_2", type=float, default=0.999, help="Beta 2 value for generator training. Default: 0.999")
+    parser.add_argument("--AC_gen_smoothing_factor", type=float, default=0.08, help="Smoothing factor for generator training. Default: 0.08")
 
     # ─── Loading Models (Optional) ───
     parser.add_argument('--pretrained_GAN', type=str, help="Path to pretrained discriminator model (optional)",
@@ -168,7 +167,7 @@ def display_training_client_opening_message(args, timestamp):
     print(f"📊 Dataset: {args.dataset}")
     print(f"🔄 Preprocessing: {args.dataset_processing}")
     print(f"🧠 Model Type: {args.model_type}")
-    print(f"🎯 Training Method: {args.model_training}")
+    print(f"🎯 Submodel Training Method: {args.model_training}")
     print(f"🔢 Epochs: {args.epochs}")
 
     # Pre-trained Models Section
@@ -361,7 +360,7 @@ def display_HFL_host_opening_message(args, timestamp):
     print(f"📊 Dataset: {args.dataset}")
     print(f"🔄 Preprocessing: {args.dataset_processing}")
     print(f"🧠 Model Type: {args.model_type}")
-    print(f"🎯 Training Focus: {args.model_training}")
+    print(f"🎯 Submodel Training Focus: {args.model_training}")
 
     # Training Parameters
     print("-" * 40)

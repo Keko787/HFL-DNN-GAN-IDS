@@ -24,6 +24,10 @@ from tensorflow.keras.optimizers import Adam
 from tensorflow_addons.layers import SpectralNormalization
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
+# Notes:
+# Regularization
+# l2_alpha = 0.0015  # Fine-tuned from 0.01 for better regularization without overly constraining
+
 
 # Function for creating the discriminator model
 def create_discriminator(input_dim):
