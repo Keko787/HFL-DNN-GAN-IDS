@@ -48,14 +48,7 @@ def main():
 
     # --- 2 Load & Preprocess Data ---#
     print("📊 Loading & Preprocessing Dataset...")
-    X_train_data, X_val_data, y_train_data, y_val_data, X_test_data, y_test_data = datasetLoadProcess(dataset_used=args.dataset,
-                                                                                                      dataset_preprocessing=args.dataset_processing,
-                                                                                                      ciciot_train_sample_size=args.ciciot_train_sample_size,
-                                                                                                      ciciot_test_sample_size=args.ciciot_test_sample_size,
-                                                                                                      ciciot_training_dataset_size=args.ciciot_training_dataset_size,
-                                                                                                      ciciot_testing_dataset_size=args.ciciot_testing_dataset_size,
-                                                                                                      ciciot_attack_eval_samples_ratio=args.ciciot_attack_eval_samples_ratio,
-                                                                                                      ciciot_random_seed=args.ciciot_random_seed)
+    X_train_data, X_val_data, y_train_data, y_val_data, X_test_data, y_test_data = datasetLoadProcess(args)
 
     print("✅ Dataset Loaded Successfully!")
     print(f"   • Training samples: {len(X_train_data)}")
@@ -68,10 +61,7 @@ def main():
     (BATCH_SIZE, noise_dim, steps_per_epoch, input_dim, num_classes, latent_dim, betas, learning_rate, l2_alpha,
      l2_norm_clip, noise_multiplier, num_microbatches, metric_to_monitor_es, es_patience, restor_best_w,
      metric_to_monitor_l2lr, l2lr_patience, save_best_only,
-     metric_to_monitor_mc, checkpoint_mode) = hyperparameterLoading(args.model_type, X_train_data,
-                                                                    args.regularizationEnabled, args.DP_enabled,
-                                                                    args.earlyStopEnabled, args.lrSchedRedEnabled,
-                                                                    args.modelCheckpointEnabled)
+     metric_to_monitor_mc, checkpoint_mode) = hyperparameterLoading(args, X_train_data)
 
     print("✅ Hyperparameters Configured!")
     print(f"   • Batch Size: {BATCH_SIZE}")

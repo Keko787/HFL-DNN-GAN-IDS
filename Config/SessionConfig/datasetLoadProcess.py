@@ -7,11 +7,13 @@ from Config.DatasetConfig.Dataset_Preprocessing.datasetPreprocess import preproc
 
 # --- Load Data ---#
 
-def datasetLoadProcess(dataset_used, dataset_preprocessing, ciciot_train_sample_size, ciciot_test_sample_size,
-                       ciciot_training_dataset_size, ciciot_testing_dataset_size, ciciot_attack_eval_samples_ratio,
-                       ciciot_random_seed):
+def datasetLoadProcess(args):
 
     # --- 1 LOAD DATASET ---#
+    # Arguments
+    dataset_used = args.dataset_used
+    dataset_preprocessing = args.dataset_preprocessing
+
     # Initiate CICIOT
     ciciot_train_data = None
     ciciot_test_data = None
@@ -34,12 +36,12 @@ def datasetLoadProcess(dataset_used, dataset_preprocessing, ciciot_train_sample_
     if dataset_used == "CICIOT":
         print("Loading CICIOT")
         # Load CICIOT data
-        ciciot_train_data, ciciot_test_data, irrelevant_features_ciciot = loadCICIOT(train_sample_size=ciciot_train_sample_size,
-                                                                                     test_sample_size=ciciot_test_sample_size,
-                                                                                     training_dataset_size=ciciot_training_dataset_size,
-                                                                                     testing_dataset_size=ciciot_testing_dataset_size,
-                                                                                     attack_eval_samples_ratio=ciciot_attack_eval_samples_ratio,
-                                                                                     random_seed=ciciot_random_seed)
+        ciciot_train_data, ciciot_test_data, irrelevant_features_ciciot = loadCICIOT(train_sample_size=args.ciciot_train_sample_size,
+                                                                                     test_sample_size=args.ciciot_test_sample_size,
+                                                                                     training_dataset_size=args.ciciot_training_dataset_size,
+                                                                                     testing_dataset_size=args.ciciot_testing_dataset_size,
+                                                                                     attack_eval_samples_ratio=args.ciciot_attack_eval_samples_ratio,
+                                                                                     random_seed=args.ciciot_random_seed)
         # ciciot_train_data, ciciot_test_data, irrelevant_features_ciciot = loadCICIOT(train_sample_size=130, test_sample_size=30,
         #        training_dataset_size=800000, testing_dataset_size=200000, attack_eval_samples_ratio=0.3)
         # ciciot_train_data, ciciot_test_data, irrelevant_features_ciciot = loadCICIOT(train_sample_size=50,

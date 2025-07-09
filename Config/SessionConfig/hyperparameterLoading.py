@@ -1,5 +1,12 @@
-def hyperparameterLoading(model_type, X_train_data, regularizationEnabled, DP_enabled, earlyStopEnabled,
-                          lrSchedRedEnabled, modelCheckpointEnabled):
+def hyperparameterLoading(args, X_train_data):
+    # initiate main argument variables
+    model_type = args.model_type
+
+    # initiate NIDS argument variables
+    DP_enabled = args.DP_enabled
+    earlyStopEnabled = args.earlyStopEnabled
+    lrSchedRedEnabled = args.lrSchedRedEnabled
+    modelCheckpointEnabled = args.modelCheckpointEnabled
 
     # initiate optional variables
     l2_alpha = None
