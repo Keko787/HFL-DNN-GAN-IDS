@@ -73,7 +73,10 @@ python3 AppSetup/Chameleon_node_Setup.py
 ```bash
 unzip $HOME/datasets/CICIoT2023.zip -d $HOME/datasets/CICIOT2023
 ```
-
+Then run the upgrade to tensorflow-addons
+```bash
+pip install --upgrade tensorflow-addons==0.23.0
+```
 ---
 
 ## Usage
