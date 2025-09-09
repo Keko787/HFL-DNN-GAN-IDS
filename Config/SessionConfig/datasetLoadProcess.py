@@ -12,7 +12,7 @@ def datasetLoadProcess(args):
     # --- 1 LOAD DATASET ---#
     # Arguments
     dataset_used = args.dataset
-    dataset_preprocessing = args.dataset_preprocessing
+    dataset_preprocessing = args.dataset_processing
 
     # Initiate CICIOT
     ciciot_train_data = None
