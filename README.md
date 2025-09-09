@@ -71,7 +71,7 @@ python3 AppSetup/Chameleon_node_Setup.py
 2. Upload `CICIoT2023.zip` to `$HOME/datasets/`, then:
 
 ```bash
-unzip $HOME/datasets/CICIoT2023.zip -d $HOME/datasets/CICIoT2023
+unzip $HOME/datasets/CICIoT2023.zip -d $HOME/datasets/CICIOT2023
 ```
 
 ---
@@ -81,13 +81,13 @@ unzip $HOME/datasets/CICIoT2023.zip -d $HOME/datasets/CICIoT2023
 ### Federated Training (Host)
 
 ```bash
-python3 Host/hflTrainingHost.py --help
+python3 App/TrainingApp/HFLHost/HFLHost.py --help
 ```
 
 ### Localized & Federated Training (Client)
 
 ```bash
-python3 Client/TrainingClient.py --help
+python3 App/TrainingApp/Client/TrainingClient.py --help
 # Default uses CICIOT2023 dataset; use --dataset IOTBOTNET for IoTBotnet.
 ```
 
