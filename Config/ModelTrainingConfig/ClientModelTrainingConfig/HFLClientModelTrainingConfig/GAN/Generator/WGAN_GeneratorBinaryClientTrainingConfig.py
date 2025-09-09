@@ -270,4 +270,14 @@ class BinaryWGeneratorClient(fl.client.NumPyClient):
         }
 
     def save(self, save_name):
-        self.generator.save(f"../../../../../../ ModelArchive/generator_fed_WGANGP_{save_name}.h5")
+        import os
+        # Calculate absolute path to ModelArchive
+        current_file_dir = os.path.dirname(os.path.abspath(__file__))
+        project_root = os.path.abspath(os.path.join(current_file_dir, '..', '..', '..', '..', '..', '..'))
+        model_archive_path = os.path.join(project_root, 'ModelArchive')
+        
+        # Create ModelArchive directory if it doesn't exist
+        os.makedirs(model_archive_path, exist_ok=True)
+        
+        # Save model using absolute path
+        self.generator.save(os.path.join(model_archive_path, f"generator_fed_WGANGP_{save_name}.h5"))

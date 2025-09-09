@@ -1377,6 +1377,15 @@ class CentralACGan:
 #                           MODEL SAVING METHODS                       #
 #########################################################################
     def save(self, save_name):
-        # Save each submodel separately
-        self.generator.save(f"../../../../../../ModelArchive/generator_local_ACGAN_{save_name}.h5")
-        self.discriminator.save(f"../../../../../../ModelArchive/discriminator_local_ACGAN_{save_name}.h5")
+        import os
+        # Calculate absolute path to ModelArchive
+        current_file_dir = os.path.dirname(os.path.abspath(__file__))
+        project_root = os.path.abspath(os.path.join(current_file_dir, '..', '..', '..', '..', '..', '..'))
+        model_archive_path = os.path.join(project_root, 'ModelArchive')
+        
+        # Create ModelArchive directory if it doesn't exist
+        os.makedirs(model_archive_path, exist_ok=True)
+        
+        # Save each submodel separately using absolute paths
+        self.generator.save(os.path.join(model_archive_path, f"generator_local_ACGAN_{save_name}.h5"))
+        self.discriminator.save(os.path.join(model_archive_path, f"discriminator_local_ACGAN_{save_name}.h5"))

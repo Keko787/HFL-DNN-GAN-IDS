@@ -34,7 +34,17 @@ class NidsIoTBinaryCentralConfig:
         plt.close()
 
     def save(self):
-        model.save('../../../../../../ ModelArchive/cnn_lstm_gru_model_binary_working.h5')
+        import os
+        # Calculate absolute path to ModelArchive
+        current_file_dir = os.path.dirname(os.path.abspath(__file__))
+        project_root = os.path.abspath(os.path.join(current_file_dir, '..', '..', '..', '..', '..'))
+        model_archive_path = os.path.join(project_root, 'ModelArchive')
+        
+        # Create ModelArchive directory if it doesn't exist
+        os.makedirs(model_archive_path, exist_ok=True)
+        
+        # Save model using absolute path
+        model.save(os.path.join(model_archive_path, 'cnn_lstm_gru_model_binary_working.h5'))
 
 
     def train_and_evaluate(self, model, X_train, y_train, X_val, y_val, X_test, y_test):
