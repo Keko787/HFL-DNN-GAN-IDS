@@ -548,7 +548,7 @@ class CentralACGan:
                 "Total Loss": f"{g_loss[0]:.4f}",
                 "Validity Loss": f"{g_loss[1]:.4f}",  # This is Discriminator_loss
                 "Class Loss": f"{g_loss[2]:.4f}",  # This is Discriminator_1_loss
-                "Validity Binary Accuracy": f"{g_loss[3] * 100:.2f}%",  # Discriminator_binary_accuracy
+                "Generator Fooling Rate": f"{(1 - g_loss[3]) * 100:.2f}%",  # Inverse of Discriminator_binary_accuracy
                 "Class Categorical Accuracy": f"{g_loss[4] * 100:.2f}%"  # Discriminator_1_categorical_accuracy
             }
 
@@ -556,7 +556,7 @@ class CentralACGan:
             self.logger.info(f"Epoch {epoch + 1} Summary:")
             self.logger.info(f"Discriminator Average Loss: {avg_epoch_d_loss:.4f}")
             self.logger.info(f"Generator Loss: {avg_epoch_g_loss:.4f}")
-            self.logger.info(f"Generator Validity Accuracy: {g_loss[3] * 100:.2f}%")
+            self.logger.info(f"Generator Fooling Rate: {(1 - g_loss[3]) * 100:.2f}%")
             self.logger.info(f"Generator Class Accuracy: {g_loss[4] * 100:.2f}%")
 
             # ─── Store Metrics History ───
@@ -737,7 +737,7 @@ class CentralACGan:
         self.logger.info(
             f"Total Loss: {g_loss[0]:.4f}, Validity Loss: {g_loss[1]:.4f}, Class Loss: {g_loss[2]:.4f}")
         self.logger.info(
-            f"Validity Binary Accuracy: {g_loss[3] * 100:.2f}%")
+            f"Generator Fooling Rate: {(1 - g_loss[3]) * 100:.2f}%")
         self.logger.info(
             f"Class Categorical Accuracy: {g_loss[4] * 100:.2f}%")
 
@@ -746,7 +746,7 @@ class CentralACGan:
             "Total Loss": f"{g_loss[0]:.4f}",
             "Validity Loss": f"{g_loss[1]:.4f}",
             "Class Loss": f"{g_loss[2]:.4f}",
-            "Validity Binary Accuracy": f"{g_loss[3] * 100:.2f}%",
+            "Generator Fooling Rate": f"{(1 - g_loss[3]) * 100:.2f}%",
             "Class Categorical Accuracy": f"{g_loss[4] * 100:.2f}%"
         }
         return g_loss[0], g_metrics
@@ -1024,7 +1024,7 @@ class CentralACGan:
             "Loss": f"{g_loss_total:.4f}",
             "Validity Loss": f"{g_loss_validity:.4f}",
             "Class Loss": f"{g_loss_class:.4f}",
-            "Validity Binary Accuracy": f"{g_validity_bin_acc * 100:.2f}%",
+            "Generator Fooling Rate": f"{(1 - g_validity_bin_acc) * 100:.2f}%",
             "Class Categorical Accuracy": f"{g_class_cat_acc * 100:.2f}%"
         }
 
@@ -1033,7 +1033,7 @@ class CentralACGan:
             f"Generator Total Loss: {g_loss_total:.4f} | Validity Loss: {g_loss_validity:.4f} | Class Loss: {g_loss_class:.4f}"
         )
         self.logger.info(
-            f"Validity Binary Accuracy: {g_validity_bin_acc * 100:.2f}%"
+            f"Generator Fooling Rate: {(1 - g_validity_bin_acc) * 100:.2f}%"
         )
         self.logger.info(
             f"Class Categorical Accuracy: {g_class_cat_acc * 100:.2f}%"
