@@ -314,40 +314,19 @@ class CentralACGan:
 #                      DISCRIMINATOR FREEZE/UNFREEZE METHODS           #
 #########################################################################
     def freeze_discriminator_for_generator_training(self):
-        """Properly freeze discriminator and recompile AC-GAN"""
+        """Properly freeze discriminator for generator training"""
+        # Only change trainable status, don't recompile
+        # The ACGAN model will use the frozen state automatically
         self.discriminator.trainable = False
         for layer in self.discriminator.layers:
             layer.trainable = False
-        
-        # CRITICAL: Recompile AC-GAN with frozen discriminator using dynamic output names
-        # Only recompile if ACGAN has been created
-        if hasattr(self, 'ACGAN'):
-            self.ACGAN.compile(
-                loss={self.ACGAN.output_names[0]: 'binary_crossentropy', 
-                      self.ACGAN.output_names[1]: 'categorical_crossentropy'},
-                optimizer=self.gen_optimizer,
-                metrics={
-                    self.ACGAN.output_names[0]: ['binary_accuracy'],
-                    self.ACGAN.output_names[1]: ['categorical_accuracy']
-                }
-            )
 
     def unfreeze_discriminator_for_discriminator_training(self):
-        """Properly unfreeze discriminator and recompile"""
+        """Properly unfreeze discriminator for discriminator training"""
+        # Only change trainable status, don't recompile
         self.discriminator.trainable = True
         for layer in self.discriminator.layers:
             layer.trainable = True
-        
-        # Recompile discriminator for next training phase using dynamic output names
-        self.discriminator.compile(
-            loss={self.discriminator.output_names[0]: 'binary_crossentropy', 
-                  self.discriminator.output_names[1]: 'categorical_crossentropy'},
-            optimizer=self.disc_optimizer,
-            metrics={
-                self.discriminator.output_names[0]: ['binary_accuracy'],
-                self.discriminator.output_names[1]: ['categorical_accuracy']
-            }
-        )
 
     def log_discriminator_status(self, sample_input=None):
         """Log discriminator training status for debugging"""
@@ -357,13 +336,29 @@ class CentralACGan:
         
         # Check if gradients are computed (only if sample input provided)
         if sample_input is not None:
+            # Create fake labels for the sample
+            sample_labels = tf.ones((sample_input.shape[0], 1))  # Validity label
+            sample_class_labels = tf.one_hot(tf.zeros(sample_input.shape[0], dtype=tf.int32), depth=self.num_classes)
+            
             with tf.GradientTape() as tape:
-                sample_output = self.discriminator(sample_input, training=False)
-                loss = tf.reduce_mean(sample_output[0])  # Use validity output
-            grads = tape.gradient(loss, self.discriminator.trainable_variables)
+                # Use training=True to ensure proper gradient flow
+                sample_output = self.discriminator(sample_input, training=True)
+                # Calculate losses for both outputs
+                validity_loss = tf.keras.losses.binary_crossentropy(sample_labels, sample_output[0])
+                class_loss = tf.keras.losses.categorical_crossentropy(sample_class_labels, sample_output[1])
+                total_loss = tf.reduce_mean(validity_loss) + tf.reduce_mean(class_loss)
+            
+            grads = tape.gradient(total_loss, self.discriminator.trainable_variables)
             non_none_grads = len([g for g in grads if g is not None])
             total_grads = len(grads)
             self.logger.info(f"Gradients computed: {non_none_grads}/{total_grads}")
+            
+            # Log which variables don't have gradients
+            if non_none_grads < total_grads:
+                self.logger.info("Variables without gradients:")
+                for i, (var, grad) in enumerate(zip(self.discriminator.trainable_variables, grads)):
+                    if grad is None:
+                        self.logger.info(f"  - {var.name}")
 
 #########################################################################
 #                            TRAINING PROCESS                          #
