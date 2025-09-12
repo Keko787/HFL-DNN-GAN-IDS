@@ -320,15 +320,17 @@ class CentralACGan:
             layer.trainable = False
         
         # CRITICAL: Recompile AC-GAN with frozen discriminator using dynamic output names
-        self.ACGAN.compile(
-            loss={self.ACGAN.output_names[0]: 'binary_crossentropy', 
-                  self.ACGAN.output_names[1]: 'categorical_crossentropy'},
-            optimizer=self.gen_optimizer,
-            metrics={
-                self.ACGAN.output_names[0]: ['binary_accuracy'],
-                self.ACGAN.output_names[1]: ['categorical_accuracy']
-            }
-        )
+        # Only recompile if ACGAN has been created
+        if hasattr(self, 'ACGAN'):
+            self.ACGAN.compile(
+                loss={self.ACGAN.output_names[0]: 'binary_crossentropy', 
+                      self.ACGAN.output_names[1]: 'categorical_crossentropy'},
+                optimizer=self.gen_optimizer,
+                metrics={
+                    self.ACGAN.output_names[0]: ['binary_accuracy'],
+                    self.ACGAN.output_names[1]: ['categorical_accuracy']
+                }
+            )
 
     def unfreeze_discriminator_for_discriminator_training(self):
         """Properly unfreeze discriminator and recompile"""
