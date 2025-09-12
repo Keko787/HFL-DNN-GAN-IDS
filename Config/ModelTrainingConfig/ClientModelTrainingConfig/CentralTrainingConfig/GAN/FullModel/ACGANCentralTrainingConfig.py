@@ -114,19 +114,23 @@ class CentralACGan:
         # ═══════════════════════════════════════════════════════════════════════
         print("Discriminator Output:", self.discriminator.output_names)
 
-        # ─── DEBUG Model Compilation ───
-        # Compile Discriminator separately (before freezing)
-        # self.discriminator.compile(
-        #     loss={'validity': 'binary_crossentropy', 'class': 'categorical_crossentropy'},
-        #     optimizer=self.disc_optimizer,
-        #     metrics={
-        #         'validity': ['binary_accuracy'],
-        #         'class': ['categorical_accuracy']
-        #     }
-        # )
+        # ─── CRITICAL FIX: Get actual discriminator output names ───
+        print("Discriminator Outputs:", self.discriminator.output_names)
+        
+        # ─── Initial Discriminator Compilation (REQUIRED) ───
+        # Must compile discriminator first to establish optimizer state
+        self.discriminator.compile(
+            loss={self.discriminator.output_names[0]: 'binary_crossentropy', 
+                  self.discriminator.output_names[1]: 'categorical_crossentropy'},
+            optimizer=self.disc_optimizer,
+            metrics={
+                self.discriminator.output_names[0]: ['binary_accuracy'],
+                self.discriminator.output_names[1]: ['categorical_accuracy']
+            }
+        )
 
-        # NOTE: Freeze Discriminator only for AC-GAN training
-        self.discriminator.trainable = False
+        # ─── Freeze Discriminator for AC-GAN Creation ───
+        self.freeze_discriminator_for_generator_training()
 
         # ─── Define AC-GAN Architecture ───
         # • Input/Output Definition
@@ -140,13 +144,14 @@ class CentralACGan:
 
         print("ACGAN Output:", self.ACGAN.output_names)
 
-        # ─── AC-GAN Model Compilation ───
+        # ─── AC-GAN Model Compilation (Use Actual Output Names) ───
         self.ACGAN.compile(
-            loss={'Discriminator': 'binary_crossentropy', 'Discriminator_1': 'categorical_crossentropy'},
+            loss={self.ACGAN.output_names[0]: 'binary_crossentropy', 
+                  self.ACGAN.output_names[1]: 'categorical_crossentropy'},
             optimizer=self.gen_optimizer,
             metrics={
-                'Discriminator': ['binary_accuracy'],
-                'Discriminator_1': ['categorical_accuracy']
+                self.ACGAN.output_names[0]: ['binary_accuracy'],
+                self.ACGAN.output_names[1]: ['categorical_accuracy']
             }
         )
 
@@ -306,6 +311,59 @@ class CentralACGan:
         return fake_labels
 
 #########################################################################
+#                      DISCRIMINATOR FREEZE/UNFREEZE METHODS           #
+#########################################################################
+    def freeze_discriminator_for_generator_training(self):
+        """Properly freeze discriminator and recompile AC-GAN"""
+        self.discriminator.trainable = False
+        for layer in self.discriminator.layers:
+            layer.trainable = False
+        
+        # CRITICAL: Recompile AC-GAN with frozen discriminator using dynamic output names
+        self.ACGAN.compile(
+            loss={self.ACGAN.output_names[0]: 'binary_crossentropy', 
+                  self.ACGAN.output_names[1]: 'categorical_crossentropy'},
+            optimizer=self.gen_optimizer,
+            metrics={
+                self.ACGAN.output_names[0]: ['binary_accuracy'],
+                self.ACGAN.output_names[1]: ['categorical_accuracy']
+            }
+        )
+
+    def unfreeze_discriminator_for_discriminator_training(self):
+        """Properly unfreeze discriminator and recompile"""
+        self.discriminator.trainable = True
+        for layer in self.discriminator.layers:
+            layer.trainable = True
+        
+        # Recompile discriminator for next training phase using dynamic output names
+        self.discriminator.compile(
+            loss={self.discriminator.output_names[0]: 'binary_crossentropy', 
+                  self.discriminator.output_names[1]: 'categorical_crossentropy'},
+            optimizer=self.disc_optimizer,
+            metrics={
+                self.discriminator.output_names[0]: ['binary_accuracy'],
+                self.discriminator.output_names[1]: ['categorical_accuracy']
+            }
+        )
+
+    def log_discriminator_status(self, sample_input=None):
+        """Log discriminator training status for debugging"""
+        self.logger.info(f"Discriminator trainable: {self.discriminator.trainable}")
+        for i, layer in enumerate(self.discriminator.layers):
+            self.logger.info(f"  Layer {i} ({layer.name}): {layer.trainable}")
+        
+        # Check if gradients are computed (only if sample input provided)
+        if sample_input is not None:
+            with tf.GradientTape() as tape:
+                sample_output = self.discriminator(sample_input, training=False)
+                loss = tf.reduce_mean(sample_output[0])  # Use validity output
+            grads = tape.gradient(loss, self.discriminator.trainable_variables)
+            non_none_grads = len([g for g in grads if g is not None])
+            total_grads = len(grads)
+            self.logger.info(f"Gradients computed: {non_none_grads}/{total_grads}")
+
+#########################################################################
 #                            TRAINING PROCESS                          #
 #########################################################################
     def fit(self, X_train=None, y_train=None, d_to_g_ratio=1):
@@ -333,26 +391,15 @@ class CentralACGan:
         # DISCRIMINATOR TRAINING SETUP
         # ═══════════════════════════════════════════════════════════════════════
         # ─── Enable Discriminator Training ───
-        self.discriminator.trainable = True
-        # • Ensure all layers within discriminator are trainable
-        for layer in self.discriminator.layers:
-            layer.trainable = True
-
-        # ─── Re-compile Discriminator ───
-        self.discriminator.compile(
-            loss={'validity': 'binary_crossentropy', 'class': 'categorical_crossentropy'},
-            optimizer=self.disc_optimizer,
-            metrics={
-                'validity': ['binary_accuracy'],
-                'class': ['categorical_accuracy']
-            }
-        )
+        self.unfreeze_discriminator_for_discriminator_training()
 
         # ═══════════════════════════════════════════════════════════════════════
         # TRAINING INITIALIZATION & LOGGING
         # ═══════════════════════════════════════════════════════════════════════
         self.log_model_settings()
         self.logger.info(f"Training with discriminator-to-generator ratio: {d_to_g_ratio}:1")
+        self.logger.info("CRITICAL FIX: Using proper discriminator freeze/unfreeze with model recompilation")
+        self.logger.info("This addresses the mode collapse issue by ensuring gradient isolation during training phases")
 
         # ═══════════════════════════════════════════════════════════════════════
         # CLASS-SPECIFIC DATA SEPARATION
@@ -514,7 +561,13 @@ class CentralACGan:
                 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
                 # ─── Freeze Discriminator for Generator Training ───
-                self.discriminator.trainable = False
+                self.freeze_discriminator_for_generator_training()
+                
+                # Debug: Log discriminator status during generator training (first step only)
+                if step == 0 and epoch == 0:
+                    self.logger.info("=== Discriminator Status During Generator Training ===")
+                    sample_input = tf.random.normal((1, self.input_dim))
+                    self.log_discriminator_status(sample_input)
 
                 # ▼ BATCH 4: New Generator Input ▼
                 # • Generate new noise and label inputs for AC-GAN training
@@ -527,7 +580,13 @@ class CentralACGan:
                 epoch_g_losses.append(g_loss[0])
 
                 # ─── Unfreeze Discriminator for Next Steps ───
-                self.discriminator.trainable = True
+                self.unfreeze_discriminator_for_discriminator_training()
+                
+                # Debug: Log discriminator status after unfreezing (first step only)
+                if step == 0 and epoch == 0:
+                    self.logger.info("=== Discriminator Status After Unfreezing ===")
+                    sample_input = tf.random.normal((1, self.input_dim))
+                    self.log_discriminator_status(sample_input)
 
                 # ─── Progress Reporting ───
                 if step % max(1, actual_steps // 10) == 0:
