@@ -99,15 +99,17 @@ class CentralACGan:
         # OPTIMIZER CONFIGURATION
         # ═══════════════════════════════════════════════════════════════════════
         # ─── Learning Rate Schedules ───
+        # Slower learning for generator to prevent overpowering discriminator
         lr_schedule_gen = tf.keras.optimizers.schedules.ExponentialDecay(
-            initial_learning_rate=0.00001, decay_steps=10000, decay_rate=0.97, staircase=False)
+            initial_learning_rate=0.00001, decay_steps=10000, decay_rate=0.98, staircase=False)
 
+        # Faster learning for discriminator to maintain strength
         lr_schedule_disc = tf.keras.optimizers.schedules.ExponentialDecay(
-            initial_learning_rate=0.00003, decay_steps=10000, decay_rate=0.97, staircase=False)
+            initial_learning_rate=0.00005, decay_steps=10000, decay_rate=0.98, staircase=False)
 
-        # ─── Optimizer Compilation ───
-        self.gen_optimizer = Adam(learning_rate=lr_schedule_gen, beta_1=0.5, beta_2=0.999)
-        self.disc_optimizer = Adam(learning_rate=lr_schedule_disc, beta_1=0.5, beta_2=0.999)
+        # ─── Optimizer Compilation with Gradient Clipping ───
+        self.gen_optimizer = Adam(learning_rate=lr_schedule_gen, beta_1=0.5, beta_2=0.999, clipnorm=1.0)
+        self.disc_optimizer = Adam(learning_rate=lr_schedule_disc, beta_1=0.5, beta_2=0.999, clipnorm=1.0)
 
         # ═══════════════════════════════════════════════════════════════════════
         # MODEL COMPILATION
@@ -527,7 +529,8 @@ class CentralACGan:
                     fake_labels_onehot = tf.one_hot(fake_labels, depth=self.num_classes)
 
                     # • Generate data from noise and labels
-                    generated_data = self.generator.predict([noise, fake_labels], verbose=0)
+                    # Use direct call instead of predict() for better performance during training
+                    generated_data = self.generator([noise, fake_labels], training=False)
 
                     # • TRAIN DISCRIMINATOR ON FAKE DATA
                     d_loss_fake = self.discriminator.train_on_batch(generated_data, [fake_smooth, fake_labels_onehot])
@@ -719,7 +722,8 @@ class CentralACGan:
         fake_labels = self.generate_balanced_fake_labels(len(self.x_val))
         fake_labels_onehot = tf.one_hot(fake_labels, depth=self.num_classes)
         fake_valid_labels = np.zeros((len(self.x_val), 1))
-        generated_data = self.generator.predict([noise, fake_labels])
+        # Use direct call instead of predict() for better performance
+        generated_data = self.generator([noise, fake_labels], training=False)
 
         # ═══════════════════════════════════════════════════════════════════════
         # EVALUATE ON EACH DATA TYPE
@@ -828,7 +832,8 @@ class CentralACGan:
         # ─── Fake Data Generation ───
         noise = tf.random.normal((len(self.x_val), self.latent_dim))
         fake_labels = self.generate_balanced_fake_labels(len(self.x_val))
-        generated_samples = self.generator.predict([noise, fake_labels])
+        # Use direct call instead of predict() for better performance
+        generated_samples = self.generator([noise, fake_labels], training=False)
         X_fake = generated_samples
         y_fake = np.zeros((len(self.x_val),), dtype="int32")  # Fake samples labeled 0
 
@@ -944,7 +949,8 @@ class CentralACGan:
             fake_labels = self.generate_balanced_fake_labels(fake_count)
             fake_labels_onehot = tf.one_hot(fake_labels, depth=self.num_classes)
             fake_valid_labels = np.zeros((fake_count, 1))
-            generated_data = self.generator.predict([noise, fake_labels])
+            # Use direct call instead of predict() for better performance
+            generated_data = self.generator([noise, fake_labels], training=False)
         else:
             self.logger.warning("No test samples available to generate fake data")
             generated_data = tf.zeros((0, X_test.shape[1]))
@@ -1109,7 +1115,8 @@ class CentralACGan:
             # ─── Generate Fake Test Data for NIDS ───
             noise = tf.random.normal((len(X_test), self.latent_dim))
             fake_labels = self.generate_balanced_fake_labels(len(X_test))
-            generated_samples = self.generator.predict([noise, fake_labels])
+            # Use direct call instead of predict() for better performance
+            generated_samples = self.generator([noise, fake_labels], training=False)
             X_fake = generated_samples
             y_fake = np.zeros((len(X_test),), dtype="int32")
 
