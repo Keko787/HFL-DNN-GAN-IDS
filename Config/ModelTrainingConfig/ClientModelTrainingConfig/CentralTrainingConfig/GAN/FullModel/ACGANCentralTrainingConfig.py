@@ -451,6 +451,32 @@ class CentralACGan:
             # └─────────────────────────────────────────────────────────────────┘
             for step in range(actual_steps):
                 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+                # PRE-SAMPLE BATCHES FOR DISCRIMINATOR TRAINING
+                # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+                # Pre-sample all batches before discriminator loop for efficiency
+                benign_batches = []
+                attack_batches = []
+                
+                for d_step in range(d_to_g_ratio):
+                    # Pre-sample benign batches
+                    if len(benign_indices) > self.batch_size:
+                        benign_idx = tf.random.shuffle(benign_indices)[:self.batch_size]
+                        benign_batch_data = tf.gather(X_train, benign_idx)
+                        benign_batch_labels = tf.gather(y_train, benign_idx)
+                        benign_batches.append((benign_batch_data, benign_batch_labels))
+                    else:
+                        benign_batches.append(None)
+                    
+                    # Pre-sample attack batches
+                    if len(attack_indices) > self.batch_size:
+                        attack_idx = tf.random.shuffle(attack_indices)[:self.batch_size]
+                        attack_batch_data = tf.gather(X_train, attack_idx)
+                        attack_batch_labels = tf.gather(y_train, attack_idx)
+                        attack_batches.append((attack_batch_data, attack_batch_labels))
+                    else:
+                        attack_batches.append(None)
+                
+                # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
                 # DISCRIMINATOR TRAINING (Multiple Steps)
                 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
                 d_step_losses = []
@@ -461,11 +487,9 @@ class CentralACGan:
                     # ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
 
                     # ▼ BATCH 1: Train on Benign Data ▼
-                    if len(benign_indices) > self.batch_size:
-                        # • Select benign samples
-                        benign_idx = tf.random.shuffle(benign_indices)[:self.batch_size]
-                        benign_data = tf.gather(X_train, benign_idx)
-                        benign_labels = tf.gather(y_train, benign_idx)
+                    if benign_batches[d_step] is not None:
+                        # • Use pre-sampled benign batch
+                        benign_data, benign_labels = benign_batches[d_step]
 
                         # • Fix shape issues - ensure 2D data
                         if len(benign_data.shape) > 2:
@@ -490,11 +514,9 @@ class CentralACGan:
                                                                           [valid_smooth_benign, benign_labels_onehot])
 
                     # ▼ BATCH 2: Train on Attack Data ▼
-                    if len(attack_indices) > self.batch_size:
-                        # • Select attack samples
-                        attack_idx = tf.random.shuffle(attack_indices)[:self.batch_size]
-                        attack_data = tf.gather(X_train, attack_idx)
-                        attack_labels = tf.gather(y_train, attack_idx)
+                    if attack_batches[d_step] is not None:
+                        # • Use pre-sampled attack batch
+                        attack_data, attack_labels = attack_batches[d_step]
 
                         # • Fix shape issues - ensure 2D data
                         if len(attack_data.shape) > 2:
