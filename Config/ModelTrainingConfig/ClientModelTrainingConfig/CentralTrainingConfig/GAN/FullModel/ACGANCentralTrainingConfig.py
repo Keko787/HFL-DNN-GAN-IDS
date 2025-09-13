@@ -456,6 +456,7 @@ class CentralACGan:
                 # Pre-sample all batches before discriminator loop for efficiency
                 benign_batches = []
                 attack_batches = []
+                effective_fake_batch_sizes = []
                 
                 for d_step in range(d_to_g_ratio):
                     # Pre-sample benign batches with dynamic batch sizing
@@ -467,6 +468,7 @@ class CentralACGan:
                         benign_batches.append((benign_batch_data, benign_batch_labels))
                     else:
                         benign_batches.append(None)
+                        benign_batch_size = 0
                     
                     # Pre-sample attack batches with dynamic batch sizing
                     attack_batch_size = min(len(attack_indices), self.batch_size)
@@ -477,6 +479,18 @@ class CentralACGan:
                         attack_batches.append((attack_batch_data, attack_batch_labels))
                     else:
                         attack_batches.append(None)
+                        attack_batch_size = 0
+                    
+                    # Calculate effective fake batch size based on available real data
+                    effective_fake_batch_size = min(
+                        max(benign_batch_size, attack_batch_size),
+                        self.batch_size
+                    )
+                    # Ensure at least 1 sample for fake data if no real data available
+                    if effective_fake_batch_size == 0:
+                        effective_fake_batch_size = min(self.batch_size, 32)  # Fallback to smaller batch
+                    
+                    effective_fake_batch_sizes.append(effective_fake_batch_size)
                 
                 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
                 # DISCRIMINATOR TRAINING (Multiple Steps)
@@ -547,9 +561,10 @@ class CentralACGan:
                     # ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
 
                     # ▼ BATCH 3: Generate and Train on Fake Data ▼
-                    # • Sample noise data
-                    noise = tf.random.normal((self.batch_size, self.latent_dim))
-                    fake_labels = self.generate_balanced_fake_labels(self.batch_size)
+                    # • Sample noise data with adaptive batch size
+                    current_fake_batch_size = effective_fake_batch_sizes[d_step]
+                    noise = tf.random.normal((current_fake_batch_size, self.latent_dim))
+                    fake_labels = self.generate_balanced_fake_labels(current_fake_batch_size)
                     fake_labels_onehot = tf.one_hot(fake_labels, depth=self.num_classes)
 
                     # • Generate data from noise and labels
