@@ -458,18 +458,20 @@ class CentralACGan:
                 attack_batches = []
                 
                 for d_step in range(d_to_g_ratio):
-                    # Pre-sample benign batches
-                    if len(benign_indices) > self.batch_size:
-                        benign_idx = tf.random.shuffle(benign_indices)[:self.batch_size]
+                    # Pre-sample benign batches with dynamic batch sizing
+                    benign_batch_size = min(len(benign_indices), self.batch_size)
+                    if benign_batch_size > 0:  # Train if ANY samples available
+                        benign_idx = tf.random.shuffle(benign_indices)[:benign_batch_size]
                         benign_batch_data = tf.gather(X_train, benign_idx)
                         benign_batch_labels = tf.gather(y_train, benign_idx)
                         benign_batches.append((benign_batch_data, benign_batch_labels))
                     else:
                         benign_batches.append(None)
                     
-                    # Pre-sample attack batches
-                    if len(attack_indices) > self.batch_size:
-                        attack_idx = tf.random.shuffle(attack_indices)[:self.batch_size]
+                    # Pre-sample attack batches with dynamic batch sizing
+                    attack_batch_size = min(len(attack_indices), self.batch_size)
+                    if attack_batch_size > 0:  # Train if ANY samples available
+                        attack_idx = tf.random.shuffle(attack_indices)[:attack_batch_size]
                         attack_batch_data = tf.gather(X_train, attack_idx)
                         attack_batch_labels = tf.gather(y_train, attack_idx)
                         attack_batches.append((attack_batch_data, attack_batch_labels))
@@ -554,8 +556,11 @@ class CentralACGan:
                     # Use direct call instead of predict() for better performance during training
                     generated_data = self.generator([noise, fake_labels], training=False)
 
+                    # • Create fake validity labels with proper batch size
+                    fake_smooth_batch = tf.zeros((generated_data.shape[0], 1)) + fake_smoothing_factor
+
                     # • TRAIN DISCRIMINATOR ON FAKE DATA
-                    d_loss_fake = self.discriminator.train_on_batch(generated_data, [fake_smooth, fake_labels_onehot])
+                    d_loss_fake = self.discriminator.train_on_batch(generated_data, [fake_smooth_batch, fake_labels_onehot])
 
                     # ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
                     # ┃           CALCULATE DISCRIMINATOR WEIGHTED LOSS               ┃
@@ -597,8 +602,11 @@ class CentralACGan:
                 sampled_labels = self.generate_balanced_fake_labels(self.batch_size)
                 sampled_labels_onehot = tf.one_hot(sampled_labels, depth=self.num_classes)
 
+                # • Create validity labels for generator with proper batch size
+                valid_smooth_gen_batch = tf.ones((noise.shape[0], 1)) * (1 - gen_smoothing_factor)
+
                 # • Train AC-GAN with sampled noise data
-                g_loss = self.ACGAN.train_on_batch([noise, sampled_labels], [valid_smooth_gen, sampled_labels_onehot])
+                g_loss = self.ACGAN.train_on_batch([noise, sampled_labels], [valid_smooth_gen_batch, sampled_labels_onehot])
                 epoch_g_losses.append(g_loss[0])
 
                 # ─── Unfreeze Discriminator for Next Steps ───
