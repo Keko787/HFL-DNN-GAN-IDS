@@ -437,7 +437,7 @@ class CentralACGan:
         # ═══════════════════════════════════════════════════════════════════════
         for epoch in range(self.epochs):
             print(f'\n=== Epoch {epoch + 1}/{self.epochs} ===\n')
-            self.logger.info(f'=== Epoch {epoch}/{self.epochs} ===')
+            self.logger.info(f'=== Epoch {epoch + 1}/{self.epochs} ===')
 
             # ─── Epoch Metrics Initialization ───
             epoch_d_losses = []
