@@ -230,7 +230,7 @@ class CentralACGan:
 
     def log_epoch_metrics(self, epoch, d_metrics, g_metrics, nids_metrics=None, fusion_metrics=None):
         """Logs a formatted summary of the metrics for this epoch."""
-        self.logger.info(f"=== Epoch {epoch} Metrics Summary ===")
+        self.logger.info(f"=== Epoch {epoch + 1} Metrics Summary ===")
 
         # ─── Discriminator Metrics ───
         self.logger.info("Discriminator Metrics:")
@@ -363,6 +363,40 @@ class CentralACGan:
                         self.logger.info(f"  - {var.name}")
 
 #########################################################################
+#                      BATCH DATA PROCESSING HELPER                     #
+#########################################################################
+    def process_batch_data(self, data, labels, valid_smoothing_factor):
+        """
+        Process batch data and labels to ensure correct shapes and encoding.
+
+        Args:
+            data: Input feature data
+            labels: Corresponding labels
+            valid_smoothing_factor: Label smoothing factor for validity labels
+
+        Returns:
+            Tuple of (processed_data, processed_labels, validity_labels)
+        """
+        # • Fix shape issues - ensure 2D data
+        if len(data.shape) > 2:
+            data = tf.reshape(data, (data.shape[0], -1))
+
+        # • Ensure one-hot encoding
+        if len(labels.shape) == 1:
+            labels_onehot = tf.one_hot(tf.cast(labels, tf.int32), depth=self.num_classes)
+        else:
+            labels_onehot = labels
+
+        # • Ensure correct shape for labels
+        if len(labels_onehot.shape) > 2:
+            labels_onehot = tf.reshape(labels_onehot, (labels_onehot.shape[0], self.num_classes))
+
+        # • Create validity labels with smoothing
+        validity_labels = tf.ones((data.shape[0], 1)) * (1 - valid_smoothing_factor)
+
+        return data, labels_onehot, validity_labels
+
+#########################################################################
 #                            TRAINING PROCESS                          #
 #########################################################################
     def fit(self, X_train=None, y_train=None, d_to_g_ratio=1):
@@ -446,6 +480,17 @@ class CentralACGan:
             # ─── Determine Steps per Epoch ───
             actual_steps = min(self.steps_per_epoch, len(X_train) // self.batch_size)
 
+            # ═══════════════════════════════════════════════════════════════════════
+            # SHUFFLE INDICES ONCE PER EPOCH (NOT PER STEP)
+            # ═══════════════════════════════════════════════════════════════════════
+            # Shuffle ONCE at the start of the epoch to prevent duplicate sampling across steps
+            shuffled_benign_indices = tf.random.shuffle(benign_indices)
+            shuffled_attack_indices = tf.random.shuffle(attack_indices)
+
+            # Initialize global offsets for tracking position in shuffled indices
+            global_benign_offset = 0
+            global_attack_offset = 0
+
             # ┌─────────────────────────────────────────────────────────────────┐
             # │                      STEP-BY-STEP TRAINING                      │
             # └─────────────────────────────────────────────────────────────────┘
@@ -457,30 +502,44 @@ class CentralACGan:
                 benign_batches = []
                 attack_batches = []
                 effective_fake_batch_sizes = []
-                
+
                 for d_step in range(d_to_g_ratio):
+                    # Calculate start/end for benign batch using global offset
+                    benign_start = global_benign_offset
+                    benign_end = min(benign_start + self.batch_size, len(benign_indices))
+
                     # Pre-sample benign batches with dynamic batch sizing
-                    benign_batch_size = min(len(benign_indices), self.batch_size)
-                    if benign_batch_size > 0:  # Train if ANY samples available
-                        benign_idx = tf.random.shuffle(benign_indices)[:benign_batch_size]
+                    if benign_start < len(benign_indices):
+                        # Take consecutive slice from shuffled indices
+                        benign_idx = shuffled_benign_indices[benign_start:benign_end]
                         benign_batch_data = tf.gather(X_train, benign_idx)
                         benign_batch_labels = tf.gather(y_train, benign_idx)
                         benign_batches.append((benign_batch_data, benign_batch_labels))
+                        benign_batch_size = benign_end - benign_start
+                        # Advance global offset for next iteration
+                        global_benign_offset = benign_end
                     else:
                         benign_batches.append(None)
                         benign_batch_size = 0
-                    
+
+                    # Calculate start/end for attack batch using global offset
+                    attack_start = global_attack_offset
+                    attack_end = min(attack_start + self.batch_size, len(attack_indices))
+
                     # Pre-sample attack batches with dynamic batch sizing
-                    attack_batch_size = min(len(attack_indices), self.batch_size)
-                    if attack_batch_size > 0:  # Train if ANY samples available
-                        attack_idx = tf.random.shuffle(attack_indices)[:attack_batch_size]
+                    if attack_start < len(attack_indices):
+                        # Take consecutive slice from shuffled indices
+                        attack_idx = shuffled_attack_indices[attack_start:attack_end]
                         attack_batch_data = tf.gather(X_train, attack_idx)
                         attack_batch_labels = tf.gather(y_train, attack_idx)
                         attack_batches.append((attack_batch_data, attack_batch_labels))
+                        attack_batch_size = attack_end - attack_start
+                        # Advance global offset for next iteration
+                        global_attack_offset = attack_end
                     else:
                         attack_batches.append(None)
                         attack_batch_size = 0
-                    
+
                     # Calculate effective fake batch size based on available real data
                     effective_fake_batch_size = min(
                         max(benign_batch_size, attack_batch_size),
@@ -489,7 +548,7 @@ class CentralACGan:
                     # Ensure at least 1 sample for fake data if no real data available
                     if effective_fake_batch_size == 0:
                         effective_fake_batch_size = min(self.batch_size, 32)  # Fallback to smaller batch
-                    
+
                     effective_fake_batch_sizes.append(effective_fake_batch_size)
                 
                 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -507,23 +566,9 @@ class CentralACGan:
                         # • Use pre-sampled benign batch
                         benign_data, benign_labels = benign_batches[d_step]
 
-                        # • Fix shape issues - ensure 2D data
-                        if len(benign_data.shape) > 2:
-                            benign_data = tf.reshape(benign_data, (benign_data.shape[0], -1))
-
-                        # • Ensure one-hot encoding
-                        if len(benign_labels.shape) == 1:
-                            benign_labels_onehot = tf.one_hot(tf.cast(benign_labels, tf.int32), depth=self.num_classes)
-                        else:
-                            benign_labels_onehot = benign_labels
-
-                        # • Ensure correct shape for labels
-                        if len(benign_labels_onehot.shape) > 2:
-                            benign_labels_onehot = tf.reshape(benign_labels_onehot,
-                                                              (benign_labels_onehot.shape[0], self.num_classes))
-
-                        # • Create validity labels
-                        valid_smooth_benign = tf.ones((benign_data.shape[0], 1)) * (1 - valid_smoothing_factor)
+                        # • Process batch data using helper function
+                        benign_data, benign_labels_onehot, valid_smooth_benign = self.process_batch_data(
+                            benign_data, benign_labels, valid_smoothing_factor)
 
                         # • TRAIN DISCRIMINATOR ON BATCH DATA
                         d_loss_benign = self.discriminator.train_on_batch(benign_data,
@@ -534,23 +579,9 @@ class CentralACGan:
                         # • Use pre-sampled attack batch
                         attack_data, attack_labels = attack_batches[d_step]
 
-                        # • Fix shape issues - ensure 2D data
-                        if len(attack_data.shape) > 2:
-                            attack_data = tf.reshape(attack_data, (attack_data.shape[0], -1))
-
-                        # • Ensure one-hot encoding
-                        if len(attack_labels.shape) == 1:
-                            attack_labels_onehot = tf.one_hot(tf.cast(attack_labels, tf.int32), depth=self.num_classes)
-                        else:
-                            attack_labels_onehot = attack_labels
-
-                        # • Ensure correct shape for labels
-                        if len(attack_labels_onehot.shape) > 2:
-                            attack_labels_onehot = tf.reshape(attack_labels_onehot,
-                                                              (attack_labels_onehot.shape[0], self.num_classes))
-
-                        # • Create validity labels
-                        valid_smooth_attack = tf.ones((attack_data.shape[0], 1)) * (1 - valid_smoothing_factor)
+                        # • Process batch data using helper function
+                        attack_data, attack_labels_onehot, valid_smooth_attack = self.process_batch_data(
+                            attack_data, attack_labels, valid_smoothing_factor)
 
                         # • TRAIN DISCRIMINATOR ON ATTACK DATA
                         d_loss_attack = self.discriminator.train_on_batch(attack_data,
@@ -686,7 +717,7 @@ class CentralACGan:
             # ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
             # ┃                      EPOCH VALIDATION                               ┃
             # ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
-            self.logger.info(f"=== Epoch {epoch} Validation ===")
+            self.logger.info(f"=== Epoch {epoch + 1} Validation ===")
 
             # ─── GAN Validation ───
             d_val_loss, d_val_metrics = self.validation_disc()
