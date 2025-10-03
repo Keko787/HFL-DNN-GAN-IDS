@@ -445,15 +445,15 @@ class CentralACGan:
         # LABEL SMOOTHING CONFIGURATION
         # ═══════════════════════════════════════════════════════════════════════
         # ─── Discriminator Label Smoothing ───
-        valid_smoothing_factor = 0.08
+        valid_smoothing_factor = 0.12
         valid_smooth = tf.ones((self.batch_size, 1)) * (1 - valid_smoothing_factor)
 
-        fake_smoothing_factor = 0.05
+        fake_smoothing_factor = 0.10
         fake_smooth = tf.zeros((self.batch_size, 1)) + fake_smoothing_factor
 
         # ─── Generator Label Smoothing ───
         # NOTE: Use slightly different smoothing to keep generator from becoming too confident or don't I'm not your mom
-        gen_smoothing_factor = 0.08
+        gen_smoothing_factor = 0.05
         valid_smooth_gen = tf.ones((self.batch_size, 1)) * (1 - gen_smoothing_factor)  # Slightly less than 1.0
 
         self.logger.info(f"Using valid label smoothing with factor: {valid_smoothing_factor}")
