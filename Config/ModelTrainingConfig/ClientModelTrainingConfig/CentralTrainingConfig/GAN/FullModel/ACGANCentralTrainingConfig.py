@@ -119,49 +119,199 @@ class CentralACGan:
         # ─── CRITICAL FIX: Get actual discriminator output names ───
         print("Discriminator Outputs:", self.discriminator.output_names)
         
-        # ─── Initial Discriminator Compilation (REQUIRED) ───
-        # Must compile discriminator first to establish optimizer state
-        self.discriminator.compile(
-            loss={self.discriminator.output_names[0]: 'binary_crossentropy', 
-                  self.discriminator.output_names[1]: 'categorical_crossentropy'},
-            optimizer=self.disc_optimizer,
-            metrics={
-                self.discriminator.output_names[0]: ['binary_accuracy'],
-                self.discriminator.output_names[1]: ['categorical_accuracy']
-            }
-        )
+        # ═══════════════════════════════════════════════════════════════════════
+        # LOSS FUNCTIONS SETUP
+        # ═══════════════════════════════════════════════════════════════════════
+        # Define loss functions for custom training
+        self.binary_crossentropy = tf.keras.losses.BinaryCrossentropy(from_logits=False)
+        self.categorical_crossentropy = tf.keras.losses.CategoricalCrossentropy(from_logits=False)
 
-        # ─── Freeze Discriminator for AC-GAN Creation ───
-        self.freeze_discriminator_for_generator_training()
+        # ═══════════════════════════════════════════════════════════════════════
+        # METRICS SETUP
+        # ═══════════════════════════════════════════════════════════════════════
+        # Create metrics for tracking (optional, for compatibility with existing code)
+        self.d_binary_accuracy = tf.keras.metrics.BinaryAccuracy(name='d_binary_accuracy')
+        self.d_categorical_accuracy = tf.keras.metrics.CategoricalAccuracy(name='d_categorical_accuracy')
+        self.g_binary_accuracy = tf.keras.metrics.BinaryAccuracy(name='g_binary_accuracy')
+        self.g_categorical_accuracy = tf.keras.metrics.CategoricalAccuracy(name='g_categorical_accuracy')
 
-        # ─── Define AC-GAN Architecture ───
-        # • Input/Output Definition
-        noise_input = tf.keras.Input(shape=(latent_dim,))
-        label_input = tf.keras.Input(shape=(1,), dtype='int32')
-        generated_data = self.generator([noise_input, label_input])
-        validity, class_pred = self.discriminator(generated_data)
-
-        # • Combined Model Creation
-        self.ACGAN = Model([noise_input, label_input], [validity, class_pred])
-
-        print("ACGAN Output:", self.ACGAN.output_names)
-
-        # ─── AC-GAN Model Compilation (Use Actual Output Names) ───
-        self.ACGAN.compile(
-            loss={self.ACGAN.output_names[0]: 'binary_crossentropy', 
-                  self.ACGAN.output_names[1]: 'categorical_crossentropy'},
-            optimizer=self.gen_optimizer,
-            metrics={
-                self.ACGAN.output_names[0]: ['binary_accuracy'],
-                self.ACGAN.output_names[1]: ['categorical_accuracy']
-            }
-        )
+        # NOTE: No model compilation needed - using custom training loops
 
 # ═══════════════════════════════════════════════════════════════════════
 # MODEL ACCESS METHODS
 # ═══════════════════════════════════════════════════════════════════════
     def setACGAN(self):
-        return self.ACGAN
+        # For backward compatibility - ACGAN model no longer exists
+        return None
+
+#########################################################################
+#                   CUSTOM TRAINING STEP METHODS                        #
+#########################################################################
+    @tf.function
+    def train_discriminator_step(self, real_data, real_labels, real_validity_labels):
+        """
+        Custom training step for discriminator on real data.
+
+        Args:
+            real_data: Real input features
+            real_labels: One-hot encoded class labels
+            real_validity_labels: Validity labels (1 for real)
+
+        Returns:
+            Tuple of (total_loss, validity_loss, class_loss, validity_acc, class_acc)
+        """
+        with tf.GradientTape() as tape:
+            # Forward pass with training=True
+            validity_pred, class_pred = self.discriminator(real_data, training=True)
+
+            # Calculate losses
+            validity_loss = self.binary_crossentropy(real_validity_labels, validity_pred)
+            class_loss = self.categorical_crossentropy(real_labels, class_pred)
+            total_loss = validity_loss + class_loss
+
+        # Calculate gradients and update weights
+        gradients = tape.gradient(total_loss, self.discriminator.trainable_variables)
+        self.disc_optimizer.apply_gradients(zip(gradients, self.discriminator.trainable_variables))
+
+        # Calculate accuracies
+        validity_acc = self.d_binary_accuracy(real_validity_labels, validity_pred)
+        class_acc = self.d_categorical_accuracy(real_labels, class_pred)
+
+        return total_loss, validity_loss, class_loss, validity_acc, class_acc
+
+    @tf.function
+    def train_discriminator_on_fake_step(self, fake_data, fake_labels, fake_validity_labels):
+        """
+        Custom training step for discriminator on fake/generated data.
+
+        Args:
+            fake_data: Generated input features
+            fake_labels: One-hot encoded class labels for generated data
+            fake_validity_labels: Validity labels (0 for fake)
+
+        Returns:
+            Tuple of (total_loss, validity_loss, class_loss, validity_acc, class_acc)
+        """
+        with tf.GradientTape() as tape:
+            # Forward pass with training=True
+            validity_pred, class_pred = self.discriminator(fake_data, training=True)
+
+            # Calculate losses
+            validity_loss = self.binary_crossentropy(fake_validity_labels, validity_pred)
+            class_loss = self.categorical_crossentropy(fake_labels, class_pred)
+            total_loss = validity_loss + class_loss
+
+        # Calculate gradients and update weights
+        gradients = tape.gradient(total_loss, self.discriminator.trainable_variables)
+        self.disc_optimizer.apply_gradients(zip(gradients, self.discriminator.trainable_variables))
+
+        # Calculate accuracies
+        validity_acc = self.d_binary_accuracy(fake_validity_labels, validity_pred)
+        class_acc = self.d_categorical_accuracy(fake_labels, class_pred)
+
+        return total_loss, validity_loss, class_loss, validity_acc, class_acc
+
+    @tf.function
+    def train_generator_step(self, noise, labels, validity_labels):
+        """
+        Custom training step for generator.
+        CRITICAL: Discriminator is called with training=False to prevent BatchNorm corruption.
+
+        Args:
+            noise: Random noise input
+            labels: One-hot encoded class labels
+            validity_labels: Target validity labels (1 - generator wants to fool discriminator)
+
+        Returns:
+            Tuple of (total_loss, validity_loss, class_loss, validity_acc, class_acc)
+        """
+        with tf.GradientTape() as tape:
+            # Generate fake data with training=True
+            generated_data = self.generator([noise, labels], training=True)
+
+            # CRITICAL: Call discriminator with training=False
+            # This prevents BatchNorm layers from updating their statistics
+            validity_pred, class_pred = self.discriminator(generated_data, training=False)
+
+            # Calculate losses (generator wants discriminator to predict "real")
+            validity_loss = self.binary_crossentropy(validity_labels, validity_pred)
+            class_loss = self.categorical_crossentropy(labels, class_pred)
+            total_loss = validity_loss + class_loss
+
+        # Calculate gradients ONLY for generator variables
+        gradients = tape.gradient(total_loss, self.generator.trainable_variables)
+        self.gen_optimizer.apply_gradients(zip(gradients, self.generator.trainable_variables))
+
+        # Calculate accuracies
+        validity_acc = self.g_binary_accuracy(validity_labels, validity_pred)
+        class_acc = self.g_categorical_accuracy(labels, class_pred)
+
+        return total_loss, validity_loss, class_loss, validity_acc, class_acc
+
+    @tf.function
+    def evaluate_discriminator(self, data, labels, validity_labels):
+        """
+        Evaluate discriminator without updating weights.
+
+        Args:
+            data: Input features
+            labels: One-hot encoded class labels
+            validity_labels: Validity labels
+
+        Returns:
+            Tuple of (total_loss, validity_loss, class_loss, validity_acc, class_acc)
+        """
+        # Forward pass with training=False for evaluation
+        validity_pred, class_pred = self.discriminator(data, training=False)
+
+        # Calculate losses
+        validity_loss = self.binary_crossentropy(validity_labels, validity_pred)
+        class_loss = self.categorical_crossentropy(labels, class_pred)
+        total_loss = validity_loss + class_loss
+
+        # Calculate accuracies
+        validity_acc = tf.reduce_mean(
+            tf.cast(tf.equal(tf.round(validity_pred), validity_labels), tf.float32)
+        )
+        class_acc = tf.reduce_mean(
+            tf.cast(tf.equal(tf.argmax(class_pred, axis=1), tf.argmax(labels, axis=1)), tf.float32)
+        )
+
+        return total_loss, validity_loss, class_loss, validity_acc, class_acc
+
+    @tf.function
+    def evaluate_generator(self, noise, labels, validity_labels):
+        """
+        Evaluate generator without updating weights.
+
+        Args:
+            noise: Random noise input
+            labels: One-hot encoded class labels
+            validity_labels: Target validity labels
+
+        Returns:
+            Tuple of (total_loss, validity_loss, class_loss, validity_acc, class_acc)
+        """
+        # Generate data
+        generated_data = self.generator([noise, labels], training=False)
+
+        # Get discriminator predictions
+        validity_pred, class_pred = self.discriminator(generated_data, training=False)
+
+        # Calculate losses
+        validity_loss = self.binary_crossentropy(validity_labels, validity_pred)
+        class_loss = self.categorical_crossentropy(labels, class_pred)
+        total_loss = validity_loss + class_loss
+
+        # Calculate accuracies
+        validity_acc = tf.reduce_mean(
+            tf.cast(tf.equal(tf.round(validity_pred), validity_labels), tf.float32)
+        )
+        class_acc = tf.reduce_mean(
+            tf.cast(tf.equal(tf.argmax(class_pred, axis=1), tf.argmax(labels, axis=1)), tf.float32)
+        )
+
+        return total_loss, validity_loss, class_loss, validity_acc, class_acc
 
 #########################################################################
 #                           LOGGING FUNCTIONS                          #
@@ -313,54 +463,11 @@ class CentralACGan:
         return fake_labels
 
 #########################################################################
-#                      DISCRIMINATOR FREEZE/UNFREEZE METHODS           #
+#                      LEGACY METHODS (NO LONGER USED)                 #
 #########################################################################
-    def freeze_discriminator_for_generator_training(self):
-        """Properly freeze discriminator for generator training"""
-        # Only change trainable status, don't recompile
-        # The ACGAN model will use the frozen state automatically
-        self.discriminator.trainable = False
-        for layer in self.discriminator.layers:
-            layer.trainable = False
-
-    def unfreeze_discriminator_for_discriminator_training(self):
-        """Properly unfreeze discriminator for discriminator training"""
-        # Only change trainable status, don't recompile
-        self.discriminator.trainable = True
-        for layer in self.discriminator.layers:
-            layer.trainable = True
-
-    def log_discriminator_status(self, sample_input=None):
-        """Log discriminator training status for debugging"""
-        self.logger.info(f"Discriminator trainable: {self.discriminator.trainable}")
-        for i, layer in enumerate(self.discriminator.layers):
-            self.logger.info(f"  Layer {i} ({layer.name}): {layer.trainable}")
-        
-        # Check if gradients are computed (only if sample input provided)
-        if sample_input is not None:
-            # Create fake labels for the sample
-            sample_labels = tf.ones((sample_input.shape[0], 1))  # Validity label
-            sample_class_labels = tf.one_hot(tf.zeros(sample_input.shape[0], dtype=tf.int32), depth=self.num_classes)
-            
-            with tf.GradientTape() as tape:
-                # Use training=True to ensure proper gradient flow
-                sample_output = self.discriminator(sample_input, training=True)
-                # Calculate losses for both outputs
-                validity_loss = tf.keras.losses.binary_crossentropy(sample_labels, sample_output[0])
-                class_loss = tf.keras.losses.categorical_crossentropy(sample_class_labels, sample_output[1])
-                total_loss = tf.reduce_mean(validity_loss) + tf.reduce_mean(class_loss)
-            
-            grads = tape.gradient(total_loss, self.discriminator.trainable_variables)
-            non_none_grads = len([g for g in grads if g is not None])
-            total_grads = len(grads)
-            self.logger.info(f"Gradients computed: {non_none_grads}/{total_grads}")
-            
-            # Log which variables don't have gradients
-            if non_none_grads < total_grads:
-                self.logger.info("Variables without gradients:")
-                for i, (var, grad) in enumerate(zip(self.discriminator.trainable_variables, grads)):
-                    if grad is None:
-                        self.logger.info(f"  - {var.name}")
+# NOTE: Freeze/unfreeze methods are no longer needed with custom training steps.
+# The discriminator's training mode is controlled explicitly via training=True/False
+# in the custom training step functions.
 
 #########################################################################
 #                      BATCH DATA PROCESSING HELPER                     #
@@ -421,18 +528,13 @@ class CentralACGan:
             y_train = self.y_train
 
         # ═══════════════════════════════════════════════════════════════════════
-        # DISCRIMINATOR TRAINING SETUP
-        # ═══════════════════════════════════════════════════════════════════════
-        # ─── Enable Discriminator Training ───
-        self.unfreeze_discriminator_for_discriminator_training()
-
-        # ═══════════════════════════════════════════════════════════════════════
         # TRAINING INITIALIZATION & LOGGING
         # ═══════════════════════════════════════════════════════════════════════
         self.log_model_settings()
         self.logger.info(f"Training with discriminator-to-generator ratio: {d_to_g_ratio}:1")
-        self.logger.info("CRITICAL FIX: Using proper discriminator freeze/unfreeze with model recompilation")
-        self.logger.info("This addresses the mode collapse issue by ensuring gradient isolation during training phases")
+        self.logger.info("CRITICAL FIX: Using custom training loops with separate optimizers")
+        self.logger.info("Generator training uses discriminator with training=False to prevent BatchNorm corruption")
+        self.logger.info("This addresses the mode collapse issue by ensuring BatchNorm statistics isolation")
 
         # ═══════════════════════════════════════════════════════════════════════
         # CLASS-SPECIFIC DATA SEPARATION
@@ -570,9 +672,18 @@ class CentralACGan:
                         benign_data, benign_labels_onehot, valid_smooth_benign = self.process_batch_data(
                             benign_data, benign_labels, valid_smoothing_factor)
 
-                        # • TRAIN DISCRIMINATOR ON BATCH DATA
-                        d_loss_benign = self.discriminator.train_on_batch(benign_data,
-                                                                          [valid_smooth_benign, benign_labels_onehot])
+                        # • TRAIN DISCRIMINATOR ON BATCH DATA (CUSTOM TRAINING STEP)
+                        d_total_benign, d_val_loss_benign, d_cls_loss_benign, d_val_acc_benign, d_cls_acc_benign = \
+                            self.train_discriminator_step(benign_data, benign_labels_onehot, valid_smooth_benign)
+
+                        # Package results in same format as before for compatibility
+                        d_loss_benign = [
+                            float(d_total_benign.numpy()),
+                            float(d_val_loss_benign.numpy()),
+                            float(d_cls_loss_benign.numpy()),
+                            float(d_val_acc_benign.numpy()),
+                            float(d_cls_acc_benign.numpy())
+                        ]
 
                     # ▼ BATCH 2: Train on Attack Data ▼
                     if attack_batches[d_step] is not None:
@@ -583,9 +694,18 @@ class CentralACGan:
                         attack_data, attack_labels_onehot, valid_smooth_attack = self.process_batch_data(
                             attack_data, attack_labels, valid_smoothing_factor)
 
-                        # • TRAIN DISCRIMINATOR ON ATTACK DATA
-                        d_loss_attack = self.discriminator.train_on_batch(attack_data,
-                                                                          [valid_smooth_attack, attack_labels_onehot])
+                        # • TRAIN DISCRIMINATOR ON ATTACK DATA (CUSTOM TRAINING STEP)
+                        d_total_attack, d_val_loss_attack, d_cls_loss_attack, d_val_acc_attack, d_cls_acc_attack = \
+                            self.train_discriminator_step(attack_data, attack_labels_onehot, valid_smooth_attack)
+
+                        # Package results in same format as before for compatibility
+                        d_loss_attack = [
+                            float(d_total_attack.numpy()),
+                            float(d_val_loss_attack.numpy()),
+                            float(d_cls_loss_attack.numpy()),
+                            float(d_val_acc_attack.numpy()),
+                            float(d_cls_acc_attack.numpy())
+                        ]
 
                     # ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
                     # ┃                  TRAIN ON FAKE DATA                           ┃
@@ -605,8 +725,18 @@ class CentralACGan:
                     # • Create fake validity labels with proper batch size
                     fake_smooth_batch = tf.zeros((generated_data.shape[0], 1)) + fake_smoothing_factor
 
-                    # • TRAIN DISCRIMINATOR ON FAKE DATA
-                    d_loss_fake = self.discriminator.train_on_batch(generated_data, [fake_smooth_batch, fake_labels_onehot])
+                    # • TRAIN DISCRIMINATOR ON FAKE DATA (CUSTOM TRAINING STEP)
+                    d_total_fake, d_val_loss_fake, d_cls_loss_fake, d_val_acc_fake, d_cls_acc_fake = \
+                        self.train_discriminator_on_fake_step(generated_data, fake_labels_onehot, fake_smooth_batch)
+
+                    # Package results in same format as before for compatibility
+                    d_loss_fake = [
+                        float(d_total_fake.numpy()),
+                        float(d_val_loss_fake.numpy()),
+                        float(d_cls_loss_fake.numpy()),
+                        float(d_val_acc_fake.numpy()),
+                        float(d_cls_acc_fake.numpy())
+                    ]
 
                     # ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
                     # ┃           CALCULATE DISCRIMINATOR WEIGHTED LOSS               ┃
@@ -633,17 +763,8 @@ class CentralACGan:
                 # GENERATOR TRAINING (Single Step)
                 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-                # ─── Freeze Discriminator for Generator Training ───
-                self.freeze_discriminator_for_generator_training()
-                
-                # Debug: Log discriminator status during generator training (first step only)
-                if step == 0 and epoch == 0:
-                    self.logger.info("=== Discriminator Status During Generator Training ===")
-                    sample_input = tf.random.normal((1, self.input_dim))
-                    self.log_discriminator_status(sample_input)
-
                 # ▼ BATCH 4: New Generator Input ▼
-                # • Generate new noise and label inputs for AC-GAN training
+                # • Generate new noise and label inputs for generator training
                 noise = tf.random.normal((self.batch_size, self.latent_dim))
                 sampled_labels = self.generate_balanced_fake_labels(self.batch_size)
                 sampled_labels_onehot = tf.one_hot(sampled_labels, depth=self.num_classes)
@@ -651,18 +772,20 @@ class CentralACGan:
                 # • Create validity labels for generator with proper batch size
                 valid_smooth_gen_batch = tf.ones((noise.shape[0], 1)) * (1 - gen_smoothing_factor)
 
-                # • Train AC-GAN with sampled noise data
-                g_loss = self.ACGAN.train_on_batch([noise, sampled_labels], [valid_smooth_gen_batch, sampled_labels_onehot])
-                epoch_g_losses.append(g_loss[0])
+                # • TRAIN GENERATOR (CUSTOM TRAINING STEP)
+                # CRITICAL: discriminator is called with training=False inside this function
+                g_total, g_val_loss, g_cls_loss, g_val_acc, g_cls_acc = \
+                    self.train_generator_step(noise, sampled_labels_onehot, valid_smooth_gen_batch)
 
-                # ─── Unfreeze Discriminator for Next Steps ───
-                self.unfreeze_discriminator_for_discriminator_training()
-                
-                # Debug: Log discriminator status after unfreezing (first step only)
-                if step == 0 and epoch == 0:
-                    self.logger.info("=== Discriminator Status After Unfreezing ===")
-                    sample_input = tf.random.normal((1, self.input_dim))
-                    self.log_discriminator_status(sample_input)
+                # Package results in same format as before for compatibility
+                g_loss = [
+                    float(g_total.numpy()),
+                    float(g_val_loss.numpy()),
+                    float(g_cls_loss.numpy()),
+                    float(g_val_acc.numpy()),
+                    float(g_cls_acc.numpy())
+                ]
+                epoch_g_losses.append(g_loss[0])
 
                 # ─── Progress Reporting ───
                 if step % max(1, actual_steps // 10) == 0:
@@ -806,20 +929,41 @@ class CentralACGan:
         # ═══════════════════════════════════════════════════════════════════════
         # ─── Benign Evaluation ───
         benign_valid_labels = np.ones((len(x_val_benign), 1))
-        d_loss_benign = self.discriminator.evaluate(
-            x_val_benign, [benign_valid_labels, y_val_benign_onehot], verbose=0
-        )
+        d_total_benign, d_val_loss_benign, d_cls_loss_benign, d_val_acc_benign, d_cls_acc_benign = \
+            self.evaluate_discriminator(x_val_benign, y_val_benign_onehot, benign_valid_labels)
+
+        d_loss_benign = [
+            float(d_total_benign.numpy()),
+            float(d_val_loss_benign.numpy()),
+            float(d_cls_loss_benign.numpy()),
+            float(d_val_acc_benign.numpy()),
+            float(d_cls_acc_benign.numpy())
+        ]
 
         # ─── Attack Evaluation ───
         attack_valid_labels = np.ones((len(x_val_attack), 1))
-        d_loss_attack = self.discriminator.evaluate(
-            x_val_attack, [attack_valid_labels, y_val_attack_onehot], verbose=0
-        )
+        d_total_attack, d_val_loss_attack, d_cls_loss_attack, d_val_acc_attack, d_cls_acc_attack = \
+            self.evaluate_discriminator(x_val_attack, y_val_attack_onehot, attack_valid_labels)
+
+        d_loss_attack = [
+            float(d_total_attack.numpy()),
+            float(d_val_loss_attack.numpy()),
+            float(d_cls_loss_attack.numpy()),
+            float(d_val_acc_attack.numpy()),
+            float(d_cls_acc_attack.numpy())
+        ]
 
         # ─── Fake Data Evaluation ───
-        d_loss_fake = self.discriminator.evaluate(
-            generated_data, [fake_valid_labels, fake_labels_onehot], verbose=0
-        )
+        d_total_fake, d_val_loss_fake, d_cls_loss_fake, d_val_acc_fake, d_cls_acc_fake = \
+            self.evaluate_discriminator(generated_data, fake_labels_onehot, fake_valid_labels)
+
+        d_loss_fake = [
+            float(d_total_fake.numpy()),
+            float(d_val_loss_fake.numpy()),
+            float(d_cls_loss_fake.numpy()),
+            float(d_val_acc_fake.numpy()),
+            float(d_cls_acc_fake.numpy())
+        ]
 
         # ═══════════════════════════════════════════════════════════════════════
         # APPLY WEIGHTED LOSS CALCULATION
@@ -848,7 +992,7 @@ class CentralACGan:
 
     def validation_gen(self):
         """
-        Evaluate the generator (via the AC-GAN) using a validation batch.
+        Evaluate the generator using a validation batch.
         The generator is evaluated by its ability to "fool" the discriminator.
         """
         # ═══════════════════════════════════════════════════════════════════════
@@ -862,14 +1006,19 @@ class CentralACGan:
         # ═══════════════════════════════════════════════════════════════════════
         # GENERATOR EVALUATION
         # ═══════════════════════════════════════════════════════════════════════
-        g_loss = self.ACGAN.evaluate(
-            [noise, sampled_labels],
-            [valid_labels, sampled_labels_onehot],
-            verbose=0
-        )
+        g_total, g_val_loss, g_cls_loss, g_val_acc, g_cls_acc = \
+            self.evaluate_generator(noise, sampled_labels_onehot, valid_labels)
+
+        g_loss = [
+            float(g_total.numpy()),
+            float(g_val_loss.numpy()),
+            float(g_cls_loss.numpy()),
+            float(g_val_acc.numpy()),
+            float(g_cls_acc.numpy())
+        ]
 
         # ─── Log Detailed Metrics ───
-        self.logger.info("Validation Generator (AC-GAN) Evaluation:")
+        self.logger.info("Validation Generator Evaluation:")
         self.logger.info(
             f"Total Loss: {g_loss[0]:.4f}, Validity Loss: {g_loss[1]:.4f}, Class Loss: {g_loss[2]:.4f}")
         self.logger.info(
@@ -1043,9 +1192,17 @@ class CentralACGan:
         # ▼ Benign Data Evaluation ▼
         if benign_count > 0:
             benign_valid_labels = np.ones((benign_count, 1))
-            d_loss_benign = self.discriminator.evaluate(
-                x_test_benign, [benign_valid_labels, y_test_benign_onehot], verbose=0
-            )
+            d_total_benign, d_val_loss_benign, d_cls_loss_benign, d_val_acc_benign, d_cls_acc_benign = \
+                self.evaluate_discriminator(x_test_benign, y_test_benign_onehot, benign_valid_labels)
+
+            d_loss_benign = [
+                float(d_total_benign.numpy()),
+                float(d_val_loss_benign.numpy()),
+                float(d_cls_loss_benign.numpy()),
+                float(d_val_acc_benign.numpy()),
+                float(d_cls_acc_benign.numpy())
+            ]
+
             self.logger.info(
                 f"Benign Test -> Total Loss: {d_loss_benign[0]:.4f}, "
                 f"Validity Loss: {d_loss_benign[1]:.4f}, "
@@ -1057,9 +1214,17 @@ class CentralACGan:
         # ▼ Attack Data Evaluation ▼
         if attack_count > 0:
             attack_valid_labels = np.ones((attack_count, 1))
-            d_loss_attack = self.discriminator.evaluate(
-                x_test_attack, [attack_valid_labels, y_test_attack_onehot], verbose=0
-            )
+            d_total_attack, d_val_loss_attack, d_cls_loss_attack, d_val_acc_attack, d_cls_acc_attack = \
+                self.evaluate_discriminator(x_test_attack, y_test_attack_onehot, attack_valid_labels)
+
+            d_loss_attack = [
+                float(d_total_attack.numpy()),
+                float(d_val_loss_attack.numpy()),
+                float(d_cls_loss_attack.numpy()),
+                float(d_val_acc_attack.numpy()),
+                float(d_cls_acc_attack.numpy())
+            ]
+
             self.logger.info(
                 f"Attack Test -> Total Loss: {d_loss_attack[0]:.4f}, "
                 f"Validity Loss: {d_loss_attack[1]:.4f}, "
@@ -1070,9 +1235,16 @@ class CentralACGan:
 
         # ▼ Fake Data Evaluation ▼
         if fake_count > 0:
-            d_loss_fake = self.discriminator.evaluate(
-                generated_data, [fake_valid_labels, fake_labels_onehot], verbose=0
-            )
+            d_total_fake, d_val_loss_fake, d_cls_loss_fake, d_val_acc_fake, d_cls_acc_fake = \
+                self.evaluate_discriminator(generated_data, fake_labels_onehot, fake_valid_labels)
+
+            d_loss_fake = [
+                float(d_total_fake.numpy()),
+                float(d_val_loss_fake.numpy()),
+                float(d_cls_loss_fake.numpy()),
+                float(d_val_acc_fake.numpy()),
+                float(d_cls_acc_fake.numpy())
+            ]
             self.logger.info(
                 f"Fake Test -> Total Loss: {d_loss_fake[0]:.4f}, "
                 f"Validity Loss: {d_loss_fake[1]:.4f}, "
@@ -1136,26 +1308,26 @@ class CentralACGan:
                 })
 
         # ═══════════════════════════════════════════════════════════════════════
-        # GENERATOR (AC-GAN) EVALUATION
+        # GENERATOR EVALUATION
         # ═══════════════════════════════════════════════════════════════════════
         self.logger.info("-- Evaluating Generator --")
 
         # ─── Prepare Generator Test Data ───
         noise = tf.random.normal((len(y_test), self.latent_dim))
         sampled_labels = self.generate_balanced_fake_labels(len(y_test))
+        sampled_labels_onehot = tf.one_hot(sampled_labels, depth=self.num_classes)
+        valid_labels = np.ones((len(y_test), 1))
 
         # ─── Run Generator Evaluation ───
-        g_loss = self.ACGAN.evaluate([noise, sampled_labels],
-                                     [tf.ones((len(y_test), 1)),
-                                      tf.one_hot(sampled_labels, depth=self.num_classes)],
-                                     verbose=0)
+        g_total, g_val_loss, g_cls_loss, g_val_acc, g_cls_acc = \
+            self.evaluate_generator(noise, sampled_labels_onehot, valid_labels)
 
         # ─── Extract Generator Metrics ───
-        g_loss_total = g_loss[0]
-        g_loss_validity = g_loss[1]
-        g_loss_class = g_loss[2]
-        g_validity_bin_acc = g_loss[3]
-        g_class_cat_acc = g_loss[4]
+        g_loss_total = float(g_total.numpy())
+        g_loss_validity = float(g_val_loss.numpy())
+        g_loss_class = float(g_cls_loss.numpy())
+        g_validity_bin_acc = float(g_val_acc.numpy())
+        g_class_cat_acc = float(g_cls_acc.numpy())
 
         # ─── Create Generator Metrics Dictionary ───
         g_eval_metrics = {
