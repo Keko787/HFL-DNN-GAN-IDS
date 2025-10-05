@@ -101,7 +101,7 @@ class CentralACGan:
         # ─── Learning Rate Schedules ───
         # Slower learning for generator to prevent overpowering discriminator
         lr_schedule_gen = tf.keras.optimizers.schedules.ExponentialDecay(
-            initial_learning_rate=0.0002, decay_steps=10000, decay_rate=0.98, staircase=False)
+            initial_learning_rate=0.00015, decay_steps=10000, decay_rate=0.98, staircase=False)
 
         # Faster learning for discriminator to maintain strength
         lr_schedule_disc = tf.keras.optimizers.schedules.ExponentialDecay(
@@ -858,7 +858,8 @@ class CentralACGan:
 
                 train_val_pred, train_cls_pred = self.discriminator(train_sample, training=False)
                 self.logger.info(f"Training data validity - Mean: {tf.reduce_mean(train_val_pred):.4f}, Min: {tf.reduce_min(train_val_pred):.4f}, Max: {tf.reduce_max(train_val_pred):.4f}")
-                self.logger.info(f"Training data - Mean: {tf.reduce_mean(train_sample):.4f}, Std: {tf.reduce_std(train_sample):.4f}")
+                self.logger.info(f"Training data - Mean: {tf.reduce_mean(train_sample):.4f}, Std: {tf.math.reduce_std(train_sample):.4f}")
+                self.logger.info(f"Training class predictions (first 5): {train_cls_pred[:5].numpy()}")
 
             # ─── Store Metrics History ───
             d_metrics_history.append(avg_epoch_d_loss)
@@ -983,8 +984,8 @@ class CentralACGan:
         self.logger.info(f"Attack class predictions (first 5): {attack_cls_pred[:5].numpy()}")
 
         # Check data statistics
-        self.logger.info(f"Benign data - Mean: {tf.reduce_mean(sample_benign):.4f}, Std: {tf.reduce_std(tf.cast(sample_benign, tf.float32)):.4f}")
-        self.logger.info(f"Attack data - Mean: {tf.reduce_mean(sample_attack):.4f}, Std: {tf.reduce_std(tf.cast(sample_attack, tf.float32)):.4f}")
+        self.logger.info(f"Benign data - Mean: {tf.reduce_mean(sample_benign):.4f}, Std: {tf.math.reduce_std(tf.cast(sample_benign, tf.float32)):.4f}")
+        self.logger.info(f"Attack data - Mean: {tf.reduce_mean(sample_attack):.4f}, Std: {tf.math.reduce_std(tf.cast(sample_attack, tf.float32)):.4f}")
 
         # ═══════════════════════════════════════════════════════════════════════
         # EVALUATE ON EACH DATA TYPE
