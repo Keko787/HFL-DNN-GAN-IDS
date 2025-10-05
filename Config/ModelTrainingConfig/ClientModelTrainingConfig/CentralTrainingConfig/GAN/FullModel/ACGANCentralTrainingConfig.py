@@ -101,11 +101,11 @@ class CentralACGan:
         # ─── Learning Rate Schedules ───
         # Slower learning for generator to prevent overpowering discriminator
         lr_schedule_gen = tf.keras.optimizers.schedules.ExponentialDecay(
-            initial_learning_rate=0.00015, decay_steps=10000, decay_rate=0.98, staircase=False)
+            initial_learning_rate=0.00012, decay_steps=10000, decay_rate=0.98, staircase=False)
 
         # Faster learning for discriminator to maintain strength
         lr_schedule_disc = tf.keras.optimizers.schedules.ExponentialDecay(
-            initial_learning_rate=0.00005, decay_steps=10000, decay_rate=0.98, staircase=False)
+            initial_learning_rate=0.00007, decay_steps=10000, decay_rate=0.98, staircase=False)
 
         # ─── Optimizer Compilation with Gradient Clipping ───
         self.gen_optimizer = Adam(learning_rate=lr_schedule_gen, beta_1=0.5, beta_2=0.999, clipnorm=1.0)

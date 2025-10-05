@@ -162,34 +162,52 @@ def build_AC_discriminator_ver_2(input_dim, num_classes):
 
 
 def build_AC_discriminator(input_dim, num_classes):
+    """
+    FIXED AC-GAN Discriminator with proper validity detection.
+    Key fixes:
+    - Removed BatchNorm from early layers to prevent saturation
+    - Lighter regularization on validity branch
+    - Better initialization
+    - Balanced architecture
+    """
     data_input = Input(shape=(input_dim,))
 
-    # REDUCE regularization to balance with generator
-    x = Dense(512, kernel_regularizer=l2(0.0005))(data_input)  # Reduced from 0.002
-    x = BatchNormalization(momentum=0.8)(x)
+    # Shared feature extraction - lighter regularization, NO BatchNorm initially
+    x = Dense(512, kernel_regularizer=l2(0.0001),
+              kernel_initializer='he_normal')(data_input)
     x = LeakyReLU(0.2)(x)
-    x = Dropout(0.2)(x)  # Reduced from 0.4
+    x = Dropout(0.3)(x)
 
-    x = Dense(256, kernel_regularizer=l2(0.0005))(x)
-    x = BatchNormalization(momentum=0.8)(x)
+    x = Dense(256, kernel_regularizer=l2(0.0001),
+              kernel_initializer='he_normal')(x)
     x = LeakyReLU(0.2)(x)
-    x = Dropout(0.2)(x)  # Reduced from 0.4
+    x = Dropout(0.3)(x)
 
-    shared = Dense(128, kernel_regularizer=l2(0.0005))(x)
-    x = BatchNormalization()(shared)
-    x = LeakyReLU(0.2)(x)
+    # Shared representation with BatchNorm (safe here, after initial layers)
+    shared = Dense(128, kernel_regularizer=l2(0.0001),
+                   kernel_initializer='he_normal')(x)
+    shared = BatchNormalization(momentum=0.9)(shared)  # Higher momentum for stability
+    shared = LeakyReLU(0.2)(shared)
 
-    # SIMPLIFIED validity branch (remove residual connection)
-    validity_branch = Dense(64)(x)
+    # --- VALIDITY BRANCH (Real vs Fake) ---
+    # CRITICAL: Very light/no regularization to allow learning
+    validity_branch = Dense(64, kernel_initializer='he_normal')(shared)  # NO regularization!
     validity_branch = LeakyReLU(0.2)(validity_branch)
     validity_branch = Dropout(0.2)(validity_branch)
-    validity = Dense(1, activation='sigmoid', name="validity")(validity_branch)
 
-    # SIMPLIFIED class branch (remove extra layers and residual)
-    class_branch = Dense(64)(x)
+    # Output with proper initialization
+    validity = Dense(1, activation='sigmoid', name="validity",
+                    kernel_initializer='glorot_uniform',  # Better for sigmoid
+                    bias_initializer='zeros')(validity_branch)
+
+    # --- CLASS BRANCH (Benign vs Attack) ---
+    class_branch = Dense(64, kernel_regularizer=l2(0.0002),
+                        kernel_initializer='he_normal')(shared)
     class_branch = LeakyReLU(0.2)(class_branch)
     class_branch = Dropout(0.2)(class_branch)
-    label_output = Dense(num_classes, activation='softmax', name="class")(class_branch)
+
+    label_output = Dense(num_classes, activation='softmax', name="class",
+                        kernel_initializer='glorot_uniform')(class_branch)
 
     return Model(data_input, [validity, label_output], name="Discriminator")
 
