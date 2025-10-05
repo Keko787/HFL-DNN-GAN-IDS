@@ -213,7 +213,17 @@ def build_AC_discriminator(input_dim, num_classes):
     label_output = Dense(num_classes, activation='softmax', name="class",
                         kernel_initializer='glorot_uniform')(class_branch)
 
-    return Model(data_input, [validity, label_output], name="Discriminator")
+    model = Model(data_input, [validity, label_output], name="Discriminator")
+
+    # DIAGNOSTIC: Verify bias initialization
+    print("\n=== DISCRIMINATOR ARCHITECTURE VERIFICATION ===")
+    validity_layer = model.get_layer('validity')
+    initial_bias = validity_layer.get_weights()[1][0]
+    print(f"Validity layer initial bias: {initial_bias}")
+    print(f"Expected: 1.5, Actual sigmoid output: {1.0 / (1.0 + tf.exp(-initial_bias))}")
+    print("==============================================\n")
+
+    return model
 
 def build_AC_discriminator_ver_last(input_dim, num_classes):
     data_input = Input(shape=(input_dim,))
