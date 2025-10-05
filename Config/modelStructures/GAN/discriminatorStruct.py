@@ -195,10 +195,14 @@ def build_AC_discriminator(input_dim, num_classes):
     validity_branch = LeakyReLU(0.2)(validity_branch)
     validity_branch = Dropout(0.2)(validity_branch)
 
-    # Output with proper initialization
+    # Output with CRITICAL bias initialization
+    # Initialize bias to +1.5 so sigmoid starts at ~0.82 instead of 0.5
+    # This prevents the validity branch from saturating at 0 during early training
+    # With target label 0.88, starting at 0.82 gives small gradients in right direction
+    from tensorflow.keras.initializers import Constant
     validity = Dense(1, activation='sigmoid', name="validity",
                     kernel_initializer='glorot_uniform',  # Better for sigmoid
-                    bias_initializer='zeros')(validity_branch)
+                    bias_initializer=Constant(1.5))(validity_branch)
 
     # --- CLASS BRANCH (Benign vs Attack) ---
     class_branch = Dense(64, kernel_regularizer=l2(0.0002),
