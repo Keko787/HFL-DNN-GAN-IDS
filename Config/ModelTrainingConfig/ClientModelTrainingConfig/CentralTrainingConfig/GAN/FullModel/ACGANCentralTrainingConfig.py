@@ -101,11 +101,11 @@ class CentralACGan:
         # ─── Learning Rate Schedules ───
         # Slower learning for generator to prevent overpowering discriminator
         lr_schedule_gen = tf.keras.optimizers.schedules.ExponentialDecay(
-            initial_learning_rate=0.00001, decay_steps=10000, decay_rate=0.98, staircase=False)
+            initial_learning_rate=0.0002, decay_steps=10000, decay_rate=0.98, staircase=False)
 
         # Faster learning for discriminator to maintain strength
         lr_schedule_disc = tf.keras.optimizers.schedules.ExponentialDecay(
-            initial_learning_rate=0.00005, decay_steps=10000, decay_rate=0.98, staircase=False)
+            initial_learning_rate=0.0001, decay_steps=10000, decay_rate=0.98, staircase=False)
 
         # ─── Optimizer Compilation with Gradient Clipping ───
         self.gen_optimizer = Adam(learning_rate=lr_schedule_gen, beta_1=0.5, beta_2=0.999, clipnorm=1.0)
@@ -254,7 +254,7 @@ class CentralACGan:
             validity_loss = self.binary_crossentropy(validity_labels, validity_pred)
             # Use one-hot labels for loss calculation
             class_loss = self.categorical_crossentropy(labels_onehot, class_pred)
-            total_loss = validity_loss + class_loss
+            total_loss = validity_loss + 2.0 * class_loss
 
         # Calculate gradients ONLY for generator variables
         gradients = tape.gradient(total_loss, self.generator.trainable_variables)

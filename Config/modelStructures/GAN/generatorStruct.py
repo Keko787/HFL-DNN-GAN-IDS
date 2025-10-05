@@ -64,7 +64,40 @@ def create_generator_optimized(input_dim, noise_dim):
 
     return generator
 
+
 def build_AC_generator(latent_dim, num_classes, input_dim):
+    noise_input = Input(shape=(latent_dim,))
+    label_input = Input(shape=(1,), dtype='int32')
+
+    # Embedding layer to process labels
+    label_embedding = Embedding(num_classes, latent_dim)(label_input)
+    label_embedding = Flatten()(label_embedding)
+
+    # Concatenate noise and label embedding
+    merged_input = Concatenate()([noise_input, label_embedding])
+
+    # STRONGER architecture with BatchNorm
+    x = Dense(256)(merged_input)
+    x = BatchNormalization(momentum=0.8)(x)  # Add BatchNorm
+    x = LeakyReLU(0.2)(x)
+
+    x = Dense(512)(x)
+    x = BatchNormalization(momentum=0.8)(x)
+    x = LeakyReLU(0.2)(x)
+
+    x = Dense(512)(x)  # Add another layer
+    x = BatchNormalization(momentum=0.8)(x)
+    x = LeakyReLU(0.2)(x)
+
+    x = Dense(256)(x)  # Add another layer
+    x = BatchNormalization(momentum=0.8)(x)
+    x = LeakyReLU(0.2)(x)
+
+    output = Dense(input_dim, activation='tanh')(x)
+
+    return Model([noise_input, label_input], output, name="ACGenerator")
+
+def build_AC_generator_ver_last(latent_dim, num_classes, input_dim):
     noise_input = Input(shape=(latent_dim,))
     label_input = Input(shape=(1,), dtype='int32')
 

@@ -164,6 +164,38 @@ def build_AC_discriminator_ver_2(input_dim, num_classes):
 def build_AC_discriminator(input_dim, num_classes):
     data_input = Input(shape=(input_dim,))
 
+    # REDUCE regularization to balance with generator
+    x = Dense(512, kernel_regularizer=l2(0.0005))(data_input)  # Reduced from 0.002
+    x = BatchNormalization(momentum=0.8)(x)
+    x = LeakyReLU(0.2)(x)
+    x = Dropout(0.2)(x)  # Reduced from 0.4
+
+    x = Dense(256, kernel_regularizer=l2(0.0005))(x)
+    x = BatchNormalization(momentum=0.8)(x)
+    x = LeakyReLU(0.2)(x)
+    x = Dropout(0.2)(x)  # Reduced from 0.4
+
+    shared = Dense(128, kernel_regularizer=l2(0.0005))(x)
+    x = BatchNormalization()(shared)
+    x = LeakyReLU(0.2)(x)
+
+    # SIMPLIFIED validity branch (remove residual connection)
+    validity_branch = Dense(64)(x)
+    validity_branch = LeakyReLU(0.2)(validity_branch)
+    validity_branch = Dropout(0.2)(validity_branch)
+    validity = Dense(1, activation='sigmoid', name="validity")(validity_branch)
+
+    # SIMPLIFIED class branch (remove extra layers and residual)
+    class_branch = Dense(64)(x)
+    class_branch = LeakyReLU(0.2)(class_branch)
+    class_branch = Dropout(0.2)(class_branch)
+    label_output = Dense(num_classes, activation='softmax', name="class")(class_branch)
+
+    return Model(data_input, [validity, label_output], name="Discriminator")
+
+def build_AC_discriminator_ver_last(input_dim, num_classes):
+    data_input = Input(shape=(input_dim,))
+
     # Increase regularization and dropout in initial layers
     x = Dense(512, kernel_regularizer=l2(0.002))(data_input)  # Increased regularization
     x = BatchNormalization(momentum=0.8)(x)  # Adjust batch norm momentum
