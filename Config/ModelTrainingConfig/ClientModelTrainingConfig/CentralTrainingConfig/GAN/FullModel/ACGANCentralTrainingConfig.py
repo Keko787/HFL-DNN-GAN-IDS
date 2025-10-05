@@ -160,6 +160,11 @@ class CentralACGan:
         Returns:
             Tuple of (total_loss, validity_loss, class_loss, validity_acc, class_acc)
         """
+        # Convert inputs to float32 for type consistency
+        real_data = tf.cast(real_data, tf.float32)
+        real_labels = tf.cast(real_labels, tf.float32)
+        real_validity_labels = tf.cast(real_validity_labels, tf.float32)
+
         with tf.GradientTape() as tape:
             # Forward pass with training=True
             validity_pred, class_pred = self.discriminator(real_data, training=True)
@@ -192,6 +197,11 @@ class CentralACGan:
         Returns:
             Tuple of (total_loss, validity_loss, class_loss, validity_acc, class_acc)
         """
+        # Convert inputs to float32 for type consistency
+        fake_data = tf.cast(fake_data, tf.float32)
+        fake_labels = tf.cast(fake_labels, tf.float32)
+        fake_validity_labels = tf.cast(fake_validity_labels, tf.float32)
+
         with tf.GradientTape() as tape:
             # Forward pass with training=True
             validity_pred, class_pred = self.discriminator(fake_data, training=True)
@@ -226,6 +236,11 @@ class CentralACGan:
         Returns:
             Tuple of (total_loss, validity_loss, class_loss, validity_acc, class_acc)
         """
+        # Convert inputs to proper types
+        noise = tf.cast(noise, tf.float32)
+        labels_onehot = tf.cast(labels_onehot, tf.float32)
+        validity_labels = tf.cast(validity_labels, tf.float32)
+
         with tf.GradientTape() as tape:
             # Generate fake data with training=True
             # Generator expects INTEGER labels
@@ -264,6 +279,11 @@ class CentralACGan:
         Returns:
             Tuple of (total_loss, validity_loss, class_loss, validity_acc, class_acc)
         """
+        # Convert inputs to float32 to ensure type consistency
+        data = tf.cast(data, tf.float32)
+        labels = tf.cast(labels, tf.float32)
+        validity_labels = tf.cast(validity_labels, tf.float32)
+
         # Forward pass with training=False for evaluation
         validity_pred, class_pred = self.discriminator(data, training=False)
 
@@ -296,6 +316,11 @@ class CentralACGan:
         Returns:
             Tuple of (total_loss, validity_loss, class_loss, validity_acc, class_acc)
         """
+        # Convert inputs to proper types
+        noise = tf.cast(noise, tf.float32)
+        labels_onehot = tf.cast(labels_onehot, tf.float32)
+        validity_labels = tf.cast(validity_labels, tf.float32)
+
         # Generate data - generator expects INTEGER labels
         generated_data = self.generator([noise, labels_int], training=False)
 
