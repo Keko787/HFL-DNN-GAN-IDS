@@ -861,6 +861,49 @@ class CentralACGan:
                 self.logger.info(f"Training data - Mean: {tf.reduce_mean(train_sample):.4f}, Std: {tf.math.reduce_std(train_sample):.4f}")
                 self.logger.info(f"Training class predictions (first 5): {train_cls_pred[:5].numpy()}")
 
+                # Check pre-activation values to diagnose saturation
+                # The validity Dense layer has sigmoid built in, so we need to check its input
+                from tensorflow.keras.models import Model
+
+                # Find the validity layer
+                validity_layer = None
+                for layer in self.discriminator.layers:
+                    if 'validity' in layer.name.lower():
+                        validity_layer = layer
+                        break
+
+                if validity_layer is not None:
+                    # Get the input tensor to the validity layer (this is before sigmoid)
+                    validity_input_layer = validity_layer.input
+
+                    # Create a model that outputs the pre-sigmoid values
+                    pre_sigmoid_model = Model(
+                        inputs=self.discriminator.input,
+                        outputs=validity_input_layer
+                    )
+
+                    # Get the activations going into the validity Dense layer
+                    pre_validity_activations = pre_sigmoid_model(train_sample, training=False)
+                    self.logger.info(f"PRE-VALIDITY DENSE activations - Mean: {tf.reduce_mean(pre_validity_activations):.4f}, Std: {tf.math.reduce_std(pre_validity_activations):.4f}")
+
+                    # Now manually compute what the output should be without sigmoid
+                    # We need to get the weights and bias of the validity layer
+                    weights, bias = validity_layer.get_weights()
+                    pre_sigmoid = tf.matmul(pre_validity_activations, weights) + bias
+                    self.logger.info(f"PRE-SIGMOID logits - Mean: {tf.reduce_mean(pre_sigmoid):.4f}, Min: {tf.reduce_min(pre_sigmoid):.4f}, Max: {tf.reduce_max(pre_sigmoid):.4f}")
+
+                    # Reference values
+                    self.logger.info(f"Reference: sigmoid(0) = 0.5, sigmoid(-3) = {tf.nn.sigmoid(-3.0):.4f}, sigmoid(-5) = {tf.nn.sigmoid(-5.0):.4f}")
+
+                    # Check if saturated
+                    mean_logit = tf.reduce_mean(pre_sigmoid)
+                    if mean_logit < -3.0:
+                        self.logger.warning(f"WARNING: Pre-sigmoid logits are very negative (mean={mean_logit:.4f}) - sigmoid is saturated!")
+                    elif mean_logit > 3.0:
+                        self.logger.warning(f"WARNING: Pre-sigmoid logits are very positive (mean={mean_logit:.4f}) - sigmoid is saturated!")
+                else:
+                    self.logger.warning("Could not find validity layer for pre-activation diagnostics")
+
             # ─── Store Metrics History ───
             d_metrics_history.append(avg_epoch_d_loss)
             g_metrics_history.append(avg_epoch_g_loss)
