@@ -176,7 +176,8 @@ class CentralACGan:
             # CRITICAL FIX: Reduce validity loss weight for real data
             # Real data has huge validity loss that dominates gradients
             # This balances gradients between real (high loss) and fake (low loss)
-            total_loss = (0.5 * validity_loss) + class_loss
+            # Reduced from 0.5 to 0.2 to prevent validity collapse to 0
+            total_loss = (0.2 * validity_loss) + class_loss
 
         # Calculate gradients and update weights
         gradients = tape.gradient(total_loss, self.discriminator.trainable_variables)
@@ -217,7 +218,8 @@ class CentralACGan:
             # CRITICAL FIX: Increase validity loss weight for fake data
             # This balances with the reduced weight on real data validity loss
             # Helps discriminator learn to distinguish real from fake more effectively
-            total_loss = (2.0 * validity_loss) + class_loss
+            # Increased from 2.0 to 5.0 to balance with real data's 0.2x weight
+            total_loss = (5.0 * validity_loss) + class_loss
 
         # Calculate gradients and update weights
         gradients = tape.gradient(total_loss, self.discriminator.trainable_variables)
