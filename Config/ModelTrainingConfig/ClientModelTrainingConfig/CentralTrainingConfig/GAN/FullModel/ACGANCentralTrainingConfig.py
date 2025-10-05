@@ -172,7 +172,11 @@ class CentralACGan:
             # Calculate losses
             validity_loss = self.binary_crossentropy(real_validity_labels, validity_pred)
             class_loss = self.categorical_crossentropy(real_labels, class_pred)
-            total_loss = validity_loss + class_loss
+
+            # CRITICAL FIX: Reduce validity loss weight for real data
+            # Real data has huge validity loss that dominates gradients
+            # This balances gradients between real (high loss) and fake (low loss)
+            total_loss = (0.5 * validity_loss) + class_loss
 
         # Calculate gradients and update weights
         gradients = tape.gradient(total_loss, self.discriminator.trainable_variables)
@@ -209,7 +213,11 @@ class CentralACGan:
             # Calculate losses
             validity_loss = self.binary_crossentropy(fake_validity_labels, validity_pred)
             class_loss = self.categorical_crossentropy(fake_labels, class_pred)
-            total_loss = validity_loss + class_loss
+
+            # CRITICAL FIX: Increase validity loss weight for fake data
+            # This balances with the reduced weight on real data validity loss
+            # Helps discriminator learn to distinguish real from fake more effectively
+            total_loss = (2.0 * validity_loss) + class_loss
 
         # Calculate gradients and update weights
         gradients = tape.gradient(total_loss, self.discriminator.trainable_variables)
