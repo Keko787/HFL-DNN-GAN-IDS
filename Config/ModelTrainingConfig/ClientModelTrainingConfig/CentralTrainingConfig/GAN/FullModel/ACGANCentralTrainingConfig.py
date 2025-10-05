@@ -105,7 +105,7 @@ class CentralACGan:
 
         # Faster learning for discriminator to maintain strength
         lr_schedule_disc = tf.keras.optimizers.schedules.ExponentialDecay(
-            initial_learning_rate=0.00001, decay_steps=10000, decay_rate=0.98, staircase=False)
+            initial_learning_rate=0.00005, decay_steps=10000, decay_rate=0.98, staircase=False)
 
         # ─── Optimizer Compilation with Gradient Clipping ───
         self.gen_optimizer = Adam(learning_rate=lr_schedule_gen, beta_1=0.5, beta_2=0.999, clipnorm=1.0)
@@ -851,9 +851,14 @@ class CentralACGan:
             if epoch == 0:  # Only on first epoch
                 self.logger.info("=== DIAGNOSTIC: Training Data Check ===")
                 train_sample = X_train[:100]
+                # Convert to numpy array if it's a DataFrame
+                if hasattr(train_sample, 'values'):
+                    train_sample = train_sample.values
+                train_sample = tf.cast(train_sample, tf.float32)
+
                 train_val_pred, train_cls_pred = self.discriminator(train_sample, training=False)
                 self.logger.info(f"Training data validity - Mean: {tf.reduce_mean(train_val_pred):.4f}, Min: {tf.reduce_min(train_val_pred):.4f}, Max: {tf.reduce_max(train_val_pred):.4f}")
-                self.logger.info(f"Training data - Mean: {tf.reduce_mean(train_sample):.4f}, Std: {tf.reduce_std(tf.cast(train_sample, tf.float32)):.4f}")
+                self.logger.info(f"Training data - Mean: {tf.reduce_mean(train_sample):.4f}, Std: {tf.reduce_std(train_sample):.4f}")
 
             # ─── Store Metrics History ───
             d_metrics_history.append(avg_epoch_d_loss)
