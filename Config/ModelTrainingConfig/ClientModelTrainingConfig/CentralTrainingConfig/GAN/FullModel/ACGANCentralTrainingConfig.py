@@ -105,7 +105,7 @@ class CentralACGan:
 
         # Faster learning for discriminator to maintain strength
         lr_schedule_disc = tf.keras.optimizers.schedules.ExponentialDecay(
-            initial_learning_rate=0.0001, decay_steps=10000, decay_rate=0.98, staircase=False)
+            initial_learning_rate=0.00001, decay_steps=10000, decay_rate=0.98, staircase=False)
 
         # ─── Optimizer Compilation with Gradient Clipping ───
         self.gen_optimizer = Adam(learning_rate=lr_schedule_gen, beta_1=0.5, beta_2=0.999, clipnorm=1.0)
@@ -847,6 +847,14 @@ class CentralACGan:
             self.logger.info(f"Generator Fooling Rate: {(1 - g_loss[3]) * 100:.2f}%")
             self.logger.info(f"Generator Class Accuracy: {g_loss[4] * 100:.2f}%")
 
+            # ─── DIAGNOSTIC: Check discriminator on training data ───
+            if epoch == 0:  # Only on first epoch
+                self.logger.info("=== DIAGNOSTIC: Training Data Check ===")
+                train_sample = X_train[:100]
+                train_val_pred, train_cls_pred = self.discriminator(train_sample, training=False)
+                self.logger.info(f"Training data validity - Mean: {tf.reduce_mean(train_val_pred):.4f}, Min: {tf.reduce_min(train_val_pred):.4f}, Max: {tf.reduce_max(train_val_pred):.4f}")
+                self.logger.info(f"Training data - Mean: {tf.reduce_mean(train_sample):.4f}, Std: {tf.reduce_std(tf.cast(train_sample, tf.float32)):.4f}")
+
             # ─── Store Metrics History ───
             d_metrics_history.append(avg_epoch_d_loss)
             g_metrics_history.append(avg_epoch_g_loss)
@@ -953,6 +961,25 @@ class CentralACGan:
         fake_valid_labels = np.zeros((len(self.x_val), 1))
         # Use direct call instead of predict() for better performance
         generated_data = self.generator([noise, fake_labels], training=False)
+
+        # ═══════════════════════════════════════════════════════════════════════
+        # DIAGNOSTIC: Check discriminator predictions on validation data
+        # ═══════════════════════════════════════════════════════════════════════
+        sample_benign = x_val_benign[:100]
+        sample_attack = x_val_attack[:100]
+
+        benign_val_pred, benign_cls_pred = self.discriminator(sample_benign, training=False)
+        attack_val_pred, attack_cls_pred = self.discriminator(sample_attack, training=False)
+
+        self.logger.info("=== DIAGNOSTIC: Discriminator Predictions ===")
+        self.logger.info(f"Benign validity - Mean: {tf.reduce_mean(benign_val_pred):.4f}, Min: {tf.reduce_min(benign_val_pred):.4f}, Max: {tf.reduce_max(benign_val_pred):.4f}")
+        self.logger.info(f"Attack validity - Mean: {tf.reduce_mean(attack_val_pred):.4f}, Min: {tf.reduce_min(attack_val_pred):.4f}, Max: {tf.reduce_max(attack_val_pred):.4f}")
+        self.logger.info(f"Benign class predictions (first 5): {benign_cls_pred[:5].numpy()}")
+        self.logger.info(f"Attack class predictions (first 5): {attack_cls_pred[:5].numpy()}")
+
+        # Check data statistics
+        self.logger.info(f"Benign data - Mean: {tf.reduce_mean(sample_benign):.4f}, Std: {tf.reduce_std(tf.cast(sample_benign, tf.float32)):.4f}")
+        self.logger.info(f"Attack data - Mean: {tf.reduce_mean(sample_attack):.4f}, Std: {tf.reduce_std(tf.cast(sample_attack, tf.float32)):.4f}")
 
         # ═══════════════════════════════════════════════════════════════════════
         # EVALUATE ON EACH DATA TYPE
