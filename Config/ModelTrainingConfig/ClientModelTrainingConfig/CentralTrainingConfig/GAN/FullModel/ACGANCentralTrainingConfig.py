@@ -212,14 +212,15 @@ class CentralACGan:
         return total_loss, validity_loss, class_loss, validity_acc, class_acc
 
     @tf.function
-    def train_generator_step(self, noise, labels, validity_labels):
+    def train_generator_step(self, noise, labels_int, labels_onehot, validity_labels):
         """
         Custom training step for generator.
         CRITICAL: Discriminator is called with training=False to prevent BatchNorm corruption.
 
         Args:
             noise: Random noise input
-            labels: One-hot encoded class labels
+            labels_int: Integer class labels (for generator input)
+            labels_onehot: One-hot encoded class labels (for loss calculation)
             validity_labels: Target validity labels (1 - generator wants to fool discriminator)
 
         Returns:
@@ -227,7 +228,8 @@ class CentralACGan:
         """
         with tf.GradientTape() as tape:
             # Generate fake data with training=True
-            generated_data = self.generator([noise, labels], training=True)
+            # Generator expects INTEGER labels
+            generated_data = self.generator([noise, labels_int], training=True)
 
             # CRITICAL: Call discriminator with training=False
             # This prevents BatchNorm layers from updating their statistics
@@ -235,7 +237,8 @@ class CentralACGan:
 
             # Calculate losses (generator wants discriminator to predict "real")
             validity_loss = self.binary_crossentropy(validity_labels, validity_pred)
-            class_loss = self.categorical_crossentropy(labels, class_pred)
+            # Use one-hot labels for loss calculation
+            class_loss = self.categorical_crossentropy(labels_onehot, class_pred)
             total_loss = validity_loss + class_loss
 
         # Calculate gradients ONLY for generator variables
@@ -244,7 +247,7 @@ class CentralACGan:
 
         # Calculate accuracies
         validity_acc = self.g_binary_accuracy(validity_labels, validity_pred)
-        class_acc = self.g_categorical_accuracy(labels, class_pred)
+        class_acc = self.g_categorical_accuracy(labels_onehot, class_pred)
 
         return total_loss, validity_loss, class_loss, validity_acc, class_acc
 
@@ -280,27 +283,28 @@ class CentralACGan:
         return total_loss, validity_loss, class_loss, validity_acc, class_acc
 
     @tf.function
-    def evaluate_generator(self, noise, labels, validity_labels):
+    def evaluate_generator(self, noise, labels_int, labels_onehot, validity_labels):
         """
         Evaluate generator without updating weights.
 
         Args:
             noise: Random noise input
-            labels: One-hot encoded class labels
+            labels_int: Integer class labels (for generator input)
+            labels_onehot: One-hot encoded class labels (for loss calculation)
             validity_labels: Target validity labels
 
         Returns:
             Tuple of (total_loss, validity_loss, class_loss, validity_acc, class_acc)
         """
-        # Generate data
-        generated_data = self.generator([noise, labels], training=False)
+        # Generate data - generator expects INTEGER labels
+        generated_data = self.generator([noise, labels_int], training=False)
 
         # Get discriminator predictions
         validity_pred, class_pred = self.discriminator(generated_data, training=False)
 
-        # Calculate losses
+        # Calculate losses - use one-hot labels
         validity_loss = self.binary_crossentropy(validity_labels, validity_pred)
-        class_loss = self.categorical_crossentropy(labels, class_pred)
+        class_loss = self.categorical_crossentropy(labels_onehot, class_pred)
         total_loss = validity_loss + class_loss
 
         # Calculate accuracies
@@ -308,7 +312,7 @@ class CentralACGan:
             tf.cast(tf.equal(tf.round(validity_pred), validity_labels), tf.float32)
         )
         class_acc = tf.reduce_mean(
-            tf.cast(tf.equal(tf.argmax(class_pred, axis=1), tf.argmax(labels, axis=1)), tf.float32)
+            tf.cast(tf.equal(tf.argmax(class_pred, axis=1), tf.argmax(labels_onehot, axis=1)), tf.float32)
         )
 
         return total_loss, validity_loss, class_loss, validity_acc, class_acc
@@ -774,8 +778,9 @@ class CentralACGan:
 
                 # • TRAIN GENERATOR (CUSTOM TRAINING STEP)
                 # CRITICAL: discriminator is called with training=False inside this function
+                # Generator needs INTEGER labels, but loss calculation needs ONE-HOT labels
                 g_total, g_val_loss, g_cls_loss, g_val_acc, g_cls_acc = \
-                    self.train_generator_step(noise, sampled_labels_onehot, valid_smooth_gen_batch)
+                    self.train_generator_step(noise, sampled_labels, sampled_labels_onehot, valid_smooth_gen_batch)
 
                 # Package results in same format as before for compatibility
                 g_loss = [
@@ -1007,7 +1012,7 @@ class CentralACGan:
         # GENERATOR EVALUATION
         # ═══════════════════════════════════════════════════════════════════════
         g_total, g_val_loss, g_cls_loss, g_val_acc, g_cls_acc = \
-            self.evaluate_generator(noise, sampled_labels_onehot, valid_labels)
+            self.evaluate_generator(noise, sampled_labels, sampled_labels_onehot, valid_labels)
 
         g_loss = [
             float(g_total.numpy()),
@@ -1320,7 +1325,7 @@ class CentralACGan:
 
         # ─── Run Generator Evaluation ───
         g_total, g_val_loss, g_cls_loss, g_val_acc, g_cls_acc = \
-            self.evaluate_generator(noise, sampled_labels_onehot, valid_labels)
+            self.evaluate_generator(noise, sampled_labels, sampled_labels_onehot, valid_labels)
 
         # ─── Extract Generator Metrics ───
         g_loss_total = float(g_total.numpy())
