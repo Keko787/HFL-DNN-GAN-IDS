@@ -254,7 +254,7 @@ class CentralACGan:
             validity_loss = self.binary_crossentropy(validity_labels, validity_pred)
             # Use one-hot labels for loss calculation
             class_loss = self.categorical_crossentropy(labels_onehot, class_pred)
-            total_loss = validity_loss + 2.0 * class_loss
+            total_loss = validity_loss + 2.0 * class_loss  # Give class loss MORE weight
 
         # Calculate gradients ONLY for generator variables
         gradients = tape.gradient(total_loss, self.generator.trainable_variables)
