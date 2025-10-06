@@ -176,9 +176,9 @@ class CentralACGan:
             # CRITICAL FIX: Reduce validity loss weight for real data
             # Real data has huge validity loss that dominates gradients
             # This balances gradients between real (high loss) and fake (low loss)
-            # Tuning history: 0.5x → 0.2x → 0.1x (too strong) → 0.15x (still too strong)
-            # Using 0.3x - closer to original but still reduced
-            total_loss = (0.3 * validity_loss) + class_loss
+            # Tuning history: 0.5x (too weak) → 0.2x → 0.1x (too strong) → 0.15x (WORKING - showed 11% acc by epoch 3)
+            # Backup options if needed: 0.3x/5.0x or 0.2x/6.0x
+            total_loss = (0.15 * validity_loss) + class_loss
 
         # Calculate gradients and update weights
         gradients = tape.gradient(total_loss, self.discriminator.trainable_variables)
@@ -219,9 +219,9 @@ class CentralACGan:
             # CRITICAL FIX: Increase validity loss weight for fake data
             # This balances with the reduced weight on real data validity loss
             # Helps discriminator learn to distinguish real from fake more effectively
-            # Tuning history: 2.0x → 5.0x → 10.0x (too strong) → 7.0x (still too strong)
-            # Back to 5.0x to balance with real data's 0.3x weight (ratio ~1:4)
-            total_loss = (5.0 * validity_loss) + class_loss
+            # Tuning history: 2.0x (too weak) → 5.0x → 10.0x (too strong) → 7.0x (WORKING - showed 11% acc by epoch 3)
+            # Backup options if needed: 5.0x/0.3x or 6.0x/0.2x
+            total_loss = (7.0 * validity_loss) + class_loss
 
         # Calculate gradients and update weights
         gradients = tape.gradient(total_loss, self.discriminator.trainable_variables)
@@ -547,7 +547,7 @@ class CentralACGan:
 #########################################################################
 #                            TRAINING PROCESS                          #
 #########################################################################
-    def fit(self, X_train=None, y_train=None, d_to_g_ratio=1):
+    def fit(self, X_train=None, y_train=None, d_to_g_ratio=3):
         """
         Train the AC-GAN with a configurable ratio between discriminator and generator training steps.
 
@@ -560,6 +560,7 @@ class CentralACGan:
         d_to_g_ratio : int, optional
             Ratio of discriminator training steps to generator training steps.
             Default is 3 (train discriminator 3 times for each generator training step).
+            Increased from 1 to 3 for better discriminator training and stability.
         """
         # ═══════════════════════════════════════════════════════════════════════
         # TRAINING DATA PREPARATION
