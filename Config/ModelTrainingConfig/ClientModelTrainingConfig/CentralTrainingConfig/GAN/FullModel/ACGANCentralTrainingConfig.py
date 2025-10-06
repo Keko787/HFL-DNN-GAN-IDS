@@ -995,8 +995,9 @@ class CentralACGan:
                 patience_counter = 0
 
                 # Save model weights (deep copy)
-                best_discriminator_weights = [w.numpy() for w in self.discriminator.get_weights()]
-                best_generator_weights = [w.numpy() for w in self.generator.get_weights()]
+                # get_weights() already returns numpy arrays, so we copy them
+                best_discriminator_weights = [w.copy() for w in self.discriminator.get_weights()]
+                best_generator_weights = [w.copy() for w in self.generator.get_weights()]
 
                 self.logger.info(f"✓ New best model! Fusion accuracy improved to {best_fusion_accuracy * 100:.2f}% at epoch {best_epoch}")
                 self.logger.info(f"  Model weights saved. Patience counter reset to 0/{self.early_stopping_patience}")
