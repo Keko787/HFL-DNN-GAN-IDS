@@ -63,6 +63,12 @@ class CentralACGan:
         self.nids = nids
 
         # ═══════════════════════════════════════════════════════════════════════
+        # EARLY STOPPING CONFIGURATION
+        # ═══════════════════════════════════════════════════════════════════════
+        self.early_stopping_patience = 5
+        self.min_delta = 0.001  # Minimum improvement to consider as progress
+
+        # ═══════════════════════════════════════════════════════════════════════
         # MODEL I/O SPECIFICATIONS
         # ═══════════════════════════════════════════════════════════════════════
         self.batch_size = BATCH_SIZE
@@ -611,6 +617,17 @@ class CentralACGan:
         g_metrics_history = []
 
         # ═══════════════════════════════════════════════════════════════════════
+        # EARLY STOPPING TRACKING
+        # ═══════════════════════════════════════════════════════════════════════
+        best_fusion_accuracy = 0.0
+        best_epoch = 0
+        patience_counter = 0
+        best_discriminator_weights = None
+        best_generator_weights = None
+
+        self.logger.info(f"Early stopping enabled with patience={self.early_stopping_patience}, min_delta={self.min_delta}")
+
+        # ═══════════════════════════════════════════════════════════════════════
         # MAIN TRAINING LOOP
         # ═══════════════════════════════════════════════════════════════════════
         for epoch in range(self.epochs):
@@ -965,7 +982,62 @@ class CentralACGan:
             # ─── Log Epoch Metrics ───
             self.log_epoch_metrics(epoch, d_val_metrics, g_val_metrics, nids_val_metrics, fusion_metrics)
 
+            # ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+            # ┃                   EARLY STOPPING CHECK                              ┃
+            # ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+            current_fusion_accuracy = fusion_metrics['accuracy']
+
+            # Check if current accuracy is better than best (with min_delta threshold)
+            if current_fusion_accuracy > best_fusion_accuracy + self.min_delta:
+                # Improvement detected - save best model weights
+                best_fusion_accuracy = current_fusion_accuracy
+                best_epoch = epoch + 1
+                patience_counter = 0
+
+                # Save model weights (deep copy)
+                best_discriminator_weights = [w.numpy() for w in self.discriminator.get_weights()]
+                best_generator_weights = [w.numpy() for w in self.generator.get_weights()]
+
+                self.logger.info(f"✓ New best model! Fusion accuracy improved to {best_fusion_accuracy * 100:.2f}% at epoch {best_epoch}")
+                self.logger.info(f"  Model weights saved. Patience counter reset to 0/{self.early_stopping_patience}")
+            else:
+                # No improvement
+                patience_counter += 1
+                self.logger.info(f"⚠ No improvement in fusion accuracy (best: {best_fusion_accuracy * 100:.2f}% at epoch {best_epoch})")
+                self.logger.info(f"  Patience counter: {patience_counter}/{self.early_stopping_patience}")
+
+                # Check if we should stop
+                if patience_counter >= self.early_stopping_patience:
+                    self.logger.info(f"Early stopping triggered at epoch {epoch + 1}")
+                    self.logger.info(f"Best fusion accuracy: {best_fusion_accuracy * 100:.2f}% at epoch {best_epoch}")
+                    self.logger.info(f"Restoring best model weights from epoch {best_epoch}...")
+
+                    # Restore best weights
+                    if best_discriminator_weights is not None and best_generator_weights is not None:
+                        self.discriminator.set_weights(best_discriminator_weights)
+                        self.generator.set_weights(best_generator_weights)
+                        self.logger.info("✓ Best model weights restored successfully")
+                    else:
+                        self.logger.warning("⚠ No best weights found - using current weights")
+
+                    break  # Exit training loop
+
         # --- End Of Epochs Loop--- #
+
+        # ═══════════════════════════════════════════════════════════════════════
+        # POST-TRAINING SUMMARY
+        # ═══════════════════════════════════════════════════════════════════════
+        self.logger.info("\n" + "=" * 50)
+        self.logger.info("TRAINING COMPLETED")
+        self.logger.info("=" * 50)
+        self.logger.info(f"Best probabilistic fusion accuracy: {best_fusion_accuracy * 100:.2f}%")
+        self.logger.info(f"Best model from epoch: {best_epoch}")
+        self.logger.info(f"Total epochs trained: {epoch + 1}")
+        if patience_counter >= self.early_stopping_patience:
+            self.logger.info(f"Training stopped early due to no improvement for {self.early_stopping_patience} epochs")
+        else:
+            self.logger.info("Training completed all epochs")
+        self.logger.info("=" * 50 + "\n")
 
         # ═══════════════════════════════════════════════════════════════════════
         # TRAINING COMPLETION
@@ -973,7 +1045,11 @@ class CentralACGan:
         # Return the training history for analysis
         return {
             "discriminator_loss": d_metrics_history,
-            "generator_loss": g_metrics_history
+            "generator_loss": g_metrics_history,
+            "best_fusion_accuracy": best_fusion_accuracy,
+            "best_epoch": best_epoch,
+            "total_epochs_trained": epoch + 1,
+            "early_stopped": patience_counter >= self.early_stopping_patience
         }
 
 #########################################################################
