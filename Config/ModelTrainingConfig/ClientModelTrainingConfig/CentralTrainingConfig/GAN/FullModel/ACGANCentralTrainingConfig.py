@@ -622,11 +622,11 @@ class CentralACGan:
             epoch_g_losses = []
 
             # ─── Determine Steps per Epoch ───
-            # CRITICAL FIX: Calculate based on per-class data size, not total dataset
-            # Each step consumes batch_size from BOTH benign and attack separately
-            # So limiting factor is the smaller class, not total data
-            # With 160K benign + 160K attack, batch_size=512: 160K/512 = 312.5 steps
-            actual_steps = min(self.steps_per_epoch, min(len(benign_indices), len(attack_indices)) // self.batch_size)
+            # CRITICAL FIX: Calculate based on per-class data size AND d_to_g_ratio
+            # Each step consumes (batch_size * d_to_g_ratio) samples from BOTH benign and attack
+            # The d_step loop iterates d_to_g_ratio times, consuming a new batch each iteration
+            # With 160K benign + 160K attack, batch_size=512, d_to_g_ratio=3: 160K/(512*3) = 104 steps
+            actual_steps = min(self.steps_per_epoch, min(len(benign_indices), len(attack_indices)) // (self.batch_size * d_to_g_ratio))
 
             # ═══════════════════════════════════════════════════════════════════════
             # SHUFFLE INDICES ONCE PER EPOCH (NOT PER STEP)
