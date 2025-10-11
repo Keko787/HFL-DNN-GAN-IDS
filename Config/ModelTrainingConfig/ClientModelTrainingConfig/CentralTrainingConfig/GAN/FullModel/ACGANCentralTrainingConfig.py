@@ -599,6 +599,7 @@ class CentralACGan:
 #########################################################################
 #                   CUSTOM TRAINING STEP METHODS                        #
 #########################################################################
+
     @tf.function
     def train_discriminator_step(self, real_data, real_labels, real_validity_labels):
         """
@@ -805,10 +806,6 @@ class CentralACGan:
         )
 
         return total_loss, validity_loss, class_loss, validity_acc, class_acc
-
-
-
-
 
 #########################################################################
 #                            TRAINING PROCESS                          #
@@ -1570,9 +1567,9 @@ class CentralACGan:
         }
         return custom_nids_loss, metrics
 
-    #########################################################################
-    #                          EVALUATION METHODS                          #
-    #########################################################################
+#########################################################################
+#                          EVALUATION METHODS                          #
+#########################################################################
     def evaluate(self, X_test=None, y_test=None):
         if X_test is None or y_test is None:
             X_test = self.x_test
