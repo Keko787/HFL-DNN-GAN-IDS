@@ -24,6 +24,7 @@ from tensorflow.keras.losses import LogCosh
 from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau, ModelCheckpoint
 from tensorflow.keras.optimizers import Adam
 from sklearn.metrics import f1_score, classification_report
+from collections import Counter
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
 import numpy as np
@@ -53,7 +54,10 @@ class ACGanClient(fl.client.NumPyClient):
     def __init__(self, GAN, nids, x_train, x_val, y_train, y_val, x_test, y_test, BATCH_SIZE,
                  noise_dim, latent_dim, num_classes, input_dim, epochs, steps_per_epoch, learning_rate,
                  log_file="training.log"):
-        #-- models
+
+        # ═══════════════════════════════════════════════════════════════════════
+        # MODEL INITIALIZATION
+        # ═══════════════════════════════════════════════════════════════════════
         self.GAN = GAN
         # Reconstruct the generator model from the merged model:
         self.generator = self.GAN.generator  # directly use the stored generator
@@ -61,50 +65,65 @@ class ACGanClient(fl.client.NumPyClient):
 
         self.nids = nids
 
-        #-- I/O Specs for models
+        # ═══════════════════════════════════════════════════════════════════════
+        # MODEL I/O SPECIFICATIONS
+        # ═══════════════════════════════════════════════════════════════════════
         self.batch_size = BATCH_SIZE
         self.noise_dim = noise_dim
         self.latent_dim = latent_dim
         self.num_classes = num_classes
         self.input_dim = input_dim
 
-        #-- training duration
+        # ═══════════════════════════════════════════════════════════════════════
+        # TRAINING CONFIGURATION
+        # ═══════════════════════════════════════════════════════════════════════
         self.epochs = epochs
         self.steps_per_epoch = steps_per_epoch
 
-        # -- Data
+        # ═══════════════════════════════════════════════════════════════════════
+        # DATA ASSIGNMENT
+        # ═══════════════════════════════════════════════════════════════════════
+        # ─── Features ───
         self.x_train = x_train
         self.x_test = x_test
         self.x_val = x_val
+
+        # ─── Categorical Labels ───
         self.y_train = y_train
         self.y_test = y_test
         self.y_val = y_val
 
-        # -- Setup Logging
+        # ═══════════════════════════════════════════════════════════════════════
+        # EARLY STOPPING CONFIGURATION
+        # ═══════════════════════════════════════════════════════════════════════
+        self.early_stopping_patience = 5
+        self.min_delta = 0.001  # Minimum improvement to consider as progress
+
+        # ═══════════════════════════════════════════════════════════════════════
+        # LOGGING SETUP
+        # ═══════════════════════════════════════════════════════════════════════
         self.setup_logger(log_file)
 
-        # -- Optimizers
-        # LR decay
+        # ═══════════════════════════════════════════════════════════════════════
+        # OPTIMIZER CONFIGURATION
+        # ═══════════════════════════════════════════════════════════════════════
+        # ─── Learning Rate Schedules ───
         lr_schedule_gen = tf.keras.optimizers.schedules.ExponentialDecay(
             initial_learning_rate=0.0002, decay_steps=10000, decay_rate=0.98, staircase=True)
 
         lr_schedule_disc = tf.keras.optimizers.schedules.ExponentialDecay(
             initial_learning_rate=0.0001, decay_steps=10000, decay_rate=0.98, staircase=True)
 
-        # Init optimizer
+        # ─── Optimizer Compilation  ───
         self.gen_optimizer = Adam(learning_rate=lr_schedule_gen, beta_1=0.5, beta_2=0.999)
         self.disc_optimizer = Adam(learning_rate=lr_schedule_disc, beta_1=0.5, beta_2=0.999)
 
         # maybe put the model compilation in here too? for ACGAN and ACDISCRIMINATOR
 
-    # Saving function for ACGAN
-    def setACGAN(self):
-        return self.ACGAN
 
-    def get_parameters(self, config):
-        return self.GAN.get_weights()
-
-    # -- logging Functions -- #
+    #########################################################################
+    #                           LOGGING FUNCTIONS                          #
+    #########################################################################
     def setup_logger(self, log_file):
         """Set up a logger that records both to a file and to the console."""
         self.logger = logging.getLogger("CentralACGan")
@@ -163,7 +182,7 @@ class ACGanClient(fl.client.NumPyClient):
         self.logger.info(f"Learning Rate (Discriminator): {self.disc_optimizer.learning_rate}")
         self.logger.info("=" * 50)
 
-    def log_epoch_metrics(self, epoch, d_metrics, g_metrics, nids_metrics=None):
+    def log_epoch_metrics(self, epoch, d_metrics, g_metrics, nids_metrics=None, fusion_metrics=None):
         """Logs a formatted summary of the metrics for this epoch."""
         self.logger.info(f"=== Epoch {epoch} Metrics Summary ===")
         self.logger.info("Discriminator Metrics:")
@@ -175,6 +194,10 @@ class ACGanClient(fl.client.NumPyClient):
         if nids_metrics is not None:
             self.logger.info("NIDS Metrics:")
             for key, value in nids_metrics.items():
+                self.logger.info(f"  {key}: {value}")
+        if fusion_metrics is not None:
+            self.logger.info("Probabilistic Fusion Metrics:")
+            for key, value in fusion_metrics.items():
                 self.logger.info(f"  {key}: {value}")
         self.logger.info("=" * 50)
 
@@ -193,7 +216,22 @@ class ACGanClient(fl.client.NumPyClient):
                 self.logger.info(f"  {key}: {value}")
         self.logger.info("=" * 50)
 
-    # -- Train -- #
+    # ═══════════════════════════════════════════════════════════════════════
+    # MODEL/WEIGHT ACCESS METHODS
+    # ═══════════════════════════════════════════════════════════════════════
+    def setACGAN(self):
+        return self.ACGAN
+
+    def get_parameters(self, config):
+        return self.GAN.get_weights()
+
+    #########################################################################
+    #                   CUSTOM TRAINING STEP METHODS                        #
+    #########################################################################
+
+    #########################################################################
+    #                            TRAINING PROCESS                          #
+    #########################################################################
     def fit(self, parameters, config):
 
         #-- Set the model weights from the Host --#
@@ -234,19 +272,39 @@ class ACGanClient(fl.client.NumPyClient):
             }
         )
 
-        # -- Set the Data --#
+        # ═══════════════════════════════════════════════════════════════════════
+        # TRAINING DATA PREPARATION
+        # ═══════════════════════════════════════════════════════════════════════
         X_train = self.x_train
         y_train = self.y_train
 
         print("Xtrain Data", X_train.head())
 
-        # Log model settings at the start
+        # ═══════════════════════════════════════════════════════════════════════
+        # TRAINING INITIALIZATION & LOGGING
+        # ═══════════════════════════════════════════════════════════════════════
         self.log_model_settings()
 
+        # ═══════════════════════════════════════════════════════════════════════
+        # CLASS-SPECIFIC DATA SEPARATION
+        # ═══════════════════════════════════════════════════════════════════════
+        # ─── Separate Data by Class ───
         valid = tf.ones((self.batch_size, 1))
         fake = tf.zeros((self.batch_size, 1))
 
-        #-- Training loop --#
+        # ═══════════════════════════════════════════════════════════════════════
+        # EARLY STOPPING TRACKING
+        # ═══════════════════════════════════════════════════════════════════════
+        best_fusion_accuracy = 0.0
+        best_epoch = 0
+        patience_counter = 0
+        best_weights = None
+
+        self.logger.info(f"Early stopping enabled with patience={self.early_stopping_patience}, min_delta={self.min_delta}")
+
+        # ═══════════════════════════════════════════════════════════════════════
+        # MAIN TRAINING LOOP
+        # ═══════════════════════════════════════════════════════════════════════
         for epoch in range(self.epochs):
             print("Discriminator Metrics:",self.discriminator.metrics_names)
             print("ACGAN Metrics:",self.ACGAN.metrics_names)
@@ -342,40 +400,101 @@ class ACGanClient(fl.client.NumPyClient):
                 self.logger.info(f"=== Epoch {epoch} Validation ===")
                 d_val_loss, d_val_metrics = self.validation_disc()
                 g_val_loss, g_val_metrics = self.validation_gen()
+
+                # -- Probabilistic Fusion Validation -- #
+                self.logger.info("=== Probabilistic Fusion Validation on Real Data ===")
+                fusion_results, fusion_metrics = self.validate_with_probabilistic_fusion(self.x_val, self.y_val)
+                self.logger.info(f"Probabilistic Fusion Accuracy: {fusion_metrics['accuracy'] * 100:.2f}%")
+
+                # Log distribution of classifications
+                self.logger.info(f"Predicted Class Distribution: {fusion_metrics['predicted_class_distribution']}")
+
                 nids_val_metrics = None
                 if self.nids is not None:
                     nids_custom_loss, nids_val_metrics = self.validation_NIDS()
                     self.logger.info(f"Validation NIDS Custom Loss: {nids_custom_loss:.4f}")
 
                 # Log the metrics for this epoch using our new logging method
-                self.log_epoch_metrics(epoch, d_val_metrics, g_val_metrics, nids_val_metrics)
+                self.log_epoch_metrics(epoch, d_val_metrics, g_val_metrics, nids_val_metrics, fusion_metrics)
                 self.logger.info(
                     f"Epoch {epoch}: D Loss: {d_loss[0]:.4f}, G Loss: {g_loss[0]:.4f}, D Acc: {d_loss[3] * 100:.2f}%")
 
-            # Return parameters for both generator and discriminator
-            return self.GAN.get_weights(), len(self.x_train), {}
+                # --------------------------
+                # Early Stopping Check
+                # --------------------------
+                current_fusion_accuracy = fusion_metrics['accuracy']
 
-        # -- Loss Calculations -- #
-    def nids_loss(self, real_output, fake_output):
-        """
-        Compute the NIDS loss on real and fake samples.
-        For real samples, the target is 1 (benign), and for fake samples, 0 (attack).
-        Returns a scalar loss value.
-        """
-        # define labels
-        real_labels = tf.ones_like(real_output)
-        fake_labels = tf.zeros_like(fake_output)
+                # Check if current accuracy is better than best (with min_delta threshold)
+                if current_fusion_accuracy > best_fusion_accuracy + self.min_delta:
+                    # Improvement detected
+                    best_fusion_accuracy = current_fusion_accuracy
+                    best_epoch = epoch
+                    patience_counter = 0
 
-        # define loss function
-        bce = tf.keras.losses.BinaryCrossentropy(from_logits=False)
+                    # Save best model weights (copy to avoid reference issues)
+                    best_weights = [w.copy() for w in self.GAN.get_weights()]
 
-        # calculate outputs
-        real_loss = bce(real_labels, real_output)
-        fake_loss = bce(fake_labels, fake_output)
+                    self.logger.info(f"✓ New best model! Fusion accuracy improved to {best_fusion_accuracy * 100:.2f}% at epoch {best_epoch}")
+                    self.logger.info(f"  Model weights saved. Patience counter reset to 0/{self.early_stopping_patience}")
+                else:
+                    # No improvement
+                    patience_counter += 1
+                    self.logger.info(f"⚠ No improvement in fusion accuracy (best: {best_fusion_accuracy * 100:.2f}% at epoch {best_epoch})")
+                    self.logger.info(f"  Patience counter: {patience_counter}/{self.early_stopping_patience}")
 
-        # sum up total loss
-        total_loss = real_loss + fake_loss
-        return total_loss.numpy()
+                    # Check if we should stop
+                    if patience_counter >= self.early_stopping_patience:
+                        self.logger.info(f"Early stopping triggered at epoch {epoch + 1}")
+                        self.logger.info(f"Best fusion accuracy: {best_fusion_accuracy * 100:.2f}% at epoch {best_epoch}")
+                        self.logger.info(f"Restoring best model weights from epoch {best_epoch}...")
+
+                        # Restore best weights
+                        if best_weights is not None:
+                            self.GAN.set_weights(best_weights)
+                            self.logger.info("✓ Best model weights restored successfully")
+
+                        # Log training completion with early stopping
+                        self.logger.info("=" * 50)
+                        self.logger.info("TRAINING COMPLETED (EARLY STOPPED)")
+                        self.logger.info("=" * 50)
+                        self.logger.info(f"Best probabilistic fusion accuracy: {best_fusion_accuracy * 100:.2f}%")
+                        self.logger.info(f"Best model from epoch: {best_epoch}")
+                        self.logger.info(f"Total epochs trained: {epoch + 1}")
+                        self.logger.info(f"Training stopped early due to no improvement for {self.early_stopping_patience} epochs")
+                        self.logger.info("=" * 50 + "\n")
+
+                        # Return early
+                        return self.GAN.get_weights(), len(self.x_train), {
+                            "best_fusion_accuracy": best_fusion_accuracy,
+                            "best_epoch": best_epoch,
+                            "total_epochs_trained": epoch + 1,
+                            "early_stopped": True
+                        }
+
+        # Training completed all epochs
+        self.logger.info("=" * 50)
+        self.logger.info("TRAINING COMPLETED")
+        self.logger.info("=" * 50)
+        self.logger.info(f"Best probabilistic fusion accuracy: {best_fusion_accuracy * 100:.2f}%")
+        self.logger.info(f"Best model from epoch: {best_epoch}")
+        self.logger.info(f"Total epochs trained: {self.epochs}")
+        self.logger.info("Training completed all epochs")
+        self.logger.info("=" * 50 + "\n")
+
+        # Restore best weights if we have them
+        if best_weights is not None:
+            self.GAN.set_weights(best_weights)
+            self.logger.info(f"✓ Best model weights from epoch {best_epoch} restored")
+
+        # Return parameters for both generator and discriminator
+        return self.GAN.get_weights(), len(self.x_train), {
+            "best_fusion_accuracy": best_fusion_accuracy,
+            "best_epoch": best_epoch,
+            "total_epochs_trained": self.epochs,
+            "early_stopped": False
+        }
+
+
 
     # -- Validation Functions (Disc, Gen, NIDS) -- #
     def validation_disc(self):
@@ -563,6 +682,7 @@ class ACGanClient(fl.client.NumPyClient):
         }
         return custom_nids_loss, metrics
 
+
     # -- Evaluate -- #
     def evaluate(self, parameters, config):
 
@@ -713,6 +833,161 @@ class ACGanClient(fl.client.NumPyClient):
         self.log_evaluation_metrics(d_eval_metrics, g_eval_metrics, nids_eval_metrics)
 
         return d_loss_total, len(self.x_test), {}
+
+
+
+    # -- Loss Calculations -- #
+    def nids_loss(self, real_output, fake_output):
+        """
+        Compute the NIDS loss on real and fake samples.
+        For real samples, the target is 1 (benign), and for fake samples, 0 (attack).
+        Returns a scalar loss value.
+        """
+        # define labels
+        real_labels = tf.ones_like(real_output)
+        fake_labels = tf.zeros_like(fake_output)
+
+        # define loss function
+        bce = tf.keras.losses.BinaryCrossentropy(from_logits=False)
+
+        # calculate outputs
+        real_loss = bce(real_labels, real_output)
+        fake_loss = bce(fake_labels, fake_output)
+
+        # sum up total loss
+        total_loss = real_loss + fake_loss
+        return total_loss.numpy()
+
+    # -- Probabilistic Fusion Methods -- #
+    def probabilistic_fusion(self, input_data):
+        """
+        Apply probabilistic fusion to combine validity and class predictions.
+        Returns combined probabilities for all four possible outcomes.
+        """
+        # Get discriminator predictions
+        validity_scores, class_predictions = self.discriminator.predict(input_data)
+
+        total_samples = len(input_data)
+        results = []
+
+        for i in range(total_samples):
+            # Validity probabilities: P(valid) and P(invalid)
+            p_valid = validity_scores[i][0]  # Probability of being valid/real
+            p_invalid = 1 - p_valid  # Probability of being invalid/fake
+
+            # Class probabilities: 2 classes (benign=0, attack=1)
+            p_benign = class_predictions[i][0]  # Probability of being benign
+            p_attack = class_predictions[i][1]  # Probability of being attack
+
+            # Calculate joint probabilities for all combinations
+            p_valid_benign = p_valid * p_benign
+            p_valid_attack = p_valid * p_attack
+            p_invalid_benign = p_invalid * p_benign
+            p_invalid_attack = p_invalid * p_attack
+
+            # Store all probabilities in a dictionary
+            probabilities = {
+                "valid_benign": p_valid_benign,
+                "valid_attack": p_valid_attack,
+                "invalid_benign": p_invalid_benign,
+                "invalid_attack": p_invalid_attack
+            }
+
+            # Find the most likely outcome
+            most_likely = max(probabilities, key=probabilities.get)
+
+            # For analysis, add the actual probabilities alongside the classification
+            result = {
+                "classification": most_likely,
+                "probabilities": probabilities
+            }
+
+            results.append(result)
+
+        return results
+
+    def validate_with_probabilistic_fusion(self, validation_data, validation_labels=None):
+        """
+        Evaluate model using probabilistic fusion and calculate metrics if labels are available.
+        """
+        fusion_results = self.probabilistic_fusion(validation_data)
+
+        # Extract classifications
+        classifications = [result["classification"] for result in fusion_results]
+
+        # Count occurrences of each class
+        predicted_class_distribution = Counter(classifications)
+        self.logger.info(f"Predicted Class Distribution: {dict(predicted_class_distribution)}")
+
+        # If we have ground truth labels, calculate accuracy
+        if validation_labels is not None:
+            correct_predictions = 0
+            correct_classifications = []
+            true_classifications = []
+
+            for i, result in enumerate(fusion_results):
+                # Get the true label (assuming 0=benign, 1=attack)
+                if isinstance(validation_labels, np.ndarray) and validation_labels.ndim > 1:
+                    true_class_idx = np.argmax(validation_labels[i])
+                else:
+                    true_class_idx = validation_labels[i]
+
+                true_class = "benign" if true_class_idx == 0 else "attack"
+
+                # For validation data (which is real), expected validity is "valid"
+                true_validity = "valid"  # Since validation data is real data
+
+                # Construct the true combined label
+                true_combined = f"{true_validity}_{true_class}"
+
+                # Add to true classifications list
+                true_classifications.append(true_combined)
+
+                # Check if prediction matches
+                if result["classification"] == true_combined:
+                    correct_predictions += 1
+                    correct_classifications.append(result["classification"])
+
+            # Count distribution of correctly classified samples
+            correct_class_distribution = Counter(correct_classifications)
+
+            # Count distribution of true classes
+            true_class_distribution = Counter(true_classifications)
+            self.logger.info(f"True Class Distribution: {dict(true_class_distribution)}")
+
+            accuracy = correct_predictions / len(validation_data)
+            self.logger.info(f"Accuracy: {accuracy:.4f}")
+
+            metrics = {
+                "accuracy": accuracy,
+                "total_samples": len(validation_data),
+                "correct_predictions": correct_predictions,
+                "predicted_class_distribution": dict(predicted_class_distribution),
+                "correct_class_distribution": dict(correct_class_distribution),
+                "true_class_distribution": dict(true_class_distribution)
+            }
+
+            return classifications, metrics
+
+        return classifications, {"predicted_class_distribution": dict(predicted_class_distribution)}
+
+    def analyze_fusion_results(self, fusion_results):
+        """Analyze the distribution of probabilities from fusion results"""
+        # Extract probabilities for each category
+        valid_benign_probs = [r["probabilities"]["valid_benign"] for r in fusion_results]
+        valid_attack_probs = [r["probabilities"]["valid_attack"] for r in fusion_results]
+        invalid_benign_probs = [r["probabilities"]["invalid_benign"] for r in fusion_results]
+        invalid_attack_probs = [r["probabilities"]["invalid_attack"] for r in fusion_results]
+
+        # Calculate summary statistics
+        categories = ["Valid Benign", "Valid Attack", "Invalid Benign", "Invalid Attack"]
+        all_probs = [valid_benign_probs, valid_attack_probs, invalid_benign_probs, invalid_attack_probs]
+
+        for cat, probs in zip(categories, all_probs):
+            self.logger.info(
+                f"{cat}: Mean={np.mean(probs):.4f}, Median={np.median(probs):.4f}, Max={np.max(probs):.4f}")
+
+        # You could add additional visualizations or analysis here
 
     def save(self, save_name):
         import os
