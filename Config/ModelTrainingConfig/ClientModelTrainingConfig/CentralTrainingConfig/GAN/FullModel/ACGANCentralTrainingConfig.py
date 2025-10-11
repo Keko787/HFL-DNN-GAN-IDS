@@ -299,9 +299,9 @@ class CentralACGan:
 
         return fake_labels
 
-    #########################################################################
-    #                      BATCH DATA PROCESSING HELPER                     #
-    #########################################################################
+#########################################################################
+#                      BATCH DATA PROCESSING HELPER                     #
+#########################################################################
     def process_batch_data(self, data, labels, valid_smoothing_factor):
         """
         Process batch data and labels to ensure correct shapes and encoding.
@@ -333,9 +333,9 @@ class CentralACGan:
 
         return data, labels_onehot, validity_labels
 
-        #########################################################################
-        #                         LOSS CALCULATION METHODS                     #
-        #########################################################################
+#########################################################################
+#                         LOSS CALCULATION METHODS                     #
+#########################################################################
 
     def calculate_weighted_loss(self, d_loss_benign, d_loss_attack, d_loss_fake,
                                 attack_weight=0.7, benign_weight=0.3,
@@ -452,9 +452,9 @@ class CentralACGan:
         total_loss = real_loss + fake_loss
         return total_loss.numpy()
 
-    #########################################################################
-    #                    PROBABILISTIC FUSION METHODS                      #
-    #########################################################################
+#########################################################################
+#                    PROBABILISTIC FUSION METHODS                      #
+#########################################################################
     def probabilistic_fusion(self, input_data):
         """
         Apply probabilistic fusion to combine validity and class predictions.

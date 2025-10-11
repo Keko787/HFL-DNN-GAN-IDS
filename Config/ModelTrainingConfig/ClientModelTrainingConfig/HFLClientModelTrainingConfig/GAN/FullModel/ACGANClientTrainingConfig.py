@@ -121,9 +121,9 @@ class ACGanClient(fl.client.NumPyClient):
         # maybe put the model compilation in here too? for ACGAN and ACDISCRIMINATOR
 
 
-    #########################################################################
-    #                           LOGGING FUNCTIONS                          #
-    #########################################################################
+#########################################################################
+#                           LOGGING FUNCTIONS                          #
+#########################################################################
     def setup_logger(self, log_file):
         """Set up a logger that records both to a file and to the console."""
         self.logger = logging.getLogger("CentralACGan")
@@ -216,22 +216,179 @@ class ACGanClient(fl.client.NumPyClient):
                 self.logger.info(f"  {key}: {value}")
         self.logger.info("=" * 50)
 
-    # ═══════════════════════════════════════════════════════════════════════
-    # MODEL/WEIGHT ACCESS METHODS
-    # ═══════════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════════
+# MODEL/WEIGHT ACCESS METHODS
+# ═══════════════════════════════════════════════════════════════════════
     def setACGAN(self):
         return self.ACGAN
 
     def get_parameters(self, config):
         return self.GAN.get_weights()
 
-    #########################################################################
-    #                   CUSTOM TRAINING STEP METHODS                        #
-    #########################################################################
+#########################################################################
+#                         LOSS CALCULATION METHODS                     #
+#########################################################################
+    def nids_loss(self, real_output, fake_output):
+        """
+        Compute the NIDS loss on real and fake samples.
+        For real samples, the target is 1 (benign), and for fake samples, 0 (attack).
+        Returns a scalar loss value.
+        """
+        # define labels
+        real_labels = tf.ones_like(real_output)
+        fake_labels = tf.zeros_like(fake_output)
 
-    #########################################################################
-    #                            TRAINING PROCESS                          #
-    #########################################################################
+        # define loss function
+        bce = tf.keras.losses.BinaryCrossentropy(from_logits=False)
+
+        # calculate outputs
+        real_loss = bce(real_labels, real_output)
+        fake_loss = bce(fake_labels, fake_output)
+
+        # sum up total loss
+        total_loss = real_loss + fake_loss
+        return total_loss.numpy()
+
+#########################################################################
+#                    PROBABILISTIC FUSION METHODS                      #
+#########################################################################
+    def probabilistic_fusion(self, input_data):
+        """
+        Apply probabilistic fusion to combine validity and class predictions.
+        Returns combined probabilities for all four possible outcomes.
+        """
+        # Get discriminator predictions
+        validity_scores, class_predictions = self.discriminator.predict(input_data)
+
+        total_samples = len(input_data)
+        results = []
+
+        for i in range(total_samples):
+            # Validity probabilities: P(valid) and P(invalid)
+            p_valid = validity_scores[i][0]  # Probability of being valid/real
+            p_invalid = 1 - p_valid  # Probability of being invalid/fake
+
+            # Class probabilities: 2 classes (benign=0, attack=1)
+            p_benign = class_predictions[i][0]  # Probability of being benign
+            p_attack = class_predictions[i][1]  # Probability of being attack
+
+            # Calculate joint probabilities for all combinations
+            p_valid_benign = p_valid * p_benign
+            p_valid_attack = p_valid * p_attack
+            p_invalid_benign = p_invalid * p_benign
+            p_invalid_attack = p_invalid * p_attack
+
+            # Store all probabilities in a dictionary
+            probabilities = {
+                "valid_benign": p_valid_benign,
+                "valid_attack": p_valid_attack,
+                "invalid_benign": p_invalid_benign,
+                "invalid_attack": p_invalid_attack
+            }
+
+            # Find the most likely outcome
+            most_likely = max(probabilities, key=probabilities.get)
+
+            # For analysis, add the actual probabilities alongside the classification
+            result = {
+                "classification": most_likely,
+                "probabilities": probabilities
+            }
+
+            results.append(result)
+
+        return results
+
+    def validate_with_probabilistic_fusion(self, validation_data, validation_labels=None):
+        """
+        Evaluate model using probabilistic fusion and calculate metrics if labels are available.
+        """
+        fusion_results = self.probabilistic_fusion(validation_data)
+
+        # Extract classifications
+        classifications = [result["classification"] for result in fusion_results]
+
+        # Count occurrences of each class
+        predicted_class_distribution = Counter(classifications)
+        self.logger.info(f"Predicted Class Distribution: {dict(predicted_class_distribution)}")
+
+        # If we have ground truth labels, calculate accuracy
+        if validation_labels is not None:
+            correct_predictions = 0
+            correct_classifications = []
+            true_classifications = []
+
+            for i, result in enumerate(fusion_results):
+                # Get the true label (assuming 0=benign, 1=attack)
+                if isinstance(validation_labels, np.ndarray) and validation_labels.ndim > 1:
+                    true_class_idx = np.argmax(validation_labels[i])
+                else:
+                    true_class_idx = validation_labels[i]
+
+                true_class = "benign" if true_class_idx == 0 else "attack"
+
+                # For validation data (which is real), expected validity is "valid"
+                true_validity = "valid"  # Since validation data is real data
+
+                # Construct the true combined label
+                true_combined = f"{true_validity}_{true_class}"
+
+                # Add to true classifications list
+                true_classifications.append(true_combined)
+
+                # Check if prediction matches
+                if result["classification"] == true_combined:
+                    correct_predictions += 1
+                    correct_classifications.append(result["classification"])
+
+            # Count distribution of correctly classified samples
+            correct_class_distribution = Counter(correct_classifications)
+
+            # Count distribution of true classes
+            true_class_distribution = Counter(true_classifications)
+            self.logger.info(f"True Class Distribution: {dict(true_class_distribution)}")
+
+            accuracy = correct_predictions / len(validation_data)
+            self.logger.info(f"Accuracy: {accuracy:.4f}")
+
+            metrics = {
+                "accuracy": accuracy,
+                "total_samples": len(validation_data),
+                "correct_predictions": correct_predictions,
+                "predicted_class_distribution": dict(predicted_class_distribution),
+                "correct_class_distribution": dict(correct_class_distribution),
+                "true_class_distribution": dict(true_class_distribution)
+            }
+
+            return classifications, metrics
+
+        return classifications, {"predicted_class_distribution": dict(predicted_class_distribution)}
+
+    def analyze_fusion_results(self, fusion_results):
+        """Analyze the distribution of probabilities from fusion results"""
+        # Extract probabilities for each category
+        valid_benign_probs = [r["probabilities"]["valid_benign"] for r in fusion_results]
+        valid_attack_probs = [r["probabilities"]["valid_attack"] for r in fusion_results]
+        invalid_benign_probs = [r["probabilities"]["invalid_benign"] for r in fusion_results]
+        invalid_attack_probs = [r["probabilities"]["invalid_attack"] for r in fusion_results]
+
+        # Calculate summary statistics
+        categories = ["Valid Benign", "Valid Attack", "Invalid Benign", "Invalid Attack"]
+        all_probs = [valid_benign_probs, valid_attack_probs, invalid_benign_probs, invalid_attack_probs]
+
+        for cat, probs in zip(categories, all_probs):
+            self.logger.info(
+                f"{cat}: Mean={np.mean(probs):.4f}, Median={np.median(probs):.4f}, Max={np.max(probs):.4f}")
+
+        # You could add additional visualizations or analysis here
+
+#########################################################################
+#                   CUSTOM TRAINING STEP METHODS                        #
+#########################################################################
+
+#########################################################################
+#                            TRAINING PROCESS                          #
+#########################################################################
     def fit(self, parameters, config):
 
         #-- Set the model weights from the Host --#
@@ -494,9 +651,9 @@ class ACGanClient(fl.client.NumPyClient):
             "early_stopped": False
         }
 
-
-
-    # -- Validation Functions (Disc, Gen, NIDS) -- #
+#########################################################################
+#                          VALIDATION METHODS                           #
+#########################################################################
     def validation_disc(self):
         """
         Evaluate the discriminator on the validation set.
@@ -682,8 +839,9 @@ class ACGanClient(fl.client.NumPyClient):
         }
         return custom_nids_loss, metrics
 
-
-    # -- Evaluate -- #
+#########################################################################
+#                          EVALUATION METHODS                          #
+#########################################################################
     def evaluate(self, parameters, config):
 
         # -- Set the model weights from the Host --#
@@ -834,161 +992,9 @@ class ACGanClient(fl.client.NumPyClient):
 
         return d_loss_total, len(self.x_test), {}
 
-
-
-    # -- Loss Calculations -- #
-    def nids_loss(self, real_output, fake_output):
-        """
-        Compute the NIDS loss on real and fake samples.
-        For real samples, the target is 1 (benign), and for fake samples, 0 (attack).
-        Returns a scalar loss value.
-        """
-        # define labels
-        real_labels = tf.ones_like(real_output)
-        fake_labels = tf.zeros_like(fake_output)
-
-        # define loss function
-        bce = tf.keras.losses.BinaryCrossentropy(from_logits=False)
-
-        # calculate outputs
-        real_loss = bce(real_labels, real_output)
-        fake_loss = bce(fake_labels, fake_output)
-
-        # sum up total loss
-        total_loss = real_loss + fake_loss
-        return total_loss.numpy()
-
-    # -- Probabilistic Fusion Methods -- #
-    def probabilistic_fusion(self, input_data):
-        """
-        Apply probabilistic fusion to combine validity and class predictions.
-        Returns combined probabilities for all four possible outcomes.
-        """
-        # Get discriminator predictions
-        validity_scores, class_predictions = self.discriminator.predict(input_data)
-
-        total_samples = len(input_data)
-        results = []
-
-        for i in range(total_samples):
-            # Validity probabilities: P(valid) and P(invalid)
-            p_valid = validity_scores[i][0]  # Probability of being valid/real
-            p_invalid = 1 - p_valid  # Probability of being invalid/fake
-
-            # Class probabilities: 2 classes (benign=0, attack=1)
-            p_benign = class_predictions[i][0]  # Probability of being benign
-            p_attack = class_predictions[i][1]  # Probability of being attack
-
-            # Calculate joint probabilities for all combinations
-            p_valid_benign = p_valid * p_benign
-            p_valid_attack = p_valid * p_attack
-            p_invalid_benign = p_invalid * p_benign
-            p_invalid_attack = p_invalid * p_attack
-
-            # Store all probabilities in a dictionary
-            probabilities = {
-                "valid_benign": p_valid_benign,
-                "valid_attack": p_valid_attack,
-                "invalid_benign": p_invalid_benign,
-                "invalid_attack": p_invalid_attack
-            }
-
-            # Find the most likely outcome
-            most_likely = max(probabilities, key=probabilities.get)
-
-            # For analysis, add the actual probabilities alongside the classification
-            result = {
-                "classification": most_likely,
-                "probabilities": probabilities
-            }
-
-            results.append(result)
-
-        return results
-
-    def validate_with_probabilistic_fusion(self, validation_data, validation_labels=None):
-        """
-        Evaluate model using probabilistic fusion and calculate metrics if labels are available.
-        """
-        fusion_results = self.probabilistic_fusion(validation_data)
-
-        # Extract classifications
-        classifications = [result["classification"] for result in fusion_results]
-
-        # Count occurrences of each class
-        predicted_class_distribution = Counter(classifications)
-        self.logger.info(f"Predicted Class Distribution: {dict(predicted_class_distribution)}")
-
-        # If we have ground truth labels, calculate accuracy
-        if validation_labels is not None:
-            correct_predictions = 0
-            correct_classifications = []
-            true_classifications = []
-
-            for i, result in enumerate(fusion_results):
-                # Get the true label (assuming 0=benign, 1=attack)
-                if isinstance(validation_labels, np.ndarray) and validation_labels.ndim > 1:
-                    true_class_idx = np.argmax(validation_labels[i])
-                else:
-                    true_class_idx = validation_labels[i]
-
-                true_class = "benign" if true_class_idx == 0 else "attack"
-
-                # For validation data (which is real), expected validity is "valid"
-                true_validity = "valid"  # Since validation data is real data
-
-                # Construct the true combined label
-                true_combined = f"{true_validity}_{true_class}"
-
-                # Add to true classifications list
-                true_classifications.append(true_combined)
-
-                # Check if prediction matches
-                if result["classification"] == true_combined:
-                    correct_predictions += 1
-                    correct_classifications.append(result["classification"])
-
-            # Count distribution of correctly classified samples
-            correct_class_distribution = Counter(correct_classifications)
-
-            # Count distribution of true classes
-            true_class_distribution = Counter(true_classifications)
-            self.logger.info(f"True Class Distribution: {dict(true_class_distribution)}")
-
-            accuracy = correct_predictions / len(validation_data)
-            self.logger.info(f"Accuracy: {accuracy:.4f}")
-
-            metrics = {
-                "accuracy": accuracy,
-                "total_samples": len(validation_data),
-                "correct_predictions": correct_predictions,
-                "predicted_class_distribution": dict(predicted_class_distribution),
-                "correct_class_distribution": dict(correct_class_distribution),
-                "true_class_distribution": dict(true_class_distribution)
-            }
-
-            return classifications, metrics
-
-        return classifications, {"predicted_class_distribution": dict(predicted_class_distribution)}
-
-    def analyze_fusion_results(self, fusion_results):
-        """Analyze the distribution of probabilities from fusion results"""
-        # Extract probabilities for each category
-        valid_benign_probs = [r["probabilities"]["valid_benign"] for r in fusion_results]
-        valid_attack_probs = [r["probabilities"]["valid_attack"] for r in fusion_results]
-        invalid_benign_probs = [r["probabilities"]["invalid_benign"] for r in fusion_results]
-        invalid_attack_probs = [r["probabilities"]["invalid_attack"] for r in fusion_results]
-
-        # Calculate summary statistics
-        categories = ["Valid Benign", "Valid Attack", "Invalid Benign", "Invalid Attack"]
-        all_probs = [valid_benign_probs, valid_attack_probs, invalid_benign_probs, invalid_attack_probs]
-
-        for cat, probs in zip(categories, all_probs):
-            self.logger.info(
-                f"{cat}: Mean={np.mean(probs):.4f}, Median={np.median(probs):.4f}, Max={np.max(probs):.4f}")
-
-        # You could add additional visualizations or analysis here
-
+#########################################################################
+#                           MODEL SAVING METHODS                       #
+#########################################################################
     def save(self, save_name):
         import os
         # Calculate absolute path to ModelArchive
