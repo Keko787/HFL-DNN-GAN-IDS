@@ -45,6 +45,10 @@ class ACDiscriminatorSyntheticStrategy(fl.server.strategy.FedAvg):
         self.y_test = y_test
         self.y_val = y_val
 
+        # -- Early Stopping Configuration
+        self.early_stopping_patience = 5
+        self.min_delta = 0.001  # Minimum improvement to consider as progress
+
         # -- Setup Logging
         self.setup_logger(log_file)
         self.timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -70,27 +74,7 @@ class ACDiscriminatorSyntheticStrategy(fl.server.strategy.FedAvg):
             }
         )
 
-    # -- Loss Calculations -- #
-    def nids_loss(self, real_output, fake_output):
-        """
-        Compute the NIDS loss on real and fake samples.
-        For real samples, the target is 1 (benign), and for fake samples, 0 (attack).
-        Returns a scalar loss value.
-        """
-        # define labels
-        real_labels = tf.ones_like(real_output)
-        fake_labels = tf.zeros_like(fake_output)
 
-        # define loss function
-        bce = tf.keras.losses.BinaryCrossentropy(from_logits=False)
-
-        # calculate outputs
-        real_loss = bce(real_labels, real_output)
-        fake_loss = bce(fake_labels, fake_output)
-
-        # sum up total loss
-        total_loss = real_loss + fake_loss
-        return total_loss.numpy()
 
     # -- logging Functions -- #
     def setup_logger(self, log_file):
@@ -168,146 +152,151 @@ class ACDiscriminatorSyntheticStrategy(fl.server.strategy.FedAvg):
                 self.logger.info(f"  {key}: {value}")
         self.logger.info("=" * 50)
 
-    def aggregate_fit(self, server_round, results, failures):
-        # -- Set the model with global weights, Bring in the parameters for the global model --#
-        aggregated_parameters = super().aggregate_fit(server_round, results, failures)
+    # -- Batch Processing Methods -- #
+    def process_batch_data(self, data, labels, valid_smoothing_factor):
+        """
+        Process batch data and labels to ensure correct shapes and encoding.
 
-        if aggregated_parameters is not None:
-            print(f"Saving global model after round {server_round}...")
-            aggregated_weights = parameters_to_ndarrays(aggregated_parameters[0])
-            if len(aggregated_weights) == len(self.discriminator.get_weights()):
-                self.discriminator.set_weights(aggregated_weights)
-        # EoF Set global weights
-        # save model before synthetic contextualization
-        model_save_path = "../../../../../ModelArchive/discriminator_GLOBAL_B4Fit_ACGAN.h5"
-        self.discriminator.save(model_save_path)
-        print(f"Model saved at: {model_save_path}")
+        Args:
+            data: Input feature data
+            labels: Corresponding labels
+            valid_smoothing_factor: Label smoothing factor for validity labels
 
-        # -- make sure discriminator is trainable for individual training -- #
-        self.discriminator.trainable = True
-        # Ensure all layers within discriminator are trainable
-        for layer in self.discriminator.layers:
-            layer.trainable = True
+        Returns:
+            Tuple of (processed_data, processed_labels, validity_labels)
+        """
+        # • Fix shape issues - ensure 2D data
+        if len(data.shape) > 2:
+            data = tf.reshape(data, (data.shape[0], -1))
 
-        # -- Re-compile discriminator with trainable weights -- #
-        self.discriminator.compile(
-            loss={'validity': 'binary_crossentropy', 'class': 'categorical_crossentropy'},
-            optimizer=self.disc_optimizer,
-            metrics={
-                'validity': ['binary_accuracy'],
-                'class': ['categorical_accuracy']
-            }
+        # • Ensure one-hot encoding
+        if len(labels.shape) == 1:
+            labels_onehot = tf.one_hot(tf.cast(labels, tf.int32), depth=self.num_classes)
+        else:
+            labels_onehot = labels
+
+        # • Ensure correct shape for labels
+        if len(labels_onehot.shape) > 2:
+            labels_onehot = tf.reshape(labels_onehot, (labels_onehot.shape[0], self.num_classes))
+
+        # • Create validity labels with smoothing
+        validity_labels = tf.ones((data.shape[0], 1)) * (1 - valid_smoothing_factor)
+
+        return data, labels_onehot, validity_labels
+
+    # -- Custom Training Step Methods -- #
+    @tf.function
+    def train_discriminator_step(self, real_data, real_labels, real_validity_labels):
+        """
+        Custom training step for discriminator on real data.
+
+        Args:
+            real_data: Real input features
+            real_labels: One-hot encoded class labels
+            real_validity_labels: Validity labels (1 for real)
+
+        Returns:
+            Tuple of (total_loss, validity_loss, class_loss, validity_acc, class_acc)
+        """
+        # Convert inputs to float32 for type consistency
+        real_data = tf.cast(real_data, tf.float32)
+        real_labels = tf.cast(real_labels, tf.float32)
+        real_validity_labels = tf.cast(real_validity_labels, tf.float32)
+
+        with tf.GradientTape() as tape:
+            # Forward pass with training=True
+            validity_pred, class_pred = self.discriminator(real_data, training=True)
+
+            # Calculate losses
+            validity_loss = tf.keras.losses.binary_crossentropy(real_validity_labels, validity_pred)
+            validity_loss = tf.reduce_mean(validity_loss)
+            class_loss = tf.keras.losses.categorical_crossentropy(real_labels, class_pred)
+            class_loss = tf.reduce_mean(class_loss)
+
+            # Reduce validity loss weight for real data to balance gradients
+            total_loss = (0.15 * validity_loss) + class_loss
+
+        # Calculate gradients and update weights
+        gradients = tape.gradient(total_loss, self.discriminator.trainable_variables)
+        self.disc_optimizer.apply_gradients(zip(gradients, self.discriminator.trainable_variables))
+
+        # Calculate accuracies
+        validity_acc = tf.reduce_mean(
+            tf.cast(tf.equal(tf.round(validity_pred), real_validity_labels), tf.float32)
+        )
+        class_acc = tf.reduce_mean(
+            tf.cast(tf.equal(tf.argmax(class_pred, axis=1), tf.argmax(real_labels, axis=1)), tf.float32)
         )
 
-        # -- Set the Data --#
-        X_train = self.x_train
-        y_train = self.y_train
+        return total_loss, validity_loss, class_loss, validity_acc, class_acc
 
-        print("Xtrain Data", X_train.head())
+    @tf.function
+    def train_discriminator_on_fake_step(self, fake_data, fake_labels, fake_validity_labels):
+        """
+        Custom training step for discriminator on fake/generated data.
 
-        # Log model settings at the start
-        self.log_model_settings()
+        Args:
+            fake_data: Generated input features
+            fake_labels: One-hot encoded class labels for generated data
+            fake_validity_labels: Validity labels (0 for fake)
 
-        # -- Apply label smoothing -- #
+        Returns:
+            Tuple of (total_loss, validity_loss, class_loss, validity_acc, class_acc)
+        """
+        # Convert inputs to float32 for type consistency
+        fake_data = tf.cast(fake_data, tf.float32)
+        fake_labels = tf.cast(fake_labels, tf.float32)
+        fake_validity_labels = tf.cast(fake_validity_labels, tf.float32)
 
-        # Create smoothed labels for discriminator training
-        valid_smoothing_factor = 0.15
-        valid_smooth = tf.ones((self.batch_size, 1)) * (1 - valid_smoothing_factor)
+        with tf.GradientTape() as tape:
+            # Forward pass with training=True
+            validity_pred, class_pred = self.discriminator(fake_data, training=True)
 
-        fake_smoothing_factor = 0.1
-        fake_smooth = tf.zeros((self.batch_size, 1)) + fake_smoothing_factor
+            # Calculate losses
+            validity_loss = tf.keras.losses.binary_crossentropy(fake_validity_labels, validity_pred)
+            validity_loss = tf.reduce_mean(validity_loss)
+            class_loss = tf.keras.losses.categorical_crossentropy(fake_labels, class_pred)
+            class_loss = tf.reduce_mean(class_loss)
 
-        self.logger.info(f"Using valid label smoothing with factor: {valid_smoothing_factor}")
-        self.logger.info(f"Using fake label smoothing with factor: {fake_smoothing_factor}")
+            # Increase validity loss weight for fake data to balance with real data
+            total_loss = (7.0 * validity_loss) + class_loss
 
-        # -- Training loop --#
-        for epoch in range(self.epochs):
-            print("Discriminator Metrics:", self.discriminator.metrics_names)
+        # Calculate gradients and update weights
+        gradients = tape.gradient(total_loss, self.discriminator.trainable_variables)
+        self.disc_optimizer.apply_gradients(zip(gradients, self.discriminator.trainable_variables))
 
-            print(f'\n=== Epoch {epoch}/{self.epochs} ===\n')
-            self.logger.info(f'=== Epoch {epoch}/{self.epochs} ===')
-            # --------------------------
-            # Train Discriminator
-            # --------------------------
-            # -- Source the real data -- #
-            # Sample a batch of real data
-            X_train = np.array(X_train)
-            y_train = np.array(y_train)
+        # Calculate accuracies
+        validity_acc = tf.reduce_mean(
+            tf.cast(tf.equal(tf.round(validity_pred), fake_validity_labels), tf.float32)
+        )
+        class_acc = tf.reduce_mean(
+            tf.cast(tf.equal(tf.argmax(class_pred, axis=1), tf.argmax(fake_labels, axis=1)), tf.float32)
+        )
 
-            idx = tf.random.shuffle(tf.range(len(X_train)))[:self.batch_size]
-            real_data = tf.gather(X_train, idx)
-            real_labels = tf.gather(y_train, idx)
+        return total_loss, validity_loss, class_loss, validity_acc, class_acc
 
-            # Ensure labels are one-hot encoded
-            if len(real_labels.shape) == 1:
-                real_labels_onehot = tf.one_hot(tf.cast(real_labels, tf.int32), depth=self.num_classes)
-            else:
-                real_labels_onehot = real_labels
+        # -- Loss Calculations -- #
 
-            # -- Generate fake data -- #
-            # Sample the noise data
-            noise = tf.random.normal((self.batch_size, self.latent_dim))
-            fake_labels = tf.random.uniform((self.batch_size,), minval=0, maxval=self.num_classes, dtype=tf.int32)
-            fake_labels_onehot = tf.one_hot(fake_labels, depth=self.num_classes)
+    def nids_loss(self, real_output, fake_output):
+        """
+        Compute the NIDS loss on real and fake samples.
+        For real samples, the target is 1 (benign), and for fake samples, 0 (attack).
+        Returns a scalar loss value.
+        """
+        # define labels
+        real_labels = tf.ones_like(real_output)
+        fake_labels = tf.zeros_like(fake_output)
 
-            # Generate fake data
-            generated_data = self.generator.predict([noise, fake_labels])
+        # define loss function
+        bce = tf.keras.losses.BinaryCrossentropy(from_logits=False)
 
-            # Train discriminator on real and fake data
-            d_loss_real = self.discriminator.train_on_batch(real_data, [valid_smooth, real_labels_onehot])
-            d_loss_fake = self.discriminator.train_on_batch(generated_data, [fake_smooth, fake_labels_onehot])
-            d_loss = 0.5 * tf.add(d_loss_real, d_loss_fake)
+        # calculate outputs
+        real_loss = bce(real_labels, real_output)
+        fake_loss = bce(fake_labels, fake_output)
 
-            # Collect discriminator metrics
-            d_metrics = {
-                "Total Loss": f"{d_loss[0]:.4f}",
-                "Validity Loss": f"{d_loss[1]:.4f}",
-                "Class Loss": f"{d_loss[2]:.4f}",
-                "Validity Binary Accuracy": f"{d_loss[3] * 100:.2f}%",
-                "Class Categorical Accuracy": f"{d_loss[4] * 100:.2f}%"
-            }
-            self.logger.info("Training Discriminator")
-            self.logger.info(
-                f"Discriminator Total Loss: {d_loss[0]:.4f} | Validity Loss: {d_loss[1]:.4f} | Class Loss: {d_loss[2]:.4f}")
-            self.logger.info(
-                f"Validity Binary Accuracy: {d_loss[3] * 100:.2f}%")
-            self.logger.info(
-                f"Class Categorical Accuracy: {d_loss[4] * 100:.2f}%")
-
-            # --------------------------
-            # Validation every 1 epochs
-            # --------------------------
-            if epoch % 1 == 0:
-                self.logger.info(f"=== Epoch {epoch} Validation ===")
-                d_val_loss, d_val_metrics = self.validation_disc()
-
-                # -- Probabilistic Fusion Validation -- #
-                self.logger.info("=== Probabilistic Fusion Validation on Real Data ===")
-                fusion_results, fusion_metrics = self.validate_with_probabilistic_fusion(self.x_val, self.y_val)
-                self.logger.info(f"Probabilistic Fusion Accuracy: {fusion_metrics['accuracy'] * 100:.2f}%")
-
-                # Log distribution of classifications
-                self.logger.info(f"Predicted Class Distribution: {fusion_metrics['predicted_class_distribution']}")
-                self.logger.info(f"Correct Class Distribution: {fusion_metrics['correct_class_distribution']}")
-                self.logger.info(f"True Class Distribution: {fusion_metrics['true_class_distribution']}")
-
-                nids_val_metrics = None
-                if self.nids is not None:
-                    nids_custom_loss, nids_val_metrics = self.validation_NIDS()
-                    self.logger.info(f"Validation NIDS Custom Loss: {nids_custom_loss:.4f}")
-
-                # Log the metrics for this epoch using our new logging method
-                self.log_epoch_metrics(epoch, d_val_metrics, nids_val_metrics)
-                self.logger.info(
-                    f"Epoch {epoch}: D Loss: {d_loss[0]:.4f}, D Acc: {d_loss[3] * 100:.2f}%")
-
-            # save model before synthetic contextualization
-            model_save_path = "../../../../ModelArchive/discriminator_GLOBAL_AfterFit_ACGAN.h5"
-            self.discriminator.save(model_save_path)
-            print(f"Model saved at: {model_save_path}")
-
-        # Send updated weights back to clients
-        return self.discriminator.get_weights(), {}
+        # sum up total loss
+        total_loss = real_loss + fake_loss
+        return total_loss.numpy()
 
     # -- Probabilistic Fusion Methods -- #
     def probabilistic_fusion(self, input_data):
@@ -439,6 +428,234 @@ class ACDiscriminatorSyntheticStrategy(fl.server.strategy.FedAvg):
                 f"{cat}: Mean={np.mean(probs):.4f}, Median={np.median(probs):.4f}, Max={np.max(probs):.4f}")
 
         # You could add additional visualizations or analysis here
+
+    def aggregate_fit(self, server_round, results, failures):
+        # -- Set the model with global weights, Bring in the parameters for the global model --#
+        aggregated_parameters = super().aggregate_fit(server_round, results, failures)
+
+        if aggregated_parameters is not None:
+            print(f"Saving global model after round {server_round}...")
+            aggregated_weights = parameters_to_ndarrays(aggregated_parameters[0])
+            if len(aggregated_weights) == len(self.discriminator.get_weights()):
+                self.discriminator.set_weights(aggregated_weights)
+        # EoF Set global weights
+        # save model before synthetic contextualization
+        model_save_path = "../../../../../ModelArchive/discriminator_GLOBAL_B4Fit_ACGAN.h5"
+        self.discriminator.save(model_save_path)
+        print(f"Model saved at: {model_save_path}")
+
+        # -- make sure discriminator is trainable for individual training -- #
+        self.discriminator.trainable = True
+        # Ensure all layers within discriminator are trainable
+        for layer in self.discriminator.layers:
+            layer.trainable = True
+
+        # -- Re-compile discriminator with trainable weights -- #
+        self.discriminator.compile(
+            loss={'validity': 'binary_crossentropy', 'class': 'categorical_crossentropy'},
+            optimizer=self.disc_optimizer,
+            metrics={
+                'validity': ['binary_accuracy'],
+                'class': ['categorical_accuracy']
+            }
+        )
+
+        # -- Set the Data --#
+        X_train = self.x_train
+        y_train = self.y_train
+
+        print("Xtrain Data", X_train.head())
+
+        # Log model settings at the start
+        self.log_model_settings()
+
+        # -- Apply label smoothing -- #
+
+        # Create smoothed labels for discriminator training
+        valid_smoothing_factor = 0.15
+        valid_smooth = tf.ones((self.batch_size, 1)) * (1 - valid_smoothing_factor)
+
+        fake_smoothing_factor = 0.1
+        fake_smooth = tf.zeros((self.batch_size, 1)) + fake_smoothing_factor
+
+        self.logger.info(f"Using valid label smoothing with factor: {valid_smoothing_factor}")
+        self.logger.info(f"Using fake label smoothing with factor: {fake_smoothing_factor}")
+
+        # -- Early Stopping Tracking
+        best_fusion_accuracy = 0.0
+        best_epoch = 0
+        patience_counter = 0
+        best_weights = None
+
+        self.logger.info(f"Early stopping enabled with patience={self.early_stopping_patience}, min_delta={self.min_delta}")
+
+        # -- Training loop --#
+        for epoch in range(self.epochs):
+            print("Discriminator Metrics:", self.discriminator.metrics_names)
+
+            print(f'\n=== Epoch {epoch}/{self.epochs} ===\n')
+            self.logger.info(f'=== Epoch {epoch}/{self.epochs} ===')
+            # --------------------------
+            # Train Discriminator
+            # --------------------------
+            # -- Source the real data -- #
+            # Sample a batch of real data
+            X_train = np.array(X_train)
+            y_train = np.array(y_train)
+
+            idx = tf.random.shuffle(tf.range(len(X_train)))[:self.batch_size]
+            real_data = tf.gather(X_train, idx)
+            real_labels = tf.gather(y_train, idx)
+
+            # Ensure labels are one-hot encoded
+            if len(real_labels.shape) == 1:
+                real_labels_onehot = tf.one_hot(tf.cast(real_labels, tf.int32), depth=self.num_classes)
+            else:
+                real_labels_onehot = real_labels
+
+            # -- Generate fake data -- #
+            # Sample the noise data
+            noise = tf.random.normal((self.batch_size, self.latent_dim))
+            fake_labels = tf.random.uniform((self.batch_size,), minval=0, maxval=self.num_classes, dtype=tf.int32)
+            fake_labels_onehot = tf.one_hot(fake_labels, depth=self.num_classes)
+
+            # Generate fake data
+            generated_data = self.generator.predict([noise, fake_labels])
+
+            # Train discriminator on real and fake data
+            d_loss_real = self.discriminator.train_on_batch(real_data, [valid_smooth, real_labels_onehot])
+            d_loss_fake = self.discriminator.train_on_batch(generated_data, [fake_smooth, fake_labels_onehot])
+            d_loss = 0.5 * tf.add(d_loss_real, d_loss_fake)
+
+            # Collect discriminator metrics
+            d_metrics = {
+                "Total Loss": f"{d_loss[0]:.4f}",
+                "Validity Loss": f"{d_loss[1]:.4f}",
+                "Class Loss": f"{d_loss[2]:.4f}",
+                "Validity Binary Accuracy": f"{d_loss[3] * 100:.2f}%",
+                "Class Categorical Accuracy": f"{d_loss[4] * 100:.2f}%"
+            }
+            self.logger.info("Training Discriminator")
+            self.logger.info(
+                f"Discriminator Total Loss: {d_loss[0]:.4f} | Validity Loss: {d_loss[1]:.4f} | Class Loss: {d_loss[2]:.4f}")
+            self.logger.info(
+                f"Validity Binary Accuracy: {d_loss[3] * 100:.2f}%")
+            self.logger.info(
+                f"Class Categorical Accuracy: {d_loss[4] * 100:.2f}%")
+
+            # --------------------------
+            # Validation every 1 epochs
+            # --------------------------
+            if epoch % 1 == 0:
+                self.logger.info(f"=== Epoch {epoch} Validation ===")
+                d_val_loss, d_val_metrics = self.validation_disc()
+
+                # -- Probabilistic Fusion Validation -- #
+                self.logger.info("=== Probabilistic Fusion Validation on Real Data ===")
+                fusion_results, fusion_metrics = self.validate_with_probabilistic_fusion(self.x_val, self.y_val)
+                self.logger.info(f"Probabilistic Fusion Accuracy: {fusion_metrics['accuracy'] * 100:.2f}%")
+
+                # Log distribution of classifications
+                self.logger.info(f"Predicted Class Distribution: {fusion_metrics['predicted_class_distribution']}")
+                self.logger.info(f"Correct Class Distribution: {fusion_metrics['correct_class_distribution']}")
+                self.logger.info(f"True Class Distribution: {fusion_metrics['true_class_distribution']}")
+
+                nids_val_metrics = None
+                if self.nids is not None:
+                    nids_custom_loss, nids_val_metrics = self.validation_NIDS()
+                    self.logger.info(f"Validation NIDS Custom Loss: {nids_custom_loss:.4f}")
+
+                # Log the metrics for this epoch using our new logging method
+                self.log_epoch_metrics(epoch, d_val_metrics, nids_val_metrics)
+                self.logger.info(
+                    f"Epoch {epoch}: D Loss: {d_loss[0]:.4f}, D Acc: {d_loss[3] * 100:.2f}%")
+
+                # --------------------------
+                # Early Stopping Check
+                # --------------------------
+                current_fusion_accuracy = fusion_metrics['accuracy']
+
+                # Check if current accuracy is better than best (with min_delta threshold)
+                if current_fusion_accuracy > best_fusion_accuracy + self.min_delta:
+                    # Improvement detected
+                    best_fusion_accuracy = current_fusion_accuracy
+                    best_epoch = epoch
+                    patience_counter = 0
+
+                    # Save best model weights (copy to avoid reference issues)
+                    best_weights = [w.copy() for w in self.discriminator.get_weights()]
+
+                    self.logger.info(f"✓ New best model! Fusion accuracy improved to {best_fusion_accuracy * 100:.2f}% at epoch {best_epoch}")
+                    self.logger.info(f"  Model weights saved. Patience counter reset to 0/{self.early_stopping_patience}")
+                else:
+                    # No improvement
+                    patience_counter += 1
+                    self.logger.info(f"⚠ No improvement in fusion accuracy (best: {best_fusion_accuracy * 100:.2f}% at epoch {best_epoch})")
+                    self.logger.info(f"  Patience counter: {patience_counter}/{self.early_stopping_patience}")
+
+                    # Check if we should stop
+                    if patience_counter >= self.early_stopping_patience:
+                        self.logger.info(f"Early stopping triggered at epoch {epoch + 1}")
+                        self.logger.info(f"Best fusion accuracy: {best_fusion_accuracy * 100:.2f}% at epoch {best_epoch}")
+                        self.logger.info(f"Restoring best model weights from epoch {best_epoch}...")
+
+                        # Restore best weights
+                        if best_weights is not None:
+                            self.discriminator.set_weights(best_weights)
+                            self.logger.info("✓ Best model weights restored successfully")
+
+                        # Save the best model
+                        model_save_path = "../../../../ModelArchive/discriminator_GLOBAL_AfterFit_ACGAN.h5"
+                        self.discriminator.save(model_save_path)
+                        print(f"Best model saved at: {model_save_path}")
+
+                        # Log training completion with early stopping
+                        self.logger.info("=" * 50)
+                        self.logger.info("TRAINING COMPLETED (EARLY STOPPED)")
+                        self.logger.info("=" * 50)
+                        self.logger.info(f"Best probabilistic fusion accuracy: {best_fusion_accuracy * 100:.2f}%")
+                        self.logger.info(f"Best model from epoch: {best_epoch}")
+                        self.logger.info(f"Total epochs trained: {epoch + 1}")
+                        self.logger.info(f"Training stopped early due to no improvement for {self.early_stopping_patience} epochs")
+                        self.logger.info("=" * 50 + "\n")
+
+                        # Return early
+                        return self.discriminator.get_weights(), {
+                            "best_fusion_accuracy": best_fusion_accuracy,
+                            "best_epoch": best_epoch,
+                            "total_epochs_trained": epoch + 1,
+                            "early_stopped": True
+                        }
+
+        # Training completed all epochs
+        self.logger.info("=" * 50)
+        self.logger.info("TRAINING COMPLETED")
+        self.logger.info("=" * 50)
+        self.logger.info(f"Best probabilistic fusion accuracy: {best_fusion_accuracy * 100:.2f}%")
+        self.logger.info(f"Best model from epoch: {best_epoch}")
+        self.logger.info(f"Total epochs trained: {self.epochs}")
+        self.logger.info("Training completed all epochs")
+        self.logger.info("=" * 50 + "\n")
+
+        # Restore best weights if we have them
+        if best_weights is not None:
+            self.discriminator.set_weights(best_weights)
+            self.logger.info(f"✓ Best model weights from epoch {best_epoch} restored")
+
+        # save model after training completion
+        model_save_path = "../../../../ModelArchive/discriminator_GLOBAL_AfterFit_ACGAN.h5"
+        self.discriminator.save(model_save_path)
+        print(f"Model saved at: {model_save_path}")
+
+        # Send updated weights back to clients
+        return self.discriminator.get_weights(), {
+            "best_fusion_accuracy": best_fusion_accuracy,
+            "best_epoch": best_epoch,
+            "total_epochs_trained": self.epochs,
+            "early_stopped": False
+        }
+
+
 
         # -- Validation Functions (Disc, Gen, NIDS) -- #
 

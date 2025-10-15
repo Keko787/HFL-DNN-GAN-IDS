@@ -272,6 +272,9 @@ class CentralACGan:
 #########################################################################
 # Helper method for TRAINING PROCESS to balanced fake label generation  #
 #########################################################################
+    #########################################################################
+    #                      fake label generator HELPER                     #
+    #########################################################################
     def generate_balanced_fake_labels(self, total_samples):
         """
         Generate balanced fake labels ensuring equal distribution of classes.
@@ -299,9 +302,9 @@ class CentralACGan:
 
         return fake_labels
 
-#########################################################################
-#                      BATCH DATA PROCESSING HELPER                     #
-#########################################################################
+    #########################################################################
+    #                      BATCH DATA PROCESSING HELPER                     #
+    #########################################################################
     def process_batch_data(self, data, labels, valid_smoothing_factor):
         """
         Process batch data and labels to ensure correct shapes and encoding.
