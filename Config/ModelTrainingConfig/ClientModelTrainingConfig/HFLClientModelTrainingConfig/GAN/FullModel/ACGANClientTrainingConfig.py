@@ -598,81 +598,6 @@ class ACGanClient(fl.client.NumPyClient):
 #########################################################################
 #                   CUSTOM TRAINING STEP METHODS                        #
 #########################################################################
-    @tf.function
-    def evaluate_discriminator(self, data, labels, validity_labels):
-        """
-        Evaluate discriminator without updating weights.
-
-        Args:
-            data: Input features
-            labels: One-hot encoded class labels
-            validity_labels: Validity labels
-
-        Returns:
-            Tuple of (total_loss, validity_loss, class_loss, validity_acc, class_acc)
-        """
-        # Convert inputs to float32 to ensure type consistency
-        data = tf.cast(data, tf.float32)
-        labels = tf.cast(labels, tf.float32)
-        validity_labels = tf.cast(validity_labels, tf.float32)
-
-        # Forward pass with training=False for evaluation
-        validity_pred, class_pred = self.discriminator(data, training=False)
-
-        # Calculate losses
-        validity_loss = self.binary_crossentropy(validity_labels, validity_pred)
-        class_loss = self.categorical_crossentropy(labels, class_pred)
-        total_loss = validity_loss + class_loss
-
-        # Calculate accuracies
-        validity_acc = tf.reduce_mean(
-            tf.cast(tf.equal(tf.round(validity_pred), validity_labels), tf.float32)
-        )
-        class_acc = tf.reduce_mean(
-            tf.cast(tf.equal(tf.argmax(class_pred, axis=1), tf.argmax(labels, axis=1)), tf.float32)
-        )
-
-        return total_loss, validity_loss, class_loss, validity_acc, class_acc
-
-    @tf.function
-    def evaluate_generator(self, noise, labels_int, labels_onehot, validity_labels):
-        """
-        Evaluate generator without updating weights.
-
-        Args:
-            noise: Random noise input
-            labels_int: Integer class labels (for generator input)
-            labels_onehot: One-hot encoded class labels (for loss calculation)
-            validity_labels: Target validity labels
-
-        Returns:
-            Tuple of (total_loss, validity_loss, class_loss, validity_acc, class_acc)
-        """
-        # Convert inputs to proper types
-        noise = tf.cast(noise, tf.float32)
-        labels_onehot = tf.cast(labels_onehot, tf.float32)
-        validity_labels = tf.cast(validity_labels, tf.float32)
-
-        # Generate data - generator expects INTEGER labels
-        generated_data = self.generator([noise, labels_int], training=False)
-
-        # Get discriminator predictions
-        validity_pred, class_pred = self.discriminator(generated_data, training=False)
-
-        # Calculate losses - use one-hot labels
-        validity_loss = self.binary_crossentropy(validity_labels, validity_pred)
-        class_loss = self.categorical_crossentropy(labels_onehot, class_pred)
-        total_loss = validity_loss + class_loss
-
-        # Calculate accuracies
-        validity_acc = tf.reduce_mean(
-            tf.cast(tf.equal(tf.round(validity_pred), validity_labels), tf.float32)
-        )
-        class_acc = tf.reduce_mean(
-            tf.cast(tf.equal(tf.argmax(class_pred, axis=1), tf.argmax(labels_onehot, axis=1)), tf.float32)
-        )
-
-        return total_loss, validity_loss, class_loss, validity_acc, class_acc
 
     @tf.function
     def train_discriminator_step(self, real_data, real_labels, real_validity_labels):
@@ -805,7 +730,83 @@ class ACGanClient(fl.client.NumPyClient):
 
         return total_loss, validity_loss, class_loss, validity_acc, class_acc
 
-#########################################################################
+    @tf.function
+    def evaluate_discriminator(self, data, labels, validity_labels):
+        """
+        Evaluate discriminator without updating weights.
+
+        Args:
+            data: Input features
+            labels: One-hot encoded class labels
+            validity_labels: Validity labels
+
+        Returns:
+            Tuple of (total_loss, validity_loss, class_loss, validity_acc, class_acc)
+        """
+        # Convert inputs to float32 to ensure type consistency
+        data = tf.cast(data, tf.float32)
+        labels = tf.cast(labels, tf.float32)
+        validity_labels = tf.cast(validity_labels, tf.float32)
+
+        # Forward pass with training=False for evaluation
+        validity_pred, class_pred = self.discriminator(data, training=False)
+
+        # Calculate losses
+        validity_loss = self.binary_crossentropy(validity_labels, validity_pred)
+        class_loss = self.categorical_crossentropy(labels, class_pred)
+        total_loss = validity_loss + class_loss
+
+        # Calculate accuracies
+        validity_acc = tf.reduce_mean(
+            tf.cast(tf.equal(tf.round(validity_pred), validity_labels), tf.float32)
+        )
+        class_acc = tf.reduce_mean(
+            tf.cast(tf.equal(tf.argmax(class_pred, axis=1), tf.argmax(labels, axis=1)), tf.float32)
+        )
+
+        return total_loss, validity_loss, class_loss, validity_acc, class_acc
+
+    @tf.function
+    def evaluate_generator(self, noise, labels_int, labels_onehot, validity_labels):
+        """
+        Evaluate generator without updating weights.
+
+        Args:
+            noise: Random noise input
+            labels_int: Integer class labels (for generator input)
+            labels_onehot: One-hot encoded class labels (for loss calculation)
+            validity_labels: Target validity labels
+
+        Returns:
+            Tuple of (total_loss, validity_loss, class_loss, validity_acc, class_acc)
+        """
+        # Convert inputs to proper types
+        noise = tf.cast(noise, tf.float32)
+        labels_onehot = tf.cast(labels_onehot, tf.float32)
+        validity_labels = tf.cast(validity_labels, tf.float32)
+
+        # Generate data - generator expects INTEGER labels
+        generated_data = self.generator([noise, labels_int], training=False)
+
+        # Get discriminator predictions
+        validity_pred, class_pred = self.discriminator(generated_data, training=False)
+
+        # Calculate losses - use one-hot labels
+        validity_loss = self.binary_crossentropy(validity_labels, validity_pred)
+        class_loss = self.categorical_crossentropy(labels_onehot, class_pred)
+        total_loss = validity_loss + class_loss
+
+        # Calculate accuracies
+        validity_acc = tf.reduce_mean(
+            tf.cast(tf.equal(tf.round(validity_pred), validity_labels), tf.float32)
+        )
+        class_acc = tf.reduce_mean(
+            tf.cast(tf.equal(tf.argmax(class_pred, axis=1), tf.argmax(labels_onehot, axis=1)), tf.float32)
+        )
+
+        return total_loss, validity_loss, class_loss, validity_acc, class_acc
+
+    #########################################################################
 #                            TRAINING PROCESS                          #
 #########################################################################
     def fit(self, parameters, config):

@@ -74,9 +74,9 @@ class ACDiscriminatorSyntheticStrategy(fl.server.strategy.FedAvg):
             }
         )
 
-
-
-    # -- logging Functions -- #
+    #########################################################################
+    #                           LOGGING FUNCTIONS                          #
+    #########################################################################
     def setup_logger(self, log_file):
         """Set up a logger that records both to a file and to the console."""
         self.logger = logging.getLogger("CentralACGan")
@@ -152,7 +152,42 @@ class ACDiscriminatorSyntheticStrategy(fl.server.strategy.FedAvg):
                 self.logger.info(f"  {key}: {value}")
         self.logger.info("=" * 50)
 
-    # -- Batch Processing Methods -- #
+        #########################################################################
+        # Helper method for TRAINING PROCESS to balanced fake label generation  #
+        #########################################################################
+        #########################################################################
+        #                      fake label generator HELPER                     #
+        #########################################################################
+    def generate_balanced_fake_labels(self, total_samples):
+        """
+        Generate balanced fake labels ensuring equal distribution of classes.
+
+        Parameters:
+        -----------
+        total_samples : int
+            Total number of fake labels to generate
+
+        Returns:
+        --------
+        tf.Tensor
+            Balanced and shuffled fake labels
+        """
+        half_samples = total_samples // 2
+        remaining_samples = total_samples - half_samples
+
+        # Create balanced labels
+        fake_labels_0 = tf.zeros(half_samples, dtype=tf.int32)  # Benign class
+        fake_labels_1 = tf.ones(remaining_samples, dtype=tf.int32)  # Attack class
+
+        # Concatenate and shuffle
+        fake_labels = tf.concat([fake_labels_0, fake_labels_1], axis=0)
+        fake_labels = tf.random.shuffle(fake_labels)
+
+        return fake_labels
+
+        #########################################################################
+        #                      BATCH DATA PROCESSING HELPER                     #
+        #########################################################################
     def process_batch_data(self, data, labels, valid_smoothing_factor):
         """
         Process batch data and labels to ensure correct shapes and encoding.
@@ -184,99 +219,9 @@ class ACDiscriminatorSyntheticStrategy(fl.server.strategy.FedAvg):
 
         return data, labels_onehot, validity_labels
 
-    # -- Custom Training Step Methods -- #
-    @tf.function
-    def train_discriminator_step(self, real_data, real_labels, real_validity_labels):
-        """
-        Custom training step for discriminator on real data.
-
-        Args:
-            real_data: Real input features
-            real_labels: One-hot encoded class labels
-            real_validity_labels: Validity labels (1 for real)
-
-        Returns:
-            Tuple of (total_loss, validity_loss, class_loss, validity_acc, class_acc)
-        """
-        # Convert inputs to float32 for type consistency
-        real_data = tf.cast(real_data, tf.float32)
-        real_labels = tf.cast(real_labels, tf.float32)
-        real_validity_labels = tf.cast(real_validity_labels, tf.float32)
-
-        with tf.GradientTape() as tape:
-            # Forward pass with training=True
-            validity_pred, class_pred = self.discriminator(real_data, training=True)
-
-            # Calculate losses
-            validity_loss = tf.keras.losses.binary_crossentropy(real_validity_labels, validity_pred)
-            validity_loss = tf.reduce_mean(validity_loss)
-            class_loss = tf.keras.losses.categorical_crossentropy(real_labels, class_pred)
-            class_loss = tf.reduce_mean(class_loss)
-
-            # Reduce validity loss weight for real data to balance gradients
-            total_loss = (0.15 * validity_loss) + class_loss
-
-        # Calculate gradients and update weights
-        gradients = tape.gradient(total_loss, self.discriminator.trainable_variables)
-        self.disc_optimizer.apply_gradients(zip(gradients, self.discriminator.trainable_variables))
-
-        # Calculate accuracies
-        validity_acc = tf.reduce_mean(
-            tf.cast(tf.equal(tf.round(validity_pred), real_validity_labels), tf.float32)
-        )
-        class_acc = tf.reduce_mean(
-            tf.cast(tf.equal(tf.argmax(class_pred, axis=1), tf.argmax(real_labels, axis=1)), tf.float32)
-        )
-
-        return total_loss, validity_loss, class_loss, validity_acc, class_acc
-
-    @tf.function
-    def train_discriminator_on_fake_step(self, fake_data, fake_labels, fake_validity_labels):
-        """
-        Custom training step for discriminator on fake/generated data.
-
-        Args:
-            fake_data: Generated input features
-            fake_labels: One-hot encoded class labels for generated data
-            fake_validity_labels: Validity labels (0 for fake)
-
-        Returns:
-            Tuple of (total_loss, validity_loss, class_loss, validity_acc, class_acc)
-        """
-        # Convert inputs to float32 for type consistency
-        fake_data = tf.cast(fake_data, tf.float32)
-        fake_labels = tf.cast(fake_labels, tf.float32)
-        fake_validity_labels = tf.cast(fake_validity_labels, tf.float32)
-
-        with tf.GradientTape() as tape:
-            # Forward pass with training=True
-            validity_pred, class_pred = self.discriminator(fake_data, training=True)
-
-            # Calculate losses
-            validity_loss = tf.keras.losses.binary_crossentropy(fake_validity_labels, validity_pred)
-            validity_loss = tf.reduce_mean(validity_loss)
-            class_loss = tf.keras.losses.categorical_crossentropy(fake_labels, class_pred)
-            class_loss = tf.reduce_mean(class_loss)
-
-            # Increase validity loss weight for fake data to balance with real data
-            total_loss = (7.0 * validity_loss) + class_loss
-
-        # Calculate gradients and update weights
-        gradients = tape.gradient(total_loss, self.discriminator.trainable_variables)
-        self.disc_optimizer.apply_gradients(zip(gradients, self.discriminator.trainable_variables))
-
-        # Calculate accuracies
-        validity_acc = tf.reduce_mean(
-            tf.cast(tf.equal(tf.round(validity_pred), fake_validity_labels), tf.float32)
-        )
-        class_acc = tf.reduce_mean(
-            tf.cast(tf.equal(tf.argmax(class_pred, axis=1), tf.argmax(fake_labels, axis=1)), tf.float32)
-        )
-
-        return total_loss, validity_loss, class_loss, validity_acc, class_acc
-
-        # -- Loss Calculations -- #
-
+        #########################################################################
+        #                         LOSS CALCULATION METHODS                     #
+        #########################################################################
     def nids_loss(self, real_output, fake_output):
         """
         Compute the NIDS loss on real and fake samples.
@@ -298,7 +243,9 @@ class ACDiscriminatorSyntheticStrategy(fl.server.strategy.FedAvg):
         total_loss = real_loss + fake_loss
         return total_loss.numpy()
 
-    # -- Probabilistic Fusion Methods -- #
+    #########################################################################
+    #                    PROBABILISTIC FUSION METHODS                      #
+    #########################################################################
     def probabilistic_fusion(self, input_data):
         """
         Apply probabilistic fusion to combine validity and class predictions.
@@ -429,6 +376,102 @@ class ACDiscriminatorSyntheticStrategy(fl.server.strategy.FedAvg):
 
         # You could add additional visualizations or analysis here
 
+#########################################################################
+#                   CUSTOM TRAINING STEP METHODS                        #
+#########################################################################
+    @tf.function
+    def train_discriminator_step(self, real_data, real_labels, real_validity_labels):
+        """
+        Custom training step for discriminator on real data.
+
+        Args:
+            real_data: Real input features
+            real_labels: One-hot encoded class labels
+            real_validity_labels: Validity labels (1 for real)
+
+        Returns:
+            Tuple of (total_loss, validity_loss, class_loss, validity_acc, class_acc)
+        """
+        # Convert inputs to float32 for type consistency
+        real_data = tf.cast(real_data, tf.float32)
+        real_labels = tf.cast(real_labels, tf.float32)
+        real_validity_labels = tf.cast(real_validity_labels, tf.float32)
+
+        with tf.GradientTape() as tape:
+            # Forward pass with training=True
+            validity_pred, class_pred = self.discriminator(real_data, training=True)
+
+            # Calculate losses
+            validity_loss = tf.keras.losses.binary_crossentropy(real_validity_labels, validity_pred)
+            validity_loss = tf.reduce_mean(validity_loss)
+            class_loss = tf.keras.losses.categorical_crossentropy(real_labels, class_pred)
+            class_loss = tf.reduce_mean(class_loss)
+
+            # Reduce validity loss weight for real data to balance gradients
+            total_loss = (0.15 * validity_loss) + class_loss
+
+        # Calculate gradients and update weights
+        gradients = tape.gradient(total_loss, self.discriminator.trainable_variables)
+        self.disc_optimizer.apply_gradients(zip(gradients, self.discriminator.trainable_variables))
+
+        # Calculate accuracies
+        validity_acc = tf.reduce_mean(
+            tf.cast(tf.equal(tf.round(validity_pred), real_validity_labels), tf.float32)
+        )
+        class_acc = tf.reduce_mean(
+            tf.cast(tf.equal(tf.argmax(class_pred, axis=1), tf.argmax(real_labels, axis=1)), tf.float32)
+        )
+
+        return total_loss, validity_loss, class_loss, validity_acc, class_acc
+
+    @tf.function
+    def train_discriminator_on_fake_step(self, fake_data, fake_labels, fake_validity_labels):
+        """
+        Custom training step for discriminator on fake/generated data.
+
+        Args:
+            fake_data: Generated input features
+            fake_labels: One-hot encoded class labels for generated data
+            fake_validity_labels: Validity labels (0 for fake)
+
+        Returns:
+            Tuple of (total_loss, validity_loss, class_loss, validity_acc, class_acc)
+        """
+        # Convert inputs to float32 for type consistency
+        fake_data = tf.cast(fake_data, tf.float32)
+        fake_labels = tf.cast(fake_labels, tf.float32)
+        fake_validity_labels = tf.cast(fake_validity_labels, tf.float32)
+
+        with tf.GradientTape() as tape:
+            # Forward pass with training=True
+            validity_pred, class_pred = self.discriminator(fake_data, training=True)
+
+            # Calculate losses
+            validity_loss = tf.keras.losses.binary_crossentropy(fake_validity_labels, validity_pred)
+            validity_loss = tf.reduce_mean(validity_loss)
+            class_loss = tf.keras.losses.categorical_crossentropy(fake_labels, class_pred)
+            class_loss = tf.reduce_mean(class_loss)
+
+            # Increase validity loss weight for fake data to balance with real data
+            total_loss = (7.0 * validity_loss) + class_loss
+
+        # Calculate gradients and update weights
+        gradients = tape.gradient(total_loss, self.discriminator.trainable_variables)
+        self.disc_optimizer.apply_gradients(zip(gradients, self.discriminator.trainable_variables))
+
+        # Calculate accuracies
+        validity_acc = tf.reduce_mean(
+            tf.cast(tf.equal(tf.round(validity_pred), fake_validity_labels), tf.float32)
+        )
+        class_acc = tf.reduce_mean(
+            tf.cast(tf.equal(tf.argmax(class_pred, axis=1), tf.argmax(fake_labels, axis=1)), tf.float32)
+        )
+
+        return total_loss, validity_loss, class_loss, validity_acc, class_acc
+
+    #########################################################################
+    #                            TRAINING PROCESS                          #
+    #########################################################################
     def aggregate_fit(self, server_round, results, failures):
         # -- Set the model with global weights, Bring in the parameters for the global model --#
         aggregated_parameters = super().aggregate_fit(server_round, results, failures)
@@ -655,10 +698,9 @@ class ACDiscriminatorSyntheticStrategy(fl.server.strategy.FedAvg):
             "early_stopped": False
         }
 
-
-
-        # -- Validation Functions (Disc, Gen, NIDS) -- #
-
+#########################################################################
+#                          VALIDATION METHODS                           #
+#########################################################################
     def validation_disc(self):
         """
         Evaluate the discriminator on the validation set.
@@ -791,7 +833,9 @@ class ACDiscriminatorSyntheticStrategy(fl.server.strategy.FedAvg):
         }
         return custom_nids_loss, metrics
 
-    # # -- Evaluate -- #
+    #########################################################################
+    #                          EVALUATION METHODS                          #
+    #########################################################################
     # def evaluate(self, parameters, config):
     #
     #     # -- Set the model weights from the Host --#

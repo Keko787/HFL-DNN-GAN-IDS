@@ -116,10 +116,9 @@ class ACDiscriminatorClient(fl.client.NumPyClient):
                 metrics={'validity': ['binary_accuracy']}
             )
 
-
-
-    # -- Logging Functions -- #
-
+#########################################################################
+#                           LOGGING FUNCTIONS                          #
+#########################################################################
     def setup_logger(self, log_file):
         """Set up a logger that records both to a file and to the console."""
         self.logger = logging.getLogger("ACDiscriminatorClient")
@@ -184,12 +183,12 @@ class ACDiscriminatorClient(fl.client.NumPyClient):
                 self.logger.info(f"  {key}: {value}")
         self.logger.info("=" * 50)
 
-        # ═══════════════════════════════════════════════════════════════════════
-        # MODEL ACCESS METHODS
-        # ═══════════════════════════════════════════════════════════════════════
-        def get_parameters(self, config):
-            # Return the discriminator's weights
-            return self.discriminator.get_weights()
+# ═══════════════════════════════════════════════════════════════════════
+# MODEL ACCESS METHODS
+# ═══════════════════════════════════════════════════════════════════════
+    def get_parameters(self, config):
+        # Return the discriminator's weights
+        return self.discriminator.get_weights()
 
     #########################################################################
     # Helper method for TRAINING PROCESS to balanced fake label generation  #
@@ -261,7 +260,6 @@ class ACDiscriminatorClient(fl.client.NumPyClient):
         #########################################################################
         #                         LOSS CALCULATION METHODS                     #
         #########################################################################
-
     def calculate_weighted_loss(self, d_loss_benign, d_loss_attack, d_loss_fake,
                                 attack_weight=0.7, benign_weight=0.3,
                                 validity_weight=0.4, class_weight=0.6):
@@ -520,7 +518,6 @@ class ACDiscriminatorClient(fl.client.NumPyClient):
     #########################################################################
     #                   CUSTOM TRAINING STEP METHODS                        #
     #########################################################################
-
     @tf.function
     def train_discriminator_step(self, real_data, real_labels, real_validity_labels):
         """
@@ -1053,9 +1050,9 @@ class ACDiscriminatorClient(fl.client.NumPyClient):
             "early_stopped": False
         }
 
-
-
-    # -- Validate -- #
+    #########################################################################
+    #                          VALIDATION METHODS                           #
+    #########################################################################
     def validation_disc(self):
         """
         Evaluate the discriminator on the validation set using real data.
@@ -1143,7 +1140,9 @@ class ACDiscriminatorClient(fl.client.NumPyClient):
 
         return avg_total_loss, metrics
 
-    # -- Evaluate -- #
+#########################################################################
+#                          EVALUATION METHODS                          #
+#########################################################################
     def evaluate(self, parameters, config):
         """
         Evaluate the discriminator on test data using custom evaluation helper.
@@ -1259,6 +1258,9 @@ class ACDiscriminatorClient(fl.client.NumPyClient):
         return float(d_loss_total), len(self.x_test), {
             "accuracy": float(d_validity_bin_acc) if not self.use_class_labels else float(d_class_cat_acc)}
 
+#########################################################################
+#                           MODEL SAVING METHODS                       #
+#########################################################################
     def save(self, save_name):
         # Save each submodel separately
         self.discriminator.save(f"../../../../../../ModelArchive/discriminator_fed_ACGAN_{save_name}.h5")

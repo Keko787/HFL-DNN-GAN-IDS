@@ -259,7 +259,9 @@ class ACDiscriminatorSyntheticStrategy(fl.server.strategy.FedAvg):
 
         return data, labels_onehot, validity_labels
 
-    # -- Loss Calculations -- #
+    #########################################################################
+    #                         LOSS CALCULATION METHODS                     #
+    #########################################################################
     def nids_loss(self, real_output, fake_output):
         """
         Compute the NIDS loss on real and fake samples.
