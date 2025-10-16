@@ -469,6 +469,66 @@ class ACDiscriminatorSyntheticStrategy(fl.server.strategy.FedAvg):
 
         return total_loss, validity_loss, class_loss, validity_acc, class_acc
 
+        # -- Custom Evaluation Helper -- #
+    @tf.function
+    def evaluate_discriminator(self, data, labels, validity_labels):
+        """
+        Evaluate discriminator without updating weights.
+
+        Args:
+            data: Input features
+            labels: One-hot encoded class labels (or None if not using class labels)
+            validity_labels: Validity labels
+
+        Returns:
+            Tuple of (total_loss, validity_loss, class_loss, validity_acc, class_acc)
+            Note: class_loss and class_acc will be 0 if not using class labels
+        """
+        # Convert inputs to float32 to ensure type consistency
+        data = tf.cast(data, tf.float32)
+        validity_labels = tf.cast(validity_labels, tf.float32)
+
+        if self.use_class_labels:
+            labels = tf.cast(labels, tf.float32)
+
+            # Forward pass with training=False for evaluation
+            validity_pred, class_pred = self.discriminator(data, training=False)
+
+            # Calculate losses
+            validity_loss = tf.keras.losses.binary_crossentropy(validity_labels, validity_pred)
+            validity_loss = tf.reduce_mean(validity_loss)
+
+            class_loss = tf.keras.losses.categorical_crossentropy(labels, class_pred)
+            class_loss = tf.reduce_mean(class_loss)
+
+            total_loss = validity_loss + class_loss
+
+            # Calculate accuracies
+            validity_acc = tf.reduce_mean(
+                tf.cast(tf.equal(tf.round(validity_pred), validity_labels), tf.float32)
+            )
+            class_acc = tf.reduce_mean(
+                tf.cast(tf.equal(tf.argmax(class_pred, axis=1), tf.argmax(labels, axis=1)), tf.float32)
+            )
+        else:
+            # Only validity output
+            validity_pred = self.discriminator(data, training=False)
+
+            # Calculate validity loss
+            validity_loss = tf.keras.losses.binary_crossentropy(validity_labels, validity_pred)
+            validity_loss = tf.reduce_mean(validity_loss)
+
+            total_loss = validity_loss
+            class_loss = tf.constant(0.0)
+
+            # Calculate validity accuracy
+            validity_acc = tf.reduce_mean(
+                tf.cast(tf.equal(tf.round(validity_pred), validity_labels), tf.float32)
+            )
+            class_acc = tf.constant(0.0)
+
+        return total_loss, validity_loss, class_loss, validity_acc, class_acc
+
     #########################################################################
     #                            TRAINING PROCESS                          #
     #########################################################################
