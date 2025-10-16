@@ -153,7 +153,7 @@ class ACDiscriminatorSyntheticStrategy(fl.server.strategy.FedAvg):
         self.logger.info("=" * 50)
 
         #########################################################################
-        # Helper method for TRAINING PROCESS to balanced fake label generation  #
+        # Helper method for TRAINING PROCESS   #
         #########################################################################
         #########################################################################
         #                      fake label generator HELPER                     #

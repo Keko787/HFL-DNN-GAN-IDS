@@ -270,7 +270,7 @@ class CentralACGan:
         return None
 
 #########################################################################
-# Helper method for TRAINING PROCESS to balanced fake label generation  #
+# Helper method for TRAINING PROCESS #
 #########################################################################
     #########################################################################
     #                      fake label generator HELPER                     #

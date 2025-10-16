@@ -266,7 +266,7 @@ class ACGanClient(fl.client.NumPyClient):
         return self.GAN.get_weights()
 
 #########################################################################
-# Helper method for TRAINING PROCESS to balanced fake label generation  #
+# Helper method for TRAINING PROCESS #
 #########################################################################
     #########################################################################
     #                      fake label generator HELPER                     #

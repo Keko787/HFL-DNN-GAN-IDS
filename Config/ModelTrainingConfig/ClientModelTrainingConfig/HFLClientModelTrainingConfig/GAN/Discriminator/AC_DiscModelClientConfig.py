@@ -191,38 +191,8 @@ class ACDiscriminatorClient(fl.client.NumPyClient):
         return self.discriminator.get_weights()
 
     #########################################################################
-    # Helper method for TRAINING PROCESS to balanced fake label generation  #
+    # Helper method for TRAINING PROCESS #
     #########################################################################
-    #########################################################################
-    #                      fake label generator HELPER                     #
-    #########################################################################
-    def generate_balanced_fake_labels(self, total_samples):
-        """
-        Generate balanced fake labels ensuring equal distribution of classes.
-
-        Parameters:
-        -----------
-        total_samples : int
-            Total number of fake labels to generate
-
-        Returns:
-        --------
-        tf.Tensor
-            Balanced and shuffled fake labels
-        """
-        half_samples = total_samples // 2
-        remaining_samples = total_samples - half_samples
-
-        # Create balanced labels
-        fake_labels_0 = tf.zeros(half_samples, dtype=tf.int32)  # Benign class
-        fake_labels_1 = tf.ones(remaining_samples, dtype=tf.int32)  # Attack class
-
-        # Concatenate and shuffle
-        fake_labels = tf.concat([fake_labels_0, fake_labels_1], axis=0)
-        fake_labels = tf.random.shuffle(fake_labels)
-
-        return fake_labels
-
     #########################################################################
     #                      BATCH DATA PROCESSING HELPER                     #
     #########################################################################
