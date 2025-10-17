@@ -97,24 +97,7 @@ class ACDiscriminatorClient(fl.client.NumPyClient):
         self.d_binary_accuracy = tf.keras.metrics.BinaryAccuracy(name='d_binary_accuracy')
         self.d_categorical_accuracy = tf.keras.metrics.CategoricalAccuracy(name='d_categorical_accuracy')
 
-        # -- Model Compilations based on whether we use class labels
-        # NOTE: Compilation is kept for backward compatibility, but custom training loops are preferred
-        if self.use_class_labels:
-            self.discriminator.compile(
-                loss={'validity': 'binary_crossentropy', 'class': 'categorical_crossentropy'},
-                optimizer=self.disc_optimizer,
-                metrics={
-                    'validity': ['binary_accuracy'],
-                    'class': ['categorical_accuracy']
-                }
-            )
-        else:
-            # If not using class labels, we only care about validity output
-            self.discriminator.compile(
-                loss={'validity': 'binary_crossentropy'},
-                optimizer=self.disc_optimizer,
-                metrics={'validity': ['binary_accuracy']}
-            )
+        # NOTE: No model compilation needed - using custom training loops only
 
 #########################################################################
 #                           LOGGING FUNCTIONS                          #
@@ -654,25 +637,6 @@ class ACDiscriminatorClient(fl.client.NumPyClient):
             layer.trainable = True
 
         # ═══════════════════════════════════════════════════════════════════════
-        # RE-COMPILE DISCRIMINATOR
-        # ═══════════════════════════════════════════════════════════════════════
-        if self.use_class_labels:
-            self.discriminator.compile(
-                loss={'validity': 'binary_crossentropy', 'class': 'categorical_crossentropy'},
-                optimizer=self.disc_optimizer,
-                metrics={
-                    'validity': ['binary_accuracy'],
-                    'class': ['categorical_accuracy']
-                }
-            )
-        else:
-            self.discriminator.compile(
-                loss={'validity': 'binary_crossentropy'},
-                optimizer=self.disc_optimizer,
-                metrics={'validity': ['binary_accuracy']}
-            )
-
-        # ═══════════════════════════════════════════════════════════════════════
         # TRAINING DATA PREPARATION
         # ═══════════════════════════════════════════════════════════════════════
         X_train = self.x_train
@@ -734,6 +698,22 @@ class ACDiscriminatorClient(fl.client.NumPyClient):
             # Determine steps per epoch
             actual_steps = min(self.steps_per_epoch, len(X_train) // self.batch_size)
 
+            # ═══════════════════════════════════════════════════════════════════════
+            # SHUFFLE INDICES ONCE PER EPOCH (NOT PER STEP)
+            # ═══════════════════════════════════════════════════════════════════════
+            # Shuffle ONCE at the start of the epoch to prevent duplicate sampling across steps
+            if use_class_separation and self.use_class_labels:
+                shuffled_benign_indices = tf.random.shuffle(benign_indices)
+                shuffled_attack_indices = tf.random.shuffle(attack_indices)
+
+                # Initialize global offsets for tracking position in shuffled indices
+                global_benign_offset = 0
+                global_attack_offset = 0
+            else:
+                # For standard training, shuffle all indices
+                shuffled_indices = tf.random.shuffle(tf.range(len(X_train)))
+                global_offset = 0
+
             # ───────────────────────────────────────────────────────────────────
             # STEP-BY-STEP TRAINING
             # ───────────────────────────────────────────────────────────────────
@@ -744,27 +724,23 @@ class ACDiscriminatorClient(fl.client.NumPyClient):
                     # ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
 
                     # ▼ BATCH 1: Train on Benign Data ▼
-                    benign_idx = tf.random.shuffle(benign_indices)[:self.batch_size]
+                    # Calculate start/end for benign batch using global offset
+                    benign_start = global_benign_offset
+                    benign_end = min(benign_start + self.batch_size, len(benign_indices))
+
+                    # Take consecutive slice from shuffled indices
+                    benign_idx = shuffled_benign_indices[benign_start:benign_end]
                     benign_data = tf.gather(X_train, benign_idx)
                     benign_labels = tf.gather(y_train, benign_idx)
 
-                    # Fix shape issues
-                    if len(benign_data.shape) > 2:
-                        benign_data = tf.reshape(benign_data, (benign_data.shape[0], -1))
+                    # Advance global offset for next iteration
+                    global_benign_offset = benign_end
 
-                    # Ensure one-hot encoding
-                    if len(benign_labels.shape) == 1:
-                        benign_labels_onehot = tf.one_hot(tf.cast(benign_labels, tf.int32), depth=self.num_classes)
-                    else:
-                        benign_labels_onehot = benign_labels
+                    # • Process batch data using helper function
+                    benign_data, benign_labels_onehot, valid_smooth_benign = self.process_batch_data(
+                        benign_data, benign_labels, valid_smoothing_factor)
 
-                    if len(benign_labels_onehot.shape) > 2:
-                        benign_labels_onehot = tf.reshape(benign_labels_onehot, (benign_labels_onehot.shape[0], self.num_classes))
-
-                    # Create validity labels with smoothing
-                    valid_smooth_benign = tf.ones((benign_data.shape[0], 1)) * (1 - valid_smoothing_factor)
-
-                    # Train on benign data using custom training step
+                    # • Train on benign data using custom training step
                     d_total_benign, d_val_loss_benign, d_cls_loss_benign, d_val_acc_benign, d_cls_acc_benign = \
                         self.train_discriminator_step(benign_data, benign_labels_onehot, valid_smooth_benign)
 
@@ -778,27 +754,23 @@ class ACDiscriminatorClient(fl.client.NumPyClient):
                     ]
 
                     # ▼ BATCH 2: Train on Attack Data ▼
-                    attack_idx = tf.random.shuffle(attack_indices)[:self.batch_size]
+                    # Calculate start/end for attack batch using global offset
+                    attack_start = global_attack_offset
+                    attack_end = min(attack_start + self.batch_size, len(attack_indices))
+
+                    # Take consecutive slice from shuffled indices
+                    attack_idx = shuffled_attack_indices[attack_start:attack_end]
                     attack_data = tf.gather(X_train, attack_idx)
                     attack_labels = tf.gather(y_train, attack_idx)
 
-                    # Fix shape issues
-                    if len(attack_data.shape) > 2:
-                        attack_data = tf.reshape(attack_data, (attack_data.shape[0], -1))
+                    # Advance global offset for next iteration
+                    global_attack_offset = attack_end
 
-                    # Ensure one-hot encoding
-                    if len(attack_labels.shape) == 1:
-                        attack_labels_onehot = tf.one_hot(tf.cast(attack_labels, tf.int32), depth=self.num_classes)
-                    else:
-                        attack_labels_onehot = attack_labels
+                    # • Process batch data using helper function
+                    attack_data, attack_labels_onehot, valid_smooth_attack = self.process_batch_data(
+                        attack_data, attack_labels, valid_smoothing_factor)
 
-                    if len(attack_labels_onehot.shape) > 2:
-                        attack_labels_onehot = tf.reshape(attack_labels_onehot, (attack_labels_onehot.shape[0], self.num_classes))
-
-                    # Create validity labels with smoothing
-                    valid_smooth_attack = tf.ones((attack_data.shape[0], 1)) * (1 - valid_smoothing_factor)
-
-                    # Train on attack data using custom training step
+                    # • Train on attack data using custom training step
                     d_total_attack, d_val_loss_attack, d_cls_loss_attack, d_val_acc_attack, d_cls_acc_attack = \
                         self.train_discriminator_step(attack_data, attack_labels_onehot, valid_smooth_attack)
 
@@ -823,23 +795,25 @@ class ACDiscriminatorClient(fl.client.NumPyClient):
                     # ┃           STANDARD TRAINING (NO CLASS SEPARATION)        ┃
                     # ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
 
-                    # Sample a batch of real data
-                    idx = tf.random.shuffle(tf.range(len(X_train)))[:self.batch_size]
+                    # Calculate start/end for batch using global offset
+                    batch_start = global_offset
+                    batch_end = min(batch_start + self.batch_size, len(X_train))
+
+                    # Take consecutive slice from shuffled indices
+                    idx = shuffled_indices[batch_start:batch_end]
                     real_data = tf.gather(X_train, idx)
                     real_labels = tf.gather(y_train, idx)
 
+                    # Advance global offset for next iteration
+                    global_offset = batch_end
+
                     # Prepare training data based on whether we use class labels
                     if self.use_class_labels:
-                        # Ensure labels are one-hot encoded
-                        if len(real_labels.shape) == 1:
-                            real_labels_onehot = tf.one_hot(tf.cast(real_labels, tf.int32), depth=self.num_classes)
-                        else:
-                            real_labels_onehot = real_labels
+                        # • Process batch data using helper function
+                        real_data, real_labels_onehot, valid_smooth = self.process_batch_data(
+                            real_data, real_labels, valid_smoothing_factor)
 
-                        # Create validity labels with smoothing
-                        valid_smooth = tf.ones((self.batch_size, 1)) * (1 - valid_smoothing_factor)
-
-                        # Train discriminator on real data using custom training step
+                        # • Train discriminator on real data using custom training step
                         d_total_real, d_val_loss_real, d_cls_loss_real, d_val_acc_real, d_cls_acc_real = \
                             self.train_discriminator_step(real_data, real_labels_onehot, valid_smooth)
 
