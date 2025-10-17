@@ -65,7 +65,7 @@ class CentralACGan:
         # ═══════════════════════════════════════════════════════════════════════
         # EARLY STOPPING CONFIGURATION
         # ═══════════════════════════════════════════════════════════════════════
-        self.early_stopping_patience = 5
+        self.early_stopping_patience = 3
         self.min_delta = 0.001  # Minimum improvement to consider as progress
 
         # ═══════════════════════════════════════════════════════════════════════
