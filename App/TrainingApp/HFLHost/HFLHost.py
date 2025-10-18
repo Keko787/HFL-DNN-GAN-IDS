@@ -27,7 +27,7 @@ from Config.SessionConfig.datasetLoadProcess import datasetLoadProcess
 from Config.SessionConfig.hyperparameterLoading import hyperparameterLoading
 from Config.SessionConfig.modelCreateLoad import modelCreateLoad
 from Config.SessionConfig.ArgumentConfigLoad import parse_HFL_Host_args, display_HFL_host_opening_message
-from Config.SessionConfig.HFLStrategyTrainingConfigLoad import _run_standard_federation_strategies, _run_fit_on_end_strategies
+from Config.SessionConfig.ModelTrainingConfigLoad.HFLStrategyTrainingConfigLoad import _run_standard_federation_strategies, _run_fit_on_end_strategies
 
 
 ################################################################################################################

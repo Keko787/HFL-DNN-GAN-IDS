@@ -49,7 +49,7 @@ def parse_training_client_args():
     parser.add_argument('--trainingArea', type=str, choices=["Central", "Federated"], default="Central",
                         help='Please select Central, Federated as the place to train the model')
 
-    parser.add_argument("--host-default", type=str, default="1",
+    parser.add_argument("--host", type=str, default="1",
                         help="Fixed Server node number 1-4")
 
     parser.add_argument('--custom-host', type=str,
