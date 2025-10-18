@@ -101,10 +101,7 @@ def main():
         (BATCH_SIZE, noise_dim, steps_per_epoch, input_dim, num_classes, latent_dim, betas, learning_rate, l2_alpha,
          l2_norm_clip, noise_multiplier, num_microbatches, metric_to_monitor_es, es_patience, restor_best_w,
          metric_to_monitor_l2lr, l2lr_patience, save_best_only,
-         metric_to_monitor_mc, checkpoint_mode) = hyperparameterLoading(model_type, X_train_data,
-                                                                        regularizationEnabled, DP_enabled,
-                                                                        earlyStopEnabled,
-                                                                        lrSchedRedEnabled, modelCheckpointEnabled)
+         metric_to_monitor_mc, checkpoint_mode) = hyperparameterLoading(args, X_train_data)
 
         # --- 6. Model Loading & Creation ---#
         nids, discriminator, generator, GAN = modelCreateLoad(model_type, train_type, pretrainedNids, pretrainedGan,
