@@ -104,11 +104,11 @@ def main():
          metric_to_monitor_mc, checkpoint_mode) = hyperparameterLoading(args, X_train_data)
 
         # --- 6. Model Loading & Creation ---#
-        nids, discriminator, generator, GAN = modelCreateLoad(model_type, train_type, pretrainedNids, pretrainedGan,
-                                                              pretrainedGenerator, pretrainedDiscriminator,
-                                                              dataset_used,
-                                                              input_dim, noise_dim, regularizationEnabled, DP_enabled,
-                                                              l2_alpha, latent_dim, num_classes)
+        nids, discriminator, generator, GAN = modelCreateLoad(args.model_type, args.model_training, args.pretrained_nids,
+                                                          args.pretrained_GAN, args.pretrained_generator,
+                                                          args.pretrained_discriminator, args.dataset,
+                                                          input_dim, noise_dim, args.regularizationEnabled,
+                                                          args.DP_enabled, l2_alpha, latent_dim, num_classes)
         # --- 7. Select model for base hosting config --- #
         # selet model for base hosting config
         if train_type == "GAN":
@@ -118,23 +118,23 @@ def main():
         else:
             model = nids
 
-            # --- 8. Run server based on selected config --- #
-            if not fitOnEnd:
-                _run_standard_federation_strategies(
-                    serverLoad, serverSave, roundInput, minClients, model, save_name
-                )
-            else:
-                _run_fit_on_end_strategies(
-                    train_type, model_type, roundInput, args,
-                    discriminator, generator, nids, GAN,
-                    X_train_data, X_val_data, y_train_data, y_val_data, X_test_data, y_test_data,
-                    BATCH_SIZE, noise_dim, steps_per_epoch, input_dim, num_classes, latent_dim,
-                    epochs, learning_rate, synth_portion, l2_norm_clip, noise_multiplier,
-                    num_microbatches, metric_to_monitor_es, es_patience, restor_best_w,
-                    metric_to_monitor_l2lr, l2lr_patience, save_best_only, metric_to_monitor_mc,
-                    checkpoint_mode, save_name, serverLoad, dataset_used, earlyStopEnabled,
-                    lrSchedRedEnabled, modelCheckpointEnabled, DP_enabled, node
-                )
+        # --- 8. Run server based on selected config --- #
+        if not fitOnEnd:
+            _run_standard_federation_strategies(
+                serverLoad, serverSave, roundInput, minClients, model, save_name
+            )
+        else:
+            _run_fit_on_end_strategies(
+                train_type, model_type, roundInput, args,
+                discriminator, generator, nids, GAN,
+                X_train_data, X_val_data, y_train_data, y_val_data, X_test_data, y_test_data,
+                BATCH_SIZE, noise_dim, steps_per_epoch, input_dim, num_classes, latent_dim,
+                epochs, learning_rate, synth_portion, l2_norm_clip, noise_multiplier,
+                num_microbatches, metric_to_monitor_es, es_patience, restor_best_w,
+                metric_to_monitor_l2lr, l2lr_patience, save_best_only, metric_to_monitor_mc,
+                checkpoint_mode, save_name, serverLoad, dataset_used, earlyStopEnabled,
+                lrSchedRedEnabled, modelCheckpointEnabled, DP_enabled, node
+            )
 
 
 if __name__ == "__main__":

@@ -129,35 +129,77 @@ def load_and_merge_ACmodels_V0(generator_path, discriminator_path, latent_dim, n
 
 
 def load_and_merge_ACmodels(generator_path, discriminator_path, latent_dim, num_classes, input_dim):
+    """
+    Load or create AC-GAN generator and discriminator models and merge them into a single model.
+
+    NOTE: The merged ACGAN model is NOT compiled and is used only as a container.
+    Training is performed using custom training loops on the sub-models (generator and discriminator)
+    separately, not on the merged model. This pattern is used throughout the codebase for AC-GAN
+    training (see ACGANCentralTrainingConfig.py, ServerACDiscBothFitOnEndConfig.py).
+
+    Args:
+        generator_path: Path to pretrained generator model (or None to create new)
+        discriminator_path: Path to pretrained discriminator model (or None to create new)
+        latent_dim: Dimension of latent noise vector
+        num_classes: Number of output classes for auxiliary classifier
+        input_dim: Dimension of input features
+
+    Returns:
+        merged_model: Keras Model with generator and discriminator as attributes
+                     (merged_model.generator, merged_model.discriminator)
+    """
+    # ═══════════════════════════════════════════════════════════════════════
+    # DEFINE INPUTS
+    # ═══════════════════════════════════════════════════════════════════════
     noise_input = Input(shape=(latent_dim,), name="noise_input")
     label_input = Input(shape=(1,), dtype='int32', name="label_input")
 
-    # Build or load the generator.
+    # ═══════════════════════════════════════════════════════════════════════
+    # LOAD OR BUILD GENERATOR
+    # ═══════════════════════════════════════════════════════════════════════
     if generator_path is not None:
         gen_model = load_model(generator_path)
     else:
         gen_model = build_AC_generator(latent_dim, num_classes, input_dim)
 
+    # ═══════════════════════════════════════════════════════════════════════
+    # GENERATE DATA
+    # ═══════════════════════════════════════════════════════════════════════
     generated_data = gen_model([noise_input, label_input])
     generated_data = tf.identity(generated_data, name="ACGenerator")
 
-    # Build or load the discriminator.
+    # ═══════════════════════════════════════════════════════════════════════
+    # LOAD OR BUILD DISCRIMINATOR
+    # ═══════════════════════════════════════════════════════════════════════
     if discriminator_path is not None:
         disc_model = load_model(discriminator_path)
     else:
         disc_model = build_AC_discriminator(input_dim, num_classes)
 
+    # ═══════════════════════════════════════════════════════════════════════
+    # CONNECT DISCRIMINATOR TO GENERATED DATA
+    # ═══════════════════════════════════════════════════════════════════════
     validity, class_output = disc_model(generated_data)
 
+    # ═══════════════════════════════════════════════════════════════════════
+    # CREATE MERGED MODEL (CONTAINER ONLY - NOT FOR DIRECT TRAINING)
+    # ═══════════════════════════════════════════════════════════════════════
     merged_model = Model(
         inputs=[noise_input, label_input],
         outputs=[validity, class_output],
         name="ACGAN"
     )
 
-    # Store the generator and discriminator as attributes.
+    # ═══════════════════════════════════════════════════════════════════════
+    # STORE SUB-MODELS AS ATTRIBUTES FOR SEPARATE TRAINING
+    # ═══════════════════════════════════════════════════════════════════════
     merged_model.generator = gen_model
     merged_model.discriminator = disc_model
+
+    # NOTE: No model compilation needed - using custom training loops only
+    # Training is performed separately on merged_model.generator and merged_model.discriminator
+    # using custom @tf.function decorated training steps with GradientTape
+
     return merged_model
 
 
