@@ -95,14 +95,7 @@ def main():
     else:
         print("🔄 Loading data and initializing models...")
         # --- 4. Load & Preprocess Data ---#
-        X_train_data, X_val_data, y_train_data, y_val_data, X_test_data, y_test_data = datasetLoadProcess(dataset_used=args.dataset,
-                                                                                                          dataset_preprocessing=args.dataset_processing,
-                                                                                                          ciciot_train_sample_size=args.ciciot_train_sample_size,
-                                                                                                          ciciot_test_sample_size=args.ciciot_test_sample_size,
-                                                                                                          ciciot_training_dataset_size=args.ciciot_training_dataset_size,
-                                                                                                          ciciot_testing_dataset_size=args.ciciot_testing_dataset_size,
-                                                                                                          ciciot_attack_eval_samples_ratio=args.ciciot_attack_eval_samples_ratio,
-                                                                                                          ciciot_random_seed=args.ciciot_random_seed)
+        X_train_data, X_val_data, y_train_data, y_val_data, X_test_data, y_test_data = datasetLoadProcess(args)
 
         # --- 5. Model Hyperparameter & Training Parameters ---#
         (BATCH_SIZE, noise_dim, steps_per_epoch, input_dim, num_classes, latent_dim, betas, learning_rate, l2_alpha,
