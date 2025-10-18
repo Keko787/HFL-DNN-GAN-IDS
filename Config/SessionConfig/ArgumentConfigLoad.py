@@ -238,6 +238,25 @@ def parse_HFL_Host_args():
     parser.add_argument('--dataset_processing', type=str, choices=["Default", "MM[-1,-1]", "AC-GAN, IOT", "IOT-MinMax"],
                         default="Default", help='Dataset preprocessing: Default, MM[-1,1], AC-GAN, IOT')
 
+    # ─── CICIOT2023 Dataset Settings ───
+    parser.add_argument("--ciciot_train_sample_size", type=int, default=50,
+                        help="Number of Sample Files to load for the CICIOT2023 Training Dataset. Default: 50")
+
+    parser.add_argument("--ciciot_test_sample_size", type=int, default=15,
+                        help="Number of Sample Files to load for the CICIOT2023 Testing Dataset. Default: 15")
+
+    parser.add_argument("--ciciot_training_dataset_size", type=int, default=400000,
+                        help="Number of entries to load for the CICIOT2023 Training Dataset. Default: 400000")
+
+    parser.add_argument("--ciciot_testing_dataset_size", type=int, default=80000,
+                        help="Number of entries to load for the CICIOT2023 Testing Dataset. Default: 80000")
+
+    parser.add_argument("--ciciot_attack_eval_samples_ratio", type=float, default=1.0,
+                        help="Amount of attack data samples to load for CICIOT2023 Evaluation Dataset Ratioed "
+                             "against the benign samples. Default: 1.0")
+
+    parser.add_argument("--ciciot_random_seed", type=int, default=110, help="Dataset file sampling consistency.")
+
     # ─── Server Hosting Modes ───
     parser.add_argument('--serverLoad', action='store_true',
                         help='Enable server-side model loading functionality')
