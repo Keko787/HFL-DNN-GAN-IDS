@@ -61,18 +61,10 @@ class ACDiscriminatorSyntheticStrategy(fl.server.strategy.FedAvg):
         # Init optimizer
         self.disc_optimizer = Adam(learning_rate=lr_schedule_disc, beta_1=0.5, beta_2=0.999)
 
-        # -- Model Compilations
+        # -- AC-GAN always uses class labels
+        self.use_class_labels = True
 
         print("Discriminator Output:", self.discriminator.output_names)
-        # Compile Discriminator separately (before freezing)
-        self.discriminator.compile(
-            loss={'validity': 'binary_crossentropy', 'class': 'categorical_crossentropy'},
-            optimizer=self.disc_optimizer,
-            metrics={
-                'validity': ['binary_accuracy'],
-                'class': ['categorical_accuracy']
-            }
-        )
 
     #########################################################################
     #                           LOGGING FUNCTIONS                          #
@@ -553,16 +545,6 @@ class ACDiscriminatorSyntheticStrategy(fl.server.strategy.FedAvg):
         for layer in self.discriminator.layers:
             layer.trainable = True
 
-        # -- Re-compile discriminator with trainable weights -- #
-        self.discriminator.compile(
-            loss={'validity': 'binary_crossentropy', 'class': 'categorical_crossentropy'},
-            optimizer=self.disc_optimizer,
-            metrics={
-                'validity': ['binary_accuracy'],
-                'class': ['categorical_accuracy']
-            }
-        )
-
         # -- Set the Data --#
         X_train = self.x_train
         y_train = self.y_train
@@ -623,28 +605,37 @@ class ACDiscriminatorSyntheticStrategy(fl.server.strategy.FedAvg):
             fake_labels_onehot = tf.one_hot(fake_labels, depth=self.num_classes)
 
             # Generate fake data
-            generated_data = self.generator.predict([noise, fake_labels])
+            generated_data = self.generator.predict([noise, fake_labels], verbose=0)
 
-            # Train discriminator on real and fake data
-            d_loss_real = self.discriminator.train_on_batch(real_data, [valid_smooth, real_labels_onehot])
-            d_loss_fake = self.discriminator.train_on_batch(generated_data, [fake_smooth, fake_labels_onehot])
-            d_loss = 0.5 * tf.add(d_loss_real, d_loss_fake)
+            # Train discriminator on real and fake data using custom training functions
+            d_total_loss_real, d_validity_loss_real, d_class_loss_real, d_validity_acc_real, d_class_acc_real = \
+                self.train_discriminator_step(real_data, real_labels_onehot, valid_smooth)
+
+            d_total_loss_fake, d_validity_loss_fake, d_class_loss_fake, d_validity_acc_fake, d_class_acc_fake = \
+                self.train_discriminator_on_fake_step(generated_data, fake_labels_onehot, fake_smooth)
+
+            # Average the losses and accuracies
+            d_total_loss = 0.5 * (d_total_loss_real + d_total_loss_fake)
+            d_validity_loss = 0.5 * (d_validity_loss_real + d_validity_loss_fake)
+            d_class_loss = 0.5 * (d_class_loss_real + d_class_loss_fake)
+            d_validity_acc = 0.5 * (d_validity_acc_real + d_validity_acc_fake)
+            d_class_acc = 0.5 * (d_class_acc_real + d_class_acc_fake)
 
             # Collect discriminator metrics
             d_metrics = {
-                "Total Loss": f"{d_loss[0]:.4f}",
-                "Validity Loss": f"{d_loss[1]:.4f}",
-                "Class Loss": f"{d_loss[2]:.4f}",
-                "Validity Binary Accuracy": f"{d_loss[3] * 100:.2f}%",
-                "Class Categorical Accuracy": f"{d_loss[4] * 100:.2f}%"
+                "Total Loss": f"{d_total_loss:.4f}",
+                "Validity Loss": f"{d_validity_loss:.4f}",
+                "Class Loss": f"{d_class_loss:.4f}",
+                "Validity Binary Accuracy": f"{d_validity_acc * 100:.2f}%",
+                "Class Categorical Accuracy": f"{d_class_acc * 100:.2f}%"
             }
             self.logger.info("Training Discriminator")
             self.logger.info(
-                f"Discriminator Total Loss: {d_loss[0]:.4f} | Validity Loss: {d_loss[1]:.4f} | Class Loss: {d_loss[2]:.4f}")
+                f"Discriminator Total Loss: {d_total_loss:.4f} | Validity Loss: {d_validity_loss:.4f} | Class Loss: {d_class_loss:.4f}")
             self.logger.info(
-                f"Validity Binary Accuracy: {d_loss[3] * 100:.2f}%")
+                f"Validity Binary Accuracy: {d_validity_acc * 100:.2f}%")
             self.logger.info(
-                f"Class Categorical Accuracy: {d_loss[4] * 100:.2f}%")
+                f"Class Categorical Accuracy: {d_class_acc * 100:.2f}%")
 
             # --------------------------
             # Validation every 1 epochs
@@ -671,7 +662,7 @@ class ACDiscriminatorSyntheticStrategy(fl.server.strategy.FedAvg):
                 # Log the metrics for this epoch using our new logging method
                 self.log_epoch_metrics(epoch, d_val_metrics, nids_val_metrics)
                 self.logger.info(
-                    f"Epoch {epoch}: D Loss: {d_loss[0]:.4f}, D Acc: {d_loss[3] * 100:.2f}%")
+                    f"Epoch {epoch}: D Loss: {d_total_loss:.4f}, D Acc: {d_validity_acc * 100:.2f}%")
 
                 # --------------------------
                 # Early Stopping Check
@@ -768,7 +759,7 @@ class ACDiscriminatorSyntheticStrategy(fl.server.strategy.FedAvg):
         Prints and returns the average total loss along with a metrics dictionary.
         """
         # --- Evaluate on real validation data ---
-        val_valid_labels = np.ones((len(self.x_val), 1))
+        val_valid_labels = tf.ones((len(self.x_val), 1))
 
         # Ensure y_val is one-hot encoded if needed
         if self.y_val.ndim == 1 or self.y_val.shape[1] != self.num_classes:
@@ -776,9 +767,9 @@ class ACDiscriminatorSyntheticStrategy(fl.server.strategy.FedAvg):
         else:
             y_val_onehot = self.y_val
 
-        d_loss_real = self.discriminator.evaluate(
-            self.x_val, [val_valid_labels, y_val_onehot], verbose=0
-        )
+        # Use custom evaluation function for real data
+        d_total_loss_real, d_validity_loss_real, d_class_loss_real, d_validity_acc_real, d_class_acc_real = \
+            self.evaluate_discriminator(self.x_val, y_val_onehot, val_valid_labels)
 
         # --- Evaluate on generated (fake) data ---
         noise = tf.random.normal((len(self.x_val), self.latent_dim))
@@ -786,44 +777,46 @@ class ACDiscriminatorSyntheticStrategy(fl.server.strategy.FedAvg):
             (len(self.x_val),), minval=0, maxval=self.num_classes, dtype=tf.int32
         )
         fake_labels_onehot = tf.one_hot(fake_labels, depth=self.num_classes)
-        fake_valid_labels = np.zeros((len(self.x_val), 1))
-        generated_data = self.generator.predict([noise, fake_labels])
-        d_loss_fake = self.discriminator.evaluate(
-            generated_data, [fake_valid_labels, fake_labels_onehot], verbose=0
-        )
+        fake_valid_labels = tf.zeros((len(self.x_val), 1))
+        generated_data = self.generator.predict([noise, fake_labels], verbose=0)
 
-        # --- Compute average loss ---
-        avg_total_loss = 0.5 * (d_loss_real[0] + d_loss_fake[0])
+        # Use custom evaluation function for fake data
+        d_total_loss_fake, d_validity_loss_fake, d_class_loss_fake, d_validity_acc_fake, d_class_acc_fake = \
+            self.evaluate_discriminator(generated_data, fake_labels_onehot, fake_valid_labels)
+
+        # --- Compute average losses ---
+        avg_total_loss = 0.5 * (d_total_loss_real + d_total_loss_fake)
 
         self.logger.info("Validation Discriminator Evaluation:")
-        # Log for real data: using all relevant indices
+        # Log for real data
         self.logger.info(
-            f"Real Data -> Total Loss: {d_loss_real[0]:.4f}, "
-            f"Validity Loss: {d_loss_real[1]:.4f}, "
-            f"Class Loss: {d_loss_real[2]:.4f}, "
-            f"Validity Binary Accuracy: {d_loss_real[3] * 100:.2f}%, "
-            f"Class Categorical Accuracy: {d_loss_real[4] * 100:.2f}%"
+            f"Real Data -> Total Loss: {d_total_loss_real:.4f}, "
+            f"Validity Loss: {d_validity_loss_real:.4f}, "
+            f"Class Loss: {d_class_loss_real:.4f}, "
+            f"Validity Binary Accuracy: {d_validity_acc_real * 100:.2f}%, "
+            f"Class Categorical Accuracy: {d_class_acc_real * 100:.2f}%"
         )
+        # Log for fake data
         self.logger.info(
-            f"Fake Data -> Total Loss: {d_loss_fake[0]:.4f}, "
-            f"Validity Loss: {d_loss_fake[1]:.4f}, "
-            f"Class Loss: {d_loss_fake[2]:.4f}, "
-            f"Validity Binary Accuracy: {d_loss_fake[3] * 100:.2f}%, "
-            f"Class Categorical Accuracy: {d_loss_fake[4] * 100:.2f}%"
+            f"Fake Data -> Total Loss: {d_total_loss_fake:.4f}, "
+            f"Validity Loss: {d_validity_loss_fake:.4f}, "
+            f"Class Loss: {d_class_loss_fake:.4f}, "
+            f"Validity Binary Accuracy: {d_validity_acc_fake * 100:.2f}%, "
+            f"Class Categorical Accuracy: {d_class_acc_fake * 100:.2f}%"
         )
         self.logger.info(f"Average Discriminator Loss: {avg_total_loss:.4f}")
 
         metrics = {
-            "Real Total Loss": f"{d_loss_real[0]:.4f}",
-            "Real Validity Loss": f"{d_loss_real[1]:.4f}",
-            "Real Class Loss": f"{d_loss_real[2]:.4f}",
-            "Real Validity Binary Accuracy": f"{d_loss_real[3] * 100:.2f}%",
-            "Real Class Categorical Accuracy": f"{d_loss_real[4] * 100:.2f}%",
-            "Fake Total Loss": f"{d_loss_fake[0]:.4f}",
-            "Fake Validity Loss": f"{d_loss_fake[1]:.4f}",
-            "Fake Class Loss": f"{d_loss_fake[2]:.4f}",
-            "Fake Validity Binary Accuracy": f"{d_loss_fake[3] * 100:.2f}%",
-            "Fake Class Categorical Accuracy": f"{d_loss_fake[4] * 100:.2f}%",
+            "Real Total Loss": f"{d_total_loss_real:.4f}",
+            "Real Validity Loss": f"{d_validity_loss_real:.4f}",
+            "Real Class Loss": f"{d_class_loss_real:.4f}",
+            "Real Validity Binary Accuracy": f"{d_validity_acc_real * 100:.2f}%",
+            "Real Class Categorical Accuracy": f"{d_class_acc_real * 100:.2f}%",
+            "Fake Total Loss": f"{d_total_loss_fake:.4f}",
+            "Fake Validity Loss": f"{d_validity_loss_fake:.4f}",
+            "Fake Class Loss": f"{d_class_loss_fake:.4f}",
+            "Fake Validity Binary Accuracy": f"{d_validity_acc_fake * 100:.2f}%",
+            "Fake Class Categorical Accuracy": f"{d_class_acc_fake * 100:.2f}%",
             "Average Total Loss": f"{avg_total_loss:.4f}"
         }
         return avg_total_loss, metrics
