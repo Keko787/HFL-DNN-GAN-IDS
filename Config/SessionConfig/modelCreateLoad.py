@@ -34,7 +34,7 @@ from sklearn.utils import shuffle
 from Config.modelStructures.NIDS.NIDS_Struct import create_CICIOT_Model, create_IOTBOTNET_Model, cnn_lstm_gru_model_multiclass, cnn_lstm_gru_model_binary, cnn_lstm_gru_model_multiclass_dynamic, create_optimized_NIDS_model
 from Config.modelStructures.GAN.discriminatorStruct import create_discriminator_binary, create_discriminator_binary_optimized, create_discriminator_binary, build_AC_discriminator, create_discriminator
 from Config.modelStructures.GAN.generatorStruct import create_generator, create_generator_optimized, build_AC_generator
-from Config.modelStructures.GAN.ganStruct import create_model, load_GAN_model, create_model_binary, create_model_binary_optimized, create_model_W_binary, load_and_merge_ACmodels, create_model_AC
+from Config.modelStructures.GAN.ganStruct import create_model, load_GAN_model, create_model_binary, create_model_binary_optimized, create_model_W_binary, load_and_merge_ACmodels, create_model_AC, merge_AC_model_instances
 
 
 def modelCreateLoad(modelType, train_type, pretrainedNids, pretrainedGan, pretrainedGenerator, pretrainedDiscriminator,
@@ -241,81 +241,83 @@ def modelCreateLoad(modelType, train_type, pretrainedNids, pretrainedGan, pretra
 
             elif pretrainedGenerator and not pretrainedDiscriminator:
                 print(f"Pretrained Generator provided from {pretrainedGenerator}. Creating a new Discriminator model.")
+                generator = build_AC_generator(latent_dim, num_classes, input_dim)
+
+                discriminator = build_AC_discriminator(input_dim, num_classes)
+
                 # Discriminator is created inside load_and_merge_ACmodels when discriminator_path is None
                 GAN = load_and_merge_ACmodels(pretrainedGenerator, pretrainedDiscriminator, latent_dim, num_classes, input_dim)
-                # Extract the models from the merged GAN
-                generator = GAN.generator
-                discriminator = GAN.discriminator
 
             elif pretrainedDiscriminator and not pretrainedGenerator:
                 print(
                     f"Pretrained Discriminator provided from {pretrainedDiscriminator}. Creating a new Generator model.")
+                generator = build_AC_generator(latent_dim, num_classes, input_dim)
+
+                discriminator = build_AC_discriminator(input_dim, num_classes)
+
                 # Generator is created inside load_and_merge_ACmodels when generator_path is None
                 GAN = load_and_merge_ACmodels(pretrainedGenerator, pretrainedDiscriminator, latent_dim, num_classes, input_dim)
-                # Extract the models from the merged GAN
-                generator = GAN.generator
-                discriminator = GAN.discriminator
 
             else:
                 print("No pretrained ACGAN provided. Creating a new ACGAN model.")
+                generator = build_AC_generator(latent_dim, num_classes, input_dim)
+
+                discriminator = build_AC_discriminator(input_dim, num_classes)
+
                 # Models are created inside load_and_merge_ACmodels when paths are None
                 GAN = load_and_merge_ACmodels(pretrainedGenerator, pretrainedDiscriminator, latent_dim, num_classes, input_dim)
                 # Extract the models from the merged GAN
-                generator = GAN.generator
-                discriminator = GAN.discriminator
 
         elif train_type == 'Generator':
             if pretrainedDiscriminator and pretrainedGenerator:
                 print(
                     f"Pretrained Generator and Discriminator provided from {pretrainedGenerator} , {pretrainedDiscriminator}")
                 discriminator = tf.keras.models.load_model(pretrainedDiscriminator)
-
                 generator = tf.keras.models.load_model(pretrainedGenerator)
 
             elif pretrainedGenerator and not pretrainedDiscriminator:
                 print(f"Pretrained Generator provided from {pretrainedGenerator}. Creating a new Discriminator model.")
                 generator = tf.keras.models.load_model(pretrainedGenerator)
-
                 discriminator = build_AC_discriminator(input_dim, num_classes)
 
             elif pretrainedDiscriminator and not pretrainedGenerator:
                 print(
                     f"Pretrained Discriminator provided from {pretrainedDiscriminator}. Creating a new Generator model.")
                 discriminator = tf.keras.models.load_model(pretrainedDiscriminator)
-
                 generator = build_AC_generator(latent_dim, num_classes, input_dim)
 
             else:
                 print("No pretrained ACGAN provided. Creating a new ACGAN model.")
                 generator = build_AC_generator(latent_dim, num_classes, input_dim)
-
                 discriminator = build_AC_discriminator(input_dim, num_classes)
+
+            # Create merged GAN model container for training
+            GAN = merge_AC_model_instances(generator, discriminator, latent_dim, num_classes)
         elif train_type == 'Discriminator':
             if pretrainedDiscriminator and pretrainedGenerator:
                 print(
                     f"Pretrained Generator and Discriminator provided from {pretrainedGenerator} , {pretrainedDiscriminator}")
                 discriminator = tf.keras.models.load_model(pretrainedDiscriminator)
-
                 generator = tf.keras.models.load_model(pretrainedGenerator)
 
             elif pretrainedGenerator and not pretrainedDiscriminator:
                 print(f"Pretrained Generator provided from {pretrainedGenerator}. Creating a new Discriminator model.")
                 generator = tf.keras.models.load_model(pretrainedGenerator)
-
                 discriminator = build_AC_discriminator(input_dim, num_classes)
 
             elif pretrainedDiscriminator and not pretrainedGenerator:
                 print(
                     f"Pretrained Discriminator provided from {pretrainedDiscriminator}. Creating a new Generator model.")
                 discriminator = tf.keras.models.load_model(pretrainedDiscriminator)
-
                 generator = build_AC_generator(latent_dim, num_classes, input_dim)
 
             else:
                 print("No pretrained ACGAN provided. Creating a new ACGAN model.")
                 generator = build_AC_generator(latent_dim, num_classes, input_dim)
-
                 discriminator = build_AC_discriminator(input_dim, num_classes)
+
+            # Create merged GAN model container for training
+            GAN = merge_AC_model_instances(generator, discriminator, latent_dim, num_classes)
 
 
     return nids, discriminator, generator, GAN

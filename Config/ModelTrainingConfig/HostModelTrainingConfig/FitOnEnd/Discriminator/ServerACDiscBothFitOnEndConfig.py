@@ -14,16 +14,13 @@ from sklearn.metrics import f1_score, classification_report
 
 # Custom FedAvg strategy with server-side model training and saving
 class ACDiscriminatorSyntheticStrategy(fl.server.strategy.FedAvg):
-    def __init__(self, GAN, nids, x_train, x_val, y_train, y_val, x_test, y_test, BATCH_SIZE,
+    def __init__(self, discriminator, generator, nids, x_train, x_val, y_train, y_val, x_test, y_test, BATCH_SIZE,
                  noise_dim, latent_dim, num_classes, input_dim, epochs, steps_per_epoch, learning_rate,
                  log_file="training.log", **kwargs):
         super().__init__(**kwargs)
         # -- models
-        self.GAN = GAN
-        # Reconstruct the generator model from the merged model:
-        self.generator = self.GAN.generator  # directly use the stored generator
-        self.discriminator = self.GAN.discriminator  # directly use the stored discriminator
-
+        self.generator = generator
+        self.discriminator = discriminator
         self.nids = nids
 
         # -- I/O Specs for models

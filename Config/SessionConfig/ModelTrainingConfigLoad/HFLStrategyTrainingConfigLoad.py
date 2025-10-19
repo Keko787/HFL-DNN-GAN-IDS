@@ -167,7 +167,8 @@ def _run_fit_on_end_strategies(train_type, model_type, roundInput, args,
         fl.server.start_server(
             config=fl.server.ServerConfig(num_rounds=roundInput),
             strategy=ACDiscriminatorSyntheticStrategy(
-                GAN=GAN,
+                discriminator=discriminator,
+                generator=generator,
                 nids=nids,
                 x_train=X_train_data,
                 x_val=X_val_data,
