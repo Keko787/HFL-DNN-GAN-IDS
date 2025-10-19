@@ -3,6 +3,8 @@ import flwr as fl
 import argparse
 import tensorflow as tf
 import logging
+import os
+from pathlib import Path
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.models import Sequential, Model
 from tensorflow.keras.metrics import AUC, Precision, Recall
@@ -10,6 +12,16 @@ from flwr.common import ndarrays_to_parameters, parameters_to_ndarrays
 import numpy as np
 from collections import Counter
 from sklearn.metrics import f1_score, classification_report
+
+
+# Helper function to get project root directory
+def get_project_root():
+    """Get the project root directory (FL-DNN-GAN-IDS)."""
+    current_file = Path(__file__).resolve()
+    # Navigate up from Config/ModelTrainingConfig/HostModelTrainingConfig/FitOnEnd/Discriminator/
+    # to the project root
+    project_root = current_file.parent.parent.parent.parent.parent.parent
+    return project_root
 
 
 # Custom FedAvg strategy with server-side model training and saving
@@ -658,8 +670,11 @@ class ACDiscriminatorSyntheticStrategy(fl.server.strategy.FedAvg):
                 self.discriminator.set_weights(aggregated_weights)
         # EoF Set global weights
         # save model before synthetic contextualization
-        model_save_path = "../../../../../ModelArchive/discriminator_GLOBAL_B4Fit_ACGAN.h5"
-        self.discriminator.save(model_save_path)
+        project_root = get_project_root()
+        model_archive_dir = project_root / "ModelArchive"
+        model_archive_dir.mkdir(parents=True, exist_ok=True)  # Ensure directory exists
+        model_save_path = model_archive_dir / "discriminator_GLOBAL_B4Fit_ACGAN.h5"
+        self.discriminator.save(str(model_save_path))
         print(f"Model saved at: {model_save_path}")
 
         # -- make sure discriminator is trainable for individual training -- #
@@ -899,8 +914,11 @@ class ACDiscriminatorSyntheticStrategy(fl.server.strategy.FedAvg):
                             self.logger.info("✓ Best model weights restored successfully")
 
                         # Save the best model
-                        model_save_path = "../../../../ModelArchive/discriminator_GLOBAL_AfterFit_ACGAN.h5"
-                        self.discriminator.save(model_save_path)
+                        project_root = get_project_root()
+                        model_archive_dir = project_root / "ModelArchive"
+                        model_archive_dir.mkdir(parents=True, exist_ok=True)
+                        model_save_path = model_archive_dir / "discriminator_GLOBAL_AfterFit_ACGAN.h5"
+                        self.discriminator.save(str(model_save_path))
                         print(f"Best model saved at: {model_save_path}")
 
                         # Log training completion with early stopping
@@ -938,8 +956,11 @@ class ACDiscriminatorSyntheticStrategy(fl.server.strategy.FedAvg):
             self.logger.info(f"✓ Best model weights from epoch {best_epoch} restored")
 
         # save model after training completion
-        model_save_path = "../../../../ModelArchive/discriminator_GLOBAL_AfterFit_ACGAN.h5"
-        self.discriminator.save(model_save_path)
+        project_root = get_project_root()
+        model_archive_dir = project_root / "ModelArchive"
+        model_archive_dir.mkdir(parents=True, exist_ok=True)
+        model_save_path = model_archive_dir / "discriminator_GLOBAL_AfterFit_ACGAN.h5"
+        self.discriminator.save(str(model_save_path))
         print(f"Model saved at: {model_save_path}")
 
         # Send updated weights back to clients
