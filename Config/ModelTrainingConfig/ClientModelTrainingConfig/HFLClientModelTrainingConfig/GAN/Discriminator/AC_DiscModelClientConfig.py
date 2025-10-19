@@ -58,6 +58,9 @@ class ACDiscriminatorClient(fl.client.NumPyClient):
         # -- models
         self.discriminator = discriminator
 
+        # -- Training Variables
+        self.learning_rate = 0.0001
+
         # -- I/O Specs for models
         self.batch_size = BATCH_SIZE
         self.num_classes = num_classes
