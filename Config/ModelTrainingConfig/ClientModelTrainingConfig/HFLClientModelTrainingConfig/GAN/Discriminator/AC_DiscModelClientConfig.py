@@ -475,7 +475,8 @@ class ACDiscriminatorClient(fl.client.NumPyClient):
     #########################################################################
     #                   CUSTOM TRAINING STEP METHODS                        #
     #########################################################################
-    @tf.function
+    # NOTE: Removed @tf.function temporarily to ensure clipping is applied during eager execution
+    # TODO: Re-enable @tf.function after confirming NaN issue is resolved
     def train_discriminator_step(self, real_data, real_labels, real_validity_labels):
         """
         Custom training step for discriminator on real data.
@@ -496,6 +497,11 @@ class ACDiscriminatorClient(fl.client.NumPyClient):
         with tf.GradientTape() as tape:
             # Forward pass with training=True
             validity_pred, class_pred = self.discriminator(real_data, training=True)
+
+            # Clip predictions for numerical stability before computing loss
+            epsilon = 1e-7
+            validity_pred = tf.clip_by_value(validity_pred, epsilon, 1.0 - epsilon)
+            class_pred = tf.clip_by_value(class_pred, epsilon, 1.0 - epsilon)
 
             # Calculate losses
             validity_loss = self.binary_crossentropy(real_validity_labels, validity_pred)
@@ -518,7 +524,7 @@ class ACDiscriminatorClient(fl.client.NumPyClient):
 
         return total_loss, validity_loss, class_loss, validity_acc, class_acc
 
-    @tf.function
+    # NOTE: Removed @tf.function temporarily to ensure clipping is applied during eager execution
     def train_discriminator_step_validity_only(self, real_data, real_validity_labels):
         """
         Custom training step for discriminator on real data (validity only, no class labels).
@@ -553,7 +559,8 @@ class ACDiscriminatorClient(fl.client.NumPyClient):
         return total_loss, validity_acc
 
     # -- Custom Evaluation Helper -- #
-    @tf.function
+    # NOTE: Removed @tf.function temporarily to ensure clipping is applied during eager execution
+    # TODO: Re-enable @tf.function after confirming NaN issue is resolved
     def evaluate_discriminator(self, data, labels, validity_labels):
         """
         Evaluate discriminator without updating weights.
