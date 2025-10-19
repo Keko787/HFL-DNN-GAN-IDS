@@ -89,7 +89,7 @@ class ACDiscriminatorClient(fl.client.NumPyClient):
 
         # -- Optimizers and Learning Rate Scheduling
         lr_schedule_disc = tf.keras.optimizers.schedules.ExponentialDecay(
-            initial_learning_rate=learning_rate, decay_steps=10000, decay_rate=0.98, staircase=True)
+            initial_learning_rate=self.learning_rate, decay_steps=10000, decay_rate=0.98, staircase=True)
         self.disc_optimizer = Adam(learning_rate=lr_schedule_disc, beta_1=0.5, beta_2=0.999)
 
         # -- Loss Functions Setup (for custom training loops)
