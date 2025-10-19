@@ -90,7 +90,8 @@ class ACDiscriminatorClient(fl.client.NumPyClient):
         # -- Optimizers and Learning Rate Scheduling
         lr_schedule_disc = tf.keras.optimizers.schedules.ExponentialDecay(
             initial_learning_rate=self.learning_rate, decay_steps=10000, decay_rate=0.98, staircase=True)
-        self.disc_optimizer = Adam(learning_rate=lr_schedule_disc, beta_1=0.5, beta_2=0.999)
+        # Add gradient clipping to prevent exploding gradients and NaN losses
+        self.disc_optimizer = Adam(learning_rate=lr_schedule_disc, beta_1=0.5, beta_2=0.999, clipnorm=1.0)
 
         # -- Loss Functions Setup (for custom training loops)
         self.binary_crossentropy = tf.keras.losses.BinaryCrossentropy(from_logits=False)
@@ -570,11 +571,18 @@ class ACDiscriminatorClient(fl.client.NumPyClient):
         data = tf.cast(data, tf.float32)
         validity_labels = tf.cast(validity_labels, tf.float32)
 
+        # Numerical stability epsilon
+        epsilon = 1e-7
+
         if self.use_class_labels:
             labels = tf.cast(labels, tf.float32)
 
             # Forward pass with training=False for evaluation
             validity_pred, class_pred = self.discriminator(data, training=False)
+
+            # Clip predictions for numerical stability (prevent log(0) which causes NaN)
+            validity_pred = tf.clip_by_value(validity_pred, epsilon, 1.0 - epsilon)
+            class_pred = tf.clip_by_value(class_pred, epsilon, 1.0 - epsilon)
 
             # Calculate losses
             validity_loss = tf.keras.losses.binary_crossentropy(validity_labels, validity_pred)
@@ -595,6 +603,9 @@ class ACDiscriminatorClient(fl.client.NumPyClient):
         else:
             # Only validity output
             validity_pred = self.discriminator(data, training=False)
+
+            # Clip predictions for numerical stability (prevent log(0) which causes NaN)
+            validity_pred = tf.clip_by_value(validity_pred, epsilon, 1.0 - epsilon)
 
             # Calculate validity loss
             validity_loss = tf.keras.losses.binary_crossentropy(validity_labels, validity_pred)
@@ -756,6 +767,12 @@ class ACDiscriminatorClient(fl.client.NumPyClient):
                         float(d_cls_acc_benign.numpy())
                     ]
 
+                    # NaN detection and handling
+                    if np.isnan(d_loss_benign[0]) or np.isinf(d_loss_benign[0]):
+                        self.logger.error(f"NaN/Inf detected in benign loss at step {step}! Loss: {d_loss_benign}")
+                        self.logger.error("Stopping training to prevent propagation of NaN values.")
+                        raise ValueError("Training halted due to NaN/Inf loss values")
+
                     # ▼ BATCH 2: Train on Attack Data ▼
                     # Calculate start/end for attack batch using global offset
                     attack_start = global_attack_offset
@@ -785,6 +802,12 @@ class ACDiscriminatorClient(fl.client.NumPyClient):
                         float(d_val_acc_attack.numpy()),
                         float(d_cls_acc_attack.numpy())
                     ]
+
+                    # NaN detection and handling
+                    if np.isnan(d_loss_attack[0]) or np.isinf(d_loss_attack[0]):
+                        self.logger.error(f"NaN/Inf detected in attack loss at step {step}! Loss: {d_loss_attack}")
+                        self.logger.error("Stopping training to prevent propagation of NaN values.")
+                        raise ValueError("Training halted due to NaN/Inf loss values")
 
                     # Accumulate metrics (average of benign and attack)
                     epoch_loss += (d_loss_benign[0] + d_loss_attack[0]) / 2
@@ -828,6 +851,12 @@ class ACDiscriminatorClient(fl.client.NumPyClient):
                             float(d_val_acc_real.numpy()),
                             float(d_cls_acc_real.numpy())
                         ]
+
+                        # NaN detection and handling
+                        if np.isnan(d_loss_real[0]) or np.isinf(d_loss_real[0]):
+                            self.logger.error(f"NaN/Inf detected in real data loss at step {step}! Loss: {d_loss_real}")
+                            self.logger.error("Stopping training to prevent propagation of NaN values.")
+                            raise ValueError("Training halted due to NaN/Inf loss values")
 
                         # Accumulate metrics
                         epoch_loss += d_loss_real[0]
