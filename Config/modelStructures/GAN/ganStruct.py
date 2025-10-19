@@ -203,6 +203,61 @@ def load_and_merge_ACmodels(generator_path, discriminator_path, latent_dim, num_
     return merged_model
 
 
+def merge_AC_model_instances(generator, discriminator, latent_dim, num_classes):
+    """
+    Merge existing AC-GAN generator and discriminator model instances into a single container model.
+
+    This function is used when you already have instantiated generator and discriminator models
+    and need to create the merged GAN container (e.g., for training types 'Generator' or 'Discriminator').
+
+    NOTE: The merged ACGAN model is NOT compiled and is used only as a container.
+    Training is performed using custom training loops on the sub-models separately.
+
+    Args:
+        generator: Instantiated generator model
+        discriminator: Instantiated discriminator model
+        latent_dim: Dimension of latent noise vector
+        num_classes: Number of output classes for auxiliary classifier
+
+    Returns:
+        merged_model: Keras Model with generator and discriminator as attributes
+    """
+    # ═══════════════════════════════════════════════════════════════════════
+    # DEFINE INPUTS
+    # ═══════════════════════════════════════════════════════════════════════
+    noise_input = Input(shape=(latent_dim,), name="noise_input")
+    label_input = Input(shape=(1,), dtype='int32', name="label_input")
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # GENERATE DATA
+    # ═══════════════════════════════════════════════════════════════════════
+    generated_data = generator([noise_input, label_input])
+    generated_data = tf.identity(generated_data, name="ACGenerator")
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # CONNECT DISCRIMINATOR TO GENERATED DATA
+    # ═══════════════════════════════════════════════════════════════════════
+    validity, class_output = discriminator(generated_data)
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # CREATE MERGED MODEL (CONTAINER ONLY - NOT FOR DIRECT TRAINING)
+    # ═══════════════════════════════════════════════════════════════════════
+    merged_model = Model(
+        inputs=[noise_input, label_input],
+        outputs=[validity, class_output],
+        name="ACGAN"
+    )
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # STORE SUB-MODELS AS ATTRIBUTES FOR SEPARATE TRAINING
+    # ═══════════════════════════════════════════════════════════════════════
+    merged_model.generator = generator
+    merged_model.discriminator = discriminator
+
+    # NOTE: No model compilation needed - using custom training loops only
+    return merged_model
+
+
 # Submodel
 def split_GAN_model(model):
     # Assuming `self.model` is the GAN model created with Sequential([generator, discriminator])
