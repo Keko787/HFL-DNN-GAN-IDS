@@ -1039,8 +1039,7 @@ class ACDiscriminatorClient(fl.client.NumPyClient):
     def validation_disc(self):
         """
         Evaluate the discriminator on the validation set using real data.
-        Uses custom evaluation helper for consistency with training approach.
-        For federated learning, we focus on real data validation (no generator available).
+        Uses BATCHED evaluation to prevent memory/numerical issues.
         Returns the average total loss and a metrics dictionary.
         """
         # ═══════════════════════════════════════════════════════════════════════
@@ -1049,8 +1048,19 @@ class ACDiscriminatorClient(fl.client.NumPyClient):
         val_valid_labels = np.ones((len(self.x_val), 1))
 
         # ═══════════════════════════════════════════════════════════════════════
-        # EVALUATE ON REAL VALIDATION DATA
+        # BATCHED EVALUATION (to prevent memory/numerical issues)
         # ═══════════════════════════════════════════════════════════════════════
+        validation_batch_size = 512  # Same as training batch size
+        num_val_samples = len(self.x_val)
+        num_batches = (num_val_samples + validation_batch_size - 1) // validation_batch_size
+
+        # Accumulators for metrics
+        total_loss_sum = 0.0
+        val_loss_sum = 0.0
+        cls_loss_sum = 0.0
+        val_acc_sum = 0.0
+        cls_acc_sum = 0.0
+
         if self.use_class_labels:
             # Ensure y_val is one-hot encoded if needed
             if self.y_val.ndim == 1 or self.y_val.shape[1] != self.num_classes:
@@ -1058,17 +1068,66 @@ class ACDiscriminatorClient(fl.client.NumPyClient):
             else:
                 y_val_onehot = self.y_val
 
-            # Use custom evaluation helper
-            d_total, d_val_loss, d_cls_loss, d_val_acc, d_cls_acc = \
-                self.evaluate_discriminator(self.x_val, y_val_onehot, val_valid_labels)
+            # Process validation in batches
+            for batch_idx in range(num_batches):
+                start_idx = batch_idx * validation_batch_size
+                end_idx = min(start_idx + validation_batch_size, num_val_samples)
 
-            # Convert to float for logging
+                # Get batch data
+                x_batch = self.x_val[start_idx:end_idx]
+                y_batch = y_val_onehot[start_idx:end_idx]
+                val_labels_batch = val_valid_labels[start_idx:end_idx]
+
+                # ─── DEBUGGING: Check predictions before loss computation ───
+                validity_pred, class_pred = self.discriminator(x_batch, training=False)
+
+                # Check for NaN/Inf in raw predictions
+                if tf.reduce_any(tf.math.is_nan(validity_pred)) or tf.reduce_any(tf.math.is_inf(validity_pred)):
+                    self.logger.error(f"[VALIDATION DEBUG] NaN/Inf detected in validity predictions at batch {batch_idx}")
+                    self.logger.error(f"  Validity pred range: [{tf.reduce_min(validity_pred):.6f}, {tf.reduce_max(validity_pred):.6f}]")
+
+                if tf.reduce_any(tf.math.is_nan(class_pred)) or tf.reduce_any(tf.math.is_inf(class_pred)):
+                    self.logger.error(f"[VALIDATION DEBUG] NaN/Inf detected in class predictions at batch {batch_idx}")
+                    self.logger.error(f"  Class pred range: [{tf.reduce_min(class_pred):.6f}, {tf.reduce_max(class_pred):.6f}]")
+
+                # Log prediction statistics for first batch
+                if batch_idx == 0:
+                    self.logger.info(f"[VALIDATION DEBUG] Batch {batch_idx} predictions:")
+                    self.logger.info(f"  Validity: min={tf.reduce_min(validity_pred):.6f}, max={tf.reduce_max(validity_pred):.6f}, mean={tf.reduce_mean(validity_pred):.6f}")
+                    self.logger.info(f"  Class: min={tf.reduce_min(class_pred):.6f}, max={tf.reduce_max(class_pred):.6f}")
+
+                # Use custom evaluation helper with clipping
+                d_total, d_val_loss, d_cls_loss, d_val_acc, d_cls_acc = \
+                    self.evaluate_discriminator(x_batch, y_batch, val_labels_batch)
+
+                # Check for NaN in computed losses
+                if tf.math.is_nan(d_total) or tf.math.is_inf(d_total):
+                    self.logger.error(f"[VALIDATION DEBUG] NaN/Inf in loss at batch {batch_idx}")
+                    self.logger.error(f"  Total: {d_total}, Val: {d_val_loss}, Cls: {d_cls_loss}")
+                    # Return NaN metrics to trigger early detection
+                    return float('nan'), {
+                        "Real Total Loss": "nan",
+                        "Real Validity Loss": "nan",
+                        "Real Class Loss": "nan",
+                        "Real Validity Binary Accuracy": "0.00%",
+                        "Real Class Categorical Accuracy": "0.00%"
+                    }
+
+                # Accumulate metrics
+                batch_weight = (end_idx - start_idx) / num_val_samples
+                total_loss_sum += float(d_total.numpy()) * batch_weight
+                val_loss_sum += float(d_val_loss.numpy()) * batch_weight
+                cls_loss_sum += float(d_cls_loss.numpy()) * batch_weight
+                val_acc_sum += float(d_val_acc.numpy()) * batch_weight
+                cls_acc_sum += float(d_cls_acc.numpy()) * batch_weight
+
+            # Average across all batches
             d_loss_real = [
-                float(d_total.numpy()),
-                float(d_val_loss.numpy()),
-                float(d_cls_loss.numpy()),
-                float(d_val_acc.numpy()),
-                float(d_cls_acc.numpy())
+                total_loss_sum,
+                val_loss_sum,
+                cls_loss_sum,
+                val_acc_sum,
+                cls_acc_sum
             ]
 
             # ─── Log Metrics ───

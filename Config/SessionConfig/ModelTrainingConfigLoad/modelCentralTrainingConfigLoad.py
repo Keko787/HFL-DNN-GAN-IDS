@@ -40,6 +40,8 @@ from Config.ModelTrainingConfig.ClientModelTrainingConfig.CentralTrainingConfig.
 from Config.ModelTrainingConfig.ClientModelTrainingConfig.CentralTrainingConfig.GAN.Discriminator.ACDiscREALCentralTrainingConfig import CentralACDiscREAL
 from Config.ModelTrainingConfig.ClientModelTrainingConfig.CentralTrainingConfig.GAN.Discriminator.ACDiscCentralTrainingConfig import CentralACDisc
 
+# from Config.ModelTrainingConfig.ClientModelTrainingConfig.CentralTrainingConfig.GAN.FullModel.CANGANCentralTrainingConfig import CANGAN
+
 ################################################################################################################
 #                      CENTRAL/Local TRAINING CONFIG CLIENT CLASS OBJECT LOADER                                #
 ################################################################################################################
@@ -152,5 +154,16 @@ def modelCentralTrainingConfigLoad(nids, discriminator, generator, GAN, dataset_
             #                       steps_per_epoch=steps_per_epoch,
             #                       learning_rate=learning_rate,
             #                       log_file=trainingLog)
+
+        # elif model_type == 'CANGAN':
+        #     if train_type == "Both":
+        #         # client = CentralCANGAN(discriminator, generator, nids, X_train_data, X_val_data, y_train_data,
+        #         #                       y_val_data, X_test_data, y_test_data, BATCH_SIZE,
+        #         #                       noise_dim, latent_dim, num_classes, input_dim, epochs, steps_per_epoch,
+        #         #                       learning_rate)
+            # elif train_type == "Generator":
+            #
+            # elif train_type == "Discriminator":
+
 
     return client

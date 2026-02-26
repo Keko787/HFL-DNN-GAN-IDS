@@ -544,6 +544,14 @@ def preprocess_timeseries_dataset(X, y, time_steps=10, test_size=0.2, val_size=0
     return X_train, X_val, X_test, y_train, y_val, y_test
 
 #
+# CANGAN
+#
+
+# def preprocess_GAN_dataset(dataset_used, ciciot_train_data=None, ciciot_test_data=None, all_attacks_train=None,
+#                        all_attacks_test=None, irrelevant_features_ciciot=None, relevant_features_iotbotnet=None):
+
+
+#
 # Live Data
 #
 

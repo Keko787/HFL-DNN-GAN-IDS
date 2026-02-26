@@ -158,6 +158,24 @@ def hyperparameterLoading(args, X_train_data):
         # num_classes = len(np.unique(y_train_categorical))
         num_classes = 2
 
+        # Learning rate and optimizer parameters for AC-GAN training
+        learning_rate = 0.0001  # Standard learning rate for AC-GAN (matches GAN/WGAN-GP)
+        betas = [0.5, 0.999]  # Beta values for Adam optimizer (beta_1=0.5 for GANs, beta_2=0.999)
+
+        print("\nAC-GAN Hyperparameters:")
+        print("Input Dim (Feature Size):", input_dim)
+        print("Batch Size:", BATCH_SIZE)
+        print(f"Steps per epoch (max(1, {len(X_train_data)} // {BATCH_SIZE})):", steps_per_epoch)
+        print("Noise Dimension:", noise_dim)
+        print("Latent Dimension:", latent_dim)
+        print("Number of Classes:", num_classes)
+        print("Learning Rate:", learning_rate)
+        print("Betas:", betas)
+
+    # elif model_type == 'CANGAN':
+
+
+
     return (BATCH_SIZE, noise_dim, steps_per_epoch, input_dim, num_classes, latent_dim, betas, learning_rate, l2_alpha,
             l2_norm_clip, noise_multiplier, num_microbatches, metric_to_monitor_es, es_patience, restor_best_w,
             metric_to_monitor_l2lr, l2lr_patience, save_best_only, metric_to_monitor_mc, checkpoint_mode)

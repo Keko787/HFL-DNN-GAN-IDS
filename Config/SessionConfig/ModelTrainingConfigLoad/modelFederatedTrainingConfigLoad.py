@@ -99,6 +99,11 @@ def modelFederatedTrainingConfigLoad(nids, discriminator, generator, GAN, datase
         elif train_type == "Generator":
             client = None
         elif train_type == "Discriminator":
+            # Debug: Verify learning_rate is not None
+            print(f"[DEBUG] Creating ACDiscriminatorClient with learning_rate={learning_rate}")
+            if learning_rate is None:
+                raise ValueError("learning_rate is None! Check hyperparameterLoading.py for AC-GAN configuration.")
+
             client = ACDiscriminatorClient(discriminator=discriminator,
                                            x_train=X_train_data,
                                            x_val=X_val_data,

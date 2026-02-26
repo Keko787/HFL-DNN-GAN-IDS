@@ -225,6 +225,71 @@ def build_AC_discriminator(input_dim, num_classes):
 
     return model
 
+
+def build_CAN_AC_discriminator(input_dim, num_classes):
+    """
+    FIXED AC-GAN Discriminator with proper validity detection.
+    Key fixes:
+    - Removed BatchNorm from early layers to prevent saturation
+    - Lighter regularization on validity branch
+    - Better initialization
+    - Balanced architecture
+    """
+    data_input = Input(shape=(input_dim,))
+
+    # Shared feature extraction - lighter regularization, NO BatchNorm initially
+    x = Dense(512, kernel_regularizer=l2(0.0001),
+              kernel_initializer='he_normal')(data_input)
+    x = LeakyReLU(0.2)(x)
+    x = Dropout(0.3)(x)
+
+    x = Dense(256, kernel_regularizer=l2(0.0001),
+              kernel_initializer='he_normal')(x)
+    x = LeakyReLU(0.2)(x)
+    x = Dropout(0.3)(x)
+
+    # Shared representation with BatchNorm (safe here, after initial layers)
+    shared = Dense(128, kernel_regularizer=l2(0.0001),
+                   kernel_initializer='he_normal')(x)
+    shared = BatchNormalization(momentum=0.9)(shared)  # Higher momentum for stability
+    shared = LeakyReLU(0.2)(shared)
+
+    # --- VALIDITY BRANCH (Real vs Fake) ---
+    # CRITICAL: Very light/no regularization to allow learning
+    validity_branch = Dense(64, kernel_initializer='he_normal')(shared)  # NO regularization!
+    validity_branch = LeakyReLU(0.2)(validity_branch)
+    validity_branch = Dropout(0.2)(validity_branch)
+
+    # Output with CRITICAL bias initialization
+    # Initialize bias to +1.5 so sigmoid starts at ~0.82 instead of 0.5
+    # This prevents the validity branch from saturating at 0 during early training
+    # With target label 0.88, starting at 0.82 gives small gradients in right direction
+    from tensorflow.keras.initializers import Constant
+    validity = Dense(1, activation='sigmoid', name="validity",
+                    kernel_initializer='glorot_uniform',  # Better for sigmoid
+                    bias_initializer=Constant(1.5))(validity_branch)
+
+    # --- CLASS BRANCH (Benign vs Attack) ---
+    class_branch = Dense(64, kernel_regularizer=l2(0.0002),
+                        kernel_initializer='he_normal')(shared)
+    class_branch = LeakyReLU(0.2)(class_branch)
+    class_branch = Dropout(0.2)(class_branch)
+
+    label_output = Dense(num_classes, activation='softmax', name="class",
+                        kernel_initializer='glorot_uniform')(class_branch)
+
+    model = Model(data_input, [validity, label_output], name="Discriminator")
+
+    # DIAGNOSTIC: Verify bias initialization
+    print("\n=== DISCRIMINATOR ARCHITECTURE VERIFICATION ===")
+    validity_layer = model.get_layer('validity')
+    initial_bias = validity_layer.get_weights()[1][0]
+    print(f"Validity layer initial bias: {initial_bias}")
+    print(f"Expected: 1.5, Actual sigmoid output: {1.0 / (1.0 + tf.exp(-initial_bias))}")
+    print("==============================================\n")
+
+    return model
+
 def build_AC_discriminator_ver_last(input_dim, num_classes):
     data_input = Input(shape=(input_dim,))
 
@@ -528,6 +593,9 @@ def create_discriminator_binary_optimized_spectral(input_dim):
     ])
 
     return discriminator
+
+
+
 
 # too strong, wtf
 def create_discriminator_binary_optimized_2(input_dim):

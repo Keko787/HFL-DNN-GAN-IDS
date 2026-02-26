@@ -61,7 +61,7 @@ def parse_training_client_args():
     # ─── Model Training Settings ───
     parser.add_argument('--model_type', type=str,
                         choices=["NIDS", "NIDS-IOT-Binary", "NIDS-IOT-Multiclass", "NIDS-IOT-Multiclass-Dynamic", "GAN",
-                                 "WGAN-GP", "AC-GAN","CAN-AC-GAN"],
+                                 "WGAN-GP", "AC-GAN", "CANGAN"],
                         help='Please select NIDS, NIDS-IOT-Binary, NIDS-IOT-Multiclass, NIDS-IOT-Multiclass-Dynamic, GAN, WGAN-GP, or AC-GAN as the model type to train')
 
     parser.add_argument('--model_training', type=str, choices=["NIDS", "Generator", "Discriminator", "Both"],

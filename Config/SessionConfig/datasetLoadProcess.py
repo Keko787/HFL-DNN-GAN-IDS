@@ -3,7 +3,7 @@ from Config.DatasetConfig.IOTBotNet2020_Sampling.iotbotnet2020DatasetLoad import
 from Config.DatasetConfig.IoT_Handling.IotDatasetLoadProcess import load_and_preprocess_data, feature_selection, prepare_data, prepare_data_min_max
 from Config.DatasetConfig.LiveData_Handling.loadLiveData import loadLiveCaptureData
 from Config.DatasetConfig.Dataset_Preprocessing.datasetPreprocess import preprocess_dataset, preprocess_AC_dataset, preprocess_live_dataset
-
+# from Config.DatasetConfig.vehicleCAN.filename import functionname
 
 # --- Load Data ---#
 
@@ -74,6 +74,8 @@ def datasetLoadProcess(args):
         # file_path = 'datasets/combined_edgeIIot_500k_custom_DDos.csv'
         X, y = load_and_preprocess_data(file_path)
 
+    # elif dataset_used == "CANGAN":
+
     elif dataset_used == "LIVEDATA":
         # Load Live Packet Capture Data
         live_data, irrelevant_features_live = loadLiveCaptureData()
@@ -114,3 +116,5 @@ def datasetLoadProcess(args):
         X_train, X_val, X_test, y_train, y_val, y_test, scaler = prepare_data_min_max(X, y, selected_features)
 
         return X_train, X_val, X_test, y_train, y_val, y_test
+
+    # elif dataset_preprocessing == "CANGAN":
