@@ -20,10 +20,10 @@ def parse_training_client_args():
     parser = argparse.ArgumentParser(description='Select dataset, model selection, and to enable DP respectively')
 
     # ───  Dataset Settings ───
-    parser.add_argument('--dataset', type=str, choices=["CICIOT", "IOTBOTNET", "IOT"], default="CICIOT",
+    parser.add_argument('--dataset', type=str, choices=["CICIOT", "IOTBOTNET", "IOT", "CANGAN"], default="CICIOT",
                         help='Datasets to use: CICIOT, IOTBOTNET, IOT (different from IOTBOTNET)')
 
-    parser.add_argument('--dataset_processing', type=str, choices=["Default", "MM[-1,-1]", "AC-GAN, IOT", "IOT-MinMax"],
+    parser.add_argument('--dataset_processing', type=str, choices=["Default", "MM[-1,-1]", "AC-GAN, IOT", "IOT-MinMax", "CANGAN"],
                         default="Default", help='Datasets to use: Default, MM[-1,1], AC-GAN, IOT')
 
     # ─── CICIOT2023 Dataset Settings ───
@@ -61,7 +61,7 @@ def parse_training_client_args():
     # ─── Model Training Settings ───
     parser.add_argument('--model_type', type=str,
                         choices=["NIDS", "NIDS-IOT-Binary", "NIDS-IOT-Multiclass", "NIDS-IOT-Multiclass-Dynamic", "GAN",
-                                 "WGAN-GP", "AC-GAN"],
+                                 "WGAN-GP", "AC-GAN","CAN-AC-GAN"],
                         help='Please select NIDS, NIDS-IOT-Binary, NIDS-IOT-Multiclass, NIDS-IOT-Multiclass-Dynamic, GAN, WGAN-GP, or AC-GAN as the model type to train')
 
     parser.add_argument('--model_training', type=str, choices=["NIDS", "Generator", "Discriminator", "Both"],
