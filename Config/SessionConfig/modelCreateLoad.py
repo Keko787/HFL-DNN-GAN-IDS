@@ -15,7 +15,7 @@ import flwr as fl
 import tensorflow as tf
 from tensorflow.keras.metrics import AUC, Precision, Recall
 from tensorflow.keras.losses import LogCosh
-from tensorflow_addons.layers import SpectralNormalization
+from tensorflow.keras.layers import SpectralNormalization
 from tensorflow.keras.optimizers import Adam
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 # other plugins

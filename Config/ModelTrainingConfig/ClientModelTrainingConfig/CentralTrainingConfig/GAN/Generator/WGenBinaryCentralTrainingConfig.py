@@ -7,7 +7,7 @@ import tensorflow as tf
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, BatchNormalization, Dropout, LeakyReLU
 from tensorflow.keras.optimizers import Adam
-from tensorflow_addons.layers import SpectralNormalization
+from tensorflow.keras.layers import SpectralNormalization
 from tensorflow.keras.metrics import Precision, Recall, BinaryAccuracy
 
 
