@@ -90,6 +90,10 @@ python3 App/TrainingApp/Client/TrainingClient.py --help
 # Default uses CICIOT2023 dataset; use --dataset IOTBOTNET for IoTBotnet.
 ```
 
+### Demo of Localized Training
+```bash
+python3 TrainingClient.py --model_type AC-GAN --model_training Both --trainingArea Central --dataset CICIOT --save_name Test1
+```
 
 
 ---
