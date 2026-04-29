@@ -1,0 +1,1258 @@
+2025-10-06 01:49:30,860 - CentralACGan - INFO - --- Hyperparameters ---
+2025-10-06 01:49:30,860 - CentralACGan - INFO - Batch Size: 512
+2025-10-06 01:49:30,860 - CentralACGan - INFO - Noise Dimension: 100
+2025-10-06 01:49:30,860 - CentralACGan - INFO - Latent Dimension: 256
+2025-10-06 01:49:30,860 - CentralACGan - INFO - Number of Classes: 2
+2025-10-06 01:49:30,860 - CentralACGan - INFO - Input Dimension: 21
+2025-10-06 01:49:30,860 - CentralACGan - INFO - Epochs: 15
+2025-10-06 01:49:30,860 - CentralACGan - INFO - Steps per Epoch: 625
+2025-10-06 01:49:30,861 - CentralACGan - INFO - Learning Rate (Generator): <tf.Variable 'current_learning_rate:0' shape=() dtype=float32, numpy=0.00012>
+2025-10-06 01:49:30,862 - CentralACGan - INFO - Learning Rate (Discriminator): <tf.Variable 'current_learning_rate:0' shape=() dtype=float32, numpy=7e-05>
+2025-10-06 01:49:30,862 - CentralACGan - INFO - ==================================================
+2025-10-06 01:49:30,862 - CentralACGan - INFO - Training with discriminator-to-generator ratio: 3:1
+2025-10-06 01:49:30,862 - CentralACGan - INFO - CRITICAL FIX: Using custom training loops with separate optimizers
+2025-10-06 01:49:30,862 - CentralACGan - INFO - Generator training uses discriminator with training=False to prevent BatchNorm corruption
+2025-10-06 01:49:30,862 - CentralACGan - INFO - This addresses the mode collapse issue by ensuring BatchNorm statistics isolation
+2025-10-06 01:49:30,873 - CentralACGan - INFO - Using valid label smoothing with factor: 0.12
+2025-10-06 01:49:30,874 - CentralACGan - INFO - Using fake label smoothing with factor: 0.1
+2025-10-06 01:49:30,874 - CentralACGan - INFO - Using gen label smoothing with factor: 0.05
+
+=== Epoch 1/15 ===
+
+2025-10-06 01:49:30,874 - CentralACGan - INFO - === Epoch 1/15 ===
+2025-10-06 01:49:35.280249: I external/local_xla/xla/service/service.cc:168] XLA service 0x7f69c227ede0 initialized for platform CUDA (this does not guarantee that XLA will be used). Devices:
+2025-10-06 01:49:35.280284: I external/local_xla/xla/service/service.cc:176]   StreamExecutor device (0): Tesla P100-PCIE-16GB, Compute Capability 6.0
+2025-10-06 01:49:35.280296: I external/local_xla/xla/service/service.cc:176]   StreamExecutor device (1): Tesla P100-PCIE-16GB, Compute Capability 6.0
+2025-10-06 01:49:35.286566: I tensorflow/compiler/mlir/tensorflow/utils/dump_mlir_util.cc:269] disabling MLIR crash reproducer, set env var `MLIR_CRASH_REPRODUCER_DIRECTORY` to enable.
+2025-10-06 01:49:35.307546: I external/local_xla/xla/stream_executor/cuda/cuda_dnn.cc:454] Loaded cuDNN version 8902
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1759715375.393706 1177436 device_compiler.h:186] Compiled cluster using XLA!  This line is logged at most once for the lifetime of the process.
+Step 0/104 - D loss: 9.6578, G loss: 1.9247
+Step 10/104 - D loss: 6.2830, G loss: 1.8768
+Step 20/104 - D loss: 4.1220, G loss: 2.0682
+Step 30/104 - D loss: 3.1220, G loss: 2.3790
+Step 40/104 - D loss: 2.6143, G loss: 2.6130
+Step 50/104 - D loss: 2.3423, G loss: 2.5289
+Step 60/104 - D loss: 2.1295, G loss: 2.3666
+Step 70/104 - D loss: 1.9707, G loss: 2.0896
+Step 80/104 - D loss: 1.8867, G loss: 1.9199
+Step 90/104 - D loss: 1.8036, G loss: 1.7913
+Step 100/104 - D loss: 1.7467, G loss: 1.7391
+2025-10-06 01:50:49,626 - CentralACGan - INFO - Epoch 1 Summary:
+2025-10-06 01:50:49,627 - CentralACGan - INFO - Discriminator Average Loss: 3.1437
+2025-10-06 01:50:49,627 - CentralACGan - INFO - Generator Loss: 2.1216
+2025-10-06 01:50:49,627 - CentralACGan - INFO - Generator Fooling Rate: 100.00%
+2025-10-06 01:50:49,627 - CentralACGan - INFO - Generator Class Accuracy: 77.55%
+2025-10-06 01:50:49,627 - CentralACGan - INFO - === DIAGNOSTIC: Training Data Check ===
+2025-10-06 01:50:49,656 - CentralACGan - INFO - Training data validity - Mean: 0.2432, Min: 0.1886, Max: 0.3296
+2025-10-06 01:50:49,660 - CentralACGan - INFO - Training data - Mean: 0.1721, Std: 0.3480
+2025-10-06 01:50:49,663 - CentralACGan - INFO - Training class predictions (first 5): [[0.57421213 0.4257878 ]
+ [0.25184613 0.74815387]
+ [0.05067401 0.949326  ]
+ [0.0510406  0.94895947]
+ [0.216987   0.78301305]]
+2025-10-06 01:50:49,675 - CentralACGan - INFO - PRE-VALIDITY DENSE activations - Mean: 0.3361, Std: 0.6047
+2025-10-06 01:50:49,676 - CentralACGan - INFO - PRE-SIGMOID logits - Mean: -1.1473, Min: -1.4593, Max: -0.7101
+2025-10-06 01:50:49,677 - CentralACGan - INFO - Reference: sigmoid(0) = 0.5, sigmoid(-3) = 0.0474, sigmoid(-5) = 0.0067
+2025-10-06 01:50:49,680 - CentralACGan - INFO - === Epoch 1 Validation ===
+2025-10-06 01:50:49,743 - CentralACGan - INFO - === DIAGNOSTIC: Discriminator Predictions ===
+2025-10-06 01:50:49,744 - CentralACGan - INFO - Benign validity - Mean: 0.2181, Min: 0.1881, Max: 0.3402
+2025-10-06 01:50:49,744 - CentralACGan - INFO - Attack validity - Mean: 0.2586, Min: 0.1995, Max: 0.3359
+2025-10-06 01:50:49,745 - CentralACGan - INFO - Benign class predictions (first 5): [[0.8496376  0.1503624 ]
+ [0.83697337 0.16302662]
+ [0.8381046  0.16189542]
+ [0.83519095 0.16480897]
+ [0.8174846  0.18251534]]
+2025-10-06 01:50:49,746 - CentralACGan - INFO - Attack class predictions (first 5): [[0.05104173 0.9489583 ]
+ [0.17057963 0.8294203 ]
+ [0.05102982 0.9489702 ]
+ [0.05119448 0.9488055 ]
+ [0.16116932 0.8388307 ]]
+2025-10-06 01:50:49,750 - CentralACGan - INFO - Benign data - Mean: 0.1862, Std: 0.3676
+2025-10-06 01:50:49,751 - CentralACGan - INFO - Attack data - Mean: 0.1558, Std: 0.3255
+2025-10-06 01:50:50,281 - CentralACGan - INFO - Validation data distribution: Benign 0.50, Attack 0.50
+2025-10-06 01:50:50,282 - CentralACGan - INFO - Validation Discriminator Evaluation:
+2025-10-06 01:50:50,282 - CentralACGan - INFO - Weighted Total Loss: 0.4114
+2025-10-06 01:50:50,669 - CentralACGan - INFO - Validation Generator Evaluation:
+2025-10-06 01:50:50,669 - CentralACGan - INFO - Total Loss: 1.7485, Validity Loss: 1.6949, Class Loss: 0.0537
+2025-10-06 01:50:50,669 - CentralACGan - INFO - Generator Fooling Rate: 100.00%
+2025-10-06 01:50:50,669 - CentralACGan - INFO - Class Categorical Accuracy: 98.65%
+2025-10-06 01:50:50,669 - CentralACGan - INFO - === Probabilistic Fusion Validation on Real Data ===
+2500/2500 [==============================] - 4s 2ms/step
+2025-10-06 01:50:59,005 - CentralACGan - INFO - Predicted Class Distribution: {'invalid_benign': 38768, 'invalid_attack': 41232}
+2025-10-06 01:50:59,267 - CentralACGan - INFO - True Class Distribution: {'valid_benign': 40000, 'valid_attack': 40000}
+2025-10-06 01:50:59,267 - CentralACGan - INFO - Accuracy: 0.0000
+2025-10-06 01:50:59,280 - CentralACGan - INFO - Probabilistic Fusion Accuracy: 0.00%
+2025-10-06 01:50:59,281 - CentralACGan - INFO - Predicted Class Distribution: {'invalid_benign': 38768, 'invalid_attack': 41232}
+2025-10-06 01:50:59,281 - CentralACGan - INFO - === Epoch 1 Metrics Summary ===
+2025-10-06 01:50:59,281 - CentralACGan - INFO - Discriminator Metrics:
+2025-10-06 01:50:59,281 - CentralACGan - INFO -   Total Loss: 1.7750
+2025-10-06 01:50:59,281 - CentralACGan - INFO -   Benign Loss: 1.8395
+2025-10-06 01:50:59,281 - CentralACGan - INFO -   Attack Loss: 1.5532
+2025-10-06 01:50:59,281 - CentralACGan - INFO -   Fake Loss: 0.2718
+2025-10-06 01:50:59,281 - CentralACGan - INFO -   Validity Loss: 0.8092
+2025-10-06 01:50:59,281 - CentralACGan - INFO -   Class Loss: 0.1463
+2025-10-06 01:50:59,281 - CentralACGan - INFO -   Benign Validity Acc: 0.00%
+2025-10-06 01:50:59,281 - CentralACGan - INFO -   Attack Validity Acc: 0.00%
+2025-10-06 01:50:59,281 - CentralACGan - INFO -   Fake Validity Acc: 100.00%
+2025-10-06 01:50:59,281 - CentralACGan - INFO -   Benign Class Acc: 95.48%
+2025-10-06 01:50:59,281 - CentralACGan - INFO -   Attack Class Acc: 98.56%
+2025-10-06 01:50:59,281 - CentralACGan - INFO -   Fake Class Acc: 98.61%
+2025-10-06 01:50:59,281 - CentralACGan - INFO - Generator Metrics:
+2025-10-06 01:50:59,281 - CentralACGan - INFO -   Total Loss: 1.7485
+2025-10-06 01:50:59,281 - CentralACGan - INFO -   Validity Loss: 1.6949
+2025-10-06 01:50:59,281 - CentralACGan - INFO -   Class Loss: 0.0537
+2025-10-06 01:50:59,282 - CentralACGan - INFO -   Generator Fooling Rate: 100.00%
+2025-10-06 01:50:59,282 - CentralACGan - INFO -   Class Categorical Accuracy: 98.65%
+2025-10-06 01:50:59,282 - CentralACGan - INFO - Probabilistic Fusion Metrics:
+2025-10-06 01:50:59,282 - CentralACGan - INFO -   accuracy: 0.0
+2025-10-06 01:50:59,282 - CentralACGan - INFO -   total_samples: 80000
+2025-10-06 01:50:59,282 - CentralACGan - INFO -   correct_predictions: 0
+2025-10-06 01:50:59,282 - CentralACGan - INFO -   predicted_class_distribution: {'invalid_benign': 38768, 'invalid_attack': 41232}
+2025-10-06 01:50:59,282 - CentralACGan - INFO -   correct_class_distribution: {}
+2025-10-06 01:50:59,282 - CentralACGan - INFO -   true_class_distribution: {'valid_benign': 40000, 'valid_attack': 40000}
+2025-10-06 01:50:59,282 - CentralACGan - INFO - ==================================================
+
+=== Epoch 2/15 ===
+
+2025-10-06 01:50:59,282 - CentralACGan - INFO - === Epoch 2/15 ===
+Step 0/104 - D loss: 1.7284, G loss: 1.7509
+Step 10/104 - D loss: 1.7044, G loss: 1.7402
+Step 20/104 - D loss: 1.6635, G loss: 1.7003
+Step 30/104 - D loss: 1.6158, G loss: 1.6781
+Step 40/104 - D loss: 1.5996, G loss: 1.6107
+Step 50/104 - D loss: 1.5704, G loss: 1.6397
+Step 60/104 - D loss: 1.5441, G loss: 1.5820
+Step 70/104 - D loss: 1.5330, G loss: 1.5992
+Step 80/104 - D loss: 1.5119, G loss: 1.5903
+Step 90/104 - D loss: 1.5100, G loss: 1.4751
+Step 100/104 - D loss: 1.4932, G loss: 1.3477
+2025-10-06 01:52:11,263 - CentralACGan - INFO - Epoch 2 Summary:
+2025-10-06 01:52:11,263 - CentralACGan - INFO - Discriminator Average Loss: 1.5819
+2025-10-06 01:52:11,263 - CentralACGan - INFO - Generator Loss: 1.6085
+2025-10-06 01:52:11,263 - CentralACGan - INFO - Generator Fooling Rate: 100.00%
+2025-10-06 01:52:11,263 - CentralACGan - INFO - Generator Class Accuracy: 88.10%
+2025-10-06 01:52:11,263 - CentralACGan - INFO - === Epoch 2 Validation ===
+2025-10-06 01:52:11,338 - CentralACGan - INFO - === DIAGNOSTIC: Discriminator Predictions ===
+2025-10-06 01:52:11,339 - CentralACGan - INFO - Benign validity - Mean: 0.3123, Min: 0.2544, Max: 0.3631
+2025-10-06 01:52:11,340 - CentralACGan - INFO - Attack validity - Mean: 0.2898, Min: 0.2210, Max: 0.3647
+2025-10-06 01:52:11,341 - CentralACGan - INFO - Benign class predictions (first 5): [[0.78297573 0.2170242 ]
+ [0.7804284  0.21957159]
+ [0.7728175  0.22718251]
+ [0.7960132  0.20398681]
+ [0.7927025  0.20729743]]
+2025-10-06 01:52:11,342 - CentralACGan - INFO - Attack class predictions (first 5): [[0.00836066 0.9916393 ]
+ [0.19423239 0.8057676 ]
+ [0.00838623 0.99161375]
+ [0.00835424 0.99164575]
+ [0.09631334 0.9036867 ]]
+2025-10-06 01:52:11,343 - CentralACGan - INFO - Benign data - Mean: 0.1862, Std: 0.3676
+2025-10-06 01:52:11,344 - CentralACGan - INFO - Attack data - Mean: 0.1558, Std: 0.3255
+2025-10-06 01:52:11,366 - CentralACGan - INFO - Validation data distribution: Benign 0.50, Attack 0.50
+2025-10-06 01:52:11,366 - CentralACGan - INFO - Validation Discriminator Evaluation:
+2025-10-06 01:52:11,367 - CentralACGan - INFO - Weighted Total Loss: 0.4115
+2025-10-06 01:52:11,404 - CentralACGan - INFO - Validation Generator Evaluation:
+2025-10-06 01:52:11,405 - CentralACGan - INFO - Total Loss: 1.3116, Validity Loss: 1.2489, Class Loss: 0.0627
+2025-10-06 01:52:11,405 - CentralACGan - INFO - Generator Fooling Rate: 98.47%
+2025-10-06 01:52:11,405 - CentralACGan - INFO - Class Categorical Accuracy: 97.73%
+2025-10-06 01:52:11,405 - CentralACGan - INFO - === Probabilistic Fusion Validation on Real Data ===
+2500/2500 [==============================] - 4s 2ms/step
+2025-10-06 01:52:18,500 - CentralACGan - INFO - Predicted Class Distribution: {'invalid_benign': 35126, 'invalid_attack': 44874}
+2025-10-06 01:52:18,742 - CentralACGan - INFO - True Class Distribution: {'valid_benign': 40000, 'valid_attack': 40000}
+2025-10-06 01:52:18,742 - CentralACGan - INFO - Accuracy: 0.0000
+2025-10-06 01:52:18,756 - CentralACGan - INFO - Probabilistic Fusion Accuracy: 0.00%
+2025-10-06 01:52:18,756 - CentralACGan - INFO - Predicted Class Distribution: {'invalid_benign': 35126, 'invalid_attack': 44874}
+2025-10-06 01:52:18,756 - CentralACGan - INFO - === Epoch 2 Metrics Summary ===
+2025-10-06 01:52:18,756 - CentralACGan - INFO - Discriminator Metrics:
+2025-10-06 01:52:18,756 - CentralACGan - INFO -   Total Loss: 1.6938
+2025-10-06 01:52:18,756 - CentralACGan - INFO -   Benign Loss: 1.5283
+2025-10-06 01:52:18,756 - CentralACGan - INFO -   Attack Loss: 1.4585
+2025-10-06 01:52:18,756 - CentralACGan - INFO -   Fake Loss: 0.4287
+2025-10-06 01:52:18,756 - CentralACGan - INFO -   Validity Loss: 0.8049
+2025-10-06 01:52:18,756 - CentralACGan - INFO -   Class Loss: 0.1492
+2025-10-06 01:52:18,757 - CentralACGan - INFO -   Benign Validity Acc: 0.00%
+2025-10-06 01:52:18,757 - CentralACGan - INFO -   Attack Validity Acc: 0.00%
+2025-10-06 01:52:18,757 - CentralACGan - INFO -   Fake Validity Acc: 98.52%
+2025-10-06 01:52:18,757 - CentralACGan - INFO -   Benign Class Acc: 86.60%
+2025-10-06 01:52:18,757 - CentralACGan - INFO -   Attack Class Acc: 98.78%
+2025-10-06 01:52:18,757 - CentralACGan - INFO -   Fake Class Acc: 97.76%
+2025-10-06 01:52:18,757 - CentralACGan - INFO - Generator Metrics:
+2025-10-06 01:52:18,757 - CentralACGan - INFO -   Total Loss: 1.3116
+2025-10-06 01:52:18,757 - CentralACGan - INFO -   Validity Loss: 1.2489
+2025-10-06 01:52:18,757 - CentralACGan - INFO -   Class Loss: 0.0627
+2025-10-06 01:52:18,757 - CentralACGan - INFO -   Generator Fooling Rate: 98.47%
+2025-10-06 01:52:18,757 - CentralACGan - INFO -   Class Categorical Accuracy: 97.73%
+2025-10-06 01:52:18,757 - CentralACGan - INFO - Probabilistic Fusion Metrics:
+2025-10-06 01:52:18,757 - CentralACGan - INFO -   accuracy: 0.0
+2025-10-06 01:52:18,757 - CentralACGan - INFO -   total_samples: 80000
+2025-10-06 01:52:18,757 - CentralACGan - INFO -   correct_predictions: 0
+2025-10-06 01:52:18,757 - CentralACGan - INFO -   predicted_class_distribution: {'invalid_benign': 35126, 'invalid_attack': 44874}
+2025-10-06 01:52:18,757 - CentralACGan - INFO -   correct_class_distribution: {}
+2025-10-06 01:52:18,757 - CentralACGan - INFO -   true_class_distribution: {'valid_benign': 40000, 'valid_attack': 40000}
+2025-10-06 01:52:18,757 - CentralACGan - INFO - ==================================================
+
+=== Epoch 3/15 ===
+
+2025-10-06 01:52:18,758 - CentralACGan - INFO - === Epoch 3/15 ===
+Step 0/104 - D loss: 1.4976, G loss: 1.3356
+Step 10/104 - D loss: 1.4644, G loss: 1.1895
+Step 20/104 - D loss: 1.4514, G loss: 1.0961
+Step 30/104 - D loss: 1.4169, G loss: 1.0348
+Step 40/104 - D loss: 1.4006, G loss: 0.9589
+Step 50/104 - D loss: 1.3834, G loss: 0.9272
+Step 60/104 - D loss: 1.3808, G loss: 0.8440
+Step 70/104 - D loss: 1.3667, G loss: 0.7135
+Step 80/104 - D loss: 1.3616, G loss: 0.6428
+Step 90/104 - D loss: 1.3523, G loss: 0.6496
+Step 100/104 - D loss: 1.3366, G loss: 0.5962
+2025-10-06 01:53:30,121 - CentralACGan - INFO - Epoch 3 Summary:
+2025-10-06 01:53:30,121 - CentralACGan - INFO - Discriminator Average Loss: 1.3962
+2025-10-06 01:53:30,121 - CentralACGan - INFO - Generator Loss: 0.8913
+2025-10-06 01:53:30,121 - CentralACGan - INFO - Generator Fooling Rate: 100.00%
+2025-10-06 01:53:30,121 - CentralACGan - INFO - Generator Class Accuracy: 91.81%
+2025-10-06 01:53:30,121 - CentralACGan - INFO - === Epoch 3 Validation ===
+2025-10-06 01:53:30,204 - CentralACGan - INFO - === DIAGNOSTIC: Discriminator Predictions ===
+2025-10-06 01:53:30,205 - CentralACGan - INFO - Benign validity - Mean: 0.4965, Min: 0.2837, Max: 0.5637
+2025-10-06 01:53:30,206 - CentralACGan - INFO - Attack validity - Mean: 0.3833, Min: 0.2222, Max: 0.5615
+2025-10-06 01:53:30,207 - CentralACGan - INFO - Benign class predictions (first 5): [[0.5834164  0.41658363]
+ [0.5967815  0.40321854]
+ [0.58729786 0.41270208]
+ [0.5610025  0.4389975 ]
+ [0.5518921  0.44810784]]
+2025-10-06 01:53:30,208 - CentralACGan - INFO - Attack class predictions (first 5): [[0.00140964 0.9985903 ]
+ [0.14980513 0.8501948 ]
+ [0.00141242 0.9985876 ]
+ [0.00141472 0.99858534]
+ [0.01996855 0.9800315 ]]
+2025-10-06 01:53:30,210 - CentralACGan - INFO - Benign data - Mean: 0.1862, Std: 0.3676
+2025-10-06 01:53:30,211 - CentralACGan - INFO - Attack data - Mean: 0.1558, Std: 0.3255
+2025-10-06 01:53:30,233 - CentralACGan - INFO - Validation data distribution: Benign 0.50, Attack 0.50
+2025-10-06 01:53:30,233 - CentralACGan - INFO - Validation Discriminator Evaluation:
+2025-10-06 01:53:30,233 - CentralACGan - INFO - Weighted Total Loss: 0.4576
+2025-10-06 01:53:30,271 - CentralACGan - INFO - Validation Generator Evaluation:
+2025-10-06 01:53:30,271 - CentralACGan - INFO - Total Loss: 0.5424, Validity Loss: 0.5313, Class Loss: 0.0111
+2025-10-06 01:53:30,271 - CentralACGan - INFO - Generator Fooling Rate: 9.10%
+2025-10-06 01:53:30,271 - CentralACGan - INFO - Class Categorical Accuracy: 99.63%
+2025-10-06 01:53:30,271 - CentralACGan - INFO - === Probabilistic Fusion Validation on Real Data ===
+2500/2500 [==============================] - 4s 2ms/step
+2025-10-06 01:53:37,774 - CentralACGan - INFO - Predicted Class Distribution: {'valid_benign': 14649, 'invalid_attack': 43207, 'invalid_benign': 15304, 'valid_attack': 6840}
+2025-10-06 01:53:38,020 - CentralACGan - INFO - True Class Distribution: {'valid_benign': 40000, 'valid_attack': 40000}
+2025-10-06 01:53:38,020 - CentralACGan - INFO - Accuracy: 0.1866
+2025-10-06 01:53:38,033 - CentralACGan - INFO - Probabilistic Fusion Accuracy: 18.66%
+2025-10-06 01:53:38,034 - CentralACGan - INFO - Predicted Class Distribution: {'valid_benign': 14649, 'invalid_attack': 43207, 'invalid_benign': 15304, 'valid_attack': 6840}
+2025-10-06 01:53:38,034 - CentralACGan - INFO - === Epoch 3 Metrics Summary ===
+2025-10-06 01:53:38,034 - CentralACGan - INFO - Discriminator Metrics:
+2025-10-06 01:53:38,034 - CentralACGan - INFO -   Total Loss: 1.6707
+2025-10-06 01:53:38,034 - CentralACGan - INFO -   Benign Loss: 1.4417
+2025-10-06 01:53:38,034 - CentralACGan - INFO -   Attack Loss: 1.1113
+2025-10-06 01:53:38,034 - CentralACGan - INFO -   Fake Loss: 0.9207
+2025-10-06 01:53:38,034 - CentralACGan - INFO -   Validity Loss: 0.9087
+2025-10-06 01:53:38,034 - CentralACGan - INFO -   Class Loss: 0.1569
+2025-10-06 01:53:38,034 - CentralACGan - INFO -   Benign Validity Acc: 52.34%
+2025-10-06 01:53:38,034 - CentralACGan - INFO -   Attack Validity Acc: 1.38%
+2025-10-06 01:53:38,034 - CentralACGan - INFO -   Fake Validity Acc: 9.07%
+2025-10-06 01:53:38,034 - CentralACGan - INFO -   Benign Class Acc: 73.94%
+2025-10-06 01:53:38,034 - CentralACGan - INFO -   Attack Class Acc: 99.05%
+2025-10-06 01:53:38,034 - CentralACGan - INFO -   Fake Class Acc: 99.67%
+2025-10-06 01:53:38,034 - CentralACGan - INFO - Generator Metrics:
+2025-10-06 01:53:38,034 - CentralACGan - INFO -   Total Loss: 0.5424
+2025-10-06 01:53:38,034 - CentralACGan - INFO -   Validity Loss: 0.5313
+2025-10-06 01:53:38,034 - CentralACGan - INFO -   Class Loss: 0.0111
+2025-10-06 01:53:38,035 - CentralACGan - INFO -   Generator Fooling Rate: 9.10%
+2025-10-06 01:53:38,035 - CentralACGan - INFO -   Class Categorical Accuracy: 99.63%
+2025-10-06 01:53:38,035 - CentralACGan - INFO - Probabilistic Fusion Metrics:
+2025-10-06 01:53:38,035 - CentralACGan - INFO -   accuracy: 0.1866375
+2025-10-06 01:53:38,035 - CentralACGan - INFO -   total_samples: 80000
+2025-10-06 01:53:38,035 - CentralACGan - INFO -   correct_predictions: 14931
+2025-10-06 01:53:38,035 - CentralACGan - INFO -   predicted_class_distribution: {'valid_benign': 14649, 'invalid_attack': 43207, 'invalid_benign': 15304, 'valid_attack': 6840}
+2025-10-06 01:53:38,035 - CentralACGan - INFO -   correct_class_distribution: {'valid_benign': 14514, 'valid_attack': 417}
+2025-10-06 01:53:38,035 - CentralACGan - INFO -   true_class_distribution: {'valid_benign': 40000, 'valid_attack': 40000}
+2025-10-06 01:53:38,035 - CentralACGan - INFO - ==================================================
+
+=== Epoch 4/15 ===
+
+2025-10-06 01:53:38,035 - CentralACGan - INFO - === Epoch 4/15 ===
+Step 0/104 - D loss: 1.3290, G loss: 0.5853
+Step 10/104 - D loss: 1.3220, G loss: 0.5387
+Step 20/104 - D loss: 1.3276, G loss: 0.4986
+Step 30/104 - D loss: 1.3090, G loss: 0.4809
+Step 40/104 - D loss: 1.3253, G loss: 0.4679
+Step 50/104 - D loss: 1.3078, G loss: 0.4494
+Step 60/104 - D loss: 1.3100, G loss: 0.4410
+Step 70/104 - D loss: 1.3131, G loss: 0.4039
+Step 80/104 - D loss: 1.3033, G loss: 0.4011
+Step 90/104 - D loss: 1.2873, G loss: 0.3864
+Step 100/104 - D loss: 1.3105, G loss: 0.3711
+2025-10-06 01:54:49,176 - CentralACGan - INFO - Epoch 4 Summary:
+2025-10-06 01:54:49,176 - CentralACGan - INFO - Discriminator Average Loss: 1.3111
+2025-10-06 01:54:49,176 - CentralACGan - INFO - Generator Loss: 0.4555
+2025-10-06 01:54:49,176 - CentralACGan - INFO - Generator Fooling Rate: 100.00%
+2025-10-06 01:54:49,176 - CentralACGan - INFO - Generator Class Accuracy: 93.77%
+2025-10-06 01:54:49,176 - CentralACGan - INFO - === Epoch 4 Validation ===
+2025-10-06 01:54:49,250 - CentralACGan - INFO - === DIAGNOSTIC: Discriminator Predictions ===
+2025-10-06 01:54:49,251 - CentralACGan - INFO - Benign validity - Mean: 0.6627, Min: 0.3417, Max: 0.7442
+2025-10-06 01:54:49,251 - CentralACGan - INFO - Attack validity - Mean: 0.5051, Min: 0.2546, Max: 0.7038
+2025-10-06 01:54:49,253 - CentralACGan - INFO - Benign class predictions (first 5): [[0.2731423  0.7268577 ]
+ [0.43326348 0.5667365 ]
+ [0.39001617 0.6099838 ]
+ [0.29736042 0.70263964]
+ [0.45088765 0.5491123 ]]
+2025-10-06 01:54:49,253 - CentralACGan - INFO - Attack class predictions (first 5): [[2.1557313e-04 9.9978441e-01]
+ [4.8729409e-02 9.5127064e-01]
+ [2.1544717e-04 9.9978453e-01]
+ [2.1487092e-04 9.9978513e-01]
+ [5.8822641e-03 9.9411774e-01]]
+2025-10-06 01:54:49,255 - CentralACGan - INFO - Benign data - Mean: 0.1862, Std: 0.3676
+2025-10-06 01:54:49,256 - CentralACGan - INFO - Attack data - Mean: 0.1558, Std: 0.3255
+2025-10-06 01:54:49,278 - CentralACGan - INFO - Validation data distribution: Benign 0.50, Attack 0.50
+2025-10-06 01:54:49,278 - CentralACGan - INFO - Validation Discriminator Evaluation:
+2025-10-06 01:54:49,278 - CentralACGan - INFO - Weighted Total Loss: 0.5148
+2025-10-06 01:54:49,316 - CentralACGan - INFO - Validation Generator Evaluation:
+2025-10-06 01:54:49,316 - CentralACGan - INFO - Total Loss: 0.3206, Validity Loss: 0.3084, Class Loss: 0.0123
+2025-10-06 01:54:49,316 - CentralACGan - INFO - Generator Fooling Rate: 0.08%
+2025-10-06 01:54:49,316 - CentralACGan - INFO - Class Categorical Accuracy: 99.63%
+2025-10-06 01:54:49,316 - CentralACGan - INFO - === Probabilistic Fusion Validation on Real Data ===
+2500/2500 [==============================] - 4s 2ms/step
+2025-10-06 01:54:56,491 - CentralACGan - INFO - Predicted Class Distribution: {'valid_attack': 55532, 'invalid_attack': 18929, 'invalid_benign': 4086, 'valid_benign': 1453}
+2025-10-06 01:54:56,740 - CentralACGan - INFO - True Class Distribution: {'valid_benign': 40000, 'valid_attack': 40000}
+2025-10-06 01:54:56,740 - CentralACGan - INFO - Accuracy: 0.2814
+2025-10-06 01:54:56,754 - CentralACGan - INFO - Probabilistic Fusion Accuracy: 28.14%
+2025-10-06 01:54:56,754 - CentralACGan - INFO - Predicted Class Distribution: {'valid_attack': 55532, 'invalid_attack': 18929, 'invalid_benign': 4086, 'valid_benign': 1453}
+2025-10-06 01:54:56,754 - CentralACGan - INFO - === Epoch 4 Metrics Summary ===
+2025-10-06 01:54:56,754 - CentralACGan - INFO - Discriminator Metrics:
+2025-10-06 01:54:56,754 - CentralACGan - INFO -   Total Loss: 1.6974
+2025-10-06 01:54:56,754 - CentralACGan - INFO -   Benign Loss: 1.5701
+2025-10-06 01:54:56,754 - CentralACGan - INFO -   Attack Loss: 0.7785
+2025-10-06 01:54:56,754 - CentralACGan - INFO -   Fake Loss: 1.3629
+2025-10-06 01:54:56,754 - CentralACGan - INFO -   Validity Loss: 0.9940
+2025-10-06 01:54:56,754 - CentralACGan - INFO -   Class Loss: 0.1954
+2025-10-06 01:54:56,754 - CentralACGan - INFO -   Benign Validity Acc: 89.64%
+2025-10-06 01:54:56,754 - CentralACGan - INFO -   Attack Validity Acc: 52.82%
+2025-10-06 01:54:56,754 - CentralACGan - INFO -   Fake Validity Acc: 0.07%
+2025-10-06 01:54:56,754 - CentralACGan - INFO -   Benign Class Acc: 13.44%
+2025-10-06 01:54:56,755 - CentralACGan - INFO -   Attack Class Acc: 99.59%
+2025-10-06 01:54:56,755 - CentralACGan - INFO -   Fake Class Acc: 99.65%
+2025-10-06 01:54:56,755 - CentralACGan - INFO - Generator Metrics:
+2025-10-06 01:54:56,755 - CentralACGan - INFO -   Total Loss: 0.3206
+2025-10-06 01:54:56,755 - CentralACGan - INFO -   Validity Loss: 0.3084
+2025-10-06 01:54:56,755 - CentralACGan - INFO -   Class Loss: 0.0123
+2025-10-06 01:54:56,755 - CentralACGan - INFO -   Generator Fooling Rate: 0.08%
+2025-10-06 01:54:56,755 - CentralACGan - INFO -   Class Categorical Accuracy: 99.63%
+2025-10-06 01:54:56,755 - CentralACGan - INFO - Probabilistic Fusion Metrics:
+2025-10-06 01:54:56,755 - CentralACGan - INFO -   accuracy: 0.2814375
+2025-10-06 01:54:56,755 - CentralACGan - INFO -   total_samples: 80000
+2025-10-06 01:54:56,755 - CentralACGan - INFO -   correct_predictions: 22515
+2025-10-06 01:54:56,755 - CentralACGan - INFO -   predicted_class_distribution: {'valid_attack': 55532, 'invalid_attack': 18929, 'invalid_benign': 4086, 'valid_benign': 1453}
+2025-10-06 01:54:56,755 - CentralACGan - INFO -   correct_class_distribution: {'valid_attack': 21095, 'valid_benign': 1420}
+2025-10-06 01:54:56,755 - CentralACGan - INFO -   true_class_distribution: {'valid_benign': 40000, 'valid_attack': 40000}
+2025-10-06 01:54:56,755 - CentralACGan - INFO - ==================================================
+
+=== Epoch 5/15 ===
+
+2025-10-06 01:54:56,755 - CentralACGan - INFO - === Epoch 5/15 ===
+Step 0/104 - D loss: 1.2991, G loss: 0.3740
+Step 10/104 - D loss: 1.2858, G loss: 0.3602
+Step 20/104 - D loss: 1.2888, G loss: 0.3778
+Step 30/104 - D loss: 1.2876, G loss: 0.3600
+Step 40/104 - D loss: 1.2727, G loss: 0.3626
+Step 50/104 - D loss: 1.2890, G loss: 0.3476
+Step 60/104 - D loss: 1.2823, G loss: 0.3353
+Step 70/104 - D loss: 1.2693, G loss: 0.3329
+Step 80/104 - D loss: 1.2804, G loss: 0.3178
+Step 90/104 - D loss: 1.2740, G loss: 0.3338
+Step 100/104 - D loss: 1.2643, G loss: 0.3357
+2025-10-06 01:56:07,738 - CentralACGan - INFO - Epoch 5 Summary:
+2025-10-06 01:56:07,738 - CentralACGan - INFO - Discriminator Average Loss: 1.2809
+2025-10-06 01:56:07,738 - CentralACGan - INFO - Generator Loss: 0.3478
+2025-10-06 01:56:07,738 - CentralACGan - INFO - Generator Fooling Rate: 100.00%
+2025-10-06 01:56:07,738 - CentralACGan - INFO - Generator Class Accuracy: 94.97%
+2025-10-06 01:56:07,738 - CentralACGan - INFO - === Epoch 5 Validation ===
+2025-10-06 01:56:07,816 - CentralACGan - INFO - === DIAGNOSTIC: Discriminator Predictions ===
+2025-10-06 01:56:07,817 - CentralACGan - INFO - Benign validity - Mean: 0.7616, Min: 0.4347, Max: 0.8479
+2025-10-06 01:56:07,818 - CentralACGan - INFO - Attack validity - Mean: 0.6444, Min: 0.3546, Max: 0.8497
+2025-10-06 01:56:07,819 - CentralACGan - INFO - Benign class predictions (first 5): [[0.46986738 0.53013265]
+ [0.38994786 0.61005217]
+ [0.36158013 0.63841987]
+ [0.5337042  0.46629575]
+ [0.4584216  0.5415784 ]]
+2025-10-06 01:56:07,820 - CentralACGan - INFO - Attack class predictions (first 5): [[4.3490862e-05 9.9995649e-01]
+ [8.4654130e-03 9.9153465e-01]
+ [4.3472737e-05 9.9995649e-01]
+ [4.3181943e-05 9.9995685e-01]
+ [4.4656591e-03 9.9553430e-01]]
+2025-10-06 01:56:07,821 - CentralACGan - INFO - Benign data - Mean: 0.1862, Std: 0.3676
+2025-10-06 01:56:07,822 - CentralACGan - INFO - Attack data - Mean: 0.1558, Std: 0.3255
+2025-10-06 01:56:07,844 - CentralACGan - INFO - Validation data distribution: Benign 0.50, Attack 0.50
+2025-10-06 01:56:07,844 - CentralACGan - INFO - Validation Discriminator Evaluation:
+2025-10-06 01:56:07,844 - CentralACGan - INFO - Weighted Total Loss: 0.4914
+2025-10-06 01:56:07,882 - CentralACGan - INFO - Validation Generator Evaluation:
+2025-10-06 01:56:07,882 - CentralACGan - INFO - Total Loss: 0.2548, Validity Loss: 0.2460, Class Loss: 0.0088
+2025-10-06 01:56:07,882 - CentralACGan - INFO - Generator Fooling Rate: 0.01%
+2025-10-06 01:56:07,882 - CentralACGan - INFO - Class Categorical Accuracy: 99.74%
+2025-10-06 01:56:07,882 - CentralACGan - INFO - === Probabilistic Fusion Validation on Real Data ===
+2500/2500 [==============================] - 4s 2ms/step
+2025-10-06 01:56:15,432 - CentralACGan - INFO - Predicted Class Distribution: {'valid_attack': 59988, 'valid_benign': 14575, 'invalid_benign': 1923, 'invalid_attack': 3514}
+2025-10-06 01:56:15,683 - CentralACGan - INFO - True Class Distribution: {'valid_benign': 40000, 'valid_attack': 40000}
+2025-10-06 01:56:15,683 - CentralACGan - INFO - Accuracy: 0.6450
+2025-10-06 01:56:15,696 - CentralACGan - INFO - Probabilistic Fusion Accuracy: 64.50%
+2025-10-06 01:56:15,696 - CentralACGan - INFO - Predicted Class Distribution: {'valid_attack': 59988, 'valid_benign': 14575, 'invalid_benign': 1923, 'invalid_attack': 3514}
+2025-10-06 01:56:15,696 - CentralACGan - INFO - === Epoch 5 Metrics Summary ===
+2025-10-06 01:56:15,696 - CentralACGan - INFO - Discriminator Metrics:
+2025-10-06 01:56:15,696 - CentralACGan - INFO -   Total Loss: 1.5106
+2025-10-06 01:56:15,696 - CentralACGan - INFO -   Benign Loss: 1.2081
+2025-10-06 01:56:15,696 - CentralACGan - INFO -   Attack Loss: 0.5148
+2025-10-06 01:56:15,697 - CentralACGan - INFO -   Fake Loss: 1.5756
+2025-10-06 01:56:15,697 - CentralACGan - INFO -   Validity Loss: 0.9907
+2025-10-06 01:56:15,697 - CentralACGan - INFO -   Class Loss: 0.1585
+2025-10-06 01:56:15,697 - CentralACGan - INFO -   Benign Validity Acc: 92.94%
+2025-10-06 01:56:15,697 - CentralACGan - INFO -   Attack Validity Acc: 93.46%
+2025-10-06 01:56:15,697 - CentralACGan - INFO -   Fake Validity Acc: 0.01%
+2025-10-06 01:56:15,697 - CentralACGan - INFO -   Benign Class Acc: 39.71%
+2025-10-06 01:56:15,697 - CentralACGan - INFO -   Attack Class Acc: 98.47%
+2025-10-06 01:56:15,697 - CentralACGan - INFO -   Fake Class Acc: 99.74%
+2025-10-06 01:56:15,697 - CentralACGan - INFO - Generator Metrics:
+2025-10-06 01:56:15,697 - CentralACGan - INFO -   Total Loss: 0.2548
+2025-10-06 01:56:15,697 - CentralACGan - INFO -   Validity Loss: 0.2460
+2025-10-06 01:56:15,697 - CentralACGan - INFO -   Class Loss: 0.0088
+2025-10-06 01:56:15,697 - CentralACGan - INFO -   Generator Fooling Rate: 0.01%
+2025-10-06 01:56:15,697 - CentralACGan - INFO -   Class Categorical Accuracy: 99.74%
+2025-10-06 01:56:15,697 - CentralACGan - INFO - Probabilistic Fusion Metrics:
+2025-10-06 01:56:15,697 - CentralACGan - INFO -   accuracy: 0.645025
+2025-10-06 01:56:15,697 - CentralACGan - INFO -   total_samples: 80000
+2025-10-06 01:56:15,697 - CentralACGan - INFO -   correct_predictions: 51602
+2025-10-06 01:56:15,697 - CentralACGan - INFO -   predicted_class_distribution: {'valid_attack': 59988, 'valid_benign': 14575, 'invalid_benign': 1923, 'invalid_attack': 3514}
+2025-10-06 01:56:15,697 - CentralACGan - INFO -   correct_class_distribution: {'valid_attack': 37206, 'valid_benign': 14396}
+2025-10-06 01:56:15,698 - CentralACGan - INFO -   true_class_distribution: {'valid_benign': 40000, 'valid_attack': 40000}
+2025-10-06 01:56:15,698 - CentralACGan - INFO - ==================================================
+
+=== Epoch 6/15 ===
+
+2025-10-06 01:56:15,698 - CentralACGan - INFO - === Epoch 6/15 ===
+Step 0/104 - D loss: 1.2656, G loss: 0.3270
+Step 10/104 - D loss: 1.2660, G loss: 0.3292
+Step 20/104 - D loss: 1.2579, G loss: 0.3407
+Step 30/104 - D loss: 1.2631, G loss: 0.3418
+Step 40/104 - D loss: 1.2666, G loss: 0.3279
+Step 50/104 - D loss: 1.2615, G loss: 0.3304
+Step 60/104 - D loss: 1.2531, G loss: 0.3451
+Step 70/104 - D loss: 1.2596, G loss: 0.3180
+Step 80/104 - D loss: 1.2559, G loss: 0.3037
+Step 90/104 - D loss: 1.2564, G loss: 0.2816
+Step 100/104 - D loss: 1.2583, G loss: 0.2844
+2025-10-06 01:57:27,460 - CentralACGan - INFO - Epoch 6 Summary:
+2025-10-06 01:57:27,460 - CentralACGan - INFO - Discriminator Average Loss: 1.2598
+2025-10-06 01:57:27,460 - CentralACGan - INFO - Generator Loss: 0.3208
+2025-10-06 01:57:27,460 - CentralACGan - INFO - Generator Fooling Rate: 100.00%
+2025-10-06 01:57:27,460 - CentralACGan - INFO - Generator Class Accuracy: 95.79%
+2025-10-06 01:57:27,460 - CentralACGan - INFO - Adjusting d_to_g_ratio up to 4:1
+2025-10-06 01:57:27,461 - CentralACGan - INFO - === Epoch 6 Validation ===
+2025-10-06 01:57:27,544 - CentralACGan - INFO - === DIAGNOSTIC: Discriminator Predictions ===
+2025-10-06 01:57:27,545 - CentralACGan - INFO - Benign validity - Mean: 0.8031, Min: 0.4295, Max: 0.8828
+2025-10-06 01:57:27,546 - CentralACGan - INFO - Attack validity - Mean: 0.6905, Min: 0.3485, Max: 0.9078
+2025-10-06 01:57:27,547 - CentralACGan - INFO - Benign class predictions (first 5): [[0.5433833  0.45661667]
+ [0.47513482 0.5248652 ]
+ [0.4659678  0.53403217]
+ [0.5557073  0.44429275]
+ [0.49688327 0.5031167 ]]
+2025-10-06 01:57:27,548 - CentralACGan - INFO - Attack class predictions (first 5): [[5.8502756e-06 9.9999416e-01]
+ [1.7173005e-02 9.8282695e-01]
+ [5.8397904e-06 9.9999416e-01]
+ [5.8355199e-06 9.9999416e-01]
+ [2.3768877e-03 9.9762315e-01]]
+2025-10-06 01:57:27,549 - CentralACGan - INFO - Benign data - Mean: 0.1862, Std: 0.3676
+2025-10-06 01:57:27,550 - CentralACGan - INFO - Attack data - Mean: 0.1558, Std: 0.3255
+2025-10-06 01:57:27,572 - CentralACGan - INFO - Validation data distribution: Benign 0.50, Attack 0.50
+2025-10-06 01:57:27,572 - CentralACGan - INFO - Validation Discriminator Evaluation:
+2025-10-06 01:57:27,572 - CentralACGan - INFO - Weighted Total Loss: 0.5083
+2025-10-06 01:57:27,610 - CentralACGan - INFO - Validation Generator Evaluation:
+2025-10-06 01:57:27,610 - CentralACGan - INFO - Total Loss: 0.2073, Validity Loss: 0.2036, Class Loss: 0.0037
+2025-10-06 01:57:27,610 - CentralACGan - INFO - Generator Fooling Rate: 0.00%
+2025-10-06 01:57:27,610 - CentralACGan - INFO - Class Categorical Accuracy: 99.95%
+2025-10-06 01:57:27,610 - CentralACGan - INFO - === Probabilistic Fusion Validation on Real Data ===
+2500/2500 [==============================] - 5s 2ms/step
+2025-10-06 01:57:35,212 - CentralACGan - INFO - Predicted Class Distribution: {'valid_benign': 15647, 'valid_attack': 59110, 'invalid_benign': 3394, 'invalid_attack': 1849}
+2025-10-06 01:57:35,461 - CentralACGan - INFO - True Class Distribution: {'valid_benign': 40000, 'valid_attack': 40000}
+2025-10-06 01:57:35,461 - CentralACGan - INFO - Accuracy: 0.6604
+2025-10-06 01:57:35,474 - CentralACGan - INFO - Probabilistic Fusion Accuracy: 66.04%
+2025-10-06 01:57:35,475 - CentralACGan - INFO - Predicted Class Distribution: {'valid_benign': 15647, 'valid_attack': 59110, 'invalid_benign': 3394, 'invalid_attack': 1849}
+2025-10-06 01:57:35,475 - CentralACGan - INFO - === Epoch 6 Metrics Summary ===
+2025-10-06 01:57:35,475 - CentralACGan - INFO - Discriminator Metrics:
+2025-10-06 01:57:35,475 - CentralACGan - INFO -   Total Loss: 1.5232
+2025-10-06 01:57:35,475 - CentralACGan - INFO -   Benign Loss: 1.1063
+2025-10-06 01:57:35,475 - CentralACGan - INFO -   Attack Loss: 0.4699
+2025-10-06 01:57:35,475 - CentralACGan - INFO -   Fake Loss: 1.7248
+2025-10-06 01:57:35,475 - CentralACGan - INFO -   Validity Loss: 1.0367
+2025-10-06 01:57:35,475 - CentralACGan - INFO -   Class Loss: 0.1561
+2025-10-06 01:57:35,475 - CentralACGan - INFO -   Benign Validity Acc: 92.94%
+2025-10-06 01:57:35,475 - CentralACGan - INFO -   Attack Validity Acc: 93.95%
+2025-10-06 01:57:35,475 - CentralACGan - INFO -   Fake Validity Acc: 0.00%
+2025-10-06 01:57:35,475 - CentralACGan - INFO -   Benign Class Acc: 42.17%
+2025-10-06 01:57:35,475 - CentralACGan - INFO -   Attack Class Acc: 94.57%
+2025-10-06 01:57:35,475 - CentralACGan - INFO -   Fake Class Acc: 99.97%
+2025-10-06 01:57:35,475 - CentralACGan - INFO - Generator Metrics:
+2025-10-06 01:57:35,475 - CentralACGan - INFO -   Total Loss: 0.2073
+2025-10-06 01:57:35,475 - CentralACGan - INFO -   Validity Loss: 0.2036
+2025-10-06 01:57:35,475 - CentralACGan - INFO -   Class Loss: 0.0037
+2025-10-06 01:57:35,475 - CentralACGan - INFO -   Generator Fooling Rate: 0.00%
+2025-10-06 01:57:35,476 - CentralACGan - INFO -   Class Categorical Accuracy: 99.95%
+2025-10-06 01:57:35,476 - CentralACGan - INFO - Probabilistic Fusion Metrics:
+2025-10-06 01:57:35,476 - CentralACGan - INFO -   accuracy: 0.6604
+2025-10-06 01:57:35,476 - CentralACGan - INFO -   total_samples: 80000
+2025-10-06 01:57:35,476 - CentralACGan - INFO -   correct_predictions: 52832
+2025-10-06 01:57:35,476 - CentralACGan - INFO -   predicted_class_distribution: {'valid_benign': 15647, 'valid_attack': 59110, 'invalid_benign': 3394, 'invalid_attack': 1849}
+2025-10-06 01:57:35,476 - CentralACGan - INFO -   correct_class_distribution: {'valid_benign': 15450, 'valid_attack': 37382}
+2025-10-06 01:57:35,476 - CentralACGan - INFO -   true_class_distribution: {'valid_benign': 40000, 'valid_attack': 40000}
+2025-10-06 01:57:35,476 - CentralACGan - INFO - ==================================================
+
+=== Epoch 7/15 ===
+
+2025-10-06 01:57:35,476 - CentralACGan - INFO - === Epoch 7/15 ===
+Step 0/78 - D loss: 1.2567, G loss: 0.2894
+Step 7/78 - D loss: 1.2533, G loss: 0.2822
+Step 14/78 - D loss: 1.2526, G loss: 0.2977
+Step 21/78 - D loss: 1.2508, G loss: 0.2843
+Step 28/78 - D loss: 1.2454, G loss: 0.2872
+Step 35/78 - D loss: 1.2447, G loss: 0.2872
+Step 42/78 - D loss: 1.2431, G loss: 0.2957
+Step 49/78 - D loss: 1.2399, G loss: 0.3214
+Step 56/78 - D loss: 1.2408, G loss: 0.3052
+Step 63/78 - D loss: 1.2349, G loss: 0.3269
+Step 70/78 - D loss: 1.2339, G loss: 0.3286
+Step 77/78 - D loss: 1.2315, G loss: 0.3117
+2025-10-06 01:58:47,792 - CentralACGan - INFO - Epoch 7 Summary:
+2025-10-06 01:58:47,792 - CentralACGan - INFO - Discriminator Average Loss: 1.2440
+2025-10-06 01:58:47,792 - CentralACGan - INFO - Generator Loss: 0.2978
+2025-10-06 01:58:47,792 - CentralACGan - INFO - Generator Fooling Rate: 100.00%
+2025-10-06 01:58:47,792 - CentralACGan - INFO - Generator Class Accuracy: 96.25%
+2025-10-06 01:58:47,792 - CentralACGan - INFO - === Epoch 7 Validation ===
+2025-10-06 01:58:47,879 - CentralACGan - INFO - === DIAGNOSTIC: Discriminator Predictions ===
+2025-10-06 01:58:47,880 - CentralACGan - INFO - Benign validity - Mean: 0.8087, Min: 0.5064, Max: 0.8756
+2025-10-06 01:58:47,881 - CentralACGan - INFO - Attack validity - Mean: 0.6488, Min: 0.3819, Max: 0.9130
+2025-10-06 01:58:47,882 - CentralACGan - INFO - Benign class predictions (first 5): [[0.6904569  0.309543  ]
+ [0.6334024  0.36659756]
+ [0.649563   0.350437  ]
+ [0.6885869  0.31141305]
+ [0.6365441  0.3634559 ]]
+2025-10-06 01:58:47,883 - CentralACGan - INFO - Attack class predictions (first 5): [[9.0131448e-07 9.9999905e-01]
+ [7.3170282e-02 9.2682976e-01]
+ [9.0275449e-07 9.9999905e-01]
+ [9.0418303e-07 9.9999905e-01]
+ [2.3497706e-03 9.9765021e-01]]
+2025-10-06 01:58:47,884 - CentralACGan - INFO - Benign data - Mean: 0.1862, Std: 0.3676
+2025-10-06 01:58:47,885 - CentralACGan - INFO - Attack data - Mean: 0.1558, Std: 0.3255
+2025-10-06 01:58:47,907 - CentralACGan - INFO - Validation data distribution: Benign 0.50, Attack 0.50
+2025-10-06 01:58:47,907 - CentralACGan - INFO - Validation Discriminator Evaluation:
+2025-10-06 01:58:47,908 - CentralACGan - INFO - Weighted Total Loss: 0.4760
+2025-10-06 01:58:47,945 - CentralACGan - INFO - Validation Generator Evaluation:
+2025-10-06 01:58:47,945 - CentralACGan - INFO - Total Loss: 0.2380, Validity Loss: 0.2367, Class Loss: 0.0013
+2025-10-06 01:58:47,946 - CentralACGan - INFO - Generator Fooling Rate: 0.00%
+2025-10-06 01:58:47,946 - CentralACGan - INFO - Class Categorical Accuracy: 99.99%
+2025-10-06 01:58:47,946 - CentralACGan - INFO - === Probabilistic Fusion Validation on Real Data ===
+2500/2500 [==============================] - 5s 2ms/step
+2025-10-06 01:58:55,773 - CentralACGan - INFO - Predicted Class Distribution: {'valid_benign': 33712, 'valid_attack': 43675, 'invalid_benign': 2079, 'invalid_attack': 534}
+2025-10-06 01:58:56,028 - CentralACGan - INFO - True Class Distribution: {'valid_benign': 40000, 'valid_attack': 40000}
+2025-10-06 01:58:56,028 - CentralACGan - INFO - Accuracy: 0.8793
+2025-10-06 01:58:56,041 - CentralACGan - INFO - Probabilistic Fusion Accuracy: 87.93%
+2025-10-06 01:58:56,041 - CentralACGan - INFO - Predicted Class Distribution: {'valid_benign': 33712, 'valid_attack': 43675, 'invalid_benign': 2079, 'invalid_attack': 534}
+2025-10-06 01:58:56,042 - CentralACGan - INFO - === Epoch 7 Metrics Summary ===
+2025-10-06 01:58:56,042 - CentralACGan - INFO - Discriminator Metrics:
+2025-10-06 01:58:56,042 - CentralACGan - INFO -   Total Loss: 1.4568
+2025-10-06 01:58:56,042 - CentralACGan - INFO -   Benign Loss: 0.7893
+2025-10-06 01:58:56,042 - CentralACGan - INFO -   Attack Loss: 0.6191
+2025-10-06 01:58:56,042 - CentralACGan - INFO -   Fake Loss: 1.5734
+2025-10-06 01:58:56,042 - CentralACGan - INFO -   Validity Loss: 0.9853
+2025-10-06 01:58:56,042 - CentralACGan - INFO -   Class Loss: 0.1365
+2025-10-06 01:58:56,042 - CentralACGan - INFO -   Benign Validity Acc: 99.72%
+2025-10-06 01:58:56,042 - CentralACGan - INFO -   Attack Validity Acc: 93.74%
+2025-10-06 01:58:56,042 - CentralACGan - INFO -   Fake Validity Acc: 0.00%
+2025-10-06 01:58:56,042 - CentralACGan - INFO -   Benign Class Acc: 83.47%
+2025-10-06 01:58:56,042 - CentralACGan - INFO -   Attack Class Acc: 94.00%
+2025-10-06 01:58:56,042 - CentralACGan - INFO -   Fake Class Acc: 99.99%
+2025-10-06 01:58:56,042 - CentralACGan - INFO - Generator Metrics:
+2025-10-06 01:58:56,042 - CentralACGan - INFO -   Total Loss: 0.2380
+2025-10-06 01:58:56,042 - CentralACGan - INFO -   Validity Loss: 0.2367
+2025-10-06 01:58:56,042 - CentralACGan - INFO -   Class Loss: 0.0013
+2025-10-06 01:58:56,042 - CentralACGan - INFO -   Generator Fooling Rate: 0.00%
+2025-10-06 01:58:56,042 - CentralACGan - INFO -   Class Categorical Accuracy: 99.99%
+2025-10-06 01:58:56,042 - CentralACGan - INFO - Probabilistic Fusion Metrics:
+2025-10-06 01:58:56,043 - CentralACGan - INFO -   accuracy: 0.8793
+2025-10-06 01:58:56,043 - CentralACGan - INFO -   total_samples: 80000
+2025-10-06 01:58:56,043 - CentralACGan - INFO -   correct_predictions: 70344
+2025-10-06 01:58:56,043 - CentralACGan - INFO -   predicted_class_distribution: {'valid_benign': 33712, 'valid_attack': 43675, 'invalid_benign': 2079, 'invalid_attack': 534}
+2025-10-06 01:58:56,043 - CentralACGan - INFO -   correct_class_distribution: {'valid_benign': 33279, 'valid_attack': 37065}
+2025-10-06 01:58:56,043 - CentralACGan - INFO -   true_class_distribution: {'valid_benign': 40000, 'valid_attack': 40000}
+2025-10-06 01:58:56,043 - CentralACGan - INFO - ==================================================
+
+=== Epoch 8/15 ===
+
+2025-10-06 01:58:56,043 - CentralACGan - INFO - === Epoch 8/15 ===
+Step 0/78 - D loss: 1.2338, G loss: 0.3137
+Step 7/78 - D loss: 1.2313, G loss: 0.3182
+Step 14/78 - D loss: 1.2300, G loss: 0.3130
+Step 21/78 - D loss: 1.2294, G loss: 0.3051
+Step 28/78 - D loss: 1.2290, G loss: 0.3081
+Step 35/78 - D loss: 1.2265, G loss: 0.3194
+Step 42/78 - D loss: 1.2265, G loss: 0.3145
+Step 49/78 - D loss: 1.2274, G loss: 0.3174
+Step 56/78 - D loss: 1.2258, G loss: 0.3167
+Step 63/78 - D loss: 1.2274, G loss: 0.3093
+Step 70/78 - D loss: 1.2273, G loss: 0.2932
+Step 77/78 - D loss: 1.2253, G loss: 0.2910
+2025-10-06 02:00:08,740 - CentralACGan - INFO - Epoch 8 Summary:
+2025-10-06 02:00:08,740 - CentralACGan - INFO - Discriminator Average Loss: 1.2279
+2025-10-06 02:00:08,740 - CentralACGan - INFO - Generator Loss: 0.3103
+2025-10-06 02:00:08,740 - CentralACGan - INFO - Generator Fooling Rate: 100.00%
+2025-10-06 02:00:08,740 - CentralACGan - INFO - Generator Class Accuracy: 96.63%
+2025-10-06 02:00:08,741 - CentralACGan - INFO - === Epoch 8 Validation ===
+2025-10-06 02:00:08,822 - CentralACGan - INFO - === DIAGNOSTIC: Discriminator Predictions ===
+2025-10-06 02:00:08,823 - CentralACGan - INFO - Benign validity - Mean: 0.7390, Min: 0.3998, Max: 0.8358
+2025-10-06 02:00:08,824 - CentralACGan - INFO - Attack validity - Mean: 0.5659, Min: 0.3387, Max: 0.8904
+2025-10-06 02:00:08,825 - CentralACGan - INFO - Benign class predictions (first 5): [[0.4681392  0.5318608 ]
+ [0.47073033 0.52926964]
+ [0.44664943 0.55335057]
+ [0.54387164 0.45612833]
+ [0.55962276 0.44037718]]
+2025-10-06 02:00:08,826 - CentralACGan - INFO - Attack class predictions (first 5): [[2.5366720e-07 9.9999976e-01]
+ [2.2295341e-01 7.7704656e-01]
+ [2.5301341e-07 9.9999976e-01]
+ [2.5388599e-07 9.9999976e-01]
+ [1.1067452e-03 9.9889332e-01]]
+2025-10-06 02:00:08,827 - CentralACGan - INFO - Benign data - Mean: 0.1862, Std: 0.3676
+2025-10-06 02:00:08,828 - CentralACGan - INFO - Attack data - Mean: 0.1558, Std: 0.3255
+2025-10-06 02:00:08,850 - CentralACGan - INFO - Validation data distribution: Benign 0.50, Attack 0.50
+2025-10-06 02:00:08,850 - CentralACGan - INFO - Validation Discriminator Evaluation:
+2025-10-06 02:00:08,850 - CentralACGan - INFO - Weighted Total Loss: 0.5834
+2025-10-06 02:00:08,888 - CentralACGan - INFO - Validation Generator Evaluation:
+2025-10-06 02:00:08,888 - CentralACGan - INFO - Total Loss: 0.2087, Validity Loss: 0.2067, Class Loss: 0.0020
+2025-10-06 02:00:08,888 - CentralACGan - INFO - Generator Fooling Rate: 0.00%
+2025-10-06 02:00:08,888 - CentralACGan - INFO - Class Categorical Accuracy: 99.98%
+2025-10-06 02:00:08,888 - CentralACGan - INFO - === Probabilistic Fusion Validation on Real Data ===
+2500/2500 [==============================] - 4s 2ms/step
+2025-10-06 02:00:16,073 - CentralACGan - INFO - Predicted Class Distribution: {'valid_attack': 31511, 'valid_benign': 21131, 'invalid_attack': 14341, 'invalid_benign': 13017}
+2025-10-06 02:00:16,323 - CentralACGan - INFO - True Class Distribution: {'valid_benign': 40000, 'valid_attack': 40000}
+2025-10-06 02:00:16,323 - CentralACGan - INFO - Accuracy: 0.4680
+2025-10-06 02:00:16,336 - CentralACGan - INFO - Probabilistic Fusion Accuracy: 46.80%
+2025-10-06 02:00:16,337 - CentralACGan - INFO - Predicted Class Distribution: {'valid_attack': 31511, 'valid_benign': 21131, 'invalid_attack': 14341, 'invalid_benign': 13017}
+2025-10-06 02:00:16,337 - CentralACGan - INFO - === Epoch 8 Metrics Summary ===
+2025-10-06 02:00:16,337 - CentralACGan - INFO - Discriminator Metrics:
+2025-10-06 02:00:16,337 - CentralACGan - INFO -   Total Loss: 1.8355
+2025-10-06 02:00:16,337 - CentralACGan - INFO -   Benign Loss: 1.1636
+2025-10-06 02:00:16,337 - CentralACGan - INFO -   Attack Loss: 0.8894
+2025-10-06 02:00:16,337 - CentralACGan - INFO -   Fake Loss: 1.7278
+2025-10-06 02:00:16,337 - CentralACGan - INFO -   Validity Loss: 1.1320
+2025-10-06 02:00:16,337 - CentralACGan - INFO -   Class Loss: 0.2177
+2025-10-06 02:00:16,337 - CentralACGan - INFO -   Benign Validity Acc: 89.64%
+2025-10-06 02:00:16,337 - CentralACGan - INFO -   Attack Validity Acc: 41.96%
+2025-10-06 02:00:16,337 - CentralACGan - INFO -   Fake Validity Acc: 0.00%
+2025-10-06 02:00:16,337 - CentralACGan - INFO -   Benign Class Acc: 62.56%
+2025-10-06 02:00:16,337 - CentralACGan - INFO -   Attack Class Acc: 77.19%
+2025-10-06 02:00:16,337 - CentralACGan - INFO -   Fake Class Acc: 99.98%
+2025-10-06 02:00:16,337 - CentralACGan - INFO - Generator Metrics:
+2025-10-06 02:00:16,337 - CentralACGan - INFO -   Total Loss: 0.2087
+2025-10-06 02:00:16,337 - CentralACGan - INFO -   Validity Loss: 0.2067
+2025-10-06 02:00:16,337 - CentralACGan - INFO -   Class Loss: 0.0020
+2025-10-06 02:00:16,338 - CentralACGan - INFO -   Generator Fooling Rate: 0.00%
+2025-10-06 02:00:16,338 - CentralACGan - INFO -   Class Categorical Accuracy: 99.98%
+2025-10-06 02:00:16,338 - CentralACGan - INFO - Probabilistic Fusion Metrics:
+2025-10-06 02:00:16,338 - CentralACGan - INFO -   accuracy: 0.4679625
+2025-10-06 02:00:16,338 - CentralACGan - INFO -   total_samples: 80000
+2025-10-06 02:00:16,338 - CentralACGan - INFO -   correct_predictions: 37437
+2025-10-06 02:00:16,338 - CentralACGan - INFO -   predicted_class_distribution: {'valid_attack': 31511, 'valid_benign': 21131, 'invalid_attack': 14341, 'invalid_benign': 13017}
+2025-10-06 02:00:16,338 - CentralACGan - INFO -   correct_class_distribution: {'valid_attack': 16545, 'valid_benign': 20892}
+2025-10-06 02:00:16,338 - CentralACGan - INFO -   true_class_distribution: {'valid_benign': 40000, 'valid_attack': 40000}
+2025-10-06 02:00:16,338 - CentralACGan - INFO - ==================================================
+
+=== Epoch 9/15 ===
+
+2025-10-06 02:00:16,338 - CentralACGan - INFO - === Epoch 9/15 ===
+Step 0/78 - D loss: 1.2258, G loss: 0.2881
+Step 7/78 - D loss: 1.2243, G loss: 0.2913
+Step 14/78 - D loss: 1.2251, G loss: 0.2982
+Step 21/78 - D loss: 1.2256, G loss: 0.2965
+Step 28/78 - D loss: 1.2241, G loss: 0.3012
+Step 35/78 - D loss: 1.2239, G loss: 0.3109
+Step 42/78 - D loss: 1.2235, G loss: 0.3111
+Step 49/78 - D loss: 1.2215, G loss: 0.3159
+Step 56/78 - D loss: 1.2214, G loss: 0.3195
+Step 63/78 - D loss: 1.2220, G loss: 0.3298
+Step 70/78 - D loss: 1.2225, G loss: 0.3279
+Step 77/78 - D loss: 1.2215, G loss: 0.3435
+2025-10-06 02:01:27,174 - CentralACGan - INFO - Epoch 9 Summary:
+2025-10-06 02:01:27,174 - CentralACGan - INFO - Discriminator Average Loss: 1.2234
+2025-10-06 02:01:27,174 - CentralACGan - INFO - Generator Loss: 0.3128
+2025-10-06 02:01:27,175 - CentralACGan - INFO - Generator Fooling Rate: 100.00%
+2025-10-06 02:01:27,175 - CentralACGan - INFO - Generator Class Accuracy: 96.93%
+2025-10-06 02:01:27,175 - CentralACGan - INFO - === Epoch 9 Validation ===
+2025-10-06 02:01:27,260 - CentralACGan - INFO - === DIAGNOSTIC: Discriminator Predictions ===
+2025-10-06 02:01:27,261 - CentralACGan - INFO - Benign validity - Mean: 0.7082, Min: 0.3942, Max: 0.8336
+2025-10-06 02:01:27,262 - CentralACGan - INFO - Attack validity - Mean: 0.5481, Min: 0.3427, Max: 0.9024
+2025-10-06 02:01:27,263 - CentralACGan - INFO - Benign class predictions (first 5): [[0.3358228  0.66417724]
+ [0.33425334 0.6657467 ]
+ [0.304453   0.69554704]
+ [0.43381628 0.56618375]
+ [0.4078845  0.5921155 ]]
+2025-10-06 02:01:27,264 - CentralACGan - INFO - Attack class predictions (first 5): [[1.9618301e-07 9.9999976e-01]
+ [1.9394796e-01 8.0605209e-01]
+ [1.9597226e-07 9.9999976e-01]
+ [1.9677098e-07 9.9999976e-01]
+ [7.2785269e-04 9.9927217e-01]]
+2025-10-06 02:01:27,265 - CentralACGan - INFO - Benign data - Mean: 0.1862, Std: 0.3676
+2025-10-06 02:01:27,266 - CentralACGan - INFO - Attack data - Mean: 0.1558, Std: 0.3255
+2025-10-06 02:01:27,288 - CentralACGan - INFO - Validation data distribution: Benign 0.50, Attack 0.50
+2025-10-06 02:01:27,288 - CentralACGan - INFO - Validation Discriminator Evaluation:
+2025-10-06 02:01:27,288 - CentralACGan - INFO - Weighted Total Loss: 0.5616
+2025-10-06 02:01:27,326 - CentralACGan - INFO - Validation Generator Evaluation:
+2025-10-06 02:01:27,326 - CentralACGan - INFO - Total Loss: 0.2744, Validity Loss: 0.2738, Class Loss: 0.0005
+2025-10-06 02:01:27,326 - CentralACGan - INFO - Generator Fooling Rate: 0.00%
+2025-10-06 02:01:27,326 - CentralACGan - INFO - Class Categorical Accuracy: 99.98%
+2025-10-06 02:01:27,326 - CentralACGan - INFO - === Probabilistic Fusion Validation on Real Data ===
+2500/2500 [==============================] - 4s 2ms/step
+2025-10-06 02:01:34,853 - CentralACGan - INFO - Predicted Class Distribution: {'valid_attack': 42770, 'invalid_attack': 15757, 'invalid_benign': 12748, 'valid_benign': 8725}
+2025-10-06 02:01:35,103 - CentralACGan - INFO - True Class Distribution: {'valid_benign': 40000, 'valid_attack': 40000}
+2025-10-06 02:01:35,103 - CentralACGan - INFO - Accuracy: 0.3001
+2025-10-06 02:01:35,116 - CentralACGan - INFO - Probabilistic Fusion Accuracy: 30.01%
+2025-10-06 02:01:35,116 - CentralACGan - INFO - Predicted Class Distribution: {'valid_attack': 42770, 'invalid_attack': 15757, 'invalid_benign': 12748, 'valid_benign': 8725}
+2025-10-06 02:01:35,116 - CentralACGan - INFO - === Epoch 9 Metrics Summary ===
+2025-10-06 02:01:35,116 - CentralACGan - INFO - Discriminator Metrics:
+2025-10-06 02:01:35,116 - CentralACGan - INFO -   Total Loss: 1.8197
+2025-10-06 02:01:35,116 - CentralACGan - INFO -   Benign Loss: 1.4565
+2025-10-06 02:01:35,116 - CentralACGan - INFO -   Attack Loss: 0.9123
+2025-10-06 02:01:35,116 - CentralACGan - INFO -   Fake Loss: 1.4882
+2025-10-06 02:01:35,116 - CentralACGan - INFO -   Validity Loss: 1.0375
+2025-10-06 02:01:35,116 - CentralACGan - INFO -   Class Loss: 0.2444
+2025-10-06 02:01:35,116 - CentralACGan - INFO -   Benign Validity Acc: 89.82%
+2025-10-06 02:01:35,116 - CentralACGan - INFO -   Attack Validity Acc: 38.92%
+2025-10-06 02:01:35,116 - CentralACGan - INFO -   Fake Validity Acc: 0.00%
+2025-10-06 02:01:35,117 - CentralACGan - INFO -   Benign Class Acc: 31.60%
+2025-10-06 02:01:35,117 - CentralACGan - INFO -   Attack Class Acc: 77.92%
+2025-10-06 02:01:35,117 - CentralACGan - INFO -   Fake Class Acc: 99.99%
+2025-10-06 02:01:35,117 - CentralACGan - INFO - Generator Metrics:
+2025-10-06 02:01:35,117 - CentralACGan - INFO -   Total Loss: 0.2744
+2025-10-06 02:01:35,117 - CentralACGan - INFO -   Validity Loss: 0.2738
+2025-10-06 02:01:35,117 - CentralACGan - INFO -   Class Loss: 0.0005
+2025-10-06 02:01:35,117 - CentralACGan - INFO -   Generator Fooling Rate: 0.00%
+2025-10-06 02:01:35,117 - CentralACGan - INFO -   Class Categorical Accuracy: 99.98%
+2025-10-06 02:01:35,117 - CentralACGan - INFO - Probabilistic Fusion Metrics:
+2025-10-06 02:01:35,117 - CentralACGan - INFO -   accuracy: 0.300075
+2025-10-06 02:01:35,117 - CentralACGan - INFO -   total_samples: 80000
+2025-10-06 02:01:35,117 - CentralACGan - INFO -   correct_predictions: 24006
+2025-10-06 02:01:35,117 - CentralACGan - INFO -   predicted_class_distribution: {'valid_attack': 42770, 'invalid_attack': 15757, 'invalid_benign': 12748, 'valid_benign': 8725}
+2025-10-06 02:01:35,117 - CentralACGan - INFO -   correct_class_distribution: {'valid_attack': 15424, 'valid_benign': 8582}
+2025-10-06 02:01:35,117 - CentralACGan - INFO -   true_class_distribution: {'valid_benign': 40000, 'valid_attack': 40000}
+2025-10-06 02:01:35,117 - CentralACGan - INFO - ==================================================
+
+=== Epoch 10/15 ===
+
+2025-10-06 02:01:35,117 - CentralACGan - INFO - === Epoch 10/15 ===
+Step 0/78 - D loss: 1.2216, G loss: 0.3479
+Step 7/78 - D loss: 1.2243, G loss: 0.3441
+Step 14/78 - D loss: 1.2271, G loss: 0.3373
+Step 21/78 - D loss: 1.2241, G loss: 0.3039
+Step 28/78 - D loss: 1.2240, G loss: 0.2955
+Step 35/78 - D loss: 1.2227, G loss: 0.2813
+Step 42/78 - D loss: 1.2240, G loss: 0.2796
+Step 49/78 - D loss: 1.2259, G loss: 0.2795
+Step 56/78 - D loss: 1.2215, G loss: 0.2836
+Step 63/78 - D loss: 1.2244, G loss: 0.2835
+Step 70/78 - D loss: 1.2214, G loss: 0.2932
+Step 77/78 - D loss: 1.2249, G loss: 0.2819
+2025-10-06 02:02:45,807 - CentralACGan - INFO - Epoch 10 Summary:
+2025-10-06 02:02:45,807 - CentralACGan - INFO - Discriminator Average Loss: 1.2243
+2025-10-06 02:02:45,807 - CentralACGan - INFO - Generator Loss: 0.2971
+2025-10-06 02:02:45,807 - CentralACGan - INFO - Generator Fooling Rate: 100.00%
+2025-10-06 02:02:45,807 - CentralACGan - INFO - Generator Class Accuracy: 97.19%
+2025-10-06 02:02:45,808 - CentralACGan - INFO - === Epoch 10 Validation ===
+2025-10-06 02:02:45,883 - CentralACGan - INFO - === DIAGNOSTIC: Discriminator Predictions ===
+2025-10-06 02:02:45,884 - CentralACGan - INFO - Benign validity - Mean: 0.7340, Min: 0.4495, Max: 0.8394
+2025-10-06 02:02:45,885 - CentralACGan - INFO - Attack validity - Mean: 0.5902, Min: 0.3990, Max: 0.8725
+2025-10-06 02:02:45,886 - CentralACGan - INFO - Benign class predictions (first 5): [[0.07049527 0.9295047 ]
+ [0.05511226 0.9448877 ]
+ [0.05348907 0.9465109 ]
+ [0.09550884 0.9044911 ]
+ [0.05712694 0.9428731 ]]
+2025-10-06 02:02:45,887 - CentralACGan - INFO - Attack class predictions (first 5): [[1.9839405e-08 1.0000000e+00]
+ [6.9114137e-03 9.9308854e-01]
+ [1.9772918e-08 1.0000000e+00]
+ [1.9966272e-08 1.0000000e+00]
+ [3.4662598e-04 9.9965334e-01]]
+2025-10-06 02:02:45,888 - CentralACGan - INFO - Benign data - Mean: 0.1862, Std: 0.3676
+2025-10-06 02:02:45,889 - CentralACGan - INFO - Attack data - Mean: 0.1558, Std: 0.3255
+2025-10-06 02:02:45,911 - CentralACGan - INFO - Validation data distribution: Benign 0.50, Attack 0.50
+2025-10-06 02:02:45,911 - CentralACGan - INFO - Validation Discriminator Evaluation:
+2025-10-06 02:02:45,911 - CentralACGan - INFO - Weighted Total Loss: 0.6830
+2025-10-06 02:02:45,949 - CentralACGan - INFO - Validation Generator Evaluation:
+2025-10-06 02:02:45,949 - CentralACGan - INFO - Total Loss: 0.1926, Validity Loss: 0.1924, Class Loss: 0.0002
+2025-10-06 02:02:45,949 - CentralACGan - INFO - Generator Fooling Rate: 0.00%
+2025-10-06 02:02:45,949 - CentralACGan - INFO - Class Categorical Accuracy: 100.00%
+2025-10-06 02:02:45,949 - CentralACGan - INFO - === Probabilistic Fusion Validation on Real Data ===
+2500/2500 [==============================] - 4s 1ms/step
+2025-10-06 02:02:52,418 - CentralACGan - INFO - Predicted Class Distribution: {'valid_attack': 61510, 'invalid_attack': 15830, 'invalid_benign': 2653, 'valid_benign': 7}
+2025-10-06 02:02:52,672 - CentralACGan - INFO - True Class Distribution: {'valid_benign': 40000, 'valid_attack': 40000}
+2025-10-06 02:02:52,672 - CentralACGan - INFO - Accuracy: 0.3187
+2025-10-06 02:02:52,685 - CentralACGan - INFO - Probabilistic Fusion Accuracy: 31.87%
+2025-10-06 02:02:52,685 - CentralACGan - INFO - Predicted Class Distribution: {'valid_attack': 61510, 'invalid_attack': 15830, 'invalid_benign': 2653, 'valid_benign': 7}
+2025-10-06 02:02:52,685 - CentralACGan - INFO - === Epoch 10 Metrics Summary ===
+2025-10-06 02:02:52,685 - CentralACGan - INFO - Discriminator Metrics:
+2025-10-06 02:02:52,685 - CentralACGan - INFO -   Total Loss: 2.1509
+2025-10-06 02:02:52,685 - CentralACGan - INFO -   Benign Loss: 2.8528
+2025-10-06 02:02:52,685 - CentralACGan - INFO -   Attack Loss: 0.5973
+2025-10-06 02:02:52,685 - CentralACGan - INFO -   Fake Loss: 1.7539
+2025-10-06 02:02:52,685 - CentralACGan - INFO -   Validity Loss: 1.1266
+2025-10-06 02:02:52,685 - CentralACGan - INFO -   Class Loss: 0.3873
+2025-10-06 02:02:52,685 - CentralACGan - INFO -   Benign Validity Acc: 90.07%
+2025-10-06 02:02:52,685 - CentralACGan - INFO -   Attack Validity Acc: 63.73%
+2025-10-06 02:02:52,685 - CentralACGan - INFO -   Fake Validity Acc: 0.00%
+2025-10-06 02:02:52,686 - CentralACGan - INFO -   Benign Class Acc: 6.36%
+2025-10-06 02:02:52,686 - CentralACGan - INFO -   Attack Class Acc: 99.72%
+2025-10-06 02:02:52,686 - CentralACGan - INFO -   Fake Class Acc: 99.99%
+2025-10-06 02:02:52,686 - CentralACGan - INFO - Generator Metrics:
+2025-10-06 02:02:52,686 - CentralACGan - INFO -   Total Loss: 0.1926
+2025-10-06 02:02:52,686 - CentralACGan - INFO -   Validity Loss: 0.1924
+2025-10-06 02:02:52,686 - CentralACGan - INFO -   Class Loss: 0.0002
+2025-10-06 02:02:52,686 - CentralACGan - INFO -   Generator Fooling Rate: 0.00%
+2025-10-06 02:02:52,686 - CentralACGan - INFO -   Class Categorical Accuracy: 100.00%
+2025-10-06 02:02:52,686 - CentralACGan - INFO - Probabilistic Fusion Metrics:
+2025-10-06 02:02:52,686 - CentralACGan - INFO -   accuracy: 0.3187
+2025-10-06 02:02:52,686 - CentralACGan - INFO -   total_samples: 80000
+2025-10-06 02:02:52,686 - CentralACGan - INFO -   correct_predictions: 25496
+2025-10-06 02:02:52,686 - CentralACGan - INFO -   predicted_class_distribution: {'valid_attack': 61510, 'invalid_attack': 15830, 'invalid_benign': 2653, 'valid_benign': 7}
+2025-10-06 02:02:52,686 - CentralACGan - INFO -   correct_class_distribution: {'valid_attack': 25490, 'valid_benign': 6}
+2025-10-06 02:02:52,686 - CentralACGan - INFO -   true_class_distribution: {'valid_benign': 40000, 'valid_attack': 40000}
+2025-10-06 02:02:52,686 - CentralACGan - INFO - ==================================================
+
+=== Epoch 11/15 ===
+
+2025-10-06 02:02:52,686 - CentralACGan - INFO - === Epoch 11/15 ===
+Step 0/78 - D loss: 1.2217, G loss: 0.2759
+Step 7/78 - D loss: 1.2233, G loss: 0.2771
+Step 14/78 - D loss: 1.2204, G loss: 0.2839
+Step 21/78 - D loss: 1.2196, G loss: 0.3023
+Step 28/78 - D loss: 1.2228, G loss: 0.2868
+Step 35/78 - D loss: 1.2190, G loss: 0.2999
+Step 42/78 - D loss: 1.2223, G loss: 0.2980
+Step 49/78 - D loss: 1.2209, G loss: 0.2937
+Step 56/78 - D loss: 1.2200, G loss: 0.2961
+Step 63/78 - D loss: 1.2200, G loss: 0.2973
+Step 70/78 - D loss: 1.2182, G loss: 0.3137
+Step 77/78 - D loss: 1.2208, G loss: 0.2974
+2025-10-06 02:04:01,533 - CentralACGan - INFO - Epoch 11 Summary:
+2025-10-06 02:04:01,534 - CentralACGan - INFO - Discriminator Average Loss: 1.2208
+2025-10-06 02:04:01,534 - CentralACGan - INFO - Generator Loss: 0.2945
+2025-10-06 02:04:01,534 - CentralACGan - INFO - Generator Fooling Rate: 100.00%
+2025-10-06 02:04:01,534 - CentralACGan - INFO - Generator Class Accuracy: 97.40%
+2025-10-06 02:04:01,534 - CentralACGan - INFO - Adjusting d_to_g_ratio up to 5:1
+2025-10-06 02:04:01,534 - CentralACGan - INFO - === Epoch 11 Validation ===
+2025-10-06 02:04:01,601 - CentralACGan - INFO - === DIAGNOSTIC: Discriminator Predictions ===
+2025-10-06 02:04:01,602 - CentralACGan - INFO - Benign validity - Mean: 0.7385, Min: 0.4920, Max: 0.8333
+2025-10-06 02:04:01,602 - CentralACGan - INFO - Attack validity - Mean: 0.6239, Min: 0.3989, Max: 0.9111
+2025-10-06 02:04:01,604 - CentralACGan - INFO - Benign class predictions (first 5): [[0.07821164 0.9217884 ]
+ [0.01227788 0.9877221 ]
+ [0.0145542  0.98544574]
+ [0.07272491 0.92727506]
+ [0.00671744 0.99328256]]
+2025-10-06 02:04:01,604 - CentralACGan - INFO - Attack class predictions (first 5): [[7.0861383e-09 1.0000000e+00]
+ [4.6621058e-03 9.9533784e-01]
+ [7.0765762e-09 1.0000000e+00]
+ [7.1853563e-09 1.0000000e+00]
+ [8.6108688e-04 9.9913883e-01]]
+2025-10-06 02:04:01,606 - CentralACGan - INFO - Benign data - Mean: 0.1862, Std: 0.3676
+2025-10-06 02:04:01,607 - CentralACGan - INFO - Attack data - Mean: 0.1558, Std: 0.3255
+2025-10-06 02:04:01,629 - CentralACGan - INFO - Validation data distribution: Benign 0.50, Attack 0.50
+2025-10-06 02:04:01,629 - CentralACGan - INFO - Validation Discriminator Evaluation:
+2025-10-06 02:04:01,629 - CentralACGan - INFO - Weighted Total Loss: 0.7007
+2025-10-06 02:04:01,666 - CentralACGan - INFO - Validation Generator Evaluation:
+2025-10-06 02:04:01,666 - CentralACGan - INFO - Total Loss: 0.2274, Validity Loss: 0.2267, Class Loss: 0.0007
+2025-10-06 02:04:01,667 - CentralACGan - INFO - Generator Fooling Rate: 0.00%
+2025-10-06 02:04:01,667 - CentralACGan - INFO - Class Categorical Accuracy: 99.98%
+2025-10-06 02:04:01,667 - CentralACGan - INFO - === Probabilistic Fusion Validation on Real Data ===
+2500/2500 [==============================] - 4s 1ms/step
+2025-10-06 02:04:08,090 - CentralACGan - INFO - Predicted Class Distribution: {'valid_attack': 67152, 'invalid_benign': 754, 'invalid_attack': 9602, 'valid_benign': 2492}
+2025-10-06 02:04:08,343 - CentralACGan - INFO - True Class Distribution: {'valid_benign': 40000, 'valid_attack': 40000}
+2025-10-06 02:04:08,343 - CentralACGan - INFO - Accuracy: 0.4113
+2025-10-06 02:04:08,356 - CentralACGan - INFO - Probabilistic Fusion Accuracy: 41.13%
+2025-10-06 02:04:08,356 - CentralACGan - INFO - Predicted Class Distribution: {'valid_attack': 67152, 'invalid_benign': 754, 'invalid_attack': 9602, 'valid_benign': 2492}
+2025-10-06 02:04:08,356 - CentralACGan - INFO - === Epoch 11 Metrics Summary ===
+2025-10-06 02:04:08,356 - CentralACGan - INFO - Discriminator Metrics:
+2025-10-06 02:04:08,356 - CentralACGan - INFO -   Total Loss: 2.2194
+2025-10-06 02:04:08,356 - CentralACGan - INFO -   Benign Loss: 3.4932
+2025-10-06 02:04:08,356 - CentralACGan - INFO -   Attack Loss: 0.5301
+2025-10-06 02:04:08,356 - CentralACGan - INFO -   Fake Loss: 1.6008
+2025-10-06 02:04:08,356 - CentralACGan - INFO -   Validity Loss: 1.0265
+2025-10-06 02:04:08,356 - CentralACGan - INFO -   Class Loss: 0.4835
+2025-10-06 02:04:08,357 - CentralACGan - INFO -   Benign Validity Acc: 97.80%
+2025-10-06 02:04:08,357 - CentralACGan - INFO -   Attack Validity Acc: 76.31%
+2025-10-06 02:04:08,357 - CentralACGan - INFO -   Fake Validity Acc: 0.00%
+2025-10-06 02:04:08,357 - CentralACGan - INFO -   Benign Class Acc: 7.94%
+2025-10-06 02:04:08,357 - CentralACGan - INFO -   Attack Class Acc: 99.82%
+2025-10-06 02:04:08,357 - CentralACGan - INFO -   Fake Class Acc: 99.99%
+2025-10-06 02:04:08,357 - CentralACGan - INFO - Generator Metrics:
+2025-10-06 02:04:08,357 - CentralACGan - INFO -   Total Loss: 0.2274
+2025-10-06 02:04:08,357 - CentralACGan - INFO -   Validity Loss: 0.2267
+2025-10-06 02:04:08,357 - CentralACGan - INFO -   Class Loss: 0.0007
+2025-10-06 02:04:08,357 - CentralACGan - INFO -   Generator Fooling Rate: 0.00%
+2025-10-06 02:04:08,357 - CentralACGan - INFO -   Class Categorical Accuracy: 99.98%
+2025-10-06 02:04:08,357 - CentralACGan - INFO - Probabilistic Fusion Metrics:
+2025-10-06 02:04:08,357 - CentralACGan - INFO -   accuracy: 0.4112875
+2025-10-06 02:04:08,357 - CentralACGan - INFO -   total_samples: 80000
+2025-10-06 02:04:08,357 - CentralACGan - INFO -   correct_predictions: 32903
+2025-10-06 02:04:08,357 - CentralACGan - INFO -   predicted_class_distribution: {'valid_attack': 67152, 'invalid_benign': 754, 'invalid_attack': 9602, 'valid_benign': 2492}
+2025-10-06 02:04:08,357 - CentralACGan - INFO -   correct_class_distribution: {'valid_attack': 30467, 'valid_benign': 2436}
+2025-10-06 02:04:08,357 - CentralACGan - INFO -   true_class_distribution: {'valid_benign': 40000, 'valid_attack': 40000}
+2025-10-06 02:04:08,357 - CentralACGan - INFO - ==================================================
+
+=== Epoch 12/15 ===
+
+2025-10-06 02:04:08,357 - CentralACGan - INFO - === Epoch 12/15 ===
+Step 0/62 - D loss: 1.2186, G loss: 0.2980
+Step 6/62 - D loss: 1.2196, G loss: 0.2966
+Step 12/62 - D loss: 1.2191, G loss: 0.3096
+Step 18/62 - D loss: 1.2195, G loss: 0.3105
+Step 24/62 - D loss: 1.2177, G loss: 0.3150
+Step 30/62 - D loss: 1.2168, G loss: 0.3161
+Step 36/62 - D loss: 1.2182, G loss: 0.3274
+Step 42/62 - D loss: 1.2181, G loss: 0.3056
+Step 48/62 - D loss: 1.2173, G loss: 0.2988
+Step 54/62 - D loss: 1.2168, G loss: 0.3011
+Step 60/62 - D loss: 1.2175, G loss: 0.2955
+2025-10-06 02:05:19,779 - CentralACGan - INFO - Epoch 12 Summary:
+2025-10-06 02:05:19,780 - CentralACGan - INFO - Discriminator Average Loss: 1.2180
+2025-10-06 02:05:19,780 - CentralACGan - INFO - Generator Loss: 0.3060
+2025-10-06 02:05:19,780 - CentralACGan - INFO - Generator Fooling Rate: 100.00%
+2025-10-06 02:05:19,780 - CentralACGan - INFO - Generator Class Accuracy: 97.55%
+2025-10-06 02:05:19,780 - CentralACGan - INFO - === Epoch 12 Validation ===
+2025-10-06 02:05:19,863 - CentralACGan - INFO - === DIAGNOSTIC: Discriminator Predictions ===
+2025-10-06 02:05:19,864 - CentralACGan - INFO - Benign validity - Mean: 0.7201, Min: 0.4508, Max: 0.8120
+2025-10-06 02:05:19,865 - CentralACGan - INFO - Attack validity - Mean: 0.6192, Min: 0.3460, Max: 0.9301
+2025-10-06 02:05:19,866 - CentralACGan - INFO - Benign class predictions (first 5): [[2.5983075e-02 9.7401696e-01]
+ [2.7560543e-03 9.9724400e-01]
+ [3.3214455e-03 9.9667859e-01]
+ [1.8607149e-02 9.8139280e-01]
+ [6.6986639e-04 9.9933016e-01]]
+2025-10-06 02:05:19,867 - CentralACGan - INFO - Attack class predictions (first 5): [[3.7887431e-09 1.0000000e+00]
+ [3.6058780e-02 9.6394122e-01]
+ [3.7882297e-09 1.0000000e+00]
+ [3.8542542e-09 1.0000000e+00]
+ [2.1433246e-03 9.9785668e-01]]
+2025-10-06 02:05:19,868 - CentralACGan - INFO - Benign data - Mean: 0.1862, Std: 0.3676
+2025-10-06 02:05:19,869 - CentralACGan - INFO - Attack data - Mean: 0.1558, Std: 0.3255
+2025-10-06 02:05:19,891 - CentralACGan - INFO - Validation data distribution: Benign 0.50, Attack 0.50
+2025-10-06 02:05:19,891 - CentralACGan - INFO - Validation Discriminator Evaluation:
+2025-10-06 02:05:19,891 - CentralACGan - INFO - Weighted Total Loss: 0.7995
+2025-10-06 02:05:19,929 - CentralACGan - INFO - Validation Generator Evaluation:
+2025-10-06 02:05:19,929 - CentralACGan - INFO - Total Loss: 0.2214, Validity Loss: 0.2212, Class Loss: 0.0001
+2025-10-06 02:05:19,929 - CentralACGan - INFO - Generator Fooling Rate: 0.00%
+2025-10-06 02:05:19,929 - CentralACGan - INFO - Class Categorical Accuracy: 100.00%
+2025-10-06 02:05:19,930 - CentralACGan - INFO - === Probabilistic Fusion Validation on Real Data ===
+2500/2500 [==============================] - 4s 2ms/step
+2025-10-06 02:05:27,595 - CentralACGan - INFO - Predicted Class Distribution: {'valid_attack': 65328, 'valid_benign': 3659, 'invalid_attack': 9311, 'invalid_benign': 1702}
+2025-10-06 02:05:27,849 - CentralACGan - INFO - True Class Distribution: {'valid_benign': 40000, 'valid_attack': 40000}
+2025-10-06 02:05:27,850 - CentralACGan - INFO - Accuracy: 0.4248
+2025-10-06 02:05:27,862 - CentralACGan - INFO - Probabilistic Fusion Accuracy: 42.48%
+2025-10-06 02:05:27,863 - CentralACGan - INFO - Predicted Class Distribution: {'valid_attack': 65328, 'valid_benign': 3659, 'invalid_attack': 9311, 'invalid_benign': 1702}
+2025-10-06 02:05:27,863 - CentralACGan - INFO - === Epoch 12 Metrics Summary ===
+2025-10-06 02:05:27,863 - CentralACGan - INFO - Discriminator Metrics:
+2025-10-06 02:05:27,863 - CentralACGan - INFO -   Total Loss: 2.5424
+2025-10-06 02:05:27,863 - CentralACGan - INFO -   Benign Loss: 4.5236
+2025-10-06 02:05:27,863 - CentralACGan - INFO -   Attack Loss: 0.5304
+2025-10-06 02:05:27,863 - CentralACGan - INFO -   Fake Loss: 1.6280
+2025-10-06 02:05:27,863 - CentralACGan - INFO -   Validity Loss: 1.0372
+2025-10-06 02:05:27,863 - CentralACGan - INFO -   Class Loss: 0.6410
+2025-10-06 02:05:27,863 - CentralACGan - INFO -   Benign Validity Acc: 96.16%
+2025-10-06 02:05:27,863 - CentralACGan - INFO -   Attack Validity Acc: 76.31%
+2025-10-06 02:05:27,863 - CentralACGan - INFO -   Fake Validity Acc: 0.00%
+2025-10-06 02:05:27,863 - CentralACGan - INFO -   Benign Class Acc: 12.56%
+2025-10-06 02:05:27,863 - CentralACGan - INFO -   Attack Class Acc: 99.16%
+2025-10-06 02:05:27,863 - CentralACGan - INFO -   Fake Class Acc: 100.00%
+2025-10-06 02:05:27,863 - CentralACGan - INFO - Generator Metrics:
+2025-10-06 02:05:27,863 - CentralACGan - INFO -   Total Loss: 0.2214
+2025-10-06 02:05:27,863 - CentralACGan - INFO -   Validity Loss: 0.2212
+2025-10-06 02:05:27,864 - CentralACGan - INFO -   Class Loss: 0.0001
+2025-10-06 02:05:27,864 - CentralACGan - INFO -   Generator Fooling Rate: 0.00%
+2025-10-06 02:05:27,864 - CentralACGan - INFO -   Class Categorical Accuracy: 100.00%
+2025-10-06 02:05:27,864 - CentralACGan - INFO - Probabilistic Fusion Metrics:
+2025-10-06 02:05:27,864 - CentralACGan - INFO -   accuracy: 0.424775
+2025-10-06 02:05:27,864 - CentralACGan - INFO -   total_samples: 80000
+2025-10-06 02:05:27,864 - CentralACGan - INFO -   correct_predictions: 33982
+2025-10-06 02:05:27,864 - CentralACGan - INFO -   predicted_class_distribution: {'valid_attack': 65328, 'valid_benign': 3659, 'invalid_attack': 9311, 'invalid_benign': 1702}
+2025-10-06 02:05:27,864 - CentralACGan - INFO -   correct_class_distribution: {'valid_attack': 30423, 'valid_benign': 3559}
+2025-10-06 02:05:27,864 - CentralACGan - INFO -   true_class_distribution: {'valid_benign': 40000, 'valid_attack': 40000}
+2025-10-06 02:05:27,864 - CentralACGan - INFO - ==================================================
+
+=== Epoch 13/15 ===
+
+2025-10-06 02:05:27,864 - CentralACGan - INFO - === Epoch 13/15 ===
+Step 0/62 - D loss: 1.2175, G loss: 0.3015
+Step 6/62 - D loss: 1.2176, G loss: 0.2965
+Step 12/62 - D loss: 1.2168, G loss: 0.2992
+Step 18/62 - D loss: 1.2172, G loss: 0.2889
+Step 24/62 - D loss: 1.2178, G loss: 0.2935
+Step 30/62 - D loss: 1.2177, G loss: 0.2750
+Step 36/62 - D loss: 1.2160, G loss: 0.2823
+Step 42/62 - D loss: 1.2155, G loss: 0.2742
+Step 48/62 - D loss: 1.2154, G loss: 0.2758
+Step 54/62 - D loss: 1.2171, G loss: 0.2738
+Step 60/62 - D loss: 1.2165, G loss: 0.2746
+2025-10-06 02:06:39,233 - CentralACGan - INFO - Epoch 13 Summary:
+2025-10-06 02:06:39,234 - CentralACGan - INFO - Discriminator Average Loss: 1.2169
+2025-10-06 02:06:39,234 - CentralACGan - INFO - Generator Loss: 0.2825
+2025-10-06 02:06:39,234 - CentralACGan - INFO - Generator Fooling Rate: 100.00%
+2025-10-06 02:06:39,234 - CentralACGan - INFO - Generator Class Accuracy: 97.68%
+2025-10-06 02:06:39,234 - CentralACGan - INFO - === Epoch 13 Validation ===
+2025-10-06 02:06:39,314 - CentralACGan - INFO - === DIAGNOSTIC: Discriminator Predictions ===
+2025-10-06 02:06:39,315 - CentralACGan - INFO - Benign validity - Mean: 0.6918, Min: 0.4030, Max: 0.8429
+2025-10-06 02:06:39,316 - CentralACGan - INFO - Attack validity - Mean: 0.6077, Min: 0.3869, Max: 0.9219
+2025-10-06 02:06:39,317 - CentralACGan - INFO - Benign class predictions (first 5): [[3.4247423e-03 9.9657518e-01]
+ [1.8392387e-03 9.9816078e-01]
+ [1.8653168e-03 9.9813461e-01]
+ [3.4385300e-03 9.9656147e-01]
+ [6.4467470e-04 9.9935538e-01]]
+2025-10-06 02:06:39,318 - CentralACGan - INFO - Attack class predictions (first 5): [[2.1358784e-09 1.0000000e+00]
+ [2.7237978e-02 9.7276199e-01]
+ [2.1248301e-09 1.0000000e+00]
+ [2.1630966e-09 1.0000000e+00]
+ [2.9464602e-04 9.9970537e-01]]
+2025-10-06 02:06:39,319 - CentralACGan - INFO - Benign data - Mean: 0.1862, Std: 0.3676
+2025-10-06 02:06:39,321 - CentralACGan - INFO - Attack data - Mean: 0.1558, Std: 0.3255
+2025-10-06 02:06:39,343 - CentralACGan - INFO - Validation data distribution: Benign 0.50, Attack 0.50
+2025-10-06 02:06:39,343 - CentralACGan - INFO - Validation Discriminator Evaluation:
+2025-10-06 02:06:39,343 - CentralACGan - INFO - Weighted Total Loss: 0.9075
+2025-10-06 02:06:39,381 - CentralACGan - INFO - Validation Generator Evaluation:
+2025-10-06 02:06:39,381 - CentralACGan - INFO - Total Loss: 0.1798, Validity Loss: 0.1794, Class Loss: 0.0003
+2025-10-06 02:06:39,381 - CentralACGan - INFO - Generator Fooling Rate: 0.00%
+2025-10-06 02:06:39,381 - CentralACGan - INFO - Class Categorical Accuracy: 99.99%
+2025-10-06 02:06:39,381 - CentralACGan - INFO - === Probabilistic Fusion Validation on Real Data ===
+2500/2500 [==============================] - 4s 2ms/step
+2025-10-06 02:06:46,679 - CentralACGan - INFO - Predicted Class Distribution: {'valid_attack': 65253, 'invalid_attack': 11455, 'valid_benign': 1629, 'invalid_benign': 1663}
+2025-10-06 02:06:46,930 - CentralACGan - INFO - True Class Distribution: {'valid_benign': 40000, 'valid_attack': 40000}
+2025-10-06 02:06:46,930 - CentralACGan - INFO - Accuracy: 0.3859
+2025-10-06 02:06:46,943 - CentralACGan - INFO - Probabilistic Fusion Accuracy: 38.59%
+2025-10-06 02:06:46,943 - CentralACGan - INFO - Predicted Class Distribution: {'valid_attack': 65253, 'invalid_attack': 11455, 'valid_benign': 1629, 'invalid_benign': 1663}
+2025-10-06 02:06:46,943 - CentralACGan - INFO - === Epoch 13 Metrics Summary ===
+2025-10-06 02:06:46,943 - CentralACGan - INFO - Discriminator Metrics:
+2025-10-06 02:06:46,943 - CentralACGan - INFO -   Total Loss: 2.8810
+2025-10-06 02:06:46,943 - CentralACGan - INFO -   Benign Loss: 5.2909
+2025-10-06 02:06:46,943 - CentralACGan - INFO -   Attack Loss: 0.5532
+2025-10-06 02:06:46,943 - CentralACGan - INFO -   Fake Loss: 1.8130
+2025-10-06 02:06:46,943 - CentralACGan - INFO -   Validity Loss: 1.1439
+2025-10-06 02:06:46,943 - CentralACGan - INFO -   Class Loss: 0.7499
+2025-10-06 02:06:46,943 - CentralACGan - INFO -   Benign Validity Acc: 92.95%
+2025-10-06 02:06:46,943 - CentralACGan - INFO -   Attack Validity Acc: 74.25%
+2025-10-06 02:06:46,943 - CentralACGan - INFO -   Fake Validity Acc: 0.00%
+2025-10-06 02:06:46,943 - CentralACGan - INFO -   Benign Class Acc: 7.05%
+2025-10-06 02:06:46,943 - CentralACGan - INFO -   Attack Class Acc: 98.82%
+2025-10-06 02:06:46,943 - CentralACGan - INFO -   Fake Class Acc: 99.99%
+2025-10-06 02:06:46,944 - CentralACGan - INFO - Generator Metrics:
+2025-10-06 02:06:46,944 - CentralACGan - INFO -   Total Loss: 0.1798
+2025-10-06 02:06:46,944 - CentralACGan - INFO -   Validity Loss: 0.1794
+2025-10-06 02:06:46,944 - CentralACGan - INFO -   Class Loss: 0.0003
+2025-10-06 02:06:46,944 - CentralACGan - INFO -   Generator Fooling Rate: 0.00%
+2025-10-06 02:06:46,944 - CentralACGan - INFO -   Class Categorical Accuracy: 99.99%
+2025-10-06 02:06:46,944 - CentralACGan - INFO - Probabilistic Fusion Metrics:
+2025-10-06 02:06:46,944 - CentralACGan - INFO -   accuracy: 0.385875
+2025-10-06 02:06:46,944 - CentralACGan - INFO -   total_samples: 80000
+2025-10-06 02:06:46,944 - CentralACGan - INFO -   correct_predictions: 30870
+2025-10-06 02:06:46,944 - CentralACGan - INFO -   predicted_class_distribution: {'valid_attack': 65253, 'invalid_attack': 11455, 'valid_benign': 1629, 'invalid_benign': 1663}
+2025-10-06 02:06:46,944 - CentralACGan - INFO -   correct_class_distribution: {'valid_attack': 29471, 'valid_benign': 1399}
+2025-10-06 02:06:46,944 - CentralACGan - INFO -   true_class_distribution: {'valid_benign': 40000, 'valid_attack': 40000}
+2025-10-06 02:06:46,944 - CentralACGan - INFO - ==================================================
+
+=== Epoch 14/15 ===
+
+2025-10-06 02:06:46,944 - CentralACGan - INFO - === Epoch 14/15 ===
+Step 0/62 - D loss: 1.2170, G loss: 0.2649
+Step 6/62 - D loss: 1.2167, G loss: 0.2654
+Step 12/62 - D loss: 1.2170, G loss: 0.2733
+Step 18/62 - D loss: 1.2163, G loss: 0.2858
+Step 24/62 - D loss: 1.2167, G loss: 0.2773
+Step 30/62 - D loss: 1.2157, G loss: 0.2888
+Step 36/62 - D loss: 1.2153, G loss: 0.2858
+Step 42/62 - D loss: 1.2148, G loss: 0.2881
+Step 48/62 - D loss: 1.2144, G loss: 0.3031
+Step 54/62 - D loss: 1.2146, G loss: 0.3020
+Step 60/62 - D loss: 1.2145, G loss: 0.3138
+2025-10-06 02:07:52,977 - CentralACGan - INFO - Epoch 14 Summary:
+2025-10-06 02:07:52,978 - CentralACGan - INFO - Discriminator Average Loss: 1.2157
+2025-10-06 02:07:52,978 - CentralACGan - INFO - Generator Loss: 0.2892
+2025-10-06 02:07:52,978 - CentralACGan - INFO - Generator Fooling Rate: 100.00%
+2025-10-06 02:07:52,978 - CentralACGan - INFO - Generator Class Accuracy: 97.80%
+2025-10-06 02:07:52,978 - CentralACGan - INFO - === Epoch 14 Validation ===
+2025-10-06 02:07:53,057 - CentralACGan - INFO - === DIAGNOSTIC: Discriminator Predictions ===
+2025-10-06 02:07:53,058 - CentralACGan - INFO - Benign validity - Mean: 0.6698, Min: 0.3892, Max: 0.8221
+2025-10-06 02:07:53,058 - CentralACGan - INFO - Attack validity - Mean: 0.6101, Min: 0.4235, Max: 0.9192
+2025-10-06 02:07:53,060 - CentralACGan - INFO - Benign class predictions (first 5): [[3.4542455e-04 9.9965453e-01]
+ [3.0901092e-03 9.9690992e-01]
+ [2.5750080e-03 9.9742508e-01]
+ [4.7575156e-04 9.9952424e-01]
+ [3.2654142e-03 9.9673456e-01]]
+2025-10-06 02:07:53,060 - CentralACGan - INFO - Attack class predictions (first 5): [[8.1959195e-10 1.0000000e+00]
+ [4.6378933e-03 9.9536210e-01]
+ [8.0661611e-10 1.0000000e+00]
+ [8.2457818e-10 1.0000000e+00]
+ [2.0263638e-04 9.9979740e-01]]
+2025-10-06 02:07:53,062 - CentralACGan - INFO - Benign data - Mean: 0.1862, Std: 0.3676
+2025-10-06 02:07:53,063 - CentralACGan - INFO - Attack data - Mean: 0.1558, Std: 0.3255
+2025-10-06 02:07:53,085 - CentralACGan - INFO - Validation data distribution: Benign 0.50, Attack 0.50
+2025-10-06 02:07:53,085 - CentralACGan - INFO - Validation Discriminator Evaluation:
+2025-10-06 02:07:53,085 - CentralACGan - INFO - Weighted Total Loss: 0.9019
+2025-10-06 02:07:53,123 - CentralACGan - INFO - Validation Generator Evaluation:
+2025-10-06 02:07:53,123 - CentralACGan - INFO - Total Loss: 0.2477, Validity Loss: 0.2475, Class Loss: 0.0001
+2025-10-06 02:07:53,123 - CentralACGan - INFO - Generator Fooling Rate: 0.00%
+2025-10-06 02:07:53,123 - CentralACGan - INFO - Class Categorical Accuracy: 100.00%
+2025-10-06 02:07:53,123 - CentralACGan - INFO - === Probabilistic Fusion Validation on Real Data ===
+2500/2500 [==============================] - 5s 2ms/step
+2025-10-06 02:08:00,959 - CentralACGan - INFO - Predicted Class Distribution: {'valid_attack': 66733, 'invalid_attack': 8578, 'valid_benign': 2804, 'invalid_benign': 1885}
+2025-10-06 02:08:01,205 - CentralACGan - INFO - True Class Distribution: {'valid_benign': 40000, 'valid_attack': 40000}
+2025-10-06 02:08:01,205 - CentralACGan - INFO - Accuracy: 0.4508
+2025-10-06 02:08:01,218 - CentralACGan - INFO - Probabilistic Fusion Accuracy: 45.08%
+2025-10-06 02:08:01,218 - CentralACGan - INFO - Predicted Class Distribution: {'valid_attack': 66733, 'invalid_attack': 8578, 'valid_benign': 2804, 'invalid_benign': 1885}
+2025-10-06 02:08:01,218 - CentralACGan - INFO - === Epoch 14 Metrics Summary ===
+2025-10-06 02:08:01,218 - CentralACGan - INFO - Discriminator Metrics:
+2025-10-06 02:08:01,219 - CentralACGan - INFO -   Total Loss: 2.9143
+2025-10-06 02:08:01,219 - CentralACGan - INFO -   Benign Loss: 5.8397
+2025-10-06 02:08:01,219 - CentralACGan - INFO -   Attack Loss: 0.5671
+2025-10-06 02:08:01,219 - CentralACGan - INFO -   Fake Loss: 1.5309
+2025-10-06 02:08:01,219 - CentralACGan - INFO -   Validity Loss: 1.0099
+2025-10-06 02:08:01,219 - CentralACGan - INFO -   Class Loss: 0.8300
+2025-10-06 02:08:01,219 - CentralACGan - INFO -   Benign Validity Acc: 90.11%
+2025-10-06 02:08:01,219 - CentralACGan - INFO -   Attack Validity Acc: 83.74%
+2025-10-06 02:08:01,219 - CentralACGan - INFO -   Fake Validity Acc: 0.00%
+2025-10-06 02:08:01,219 - CentralACGan - INFO -   Benign Class Acc: 10.34%
+2025-10-06 02:08:01,219 - CentralACGan - INFO -   Attack Class Acc: 98.62%
+2025-10-06 02:08:01,219 - CentralACGan - INFO -   Fake Class Acc: 100.00%
+2025-10-06 02:08:01,219 - CentralACGan - INFO - Generator Metrics:
+2025-10-06 02:08:01,219 - CentralACGan - INFO -   Total Loss: 0.2477
+2025-10-06 02:08:01,219 - CentralACGan - INFO -   Validity Loss: 0.2475
+2025-10-06 02:08:01,219 - CentralACGan - INFO -   Class Loss: 0.0001
+2025-10-06 02:08:01,219 - CentralACGan - INFO -   Generator Fooling Rate: 0.00%
+2025-10-06 02:08:01,219 - CentralACGan - INFO -   Class Categorical Accuracy: 100.00%
+2025-10-06 02:08:01,219 - CentralACGan - INFO - Probabilistic Fusion Metrics:
+2025-10-06 02:08:01,219 - CentralACGan - INFO -   accuracy: 0.4508
+2025-10-06 02:08:01,219 - CentralACGan - INFO -   total_samples: 80000
+2025-10-06 02:08:01,219 - CentralACGan - INFO -   correct_predictions: 36064
+2025-10-06 02:08:01,220 - CentralACGan - INFO -   predicted_class_distribution: {'valid_attack': 66733, 'invalid_attack': 8578, 'valid_benign': 2804, 'invalid_benign': 1885}
+2025-10-06 02:08:01,220 - CentralACGan - INFO -   correct_class_distribution: {'valid_attack': 33377, 'valid_benign': 2687}
+2025-10-06 02:08:01,220 - CentralACGan - INFO -   true_class_distribution: {'valid_benign': 40000, 'valid_attack': 40000}
+2025-10-06 02:08:01,220 - CentralACGan - INFO - ==================================================
+
+=== Epoch 15/15 ===
+
+2025-10-06 02:08:01,220 - CentralACGan - INFO - === Epoch 15/15 ===
+Step 0/62 - D loss: 1.2137, G loss: 0.3181
+Step 6/62 - D loss: 1.2135, G loss: 0.3191
+Step 12/62 - D loss: 1.2138, G loss: 0.3324
+Step 18/62 - D loss: 1.2134, G loss: 0.3372
+Step 24/62 - D loss: 1.2133, G loss: 0.3408
+Step 30/62 - D loss: 1.2131, G loss: 0.3362
+Step 36/62 - D loss: 1.2123, G loss: 0.3437
+Step 42/62 - D loss: 1.2137, G loss: 0.3339
+Step 48/62 - D loss: 1.2129, G loss: 0.3578
+Step 54/62 - D loss: 1.2125, G loss: 0.3424
+Step 60/62 - D loss: 1.2143, G loss: 0.3612
+2025-10-06 02:09:03,764 - CentralACGan - INFO - Epoch 15 Summary:
+2025-10-06 02:09:03,765 - CentralACGan - INFO - Discriminator Average Loss: 1.2133
+2025-10-06 02:09:03,765 - CentralACGan - INFO - Generator Loss: 0.3390
+2025-10-06 02:09:03,765 - CentralACGan - INFO - Generator Fooling Rate: 100.00%
+2025-10-06 02:09:03,765 - CentralACGan - INFO - Generator Class Accuracy: 97.91%
+2025-10-06 02:09:03,765 - CentralACGan - INFO - === Epoch 15 Validation ===
+2025-10-06 02:09:03,846 - CentralACGan - INFO - === DIAGNOSTIC: Discriminator Predictions ===
+2025-10-06 02:09:03,847 - CentralACGan - INFO - Benign validity - Mean: 0.6627, Min: 0.3845, Max: 0.7528
+2025-10-06 02:09:03,847 - CentralACGan - INFO - Attack validity - Mean: 0.5726, Min: 0.3386, Max: 0.9262
+2025-10-06 02:09:03,849 - CentralACGan - INFO - Benign class predictions (first 5): [[1.3178504e-03 9.9868208e-01]
+ [8.1593805e-04 9.9918407e-01]
+ [7.6162373e-04 9.9923837e-01]
+ [1.8307884e-03 9.9816918e-01]
+ [8.5182686e-04 9.9914813e-01]]
+2025-10-06 02:09:03,849 - CentralACGan - INFO - Attack class predictions (first 5): [[2.4266217e-10 1.0000000e+00]
+ [2.2710131e-03 9.9772900e-01]
+ [2.3962016e-10 1.0000000e+00]
+ [2.4400720e-10 1.0000000e+00]
+ [4.0574607e-05 9.9995947e-01]]
+2025-10-06 02:09:03,851 - CentralACGan - INFO - Benign data - Mean: 0.1862, Std: 0.3676
+2025-10-06 02:09:03,852 - CentralACGan - INFO - Attack data - Mean: 0.1558, Std: 0.3255
+2025-10-06 02:09:03,874 - CentralACGan - INFO - Validation data distribution: Benign 0.50, Attack 0.50
+2025-10-06 02:09:03,874 - CentralACGan - INFO - Validation Discriminator Evaluation:
+2025-10-06 02:09:03,874 - CentralACGan - INFO - Weighted Total Loss: 0.8972
+2025-10-06 02:09:03,912 - CentralACGan - INFO - Validation Generator Evaluation:
+2025-10-06 02:09:03,912 - CentralACGan - INFO - Total Loss: 0.2965, Validity Loss: 0.2936, Class Loss: 0.0029
+2025-10-06 02:09:03,912 - CentralACGan - INFO - Generator Fooling Rate: 0.00%
+2025-10-06 02:09:03,912 - CentralACGan - INFO - Class Categorical Accuracy: 99.95%
+2025-10-06 02:09:03,912 - CentralACGan - INFO - === Probabilistic Fusion Validation on Real Data ===
+2500/2500 [==============================] - 4s 2ms/step
+2025-10-06 02:09:11,174 - CentralACGan - INFO - Predicted Class Distribution: {'valid_attack': 60522, 'invalid_attack': 16201, 'valid_benign': 1434, 'invalid_benign': 1843}
+2025-10-06 02:09:11,427 - CentralACGan - INFO - True Class Distribution: {'valid_benign': 40000, 'valid_attack': 40000}
+2025-10-06 02:09:11,428 - CentralACGan - INFO - Accuracy: 0.3434
+2025-10-06 02:09:11,440 - CentralACGan - INFO - Probabilistic Fusion Accuracy: 34.34%
+2025-10-06 02:09:11,440 - CentralACGan - INFO - Predicted Class Distribution: {'valid_attack': 60522, 'invalid_attack': 16201, 'valid_benign': 1434, 'invalid_benign': 1843}
+2025-10-06 02:09:11,441 - CentralACGan - INFO - === Epoch 15 Metrics Summary ===
+2025-10-06 02:09:11,441 - CentralACGan - INFO - Discriminator Metrics:
+2025-10-06 02:09:11,441 - CentralACGan - INFO -   Total Loss: 2.9364
+2025-10-06 02:09:11,441 - CentralACGan - INFO -   Benign Loss: 6.0679
+2025-10-06 02:09:11,441 - CentralACGan - INFO -   Attack Loss: 0.6025
+2025-10-06 02:09:11,441 - CentralACGan - INFO -   Fake Loss: 1.3886
+2025-10-06 02:09:11,441 - CentralACGan - INFO -   Validity Loss: 0.9600
+2025-10-06 02:09:11,441 - CentralACGan - INFO -   Class Loss: 0.8554
+2025-10-06 02:09:11,441 - CentralACGan - INFO -   Benign Validity Acc: 89.63%
+2025-10-06 02:09:11,441 - CentralACGan - INFO -   Attack Validity Acc: 65.26%
+2025-10-06 02:09:11,441 - CentralACGan - INFO -   Fake Validity Acc: 0.00%
+2025-10-06 02:09:11,441 - CentralACGan - INFO -   Benign Class Acc: 7.03%
+2025-10-06 02:09:11,441 - CentralACGan - INFO -   Attack Class Acc: 98.83%
+2025-10-06 02:09:11,441 - CentralACGan - INFO -   Fake Class Acc: 99.96%
+2025-10-06 02:09:11,441 - CentralACGan - INFO - Generator Metrics:
+2025-10-06 02:09:11,441 - CentralACGan - INFO -   Total Loss: 0.2965
+2025-10-06 02:09:11,441 - CentralACGan - INFO -   Validity Loss: 0.2936
+2025-10-06 02:09:11,441 - CentralACGan - INFO -   Class Loss: 0.0029
+2025-10-06 02:09:11,441 - CentralACGan - INFO -   Generator Fooling Rate: 0.00%
+2025-10-06 02:09:11,441 - CentralACGan - INFO -   Class Categorical Accuracy: 99.95%
+2025-10-06 02:09:11,441 - CentralACGan - INFO - Probabilistic Fusion Metrics:
+2025-10-06 02:09:11,442 - CentralACGan - INFO -   accuracy: 0.3433875
+2025-10-06 02:09:11,442 - CentralACGan - INFO -   total_samples: 80000
+2025-10-06 02:09:11,442 - CentralACGan - INFO -   correct_predictions: 27471
+2025-10-06 02:09:11,442 - CentralACGan - INFO -   predicted_class_distribution: {'valid_attack': 60522, 'invalid_attack': 16201, 'valid_benign': 1434, 'invalid_benign': 1843}
+2025-10-06 02:09:11,442 - CentralACGan - INFO -   correct_class_distribution: {'valid_attack': 26070, 'valid_benign': 1401}
+2025-10-06 02:09:11,442 - CentralACGan - INFO -   true_class_distribution: {'valid_benign': 40000, 'valid_attack': 40000}
+2025-10-06 02:09:11,442 - CentralACGan - INFO - ==================================================
+2025-10-06 02:09:11,443 - CentralACGan - INFO - -- Evaluating Discriminator --
+2025-10-06 02:09:11,470 - CentralACGan - INFO - Test Data Distribution: 40000 Benign (0.50), 40000 Attack (0.50)
+2025-10-06 02:09:11,506 - CentralACGan - INFO - Benign Test -> Total Loss: 6.0732, Validity Loss: 0.4339, Class Loss: 5.6393, Validity Accuracy: 89.75%, Class Accuracy: 7.06%
+2025-10-06 02:09:11,512 - CentralACGan - INFO - Attack Test -> Total Loss: 0.6006, Validity Loss: 0.5755, Class Loss: 0.0250, Validity Accuracy: 65.44%, Class Accuracy: 98.87%
+2025-10-06 02:09:11,522 - CentralACGan - INFO - Fake Test -> Total Loss: 1.3890, Validity Loss: 1.3859, Class Loss: 0.0031, Validity Accuracy: 0.00%, Class Accuracy: 99.95%
+2025-10-06 02:09:11,522 - CentralACGan - INFO - Weighted Total Discriminator Loss: 0.8975
+2025-10-06 02:09:11,522 - CentralACGan - INFO - -- Evaluating Generator --
+2025-10-06 02:09:11,560 - CentralACGan - INFO - Generator Total Loss: 0.2964 | Validity Loss: 0.2935 | Class Loss: 0.0028
+2025-10-06 02:09:11,560 - CentralACGan - INFO - Generator Fooling Rate: 0.00%
+2025-10-06 02:09:11,560 - CentralACGan - INFO - Class Categorical Accuracy: 99.97%
+2025-10-06 02:09:11,560 - CentralACGan - INFO - -- Evaluating Probabilistic Fusion --
+2500/2500 [==============================] - 5s 2ms/step
+2025-10-06 02:09:19,057 - CentralACGan - INFO - Predicted Class Distribution: {'valid_attack': 60597, 'invalid_attack': 16127, 'valid_benign': 1483, 'invalid_benign': 1793}
+2025-10-06 02:09:19,308 - CentralACGan - INFO - True Class Distribution: {'valid_benign': 40000, 'valid_attack': 40000}
+2025-10-06 02:09:19,308 - CentralACGan - INFO - Accuracy: 0.3450
+2025-10-06 02:09:19,321 - CentralACGan - INFO - Probabilistic Fusion Accuracy: 34.50%
+2025-10-06 02:09:19,321 - CentralACGan - INFO - Predicted Class Distribution: {'valid_attack': 60597, 'invalid_attack': 16127, 'valid_benign': 1483, 'invalid_benign': 1793}
+2025-10-06 02:09:19,321 - CentralACGan - INFO - === Evaluation Metrics Summary ===
+2025-10-06 02:09:19,321 - CentralACGan - INFO - Discriminator Evaluation:
+2025-10-06 02:09:19,321 - CentralACGan - INFO -   Total Loss: 2.9369
+2025-10-06 02:09:19,321 - CentralACGan - INFO -   Benign Loss: 6.0732
+2025-10-06 02:09:19,321 - CentralACGan - INFO -   Attack Loss: 0.6006
+2025-10-06 02:09:19,321 - CentralACGan - INFO -   Fake Loss: 1.3890
+2025-10-06 02:09:19,321 - CentralACGan - INFO -   Validity Loss: 0.9595
+2025-10-06 02:09:19,322 - CentralACGan - INFO -   Class Loss: 0.8562
+2025-10-06 02:09:19,322 - CentralACGan - INFO -   Benign Validity Acc: 89.75%
+2025-10-06 02:09:19,322 - CentralACGan - INFO -   Attack Validity Acc: 65.44%
+2025-10-06 02:09:19,322 - CentralACGan - INFO -   Fake Validity Acc: 0.00%
+2025-10-06 02:09:19,322 - CentralACGan - INFO -   Benign Class Acc: 7.06%
+2025-10-06 02:09:19,322 - CentralACGan - INFO -   Attack Class Acc: 98.87%
+2025-10-06 02:09:19,322 - CentralACGan - INFO -   Fake Class Acc: 99.95%
+2025-10-06 02:09:19,322 - CentralACGan - INFO - Generator Evaluation:
+2025-10-06 02:09:19,322 - CentralACGan - INFO -   Loss: 0.2964
+2025-10-06 02:09:19,322 - CentralACGan - INFO -   Validity Loss: 0.2935
+2025-10-06 02:09:19,322 - CentralACGan - INFO -   Class Loss: 0.0028
+2025-10-06 02:09:19,322 - CentralACGan - INFO -   Generator Fooling Rate: 0.00%
+2025-10-06 02:09:19,322 - CentralACGan - INFO -   Class Categorical Accuracy: 99.97%
+2025-10-06 02:09:19,322 - CentralACGan - INFO - Probabilistic Fusion Evaluation:
+2025-10-06 02:09:19,322 - CentralACGan - INFO -   accuracy: 0.3450375
+2025-10-06 02:09:19,322 - CentralACGan - INFO -   total_samples: 80000
+2025-10-06 02:09:19,322 - CentralACGan - INFO -   correct_predictions: 27603
+2025-10-06 02:09:19,322 - CentralACGan - INFO -   predicted_class_distribution: {'valid_attack': 60597, 'invalid_attack': 16127, 'valid_benign': 1483, 'invalid_benign': 1793}
+2025-10-06 02:09:19,322 - CentralACGan - INFO -   correct_class_distribution: {'valid_attack': 26149, 'valid_benign': 1454}
+2025-10-06 02:09:19,322 - CentralACGan - INFO -   true_class_distribution: {'valid_benign': 40000, 'valid_attack': 40000}
+2025-10-06 02:09:19,322 - CentralACGan - INFO - ==================================================

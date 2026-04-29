@@ -1,0 +1,771 @@
+=== (CICIOT) Train & Test Attack Data Loaded (Attack Data already Combined) ===
+
+Training Data Sample:
+        flow_duration  Header_Length  Protocol Type  Duration        Rate  ...    Radius  Covariance  Variance  Weight   label
+232821            0.0            0.0           0.99     63.36   32.323800  ...  0.422565    1.278821      0.07  141.55  Attack
+192642            0.0            0.0           1.00     64.00    4.716463  ...  0.000000    0.000000      0.00  141.55  Attack
+212796            0.0            0.0           1.00     64.00  116.069958  ...  0.000000    0.000000      0.00  141.55  Attack
+34787             0.0            0.0           1.00     64.00   50.512787  ...  0.000000    0.000000      0.00  141.55  Attack
+101824            0.0            0.0           1.00     64.00    3.571713  ...  0.000000    0.000000      0.00  141.55  Attack
+
+[5 rows x 47 columns]
+Testing Data Sample:
+     flow_duration  Header_Length  Protocol Type  Duration        Rate  ...       Radius    Covariance  Variance  Weight   label
+6         1.920231       336224.2            6.0      64.0  129.931358  ...  1227.053653  7.554403e+05       1.0   244.6  Benign
+109      24.405015      2263677.1            6.0     215.2   78.142617  ...    88.763426  5.714054e+03       0.7    38.5  Benign
+186      36.878332      2390788.4            6.0     114.5   66.377461  ...   796.811510  3.969384e+05       0.8    38.5  Benign
+195      16.924883      1196308.0            6.0      80.8   69.867527  ...   699.172150  3.106056e+05       0.8    38.5  Benign
+209      22.695491      1099887.3            6.0     147.5   84.939281  ...  2675.233986  4.018613e+06       0.9    38.5  Benign
+
+[5 rows x 47 columns]
+
+=== Selecting Features for CICIOT ===
+
+=== Features Selected ===
+
+=== Encoding ===
+
+
+First instance of Benign:
+Protocol Type            7.1
+Duration                82.7
+Rate               45.533328
+Drate                    0.0
+fin_flag_number          0.0
+syn_flag_number          0.0
+psh_flag_number          0.0
+HTTP                     0.0
+HTTPS                    1.0
+DNS                      0.0
+Telnet                   0.0
+SMTP                     0.0
+SSH                      0.0
+IRC                      0.0
+TCP                      1.0
+UDP                      0.0
+DHCP                     0.0
+ARP                      0.0
+ICMP                     0.0
+IPv                      1.0
+IAT                 0.010001
+label                 Benign
+Name: 214934, dtype: object
+
+First instance of Attack:
+Protocol Type                  6.0
+Duration                     65.91
+Rate                     13.205748
+Drate                          0.0
+fin_flag_number                0.0
+syn_flag_number                0.0
+psh_flag_number                0.0
+HTTP                           0.0
+HTTPS                          0.0
+DNS                            0.0
+Telnet                         0.0
+SMTP                           0.0
+SSH                            0.0
+IRC                            0.0
+TCP                            1.0
+UDP                            0.0
+DHCP                           0.0
+ARP                            0.0
+ICMP                           0.0
+IPv                            1.0
+IAT                83067290.462827
+label                       Attack
+Name: 1225, dtype: object
+
+label
+Benign    200000
+Attack    200000
+Name: count, dtype: int64
+
+
+Label mappings: {0: 'Benign', 1: 'Attack'}
+
+label
+0    200000
+1    200000
+Name: count, dtype: int64
+
+
+=== Labels Encoded ===
+
+
+=== Normalizing ===
+
+
+Training Data Before Normalization:
+        Protocol Type  Duration       Rate  Drate  fin_flag_number  syn_flag_number  ...  DHCP  ARP  ICMP  IPv           IAT  label
+214934            7.1      82.7  45.533328    0.0              0.0              0.0  ...   0.0  0.0   0.0  1.0  1.000090e-02      0
+24168             6.5     111.6   8.834288    0.0              0.0              0.0  ...   0.0  0.0   0.0  1.0  3.114090e-02      0
+170172            7.6      76.4   5.844998    0.0              0.0              0.0  ...   0.0  0.0   0.0  1.0  1.665171e+08      0
+193960            9.3     100.8   0.238667    0.0              0.0              0.0  ...   0.0  0.0   0.0  1.0  1.665195e+08      0
+322808            9.3      88.7  25.069774    0.0              0.0              0.0  ...   0.0  0.0   0.0  1.0  1.743300e-02      0
+
+[5 rows x 22 columns]
+(400000, 22)
+
+Test Data Before Normalization:
+        Protocol Type  Duration        Rate  Drate  fin_flag_number  syn_flag_number  ...  DHCP  ARP  ICMP  IPv           IAT  label
+210524            6.0     130.8  104.951511    0.0              0.0              0.0  ...   0.0  0.0   0.0  1.0  1.665233e+08      0
+175301            6.0     130.8  140.036011    0.0              0.0              0.0  ...   0.0  0.0   0.0  1.0  2.647877e-04      0
+146623            6.0      64.0    0.000000    0.0              0.0              0.0  ...   0.0  0.0   0.0  1.0  8.300283e+07      1
+53323             7.1      98.7   19.241553    0.0              0.0              0.0  ...   0.0  0.0   0.0  1.0  1.665207e+08      0
+195274            6.0      64.0   10.211007    0.0              1.0              0.0  ...   0.0  0.0   0.0  1.0  8.334406e+07      1
+
+[5 rows x 22 columns]
+(80000, 22)
+
+Training Data After Normalization:
+        Protocol Type  Duration          Rate  Drate  fin_flag_number  syn_flag_number  ...  DHCP  ARP  ICMP  IPv           IAT  label
+214934       0.151064  0.324314  6.970137e-06    0.0              0.0              0.0  ...   0.0  0.0   0.0  1.0  5.965731e-11      0
+24168        0.138298  0.437647  1.352332e-06    0.0              0.0              0.0  ...   0.0  0.0   0.0  1.0  1.857616e-10      0
+170172       0.161702  0.299608  8.947389e-07    0.0              0.0              0.0  ...   0.0  0.0   0.0  1.0  9.933071e-01      0
+193960       0.197872  0.395294  3.653453e-08    0.0              0.0              0.0  ...   0.0  0.0   0.0  1.0  9.933218e-01      0
+322808       0.197872  0.347843  3.837623e-06    0.0              0.0              0.0  ...   0.0  0.0   0.0  1.0  1.039913e-10      0
+
+[5 rows x 22 columns]
+(400000, 22)
+
+Min:
+ Protocol Type      0.0
+Duration           0.0
+Rate               0.0
+Drate              0.0
+fin_flag_number    0.0
+syn_flag_number    0.0
+psh_flag_number    0.0
+HTTP               0.0
+HTTPS              0.0
+DNS                0.0
+Telnet             0.0
+SMTP               0.0
+SSH                0.0
+IRC                0.0
+TCP                0.0
+UDP                0.0
+DHCP               0.0
+ARP                0.0
+ICMP               0.0
+IPv                0.0
+IAT                0.0
+label              0.0
+dtype: float64
+Max:
+ Protocol Type      1.0
+Duration           1.0
+Rate               1.0
+Drate              1.0
+fin_flag_number    1.0
+syn_flag_number    1.0
+psh_flag_number    1.0
+HTTP               1.0
+HTTPS              1.0
+DNS                1.0
+Telnet             0.0
+SMTP               0.0
+SSH                1.0
+IRC                0.0
+TCP                1.0
+UDP                1.0
+DHCP               0.0
+ARP                1.0
+ICMP               1.0
+IPv                1.0
+IAT                1.0
+label              1.0
+dtype: float64
+
+Test Data After Normalization:
+        Protocol Type  Duration      Rate  Drate  fin_flag_number  syn_flag_number  ...  DHCP  ARP  ICMP  IPv           IAT  label
+210524       0.127660  0.512941  0.000016    0.0              0.0              0.0  ...   0.0  0.0   0.0  1.0  9.933443e-01      0
+175301       0.127660  0.512941  0.000021    0.0              0.0              0.0  ...   0.0  0.0   0.0  1.0  1.579510e-12      0
+146623       0.127660  0.250980  0.000000    0.0              0.0              0.0  ...   0.0  0.0   0.0  1.0  4.951282e-01      1
+53323        0.151064  0.387059  0.000003    0.0              0.0              0.0  ...   0.0  0.0   0.0  1.0  9.933288e-01      0
+195274       0.127660  0.250980  0.000002    0.0              1.0              0.0  ...   0.0  0.0   0.0  1.0  4.971637e-01      1
+
+[5 rows x 22 columns]
+(80000, 22)
+
+Min:
+ Protocol Type      0.000000e+00
+Duration           0.000000e+00
+Rate               0.000000e+00
+Drate              0.000000e+00
+fin_flag_number    0.000000e+00
+syn_flag_number    0.000000e+00
+psh_flag_number    0.000000e+00
+HTTP               0.000000e+00
+HTTPS              0.000000e+00
+DNS                0.000000e+00
+Telnet             0.000000e+00
+SMTP               0.000000e+00
+SSH                0.000000e+00
+IRC                0.000000e+00
+TCP                0.000000e+00
+UDP                0.000000e+00
+DHCP               0.000000e+00
+ARP                0.000000e+00
+ICMP               0.000000e+00
+IPv                0.000000e+00
+IAT                5.688855e-15
+label              0.000000e+00
+dtype: float64
+Max:
+ Protocol Type      1.000000
+Duration           1.000000
+Rate               0.621188
+Drate              8.815179
+fin_flag_number    1.000000
+syn_flag_number    1.000000
+psh_flag_number    1.000000
+HTTP               1.000000
+HTTPS              1.000000
+DNS                1.000000
+Telnet             0.000000
+SMTP               0.000000
+SSH                0.000000
+IRC                0.000000
+TCP                1.000000
+UDP                1.000000
+DHCP               0.000000
+ARP                1.000000
+ICMP               1.000000
+IPv                1.000000
+IAT                0.999998
+label              1.000000
+dtype: float64
+
+=== Data Normalized ===
+
+
+=== Assigning Data to Models ===
+
+
+Before to_categorical conversion:
+
+y_train_data sample:
+175723    0
+76983     1
+82309     1
+95635     1
+62071     1
+Name: label, dtype: int64
+
+y_val_data sample:
+385517    0
+156504    1
+26567     1
+183594    0
+78548     0
+Name: label, dtype: int64
+
+y_test_data sample:
+210524    0
+175301    0
+146623    1
+53323     0
+195274    1
+Name: label, dtype: int64
+
+After to_categorical conversion:
+
+y_train_categorical shape: (320000, 2)
+Sample of y_train_categorical:
+[[1. 0.]
+ [0. 1.]
+ [0. 1.]
+ [0. 1.]
+ [0. 1.]]
+
+y_val_categorical shape: (80000, 2)
+Sample of y_val_categorical:
+[[1. 0.]
+ [0. 1.]
+ [0. 1.]
+ [1. 0.]
+ [1. 0.]]
+
+y_test_categorical shape: (80000, 2)
+Sample of y_test_categorical:
+[[1. 0.]
+ [1. 0.]
+ [0. 1.]
+ [1. 0.]
+ [0. 1.]]
+
+Training label distribution:
+label
+0    160000
+1    160000
+Name: count, dtype: int64
+
+Validation label distribution:
+label
+0    40000
+1    40000
+Name: count, dtype: int64
+
+Test label distribution:
+label
+0    40000
+1    40000
+Name: count, dtype: int64
+
+=== Data Assigned ===
+
+✅ Dataset Loaded Successfully!
+   • Training samples: 320000
+   • Validation samples: 80000
+   • Test samples: 80000
+
+⚙️  Loading Hyperparameters & Training Configuration...
+✅ Hyperparameters Configured!
+   • Batch Size: 512
+   • Steps per Epoch: 625
+   • Input Dimension: 21
+   • Number of Classes: 2
+   • Latent Dimension: 256
+
+🧠 Creating // Loading Models...
+No pretrained ACGAN provided. Creating a new ACGAN model.
+2025-10-05 21:22:26.602622: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1929] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 15513 MB memory:  -> device: 0, name: Tesla P100-PCIE-16GB, pci bus id: 0000:03:00.0, compute capability: 6.0
+2025-10-05 21:22:26.603152: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1929] Created device /job:localhost/replica:0/task:0/device:GPU:1 with 15513 MB memory:  -> device: 1, name: Tesla P100-PCIE-16GB, pci bus id: 0000:82:00.0, compute capability: 6.0
+
+=== DISCRIMINATOR ARCHITECTURE VERIFICATION ===
+Validity layer initial bias: 1.5
+Expected: 1.5, Actual sigmoid output: 0.8175744414329529
+==============================================
+
+
+=== DISCRIMINATOR ARCHITECTURE VERIFICATION ===
+Validity layer initial bias: 1.5
+Expected: 1.5, Actual sigmoid output: 0.8175744414329529
+==============================================
+
+✅ Models Initialized Successfully!
+
+Discriminator Output: ['validity', 'class']
+Discriminator Outputs: ['validity', 'class']
+2025-10-05 21:22:28,305 - CentralACGan - INFO - === Model Settings ===
+2025-10-05 21:22:28,305 - CentralACGan - INFO - Generator Model Summary:
+2025-10-05 21:22:28,308 - CentralACGan - INFO - Model: "ACGenerator"
+2025-10-05 21:22:28,308 - CentralACGan - INFO - __________________________________________________________________________________________________
+2025-10-05 21:22:28,309 - CentralACGan - INFO -  Layer (type)                Output Shape                 Param #   Connected to
+2025-10-05 21:22:28,309 - CentralACGan - INFO - ==================================================================================================
+2025-10-05 21:22:28,309 - CentralACGan - INFO -  input_2 (InputLayer)        [(None, 1)]                  0         []
+2025-10-05 21:22:28,309 - CentralACGan - INFO -
+2025-10-05 21:22:28,309 - CentralACGan - INFO -  embedding (Embedding)       (None, 1, 256)               512       ['input_2[0][0]']
+2025-10-05 21:22:28,309 - CentralACGan - INFO -
+2025-10-05 21:22:28,309 - CentralACGan - INFO -  input_1 (InputLayer)        [(None, 256)]                0         []
+2025-10-05 21:22:28,309 - CentralACGan - INFO -
+2025-10-05 21:22:28,309 - CentralACGan - INFO -  flatten (Flatten)           (None, 256)                  0         ['embedding[0][0]']
+2025-10-05 21:22:28,309 - CentralACGan - INFO -
+2025-10-05 21:22:28,309 - CentralACGan - INFO -  concatenate (Concatenate)   (None, 512)                  0         ['input_1[0][0]',
+2025-10-05 21:22:28,309 - CentralACGan - INFO -                                                                      'flatten[0][0]']
+2025-10-05 21:22:28,309 - CentralACGan - INFO -
+2025-10-05 21:22:28,309 - CentralACGan - INFO -  dense (Dense)               (None, 256)                  131328    ['concatenate[0][0]']
+2025-10-05 21:22:28,309 - CentralACGan - INFO -
+2025-10-05 21:22:28,309 - CentralACGan - INFO -  batch_normalization (Batch  (None, 256)                  1024      ['dense[0][0]']
+2025-10-05 21:22:28,309 - CentralACGan - INFO -  Normalization)
+2025-10-05 21:22:28,309 - CentralACGan - INFO -
+2025-10-05 21:22:28,309 - CentralACGan - INFO -  leaky_re_lu (LeakyReLU)     (None, 256)                  0         ['batch_normalization[0][0]']
+2025-10-05 21:22:28,309 - CentralACGan - INFO -
+2025-10-05 21:22:28,309 - CentralACGan - INFO -  dense_1 (Dense)             (None, 512)                  131584    ['leaky_re_lu[0][0]']
+2025-10-05 21:22:28,309 - CentralACGan - INFO -
+2025-10-05 21:22:28,309 - CentralACGan - INFO -  batch_normalization_1 (Bat  (None, 512)                  2048      ['dense_1[0][0]']
+2025-10-05 21:22:28,310 - CentralACGan - INFO -  chNormalization)
+2025-10-05 21:22:28,310 - CentralACGan - INFO -
+2025-10-05 21:22:28,310 - CentralACGan - INFO -  leaky_re_lu_1 (LeakyReLU)   (None, 512)                  0         ['batch_normalization_1[0][0]'
+2025-10-05 21:22:28,310 - CentralACGan - INFO -                                                                     ]
+2025-10-05 21:22:28,310 - CentralACGan - INFO -
+2025-10-05 21:22:28,310 - CentralACGan - INFO -  dense_2 (Dense)             (None, 512)                  262656    ['leaky_re_lu_1[0][0]']
+2025-10-05 21:22:28,310 - CentralACGan - INFO -
+2025-10-05 21:22:28,310 - CentralACGan - INFO -  batch_normalization_2 (Bat  (None, 512)                  2048      ['dense_2[0][0]']
+2025-10-05 21:22:28,310 - CentralACGan - INFO -  chNormalization)
+2025-10-05 21:22:28,310 - CentralACGan - INFO -
+2025-10-05 21:22:28,310 - CentralACGan - INFO -  leaky_re_lu_2 (LeakyReLU)   (None, 512)                  0         ['batch_normalization_2[0][0]'
+2025-10-05 21:22:28,310 - CentralACGan - INFO -                                                                     ]
+2025-10-05 21:22:28,310 - CentralACGan - INFO -
+2025-10-05 21:22:28,310 - CentralACGan - INFO -  dense_3 (Dense)             (None, 256)                  131328    ['leaky_re_lu_2[0][0]']
+2025-10-05 21:22:28,310 - CentralACGan - INFO -
+2025-10-05 21:22:28,310 - CentralACGan - INFO -  batch_normalization_3 (Bat  (None, 256)                  1024      ['dense_3[0][0]']
+2025-10-05 21:22:28,310 - CentralACGan - INFO -  chNormalization)
+2025-10-05 21:22:28,310 - CentralACGan - INFO -
+2025-10-05 21:22:28,310 - CentralACGan - INFO -  leaky_re_lu_3 (LeakyReLU)   (None, 256)                  0         ['batch_normalization_3[0][0]'
+2025-10-05 21:22:28,310 - CentralACGan - INFO -                                                                     ]
+2025-10-05 21:22:28,310 - CentralACGan - INFO -
+2025-10-05 21:22:28,310 - CentralACGan - INFO -  dense_4 (Dense)             (None, 21)                   5397      ['leaky_re_lu_3[0][0]']
+2025-10-05 21:22:28,310 - CentralACGan - INFO -
+2025-10-05 21:22:28,311 - CentralACGan - INFO - ==================================================================================================
+2025-10-05 21:22:28,311 - CentralACGan - INFO - Total params: 668949 (2.55 MB)
+2025-10-05 21:22:28,311 - CentralACGan - INFO - Trainable params: 665877 (2.54 MB)
+2025-10-05 21:22:28,311 - CentralACGan - INFO - Non-trainable params: 3072 (12.00 KB)
+2025-10-05 21:22:28,311 - CentralACGan - INFO - __________________________________________________________________________________________________
+2025-10-05 21:22:28,311 - CentralACGan - INFO - Discriminator Model Summary:
+2025-10-05 21:22:28,313 - CentralACGan - INFO - Model: "Discriminator"
+2025-10-05 21:22:28,313 - CentralACGan - INFO - __________________________________________________________________________________________________
+2025-10-05 21:22:28,313 - CentralACGan - INFO -  Layer (type)                Output Shape                 Param #   Connected to
+2025-10-05 21:22:28,313 - CentralACGan - INFO - ==================================================================================================
+2025-10-05 21:22:28,313 - CentralACGan - INFO -  input_3 (InputLayer)        [(None, 21)]                 0         []
+2025-10-05 21:22:28,313 - CentralACGan - INFO -
+2025-10-05 21:22:28,313 - CentralACGan - INFO -  dense_5 (Dense)             (None, 512)                  11264     ['input_3[0][0]']
+2025-10-05 21:22:28,314 - CentralACGan - INFO -
+2025-10-05 21:22:28,314 - CentralACGan - INFO -  leaky_re_lu_4 (LeakyReLU)   (None, 512)                  0         ['dense_5[0][0]']
+2025-10-05 21:22:28,314 - CentralACGan - INFO -
+2025-10-05 21:22:28,314 - CentralACGan - INFO -  dropout (Dropout)           (None, 512)                  0         ['leaky_re_lu_4[0][0]']
+2025-10-05 21:22:28,314 - CentralACGan - INFO -
+2025-10-05 21:22:28,314 - CentralACGan - INFO -  dense_6 (Dense)             (None, 256)                  131328    ['dropout[0][0]']
+2025-10-05 21:22:28,314 - CentralACGan - INFO -
+2025-10-05 21:22:28,314 - CentralACGan - INFO -  leaky_re_lu_5 (LeakyReLU)   (None, 256)                  0         ['dense_6[0][0]']
+2025-10-05 21:22:28,314 - CentralACGan - INFO -
+2025-10-05 21:22:28,314 - CentralACGan - INFO -  dropout_1 (Dropout)         (None, 256)                  0         ['leaky_re_lu_5[0][0]']
+2025-10-05 21:22:28,314 - CentralACGan - INFO -
+2025-10-05 21:22:28,314 - CentralACGan - INFO -  dense_7 (Dense)             (None, 128)                  32896     ['dropout_1[0][0]']
+2025-10-05 21:22:28,314 - CentralACGan - INFO -
+2025-10-05 21:22:28,314 - CentralACGan - INFO -  batch_normalization_4 (Bat  (None, 128)                  512       ['dense_7[0][0]']
+2025-10-05 21:22:28,314 - CentralACGan - INFO -  chNormalization)
+2025-10-05 21:22:28,314 - CentralACGan - INFO -
+2025-10-05 21:22:28,314 - CentralACGan - INFO -  leaky_re_lu_6 (LeakyReLU)   (None, 128)                  0         ['batch_normalization_4[0][0]'
+2025-10-05 21:22:28,314 - CentralACGan - INFO -                                                                     ]
+2025-10-05 21:22:28,315 - CentralACGan - INFO -
+2025-10-05 21:22:28,315 - CentralACGan - INFO -  dense_8 (Dense)             (None, 64)                   8256      ['leaky_re_lu_6[0][0]']
+2025-10-05 21:22:28,315 - CentralACGan - INFO -
+2025-10-05 21:22:28,315 - CentralACGan - INFO -  dense_9 (Dense)             (None, 64)                   8256      ['leaky_re_lu_6[0][0]']
+2025-10-05 21:22:28,315 - CentralACGan - INFO -
+2025-10-05 21:22:28,315 - CentralACGan - INFO -  leaky_re_lu_7 (LeakyReLU)   (None, 64)                   0         ['dense_8[0][0]']
+2025-10-05 21:22:28,315 - CentralACGan - INFO -
+2025-10-05 21:22:28,315 - CentralACGan - INFO -  leaky_re_lu_8 (LeakyReLU)   (None, 64)                   0         ['dense_9[0][0]']
+2025-10-05 21:22:28,315 - CentralACGan - INFO -
+2025-10-05 21:22:28,315 - CentralACGan - INFO -  dropout_2 (Dropout)         (None, 64)                   0         ['leaky_re_lu_7[0][0]']
+2025-10-05 21:22:28,315 - CentralACGan - INFO -
+2025-10-05 21:22:28,315 - CentralACGan - INFO -  dropout_3 (Dropout)         (None, 64)                   0         ['leaky_re_lu_8[0][0]']
+2025-10-05 21:22:28,315 - CentralACGan - INFO -
+2025-10-05 21:22:28,315 - CentralACGan - INFO -  validity (Dense)            (None, 1)                    65        ['dropout_2[0][0]']
+2025-10-05 21:22:28,315 - CentralACGan - INFO -
+2025-10-05 21:22:28,315 - CentralACGan - INFO -  class (Dense)               (None, 2)                    130       ['dropout_3[0][0]']
+2025-10-05 21:22:28,315 - CentralACGan - INFO -
+2025-10-05 21:22:28,315 - CentralACGan - INFO - ==================================================================================================
+2025-10-05 21:22:28,315 - CentralACGan - INFO - Total params: 192707 (752.76 KB)
+2025-10-05 21:22:28,315 - CentralACGan - INFO - Trainable params: 192451 (751.76 KB)
+2025-10-05 21:22:28,315 - CentralACGan - INFO - Non-trainable params: 256 (1.00 KB)
+2025-10-05 21:22:28,315 - CentralACGan - INFO - __________________________________________________________________________________________________
+2025-10-05 21:22:28,316 - CentralACGan - INFO - NIDS Model is not defined.
+2025-10-05 21:22:28,316 - CentralACGan - INFO - --- Hyperparameters ---
+2025-10-05 21:22:28,316 - CentralACGan - INFO - Batch Size: 512
+2025-10-05 21:22:28,316 - CentralACGan - INFO - Noise Dimension: 100
+2025-10-05 21:22:28,316 - CentralACGan - INFO - Latent Dimension: 256
+2025-10-05 21:22:28,316 - CentralACGan - INFO - Number of Classes: 2
+2025-10-05 21:22:28,316 - CentralACGan - INFO - Input Dimension: 21
+2025-10-05 21:22:28,316 - CentralACGan - INFO - Epochs: 3
+2025-10-05 21:22:28,316 - CentralACGan - INFO - Steps per Epoch: 625
+2025-10-05 21:22:28,317 - CentralACGan - INFO - Learning Rate (Generator): <tf.Variable 'current_learning_rate:0' shape=() dtype=float32, numpy=0.00012>
+2025-10-05 21:22:28,317 - CentralACGan - INFO - Learning Rate (Discriminator): <tf.Variable 'current_learning_rate:0' shape=() dtype=float32, numpy=7e-05>
+2025-10-05 21:22:28,318 - CentralACGan - INFO - ==================================================
+2025-10-05 21:22:28,318 - CentralACGan - INFO - Training with discriminator-to-generator ratio: 1:1
+2025-10-05 21:22:28,318 - CentralACGan - INFO - CRITICAL FIX: Using custom training loops with separate optimizers
+2025-10-05 21:22:28,318 - CentralACGan - INFO - Generator training uses discriminator with training=False to prevent BatchNorm corruption
+2025-10-05 21:22:28,318 - CentralACGan - INFO - This addresses the mode collapse issue by ensuring BatchNorm statistics isolation
+2025-10-05 21:22:28,329 - CentralACGan - INFO - Using valid label smoothing with factor: 0.12
+2025-10-05 21:22:28,329 - CentralACGan - INFO - Using fake label smoothing with factor: 0.1
+2025-10-05 21:22:28,329 - CentralACGan - INFO - Using gen label smoothing with factor: 0.05
+
+=== Epoch 1/3 ===
+
+2025-10-05 21:22:28,329 - CentralACGan - INFO - === Epoch 1/3 ===
+2025-10-05 21:22:32.361234: I external/local_xla/xla/service/service.cc:168] XLA service 0x7fbdb673bde0 initialized for platform CUDA (this does not guarantee that XLA will be used). Devices:
+2025-10-05 21:22:32.361271: I external/local_xla/xla/service/service.cc:176]   StreamExecutor device (0): Tesla P100-PCIE-16GB, Compute Capability 6.0
+2025-10-05 21:22:32.361280: I external/local_xla/xla/service/service.cc:176]   StreamExecutor device (1): Tesla P100-PCIE-16GB, Compute Capability 6.0
+2025-10-05 21:22:32.367433: I tensorflow/compiler/mlir/tensorflow/utils/dump_mlir_util.cc:269] disabling MLIR crash reproducer, set env var `MLIR_CRASH_REPRODUCER_DIRECTORY` to enable.
+2025-10-05 21:22:32.388517: I external/local_xla/xla/stream_executor/cuda/cuda_dnn.cc:454] Loaded cuDNN version 8902
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1759699352.472586 1157073 device_compiler.h:186] Compiled cluster using XLA!  This line is logged at most once for the lifetime of the process.
+Step 0/625 - D loss: 4.7406, G loss: 1.9679
+Step 62/625 - D loss: 2.3866, G loss: 1.2583
+Step 124/625 - D loss: 1.9196, G loss: 1.5642
+Step 186/625 - D loss: 1.6849, G loss: 1.2795
+Step 248/625 - D loss: 1.5531, G loss: 1.3267
+Step 310/625 - D loss: 1.5034, G loss: 1.3247
+Step 372/625 - D loss: 1.4087, G loss: 1.2198
+Step 434/625 - D loss: 1.3956, G loss: 0.9905
+Step 496/625 - D loss: 1.4193, G loss: 0.8517
+Step 558/625 - D loss: 1.4327, G loss: 0.8071
+Step 620/625 - D loss: 1.4375, G loss: 0.7992
+2025-10-05 21:24:07,785 - CentralACGan - INFO - Epoch 1 Summary:
+2025-10-05 21:24:07,785 - CentralACGan - INFO - Discriminator Average Loss: 1.7487
+2025-10-05 21:24:07,786 - CentralACGan - INFO - Generator Loss: 1.2130
+2025-10-05 21:24:07,786 - CentralACGan - INFO - Generator Fooling Rate: 100.00%
+2025-10-05 21:24:07,786 - CentralACGan - INFO - Generator Class Accuracy: 96.39%
+2025-10-05 21:24:07,786 - CentralACGan - INFO - === DIAGNOSTIC: Training Data Check ===
+2025-10-05 21:24:07,825 - CentralACGan - INFO - Training data validity - Mean: 0.0074, Min: 0.0044, Max: 0.0158
+2025-10-05 21:24:07,830 - CentralACGan - INFO - Training data - Mean: 0.1721, Std: 0.3480
+2025-10-05 21:24:07,834 - CentralACGan - INFO - Training class predictions (first 5): [[9.99190748e-01 8.09210993e-04]
+ [9.98305798e-01 1.69418147e-03]
+ [8.93105984e-01 1.06893949e-01]
+ [8.90834093e-01 1.09165855e-01]
+ [9.93651867e-01 6.34815823e-03]]
+2025-10-05 21:24:07,850 - CentralACGan - INFO - PRE-VALIDITY DENSE activations - Mean: 0.6594, Std: 1.1927
+2025-10-05 21:24:07,852 - CentralACGan - INFO - PRE-SIGMOID logits - Mean: -4.9737, Min: -5.4207, Max: -4.1313
+2025-10-05 21:24:07,853 - CentralACGan - INFO - Reference: sigmoid(0) = 0.5, sigmoid(-3) = 0.0474, sigmoid(-5) = 0.0067
+2025-10-05 21:24:07,855 - CentralACGan - WARNING - WARNING: Pre-sigmoid logits are very negative (mean=-4.9737) - sigmoid is saturated!
+2025-10-05 21:24:07,855 - CentralACGan - INFO - === Epoch 1 Validation ===
+2025-10-05 21:24:07,943 - CentralACGan - INFO - === DIAGNOSTIC: Discriminator Predictions ===
+2025-10-05 21:24:07,944 - CentralACGan - INFO - Benign validity - Mean: 0.0095, Min: 0.0049, Max: 0.0156
+2025-10-05 21:24:07,944 - CentralACGan - INFO - Attack validity - Mean: 0.0061, Min: 0.0044, Max: 0.0157
+2025-10-05 21:24:07,945 - CentralACGan - INFO - Benign class predictions (first 5): [[8.3965629e-01 1.6034372e-01]
+ [9.9972981e-01 2.7021032e-04]
+ [9.9970871e-01 2.9125006e-04]
+ [8.4091812e-01 1.5908186e-01]
+ [9.9978667e-01 2.1328068e-04]]
+2025-10-05 21:24:07,946 - CentralACGan - INFO - Attack class predictions (first 5): [[0.8908563  0.10914365]
+ [0.99678457 0.0032154 ]
+ [0.88972044 0.11027955]
+ [0.8892034  0.11079654]
+ [0.9933274  0.00667257]]
+2025-10-05 21:24:07,950 - CentralACGan - INFO - Benign data - Mean: 0.1862, Std: 0.3676
+2025-10-05 21:24:07,951 - CentralACGan - INFO - Attack data - Mean: 0.1558, Std: 0.3255
+2025-10-05 21:24:08,504 - CentralACGan - INFO - Validation data distribution: Benign 0.50, Attack 0.50
+2025-10-05 21:24:08,504 - CentralACGan - INFO - Validation Discriminator Evaluation:
+2025-10-05 21:24:08,504 - CentralACGan - INFO - Weighted Total Loss: 2.1391
+2025-10-05 21:24:08,894 - CentralACGan - INFO - Validation Generator Evaluation:
+2025-10-05 21:24:08,894 - CentralACGan - INFO - Total Loss: 0.7548, Validity Loss: 0.7130, Class Loss: 0.0419
+2025-10-05 21:24:08,894 - CentralACGan - INFO - Generator Fooling Rate: 53.64%
+2025-10-05 21:24:08,894 - CentralACGan - INFO - Class Categorical Accuracy: 100.00%
+2025-10-05 21:24:08,894 - CentralACGan - INFO - === Probabilistic Fusion Validation on Real Data ===
+2500/2500 [==============================] - 5s 2ms/step
+2025-10-05 21:24:17,528 - CentralACGan - INFO - Predicted Class Distribution: {'invalid_benign': 79971, 'invalid_attack': 29}
+2025-10-05 21:24:17,781 - CentralACGan - INFO - True Class Distribution: {'valid_benign': 40000, 'valid_attack': 40000}
+2025-10-05 21:24:17,781 - CentralACGan - INFO - Accuracy: 0.0000
+2025-10-05 21:24:17,794 - CentralACGan - INFO - Probabilistic Fusion Accuracy: 0.00%
+2025-10-05 21:24:17,794 - CentralACGan - INFO - Predicted Class Distribution: {'invalid_benign': 79971, 'invalid_attack': 29}
+2025-10-05 21:24:17,795 - CentralACGan - INFO - === Epoch 1 Metrics Summary ===
+2025-10-05 21:24:17,795 - CentralACGan - INFO - Discriminator Metrics:
+2025-10-05 21:24:17,795 - CentralACGan - INFO -   Total Loss: 8.6556
+2025-10-05 21:24:17,795 - CentralACGan - INFO -   Benign Loss: 4.8220
+2025-10-05 21:24:17,795 - CentralACGan - INFO -   Attack Loss: 9.7805
+2025-10-05 21:24:17,795 - CentralACGan - INFO -   Fake Loss: 0.7253
+2025-10-05 21:24:17,795 - CentralACGan - INFO -   Validity Loss: 2.8318
+2025-10-05 21:24:17,795 - CentralACGan - INFO -   Class Loss: 1.6774
+2025-10-05 21:24:17,795 - CentralACGan - INFO -   Benign Validity Acc: 0.00%
+2025-10-05 21:24:17,795 - CentralACGan - INFO -   Attack Validity Acc: 0.00%
+2025-10-05 21:24:17,795 - CentralACGan - INFO -   Fake Validity Acc: 53.46%
+2025-10-05 21:24:17,795 - CentralACGan - INFO -   Benign Class Acc: 100.00%
+2025-10-05 21:24:17,795 - CentralACGan - INFO -   Attack Class Acc: 0.07%
+2025-10-05 21:24:17,795 - CentralACGan - INFO -   Fake Class Acc: 100.00%
+2025-10-05 21:24:17,795 - CentralACGan - INFO - Generator Metrics:
+2025-10-05 21:24:17,795 - CentralACGan - INFO -   Total Loss: 0.7548
+2025-10-05 21:24:17,796 - CentralACGan - INFO -   Validity Loss: 0.7130
+2025-10-05 21:24:17,796 - CentralACGan - INFO -   Class Loss: 0.0419
+2025-10-05 21:24:17,796 - CentralACGan - INFO -   Generator Fooling Rate: 53.64%
+2025-10-05 21:24:17,796 - CentralACGan - INFO -   Class Categorical Accuracy: 100.00%
+2025-10-05 21:24:17,796 - CentralACGan - INFO - Probabilistic Fusion Metrics:
+2025-10-05 21:24:17,796 - CentralACGan - INFO -   accuracy: 0.0
+2025-10-05 21:24:17,796 - CentralACGan - INFO -   total_samples: 80000
+2025-10-05 21:24:17,796 - CentralACGan - INFO -   correct_predictions: 0
+2025-10-05 21:24:17,796 - CentralACGan - INFO -   predicted_class_distribution: {'invalid_benign': 79971, 'invalid_attack': 29}
+2025-10-05 21:24:17,796 - CentralACGan - INFO -   correct_class_distribution: {}
+2025-10-05 21:24:17,796 - CentralACGan - INFO -   true_class_distribution: {'valid_benign': 40000, 'valid_attack': 40000}
+2025-10-05 21:24:17,796 - CentralACGan - INFO - ==================================================
+
+=== Epoch 2/3 ===
+
+2025-10-05 21:24:17,796 - CentralACGan - INFO - === Epoch 2/3 ===
+Step 0/625 - D loss: 1.6148, G loss: 0.8310
+Step 62/625 - D loss: 1.4163, G loss: 0.9385
+Step 124/625 - D loss: 1.3242, G loss: 0.6980
+Step 186/625 - D loss: 1.2797, G loss: 0.5364
+Step 248/625 - D loss: 1.2023, G loss: 0.5689
+Step 310/625 - D loss: 1.1403, G loss: 0.4951
+Step 372/625 - D loss: 1.1707, G loss: 0.7037
+Step 434/625 - D loss: 1.2335, G loss: 0.6928
+Step 496/625 - D loss: 1.3323, G loss: 0.7233
+Step 558/625 - D loss: 1.2290, G loss: 0.7161
+Step 620/625 - D loss: 1.2365, G loss: 0.6423
+2025-10-05 21:25:48,708 - CentralACGan - INFO - Epoch 2 Summary:
+2025-10-05 21:25:48,709 - CentralACGan - INFO - Discriminator Average Loss: 1.2759
+2025-10-05 21:25:48,709 - CentralACGan - INFO - Generator Loss: 0.7278
+2025-10-05 21:25:48,709 - CentralACGan - INFO - Generator Fooling Rate: 100.00%
+2025-10-05 21:25:48,709 - CentralACGan - INFO - Generator Class Accuracy: 98.19%
+2025-10-05 21:25:48,709 - CentralACGan - INFO - === Epoch 2 Validation ===
+2025-10-05 21:25:48,800 - CentralACGan - INFO - === DIAGNOSTIC: Discriminator Predictions ===
+2025-10-05 21:25:48,801 - CentralACGan - INFO - Benign validity - Mean: 0.0143, Min: 0.0058, Max: 0.0230
+2025-10-05 21:25:48,802 - CentralACGan - INFO - Attack validity - Mean: 0.0058, Min: 0.0040, Max: 0.0104
+2025-10-05 21:25:48,803 - CentralACGan - INFO - Benign class predictions (first 5): [[1.1674791e-02 9.8832524e-01]
+ [9.9999666e-01 3.3662259e-06]
+ [9.9999702e-01 3.0272142e-06]
+ [1.0932996e-02 9.8906708e-01]
+ [9.9999726e-01 2.7926949e-06]]
+2025-10-05 21:25:48,804 - CentralACGan - INFO - Attack class predictions (first 5): [[9.9970943e-01 2.9054482e-04]
+ [9.9999940e-01 6.5168507e-07]
+ [9.9970466e-01 2.9528179e-04]
+ [9.9970216e-01 2.9786277e-04]
+ [9.9977297e-01 2.2710054e-04]]
+2025-10-05 21:25:48,806 - CentralACGan - INFO - Benign data - Mean: 0.1862, Std: 0.3676
+2025-10-05 21:25:48,807 - CentralACGan - INFO - Attack data - Mean: 0.1558, Std: 0.3255
+2025-10-05 21:25:48,830 - CentralACGan - INFO - Validation data distribution: Benign 0.50, Attack 0.50
+2025-10-05 21:25:48,830 - CentralACGan - INFO - Validation Discriminator Evaluation:
+2025-10-05 21:25:48,830 - CentralACGan - INFO - Weighted Total Loss: 3.6516
+2025-10-05 21:25:48,868 - CentralACGan - INFO - Validation Generator Evaluation:
+2025-10-05 21:25:48,868 - CentralACGan - INFO - Total Loss: 0.6020, Validity Loss: 0.5616, Class Loss: 0.0405
+2025-10-05 21:25:48,868 - CentralACGan - INFO - Generator Fooling Rate: 0.00%
+2025-10-05 21:25:48,868 - CentralACGan - INFO - Class Categorical Accuracy: 100.00%
+2025-10-05 21:25:48,868 - CentralACGan - INFO - === Probabilistic Fusion Validation on Real Data ===
+2500/2500 [==============================] - 5s 2ms/step
+2025-10-05 21:25:56,457 - CentralACGan - INFO - Predicted Class Distribution: {'invalid_attack': 14280, 'invalid_benign': 65720}
+2025-10-05 21:25:56,709 - CentralACGan - INFO - True Class Distribution: {'valid_benign': 40000, 'valid_attack': 40000}
+2025-10-05 21:25:56,710 - CentralACGan - INFO - Accuracy: 0.0000
+2025-10-05 21:25:56,723 - CentralACGan - INFO - Probabilistic Fusion Accuracy: 0.00%
+2025-10-05 21:25:56,723 - CentralACGan - INFO - Predicted Class Distribution: {'invalid_attack': 14280, 'invalid_benign': 65720}
+2025-10-05 21:25:56,723 - CentralACGan - INFO - === Epoch 2 Metrics Summary ===
+2025-10-05 21:25:56,723 - CentralACGan - INFO - Discriminator Metrics:
+2025-10-05 21:25:56,723 - CentralACGan - INFO -   Total Loss: 13.6474
+2025-10-05 21:25:56,723 - CentralACGan - INFO -   Benign Loss: 5.9329
+2025-10-05 21:25:56,723 - CentralACGan - INFO -   Attack Loss: 16.3208
+2025-10-05 21:25:56,723 - CentralACGan - INFO -   Fake Loss: 0.8859
+2025-10-05 21:25:56,723 - CentralACGan - INFO -   Validity Loss: 2.8775
+2025-10-05 21:25:56,723 - CentralACGan - INFO -   Class Loss: 4.1676
+2025-10-05 21:25:56,723 - CentralACGan - INFO -   Benign Validity Acc: 0.00%
+2025-10-05 21:25:56,723 - CentralACGan - INFO -   Attack Validity Acc: 0.00%
+2025-10-05 21:25:56,724 - CentralACGan - INFO -   Fake Validity Acc: 0.00%
+2025-10-05 21:25:56,724 - CentralACGan - INFO -   Benign Class Acc: 65.13%
+2025-10-05 21:25:56,724 - CentralACGan - INFO -   Attack Class Acc: 0.83%
+2025-10-05 21:25:56,724 - CentralACGan - INFO -   Fake Class Acc: 100.00%
+2025-10-05 21:25:56,724 - CentralACGan - INFO - Generator Metrics:
+2025-10-05 21:25:56,724 - CentralACGan - INFO -   Total Loss: 0.6020
+2025-10-05 21:25:56,724 - CentralACGan - INFO -   Validity Loss: 0.5616
+2025-10-05 21:25:56,724 - CentralACGan - INFO -   Class Loss: 0.0405
+2025-10-05 21:25:56,724 - CentralACGan - INFO -   Generator Fooling Rate: 0.00%
+2025-10-05 21:25:56,724 - CentralACGan - INFO -   Class Categorical Accuracy: 100.00%
+2025-10-05 21:25:56,724 - CentralACGan - INFO - Probabilistic Fusion Metrics:
+2025-10-05 21:25:56,724 - CentralACGan - INFO -   accuracy: 0.0
+2025-10-05 21:25:56,724 - CentralACGan - INFO -   total_samples: 80000
+2025-10-05 21:25:56,724 - CentralACGan - INFO -   correct_predictions: 0
+2025-10-05 21:25:56,724 - CentralACGan - INFO -   predicted_class_distribution: {'invalid_attack': 14280, 'invalid_benign': 65720}
+2025-10-05 21:25:56,724 - CentralACGan - INFO -   correct_class_distribution: {}
+2025-10-05 21:25:56,724 - CentralACGan - INFO -   true_class_distribution: {'valid_benign': 40000, 'valid_attack': 40000}
+2025-10-05 21:25:56,724 - CentralACGan - INFO - ==================================================
+
+=== Epoch 3/3 ===
+
+2025-10-05 21:25:56,724 - CentralACGan - INFO - === Epoch 3/3 ===
+Step 0/625 - D loss: 1.6925, G loss: 0.8728
+Step 62/625 - D loss: 1.1006, G loss: 0.5077
+Step 124/625 - D loss: 1.0656, G loss: 0.4080
+Step 186/625 - D loss: 1.0550, G loss: 0.3985
+Step 248/625 - D loss: 1.0350, G loss: 0.3815
+Step 310/625 - D loss: 1.0315, G loss: 0.3591
+Step 372/625 - D loss: 1.1829, G loss: 0.7650
+Step 434/625 - D loss: 1.3003, G loss: 0.6235
+Step 496/625 - D loss: 1.1471, G loss: 0.6391
+Step 558/625 - D loss: 1.0292, G loss: 0.5970
+Step 620/625 - D loss: 1.2571, G loss: 0.5627
+2025-10-05 21:27:21,061 - CentralACGan - INFO - Epoch 3 Summary:
+2025-10-05 21:27:21,061 - CentralACGan - INFO - Discriminator Average Loss: 1.1219
+2025-10-05 21:27:21,061 - CentralACGan - INFO - Generator Loss: 0.5667
+2025-10-05 21:27:21,062 - CentralACGan - INFO - Generator Fooling Rate: 100.00%
+2025-10-05 21:27:21,062 - CentralACGan - INFO - Generator Class Accuracy: 98.80%
+2025-10-05 21:27:21,062 - CentralACGan - INFO - === Epoch 3 Validation ===
+2025-10-05 21:27:21,150 - CentralACGan - INFO - === DIAGNOSTIC: Discriminator Predictions ===
+2025-10-05 21:27:21,151 - CentralACGan - INFO - Benign validity - Mean: 0.0170, Min: 0.0012, Max: 0.0269
+2025-10-05 21:27:21,152 - CentralACGan - INFO - Attack validity - Mean: 0.0061, Min: 0.0016, Max: 0.0168
+2025-10-05 21:27:21,153 - CentralACGan - INFO - Benign class predictions (first 5): [[1.4201149e-02 9.8579884e-01]
+ [1.0000000e+00 2.3820944e-13]
+ [1.0000000e+00 2.6515351e-13]
+ [1.1137420e-02 9.8886257e-01]
+ [1.0000000e+00 2.4766083e-13]]
+2025-10-05 21:27:21,154 - CentralACGan - INFO - Attack class predictions (first 5): [[9.9839729e-01 1.6027450e-03]
+ [1.0000000e+00 3.0432909e-12]
+ [9.9831969e-01 1.6802568e-03]
+ [9.9833637e-01 1.6636287e-03]
+ [9.9999988e-01 9.5130282e-08]]
+2025-10-05 21:27:21,155 - CentralACGan - INFO - Benign data - Mean: 0.1862, Std: 0.3676
+2025-10-05 21:27:21,156 - CentralACGan - INFO - Attack data - Mean: 0.1558, Std: 0.3255
+2025-10-05 21:27:21,178 - CentralACGan - INFO - Validation data distribution: Benign 0.50, Attack 0.50
+2025-10-05 21:27:21,178 - CentralACGan - INFO - Validation Discriminator Evaluation:
+2025-10-05 21:27:21,179 - CentralACGan - INFO - Weighted Total Loss: 5.4167
+2025-10-05 21:27:21,216 - CentralACGan - INFO - Validation Generator Evaluation:
+2025-10-05 21:27:21,216 - CentralACGan - INFO - Total Loss: 0.5060, Validity Loss: 0.4814, Class Loss: 0.0246
+2025-10-05 21:27:21,216 - CentralACGan - INFO - Generator Fooling Rate: 0.00%
+2025-10-05 21:27:21,216 - CentralACGan - INFO - Class Categorical Accuracy: 100.00%
+2025-10-05 21:27:21,216 - CentralACGan - INFO - === Probabilistic Fusion Validation on Real Data ===
+2500/2500 [==============================] - 5s 2ms/step
+2025-10-05 21:27:29,277 - CentralACGan - INFO - Predicted Class Distribution: {'invalid_attack': 14705, 'invalid_benign': 65295}
+2025-10-05 21:27:29,531 - CentralACGan - INFO - True Class Distribution: {'valid_benign': 40000, 'valid_attack': 40000}
+2025-10-05 21:27:29,531 - CentralACGan - INFO - Accuracy: 0.0000
+2025-10-05 21:27:29,545 - CentralACGan - INFO - Probabilistic Fusion Accuracy: 0.00%
+2025-10-05 21:27:29,545 - CentralACGan - INFO - Predicted Class Distribution: {'invalid_attack': 14705, 'invalid_benign': 65295}
+2025-10-05 21:27:29,545 - CentralACGan - INFO - === Epoch 3 Metrics Summary ===
+2025-10-05 21:27:29,545 - CentralACGan - INFO - Discriminator Metrics:
+2025-10-05 21:27:29,545 - CentralACGan - INFO -   Total Loss: 19.5592
+2025-10-05 21:27:29,545 - CentralACGan - INFO -   Benign Loss: 5.8617
+2025-10-05 21:27:29,545 - CentralACGan - INFO -   Attack Loss: 24.7235
+2025-10-05 21:27:29,545 - CentralACGan - INFO -   Fake Loss: 0.9885
+2025-10-05 21:27:29,545 - CentralACGan - INFO -   Validity Loss: 2.9968
+2025-10-05 21:27:29,545 - CentralACGan - INFO -   Class Loss: 7.0300
+2025-10-05 21:27:29,545 - CentralACGan - INFO -   Benign Validity Acc: 0.00%
+2025-10-05 21:27:29,545 - CentralACGan - INFO -   Attack Validity Acc: 0.00%
+2025-10-05 21:27:29,545 - CentralACGan - INFO -   Fake Validity Acc: 0.00%
+2025-10-05 21:27:29,545 - CentralACGan - INFO -   Benign Class Acc: 65.13%
+2025-10-05 21:27:29,545 - CentralACGan - INFO -   Attack Class Acc: 1.90%
+2025-10-05 21:27:29,545 - CentralACGan - INFO -   Fake Class Acc: 100.00%
+2025-10-05 21:27:29,545 - CentralACGan - INFO - Generator Metrics:
+2025-10-05 21:27:29,545 - CentralACGan - INFO -   Total Loss: 0.5060
+2025-10-05 21:27:29,546 - CentralACGan - INFO -   Validity Loss: 0.4814
+2025-10-05 21:27:29,546 - CentralACGan - INFO -   Class Loss: 0.0246
+2025-10-05 21:27:29,546 - CentralACGan - INFO -   Generator Fooling Rate: 0.00%
+2025-10-05 21:27:29,546 - CentralACGan - INFO -   Class Categorical Accuracy: 100.00%
+2025-10-05 21:27:29,546 - CentralACGan - INFO - Probabilistic Fusion Metrics:
+2025-10-05 21:27:29,546 - CentralACGan - INFO -   accuracy: 0.0
+2025-10-05 21:27:29,546 - CentralACGan - INFO -   total_samples: 80000
+2025-10-05 21:27:29,546 - CentralACGan - INFO -   correct_predictions: 0
+2025-10-05 21:27:29,546 - CentralACGan - INFO -   predicted_class_distribution: {'invalid_attack': 14705, 'invalid_benign': 65295}
+2025-10-05 21:27:29,546 - CentralACGan - INFO -   correct_class_distribution: {}
+2025-10-05 21:27:29,546 - CentralACGan - INFO -   true_class_distribution: {'valid_benign': 40000, 'valid_attack': 40000}
+2025-10-05 21:27:29,546 - CentralACGan - INFO - ==================================================
+2025-10-05 21:27:29,547 - CentralACGan - INFO - -- Evaluating Discriminator --
+2025-10-05 21:27:29,577 - CentralACGan - INFO - Test Data Distribution: 40000 Benign (0.50), 40000 Attack (0.50)
+2025-10-05 21:27:29,613 - CentralACGan - INFO - Benign Test -> Total Loss: 5.8862, Validity Loss: 4.2666, Class Loss: 1.6196, Validity Accuracy: 0.00%, Class Accuracy: 64.56%
+2025-10-05 21:27:29,618 - CentralACGan - INFO - Attack Test -> Total Loss: 24.7053, Validity Loss: 5.3543, Class Loss: 19.3510, Validity Accuracy: 0.00%, Class Accuracy: 1.76%
+2025-10-05 21:27:29,628 - CentralACGan - INFO - Fake Test -> Total Loss: 0.9885, Validity Loss: 0.9639, Class Loss: 0.0246, Validity Accuracy: 0.00%, Class Accuracy: 100.00%
+2025-10-05 21:27:29,629 - CentralACGan - INFO - Weighted Total Discriminator Loss: 5.4152
+2025-10-05 21:27:29,629 - CentralACGan - INFO - -- Evaluating Generator --
+2025-10-05 21:27:29,666 - CentralACGan - INFO - Generator Total Loss: 0.5060 | Validity Loss: 0.4814 | Class Loss: 0.0246
+2025-10-05 21:27:29,666 - CentralACGan - INFO - Generator Fooling Rate: 0.00%
+2025-10-05 21:27:29,666 - CentralACGan - INFO - Class Categorical Accuracy: 100.00%
+2025-10-05 21:27:29,666 - CentralACGan - INFO - -- Evaluating Probabilistic Fusion --
+2500/2500 [==============================] - 5s 2ms/step
+2025-10-05 21:27:37,660 - CentralACGan - INFO - Predicted Class Distribution: {'invalid_benign': 65120, 'invalid_attack': 14880}
+2025-10-05 21:27:37,919 - CentralACGan - INFO - True Class Distribution: {'valid_benign': 40000, 'valid_attack': 40000}
+2025-10-05 21:27:37,920 - CentralACGan - INFO - Accuracy: 0.0000
+2025-10-05 21:27:37,932 - CentralACGan - INFO - Probabilistic Fusion Accuracy: 0.00%
+2025-10-05 21:27:37,933 - CentralACGan - INFO - Predicted Class Distribution: {'invalid_benign': 65120, 'invalid_attack': 14880}
+2025-10-05 21:27:37,933 - CentralACGan - INFO - === Evaluation Metrics Summary ===
+2025-10-05 21:27:37,933 - CentralACGan - INFO - Discriminator Evaluation:
+2025-10-05 21:27:37,933 - CentralACGan - INFO -   Total Loss: 19.5538
+2025-10-05 21:27:37,933 - CentralACGan - INFO -   Benign Loss: 5.8862
+2025-10-05 21:27:37,933 - CentralACGan - INFO -   Attack Loss: 24.7053
+2025-10-05 21:27:37,933 - CentralACGan - INFO -   Fake Loss: 0.9885
+2025-10-05 21:27:37,933 - CentralACGan - INFO -   Validity Loss: 2.9960
+2025-10-05 21:27:37,933 - CentralACGan - INFO -   Class Loss: 7.0281
+2025-10-05 21:27:37,933 - CentralACGan - INFO -   Benign Validity Acc: 0.00%
+2025-10-05 21:27:37,933 - CentralACGan - INFO -   Attack Validity Acc: 0.00%
+2025-10-05 21:27:37,933 - CentralACGan - INFO -   Fake Validity Acc: 0.00%
+2025-10-05 21:27:37,933 - CentralACGan - INFO -   Benign Class Acc: 64.56%
+2025-10-05 21:27:37,933 - CentralACGan - INFO -   Attack Class Acc: 1.76%
+2025-10-05 21:27:37,933 - CentralACGan - INFO -   Fake Class Acc: 100.00%
+2025-10-05 21:27:37,933 - CentralACGan - INFO - Generator Evaluation:
+2025-10-05 21:27:37,933 - CentralACGan - INFO -   Loss: 0.5060
+2025-10-05 21:27:37,933 - CentralACGan - INFO -   Validity Loss: 0.4814
+2025-10-05 21:27:37,933 - CentralACGan - INFO -   Class Loss: 0.0246
+2025-10-05 21:27:37,933 - CentralACGan - INFO -   Generator Fooling Rate: 0.00%
+2025-10-05 21:27:37,934 - CentralACGan - INFO -   Class Categorical Accuracy: 100.00%
+2025-10-05 21:27:37,934 - CentralACGan - INFO - Probabilistic Fusion Evaluation:
+2025-10-05 21:27:37,934 - CentralACGan - INFO -   accuracy: 0.0
+2025-10-05 21:27:37,934 - CentralACGan - INFO -   total_samples: 80000
+2025-10-05 21:27:37,934 - CentralACGan - INFO -   correct_predictions: 0
+2025-10-05 21:27:37,934 - CentralACGan - INFO -   predicted_class_distribution: {'invalid_benign': 65120, 'invalid_attack': 14880}
+2025-10-05 21:27:37,934 - CentralACGan - INFO -   correct_class_distribution: {}
+2025-10-05 21:27:37,934 - CentralACGan - INFO -   true_class_distribution: {'valid_benign': 40000, 'valid_attack': 40000}
+2025-10-05 21:27:37,934 - CentralACGan - INFO - ==================================================

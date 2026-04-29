@@ -23,7 +23,6 @@ self.ACGAN.compile(
     optimizer=self.gen_optimizer,  # ← Only generator optimizer!
     metrics={...}
 )
-```
 
 **Issue**: When discriminator is later unfrozen, its weights are NOT properly connected to the AC-GAN optimization graph because no recompilation occurs.
 

@@ -1,0 +1,128 @@
+Great question! Let me list the proven, production-standard GAN stabilization techniques that you're NOT currently using, ordered by how
+  conservative/well-established they are:
+
+  Techniques You Should Definitely Add (Very Standard):
+
+  1. Gradient Clipping ⭐⭐⭐ (Highest Priority)
+
+  What it is: Limit the magnitude of gradients during backpropagation
+
+  Why it helps: Prevents exploding gradients that can destabilize training, especially important for the validity branch
+
+  How conservative: Extremely standard - used in almost every production GAN
+
+  Implementation:
+  # In your optimizer setup
+  self.disc_optimizer = Adam(learning_rate=0.0002, clipnorm=1.0)  # Clip by norm
+  self.gen_optimizer = Adam(learning_rate=0.0002, clipnorm=1.0)
+
+  # OR clip by value
+  gradients = tape.gradient(total_loss, self.discriminator.trainable_variables)
+  gradients = [tf.clip_by_value(g, -1.0, 1.0) for g in gradients]  # Clip to [-1, 1]
+
+  Recommendation: Start with clipnorm=1.0 or clipvalue=1.0
+
+  ---
+  2. Spectral Normalization ⭐⭐⭐
+
+  What it is: Normalizes weights to have spectral norm ≤ 1, constraining the Lipschitz constant
+
+  Why it helps: Prevents discriminator from becoming too confident too quickly, stabilizes training dynamics
+
+  How conservative: Very well-established (introduced in 2018, widely adopted)
+
+  Implementation:
+  from tensorflow.keras.layers import Dense
+  from tensorflow_addons.layers import SpectralNormalization
+
+  # Wrap layers in discriminator
+  x = SpectralNormalization(Dense(512))(x)
+
+  Recommendation: Add to discriminator layers only (not generator)
+
+  ---
+  3. Different Learning Rates for D and G ⭐⭐
+
+  What it is: Use lower learning rate for discriminator than generator
+
+  Why it helps: Prevents discriminator from getting too strong too fast
+
+  How conservative: Standard practice (TTUR - Two Time-Scale Update Rule)
+
+  Current state: You're using same LR for both
+
+  Recommendation:
+  self.disc_optimizer = Adam(learning_rate=0.0001)  # Halve discriminator LR
+  self.gen_optimizer = Adam(learning_rate=0.0002)   # Keep generator LR
+
+  ---
+  4. Increase D:G Training Ratio ⭐⭐
+
+  What it is: Train discriminator more steps per generator step
+
+  Why it helps: Gives discriminator more opportunities to learn, provides better gradient signal to generator
+
+  Current state: You appear to have this already (d_to_g_ratio variable)
+
+  Recommendation: Check your current ratio and consider increasing to 3:1 or 5:1 if it's lower
+
+  ---
+  Moderately Conservative Techniques:
+
+  5. Gradient Penalty (WGAN-GP style) ⭐⭐
+
+  What it is: Add penalty term to encourage gradients near 1
+
+  Why it helps: Enforces Lipschitz constraint more softly than weight clipping
+
+  How conservative: Well-established for WGAN, less common for standard GANs with BCE loss
+
+  Recommendation: Skip for now since you're using BCE loss, not Wasserstein
+
+  ---
+  6. One-Sided Label Smoothing (which you have) ⭐⭐⭐
+
+  Current state: ✅ You already use this (0.88 for real, 0.10 for fake)
+
+  ---
+  7. Noise Injection to Discriminator Inputs ⭐
+
+  What it is: Add small Gaussian noise to real/fake data before feeding to discriminator
+
+  Why it helps: Prevents discriminator from memorizing, forces it to learn robust features
+
+  How conservative: Somewhat standard but can hurt quality if overdone
+
+  Recommendation: Skip for now, try if other methods don't work
+
+  ---
+  What I Recommend You Try (In Order):
+
+  Priority 1: Gradient Clipping (Easiest, Safest)
+
+  Add to your optimizer initialization:
+  self.disc_optimizer = Adam(learning_rate=self.learning_rate, clipnorm=1.0)
+  self.gen_optimizer = Adam(learning_rate=self.learning_rate, clipnorm=1.0)
+
+  Priority 2: Check/Increase D:G Ratio
+
+  Let me check what your current ratio is:
+
+● Search(pattern: "d_to_g_ratio", path:
+        "Config/ModelTrainingConfig/ClientModelTrainingConfig/CentralTrainingConfig/GAN/FullModel/ACGANCentralTrainingConfig.py", output_mode:
+        "content")
+  ⎿  Found 9 lines (ctrl+o to expand)
+
+● Your current d_to_g_ratio defaults to 1:1 (line 550) and has adaptive logic. For AC-GAN, I'd recommend starting at 3:1 or 5:1.
+
+  Priority 3: Different Learning Rates (TTUR)
+
+  Discriminator: 0.0001, Generator: 0.0002
+
+  ---
+  My Recommended Approach:
+
+  Step 1: Add gradient clipping first (1 line change, very safe)
+  Step 2: Test current training with 0.3x/5.0x weights + gradient clipping
+  Step 3: If still unstable, increase d_to_g_ratio to 3 or 5
+  Step 4: If still issues, try TTUR (different learning rates)
