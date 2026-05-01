@@ -4,19 +4,20 @@ These dataclasses are the wire format between programs. Keep them small,
 serialisable, and free of behaviour — anything fancy belongs in the program
 that owns the lifecycle of the value, not in the dataclass.
 
-Phase 1 only uses:
+Imported types break down into a few groups:
 
-* ``DeviceID`` / ``MuleID`` / ``ServerID``
-* ``DeviceRecord``
-* ``MissionSlice``
-* ``PartialAggregate``
-* ``MissionRoundCloseReport`` (and its line type)
-* ``ContactHistory``
-* ``ClusterAmendment``
-* ``UpBundle`` / ``DownBundle`` (the dock-link payloads)
+* IDs and core records: ``DeviceID``, ``MuleID``, ``ServerID``,
+  ``DeviceRecord``, ``MissionSlice``, ``SpectrumSig``.
+* RF-link messages (Sprint 1+): ``FLReadyAdv``, ``Solicit``,
+  ``DiscPush``, ``ContactWaypoint``, ``DeliveryAck``.
+* Round reports + outcomes: ``MissionRoundCloseReport`` /
+  ``MissionRoundCloseLine``, ``MissionDeliveryReport`` /
+  ``MissionDeliveryLine``, ``ContactHistory`` / ``ContactRecord``,
+  ``MissionOutcome``, ``DeliveryOutcome``.
+* Aggregates + dock payloads: ``PartialAggregate``,
+  ``ClusterAmendment``, ``UpBundle``, ``DownBundle``.
 
-Later phases extend with ``FL_READY_ADV``, ``RoundCloseDelta``,
-``DeviceState``, etc. — added when the phase that needs them lands.
+The full list is in ``__all__`` at the bottom of this module.
 """
 
 from .ids import DeviceID, MuleID, ServerID
@@ -24,14 +25,24 @@ from .registry import DeviceRecord, MissionSlice, SpectrumSig
 from .round_report import (
     ContactHistory,
     ContactRecord,
+    DeliveryOutcome,
+    MissionDeliveryLine,
+    MissionDeliveryReport,
     MissionOutcome,
     MissionRoundCloseReport,
     MissionRoundCloseLine,
 )
-from .aggregate import PartialAggregate, ClusterAmendment, Weights
+from .aggregate import (
+    ClusterAmendment,
+    ClusterPartialUpload,
+    GeneratorRefinement,
+    PartialAggregate,
+    Weights,
+)
 from .bundles import UpBundle, DownBundle
 from .fl_state import FLState
 from .fl_messages import (
+    DeliveryAck,
     FLOpenSolicit,
     FLReadyAdv,
     DiscPush,
@@ -50,7 +61,9 @@ from .scheduler import (
     BUCKET_PRIORITY,
     BeaconObservation,
     Bucket,
+    ContactWaypoint,
     DeviceSchedulerState,
+    MissionPass,
     TargetWaypoint,
 )
 
@@ -66,22 +79,28 @@ __all__ = [
     # round report
     "ContactHistory",
     "ContactRecord",
+    "DeliveryOutcome",
+    "MissionDeliveryLine",
+    "MissionDeliveryReport",
     "MissionOutcome",
     "MissionRoundCloseReport",
     "MissionRoundCloseLine",
     # aggregate
     "PartialAggregate",
     "ClusterAmendment",
+    "ClusterPartialUpload",
+    "GeneratorRefinement",
     "Weights",
     # bundles
     "UpBundle",
     "DownBundle",
-    # FL state + messages (Phase 2)
+    # FL state + messages (Phase 2 + Sprint 1.5)
     "FLState",
     "FLOpenSolicit",
     "FLReadyAdv",
     "DiscPush",
     "GradientSubmission",
+    "DeliveryAck",
     "RoundCloseDelta",
     "weights_signature",
     "weights_byte_count",
@@ -94,6 +113,8 @@ __all__ = [
     "BUCKET_PRIORITY",
     "BeaconObservation",
     "Bucket",
+    "ContactWaypoint",
     "DeviceSchedulerState",
+    "MissionPass",
     "TargetWaypoint",
 ]

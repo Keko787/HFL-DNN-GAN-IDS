@@ -18,7 +18,7 @@ from __future__ import annotations
 import logging
 import threading
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Callable, Dict, Iterable, List, Optional, Protocol, Tuple
 
 import numpy as np
@@ -60,6 +60,20 @@ class GeneratorHost(Protocol):
     def update_disc_from_cluster_avg(self, weights: Weights) -> None:
         """Apply the post-FedAvg discriminator weights into the held global."""
 
+    def apply_tier3_gen_refinement(
+        self, weights: Weights, refinement_round: int = 0
+    ) -> None:
+        """Phase 7: apply a Tier-3-aggregated θ_gen back into the local generator.
+
+        Called by ``ClusterService`` when ``HTTPCloudLink.poll_refinement``
+        returns a fresh :class:`GeneratorRefinement`. The synth-batch
+        generation in subsequent missions then draws from the updated
+        cross-cluster θ_gen instead of the stale local one. Implementations
+        should ignore older ``refinement_round`` numbers (out-of-order
+        delivery from Tier-3) and otherwise replace their generator
+        weights wholesale.
+        """
+
 
 @dataclass
 class StubGeneratorHost:
@@ -72,6 +86,12 @@ class StubGeneratorHost:
 
     disc_weights: Weights
     synth_shape: Tuple[int, ...] = (8,)
+    # Phase 7: held θ_gen so the tier-3 refinement fold has somewhere to land.
+    # The stub doesn't actually use it for synth generation (we still emit
+    # zeros); real GeneratorHost implementations replace this with the
+    # AC-GAN generator weights.
+    gen_weights: Weights = field(default_factory=list)
+    last_refinement_round: int = -1
 
     def make_synth_batch(self, n: int) -> List[np.ndarray]:
         return [np.zeros(self.synth_shape, dtype=np.float32) for _ in range(n)]
@@ -82,6 +102,17 @@ class StubGeneratorHost:
 
     def update_disc_from_cluster_avg(self, weights: Weights) -> None:
         self.disc_weights = [w.copy() for w in weights]
+
+    def apply_tier3_gen_refinement(
+        self, weights: Weights, refinement_round: int = 0
+    ) -> None:
+        if refinement_round < self.last_refinement_round:
+            # Out-of-order Tier-3 delivery — keep the newer state we
+            # already have. Tier-3 is best-effort polled; old packets
+            # can lag a fresh one.
+            return
+        self.gen_weights = [w.copy() for w in weights]
+        self.last_refinement_round = refinement_round
 
 
 # --------------------------------------------------------------------------- #
@@ -96,10 +127,25 @@ class _PendingRound:
     started_at: float
     partials: List[PartialAggregate]
     seen_mules: List[MuleID]
+    # Sprint 1.5 observability: how many devices were UNDELIVERED in the
+    # previous mission's Pass 2 across all docked mules in this cluster
+    # round. Bumped in ``ingest_up_bundle`` whenever a non-empty
+    # ``prev_mission_delivery_report`` arrives.
+    n_undelivered_carryover: int = 0
 
 
 class HFLHostCluster:
-    """Cluster-scope coordinator. One instance per edge server."""
+    """Cluster-scope coordinator. One instance per edge server.
+
+    ``min_participation`` controls how many mules must contribute an
+    UpBundle before ``aggregate_pending`` returns merged weights. The
+    default of 1 implements **partial-FedAvg** — the cluster aggregates
+    as soon as any mule reports, accepting one-round staleness from
+    absent mules. Set to ``len(mules)`` for full-FedAvg semantics
+    (everyone in lockstep, no aggregation until the slowest mule
+    reports). Sprint 2's chunk-L orchestrator surfaces this through
+    ``ClusterConfig.min_participation``.
+    """
 
     def __init__(
         self,
@@ -127,7 +173,15 @@ class HFLHostCluster:
     # -------------------------------------------------------------- registry
 
     def known_mules(self) -> List[MuleID]:
-        """Return the list of mules currently assigned in the registry."""
+        """Return mules **assigned** in the registry (logical assignment).
+
+        This is the planning view — mules the cluster *expects* to dock
+        because they own a slice. It is NOT the connectivity view: a
+        mule that's assigned but currently offline still appears here.
+        For the live-connection set used by Sprint 2's orchestrator
+        re-dispatch logic, use ``TCPDockLinkServer.registered_mules()``
+        instead.
+        """
         return sorted(self.registry.snapshot().by_mule.keys())
 
     # ----------------------------------------------------------- dock ingest
@@ -135,6 +189,14 @@ class HFLHostCluster:
     def ingest_up_bundle(self, bundle: UpBundle) -> None:
         """Accept a mule's mission output. Folds the round-close report
         into per-device counters and parks the partial for cross-mule FedAvg.
+
+        Sprint 1.5: also ingests the optional
+        ``prev_mission_delivery_report`` (Pass-2 ledger from the
+        *previous* mission). For each line, bumps
+        ``DeviceRecord.delivery_priority`` on UNDELIVERED rows and
+        resets it on DELIVERED — design §7 principle 13. The
+        ``n_undelivered_carryover`` metric is bumped so observability
+        can detect Pass-2 coverage degrading.
         """
         with self._lock:
             self._ensure_pending_round()
@@ -159,12 +221,27 @@ class HFLHostCluster:
                     on_time=line.outcome.is_on_time(),
                 )
 
+            # Sprint 1.5 — fold the previous mission's delivery report.
+            n_undelivered = 0
+            if bundle.prev_mission_delivery_report is not None:
+                for line in bundle.prev_mission_delivery_report.lines:
+                    delivered = line.outcome.is_delivered()
+                    self.registry.update_after_delivery(
+                        device_id=line.device_id,
+                        delivered=delivered,
+                    )
+                    if not delivered:
+                        n_undelivered += 1
+                self._pending.n_undelivered_carryover += n_undelivered
+
             log.info(
-                "ingested UpBundle mule=%s round=%d devices=%d on_time=%d missed=%d",
+                "ingested UpBundle mule=%s round=%d devices=%d "
+                "on_time=%d missed=%d undelivered_carryover=%d",
                 bundle.mule_id,
                 self._pending.cluster_round,
                 len(bundle.round_close_report.lines),
                 *bundle.round_close_report.counts(),
+                n_undelivered,
             )
 
     # ----------------------------------------------- cross-mule aggregation
@@ -230,15 +307,44 @@ class HFLHostCluster:
 
         Caller may pass a freshly-built ``ClusterAmendment``; otherwise the
         last one shipped is reused (keeps the contract stable across calls).
+
+        Sprint 1.5 H7 — fold per-device ``last_known_position`` and
+        ``delivery_priority`` from the cluster registry into the
+        amendment's ``registry_deltas`` so the mule's scheduler sees
+        real positions (S3a clustering depends on them) and the
+        cluster-side ``delivery_priority`` carries forward (S3a
+        tie-breaker depends on this). Without this, the mule's
+        ``DeviceSchedulerState.last_known_position`` stays at the
+        dataclass default ``(0, 0, 0)`` and every device clusters into
+        one contact at origin.
         """
         with self._lock:
             mission_slice = self.make_mission_slice(mule_id)
+            base_amendment = amendment or self._last_amendment
+            # Build a fresh amendment that carries the positions + priorities
+            # for *this mule's* slice members, layered on top of any
+            # amendment fields (deadline overrides, notes) the caller passed.
+            registry_deltas = dict(base_amendment.registry_deltas)
+            for did in mission_slice.device_ids:
+                rec = self.registry.get(did)
+                if rec is None:
+                    continue
+                patch = dict(registry_deltas.get(did, {}))
+                patch["last_known_position"] = rec.last_known_position
+                patch["delivery_priority"] = rec.delivery_priority
+                registry_deltas[did] = patch
+            enriched_amendment = ClusterAmendment(
+                cluster_round=base_amendment.cluster_round,
+                deadline_overrides=dict(base_amendment.deadline_overrides),
+                registry_deltas=registry_deltas,
+                notes=base_amendment.notes,
+            )
             bundle = DownBundle(
                 mule_id=mule_id,
                 mission_slice=mission_slice,
                 theta_disc=self.generator.get_global_disc_weights(),
                 synth_batch=self.generator.make_synth_batch(self.synth_batch_size),
-                cluster_amendments=amendment or self._last_amendment,
+                cluster_amendments=enriched_amendment,
             )
             sign_down_bundle(bundle)
             return bundle
@@ -304,6 +410,17 @@ class HFLHostCluster:
     def pending_partials(self) -> int:
         with self._lock:
             return 0 if self._pending is None else len(self._pending.partials)
+
+    def pending_undelivered_carryover(self) -> int:
+        """Sprint 1.5 observability — Pass-2 misses carried over this round.
+
+        Returns the count of UNDELIVERED rows ingested via
+        ``prev_mission_delivery_report`` for the *current* (not-yet-
+        closed) cluster round. Resets when ``close_cluster_round`` is
+        called. Used by tests + the supervisor's metrics emitter.
+        """
+        with self._lock:
+            return 0 if self._pending is None else self._pending.n_undelivered_carryover
 
     # ----------------------------------------------- internal
 

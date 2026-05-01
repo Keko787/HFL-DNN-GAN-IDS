@@ -33,6 +33,18 @@ class Bucket(str, Enum):
     BEACON_ACTIVE = "beacon_active"      # recent beacon heard, opportunistic
 
 
+class MissionPass(str, Enum):
+    """Which half of a two-pass HERMES mission is running.
+
+    Design §7 principle 13: a mission is Pass 1 (collect Δθ) + dock +
+    Pass 2 (deliver fresh θ). Pass 1 runs scheduler-driven contact
+    selection; Pass 2 walks every contact greedily for universal delivery.
+    """
+
+    COLLECT = "collect"  # Pass 1 — pull pre-prepared Δθ from devices
+    DELIVER = "deliver"  # Pass 2 — push fresh θ_disc to every device
+
+
 # Buckets visit-order (design §4): new first, then scheduled, then beacon
 BUCKET_PRIORITY: Tuple[Bucket, ...] = (
     Bucket.NEW,
@@ -60,6 +72,21 @@ class DeviceSchedulerState:
     last_outcome: Optional[MissionOutcome] = None
     last_contact_ts: float = 0.0
     last_utility: float = 0.0
+    # Running tallies that mirror DeviceRecord.on_time_history /
+    # missed_history but live mule-side. The S3.5 selector reads
+    # on_time_count / (on_time_count + missed_count) as its continuous
+    # reliability proxy — the binary `last_outcome` was too noisy a
+    # signal for the DDQN to separate flaky from reliable devices.
+    on_time_count: int = 0
+    missed_count: int = 0
+
+    # Sprint 1.5: cached copy of DeviceRecord.delivery_priority pulled
+    # from the most recent DOWN bundle. S3a clustering reads this as a
+    # tie-breaker so a device that went UNDELIVERED in the previous
+    # mission's Pass 2 gets pulled toward a cluster anchor early in the
+    # next slice's circuit. Reset to 0 on a clean delivery via
+    # MissionDeliveryReport ingest at the cluster.
+    delivery_priority: int = 0
 
     # Deadline machinery (see Design §6.2 formula)
     deadline_fulfilment_s: float = 60.0   # default window (design §9 Q1 open)
@@ -91,14 +118,43 @@ class BeaconObservation:
 
 @dataclass(frozen=True)
 class TargetWaypoint:
-    """One entry in the scheduler's output visit queue.
+    """One entry in the scheduler's output visit queue (per-device, pre-Sprint-1.5).
 
-    The mule supervisor walks these in order, hands each to L1 as the
-    current target, and lets L1 pick the RF channel. Bucket is carried
-    so L1 / observability can log the priority tier the target came from.
+    Retained for backward compatibility with the Phase-4 deterministic
+    pipeline + Sprint-1A `MuleSupervisor` tests. After Sprint 1.5 the
+    scheduler emits ``ContactWaypoint`` instead, which covers N≥1
+    devices per stop. ``TargetWaypoint`` is the degenerate N=1 case.
     """
 
     device_id: DeviceID
     position: Tuple[float, float, float]
     bucket: Bucket
     deadline_ts: float
+
+
+@dataclass(frozen=True)
+class ContactWaypoint:
+    """One contact-event entry in the scheduler's output queue.
+
+    Sprint 1.5 design §7 principle 15: the mule's circuit is decomposed
+    into contact events, where each stop covers all devices within
+    ``rf_range_m`` of the position. The selector picks among
+    ``ContactWaypoint``s, not individual devices. The N=1 case (isolated
+    device) is the degenerate-but-valid form of the same payload.
+
+    ``devices`` is the list of in-range slice members the mule will
+    serve in parallel at this stop. ``bucket`` is inherited from the
+    *worst* bucket among the members (so a NEW-and-SCHEDULED mix is
+    treated as NEW, drained first). ``deadline_ts`` is the *tightest*
+    deadline among the members — if any member's deadline is overdue,
+    the contact inherits that pressure.
+    """
+
+    position: Tuple[float, float, float]
+    devices: Tuple[DeviceID, ...]
+    bucket: Bucket
+    deadline_ts: float
+
+    def __post_init__(self) -> None:
+        if not self.devices:
+            raise ValueError("ContactWaypoint must cover ≥1 device")

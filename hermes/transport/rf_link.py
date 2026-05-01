@@ -22,6 +22,7 @@ from abc import ABC, abstractmethod
 from typing import Optional
 
 from hermes.types import (
+    DeliveryAck,
     DeviceID,
     DiscPush,
     FLOpenSolicit,
@@ -63,6 +64,12 @@ class RFLink(ABC):
     ) -> GradientSubmission:
         """Block for one device's gradient submission."""
 
+    @abstractmethod
+    def recv_delivery_ack(
+        self, device_id: DeviceID, timeout: Optional[float] = None
+    ) -> DeliveryAck:
+        """Pass-2 only: wait for one device's DeliveryAck."""
+
     # ---- device-side (client) ----
 
     @abstractmethod
@@ -86,11 +93,23 @@ class RFLink(ABC):
         """Device -> mule: submit Δθ_disc + meta."""
 
     @abstractmethod
+    def send_delivery_ack(self, msg: DeliveryAck) -> None:
+        """Pass-2 only: device acks θ' receipt to mule."""
+
+    @abstractmethod
     def close(self) -> None: ...
 
 
 class LoopbackRFLink(RFLink):
-    """Thread-safe in-process loopback.
+    """Thread-safe in-process loopback. **Tests + demos only.**
+
+    Phase 7 retirement: this class is allowed in ``tests/`` and the
+    ``hermes.{cluster,mule,mission}.__main__`` pedagogical demos, but
+    must **not** be imported from any production runtime path
+    (``hermes.processes.*`` and the supervised cluster / mule / device
+    services). Production uses :class:`TCPRFLinkServer` +
+    :class:`TCPRFLinkClient`. The ``test_loopback_retirement.py``
+    import-graph test pins this invariant.
 
     One instance is shared by the mule server and one-or-more device
     clients. Routing:
@@ -113,6 +132,9 @@ class LoopbackRFLink(RFLink):
         self._gradient_per_device: dict[
             DeviceID, "queue.Queue[GradientSubmission]"
         ] = {}
+        self._delivery_ack_per_device: dict[
+            DeviceID, "queue.Queue[DeliveryAck]"
+        ] = {}
 
     # ---- device registration --------------------------------------------------
 
@@ -122,6 +144,7 @@ class LoopbackRFLink(RFLink):
             self._solicit_per_device.setdefault(device_id, queue.Queue())
             self._disc_per_device.setdefault(device_id, queue.Queue())
             self._gradient_per_device.setdefault(device_id, queue.Queue())
+            self._delivery_ack_per_device.setdefault(device_id, queue.Queue())
 
     def known_devices(self) -> list[DeviceID]:
         with self._lock:
@@ -160,6 +183,18 @@ class LoopbackRFLink(RFLink):
                 f"recv_gradient for {device_id!r} timed out after {timeout}s"
             ) from e
 
+    def recv_delivery_ack(
+        self, device_id: DeviceID, timeout: Optional[float] = None
+    ) -> DeliveryAck:
+        self._raise_if_closed()
+        q = self._ensure_device_queue(self._delivery_ack_per_device, device_id)
+        try:
+            return q.get(timeout=timeout)
+        except queue.Empty as e:
+            raise RFLinkError(
+                f"recv_delivery_ack for {device_id!r} timed out after {timeout}s"
+            ) from e
+
     # ---- device-side ----------------------------------------------------------
 
     def recv_open_solicit(
@@ -194,6 +229,13 @@ class LoopbackRFLink(RFLink):
         self._raise_if_closed()
         q = self._ensure_device_queue(
             self._gradient_per_device, msg.device_id
+        )
+        q.put(msg)
+
+    def send_delivery_ack(self, msg: DeliveryAck) -> None:
+        self._raise_if_closed()
+        q = self._ensure_device_queue(
+            self._delivery_ack_per_device, msg.device_id
         )
         q.put(msg)
 

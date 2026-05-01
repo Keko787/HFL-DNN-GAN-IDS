@@ -24,6 +24,7 @@ from .s3_deadline import (
     fold_round_close_delta,
     fold_cluster_amendment,
 )
+from .s3a_cluster import cluster_by_rf_range, order_pass_2_greedy
 from .s35_selector import select_order, select_target
 
 __all__ = [
@@ -35,6 +36,8 @@ __all__ = [
     "classify_bucket",
     "fold_round_close_delta",
     "fold_cluster_amendment",
+    "cluster_by_rf_range",
+    "order_pass_2_greedy",
     "select_order",
     "select_target",
 ]

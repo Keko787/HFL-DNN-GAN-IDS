@@ -147,11 +147,13 @@ def fold_round_close_delta(
     if delta.outcome is MissionOutcome.CLEAN:
         state.is_new = False
         state.idle_time_ref_ts = delta.contact_ts
+        state.on_time_count += 1
         state.deadline_fulfilment_s = max(
             MIN_DEADLINE_FULFILMENT_S,
             state.deadline_fulfilment_s - FAST_PHASE_ON_TIME_SHRINK_S,
         )
     else:
+        state.missed_count += 1
         state.deadline_fulfilment_s = (
             state.deadline_fulfilment_s + FAST_PHASE_MISSED_WIDEN_S
         )
@@ -199,3 +201,15 @@ def fold_cluster_amendment(
                 st.deadline_fulfilment_s = max(
                     MIN_DEADLINE_FULFILMENT_S, float(val)
                 )
+        # Sprint 1.5 H7 — delivery_priority flows cluster→mule via
+        # registry_deltas so S3a clustering's tie-breaker reads the
+        # current cluster-bumped value. Accept ``int`` and ``float``
+        # (post-pickle round-trips can promote ints to floats); reject
+        # ``bool`` explicitly because in Python ``bool`` is a subclass
+        # of ``int`` and ``True/False`` would silently become 1/0.
+        if "delivery_priority" in patch:
+            val = patch["delivery_priority"]
+            if isinstance(val, bool):
+                pass  # not a meaningful priority; ignore.
+            elif isinstance(val, (int, float)):
+                st.delivery_priority = int(val)

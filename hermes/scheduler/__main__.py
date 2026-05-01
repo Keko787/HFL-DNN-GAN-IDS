@@ -12,6 +12,12 @@ We don't spin up the full Phase 3 roundtrip here (that's covered by
 ``python -m hermes.mule``) — the demo concentrates on the scheduler
 pipeline so the output is easy to read.
 
+This demo only exercises the legacy per-device path
+(``build_target_queue``). Sprint 1.5's two-pass + ContactWaypoint
+clustering path (``build_contact_queue`` / ``build_pass_2_queue``) is
+covered by ``python -m hermes.mule`` and the integration tests under
+``tests/integration/test_two_pass_contact.py``.
+
 Round 1:
     * 5 devices, all new, all in the slice.
     * Queue = pure distance order inside NEW bucket.

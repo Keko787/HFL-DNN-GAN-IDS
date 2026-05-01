@@ -128,16 +128,19 @@ def test_fl_scheduler_keeps_bucket_priority_with_learned_selector():
         issued_round=1,
         mule_id=MULE,
         device_ids=tuple(r.device_id for r in records),
+        issued_at=NOW,
     )
     fs.ingest_slice(slice_, registry_records=records)
 
     # Push d_sched into SCHEDULED_THIS_ROUND via a CLEAN delta.
     fs.ingest_round_close_delta(
         RoundCloseDelta(
-            round_id=1,
             device_id=DeviceID("d_sched"),
+            mule_id=MULE,
+            mission_round=1,
             outcome=MissionOutcome.CLEAN,
-            observed_at=NOW,
+            utility=0.8,
+            contact_ts=NOW,
         )
     )
     # d_beacon gets a fresh beacon, but also clear is_new=False already.
@@ -176,6 +179,7 @@ def test_fl_scheduler_never_feeds_gated_device_to_selector():
         issued_round=1,
         mule_id=MULE,
         device_ids=(DeviceID("d_admit"),),
+        issued_at=NOW,
     )
     fs.ingest_slice(
         slice_,

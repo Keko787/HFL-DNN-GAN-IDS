@@ -19,24 +19,45 @@ import numpy as np
 from .aggregate import ClusterAmendment, PartialAggregate, Weights
 from .ids import MuleID
 from .registry import MissionSlice
-from .round_report import ContactHistory, MissionRoundCloseReport
+from .round_report import (
+    ContactHistory,
+    MissionDeliveryReport,
+    MissionRoundCloseReport,
+)
 
 
 @dataclass
 class UpBundle:
-    """Mule -> Cluster dock payload."""
+    """Mule -> Cluster dock payload.
+
+    Sprint 1.5 added ``prev_mission_delivery_report``: the previous
+    mission's Pass-2 ``MissionDeliveryReport``, carried up at the
+    *next* mission's Pass-1 dock. Optional — None on cold start (no
+    previous mission) or if the supervisor is still in legacy
+    single-pass mode. The cluster reads it to bump
+    ``DeviceRecord.delivery_priority`` on undelivered rows so they're
+    pulled toward cluster anchors next slice.
+    """
 
     mule_id: MuleID
     partial_aggregate: PartialAggregate
     round_close_report: MissionRoundCloseReport
     contact_history: ContactHistory
     bundle_sig: str = ""  # checksum/version (Phase 3 verifier)
+    prev_mission_delivery_report: Optional[MissionDeliveryReport] = None
 
     def __post_init__(self) -> None:
         if self.partial_aggregate.mule_id != self.mule_id:
             raise ValueError("UpBundle mule_id mismatches partial_aggregate")
         if self.round_close_report.mule_id != self.mule_id:
             raise ValueError("UpBundle mule_id mismatches round_close_report")
+        if (
+            self.prev_mission_delivery_report is not None
+            and self.prev_mission_delivery_report.mule_id != self.mule_id
+        ):
+            raise ValueError(
+                "UpBundle mule_id mismatches prev_mission_delivery_report"
+            )
 
 
 @dataclass

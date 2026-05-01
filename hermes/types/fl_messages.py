@@ -27,6 +27,7 @@ from .aggregate import Weights
 from .fl_state import FLState
 from .ids import DeviceID, MuleID
 from .round_report import MissionOutcome
+from .scheduler import MissionPass
 
 
 # --------------------------------------------------------------------------- #
@@ -35,11 +36,18 @@ from .round_report import MissionOutcome
 
 @dataclass(frozen=True)
 class FLOpenSolicit:
-    """Mule -> device — 'is anyone FL-ready on this channel?' ping."""
+    """Mule -> device — 'is anyone FL-ready on this channel?' ping.
+
+    ``pass_kind`` distinguishes Pass-1 (COLLECT — pull prepared Δθ) from
+    Pass-2 (DELIVER — push fresh θ', no Δθ requested). Devices branch on
+    this field in ``serve_once`` vs ``serve_delivery``. Default stays
+    COLLECT so pre-Sprint-1.5 callers still work unchanged.
+    """
 
     mule_id: MuleID
     mission_round: int
     issued_at: float
+    pass_kind: MissionPass = MissionPass.COLLECT
 
 
 @dataclass(frozen=True)
@@ -73,6 +81,10 @@ class DiscPush:
 
     ``weights_sig`` is an opaque hash over the weight bytes so the device
     can reject a corrupt push without rebuilding the model.
+
+    ``pass_kind`` mirrors :class:`FLOpenSolicit` — DELIVER means "store
+    these weights, start fresh local training, send a DeliveryAck instead
+    of a GradientSubmission." Default COLLECT for backward compat.
     """
 
     mule_id: MuleID
@@ -80,6 +92,7 @@ class DiscPush:
     theta_disc: Weights
     synth_batch: List[np.ndarray]
     weights_sig: str = ""
+    pass_kind: MissionPass = MissionPass.COLLECT
 
     def __post_init__(self) -> None:
         if not self.weights_sig:
@@ -111,6 +124,27 @@ class GradientSubmission:
             self.byte_count = sum(int(w.nbytes) for w in self.delta_theta)
         if not self.checksum:
             self.checksum = weights_signature(self.delta_theta)
+
+
+# --------------------------------------------------------------------------- #
+# Pass-2 delivery acknowledgment (device -> mule)
+# --------------------------------------------------------------------------- #
+
+@dataclass(frozen=True)
+class DeliveryAck:
+    """Device -> mule — Pass-2 receipt acknowledgment.
+
+    Sent in response to a Pass-2 ``DiscPush`` (``pass_kind == DELIVER``)
+    instead of a ``GradientSubmission``. Confirms the device has stored
+    θ' and started fresh offline training. ``weights_sig`` echoes the
+    push's signature so the mule can match the ack to the push.
+    """
+
+    device_id: DeviceID
+    mule_id: MuleID
+    mission_round: int
+    weights_sig: str
+    received_at: float
 
 
 # --------------------------------------------------------------------------- #

@@ -245,3 +245,122 @@ def test_queue_carries_deadline_and_position():
     wp = queue[0]
     assert wp.deadline_ts == 5555.0
     assert wp.position == (7.0, 8.0, 9.0)
+
+
+# --------------------------------------------------------------------------- #
+# Sprint 1.5 — two-pass + clustering (unit-level wiring tests)
+#
+# The per-stage S3a clustering math has dedicated coverage in
+# test_s3a_cluster.py; the two-pass mission integration is exercised in
+# tests/integration/test_two_pass_contact.py. These tests pin the
+# scheduler-level orchestration: build_contact_queue actually returns
+# ContactWaypoints and build_pass_2_queue walks every slice member.
+# --------------------------------------------------------------------------- #
+
+def _seed_two_devices_in_one_cluster(sch: FLScheduler) -> None:
+    """Two devices a metre apart so any sane rf_range groups them."""
+    sch.ingest_slice(_slice("a", "b"))
+    sch.device_states[DeviceID("a")].last_known_position = (0.0, 0.0, 0.0)
+    sch.device_states[DeviceID("b")].last_known_position = (1.0, 0.0, 0.0)
+
+
+def test_build_contact_queue_returns_contact_waypoints():
+    sch = FLScheduler(now_fn=_fixed_clock(1000.0))
+    _seed_two_devices_in_one_cluster(sch)
+    contacts = sch.build_contact_queue(rf_range_m=10.0, now=1000.0)
+    assert len(contacts) == 1
+    contact = contacts[0]
+    assert set(contact.devices) == {DeviceID("a"), DeviceID("b")}
+
+
+def test_build_contact_queue_splits_when_devices_out_of_rf_range():
+    sch = FLScheduler(now_fn=_fixed_clock(1000.0))
+    sch.ingest_slice(_slice("near", "far"))
+    sch.device_states[DeviceID("near")].last_known_position = (0.0, 0.0, 0.0)
+    sch.device_states[DeviceID("far")].last_known_position = (200.0, 0.0, 0.0)
+    contacts = sch.build_contact_queue(rf_range_m=10.0, now=1000.0)
+    assert len(contacts) == 2
+    members = {tuple(sorted(c.devices)) for c in contacts}
+    assert members == {(DeviceID("far"),), (DeviceID("near"),)}
+
+
+def test_build_contact_queue_rejects_zero_rf_range():
+    sch = FLScheduler(now_fn=_fixed_clock(1000.0))
+    _seed_two_devices_in_one_cluster(sch)
+    with pytest.raises(FLSchedulerError):
+        sch.build_contact_queue(rf_range_m=0.0)
+
+
+def test_build_pass_2_queue_visits_every_slice_member():
+    """Pass 2 is delivery-only — no S1 filtering, no bucket priority."""
+    sch = FLScheduler(now_fn=_fixed_clock(1000.0))
+    sch.ingest_slice(_slice("a", "b", "c"))
+    sch.device_states[DeviceID("a")].last_known_position = (0.0, 0.0, 0.0)
+    sch.device_states[DeviceID("b")].last_known_position = (50.0, 0.0, 0.0)
+    sch.device_states[DeviceID("c")].last_known_position = (100.0, 0.0, 0.0)
+    contacts = sch.build_pass_2_queue(rf_range_m=20.0, mule_pose=(0.0, 0.0, 0.0))
+    visited = {did for c in contacts for did in c.devices}
+    assert visited == {DeviceID("a"), DeviceID("b"), DeviceID("c")}
+
+
+def test_build_pass_2_queue_orders_nearest_first_from_mule_pose():
+    sch = FLScheduler(now_fn=_fixed_clock(1000.0))
+    sch.ingest_slice(_slice("near", "mid", "far"))
+    sch.device_states[DeviceID("near")].last_known_position = (5.0, 0.0, 0.0)
+    sch.device_states[DeviceID("mid")].last_known_position = (50.0, 0.0, 0.0)
+    sch.device_states[DeviceID("far")].last_known_position = (500.0, 0.0, 0.0)
+    contacts = sch.build_pass_2_queue(rf_range_m=10.0, mule_pose=(0.0, 0.0, 0.0))
+    # Each device falls into its own contact at rf_range=10 m; visit order
+    # should be near → mid → far when greedy-walking from origin.
+    visit_order = [next(iter(c.devices)) for c in contacts]
+    assert visit_order == [DeviceID("near"), DeviceID("mid"), DeviceID("far")]
+
+
+def test_build_contact_queue_skips_selector_when_bucket_has_one_candidate():
+    """Design §2.7: selector is only consulted when a bucket has ≥2 candidates.
+
+    With one candidate there is nothing to choose between, so we skip the
+    DDQN forward pass entirely. Pinned with a counting stub that fails
+    the test if rank_contacts is invoked on a singleton bucket.
+    """
+    class _CountingSelector:
+        def __init__(self):
+            self.rank_calls = 0
+
+        def rank_contacts(self, candidates, device_states, *, env, pass_kind, admitted):
+            self.rank_calls += 1
+            return list(candidates)
+
+    spy = _CountingSelector()
+    sch = FLScheduler(
+        now_fn=_fixed_clock(1000.0),
+        target_selector=spy,
+    )
+    sch.ingest_slice(_slice("solo"))
+    sch.device_states[DeviceID("solo")].last_known_position = (0.0, 0.0, 0.0)
+    sch.build_contact_queue(rf_range_m=10.0, now=1000.0)
+    assert spy.rank_calls == 0, "selector must not run on singleton bucket"
+
+
+def test_build_contact_queue_consults_selector_when_bucket_has_two_or_more():
+    """Inverse of the singleton test — confirm the ≥2 path still fires."""
+    class _CountingSelector:
+        def __init__(self):
+            self.rank_calls = 0
+
+        def rank_contacts(self, candidates, device_states, *, env, pass_kind, admitted):
+            self.rank_calls += 1
+            return list(candidates)
+
+    spy = _CountingSelector()
+    sch = FLScheduler(
+        now_fn=_fixed_clock(1000.0),
+        target_selector=spy,
+    )
+    # Two devices placed far enough apart to land in separate contacts at
+    # rf_range=10 m, putting both into the same NEW bucket.
+    sch.ingest_slice(_slice("a", "b"))
+    sch.device_states[DeviceID("a")].last_known_position = (0.0, 0.0, 0.0)
+    sch.device_states[DeviceID("b")].last_known_position = (100.0, 0.0, 0.0)
+    sch.build_contact_queue(rf_range_m=10.0, now=1000.0)
+    assert spy.rank_calls == 1, "selector must run on multi-candidate bucket"

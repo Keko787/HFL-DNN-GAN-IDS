@@ -76,7 +76,16 @@ class DockLink(ABC):
 
 
 class LoopbackDockLink(DockLink):
-    """Thread-safe in-process loopback.
+    """Thread-safe in-process loopback. **Tests + demos only.**
+
+    Phase 7 retirement: this class is allowed in ``tests/`` and the
+    ``hermes.{cluster,mule,mission}.__main__`` pedagogical demos, but
+    must **not** be imported from any production runtime path
+    (``hermes.processes.*`` and the supervised cluster / mule / device
+    services). Production uses :class:`TCPDockLinkServer` +
+    :class:`TCPDockLinkClient` — the real transport that survives
+    multi-process deployment. The ``test_loopback_retirement.py``
+    import-graph test pins this invariant.
 
     Both sides share one instance. The mule-side test helpers
     (``client_send_up`` / ``client_recv_down``) sit alongside the cluster

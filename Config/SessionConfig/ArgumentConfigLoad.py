@@ -110,6 +110,19 @@ def parse_training_client_args():
     # ─── Saving Models ───
     parser.add_argument('--save_name', type=str, help="name of model files you save as", default=f"{timestamp}")
 
+    # ─── Mode gate — see Implementation Plan §3.6.1 ───
+    # legacy = run the original Flower client unchanged.
+    # hermes = route through hermes.client.ClientMission shims.
+    # Default stays legacy for zero-risk rollback; flipping the default
+    # is its own decision and must not happen here.
+    parser.add_argument(
+        '--mode',
+        choices=["legacy", "hermes"],
+        default="legacy",
+        help="legacy = run the original Flower client unchanged; "
+             "hermes = run via hermes.client.ClientMission shims.",
+    )
+
     # ───  Initiate Arguments ───
     args = parser.parse_args()
 
@@ -305,6 +318,19 @@ def parse_HFL_Host_args():
     # ─── Model Saving Configuration ───
     parser.add_argument('--save_name', type=str, default=f"{timestamp}",
                         help="Base name for saved model files")
+
+    # ─── Mode gate — see Implementation Plan §3.6.1 ───
+    # legacy = run the original Flower server unchanged.
+    # hermes = route through hermes.cluster.HFLHostCluster shims.
+    # Default stays legacy for zero-risk rollback; flipping the default
+    # is its own decision and must not happen here.
+    parser.add_argument(
+        '--mode',
+        choices=["legacy", "hermes"],
+        default="legacy",
+        help="legacy = run the original Flower server unchanged; "
+             "hermes = run via hermes.cluster.HFLHostCluster shims.",
+    )
 
     # ───  Initiate Arguments ───
     args = parser.parse_args()

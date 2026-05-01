@@ -99,6 +99,25 @@ class DeviceRegistry:
             if new_position is not None:
                 rec.last_known_position = new_position
 
+    def update_after_delivery(self, device_id: DeviceID, delivered: bool) -> None:
+        """Sprint 1.5 — apply one Pass-2 delivery outcome to the registry.
+
+        Called by ``HFLHostCluster`` for every line of an ingested
+        ``MissionDeliveryReport``. Bumps ``delivery_priority`` on a miss,
+        resets it to 0 on a clean delivery. The S3a clustering stage
+        on the mule reads the per-mule cached copy of this field and
+        pulls high-priority devices toward cluster anchors so they get
+        reached early in the next slice's circuit.
+        """
+        with self._lock:
+            rec = self._records.get(device_id)
+            if rec is None:
+                return
+            if delivered:
+                rec.delivery_priority = 0
+            else:
+                rec.delivery_priority += 1
+
     # ------------------------------------------------------------------ slice
 
     def rebalance(

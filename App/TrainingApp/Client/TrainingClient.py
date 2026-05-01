@@ -46,6 +46,21 @@ def main():
     # -- Display selected arguments --#
     display_training_client_opening_message(args, timestamp)
 
+    # ──────────────────────────────────────────────────────────────────────
+    #   Mode gate (Phase 6 / Implementation Plan §3.6.1)
+    # ──────────────────────────────────────────────────────────────────────
+    # default = "legacy" → run the pre-Phase-6 Flower client unchanged.
+    # "hermes" → route through hermes.client.ClientMission shims.
+    #
+    # No code outside this branch may import hermes.* — enforced by the
+    # repo-wide grep test (M6 in tests/unit/test_mode_switch.py).
+    if args.mode == "hermes":
+        _run_hermes_main(args)
+        return
+
+    print("MODE=legacy; running Flower client")
+    # ──────────────────────────────────────────────────────────────────────
+
     # --- 2 Load & Preprocess Data ---#
     print("📊 Loading & Preprocessing Dataset...")
     X_train_data, X_val_data, y_train_data, y_val_data, X_test_data, y_test_data = datasetLoadProcess(args)
@@ -150,6 +165,48 @@ def main():
     # --- 8 Locally Save Model After Training ---#
         client.save(args.save_name)
     # -- EOF Central/Local TRAINING -- #
+
+
+def _run_hermes_main(args):
+    """Route the TrainingClient binary through the Phase 6 mission shim.
+
+    Reachable only when ``args.mode == "hermes"``. Imports inside this
+    function so the legacy path never pulls hermes.* into the process —
+    keep the import here, NOT at module top level. The repo-wide grep
+    test (M6) enforces this.
+    """
+    # NOTE: hermes imports are intentionally inside this function so the
+    # legacy path is unaffected. Do not hoist them to module scope.
+    from hermes.mission import ClientMission  # noqa: WPS433
+    from hermes.transport import LoopbackRFLink  # noqa: WPS433
+    from hermes.types import DeviceID  # noqa: WPS433
+
+    # Sprint 1B is the wiring test for the mode gate. The full
+    # production wiring (real local_train callback, real RF link,
+    # real device_id provisioning) lands in Sprint 1.5 + Sprint 2;
+    # here we stand up a minimal ClientMission so the path is reachable.
+    rf = LoopbackRFLink()
+    device_id = DeviceID(f"client-{args.timestamp}")
+    rf.register_device(device_id)
+
+    def _stub_train(theta, synth):
+        # Sprint 2 swaps this for the real model_federated_training_config
+        # path. Sprint 1B just proves the mode-hermes branch is wired.
+        raise RuntimeError(
+            "hermes-mode local_train not wired yet — Sprint 1.5 deliverable"
+        )
+
+    mission = ClientMission(
+        device_id=device_id,
+        rf=rf,
+        local_train=_stub_train,
+        solicit_timeout_s=0.1,
+        disc_push_timeout_s=0.1,
+    )
+    print(
+        f"MODE=hermes; ClientMission ready device_id={device_id}; "
+        f"awaiting Sprint 1.5 + Sprint 2 wiring."
+    )
 
 
 ################################################################################################################

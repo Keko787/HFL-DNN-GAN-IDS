@@ -42,6 +42,21 @@ def main():
     args = parse_HFL_Host_args()
     display_HFL_host_opening_message(args, args.timestamp)
 
+    # ──────────────────────────────────────────────────────────────────────
+    #   Mode gate (Phase 6 / Implementation Plan §3.6.1)
+    # ──────────────────────────────────────────────────────────────────────
+    # default = "legacy" → run the pre-Phase-6 Flower server unchanged.
+    # "hermes" → route through hermes.cluster.HFLHostCluster.
+    #
+    # No code outside this branch may import hermes.* — enforced by the
+    # repo-wide grep test (M6 in tests/unit/test_mode_switch.py).
+    if args.mode == "hermes":
+        _run_hermes_main(args)
+        return
+
+    print("MODE=legacy; running Flower server")
+    # ──────────────────────────────────────────────────────────────────────
+
     # --- 2. Extract variables from args for compatibility with existing code --- #
     dataset_used = args.dataset
     dataset_processing = args.dataset_processing
@@ -135,6 +150,43 @@ def main():
                 checkpoint_mode, save_name, serverLoad, dataset_used, earlyStopEnabled,
                 lrSchedRedEnabled, modelCheckpointEnabled, DP_enabled, node
             )
+
+
+def _run_hermes_main(args):
+    """Route the HFLHost binary through the Phase 6 cluster shim.
+
+    Reachable only when ``args.mode == "hermes"``. Imports inside this
+    function so the legacy path never pulls hermes.* into the process —
+    keep the import here, NOT at module top level. The repo-wide grep
+    test (M6) enforces this.
+    """
+    # NOTE: hermes imports are intentionally inside this function so the
+    # legacy path is unaffected. Do not hoist them to module scope.
+    from hermes.cluster import HFLHostCluster, DeviceRegistry  # noqa: WPS433
+    from hermes.cluster.host_cluster import StubGeneratorHost  # noqa: WPS433
+    from hermes.transport import LoopbackDockLink  # noqa: WPS433
+
+    print(f"MODE=hermes; HFLHostCluster ready on dock; cluster_id={args.timestamp}")
+
+    # Sprint 1B is the wiring test for the mode gate. The cluster's full
+    # production wiring (real generator, real dock-link, mule rebalance
+    # cadence) lands in Sprint 1.5 + Sprint 2; here we stand up a
+    # functioning HFLHostCluster end-to-end so a fake mule can dock UP
+    # against this binary and exit cleanly.
+    registry = DeviceRegistry()
+    cluster = HFLHostCluster(
+        registry=registry,
+        generator=StubGeneratorHost(disc_weights=[]),
+        dock=LoopbackDockLink(),
+        synth_batch_size=1,
+    )
+    # No serve_forever yet — the supervisor in Sprint 2 owns the long-
+    # running loop. Stand up + tear down is enough to prove the mode
+    # path is reachable end-to-end.
+    print(
+        f"MODE=hermes; cluster registry size={len(registry.all())}; "
+        f"awaiting Sprint 1.5 + Sprint 2 wiring."
+    )
 
 
 if __name__ == "__main__":

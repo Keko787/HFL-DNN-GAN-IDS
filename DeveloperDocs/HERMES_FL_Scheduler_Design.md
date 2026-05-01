@@ -65,18 +65,25 @@ Within Layer 2 the scheduler is decoupled into **four stages**: S1 Eligibility �
 | Never read SNR/SINR for scoring — SNR is a Stage-1 binary gate only, and a feature for the selector only |  — |
 
 ### 2.2 `HFLHostMission` — Mission FL Server (on Mule NUC)
-**One job: Server to devices in-field.** Runs FL sub-sessions, partial-FedAvgs the mission slice, writes the round-close report. **No dock behavior here** — that is `ClientCluster`'s job.
+**One job: Server to devices in-field.** Runs FL sub-sessions per contact event, partial-FedAvgs the mission slice as it goes, writes the round-close report. **No dock behavior here** — that is `ClientCluster`'s job.
+
+Operates in two modes, set per Pass:
+
+* **COLLECT (Pass 1)** — exchange-only sessions: push `θ_disc` + synth, pull pre-prepared `Δθ_disc` from each in-range device. Local fitting does NOT run during the session (devices trained between visits). Per-contact partial-FedAvg merges N parallel `Δθ_disc` into one batch aggregate before folding into the running mission aggregate.
+* **DELIVER (Pass 2)** — push-only sessions: push the freshly-aggregated `θ_disc'` + new `synth_batch` to every device in range; do not request a `Δθ` back. Devices stash the new global and start fresh local training.
 
 | Responsibility | Role |
 |---|---|
-| `FL_OPEN` handshake with devices on arrival | Server |
-| Push global `θ_disc` + synth samples DOWN to device | Server |
-| Receive `Δθ_disc` UP from device + verify gradient receipts (checksum, completion, TTL) | Server |
-| Arbitrate cross-mule races via device busy-flag (TTL-bounded) | Server |
-| Weighted merge of `Δθ_disc` across mission slice → `partial_round_state` (FlightFramework) | FedAvg |
-| Generate mission round-close report (authoritative participation ledger) | Writer |
-| Feed fast-phase `Deadline(j)` update to `FLScheduler` in-flight | Feedback |
-| Hand finalized `partial_aggregate` + `MissionRoundCloseReport` + `contact_history` to local `ClientCluster` at dock entry | Intra-NUC |
+| `FL_OPEN` handshake with all devices in `contact.devices` on arrival | Server |
+| Pass 1: push `θ_disc` + synth and pull prepared `Δθ_disc` from each | Server (collect) |
+| Pass 2: push `θ_disc'` + synth — no `Δθ` requested | Server (deliver) |
+| Verify gradient receipts (checksum, completion, TTL) per device, in parallel | Server |
+| Arbitrate cross-mule races via per-device busy-flag (TTL-bounded) | Server |
+| Per-contact partial-FedAvg merge of in-range `Δθ_disc_i` → `batch_aggregate_for_contact` | FedAvg |
+| Fold each `batch_aggregate_for_contact` into the running `mission_aggregate` | FedAvg |
+| Generate `MissionRoundCloseReport` (Pass 1) + `MissionDeliveryReport` (Pass 2) | Writer |
+| Emit one `RoundCloseDelta` per device to `FLScheduler` (intra-NUC, per contact) | Feedback |
+| Hand finalized `mission_aggregate` + reports + `contact_history` to `ClientCluster` between Pass 1 and Pass 2 | Intra-NUC |
 
 ### 2.3 `ClientCluster` — Dock-Handoff Client *(new, on Mule NUC)*
 **One job: Client to `HFLHostCluster` at dock.** Owns the entire dock lifecycle — upload of mission output, download of next-mission bundle. Mirrors `HFLHostMission` on the *server* side of the mule.
@@ -93,17 +100,21 @@ Within Layer 2 the scheduler is decoupled into **four stages**: S1 Eligibility �
 | **Never** trains, never inspects gradients — pure transport client | — |
 
 ### 2.4 `ClientMission` *(was `EdgeClient`)* — Edge-Device FL Client + Flagger (Tier 1)
-**One job: Who, locally.** Trains the discriminator, self-declares whether its weights are worth federating, and acts as FL client to `HFLHostMission` on contact.
+**One job: Who, locally.** Runs local discriminator training **offline between mule visits** (NOT during the FL session itself), self-declares whether its prepared weights are worth federating, and acts as FL client to `HFLHostMission` on contact for an exchange-only session.
 
 | Responsibility | Stage |
 |---|---|
-| Local training of discriminator on local real traffic | Tier 1 |
+| **Offline** local training of discriminator on local real traffic, between mule visits | Tier 1 |
+| Stash the prepared `Δθ_disc` (= θ_local_after_train − θ_disc_received_from_last_Pass_2) in a delivery slot | Tier 1 |
 | Post-round eligibility check: `Performance_score` (Acc, AUC, Loss) + `diversity_adjusted = cosine(θ_local, θ_global)·perf_discount` | S2B |
 | `utility(i) = w₁·Performance_score + w₂·diversity_adjusted` — open flag when `> FL_Threshold` | S2B |
 | Set FL state in `{busy, unavailable, FL_OPEN}` | S2B |
 | On `FL_OPEN`, emit low-power RF beacon — **proximity only** (can't summon mule) | S1 |
-| On contact: client handshake with `HFLHostMission`, receive `θ_disc + synth`, return `Δθ_disc` + meta-stats | FL client |
+| Pass 1 contact: handshake with `HFLHostMission`, receive `θ_disc + synth`, return the **already-prepared** `Δθ_disc` + meta-stats. No fitting during the session. | FL client (collect) |
+| Pass 2 contact: handshake with `HFLHostMission`, receive new `θ_disc' + synth'`, store them, **immediately start the next round of offline local training** against `θ_disc'`. No `Δθ` is sent back. | FL client (deliver) |
 | Maintain `FL_READY_ADV` payload (perf_delta, diversity_proxy, payload_size, missed_count, idle_time) | S2B |
+
+**Why this matters.** Pulling fitting out of the session shrinks the mule's contact time from "minutes per device" (push + train + receive) to "milliseconds per device" (push + receive), which is what makes parallel sessions per contact event physically tractable inside an RF dwell window.
 
 ### 2.5 `HFLHostCluster` — Cluster FL Coordinator (Tier 2)
 **One job: When, across missions.** Authoritative registry and cross-mule aggregator.
@@ -131,19 +142,21 @@ Within Layer 2 the scheduler is decoupled into **four stages**: S1 Eligibility �
 
 > **Algorithm implication.** With the position head removed, L1 reduces from MA-P-DQN to a single DDQN (or the discrete head of MA-P-DQN, kept for backward compatibility). The "joint action" framing in slides 20/21 no longer applies — it survives only as a training-time formality if MA-P-DQN is retained.
 
-### 2.7 `TargetSelectorRL` — Intra-Bucket Selector *(new, sub-model of L2 S3)*
-**Where the trajectory head went.** What was "trajectory" in MA-P-DQN was actually a **next-target selector** — which device or server to visit next. That decision belongs to *Who* (L2), not *How* (L1). This sub-model lives inside `FLScheduler` S3, queried only when a bucket has ≥2 candidates.
+### 2.7 `TargetSelectorRL` — Intra-Bucket Selector *(new, sub-model of L2 S3.5)*
+**Where the trajectory head went.** What was "trajectory" in MA-P-DQN was actually a **next-target selector**. After Sprint 1.5, the selector picks the next *contact position* (a stop where the mule serves N≥1 devices in parallel), not an individual device. The selector queries only when a bucket has ≥2 candidate positions.
+
+**Pass 1 only.** Pass 2 walks every contact greedily — the goal there is universal delivery, not selection — so the selector is bypassed in Pass 2.
 
 | Responsibility | Role |
 |---|---|
-| Inputs: candidate set within a single S3 bucket, last-known positions, SpectrumSig per device, current mule pose, energy budget, RF priors from L1 env state | features |
-| Output: ordering over the candidate set (or single argmax DeviceID) | selector |
-| Reward signal (training): −time_to_complete − energy_used + completed_session_bonus | RL training |
-| Two distinct invocations: (a) device-selection during a mission round, (b) **server-selection** at end-of-mission (which edge server to dock at, if multiple are reachable) | dual-purpose |
+| Inputs: candidate **contact positions** within a single S3 bucket; per-position aggregate features (mean on_time_rate of in-range devices, member count, SpectrumSig of nearest device, etc.); current mule pose, energy budget, RF priors from L1 env state | features |
+| Output: ordering over candidate contact positions (or single argmax position) | selector |
+| Reward signal (training): per-contact `Σ_devices_in_range completed_bonus_i − time_to_complete − energy_used` — sums the contribution across the parallel sessions in that contact | RL training |
+| Two distinct invocations: (a) Pass-1 contact-selection during a mission, (b) **server-selection** at end-of-mission (which edge server to dock at, if multiple are reachable) | dual-purpose |
 | Trained centrally (CTDE), deployed as small actor on NUC alongside L1 channel actor | deployment |
-| **Never** decides eligibility / gating / deadlines — those remain hard rules in S1 / S2A / S2B / S3 deadline math | scope |
+| **Never** decides eligibility / gating / deadlines / clustering — those remain hard rules in S1 / S2A / S2B / S3 deadline math / S3a clustering | scope |
 
-This sub-model only ranks candidates that the deterministic stages already admitted. It cannot promote a gated-out device or override a deadline — it only fills the ordering gap inside a bucket.
+This sub-model only ranks contact positions that the deterministic stages already admitted (S1 → S3 deadline math → S3a clustering → S3 bucket-classify). It cannot promote a gated-out device, cannot reorder buckets, cannot override a deadline, and cannot change which devices are clustered together — it only fills the ordering gap inside a bucket of contact positions.
 
 ---
 
@@ -231,82 +244,129 @@ This sub-model only ranks candidates that the deterministic stages already admit
 
 ## 4. Process Flow — Happy Path (One Mission)
 
+A HERMES mission is **two-pass**: Pass 1 collects Δθ from devices, Pass 2 delivers fresh θ to devices, with the cluster's cross-mule FedAvg in the dock between them. The selector drives Pass 1's order; Pass 2 walks every contact greedily because the goal is universal delivery.
+
 ```
-[PRE-MISSION — at dock]
+[PRE-MISSION — at dock, before Pass 1]
   (1) Mule docks at edge server; ClientCluster detects dock link.
   (2) ClientCluster ← HFLHostCluster (DOWN bundle):
         MissionSlice(ids, spectrum_sigs, positions)
-        θ_disc_global
+        θ_disc_global   (the version delivered to devices last mission's Pass 2)
         SynthBatch
         Amendments(prev round)
   (3) ClientCluster verifies bundle integrity, then hands off intra-NUC:
         → FLScheduler:     MissionSlice + Amendments
         → HFLHostMission:  θ_disc_global + SynthBatch
   (4) FLScheduler folds Amendments → slow-phase Deadline(j) update.
-  (5) FLScheduler builds session device list (Stage 1).
+  (5) FLScheduler runs S1 eligibility, S3 deadline math, S3a clustering:
+        - eligible_devices  = filter(slice ∪ beacon_heard)
+        - contact_positions = cluster_by_rf_range(eligible_devices, rf_range_m)
+        - bucket_classify(contact_positions)
+            (a position inherits the worst bucket among its members)
 
-[MISSION — in field, per-device loop]
-  loop while mission_time_left > 0 and devices_pending:
-    (6) FLScheduler S3:
-          bucket_classify(device_list) → {new, scheduled, beacon-active}
-          if |bucket| > 1: TargetSelectorRL.rank(bucket, env_priors)
-          target_waypoint = head(top_bucket)
-        FLScheduler → L1: target_waypoint
-    (7) L1 picks chan_idx (DDQN) for the link to that target;
-        mule navigates mechanically to the device's last-known position.
-    (8) On arrival, HFLHostMission issues FL_OPEN solicitation.
-    (9) ClientMission (device) responds with FL_READY_ADV(perf_delta,
+[PASS 1 — outbound from server, COLLECT]
+  loop while mission_time_left > 0 and contacts_pending:
+    (6) FLScheduler S3.5:
+          if |top_bucket| > 1: TargetSelectorRL.rank(top_bucket, env_priors)
+          contact = head(top_bucket)
+        FLScheduler → L1: contact.position + contact.devices
+    (7) L1 picks chan_idx (DDQN) for the link to that contact;
+        mule navigates mechanically to contact.position.
+    (8) On arrival, HFLHostMission issues FL_OPEN solicitation
+        addressed to every device in contact.devices (parallel).
+    (9) Each ClientMission responds with FL_READY_ADV(perf_delta,
         diversity_proxy, payload_size, missed_count, idle_time).
-    (10) Stage 2A gate:
-          if FL_READY == False  →  mark device, skip, continue.
-    (11) FL sub-session (HFLHostMission ↔ ClientMission):
-          HFLHostMission pushes θ_disc + synth   →  ClientMission
-          ClientMission trains locally (discriminator only)
-          ClientMission returns Δθ_disc + meta   →  HFLHostMission
-    (12) HFLHostMission:
-          verify gradient receipt (checksum, TTL, completion)
-          merge into partial_round_state (Partial FedAvg)
-          append line to MissionRoundCloseReport
+    (10) Stage 2A gate, per device:
+          if FL_READY == False → mark skipped (this contact only).
+    (11) Parallel FL exchange-only sessions (HFLHostMission ↔ in-range ClientMission_i):
+          HFLHostMission pushes θ_disc + synth   →  ClientMission_i
+          ClientMission_i returns the pre-prepared Δθ_disc_i + meta
+                          (training was already done offline between visits)
+    (12) HFLHostMission per-contact merge:
+          for each accepted submission: verify (checksum, TTL, completion)
+          partial-FedAvg-merge {Δθ_disc_i} → batch_aggregate_for_contact
+          fold batch_aggregate_for_contact → mission_aggregate (running)
+          append one line per device to MissionRoundCloseReport
     (13) HFLHostMission → FLScheduler (intra-NUC):
-          RoundCloseDelta{device_id, outcome ∈ {clean, partial, timeout}}
-    (14) FLScheduler fast-phase Deadline(j) update:
-          on-time → shorten next interval
-          missed  → lengthen next interval
-    (15) FLScheduler re-ranks device_list (S3):
-          Rank 1: new devices awaiting distribution
-          Rank 2: devices with shortened deadlines (on-time history)
-          Rank 3: devices in session awaiting their deadline
-    (16) Opportunistic FL_OPEN beacon?  If heard in-range, treat as
-         an immediate transact (bonus) — else goto (6).
+          the full MissionRoundCloseReport is folded into the scheduler;
+          per line: {device_id, outcome ∈ {clean, partial, timeout}, contact_ts,
+          bytes_received, bytes_sent}. (RoundCloseDelta line-by-line streaming
+          is deferred — see §6.3 note.)
+    (14) FLScheduler fast-phase Deadline(j) update, per device:
+          on-time → shorten next interval; missed → lengthen.
+    (15) FLScheduler re-bucket-classifies the *remaining* contact_positions
+         using the updated time budget + deadlines:
+          Rank 1: new positions awaiting first distribution
+          Rank 2: positions with shortened deadlines
+          Rank 3: positions in-session awaiting their deadline
+    (16) Opportunistic FL_OPEN beacon? If heard in-range, treat as a
+         single-device contact insert into the queue — else goto (6).
 
-[POST-MISSION — at dock]
+[INTER-PASS DOCK — between Pass 1 and Pass 2]
   (16.5) If multiple edge servers are reachable, FLScheduler calls
          TargetSelectorRL.select_server(reachable_servers, energy_budget)
          to pick the dock target; L1 picks channel for the dock link.
   (17) Mule docks; ClientCluster detects dock link.
-  (18) HFLHostMission → ClientCluster (intra-NUC, dock-entry handoff):
-         partial_aggregate + MissionRoundCloseReport + contact_history
+  (18) HFLHostMission → ClientCluster (intra-NUC handoff):
+         mission_aggregate + MissionRoundCloseReport + contact_history
   (19) ClientCluster → HFLHostCluster (UP bundle, dock link):
-         partial_aggregate + MissionRoundCloseReport + contact_history
+         mission_aggregate + MissionRoundCloseReport + contact_history
   (20) HFLHostCluster:
-        cross-mule FedAvg of partial aggregates
-        produce cluster Amendments
-        push to Tier 3 for θ_gen refinement (via ClusterCloudClient)
-        build next MissionSlice per mule
-  (21) Goto (1) for next mission.
+        cross-mule FedAvg(mission_aggregates from all docked mules)
+                                      → fresh θ_disc_global'
+        produce cluster Amendments (cross-mission corrections)
+        push θ_disc_global' to Tier 3 (via ClusterCloudClient) for θ_gen refinement
+        prepare DOWN bundle for Pass 2:
+          MissionSlice (unchanged for this mission)
+          θ_disc_global'   ← the new global, freshly aggregated
+          SynthBatch (regenerated against θ_gen)
+          Amendments
+  (21) ClientCluster ← HFLHostCluster: DOWN bundle.
+       ClientCluster verifies + distributes intra-NUC:
+        → FLScheduler:     refreshed positions / amendments
+        → HFLHostMission:  θ_disc_global' + SynthBatch'
+
+[PASS 2 — outbound from server, DELIVER]
+  Pass 2 walks every contact in the slice (no skipping based on selector
+  ranking — the goal is universal delivery so devices can re-train fresh).
+  loop over contact_positions:
+    (22) FLScheduler emits the next contact greedily (no selector call):
+          - default order: S3a's clustering output, walked in nearest-first
+            order from the current mule pose to minimize Pass 2 path length.
+    (23) L1 picks chan_idx; mule navigates to contact.position.
+    (24) HFLHostMission issues FL_OPEN solicitation in DELIVER mode.
+    (25) Each ClientMission_i in range responds; HFLHostMission pushes
+         θ_disc_global' + SynthBatch'. No Δθ is requested.
+    (26) ClientMission_i stores θ_disc_global' and starts the next round
+         of offline local training immediately.
+    (27) HFLHostMission appends a delivery line to a Pass-2 report
+         (separate from Pass 1's MissionRoundCloseReport).
+
+[POST-MISSION — return to dock]
+  (28) Mule returns to the edge server (no UP bundle — Pass 1's UP
+       already shipped the mission_aggregate). Optional Pass-2 delivery
+       report flows up so the cluster can detect non-delivered devices
+       (which become priority candidates next mission).
+  (29) Mission n complete. Goto (1) for mission n+1.
 ```
+
+**Why the staleness is now structurally impossible.** Every Δθ collected in Pass 1 was trained against the θ_disc the device received in *the previous mission's* Pass 2. The cluster has direct knowledge of that θ (it dispatched it) — so the FedAvg math is exact, no async-FL drift. The cost is one extra circuit per mission; the benefit is mathematical correctness plus halved staleness time on devices.
 
 ### 4.1 Exception paths
 
 | Event | Handler | Action |
 |---|---|---|
-| Gradient receipt fails checksum / TTL | HFLHostMission | discard, mark outcome=`partial`, device gets missed-count bump |
-| Mule disconnects mid-round | HFLHostMission | write `partial_round_state` checkpoint → resume on reconnect |
-| Cross-mule race on same device | HFLHostMission | device busy-flag (TTL-bounded) wins; losing mule marks `timeout` |
-| Dock link drops mid-UP | ClientCluster | retain `partial_aggregate` on-NUC; retry on next dock; emit stale-bundle warning to HFLHostCluster |
-| Dock DOWN bundle fails verification | ClientCluster | refuse intra-NUC handoff; request re-dispatch; HFLHostMission re-uses prior θ_disc until resolved |
-| No min_participation_threshold | HFLHostCluster | **deadline-aware aggregation** — aggregate whatever arrived, never stall |
+| Gradient receipt fails checksum / TTL (Pass 1) | HFLHostMission | discard, mark outcome=`partial`, device gets missed-count bump; other in-range devices in the same contact event are unaffected |
+| Subset of contact's devices respond, others don't | HFLHostMission | merge whatever did respond into the contact batch aggregate; non-responders get `timeout` outcome individually |
+| Mule disconnects mid-Pass-1 | HFLHostMission | write `partial_round_state` checkpoint of the running mission_aggregate → resume on reconnect; partially-served contacts may need re-visit |
+| Mule fails to return to server between Pass 1 and Pass 2 | ClientCluster | the mission_aggregate is already on the mule; on next dock, ship Pass 1's UP first, then resume Pass 2 with whatever θ' the cluster has |
+| Pass 2 device unreachable (no FL_READY response) | HFLHostMission | log non-delivery in Pass-2 report; cluster prioritizes that device's contact in next mission |
+| Cross-mule race on same device (Pass 1) | HFLHostMission | device busy-flag (TTL-bounded) wins; losing mule marks `timeout`. Disjoint slicing makes this rare; the busy-flag is a defense-in-depth |
+| Dock link drops mid-UP | ClientCluster | retain `mission_aggregate` on-NUC; retry on next dock; emit stale-bundle warning to HFLHostCluster |
+| Dock DOWN bundle (Pass 1's reply) fails verification | ClientCluster | refuse intra-NUC handoff; request re-dispatch; HFLHostMission cannot start Pass 2 until resolved |
+| No min_participation_threshold at cluster | HFLHostCluster | **deadline-aware aggregation** — aggregate whatever arrived, never stall the dispatch of θ_disc' for Pass 2 |
 | Mission slice collision across mules | HFLHostCluster | disjoint slicing enforced at dispatch; no runtime reconciliation needed |
+| Stale Δθ collected (basis ≠ cluster's current θ) | n/a | **structurally impossible under two-pass missions** — Pass 1's collected Δθ are always trained against the θ the cluster delivered in the previous mission's Pass 2, which the cluster knows exactly |
 
 ---
 
@@ -462,11 +522,14 @@ This sub-model only ranks candidates that the deterministic stages already admit
 |---|---|---|
 | `DeviceID` | string | Unique cluster-scope device identifier. |
 | `θ_disc` | tensor | Discriminator weights; global copy pushed DOWN. |
-| `Δθ_disc` | tensor | Discriminator gradient / delta; flows UP. |
+| `Δθ_disc` | tensor | Discriminator gradient / delta; flows UP. Always trained against the θ delivered in the previous mission's Pass 2 (no async drift). |
 | `θ_gen` | tensor | Generator weights; **never leaves Tier 2**. |
 | `SynthBatch` | tensor[] | Fresh synthetic samples generated per round at Tier 2. |
 | `SpectrumSig` | struct | Per-device RF fingerprint (bands, last-good SNR priors). |
 | `MissionSlice` | list[DeviceID] | Disjoint per-mule subset of the cluster registry. |
+| `MissionPass` | enum | `{COLLECT, DELIVER}` — distinguishes Pass 1 (collect Δθ) from Pass 2 (deliver fresh θ). |
+| `ContactWaypoint` | struct | `{position, devices: list[DeviceID], bucket, deadline_ts}` — one stop where the mule serves N≥1 in-range devices in parallel. Replaces `TargetWaypoint` in the scheduler→L1 contract post-Sprint-1.5. |
+| `rf_range_m` | float | Mule's effective RF range in metres; the radius S3a clustering uses to group devices into contact positions. Default 60 m; sweep {30, 60, 120} in Experiment 3. |
 
 ### 6.2 `FLScheduler` state
 
@@ -486,22 +549,26 @@ This sub-model only ranks candidates that the deterministic stages already admit
 
 | Name | Type | Definition |
 |---|---|---|
-| `partial_round_state` | tensor | Intermediate mission-scope FedAvg accumulator (FlightFramework). |
-| `MissionRoundCloseReport` | list[Line] | Authoritative participation ledger; per-device outcome ∈ {clean, partial, timeout}. |
+| `current_pass` | MissionPass | `COLLECT` (Pass 1) or `DELIVER` (Pass 2). Drives session semantics. |
+| `mission_aggregate` | tensor | Running per-mission FedAvg accumulator. After a contact's `batch_aggregate_for_contact` is computed, it folds into here. Persists across contacts within Pass 1. |
+| `batch_aggregate_for_contact` | tensor (transient) | Intermediate per-contact merge of the parallel `Δθ_disc_i`. Discarded after fold. |
+| `MissionRoundCloseReport` | list[Line] | Authoritative Pass-1 participation ledger; per-device outcome ∈ {clean, partial, timeout}. (Future work: add `contact_id` so position-level metrics are recoverable; not currently consumed by any downstream metric, so deferred — see implementation note below.) |
+| `MissionDeliveryReport` | list[Line] | Pass-2 ledger; per-device outcome ∈ {delivered, undelivered}. Lets the cluster prioritize undelivered devices in next mission's slice. |
 | `gradient_receipt` | struct | `{device_id, checksum, bytes_received, ttl_ok}`. |
 | `device_busy_flag` | map[DeviceID, TTL] | Cross-mule race arbitration. |
-| `RoundCloseDelta` | struct | Streamed to Scheduler: `{device_id, outcome, ts}`. |
+| `RoundCloseDelta` | struct | Streamed per-device into the Scheduler's fast-phase Deadline update: `{device_id, mule_id, mission_round, outcome, utility, contact_ts}`. (Originally specified with `contact_id` as well; deferred until per-contact backpressure becomes a measurable concern — the report-level fold below is functionally equivalent today.) |
 
 ### 6.4 `TargetSelectorRL` state *(sub-model of FLScheduler S3.5)*
 
 | Name | Type | Definition |
 |---|---|---|
-| `candidate_set` | list[DeviceID \| ServerID] | Admitted members of one S3 bucket (or reachable servers at dock). |
-| `features(j)` | vector | `{last_known_pos, SpectrumSig, distance, mule_energy, rf_prior_snr, on_time_rate}`. |
+| `candidate_set` | list[ContactWaypoint \| ServerID] | Admitted contact positions in one S3 bucket (or reachable servers at dock). One ContactWaypoint covers N≥1 in-range devices. |
+| `features(j)` | vector | Per-contact aggregate: `{position, mean_on_time_rate, member_count, distance_to_mule, mule_energy, rf_prior_snr, ...}`. Member-level details are summarised so the actor sees a fixed-shape feature row regardless of N. |
 | `bucket_tag` | {new, scheduled, beacon-active, server} | Which decision context the selector is running in. |
-| `action` | DeviceID \| ServerID | argmax over `candidate_set`. |
-| `replay_buffer` | list | Offline — rewards from mission-scope metrics (completion, energy, throughput). |
+| `action` | ContactWaypoint \| ServerID | argmax over `candidate_set`. |
+| `replay_buffer` | list | Offline — per-contact rewards: `Σ devices in range (completion_bonus_i) − time_to_complete − energy_used`. |
 | `actor_weights` | tensor | Deployed on NUC; trained CTDE on AERPAW digital twin. |
+| `pass` | MissionPass | Selector is consulted only when `pass == COLLECT`; Pass 2 walks contacts greedily without invoking the selector. |
 
 ### 6.5 `ClientCluster` state *(on Mule NUC)*
 
@@ -587,6 +654,9 @@ eligible(i)    = (has_active_deadline(i)) ∨ (beacon_heard_in_range(i))        
 10. **Eligibility is computed locally on the edge device** (S2B). The mule is a transport agent — it never inspects payloads.
 11. **Symmetric server/client at every tier-boundary.** Each link has exactly one server program on one side and one client program on the other. The mule is the only host that runs both roles — `HFLHostMission` (server, RF link to devices) and `ClientCluster` (client, dock link to server). No program straddles two tier-boundaries.
 12. **`TargetSelectorRL` is bounded to intra-bucket ordering.** The selector runs *after* the deterministic gates (S1/S2A/S2B) and *after* the deadline math (S3). It cannot promote a gated-out device, cannot reorder buckets, and cannot override a deadline — it only breaks ties within a bucket. Hard rules stay hard; learned rules stay inside one explicit sub-stage.
+13. **Missions are two-pass: collect, then deliver.** A mission consists of Pass 1 (mule departs server, visits devices to *collect* prepared Δθ, returns to server) and Pass 2 (mule departs again with the freshly-aggregated global θ_disc, *delivers* it to every slice member, returns). Cluster cross-mule FedAvg runs in the dock between the two passes. The 2× flight cost is intentional: it removes async-FL drift entirely (every Δθ collected was trained against a θ the cluster has direct knowledge of) and halves the time a device spends training against an outdated global. Selector-driven ordering applies to Pass 1 only — Pass 2 walks every contact greedily because the goal is universal delivery.
+14. **Local training is offline; FL sessions are exchange-only.** ClientMission trains the discriminator against locally-stored data on its own schedule, between mule visits. When the mule arrives, the FL session is purely a data exchange (push θ_disc + synth, pull pre-prepared Δθ). No fitting happens during the session. This keeps contact time short, which is what makes contact-level parallel sessions practical inside an RF window.
+15. **The mule's circuit is decomposed into contact events, not per-device visits.** When the mule stops at a position, every device within `rf_range_m` of that position is served in parallel — one *contact event* covers N≥1 devices. The scheduler clusters slice members into contact positions (S3a clustering stage); the selector picks among contact positions, not individual devices. Per-contact partial-FedAvg merges the N parallel Δθ into a contact-level batch aggregate, which then folds into the running mission aggregate. The N=1 case (isolated device) is the degenerate-but-valid form of the same code path — no special-cased branch.
 
 ---
 
@@ -609,13 +679,27 @@ eligible(i)    = (has_active_deadline(i)) ∨ (beacon_heard_in_range(i))        
 
 ## 9. Open Questions / Decisions Deferred
 
+### Still open (Phase 7 + experiment-time)
+
 1. **Deadline clock** — wall-clock or mission-logical time? Slide 42 shows *Current Deadline Time for Device*; slide 41 shows *next round base timestamp*. Resolve which is `Time` in `Deadline(j)`.
 2. **`FL_Threshold` tuning** — static value or adaptive (e.g. learned per cluster)?
 3. **Beacon channel** — reuse one of the 3 RL-managed bands (3.32 / 3.34 / 3.90 GHz) or a dedicated narrow beacon band?
-4. **Cross-cluster θ_gen refinement cadence** — on every Tier-2 round, or on a slower rhythm orchestrated by Tier 3?
-5. **Min-participation threshold default** — fraction of slice vs. absolute count?
-6. **`TargetSelectorRL` algorithm** — now that trajectory is discrete target selection, MA-P-DQN's hybrid-action justification is gone. Options: (a) plain DDQN over candidate set, (b) pointer-network style selector, (c) keep MA-P-DQN as a legacy wrapper with a dummy continuous head. Decide during RL training bring-up.
-7. **Selector reward shaping** — what exact signals drive `TargetSelectorRL` training? Proposed: `−time_to_complete − w·energy + completed_session_bonus`; verify this doesn't bias against beacon-active devices.
-8. **Does L1 keep a shared encoder?** — if L1 is DDQN-only, the slide-21 "shared encoder captures channel↔position co-dependency" claim no longer applies. Confirm L1 is a standalone channel DDQN.
+4. **`rf_range_m` calibration on real hardware** — sim default is 60 m, sweep {30, 60, 120}. Real AERPAW deployment may need a different value depending on tx power + antenna; treat the sim sweep as the parametric story and re-calibrate in the live testbed.
+5. **Pass 2 ordering at large slice sizes** — Sprint 1.5 ships nearest-first greedy from the post-Pass-1 mule pose. Open: would a TSP-like solver materially improve Pass 2 path length for >10-contact missions? Defer until measurement shows it matters.
 
-These do not change the architecture; they are parameters to fix during implementation.
+### Resolved by Sprint 1.5 / Sprint 2
+
+* **Async-FL drift** — was a concern about stale Δθ in single-pass missions; **closed** by adopting two-pass missions (principle 13). Pass 1 collects, Pass 2 delivers; every Δθ is trained against a θ the cluster knows exactly.
+* **In-session training cost** — was a concern about contact dwell time; **closed** by moving local training offline (principle 14). Sessions are exchange-only and finish in milliseconds.
+* **One-device-at-a-time bottleneck** — was implicit in per-device session model; **closed** by per-contact parallel sessions (principle 15). N≥1 devices in range are served in one stop.
+* **`TargetSelectorRL` algorithm** — **closed** as scalar-Q DDQN over per-contact aggregate features (option a from the original alternatives list). Pointer-network over the bucket was rejected as over-engineered for slice sizes ≤10. Implementation: `hermes/scheduler/selector/target_selector_rl.py`.
+* **Selector reward shaping under contact events** — **closed** as `Σ_(devices in contact) completed_bonus_i − time_to_complete − w·energy_used`. The sum-over-devices form is the design intent; the multi-metric A/B at `rf_range_m ∈ {30, 60, 120}` validates it doesn't over-weight large clusters in practice.
+* **L1 shared encoder** — **closed** as dropped. L1 is a standalone channel DDQN; the slide-21 shared-encoder claim is dead text.
+* **Min-participation threshold default** — **closed** as absolute integer count, default 1 (partial-FedAvg). Set to `len(mules)` for full-FedAvg semantics. Wired through `ClusterConfig.min_participation` (Sprint 2 chunk L).
+* **`MissionDeliveryReport` consumption** — **closed** per the proposed plan: cluster bumps `DeviceRecord.delivery_priority` on undelivered devices, S3a uses that as a tie-breaker (Sprint 1.5 H7). Pinned by `test_undelivered_carryover_routes_priority`.
+
+### Partially resolved (carried into Phase 7)
+
+* **Cross-cluster θ_gen refinement cadence** — Sprint 2 ships `HTTPCloudLink` polling Tier-3 every 5 s and draining the refinement queue, but the result isn't yet folded into `θ_gen`. Wiring the refinement back into the generator + finalising the cadence (per-round vs. slower) is a Phase-7 task.
+
+These do not change the architecture (post-Sprint-2); they are parameters to fix during deployment hardening.

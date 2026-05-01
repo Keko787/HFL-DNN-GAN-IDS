@@ -36,6 +36,7 @@ from hermes.types import (
     ClusterAmendment,
     ContactHistory,
     DownBundle,
+    MissionDeliveryReport,
     MissionRoundCloseReport,
     MissionSlice,
     MuleID,
@@ -140,6 +141,11 @@ class ClientCluster:
         self._staged_aggregate: Optional[PartialAggregate] = None
         self._staged_report: Optional[MissionRoundCloseReport] = None
         self._staged_contacts: Optional[ContactHistory] = None
+        # Sprint 1.5 H3 — Pass-2 delivery report from the *previous*
+        # mission, ridden up in the *next* mission's Pass-1 UP bundle
+        # so the cluster can bump DeviceRecord.delivery_priority on
+        # undelivered devices. Cleared after a successful UP send.
+        self._staged_delivery_report: Optional[MissionDeliveryReport] = None
 
         # Retry queue — oldest first, drained on each successful dock.
         self._retry_queue: List[_PendingUp] = []
@@ -170,11 +176,18 @@ class ClientCluster:
         partial_aggregate: PartialAggregate,
         report: MissionRoundCloseReport,
         contacts: ContactHistory,
+        delivery_report: Optional[MissionDeliveryReport] = None,
     ) -> None:
         """Stage the latest mission output. Overwrites any prior stage.
 
         Called by the mule supervisor (or the demo) whenever
         ``HFLHostMission.close_round`` yields a fresh triple.
+
+        Sprint 1.5 H3: ``delivery_report`` is the *previous mission's*
+        Pass-2 ledger, attached to this mission's Pass-1 UP bundle so
+        the cluster can carry over undelivered devices into the next
+        slice. ``None`` for the very first mission (or for legacy
+        single-pass missions).
         """
         if partial_aggregate.mule_id != self.mule_id:
             raise ClientClusterError(
@@ -185,13 +198,16 @@ class ClientCluster:
             self._staged_aggregate = partial_aggregate
             self._staged_report = report
             self._staged_contacts = contacts
+            self._staged_delivery_report = delivery_report
             self._set_state(ClientClusterState.COLLECT)
             log.info(
-                "collect: mule=%s mission_round=%d accepted=%d lines=%d",
+                "collect: mule=%s mission_round=%d accepted=%d lines=%d "
+                "delivery_report=%s",
                 self.mule_id,
                 partial_aggregate.mission_round,
                 partial_aggregate.num_examples,
                 len(report.lines),
+                "yes" if delivery_report is not None else "no",
             )
 
     # ---------------------------------------------- AWAIT_DOCK
@@ -208,6 +224,27 @@ class ClientCluster:
             if deadline is not None and time.time() >= deadline:
                 return False
             time.sleep(self.dock_poll_interval_s)
+
+    # ---------------------------------------------- bootstrap dock
+
+    def bootstrap_down_only(self) -> Optional[DownBundle]:
+        """Initial dock: receive + distribute a DOWN bundle without sending UP.
+
+        Used at supervisor startup, before the mule has run any missions
+        and therefore has no aggregate to upload. The cluster must have
+        already pre-dispatched a DOWN for this mule (registry slice +
+        initial θ_disc + synth + amendments).
+
+        Returns the verified ``DownBundle`` on success, ``None`` if the
+        dock is unavailable. Raises ``ClientClusterError`` on a verify
+        or routing failure (same semantics as the DOWN leg of the full
+        cycle).
+        """
+        if not self.dock.is_available():
+            return None
+        down = self._recv_and_verify_down()
+        self._distribute(down)
+        return down
 
     # ---------------------------------------------- full dock cycle
 
@@ -260,6 +297,7 @@ class ClientCluster:
             partial_aggregate=self._staged_aggregate,
             round_close_report=self._staged_report,
             contact_history=self._staged_contacts,
+            prev_mission_delivery_report=self._staged_delivery_report,
         )
         sign_up_bundle(bundle)
 
@@ -267,6 +305,7 @@ class ClientCluster:
         self._staged_aggregate = None
         self._staged_report = None
         self._staged_contacts = None
+        self._staged_delivery_report = None
         return bundle
 
     def _send_bundles(self, bundles: List[UpBundle]) -> bool:

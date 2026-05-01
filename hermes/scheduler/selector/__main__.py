@@ -36,14 +36,14 @@ def run_demo() -> int:
     # ---------------------------------------------------------------- #
     _hr("Phase 5 demo: training TargetSelectorRL on BucketSim")
     cfg = TrainConfig(
-        episodes=250,
+        episodes=500,
         bucket_size=6,
         batch_size=32,
         warmup=64,
         buffer_capacity=4_000,
         epsilon_start=0.9,
         epsilon_end=0.05,
-        epsilon_decay_episodes=200,
+        epsilon_decay_episodes=350,
         seed=0,
     )
     print(
@@ -66,29 +66,46 @@ def run_demo() -> int:
     print(f"  SGD steps logged        : {len(metrics.loss_by_step)}")
 
     # ---------------------------------------------------------------- #
-    # 2. A/B.
+    # 2. A/B — multi-metric scoreboard (paper §V.C Experiment 3).
     # ---------------------------------------------------------------- #
     _hr("A/B: selector vs distance-placeholder (200 episodes, same seeds)")
     ab = run_ab_evaluation(selector, episodes=200, bucket_size=6, seed=1)
+    ph = ab.placeholder
+    sl = ab.selector
     print(
-        "  placeholder  : "
-        f"mean_reward={ab.placeholder_mean_reward:+.3f} "
-        f"completion_rate={ab.placeholder_completion_rate:.3f}"
+        f"  {'metric':<22} {'placeholder':>14} {'selector':>14} {'delta':>10}"
     )
     print(
-        "  selector     : "
-        f"mean_reward={ab.selector_mean_reward:+.3f} "
-        f"completion_rate={ab.selector_completion_rate:.3f}"
+        f"  {'completion rate':<22} {ph.completion_rate:>14.3f} "
+        f"{sl.completion_rate:>14.3f} {ab.completion_rate_lift:>+10.2%}"
     )
-    lift = ab.completion_rate_lift
-    print(f"  completion-rate lift    : {lift:+.2%}")
-    dod_ok = lift >= 0.05
-    print(f"  DoD (≥ +5 % lift)       : {'OK' if dod_ok else 'MISS'}")
+    print(
+        f"  {'energy / episode':<22} {ph.energy_per_episode:>14.4f} "
+        f"{sl.energy_per_episode:>14.4f} {ab.energy_savings:>+10.2%}"
+    )
+    print(
+        f"  {'path / episode':<22} {ph.path_length_per_episode:>14.2f} "
+        f"{sl.path_length_per_episode:>14.2f} {ab.path_savings:>+10.2%}"
+    )
+    print(
+        f"  {'retry rate':<22} {ph.retry_rate:>14.3f} "
+        f"{sl.retry_rate:>14.3f} {ab.retry_rate_savings:>+10.2%}"
+    )
+    print(
+        f"  {'compute / dec us':<22} {ph.mean_compute_us:>14.2f} "
+        f"{sl.mean_compute_us:>14.2f} {ab.compute_overhead_x:>9.2f}x"
+    )
+    dod_ok = ab.passes_dod()
+    print(
+        f"  multi-metric DoD          : {'OK' if dod_ok else 'MISS'}  "
+        f"(within completion tolerance + >=5% on energy or retries, "
+        f"compute <= ceiling)"
+    )
 
     # ---------------------------------------------------------------- #
     # 3. Scope guard demo.
     # ---------------------------------------------------------------- #
-    _hr("Scope guard (design §7 principle 12)")
+    _hr("Scope guard (design principle 12)")
     env = SelectorEnv(
         mule_pose=(0.0, 0.0, 0.0),
         mule_energy=1.0,
@@ -112,7 +129,7 @@ def run_demo() -> int:
 
     _hr("Phase 5 summary")
     print(f"  trained selector                     : OK")
-    print(f"  selector beats placeholder by ≥5 %   : {'OK' if dod_ok else 'MISS'}")
+    print(f"  selector beats placeholder (multi-metric) : {'OK' if dod_ok else 'MISS'}")
     print(f"  scope guard rejects foreign device   : {'OK' if guard_ok else 'MISS'}")
     return 0 if (dod_ok and guard_ok) else 1
 

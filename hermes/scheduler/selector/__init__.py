@@ -22,6 +22,8 @@ from .features import (
     SelectorEnv,
     extract_features,
     extract_features_batch,
+    extract_features_contact_batch,
+    extract_features_for_contact,
 )
 from .scope_guard import SelectorScopeViolation, assert_candidates_admitted
 from .replay import ReplayBuffer, Transition
@@ -33,6 +35,8 @@ __all__ = [
     "SelectorEnv",
     "extract_features",
     "extract_features_batch",
+    "extract_features_for_contact",
+    "extract_features_contact_batch",
     "SelectorScopeViolation",
     "assert_candidates_admitted",
     "ReplayBuffer",

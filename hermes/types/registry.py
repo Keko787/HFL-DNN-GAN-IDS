@@ -40,6 +40,14 @@ class DeviceRecord:
     on_time_history: int = 0  # increments each on-time submission
     missed_history: int = 0  # increments each missed deadline
     is_new: bool = True  # cleared after first successful distribution
+    # Sprint 1.5: incremented by HFLHostCluster when a MissionDeliveryReport
+    # row says this device was *undelivered* in Pass 2; reset to 0 on a
+    # clean delivery. S3a clustering reads this as a tie-breaker so
+    # high-priority (recently-undelivered) devices are pulled toward
+    # cluster anchors, increasing the chance they get reached early in
+    # the next mission. Design principle 13 — Pass 2 must reach every
+    # member; this field is the carry-over for when it doesn't.
+    delivery_priority: int = 0
 
 
 @dataclass(frozen=True)

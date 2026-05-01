@@ -31,6 +31,22 @@ class MissionOutcome(str, Enum):
         return self is MissionOutcome.CLEAN
 
 
+class DeliveryOutcome(str, Enum):
+    """Per-device outcome of one Pass-2 delivery attempt.
+
+    Sprint 1.5 design §7 principle 13: every Pass-2 contact must reach
+    every reachable device, otherwise the un-reached device spends the
+    next mission training against a stale θ. The cluster ingests this
+    enum to decide whether to bump ``DeviceRecord.delivery_priority``.
+    """
+
+    DELIVERED = "delivered"  # device acknowledged θ' receipt
+    UNDELIVERED = "undelivered"  # device did not acknowledge in TTL
+
+    def is_delivered(self) -> bool:
+        return self is DeliveryOutcome.DELIVERED
+
+
 @dataclass(frozen=True)
 class MissionRoundCloseLine:
     """One device's row in the mission round-close report."""
@@ -92,3 +108,47 @@ class ContactHistory:
 
     def add(self, rec: ContactRecord) -> None:
         self.records.append(rec)
+
+
+@dataclass(frozen=True)
+class MissionDeliveryLine:
+    """One device's row in the Pass-2 delivery ledger."""
+
+    device_id: DeviceID
+    outcome: DeliveryOutcome
+    contact_ts: float
+
+
+@dataclass
+class MissionDeliveryReport:
+    """Pass-2 ledger — emitted by ``HFLHostMission`` after Pass 2 closes.
+
+    Companion to :class:`MissionRoundCloseReport` (Pass 1's ledger). The
+    cluster uses this to bump ``DeviceRecord.delivery_priority`` for any
+    UNDELIVERED row, and to reset it on a DELIVERED row.
+
+    Design refs:
+    * HERMES_FL_Scheduler_Design.md §6.3 (HFLHostMission state)
+    * HERMES_FL_Scheduler_Design.md §4 step (27)
+    * HERMES_FL_Scheduler_Implementation_Plan.md §3.6.2 task 9
+    """
+
+    mule_id: MuleID
+    mission_round: int
+    started_at: float
+    finished_at: float
+    lines: List[MissionDeliveryLine] = field(default_factory=list)
+
+    def append(self, line: MissionDeliveryLine) -> None:
+        self.lines.append(line)
+
+    def delivered(self) -> List[DeviceID]:
+        return [l.device_id for l in self.lines if l.outcome.is_delivered()]
+
+    def undelivered(self) -> List[DeviceID]:
+        return [l.device_id for l in self.lines if not l.outcome.is_delivered()]
+
+    def counts(self) -> Tuple[int, int]:
+        """``(delivered, undelivered)`` — for the cluster's summary metric."""
+        delivered = sum(1 for l in self.lines if l.outcome.is_delivered())
+        return delivered, len(self.lines) - delivered
