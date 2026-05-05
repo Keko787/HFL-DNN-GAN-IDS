@@ -1,0 +1,17 @@
+{
+  "server": {
+    "host": "0.0.0.0",
+    "port": 9000,
+    "registration_timeout_s": 120.0
+  },
+  "clients": [
+    {"client_id": "d1", "host": "${129.114.108.91}", "data_partition": 0},
+    {"client_id": "d2", "host": "${129.114.108.191}", "data_partition": 1},
+    {"client_id": "d3", "host": "${129.114.109.6}", "data_partition": 2},
+    {"client_id": "d4", "host": "${129.114.108.11}", "data_partition": 3}
+  ],
+  "shared_link": {
+    "B_nominal_mbps": 10.0,
+    "shaping_owner": "operator"
+  }
+}

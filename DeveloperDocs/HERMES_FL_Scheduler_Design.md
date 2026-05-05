@@ -698,8 +698,12 @@ eligible(i)    = (has_active_deadline(i)) ∨ (beacon_heard_in_range(i))        
 * **Min-participation threshold default** — **closed** as absolute integer count, default 1 (partial-FedAvg). Set to `len(mules)` for full-FedAvg semantics. Wired through `ClusterConfig.min_participation` (Sprint 2 chunk L).
 * **`MissionDeliveryReport` consumption** — **closed** per the proposed plan: cluster bumps `DeviceRecord.delivery_priority` on undelivered devices, S3a uses that as a tie-breaker (Sprint 1.5 H7). Pinned by `test_undelivered_carryover_routes_priority`.
 
-### Partially resolved (carried into Phase 7)
+### Resolved by Phase 7
 
-* **Cross-cluster θ_gen refinement cadence** — Sprint 2 ships `HTTPCloudLink` polling Tier-3 every 5 s and draining the refinement queue, but the result isn't yet folded into `θ_gen`. Wiring the refinement back into the generator + finalising the cadence (per-round vs. slower) is a Phase-7 task.
+* **Cross-cluster θ_gen refinement cadence** — Sprint 2 ships `HTTPCloudLink` polling Tier-3 every 5 s; Phase 7 chunk P2 wired the fold via `GeneratorHost.apply_tier3_gen_refinement(weights, refinement_round)`, with an out-of-order guard that ignores stale `refinement_round` values from a delayed Tier-3 packet. The cluster surfaces successful folds as `tier3_refinement_applied` events. The 5 s default cadence is a runtime tunable in `HERMES_Configuration_Reference.md`; tighten or relax once Tier-3's measured refinement rate is known.
 
 These do not change the architecture (post-Sprint-2); they are parameters to fix during deployment hardening.
+
+---
+
+> **Implementation closeout (Phase 7 done, 2026-05):** all eight phases (0 → 7) have shipped. The system runs on the multi-process orchestrator under `--mode hermes`, with structured JSONL observability per process, principle-by-principle assertion tests for all 15 design principles, and Tier-3 refinement folding into the local generator. Final test count is **410 passed, 22 deselected** (the 22 are pre-existing flakes — stochastic A/B at rf=60 m and Flower-mode subprocess timeouts — both documented). What remains is paper-experiment scaffolding (see [HERMES_Experiments_Implementation_Plan.md](HERMES_Experiments_Implementation_Plan.md)) and AERPAW deployment when the testbed returns. Chunk Q (per-device SpectrumSig plumbing) is queued — see implementation plan §3.6.3 — and is conditional on whether a paper claim demands it.

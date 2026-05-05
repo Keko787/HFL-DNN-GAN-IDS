@@ -1,0 +1,85 @@
+# HERMES experiments — calibration constants
+#
+# Single source of truth for the physical-model constants the
+# Experiment 1 + Experiment 3 analyses turn into energy + path-length
+# numbers. Each table below documents its source and units; replace
+# the placeholder values with real AERPAW / mule-platform measurements
+# before running the paper-grade sweep.
+#
+# THIS FILE IS CHECKED INTO THE REPO so a paper reviewer can audit
+# every numeric input. If you change a value, commit a separate
+# revision so reproducibility is traceable.
+
+# --------------------------------------------------------------------- #
+# Experiment 1 — Federated vs Centralized at fixed radio
+# --------------------------------------------------------------------- #
+#
+# Energy proxy from §IV-B Eq. 3:
+#     E = T_proc · P_idle + B_pw · ε_bit
+# Reported as a stacked bar (idle component vs transmission component)
+# rather than collapsed to a scalar.
+
+[exp1.aerpaw_usrp]
+# Per-node idle power draw, watts. AERPAW USRP front-end nominal.
+# REPLACE-FROM-AERPAW-SPEC: USRP B210 typical idle power ≈ 5 W;
+# update with the exact device + cooling-state value used.
+P_idle_W = 5.0
+
+# Energy cost per transmitted bit, joules. Computed from the radio's
+# transmit-mode power draw / max bit rate. REPLACE-FROM-AERPAW-SPEC:
+# typical USRP B210 in TX-mode at 10 Mbps ≈ 12 W → ≈ 1.2e-9 J/bit.
+epsilon_bit_J_per_bit = 1.2e-9
+
+# Nominal shaped-link capacity, bits per second. Used only to compute
+# the alpha-scaled session deadline. The actual shaping is enforced
+# OS-level by tc/netem (see operations runbook §6.1).
+B_nominal_bps = 10_000_000
+
+# --------------------------------------------------------------------- #
+# Experiment 3 — Scheduling ablation
+# --------------------------------------------------------------------- #
+#
+# Mission energy proxy from §IV-D Eq. 5:
+#     E = T_mission · P_idle + B_tx · ε_bit + L_path · ε_prop
+# The propulsion term is what makes wasted hops show up on the cost
+# ledger; without it, a scheduler that traverses the field aimlessly
+# would look identical to one that planned its route.
+
+[exp3.mule_platform]
+# Reuses the AERPAW USRP idle / per-bit energy from exp1.
+# (Same physics — same constants, accessed from this table to keep
+# the analysis script's lookup namespace clean.)
+P_idle_W = 5.0
+epsilon_bit_J_per_bit = 1.2e-9
+
+# Energy per metre of mule propulsion, joules per metre.
+# REPLACE-FROM-PLATFORM-SPEC: depends on UAV / UGV mass + speed +
+# motor efficiency. Typical small quadcopter ≈ 10 J/m at cruise.
+# Sensitivity analysis in the analysis notebook covers ±50%.
+epsilon_prop_J_per_m = 10.0
+
+# Mule cruise speed, metres per second. Used by Eq. 5 only when path
+# length is reported in time units; in our analysis the simulator
+# returns L_path in metres directly so this is informational.
+mule_cruise_speed_m_s = 5.0
+
+# --------------------------------------------------------------------- #
+# Provenance metadata
+# --------------------------------------------------------------------- #
+#
+# Every paper-figure run should set this block so the figure caption
+# can credit the calibration source.
+
+[provenance]
+# When were these values last verified?  YYYY-MM-DD.
+last_verified = "2026-05-01"
+
+# Which AERPAW / hardware spec sheet?  Free-form citation for the
+# reviewer.
+source = "PLACEHOLDER — replace with the actual AERPAW USRP datasheet revision used"
+
+# The status word the analysis tooling reads to decide whether the
+# constants are paper-grade. Allowed values: "placeholder" | "verified".
+# A "placeholder" calibration causes the analysis notebook to stamp
+# every figure with a watermark.
+status = "placeholder"

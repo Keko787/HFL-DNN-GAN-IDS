@@ -658,6 +658,104 @@ cat "$RUN"/*.jsonl | jq -s 'sort_by(.ts)' > "$RUN/combined.json"
 
 ---
 
+## 6.5 Running Experiment 1 (FL vs Centralized)
+
+Experiment 1 has its own server + client scripts under
+`experiments/exp1/`. They're **testbed-agnostic**: identical commands
+work on a single Linux box, AERPAW (5 AVNs), or Chameleon (5 KVMs);
+only the IPs in the topology change.
+
+### 6.5.1 Local smoke (one Linux box, no shaping)
+
+```bash
+# Smallest viable run — 1 cell × 2 arms × 2 trials = 4 trials, ~2s
+N_TRIALS=2 FILTER='Dpd=10MB,R=5' \
+  bash experiments/exp1/setup/launch_local.sh
+
+# Inspect the CSV:
+head results/exp1.csv
+```
+
+The launcher spawns the server + 4 clients in the background under
+`logs/exp1_*.log` and waits for the server to finish. Tail those logs
+during the run if anything looks stuck.
+
+### 6.5.2 Local with link shaping (paper-grade variance)
+
+```bash
+# Apply 10 Mbps cap on the loopback interface (Linux + sudo only):
+sudo bash experiments/exp1/setup/shape_link.sh apply
+
+# Run the full grid:
+N_TRIALS=20 bash experiments/exp1/setup/launch_local.sh
+
+# Single-cell jittery ablation (|D|pd=100MB, alpha=1.0):
+sudo bash experiments/exp1/setup/shape_link.sh apply --jittery
+N_TRIALS=20 FILTER='Dpd=100MB,alpha=1.0' OUT=results/exp1_jittery.csv \
+  bash experiments/exp1/setup/launch_local.sh
+
+# Always remove the qdisc when done so other workloads aren't capped:
+sudo bash experiments/exp1/setup/shape_link.sh remove
+```
+
+### 6.5.3 AERPAW or Chameleon deployment
+
+```bash
+# 1. Edit configs/exp1_aerpaw.json with the 5 AVN IPs (server + 4 clients).
+# 2. SSH-launch:
+ssh server-avn 'cd ~/hermes && source .venv310/bin/activate && \
+  python -m experiments.exp1.server \
+    --topology ~/configs/exp1_aerpaw.json \
+    --output ~/results/exp1.csv'
+
+# 3. On each client AVN (parallel via SSH-batch or separate terminals):
+for i in 1 2 3 4; do
+  ssh "dev${i}-avn" "cd ~/hermes && source .venv310/bin/activate && \
+    python -m experiments.exp1.client \
+      --client-id d${i} \
+      --server <server-avn-ip>:9000 \
+      --data-partition $((i-1))" &
+done
+wait
+
+# 4. Pull the CSV back:
+scp server-avn:~/results/exp1.csv results/
+```
+
+The server's three topology modes (`--topology JSON`, repeated
+`--client` CLI flags, or `--discover`) are all available — pick the
+mode that matches your provisioning workflow. Defaults are explicit
+(JSON or `--client`); `--discover` is opt-in.
+
+### 6.5.4 Diagnostic checks
+
+```bash
+# Verify a CSV row's energy components match the calibration:
+python -c "
+from experiments.calibration import load_calibration, exp1_energy_proxy
+import csv
+cal = load_calibration().exp1
+with open('results/exp1.csv') as f:
+    row = next(csv.DictReader(f))
+e = exp1_energy_proxy(
+    T_proc_s=float(row['Tproc_s']),
+    B_pw_bytes=float(row['Bpw_bytes']),
+    cal=cal,
+)
+print(f'idle={e.idle_J:.4f}J  tx={e.tx_J:.4f}J  total={e.total_J:.4f}J')
+"
+
+# Confirm calibration provenance before a paper run:
+python -c "
+from experiments.calibration import load_calibration
+cal = load_calibration()
+print(f'status={cal.status}  source={cal.source}  verified={cal.last_verified}')
+assert cal.is_paper_grade, 'calibration is still placeholder!'
+"
+```
+
+---
+
 ## 7. Phase 7 verification commands
 
 Use these after a code change to confirm the Phase 7 invariants haven't

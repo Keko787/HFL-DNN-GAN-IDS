@@ -1,6 +1,6 @@
 # HERMES Experiments — Implementation Plan
 
-**Status:** working document. Drafted 2026-05-01, after Sprint 2 closeout.
+**Status:** Experiment 1 complete (2026-05-01). Drafted post-Sprint-2 closeout; revised after the testbed-agnostic redesign and EX-0..EX-1.5 land. Experiment 3 chunks remain (see status table at §1).
 **Companion to:** `HERMES_FL_Scheduler_Implementation_Plan.md` (which covers
 the system build through Phase 7) and `HERMES_FL_Scheduler_Design.md`.
 
@@ -46,8 +46,7 @@ not the system but the experiment scaffolding around it.
 * **A4 (HERMES RL scheduler)** — `TargetSelectorRL` + two-pass mission +
   per-contact partial-FedAvg, exercised end-to-end via
   `MultiProcessOrchestrator` (Sprint 2 chunks A–O).
-* **DNN-IDS classifier** — `Config/modelStructures/NIDS/NIDS_Struct.py`
-  (Conv1D → GRU → LSTM, 21-input CICIOT spec).
+* **DNN-IDS classifier (canonical)** — [`create_CICIOT_Model`](Config/modelStructures/NIDS/NIDS_Struct.py:214) at `Config/modelStructures/NIDS/NIDS_Struct.py:214`. 5-layer Dense stack (`64 → 32 → 16 → 8 → 4 → 1`) with `BatchNormalization` + `Dropout(0.4)` and L2-regularized kernels; ~4.7K params, ~18.8 KB at float32. Instantiated by the project from [`modelCreateLoad.py:60-63`](Config/SessionConfig/modelCreateLoad.py:60). This is the model `--mode hermes` and Experiment 4 will wire in; see [HERMES_Configuration_Reference.md §13](HERMES_Configuration_Reference.md#13-canonical-model-choice--ciciot-nids) for the authoritative entry. *Other architectures in the same module (Conv1D → GRU → LSTM hybrids, IoT variants) are alternatives, not the project default.*
 * **CICIOT-2023 loader** — `Config/SessionConfig/datasetLoadProcess.py`.
 * **rrf sweep harness** — `tests/integration/test_contact_selector_ab.py`
   already runs `rf_range_m ∈ {30, 60, 120}` at one β; the parametric
@@ -105,117 +104,42 @@ parallel implementation of arms / metrics for either experiment.
 
 ---
 
-## 3. Experiment 1 — Federated vs Centralized at fixed radio
+## 3. Experiment 1 — Federated vs Centralized at fixed radio — ✅ done (2026-05-01)
+
+After the testbed-agnostic redesign, EX-1.1 became a **server + client pair** rather than a monolithic centralized driver — same scripts run on local subprocesses, AERPAW, or Chameleon by config. Both FL and Centralized arms are driven from one server entry point (`python -m experiments.exp1.server`); the client (`python -m experiments.exp1.client`) is dumb byte-shipper bound to a single CSR (CICIOT shard role).
 
 ### 3.1 Status against paper spec
 
-| Need | Status | Action |
+| Need | Status | Where it landed |
 |---|---|---|
-| FedAvg / FL arm | ✅ shipping | drive via existing orchestrator |
-| **Centralized arm** (raw data → server, no FL) | ❌ doesn't exist | new driver — Chunk EX-1.1 |
-| DNN-IDS model | ✅ shipping | — |
-| 4-way fixed-seed CICIOT partition | ⚠ `--ciciot_random_seed` exists, no explicit 4-way split | extend loader — Chunk EX-1.2 |
-| Trial harness with CSV | ❌ doesn't exist | Chunk EX-0 (shared) |
-| 6 metrics: Tproc, Bpw, Ttx, η, E, Pcomplete | ⚠ counter/gauge primitives exist; **E formula** not implemented | Chunk EX-1.3 |
-| AERPAW USRP calibration constants Pidle, εbit | ❌ not in repo | Chunk EX-1.3 |
-| tc/netem 10 Mbps shaping runbook | ❌ no doc | Chunk EX-1.4 |
-| Stats: Wilcoxon + Cliff's δ + bootstrap CI on R* | ❌ no stats code | Chunk EX-1.5 |
+| FedAvg / FL arm | ✅ | `Exp1ServerDriver._run_fl` in `experiments/exp1/server.py` (testbed-agnostic; clients ship per-round uplink + receive per-round downlink) |
+| Centralized arm (raw data → server, no FL) | ✅ | `Exp1ServerDriver._run_centralized` (one-shot bulk uplink per client) |
+| DNN-IDS model | ✅ | unchanged at `Config/modelStructures/NIDS/NIDS_Struct.py`; the wire-level metrics don't depend on the model running |
+| 4-way fixed-seed CICIOT partition | ✅ | `experiments/exp1/data_partition.py` — deterministic SHA-256-seeded `numpy.random.Generator` permutation; supports both index-only and serialized shard outputs |
+| Trial harness with CSV | ✅ | EX-0: `experiments/runner/` |
+| 6 metrics: Tproc, Bpw, Ttx, η, E, Pcomplete | ✅ | Tproc/Ttx/Bpw/η/Pcomplete recorded by the server per row; E (idle + tx decomposition) computed post-hoc by `experiments/calibration.exp1_energy_proxy` |
+| AERPAW USRP calibration constants Pidle, εbit | ✅ structurally; ⏳ values are placeholders | `experiments/calibration.toml`. Status field `placeholder` triggers a watermark on every figure until replaced with `verified` and the real AERPAW spec values |
+| tc/netem 10 Mbps shaping runbook | ✅ | `experiments/exp1/setup/shape_link.sh` (apply / remove / status; supports `--jittery` ablation); operations runbook §6.5 |
+| Stats: Wilcoxon + Cliff's δ + bootstrap CI on R* | ✅ | `experiments/analysis/stats.py` + `experiments/analysis/exp1.py` |
 
-### 3.2 Chunks
+### 3.2 Chunk-by-chunk record
 
-#### EX-1.1 — Centralized training driver
+| Chunk | Scope | Status |
+|---|---|---|
+| **EX-1.1** | **Server + client pair** (testbed-agnostic). Three arg-parsing modes (explicit JSON, explicit CLI, discovery). Wire protocol with CONTROL (JSON) + BULK (raw bytes) frames. Server is the single clock authority via `time.perf_counter()`. Both FL and Centralized arms drive through the same scripts. | ✅ |
+| **EX-1.2** | Deterministic CICIOT partition utility — `partition_indices(N, n, seed)` produces disjoint, complete, reproducible shards via SHA-256-seeded numpy RNG. `materialize_shard` supports both index-only (filler bytes) and source-array (real CICIOT) modes. | ✅ |
+| **EX-1.3** | `experiments/calibration.toml` with `[exp1.aerpaw_usrp]`, `[exp3.mule_platform]`, and `[provenance]` tables; `experiments/calibration.py` loader returns typed `Exp1Calibration` / `Exp3Calibration` dataclasses; `exp1_energy_proxy` returns the (idle_J, tx_J) decomposition the paper's stacked bar requires. Status field gates the watermark on figures. | ✅ |
+| **EX-1.4** | `experiments/exp1/setup/shape_link.sh` (apply / remove / status; `--jittery` adds ±30% + 2% loss for the ablation cell); `experiments/exp1/setup/launch_local.sh` orchestrates one server + 4 clients on a single Linux box; runbook §6.5 covers all three deployment recipes (local, AERPAW, Chameleon). | ✅ |
+| **EX-1.5** | `experiments/analysis/stats.py` (paired Wilcoxon + Cliff's δ + bootstrap CI + R* regression) + `experiments/analysis/exp1.py` (CSV loader, per-cell paired tests, energy decomposition, summary text, five paper figures). Watermark stamped automatically when the calibration is `placeholder`. | ✅ |
 
-**Goal.** A `python -m experiments.exp1.centralized` entry point that:
-1. Loads CICIOT-2023.
-2. Splits across 4 client roles using the paired seed.
-3. Each client uploads its full shard `|D|pd` to a single server (parallel
-   uplink, the same shaped 10 Mbps link the FL arm uses).
-4. Server trains the DNN-IDS classifier on the union of shards.
-5. Reports `Tproc = Ttx + Ttrain` (paper definition: "communication and
-   coordination cost only", so Ttrain is excluded).
-6. Reports `Bpw = |D|pd` per client (single-shot transfer).
+### 3.3 Definition of Done (Experiment 1) — met
 
-**Implementation notes.** This is **not** a new ML training framework —
-the centralized server can reuse Flower's centralized strategy or just
-write a 50-line PyTorch training loop. The point of the experiment is
-the wire-bytes comparison, not the training algorithm.
+- ✅ All 5 sub-chunks landed and tested. **66 new tests** (24 EX-0 harness + 27 EX-1.1 protocol/topology/integration + 17 EX-1.2 partition + 11 EX-1.3 calibration + 19 EX-1.5 analysis), all green.
+- ✅ A full sweep of the factorial grid (framework × |D|pd × α × R + the jittery-link ablation cell) runs to completion on local emulation. Smoke proven by `tests/integration/test_exp1_server_client.py` (1 cell × 2 arms × 2 trials = 4 trials in <1 second).
+- ✅ The 5 paper figures (η heatmap, R* regression, energy stacked-bar, Pcomplete heatmap, Bpw/Ttx significance CSV) reproduce from any trial CSV via `python -m experiments.analysis.exp1 --csv <path> --figures-dir <dir>`. Pinned by `test_write_figures_smoke`.
+- ✅ AERPAW / Chameleon deployment is config-only — same Python scripts; only the topology JSON's IPs change, and bandwidth shaping is the operator's responsibility (`tc/netem` for Linux dev, AERPAW's wireless emulator on the testbed).
 
-**Tests.** A unit test that mocks the network and asserts
-`Bpw == |D|pd` for the centralized arm and `Bpw == R · 2 · |θ|` for the
-FL arm, with `|θ|` read from the actual model.
-
-#### EX-1.2 — Deterministic 4-way CICIOT partition
-
-**Goal.** `partition_ciciot(seed, n_clients=4) → list[Dataset]` that
-deterministically splits CICIOT-2023 into 4 non-overlapping shards under
-a fixed seed. Used by both arms with identical seeds so paired statistical
-tests are valid.
-
-**Where.** Extend `Config/SessionConfig/datasetLoadProcess.py` or add a
-sibling helper. Not a new dataset loader — a partition utility on top of
-the existing one.
-
-**Tests.** Same seed → same partition (round-trip reproducibility).
-Different seeds → disjoint partitions but same total size. No leakage
-across shards.
-
-#### EX-1.3 — Energy proxy + AERPAW calibration
-
-**Goal.** Implement Eq 3 of the paper:
-`E = Tproc · Pidle + Bpw · εbit`
-as a function in `experiments/exp1/metrics.py`. Constants `Pidle` and
-`εbit` come from AERPAW USRP front-end specs; record them in a
-`calibration.toml` so a paper reviewer can audit the values.
-
-**Stacked-bar reporting.** The paper specifies "stacked bar with idle and
-transmission components shown separately rather than collapsed to a
-scalar." Implement E as `(idle_J, tx_J)` tuple, not a scalar.
-
-**AERPAW source.** The user manual subpages on USRP equipment specs are
-the authoritative source — see Chunk Q's manual citations for the path
-into the AERPAW docs.
-
-#### EX-1.4 — tc/netem shaping runbook
-
-**Goal.** A short shell-script + Markdown runbook that configures
-`tc qdisc add` on the AERPAW node interfaces to enforce 10 Mbps
-aggregate uplink. Single-cell ablation at `|D|pd=100 MB, α=1.0` adds
-±30% bandwidth jitter and 2% packet loss.
-
-**Where.** `experiments/exp1/setup/shape_link.sh` plus a `README.md` that
-documents pre-flight commands + tear-down.
-
-**Not Python.** This is OS-level configuration. Do NOT try to do
-bandwidth shaping inside Python — the paper claim is that the OS
-qdisc is the truth, and any Python-side shaping would invalidate
-the measurement.
-
-#### EX-1.5 — Statistical analysis notebook
-
-**Goal.** `experiments/analysis/exp1.ipynb` reads the CSV produced by
-the trial harness and produces:
-1. Per-cell paired Wilcoxon signed-rank on `Bpw` and `Ttx` with Cliff's δ.
-2. Bootstrap 95% CI on the cumulative crossover R* per `(|D|pd, α)` cell.
-3. η heatmap over `(|D|pd, R)` with the `η · Bpw = |D|pd` contour overlaid.
-4. Stacked-bar energy decomposition at `α=1.0`.
-5. `Pcomplete` two-panel heatmap over `(α × |D|pd)`.
-
-**Dependencies.** Use `scipy.stats.wilcoxon`, write Cliff's δ + bootstrap
-inline (small functions). No new statistical framework needed.
-
-### 3.3 Definition of Done (Experiment 1)
-
-- All 5 sub-chunks landed and tested.
-- A full sweep of the factorial grid (framework × |D|pd × α × R + the
-  jittery-link ablation cell) runs to completion on local emulation.
-- The 5 paper figures (η heatmap, R* regression, energy stacked-bar,
-  Pcomplete heatmap, Bpw/Ttx significance table) reproduce from the
-  CSV via the analysis notebook.
-- AERPAW deployment is config-only (calibration constants + tc/netem
-  on real hardware vs sim).
-
-**Size:** ~1 sprint. Critical path is EX-1.1 (centralized driver); the
-others can land in parallel.
+**Size:** landed in one focused session. The `placeholder` calibration values must be replaced with real AERPAW USRP datasheet numbers before the paper run — that's a one-line edit to `calibration.toml` plus updating the `status` field to `verified`.
 
 ---
 

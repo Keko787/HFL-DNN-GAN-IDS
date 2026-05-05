@@ -173,6 +173,65 @@ plan lands the audit trail) so the paper reproduces.
 
 ---
 
+## 13. Canonical model choice — CICIOT NIDS
+
+The IDS model used **across the board for this project** when the
+target dataset is CICIOT-2023 is `create_CICIOT_Model` from
+[Config/modelStructures/NIDS/NIDS_Struct.py:214](Config/modelStructures/NIDS/NIDS_Struct.py:214).
+Anywhere the experiments or the integrated system instantiate the IDS
+model, this is the function.
+
+| Property | Value |
+|---|---|
+| Architecture | 5 Dense layers (`64 → 32 → 16 → 8 → 4 → 1`), each with `BatchNormalization` + `Dropout(0.4)`; ReLU activations + L2-regularized kernels; sigmoid output for binary classification |
+| Source | [Config/modelStructures/NIDS/NIDS_Struct.py:214 `create_CICIOT_Model`](Config/modelStructures/NIDS/NIDS_Struct.py:214) |
+| Instantiation site | [Config/SessionConfig/modelCreateLoad.py:60-63](Config/SessionConfig/modelCreateLoad.py:60) — `if dataset_used == "CICIOT": nids = create_CICIOT_Model(input_dim, regularizationEnabled, DP_enabled, l2_alpha)` |
+| Hyperparameters | Per [Config/SessionConfig/hyperparameterLoading.py:34-50](Config/SessionConfig/hyperparameterLoading.py:34) — `input_dim = X_train.shape[1]` (typically 21 for CICIOT post-preprocessing), `BATCH_SIZE = 64`, `learning_rate = 0.0001`, `l2_alpha = 0.0001` |
+| Approximate parameter count | ~4,700 trainable params; ~18.8 KB at float32 |
+| On-the-wire size for FL | `|θ| ≈ 18.8 KB` per round per direction (paper-faithful value for `--theta-bytes` in Experiment 1's FL arm; the 200,000-byte default in `experiments/exp1/server.py` is a round-number placeholder for smoke runs) |
+
+### Project-wide invariants on the two flags
+
+`create_CICIOT_Model` takes two boolean flags (`regularizationEnabled`,
+`DP_enabled`) that select between four architectural variants. The
+project locks them as follows for every run:
+
+| Flag | Setting | Why |
+|---|---|---|
+| `DP_enabled` | **`False` — always, until further notice** | The differential-privacy code path (TF-Privacy `DPKerasAdamOptimizer` in `nidsModelCentralTrainingConfig.py` and `NIDSModelClientConfig.py`) is **currently broken** and not part of any paper run. Treat `DP_enabled = True` as a known-bad code path; do not turn it on without first fixing the underlying TF-Privacy integration. |
+| `regularizationEnabled` | **`True` is the typical setting; `False` is optional** | L2 regularization on the Dense kernels (`l2_alpha = 1e-4`) plus the BatchNorm + Dropout layers. Disable only for ablation runs that explicitly want to study the effect of regularization on the IDS classifier. |
+
+**Operative branch in `create_CICIOT_Model`.** Because `DP_enabled` is
+locked to `False`, the canonical instantiation always lands in the
+**first** `if regularizationEnabled:` branch (the 64→32→16→8→4→1
+stack with L2 + BN + Dropout(0.4)). The other three branches —
+including the `elif regularizationEnabled and DP_enabled` branch, which
+is dead code under Python's `if/elif` ordering anyway — are not
+exercised in any current run.
+
+> **Watch when DP is fixed.** When the DP-broken status is resolved,
+> two things need to land together: (1) the underlying TF-Privacy
+> integration, and (2) a fix to the conditional ordering in
+> `create_CICIOT_Model` so the `regularizationEnabled and DP_enabled`
+> branch is actually reachable (today it is shadowed by the unguarded
+> `if regularizationEnabled:` above it). Re-enabling DP without
+> re-ordering the branches would silently use the regularization-only
+> architecture — which would not be the intended DP+reg combined
+> variant.
+
+### Variants in `NIDS_Struct.py` — informational
+
+The same module ships several other architectures (`create_high_performance_nids`, `create_balanced_nids`, `create_lightweight_nids`, `create_optimized_NIDS_model`, `create_optimized_model`, `cnn_lstm_gru_model_*` for IoT). These are alternatives — **not the project default**. The `modelCreateLoad.py` factory currently routes CICIOT explicitly to `create_CICIOT_Model`; switching to one of the alternatives is its own decision and should land as a separate code review, not a silent default change.
+
+### Where this matters for the experiments
+
+* **Experiment 1 (FL vs Centralized)** — does *not* call the model at training time (paper §IV-B excludes SGD compute from `Tproc`). The IDS model only matters for `--theta-bytes`: pass `--theta-bytes 18800` for a paper-faithful FL byte count, or compute it precisely from `model.count_params() * 4` once the data is loaded so `input_dim` is known.
+* **Experiment 3 (scheduling ablation)** — A1 (centralized FL) needs the model for the actual Flower training round. A2/A3/A4 are scheduling sims — they don't touch the model.
+* **Experiment 4 (integrated end-to-end)** — calls the model at every device's local-train step. This is the primary consumer.
+* **HERMES `--mode hermes` path** — when wired, `ClientMission`'s `local_train` callback should call into this model's `.fit` step. Sprint-1B left a stub at [App/TrainingApp/Client/TrainingClient.py:192-197](App/TrainingApp/Client/TrainingClient.py:192) (`_stub_train`) that explicitly raises pending Sprint-1.5 / Sprint-2 wiring; replace with a wrapper around `create_CICIOT_Model` + `model.fit()` when integrating.
+
+---
+
 ## Cross-references
 
 * [HERMES_FL_Scheduler_Design.md](HERMES_FL_Scheduler_Design.md) §6
