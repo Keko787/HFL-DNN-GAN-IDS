@@ -79,9 +79,9 @@ case "$CMD" in
             rate 10mbit burst 32kbit latency 50ms
 
         if [[ "$JITTERY" -eq 1 ]]; then
-            echo "[shape_link] adding jittery netem overlay (30% bw, 2% loss)..."
+            echo "[shape_link] adding jittery netem overlay (delay jitter + 2% loss)..."
             tc qdisc add dev "$IFACE" parent 1:1 handle 10: netem \
-                rate 10mbit 30% loss 2%
+                delay 30ms 9ms distribution normal loss 2%
         fi
 
         echo
