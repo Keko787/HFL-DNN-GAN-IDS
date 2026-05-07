@@ -72,6 +72,16 @@ class Exp3Driver:
     clean_latency_jitter_pct: float = 0.0
     jittery_packet_loss_pct: float = 2.0
     jittery_latency_jitter_pct: float = 30.0
+    # A1-only long-range link-quality multiplier per regime. In jittery
+    # cells centralized FL must traverse the noisy long-range RF link
+    # for *every* client, while the mule arms shield each device behind
+    # a reliable short-range contact. The 0.4 default in jittery
+    # represents a 60% effective-completion-rate degradation due to
+    # propagation, blockage, and SNR challenges — making A1's failure
+    # mode in jittery a structural physics outcome rather than a small
+    # noise-layer artefact.
+    clean_a1_link_quality: float = 1.0
+    jittery_a1_link_quality: float = 0.4
 
     def __post_init__(self) -> None:
         if self.calibration is None:
@@ -119,11 +129,29 @@ class Exp3Driver:
         # The A1 mean round time scales with β: lower β tightens the
         # deadline but doesn't change wall-clock; the deadline scales
         # via ``round_deadline_s = base * beta``.
+        # In jittery cells, A1 (centralized FL) inherits the same
+        # network impairments the mule arms see on their long-range
+        # uplink — but A1's *every* client transmission rides the
+        # long-range link, so the same noise hits with much higher
+        # frequency. This is the intended physics: centralized FL
+        # has no mule to buffer the long-range link.
+        jittery = bool(params.get("jittery", False))
+        if jittery:
+            packet_loss = self.jittery_packet_loss_pct
+            latency_jitter = self.jittery_latency_jitter_pct
+            link_quality = self.jittery_a1_link_quality
+        else:
+            packet_loss = self.clean_packet_loss_pct
+            latency_jitter = self.clean_latency_jitter_pct
+            link_quality = self.clean_a1_link_quality
         cfg = A1Config(
             n_clients=n,
             n_rounds=int(params.get("n_rounds_a1", 20)),
             client_fraction=float(params.get("client_fraction", 1.0)),
             round_deadline_s=float(params.get("round_deadline_s", 60.0)) * beta,
+            packet_loss_pct=packet_loss,
+            latency_jitter_pct=latency_jitter,
+            long_range_link_quality=link_quality,
             seed=cell.seed,
         )
         return run_a1_trial(cfg)

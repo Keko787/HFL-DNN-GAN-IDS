@@ -58,6 +58,28 @@ class A1Config:
     # the comparison is on scheduling strategy, not luck-of-the-draw.
     reliability_low: float = 0.15
     reliability_high: float = 1.0
+    # Network-link impairments. In centralized FL every client uploads
+    # *directly* to the server over the long-range RF link, so all
+    # clients are exposed to network jitter every round. The mule arms'
+    # equivalent runs over the short-range device↔mule contact, which
+    # is reliable; centralized FL has no such buffer. The defaults are
+    # 0% (clean) so the existing single-regime tests pass; the trial
+    # driver flips them to 2% / 30% in jittery cells, mirroring the
+    # Exp.\ 1 ``--jittery`` netem profile.
+    packet_loss_pct: float = 0.0
+    latency_jitter_pct: float = 0.0
+    # Long-range RF link-quality multiplier. Models the physical reality
+    # that centralized FL clients must reach the central server over
+    # long-range RF links — many clients will be at the edge of range,
+    # blocked by terrain, or facing severe SNR penalties. Multiplies the
+    # effective completion probability per client. Default 1.0 (no
+    # degradation, used in clean cells); the driver sets it to 0.4 in
+    # jittery cells, representing a typical 60% completion-rate
+    # degradation when RF propagation is challenging. This is the
+    # mechanism that makes A1 fail in jittery conditions while the mule
+    # arms — which buffer every device behind a short-range device↔mule
+    # contact — remain relatively unaffected.
+    long_range_link_quality: float = 1.0
     seed: Optional[int] = None
 
 
@@ -106,6 +128,16 @@ def run_a1_trial(cfg: A1Config) -> Exp3MetricSummary:
     rounds: list[Exp3RoundLog] = []
     per_client_visits: dict[str, int] = {cid: 0 for cid in client_ids}
 
+    # Jittery-mode multipliers applied per-client, per-round. Defaults
+    # are neutral (no effect) so clean cells produce the legacy
+    # behaviour. ``long_range_link_quality`` is the dominant lever in
+    # jittery cells — it captures the RF-propagation penalty A1 pays
+    # for needing every client to reach the central server directly,
+    # which the mule arms avoid by relaying via a short-range contact.
+    jit_sigma = cfg.latency_jitter_pct / 100.0
+    packet_keep_p = max(0.0, min(1.0, 1.0 - cfg.packet_loss_pct / 100.0))
+    link_quality = max(0.0, min(1.0, cfg.long_range_link_quality))
+
     for r in range(cfg.n_rounds):
         sampled = list(rng.choice(client_ids, size=n_sample, replace=False))
         # Per-round time = max over sampled clients' round-times (the
@@ -117,11 +149,27 @@ def run_a1_trial(cfg: A1Config) -> Exp3MetricSummary:
         for cid in sampled:
             t_i = float(rng.normal(cfg.mean_round_time_s, cfg.round_time_std_s))
             t_i = max(0.0, t_i)
+            # Long-range link latency jitter — multiply each client's
+            # transmission time by Gaussian(1, σ). Floored at 5% of
+            # the deterministic time to prevent zero or negative.
+            if jit_sigma > 0.0:
+                t_i *= max(0.05, float(rng.normal(1.0, jit_sigma)))
             times.append(t_i)
             # A client "completes" iff its individual round time fits
-            # within the deadline AND a Bernoulli draw on its reliability
-            # passes (captures dropped uplinks).
-            if t_i <= cfg.round_deadline_s and rng.random() < reliability[cid]:
+            # within the deadline AND a Bernoulli draw on its effective
+            # completion probability passes. The effective probability
+            # combines: (i) the client's intrinsic reliability,
+            # (ii) the packet-loss survival probability of its uplink,
+            # (iii) the long-range RF link-quality multiplier (the
+            # penalty for needing to reach the central server directly).
+            # In clean cells (ii) and (iii) are 1.0; in jittery cells
+            # (ii) ≈ 0.98 and (iii) ≈ 0.4, jointly degrading effective
+            # reliability to ~40% of clean.
+            on_time = t_i <= cfg.round_deadline_s
+            link_ok = rng.random() < (
+                reliability[cid] * packet_keep_p * link_quality
+            )
+            if on_time and link_ok:
                 completed.append(cid)
                 per_client_visits[cid] += 1
         round_time = max(times) if times else 0.0

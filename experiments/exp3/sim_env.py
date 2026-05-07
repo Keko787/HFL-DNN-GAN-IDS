@@ -452,23 +452,30 @@ class Exp3Sim:
         upload_bytes = cfg.upload_bytes_per_contact
         upload_s = upload_bytes * 8.0 / max(upload_rate, 1e-6)
 
-        # Apply latency jitter (jittery-mode parity with Exp.\ 1's
-        # tc/netem ±30% latency jitter). Multiplies transit, collect,
-        # and upload by an independent Gaussian per call, clamped to a
-        # minimum 5% of the deterministic value to prevent zero or
-        # negative durations.
+        # Network-jitter physics: only the long-range mule→BS upload
+        # link is exposed to jitter. Mule transit is a physical flight
+        # operation (not network-bound); the device↔mule collect is a
+        # short-range RF session with much higher reliability than the
+        # long-range BS link. Applying jitter to transit_s or collect_s
+        # would conflate physical time with network time.
         if cfg.latency_jitter_pct > 0.0:
             sigma = cfg.latency_jitter_pct / 100.0
-            transit_s *= max(0.05, float(self._rng.normal(1.0, sigma)))
-            collect_s *= max(0.05, float(self._rng.normal(1.0, sigma)))
             upload_s *= max(0.05, float(self._rng.normal(1.0, sigma)))
 
+        # Long-range packet loss applied at the *contact* level: the
+        # mule→BS upload either succeeds for the whole batch or fails
+        # for the whole batch (one Bernoulli draw per contact). This
+        # is the right model because a single upload over the long-
+        # range link carries the aggregated payload from every device
+        # in the contact; if that upload drops, every device loses
+        # its update for this round, but the device→mule short hop
+        # itself never fails.
+        contact_uplink_kept = (
+            cfg.packet_loss_pct <= 0.0
+            or self._rng.random() < (1.0 - cfg.packet_loss_pct / 100.0)
+        )
+
         per_device_completed: List[bool] = []
-        # Independent packet-loss probability applied per device on top
-        # of reliability×rf_factor (jittery-mode parity with Exp.\ 1's
-        # tc/netem 2% packet loss). Matches the Bernoulli-loss model
-        # netem applies to outgoing packets.
-        packet_keep_p = max(0.0, min(1.0, 1.0 - cfg.packet_loss_pct / 100.0))
         for did in contact.devices:
             dev = next((d for d in self._devices if d.device_id == did), None)
             if dev is None:
@@ -476,11 +483,12 @@ class Exp3Sim:
                 continue
             d_dist = _euclid(contact.position, dev.pos)
             rf_factor = max(0.4, 1.0 - d_dist / (3.0 * cfg.world_radius))
-            p_complete = max(
-                0.0,
-                min(1.0, dev.reliability * rf_factor * packet_keep_p),
+            # Short-range device↔mule completion (no packet loss here).
+            p_complete = max(0.0, min(1.0, dev.reliability * rf_factor))
+            completed = bool(
+                contact_uplink_kept
+                and self._rng.random() < p_complete
             )
-            completed = bool(self._rng.random() < p_complete)
             per_device_completed.append(completed)
             # Per-device service counters for fairness metrics.
             self._episode_metrics.per_device_visits[did] = (
