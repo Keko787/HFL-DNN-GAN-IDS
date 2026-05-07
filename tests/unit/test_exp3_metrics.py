@@ -149,23 +149,34 @@ def _fake_cal() -> Exp3Calibration:
 
 
 def test_propulsion_energy_combines_three_components():
+    # Real flight path = Pass-1 transits (10m) + dock leg (3m) + Pass-2
+    # walk (2m) = 15m. Mission time = Pass-1 (2+1+10) + dock (0.5+1) +
+    # Pass-2 (0.4+0.6) = 15.5s. The legacy ``return_distance_m`` is
+    # intentionally not part of ``path_length_m`` anymore — see
+    # docstring on Exp3EpisodeMetrics.
     m = Exp3EpisodeMetrics(
         transit_distance_m=10.0,
-        return_distance_m=5.0,
+        return_distance_m=5.0,           # legacy field, no longer counted
         upload_bytes=1_000_000.0,
         transit_time_s=2.0,
         upload_time_s=1.0,
         collect_time_s=10.0,
+        dock_transit_distance_m=3.0,
+        dock_transit_time_s=0.5,
+        dock_time_s=1.0,
+        pass2_transit_distance_m=2.0,
+        pass2_transit_time_s=0.4,
+        pass2_delivery_time_s=0.6,
     )
     cal = _fake_cal()
     e = propulsion_energy(m, cal)
-    # idle: 13s × 2W = 26 J
-    assert e.idle_J == pytest.approx(26.0)
+    # idle: 15.5s × 2W = 31 J
+    assert e.idle_J == pytest.approx(31.0)
     # tx: 1e6 bytes × 8 × 1e-9 J/bit = 0.008 J
     assert e.tx_J == pytest.approx(0.008)
-    # prop: 15m × 10 J/m = 150 J
+    # prop: 15m × 10 J/m = 150 J  (10 + 3 + 2, NOT counting return_distance_m)
     assert e.prop_J == pytest.approx(150.0)
-    assert e.total_J == pytest.approx(176.008)
+    assert e.total_J == pytest.approx(181.008)
 
 
 # --------------------------------------------------------------------------- #

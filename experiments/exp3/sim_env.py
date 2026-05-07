@@ -144,6 +144,22 @@ class Exp3SimConfig:
     # implausibly small times. Set to 30.0 to mirror Exp.\ 1 jittery.
     latency_jitter_pct: float = 0.0
 
+    # ---------------------------------------------------------------- #
+    # Two-pass mission knobs — make Exp3Sim a faithful walk of the
+    # PRE-MISSION-load → Pass-1-collect → DOCK → Pass-2-deliver flow
+    # described in HERMES_FL_Scheduler_Design.md §V.
+    # ---------------------------------------------------------------- #
+    # Inter-pass dock event: between Pass 1 and Pass 2 the mule flies
+    # back to the nearest BS / dock, ships the mission_aggregate UP,
+    # and receives fresh θ_disc' DOWN. Modeled as a fixed dock_time_s
+    # charge in addition to the transit. Default 30 s mirrors the
+    # paper's intra-NUC handoff window.
+    dock_time_s: float = 30.0
+    # Pass-2 delivery session per contact — push-only downlink (no Δθ
+    # pull), so much shorter than Pass-1's collect_s. Default 5 s vs
+    # the 30 s collect default.
+    delivery_session_s: float = 5.0
+
     energy_weight: float = 1.0
     seed: Optional[int] = None
 
@@ -182,6 +198,45 @@ class Exp3StepResult:
         return len(self.per_device_completed)
 
 
+@dataclass(frozen=True)
+class Exp3DockResult:
+    """Outcome of an inter-pass dock event.
+
+    The mule flies from its post-Pass-1 position back to the nearest
+    BS, swaps the mission_aggregate UP and θ_disc' DOWN bundles, and
+    is now positioned at the BS for the start of Pass 2.
+    """
+
+    transit_s: float
+    transit_distance_m: float
+    dock_time_s: float
+    bs_position: Position
+    success: bool
+
+
+@dataclass(frozen=True)
+class Exp3DeliveryStepResult:
+    """One Pass-2 contact's outcome.
+
+    Pass 2 is push-only (deliver fresh θ to every device in range);
+    no Δθ is pulled back, so this carries no upload accounting.
+    """
+
+    contact: ContactWaypoint
+    transit_s: float
+    transit_distance_m: float
+    delivery_s: float
+    per_device_delivered: List[bool]
+
+    @property
+    def delivered_count(self) -> int:
+        return sum(self.per_device_delivered)
+
+    @property
+    def member_count(self) -> int:
+        return len(self.per_device_delivered)
+
+
 # --------------------------------------------------------------------------- #
 # Per-episode roll-up
 # --------------------------------------------------------------------------- #
@@ -196,6 +251,11 @@ class Exp3EpisodeMetrics:
     devices_completed: int = 0
     energy_total: float = 0.0
     transit_distance_m: float = 0.0
+    # Legacy: per-step contact→nearest-BS distance summed across Pass 1.
+    # Originally a placeholder for end-of-mission return cost; with the
+    # explicit ``dock_at_bs`` event now wired up, this field is retained
+    # for backward compat but is NO LONGER added to ``path_length_m``
+    # (the dock event records the real flight). Future work may delete it.
     return_distance_m: float = 0.0
     upload_bytes: float = 0.0
     transit_time_s: float = 0.0
@@ -207,20 +267,45 @@ class Exp3EpisodeMetrics:
     # Per-round close-rate inputs.
     rounds_completed: int = 0
     rounds_attempted: int = 0
-    # Pass-2 deliverability; surfaces the "did we get the fresh θ to
-    # everyone?" claim. Maintained as a count of devices reached via
-    # the greedy second pass.
+    # Pass-2 deliverability — count of devices that received fresh θ.
     pass2_devices_reached: int = 0
+    # Inter-pass dock accounting (one event per mission, between Pass 1
+    # and Pass 2). dock_attempted is True iff arm_mule called dock_at_bs;
+    # dock_success captures whether budget allowed it.
+    dock_transit_distance_m: float = 0.0
+    dock_transit_time_s: float = 0.0
+    dock_time_s: float = 0.0
+    dock_attempted: bool = False
+    dock_success: bool = False
+    # Pass-2 walk accounting (cumulative across the greedy walk).
+    pass2_transit_distance_m: float = 0.0
+    pass2_transit_time_s: float = 0.0
+    pass2_delivery_time_s: float = 0.0
+    pass2_contacts_visited: int = 0
+    # Devices whose Δθ slot was empty when the mule arrived (mule was
+    # late vs ``deadline_fulfilment_s``). Diagnostic for the deadline-
+    # gating mechanism — surfaces *why* yield drops in budget-tight cells.
+    pass1_devices_deadline_missed: int = 0
 
     @property
     def path_length_m(self) -> float:
-        # The mule's full propulsion path = transit (Pass 1) + return
-        # legs to the nearest BS (one per contact in Eq. 5).
-        return self.transit_distance_m + self.return_distance_m
+        # Real flight path: Pass 1 transits + dock leg + Pass 2 walk.
+        # The legacy ``return_distance_m`` is intentionally excluded —
+        # it was a per-step placeholder for an end-of-mission return
+        # that the explicit dock event now models honestly.
+        return (
+            self.transit_distance_m
+            + self.dock_transit_distance_m
+            + self.pass2_transit_distance_m
+        )
 
     @property
     def time_total_s(self) -> float:
-        return self.transit_time_s + self.upload_time_s + self.collect_time_s
+        return (
+            self.transit_time_s + self.upload_time_s + self.collect_time_s
+            + self.dock_transit_time_s + self.dock_time_s
+            + self.pass2_transit_time_s + self.pass2_delivery_time_s
+        )
 
 
 # --------------------------------------------------------------------------- #
@@ -262,7 +347,13 @@ class Exp3Sim:
 
         self._cfg = cfg
         self._rng = np.random.default_rng(cfg.seed)
-        self._mule_pose: Position = (0.0, 0.0, 0.0)
+        # Mule starts at the BS-infrastructure centroid — the
+        # PRE-MISSION dock load (HERMES_FL_Scheduler_Design.md §V) puts
+        # θ_disc on the mule at the cluster's edge server, not at the
+        # field origin. Using the centroid of the BS positions
+        # represents an abstract dock co-located with the BS array;
+        # picking any single BS would bias the first-leg geometry.
+        self._mule_pose: Position = _bs_centroid(cfg.base_station_positions)
         self._mule_energy: float = 1.0
         self._mission_budget: float = cfg.mission_budget_s * cfg.beta
         self._budget_remaining: float = self._mission_budget
@@ -271,6 +362,11 @@ class Exp3Sim:
         self._states: Dict[DeviceID, DeviceSchedulerState] = {}
         self._deadlines: Dict[DeviceID, float] = {}
         self._contacts: List[ContactWaypoint] = []
+        # Snapshot of every contact produced by S3a clustering at reset.
+        # Pass 1 depletes ``_contacts``; ``_initial_contacts`` is what
+        # the Pass-2 greedy walk iterates over (every admitted-device
+        # cluster, regardless of Pass-1 service status).
+        self._initial_contacts: List[ContactWaypoint] = []
         self._episode_metrics: Exp3EpisodeMetrics = Exp3EpisodeMetrics()
 
     # ------------------------------------------------------------------ #
@@ -279,7 +375,7 @@ class Exp3Sim:
 
     def reset(self) -> None:
         cfg = self._cfg
-        self._mule_pose = (0.0, 0.0, 0.0)
+        self._mule_pose = _bs_centroid(cfg.base_station_positions)
         self._mule_energy = 1.0
         self._mission_budget = cfg.mission_budget_s * cfg.beta
         self._budget_remaining = self._mission_budget
@@ -288,6 +384,7 @@ class Exp3Sim:
         self._states = {}
         self._deadlines = {}
         self._contacts = []
+        self._initial_contacts = []
         self._episode_metrics = Exp3EpisodeMetrics()
 
         _PRE_ROUNDS = 11
@@ -342,6 +439,7 @@ class Exp3Sim:
             deadlines=self._deadlines,
             rf_range_m=cfg.rf_range_m,
         )
+        self._initial_contacts = list(self._contacts)
         self._episode_metrics.contacts_total_pass1 = len(self._contacts)
 
     # ------------------------------------------------------------------ #
@@ -476,6 +574,11 @@ class Exp3Sim:
         )
 
         per_device_completed: List[bool] = []
+        # Anticipate the post-step time so deadline gating reflects
+        # *when the contact actually wraps up*, not when the mule
+        # arrived. A device whose deadline elapses mid-session has an
+        # empty Δθ slot by the time the mule asks for it.
+        contact_finish_time = self._now + transit_s + collect_s
         for did in contact.devices:
             dev = next((d for d in self._devices if d.device_id == did), None)
             if dev is None:
@@ -485,10 +588,26 @@ class Exp3Sim:
             rf_factor = max(0.4, 1.0 - d_dist / (3.0 * cfg.world_radius))
             # Short-range device↔mule completion (no packet loss here).
             p_complete = max(0.0, min(1.0, dev.reliability * rf_factor))
-            completed = bool(
-                contact_uplink_kept
-                and self._rng.random() < p_complete
+            # Deadline gating: a device's prepared Δθ has a window
+            # (``deadline_fulfilment_s``). The design doc has the
+            # device stash its Δθ in a delivery slot — if the mule
+            # arrives after the absolute deadline, the slot is empty
+            # because the device has either moved on to the next
+            # local-train cycle or the prepared Δθ has been recycled.
+            # This is what gives EDF (A3) genuine signal vs FIFO (A2):
+            # A3 prioritizes tighter-deadline contacts, which under
+            # this gating are the ones with real participation risk.
+            deadline_passed = (
+                contact_finish_time > self._deadlines.get(did, float("inf"))
             )
+            if deadline_passed:
+                completed = False
+                self._episode_metrics.pass1_devices_deadline_missed += 1
+            else:
+                completed = bool(
+                    contact_uplink_kept
+                    and self._rng.random() < p_complete
+                )
             per_device_completed.append(completed)
             # Per-device service counters for fairness metrics.
             self._episode_metrics.per_device_visits[did] = (
@@ -539,12 +658,14 @@ class Exp3Sim:
         self._episode_metrics.upload_time_s += upload_s
         self._episode_metrics.collect_time_s += collect_s
 
-        # Drop the contact and its members from the unvisited set.
+        # Drop the contact from the Pass-1 unvisited set. Device
+        # state (``_states`` / ``_deadlines`` / ``_devices``) is
+        # intentionally retained so Pass 2's greedy walk can look up
+        # positions and short-range reliabilities. Each device only
+        # appears in one contact (``cluster_by_rf_range`` partitions
+        # by RF range), so there's no risk of double-scheduling within
+        # Pass 1 from leaving the entries in place.
         self._contacts.pop(idx)
-        for did in contact.devices:
-            self._states.pop(did, None)
-            self._deadlines.pop(did, None)
-            self._devices = [d for d in self._devices if d.device_id != did]
 
         return Exp3StepResult(
             contact=contact,
@@ -567,10 +688,148 @@ class Exp3Sim:
         Pass 2 walks every remaining contact greedily (handled by the
         arm driver, not the policy); this is where it stamps the count
         of devices that received fresh weights for the metric module.
+
+        Note: the production-faithful path now uses :meth:`step_deliver`,
+        which updates ``pass2_devices_reached`` directly. This setter
+        is retained for tests and external callers that drive the
+        Pass-2 metric without calling :meth:`step_deliver`.
         """
         if devices_reached < 0:
             raise ValueError("devices_reached must be non-negative")
         self._episode_metrics.pass2_devices_reached = devices_reached
+
+    # ------------------------------------------------------------------ #
+    # Inter-pass dock event
+    # ------------------------------------------------------------------ #
+
+    def dock_at_bs(self) -> Exp3DockResult:
+        """Fly to the nearest BS and dock with the cluster.
+
+        Models the inter-pass dock from
+        HERMES_FL_Scheduler_Design.md §V (lines 305-319): mule ships
+        Pass-1's mission_aggregate UP, the cluster runs cross-mule
+        FedAvg, and the mule receives fresh ``θ_disc'`` DOWN for
+        Pass-2 delivery.
+
+        Charges ``transit_s + cfg.dock_time_s`` against the budget
+        and updates ``mule_pose`` to the BS position. If the residual
+        budget can't cover the round-trip, returns ``success=False``
+        without advancing state — the caller should skip Pass 2.
+        """
+        cfg = self._cfg
+        bs = self._nearest_bs(self._mule_pose)
+        transit_dist = _euclid(self._mule_pose, bs)
+        transit_s = transit_dist / cfg.cruise_speed_m_s
+        cost = transit_s + cfg.dock_time_s
+        self._episode_metrics.dock_attempted = True
+        if cost > self._budget_remaining:
+            return Exp3DockResult(
+                transit_s=transit_s,
+                transit_distance_m=transit_dist,
+                dock_time_s=cfg.dock_time_s,
+                bs_position=bs,
+                success=False,
+            )
+        self._mule_pose = bs
+        self._budget_remaining = max(0.0, self._budget_remaining - cost)
+        self._now += cost
+        # Energy proxy: the dock leg is real flight, so charge it the
+        # same per-meter cost the Pass-1 transit uses.
+        self._mule_energy = max(0.0, self._mule_energy - transit_dist * ENERGY_W)
+        self._episode_metrics.dock_transit_distance_m = transit_dist
+        self._episode_metrics.dock_transit_time_s = transit_s
+        self._episode_metrics.dock_time_s = cfg.dock_time_s
+        self._episode_metrics.dock_success = True
+        self._episode_metrics.energy_total += transit_dist * ENERGY_W
+        return Exp3DockResult(
+            transit_s=transit_s,
+            transit_distance_m=transit_dist,
+            dock_time_s=cfg.dock_time_s,
+            bs_position=bs,
+            success=True,
+        )
+
+    # ------------------------------------------------------------------ #
+    # Pass-2 walk
+    # ------------------------------------------------------------------ #
+
+    def pass2_candidates(self) -> List[ContactWaypoint]:
+        """Snapshot of every contact produced by S3a clustering.
+
+        Pass 2 walks all of these (selector bypassed — the goal is
+        universal delivery), greedy nearest-first from the post-dock
+        mule position. Caller pops as it visits.
+        """
+        return list(self._initial_contacts)
+
+    def step_deliver(self, contact: ContactWaypoint) -> Exp3DeliveryStepResult:
+        """Visit one contact in Pass 2 to push fresh ``θ_disc'``.
+
+        Costs ``transit_s + cfg.delivery_session_s``; no upload (Pass
+        2 is push-only — the long-range link was exercised once at
+        the dock for the DOWN bundle, not per-contact).
+
+        Per-device delivery succeeds iff a Bernoulli on the device's
+        short-range ``reliability × rf_factor`` passes. Pass 2 does
+        NOT inherit the long-range packet-loss check (the mule already
+        holds ``θ_disc'`` after docking; the per-contact link is the
+        reliable short-range hop).
+
+        If residual budget can't cover the cost, returns a result
+        with all-False delivery flags and does not advance state.
+        """
+        if self.done and self._budget_remaining <= 0.0:
+            # Defensive: empty result if mission is fully exhausted.
+            return Exp3DeliveryStepResult(
+                contact=contact,
+                transit_s=0.0,
+                transit_distance_m=0.0,
+                delivery_s=0.0,
+                per_device_delivered=[False] * len(contact.devices),
+            )
+        cfg = self._cfg
+        transit_dist = _euclid(self._mule_pose, contact.position)
+        transit_s = transit_dist / cfg.cruise_speed_m_s
+        delivery_s = cfg.delivery_session_s
+        cost = transit_s + delivery_s
+        if cost > self._budget_remaining:
+            return Exp3DeliveryStepResult(
+                contact=contact,
+                transit_s=transit_s,
+                transit_distance_m=transit_dist,
+                delivery_s=delivery_s,
+                per_device_delivered=[False] * len(contact.devices),
+            )
+
+        per_device_delivered: List[bool] = []
+        for did in contact.devices:
+            dev = next((d for d in self._devices if d.device_id == did), None)
+            if dev is None:
+                per_device_delivered.append(False)
+                continue
+            d_dist = _euclid(contact.position, dev.pos)
+            rf_factor = max(0.4, 1.0 - d_dist / (3.0 * cfg.world_radius))
+            p_deliver = max(0.0, min(1.0, dev.reliability * rf_factor))
+            per_device_delivered.append(self._rng.random() < p_deliver)
+
+        self._mule_pose = contact.position
+        self._budget_remaining = max(0.0, self._budget_remaining - cost)
+        self._now += cost
+        self._mule_energy = max(0.0, self._mule_energy - transit_dist * ENERGY_W)
+        self._episode_metrics.pass2_transit_distance_m += transit_dist
+        self._episode_metrics.pass2_transit_time_s += transit_s
+        self._episode_metrics.pass2_delivery_time_s += delivery_s
+        self._episode_metrics.pass2_contacts_visited += 1
+        self._episode_metrics.pass2_devices_reached += sum(per_device_delivered)
+        self._episode_metrics.energy_total += transit_dist * ENERGY_W
+
+        return Exp3DeliveryStepResult(
+            contact=contact,
+            transit_s=transit_s,
+            transit_distance_m=transit_dist,
+            delivery_s=delivery_s,
+            per_device_delivered=per_device_delivered,
+        )
 
     # ------------------------------------------------------------------ #
     # Helpers
@@ -608,3 +867,20 @@ class Exp3Sim:
 
 def _euclid(a: Position, b: Position) -> float:
     return math.sqrt(sum((x - y) ** 2 for x, y in zip(a, b)))
+
+
+def _bs_centroid(positions: Tuple[Position, ...]) -> Position:
+    """Geometric centroid of the configured BS array.
+
+    The mule docks at the cluster's edge server, which the simulator
+    represents as the centroid of the BS positions — symmetric across
+    all BSes so the first-leg geometry doesn't bias toward any one.
+    """
+    if not positions:
+        raise ValueError("base_station_positions must not be empty")
+    n = len(positions)
+    return (
+        sum(p[0] for p in positions) / n,
+        sum(p[1] for p in positions) / n,
+        sum(p[2] for p in positions) / n,
+    )

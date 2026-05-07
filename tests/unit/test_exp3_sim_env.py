@@ -144,3 +144,172 @@ def test_invalid_config_rejected():
         Exp3Sim(Exp3SimConfig(beta=0.0))
     with pytest.raises(ValueError):
         Exp3Sim(Exp3SimConfig(base_station_positions=()))
+
+
+# --------------------------------------------------------------------------- #
+# Two-pass mission fidelity — fixes (1)–(3) + (5) from the design audit
+# --------------------------------------------------------------------------- #
+
+
+def test_mule_starts_at_bs_centroid_not_origin():
+    """The PRE-MISSION dock-load happens at the cluster, not at (0,0,0).
+
+    With default BS positions ``[(-80,100,0),(0,100,0),(80,100,0)]``,
+    the centroid is ``(0,100,0)`` — that's where the mule starts.
+    """
+    sim = Exp3Sim(_basic_cfg())
+    sim.reset()
+    pose = sim.mule_pose
+    assert pose == pytest.approx((0.0, 100.0, 0.0))
+
+
+def test_initial_contacts_snapshot_persists_across_pass1():
+    """``pass2_candidates`` must return every contact produced at reset,
+    regardless of which were serviced in Pass 1.
+    """
+    sim = Exp3Sim(_basic_cfg(n_devices=12, rf_range_m=40.0, seed=0))
+    sim.reset()
+    initial = sim.pass2_candidates()
+    n_initial = len(initial)
+    # Burn through a couple of Pass-1 steps.
+    if sim.candidates():
+        sim.step(sim.candidates()[0])
+    if sim.candidates():
+        sim.step(sim.candidates()[0])
+    # Pass-1 list should have shrunk; Pass-2 snapshot is unchanged.
+    assert len(sim.candidates()) <= n_initial - 1
+    assert len(sim.pass2_candidates()) == n_initial
+
+
+def test_pass1_step_does_not_pop_device_state():
+    """Pass-2 needs to look up device positions; ``step`` must retain them.
+    """
+    sim = Exp3Sim(_basic_cfg(n_devices=4, rf_range_m=300.0, seed=0))
+    sim.reset()
+    contact = sim.candidates()[0]
+    devices_before = set(contact.devices)
+    sim.step(contact)
+    # Every device that was in the contact is still in the sim's state map.
+    states = sim.device_states()
+    for did in devices_before:
+        assert did in states
+
+
+def test_step_applies_deadline_gating():
+    """A device whose absolute deadline has elapsed must be marked
+    ``not completed`` even if its reliability roll would otherwise pass.
+    """
+    sim = Exp3Sim(_basic_cfg(n_devices=4, rf_range_m=300.0, seed=0,
+                             cruise_speed_m_s=100.0))
+    sim.reset()
+    # Force the simulator's clock past every device's deadline.
+    deadlines = sim.deadlines()
+    max_deadline = max(deadlines.values()) if deadlines else 0.0
+    sim._now = max_deadline + 1.0
+    chosen = sim.candidates()[0]
+    result = sim.step(chosen)
+    # All four devices were behind the deadline → no completions.
+    assert result.completed_count == 0
+    # And the diagnostic counter was bumped.
+    assert sim.episode_metrics.pass1_devices_deadline_missed == 4
+
+
+def test_dock_at_bs_charges_transit_plus_dock_time():
+    sim = Exp3Sim(_basic_cfg(n_devices=4, rf_range_m=300.0,
+                             mission_budget_s=600.0, seed=0,
+                             dock_time_s=30.0, cruise_speed_m_s=10.0))
+    sim.reset()
+    sim.step(sim.candidates()[0])
+    budget_before = sim.budget_remaining
+    now_before = sim.now
+    result = sim.dock_at_bs()
+    assert result.success
+    # Charged transit_s + dock_time_s exactly.
+    expected_cost = result.transit_s + result.dock_time_s
+    assert sim.budget_remaining == pytest.approx(
+        max(0.0, budget_before - expected_cost), rel=1e-9,
+    )
+    assert sim.now == pytest.approx(now_before + expected_cost, rel=1e-9)
+    # Mule is at the BS now.
+    assert sim.mule_pose in sim.base_station_positions
+    # Episode metrics record the dock event.
+    em = sim.episode_metrics
+    assert em.dock_attempted is True
+    assert em.dock_success is True
+    assert em.dock_transit_distance_m == pytest.approx(result.transit_distance_m)
+    assert em.dock_time_s == pytest.approx(30.0)
+
+
+def test_dock_at_bs_fails_if_budget_too_small():
+    """If residual budget can't cover transit + dock_time, the dock event
+    must report ``success=False`` and leave state unchanged.
+    """
+    sim = Exp3Sim(_basic_cfg(n_devices=4, rf_range_m=300.0,
+                             mission_budget_s=600.0, seed=0,
+                             dock_time_s=30.0, cruise_speed_m_s=10.0))
+    sim.reset()
+    sim.step(sim.candidates()[0])
+    # Drain the budget below the dock cost.
+    sim._budget_remaining = 1.0
+    pose_before = sim.mule_pose
+    now_before = sim.now
+    result = sim.dock_at_bs()
+    assert result.success is False
+    # Pose / clock untouched.
+    assert sim.mule_pose == pose_before
+    assert sim.now == now_before
+    # Episode metric flags the attempt but records no success.
+    assert sim.episode_metrics.dock_attempted is True
+    assert sim.episode_metrics.dock_success is False
+
+
+def test_step_deliver_walks_remaining_contacts_and_charges_session():
+    sim = Exp3Sim(_basic_cfg(n_devices=4, rf_range_m=300.0,
+                             mission_budget_s=600.0, seed=0,
+                             delivery_session_s=5.0, cruise_speed_m_s=10.0))
+    sim.reset()
+    contact = sim.pass2_candidates()[0]
+    budget_before = sim.budget_remaining
+    result = sim.step_deliver(contact)
+    # Transit + delivery_session_s charged, no upload.
+    expected_cost = result.transit_s + result.delivery_s
+    assert sim.budget_remaining == pytest.approx(
+        budget_before - expected_cost, rel=1e-9,
+    )
+    em = sim.episode_metrics
+    assert em.pass2_contacts_visited == 1
+    assert em.pass2_devices_reached == result.delivered_count
+    assert em.pass2_delivery_time_s == pytest.approx(5.0)
+    assert sim.mule_pose == contact.position
+
+
+def test_step_deliver_skips_when_budget_exhausted():
+    """No state advance when residual budget < cost; no metric updates."""
+    sim = Exp3Sim(_basic_cfg(n_devices=4, rf_range_m=300.0,
+                             mission_budget_s=600.0, seed=0))
+    sim.reset()
+    contact = sim.pass2_candidates()[0]
+    sim._budget_remaining = 0.5
+    pose_before = sim.mule_pose
+    result = sim.step_deliver(contact)
+    assert result.delivered_count == 0
+    assert sim.mule_pose == pose_before
+    assert sim.episode_metrics.pass2_contacts_visited == 0
+
+
+def test_path_length_includes_dock_and_pass2_segments():
+    """``path_length_m`` must reflect the full flight path:
+    Pass-1 transits + dock leg + Pass-2 walk.
+    """
+    sim = Exp3Sim(_basic_cfg(n_devices=4, rf_range_m=300.0,
+                             mission_budget_s=600.0, seed=0))
+    sim.reset()
+    sim.step(sim.candidates()[0])
+    pass1_dist = sim.episode_metrics.transit_distance_m
+    dock = sim.dock_at_bs()
+    delivery = sim.step_deliver(sim.pass2_candidates()[0])
+    em = sim.episode_metrics
+    assert em.path_length_m == pytest.approx(
+        pass1_dist + dock.transit_distance_m + delivery.transit_distance_m,
+        rel=1e-9,
+    )

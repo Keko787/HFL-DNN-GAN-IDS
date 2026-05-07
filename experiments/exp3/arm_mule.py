@@ -64,17 +64,22 @@ def run_mule_trial(
     policy: ContactRankingPolicy,
     cal: Optional[Exp3Calibration] = None,
 ) -> Exp3MetricSummary:
-    """Run one mule trial under the given ranking policy.
+    """Run one mule trial as a faithful two-pass mission.
 
-    Pass-1 loop:
-      1. ``sim.candidates()`` -> the eligible contact list this step.
-      2. ``policy.rank_contacts(...)`` -> a *re-ordered* (and possibly
-         shorter, for A3's feasibility skip) list.
-      3. Take the head, ``sim.step(contact)``.
-      4. Stop when ``sim.done`` or the policy returns an empty list.
+    Mirrors the §V mission lifecycle in
+    HERMES_FL_Scheduler_Design.md:
 
-    Pass-2: greedy nearest-first walk over remaining contacts to
-    record the Pass-2 deliverability metric.
+    * **Pass 1 (COLLECT)** — selector-driven walk over admitted-device
+      contacts. Each step exchanges θ↔Δθ via :meth:`Exp3Sim.step`
+      (transit + collect + per-contact mule→BS upload).
+    * **Inter-pass dock** — :meth:`Exp3Sim.dock_at_bs` flies the mule
+      back to the nearest BS, charges ``dock_time_s`` for the UP/DOWN
+      bundle exchange, and updates the mule pose to the BS.
+    * **Pass 2 (DELIVER)** — greedy nearest-first walk over every
+      original contact (selector bypassed per design.md:148), pushing
+      ``θ_disc'`` via :meth:`Exp3Sim.step_deliver`. Stops when the
+      contact list exhausts or residual budget can't cover one more
+      delivery.
     """
     sim = Exp3Sim(cfg.sim)
     sim.reset()
@@ -83,14 +88,15 @@ def run_mule_trial(
     n_devices = cfg.sim.n_devices
     round_idx = 0
 
+    # ------------------------------------------------------------------ #
+    # Pass 1 — collect Δθ via selector-driven contact walk
+    # ------------------------------------------------------------------ #
     while not sim.done:
         candidates = sim.candidates()
         if not candidates:
             break
         env = sim.selector_env()
         device_states = sim.device_states()
-        # The scope guard wants the admitted set; use every device
-        # currently in the sim's state map.
         admitted = list(device_states.keys())
         ranked = policy.rank_contacts(
             candidates,
@@ -100,7 +106,7 @@ def run_mule_trial(
             admitted=admitted,
         )
         if not ranked:
-            # Policy declared nothing feasible. End the mission.
+            # Policy declared nothing feasible. End Pass 1.
             break
         chosen = ranked[0]
         result = sim.step(chosen)
@@ -108,25 +114,37 @@ def run_mule_trial(
             round_index=round_idx,
             n_updates=result.completed_count,
             n_target=result.member_count,
-            deadline_met=True,  # contact was served before the mission deadline
+            deadline_met=True,
         ))
         round_idx += 1
 
-    # Pass-2 — count how many devices the greedy walk would reach with
-    # whatever budget remains. Each remaining contact adds its devices
-    # to the reach count if it fits in the residual budget.
-    pass2_reached = 0
-    for contact in sim.candidates():
-        # Conservative cost: transit + collect (no upload — Pass 2 is a
-        # downlink + ACK, much smaller than upload).
+    # ------------------------------------------------------------------ #
+    # Inter-pass dock — UP/DOWN bundle exchange at nearest BS
+    # ------------------------------------------------------------------ #
+    dock_result = sim.dock_at_bs()
+
+    # ------------------------------------------------------------------ #
+    # Pass 2 — greedy nearest-first delivery walk
+    # ------------------------------------------------------------------ #
+    if dock_result.success:
         from .sim_env import _euclid
 
-        transit = _euclid(sim.mule_pose, contact.position) / cfg.sim.cruise_speed_m_s
-        cost = transit + cfg.sim.session_time_s
-        if cost > sim.budget_remaining:
-            break
-        pass2_reached += len(contact.devices)
-    sim.record_pass2_deliveries(pass2_reached)
+        remaining: List[ContactWaypoint] = list(sim.pass2_candidates())
+        # Residual-budget guard: a delivery's lower-bound cost is just
+        # the session (transit ≥ 0). If even that doesn't fit, stop.
+        while remaining and sim.budget_remaining > cfg.sim.delivery_session_s:
+            current = sim.mule_pose
+            # Greedy nearest-first from the current pose.
+            remaining.sort(key=lambda c: _euclid(current, c.position))
+            chosen = remaining[0]
+            transit = (
+                _euclid(current, chosen.position) / cfg.sim.cruise_speed_m_s
+            )
+            cost = transit + cfg.sim.delivery_session_s
+            if cost > sim.budget_remaining:
+                break
+            sim.step_deliver(chosen)
+            remaining.pop(0)
 
     summary = summarise_trial(
         rounds=rounds,
