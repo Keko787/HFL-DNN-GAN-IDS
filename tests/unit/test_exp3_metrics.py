@@ -38,6 +38,38 @@ def test_update_yield_mean_of_n_updates():
     assert update_yield(rounds) == pytest.approx(3.0)
 
 
+def test_aggregate_round_logs_emits_quorum_threshold():
+    """``aggregate_round_logs`` must include kmin=2 (the FL quorum
+    threshold) alongside the legacy 1, N/2, N thresholds.
+    """
+    rounds = [
+        Exp3RoundLog(0, 0, 10, True),  # below quorum
+        Exp3RoundLog(1, 1, 10, True),  # below quorum
+        Exp3RoundLog(2, 2, 10, True),  # AT quorum
+        Exp3RoundLog(3, 5, 10, True),  # above quorum, at majority
+        Exp3RoundLog(4, 10, 10, True),  # full slice
+    ]
+    _, close_rates = aggregate_round_logs(rounds)
+    # 3 of 5 rounds had n_updates >= 2 (rounds 2, 3, 4) → 0.6
+    assert close_rates[2] == pytest.approx(3 / 5)
+    # legacy thresholds still computed
+    assert 1 in close_rates and 5 in close_rates and 10 in close_rates
+
+
+def test_summarise_trial_populates_kmin2():
+    rounds = [
+        Exp3RoundLog(0, 3, 10, True),
+        Exp3RoundLog(1, 1, 10, True),
+        Exp3RoundLog(2, 0, 10, True),
+    ]
+    s = summarise_trial(
+        rounds=rounds, metrics=None, cal=None,
+        n_devices=10, is_mule_arm=False,
+    )
+    # Only round 0 (n_updates=3) hits the FL quorum (≥2).
+    assert s.round_close_rate_kmin2 == pytest.approx(1 / 3)
+
+
 def test_round_close_rate_kmin_threshold():
     rounds = [
         Exp3RoundLog(0, 3, 5, True),  # ≥1, ≥2, not ≥5
@@ -231,7 +263,9 @@ def test_to_row_writes_blank_for_none_values():
     s = Exp3MetricSummary(
         update_yield=1.0, coverage=1.0, jains_fairness=1.0,
         participation_entropy=1.0,
-        round_close_rate_kmin1=1.0, round_close_rate_kminhalf=1.0,
+        round_close_rate_kmin1=1.0,
+        round_close_rate_kmin2=1.0,
+        round_close_rate_kminhalf=1.0,
         round_close_rate_kminN=1.0,
         mission_completion_rate=1.0,
         completion_fairness=1.0,

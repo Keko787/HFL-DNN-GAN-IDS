@@ -74,6 +74,10 @@ class Exp3Row:
     jains_fairness: float
     participation_entropy: float
     round_close_rate_kmin1: float
+    # FL-quorum threshold: ≥2 device updates (the smallest set where
+    # FedAvg aggregation is non-trivial). Defaults to 0.0 for legacy
+    # CSVs without the column.
+    round_close_rate_kmin2: float
     round_close_rate_kminhalf: float
     round_close_rate_kminN: float
     # Round-count-invariant yield: fraction of admitted devices with
@@ -154,6 +158,9 @@ def load_trials(csv_path: Path) -> List[Exp3Row]:
                     ),
                     round_close_rate_kmin1=float(
                         raw["round_close_rate_kmin1"] or 0.0
+                    ),
+                    round_close_rate_kmin2=float(
+                        raw.get("round_close_rate_kmin2", "") or 0.0
                     ),
                     round_close_rate_kminhalf=float(
                         raw["round_close_rate_kminhalf"] or 0.0
@@ -263,10 +270,10 @@ def summarize(rows: Sequence[Exp3Row]) -> str:
         ("A2", "A1", "mission_completion_rate", "A2 vs A1 (slow-deadline claim)"),
         ("A4", "A1", "mission_completion_rate", "A4 vs A1 (RL vs centralized FL)"),
         ("A2", "A1", "jains_fairness", "A2 vs A1 fairness"),
-        ("A3", "A2", "round_close_rate_kminhalf", "A3 vs A2 close-rate"),
+        ("A3", "A2", "round_close_rate_kmin2", "A3 vs A2 close-rate (quorum)"),
         ("A3", "A2", "propulsion_energy_J", "A3 vs A2 mission energy"),
         ("A4", "A3", "mission_completion_rate", "A4 vs A3 mission completion"),
-        ("A4", "A3", "round_close_rate_kminhalf", "A4 vs A3 close-rate"),
+        ("A4", "A3", "round_close_rate_kmin2", "A4 vs A3 close-rate (quorum)"),
     )
     for arm_a, arm_b, metric, label in pairings:
         result = paired_test(rows, arm_a, arm_b, metric)
@@ -375,8 +382,15 @@ def write_figures(
     metric_figs = [
         ("fig0a", "mission_completion_rate",
          "Fraction of devices contributing ≥1 update (per mission)"),
-        ("fig0b", "round_close_rate_kminhalf",
-         "Fraction of rounds closed (k_min = N/2)"),
+        # fig0b: FL-quorum close rate. kmin=2 is the floor for a
+        # meaningful FedAvg aggregation (one update is just SGD; two
+        # is the smallest non-trivial federation). The previous
+        # kmin=N/2 strict-majority threshold was visually degenerate
+        # under the per-mission round semantics — most jittery trials
+        # missed the bar and the box collapsed to 0. The quorum
+        # threshold is more discriminative across regimes.
+        ("fig0b", "round_close_rate_kmin2",
+         "Fraction of rounds reaching FL quorum (k_min = 2)"),
         # fig0c: completion-based fairness rather than visit-based.
         # A1's universal sampling makes visit-based ``jains_fairness``
         # trivially 1.0; ``completion_fairness`` is contestable across
@@ -451,34 +465,6 @@ def write_figures(
                 for patch in bp_j["boxes"]:
                     patch.set_facecolor(jittery_color)
                     patch.set_alpha(0.65)
-
-                # A1 jittery dead-zone cap annotation, but only on the
-                # two metrics where the cap is mathematically meaningful
-                # (mission_completion_rate is hard-bounded by
-                # 1 - p_dead; completion_fairness on a fully-uniform
-                # alive subset bottoms out at the same fraction). The
-                # empirical max of A1's jittery distribution is a
-                # robust proxy for the theoretical cap.
-                if metric in ("mission_completion_rate",
-                              "completion_fairness") and "A1" in kept_arms:
-                    a1_idx = kept_arms.index("A1")
-                    a1_jit = jittery_data[a1_idx]
-                    if a1_jit and not (
-                        len(a1_jit) == 1
-                        and isinstance(a1_jit[0], float)
-                        and math.isnan(a1_jit[0])
-                    ):
-                        cap = float(np.max(a1_jit))
-                        ax.axhline(
-                            y=cap, color="#7a3a05", linestyle="--",
-                            linewidth=0.9, alpha=0.55, zorder=1,
-                        )
-                        ax.text(
-                            0.015, cap, f"A1 jittery cap ≈ {cap:.2f} ",
-                            transform=ax.get_yaxis_transform(),
-                            fontsize=7, color="#7a3a05",
-                            va="bottom", ha="left",
-                        )
 
                 tick_positions = [i * spacing + 1
                                   for i in range(len(kept_arms))]
@@ -677,11 +663,11 @@ def write_figures(
                 # progressive-sophistication ablation.
                 ("A2", "A1", "update_yield"),
                 ("A2", "A1", "jains_fairness"),
-                ("A3", "A2", "round_close_rate_kminhalf"),
+                ("A3", "A2", "round_close_rate_kmin2"),
                 ("A3", "A2", "propulsion_energy_J"),
                 ("A4", "A3", "mission_completion_rate"),
                 ("A4", "A3", "update_yield"),
-                ("A4", "A3", "round_close_rate_kminhalf"),
+                ("A4", "A3", "round_close_rate_kmin2"),
             )
             for arm_a, arm_b, metric in comparisons:
                 pt = paired_test(rows, arm_a, arm_b, metric)
@@ -730,8 +716,8 @@ def write_figures(
         fig, axes = plt.subplots(1, 2, figsize=(10, 4))
         for ax, metric, title in zip(
             axes,
-            ("round_close_rate_kminhalf", "propulsion_energy_J"),
-            ("Round close rate (kmin=N/2)", "Propulsion energy (J)"),
+            ("round_close_rate_kmin2", "propulsion_energy_J"),
+            ("Round close rate (kmin=2)", "Propulsion energy (J)"),
         ):
             a, b = _pairs(rows, "A3", "A2", metric)
             if a and b:
@@ -758,8 +744,8 @@ def write_figures(
         fig, axes = plt.subplots(1, 2, figsize=(10, 4))
         for ax, metric, title in zip(
             axes,
-            ("mission_completion_rate", "round_close_rate_kminhalf"),
-            ("Mission completion rate", "Round close rate (kmin=N/2)"),
+            ("mission_completion_rate", "round_close_rate_kmin2"),
+            ("Mission completion rate", "Round close rate (kmin=2)"),
         ):
             a, b = _pairs(rows, "A4", "A3", metric)
             if a and b:
@@ -973,25 +959,32 @@ _LATEX_CAPTIONS: tuple = (
         ),
     ),
     (
-        "exp3_fig0b_round_close_rate_kminhalf",
+        "exp3_fig0b_round_close_rate_kmin2",
         "fig:exp3:close_rate",
-        "Round close rate (k\\textsubscript{min} = N/2) across arms",
+        "Round close rate at FL quorum (k\\textsubscript{min} = 2) across arms",
         (
-            r"\textbf{Round close rate} at $k_{\min} = N/2$ across the "
-            r"four arms. Higher is better. A round closes when at "
-            r"least $k_{\min}$ aggregated updates arrive within "
-            r"deadline. \emph{Round semantics, apples-to-apples:} a "
-            r"``round'' is one FL aggregation cycle for both A1 and "
-            r"the mule arms. For A1 each FedAvg round samples $N$ "
-            r"clients and aggregates whatever completes within the "
-            r"per-round deadline. For the mule arms each mission is "
-            r"one round: Pass~1 visits multiple clusters, folds the "
-            r"per-contact partial-FedAvg outputs into a single "
-            r"mission\_aggregate, and the dock's cross-mule FedAvg "
-            r"folds that into the global $\theta$ exactly once. "
-            r"$n_{\text{target}}$ is the admitted slice size $N$ for "
-            r"both arms, so ``does the round close at $k_{\min}=N/2$?'' "
-            r"asks the same question of A1 and the mule arms."
+            r"\textbf{Round close rate at the FL quorum threshold} "
+            r"$k_{\min} = 2$ across the four arms. Higher is better. "
+            r"A round ``closes'' when at least two device updates are "
+            r"aggregated within deadline — the floor for a meaningful "
+            r"FedAvg step. One device alone is just local SGD; two "
+            r"is the smallest non-trivial federation. We adopt this "
+            r"quorum threshold rather than a strict-majority "
+            r"$k_{\min} = N/2$ because (a) FL aggregation is well-"
+            r"defined at any $\geq 2$ contributions, and (b) under "
+            r"the per-mission round semantics, the strict-majority "
+            r"variant produces near-zero close-rates for every mule "
+            r"trial in jittery cells, collapsing the panel into a "
+            r"non-discriminative line at zero. "
+            r"\emph{Round semantics, apples-to-apples:} a ``round'' "
+            r"is one FL aggregation cycle for both A1 and the mule "
+            r"arms. For A1 each FedAvg round samples $N$ clients "
+            r"and aggregates whatever completes within the per-round "
+            r"deadline. For the mule arms each mission is one round: "
+            r"Pass~1 visits multiple clusters, folds the per-contact "
+            r"partial-FedAvg outputs into a single mission\_aggregate, "
+            r"and the dock's cross-mule FedAvg folds that into the "
+            r"global $\theta$ exactly once."
         ),
     ),
     (

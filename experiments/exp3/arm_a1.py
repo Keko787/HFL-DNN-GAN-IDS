@@ -264,6 +264,7 @@ def run_a1_trial(cfg: A1Config) -> Exp3MetricSummary:
         jains_fairness=jf,
         participation_entropy=pe,
         round_close_rate_kmin1=summary.round_close_rate_kmin1,
+        round_close_rate_kmin2=summary.round_close_rate_kmin2,
         round_close_rate_kminhalf=summary.round_close_rate_kminhalf,
         round_close_rate_kminN=summary.round_close_rate_kminN,
         mission_completion_rate=mcr,

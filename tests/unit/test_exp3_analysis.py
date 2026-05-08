@@ -58,6 +58,7 @@ def _row(arm: str, trial: int, **overrides):
         jains_fairness=0.9,
         participation_entropy=2.0,
         round_close_rate_kmin1=1.0,
+        round_close_rate_kmin2=0.95,
         round_close_rate_kminhalf=0.8,
         round_close_rate_kminN=0.5,
         rho_contact="",
@@ -168,7 +169,7 @@ def test_write_figures_smoke(tmp_path: Path):
     # fig0a now leads with the round-count-invariant headline metric;
     # update_yield is demoted to fig0f as a supporting panel.
     assert "exp3_fig0a_mission_completion_rate.png" in written_names
-    assert "exp3_fig0b_round_close_rate_kminhalf.png" in written_names
+    assert "exp3_fig0b_round_close_rate_kmin2.png" in written_names
     assert "exp3_fig0c_completion_fairness.png" in written_names
     assert "exp3_fig0d_coverage.png" in written_names
     assert "exp3_fig0e_propulsion_energy.png" in written_names
@@ -178,7 +179,7 @@ def test_write_figures_smoke(tmp_path: Path):
     tex = (figs_dir / "exp3_fig_captions.tex").read_text(encoding="utf-8")
     for stem in (
         "exp3_fig0a_mission_completion_rate",
-        "exp3_fig0b_round_close_rate_kminhalf",
+        "exp3_fig0b_round_close_rate_kmin2",
         "exp3_fig0c_completion_fairness", "exp3_fig0d_coverage",
         "exp3_fig0e_propulsion_energy",
         "exp3_fig0f_update_yield",

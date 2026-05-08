@@ -64,6 +64,11 @@ class Exp3MetricSummary:
     jains_fairness: float
     participation_entropy: float
     round_close_rate_kmin1: float
+    # FL-quorum threshold: fraction of rounds with ≥2 device updates,
+    # i.e. the floor for a meaningful FedAvg aggregation. One update
+    # is just SGD; two is the smallest non-trivial federation. This is
+    # the default cross-arm close-rate metric for fig0b.
+    round_close_rate_kmin2: float
     round_close_rate_kminhalf: float
     round_close_rate_kminN: float
     # Round-count-invariant yield: fraction of admitted devices with
@@ -99,6 +104,7 @@ class Exp3MetricSummary:
             "jains_fairness": self.jains_fairness,
             "participation_entropy": self.participation_entropy,
             "round_close_rate_kmin1": self.round_close_rate_kmin1,
+            "round_close_rate_kmin2": self.round_close_rate_kmin2,
             "round_close_rate_kminhalf": self.round_close_rate_kminhalf,
             "round_close_rate_kminN": self.round_close_rate_kminN,
             "mission_completion_rate": self.mission_completion_rate,
@@ -125,6 +131,7 @@ class Exp3MetricSummary:
             "jains_fairness",
             "participation_entropy",
             "round_close_rate_kmin1",
+            "round_close_rate_kmin2",
             "round_close_rate_kminhalf",
             "round_close_rate_kminN",
             "mission_completion_rate",
@@ -164,15 +171,28 @@ def aggregate_round_logs(
 ) -> Tuple[float, Dict[int, float]]:
     """Compute (update_yield, {kmin: round_close_rate}) over a trial.
 
-    Returns the trial-mean update-yield + a dict mapping the three
-    canonical kmin thresholds (1, ⌈N/2⌉, N) to their round-close-rate.
+    Returns the trial-mean update-yield + a dict mapping four canonical
+    kmin thresholds to their round-close-rate:
+
+    * ``1`` — any update at all (very lenient, mostly trivial in clean cells).
+    * ``2`` — the **FL-quorum threshold**: the smallest set where
+      FedAvg-style aggregation is non-trivial. A round that produces
+      a single update is just one client's local SGD; two or more is
+      the floor for a meaningful federation step. Use this as the
+      default cross-arm close-rate metric — it discriminates between
+      regimes where the mule managed at least a viable aggregation
+      and regimes where it didn't, without imposing a "majority
+      participation" bar that is unrealistic under heavy network
+      pressure.
+    * ``⌈N/2⌉`` — majority threshold (strict).
+    * ``N`` — full slice (very strict).
     """
     if not rounds:
         return 0.0, {}
     yield_mean = sum(r.n_updates for r in rounds) / len(rounds)
 
     n_target = max((r.n_target for r in rounds), default=0)
-    thresholds = (1, max(1, n_target // 2), max(1, n_target))
+    thresholds = (1, 2, max(1, n_target // 2), max(1, n_target))
     out: Dict[int, float] = {}
     for k in thresholds:
         hits = sum(1 for r in rounds if r.deadline_met and r.n_updates >= k)
@@ -470,6 +490,7 @@ def summarise_trial(
         jains_fairness=jf,
         participation_entropy=pe,
         round_close_rate_kmin1=close_rate_by_k.get(1, 0.0),
+        round_close_rate_kmin2=close_rate_by_k.get(2, 0.0),
         round_close_rate_kminhalf=close_rate_by_k.get(k_half, 0.0),
         round_close_rate_kminN=close_rate_by_k.get(k_full, 0.0),
         mission_completion_rate=mcr,
