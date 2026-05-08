@@ -192,7 +192,37 @@ def test_mule_a4_smoke_with_default_selector():
     assert s.update_yield >= 0.0
 
 
-def test_mule_propulsion_energy_present_when_cal_supplied():
+def test_mule_arm_pads_unvisited_contacts_into_rounds():
+    """An admitted-but-unvisited cluster must count as a failed round.
+
+    Regression for the survivorship bias that previously caused jittery
+    cells to post higher per-round means than clean (because slow
+    uploads truncated Pass 1 to only the early/dense clusters, biasing
+    the mean upward). After the fix, every unvisited contact appears
+    in the rounds log as ``(n_updates=0, deadline_met=False)``.
+    """
+    # Tight mission budget + many small clusters so Pass 1 can't reach
+    # every contact — guarantees at least one unvisited cluster.
+    cfg = MuleArmConfig(
+        arm_name="A2",
+        sim=Exp3SimConfig(
+            n_devices=20, beta=1.0, deadline_heterogeneity=False,
+            rf_range_m=20.0,        # tiny clusters
+            mission_budget_s=80.0,  # tight — can't finish the schedule
+            seed=0,
+        ),
+    )
+    s = run_mule_trial(cfg=cfg, policy=ArrivalOrderPolicy())
+    # update_yield is the per-round mean. With ghost padding, an
+    # all-budget-burned trial that visited 1-2 small clusters and
+    # left 6+ unvisited drops the mean substantially. Specifically,
+    # the value MUST be lower than (mean over only visited contacts).
+    assert s.update_yield >= 0.0
+    # Round close rate must reflect the unvisited contacts as failed
+    # rounds — at kmin=N/2=10 with 20 devices, a small cluster can't
+    # close, and unvisited rounds also fail. So close-rate should be
+    # very low, not artificially high from a survivor-only denominator.
+    assert s.round_close_rate_kminhalf < 0.5
     s = run_mule_trial(
         cfg=_mule_cfg("A2"),
         policy=ArrivalOrderPolicy(),

@@ -247,11 +247,16 @@ def summarize(rows: Sequence[Exp3Row]) -> str:
     ]
 
     pairings = (
-        ("A2", "A1", "update_yield", "A2 vs A1 (slow-deadline claim)"),
+        # Headline cross-arm tests — mission_completion_rate is the
+        # round-count-invariant metric, comparable across A1 and the
+        # mule arms even when A1 has 20 FedAvg rounds and the mule
+        # arms have a handful of contacts.
+        ("A2", "A1", "mission_completion_rate", "A2 vs A1 (slow-deadline claim)"),
+        ("A4", "A1", "mission_completion_rate", "A4 vs A1 (RL vs centralized FL)"),
         ("A2", "A1", "jains_fairness", "A2 vs A1 fairness"),
         ("A3", "A2", "round_close_rate_kminhalf", "A3 vs A2 close-rate"),
         ("A3", "A2", "propulsion_energy_J", "A3 vs A2 mission energy"),
-        ("A4", "A3", "update_yield", "A4 vs A3 update yield"),
+        ("A4", "A3", "mission_completion_rate", "A4 vs A3 mission completion"),
         ("A4", "A3", "round_close_rate_kminhalf", "A4 vs A3 close-rate"),
     )
     for arm_a, arm_b, metric, label in pairings:
@@ -618,10 +623,20 @@ def write_figures(
                 "W", "p", "cliffs_delta", "delta_magnitude",
             ])
             comparisons = (
+                # Headline: mission_completion_rate is the round-count-
+                # invariant cross-arm metric. The A2-vs-A1 and A4-vs-A1
+                # rows are the central jittery-regime claim — they show
+                # whether the mule architecture out-performs centralized
+                # FL when A1's long-range dead zones bite.
+                ("A2", "A1", "mission_completion_rate"),
+                ("A4", "A1", "mission_completion_rate"),
+                # Within-strategy paired tests retained for the
+                # progressive-sophistication ablation.
                 ("A2", "A1", "update_yield"),
                 ("A2", "A1", "jains_fairness"),
                 ("A3", "A2", "round_close_rate_kminhalf"),
                 ("A3", "A2", "propulsion_energy_J"),
+                ("A4", "A3", "mission_completion_rate"),
                 ("A4", "A3", "update_yield"),
                 ("A4", "A3", "round_close_rate_kminhalf"),
             )
@@ -640,13 +655,17 @@ def write_figures(
     except Exception as e:  # pragma: no cover
         log.warning("paired tests CSV skipped: %s", e)
 
-    # Figure 1 — A2 vs A1 paired comparison panel (yield + fairness).
+    # Figure 1 — A2 vs A1 paired comparison panel.
+    # Lead with mission_completion_rate (round-count-invariant,
+    # bounded [0,1] for both arms — the cleanest one-number cross-
+    # arm comparison). Fairness is the secondary panel; update_yield
+    # is shown elsewhere (fig0f) with the round-definition footnote.
     try:
         fig, axes = plt.subplots(1, 2, figsize=(10, 4))
         for ax, metric, title in zip(
             axes,
-            ("update_yield", "jains_fairness"),
-            ("Update yield", "Jain's fairness"),
+            ("mission_completion_rate", "jains_fairness"),
+            ("Mission completion rate", "Jain's fairness"),
         ):
             a, b = _pairs(rows, "A2", "A1", metric)
             if a and b:
@@ -686,13 +705,18 @@ def write_figures(
     except Exception as e:  # pragma: no cover
         log.warning("fig2 skipped: %s", e)
 
-    # Figure 3 — A4 vs A3 (yield + close rate; primary novelty).
+    # Figure 3 — A4 vs A3 (mission completion + close rate; primary novelty).
+    # Both panels are round-count-invariant; the round-definition
+    # caveat that demoted update_yield to fig0f does not apply within
+    # the mule-arm ablation (A3 and A4 share the same per-contact
+    # round semantics), but we keep the comparable metric for
+    # consistency with fig1 and the headline cross-arm story.
     try:
         fig, axes = plt.subplots(1, 2, figsize=(10, 4))
         for ax, metric, title in zip(
             axes,
-            ("update_yield", "round_close_rate_kminhalf"),
-            ("Update yield", "Round close rate (kmin=N/2)"),
+            ("mission_completion_rate", "round_close_rate_kminhalf"),
+            ("Mission completion rate", "Round close rate (kmin=N/2)"),
         ):
             a, b = _pairs(rows, "A4", "A3", metric)
             if a and b:
@@ -893,7 +917,16 @@ _LATEX_CAPTIONS: tuple = (
             r"across arms and across clean / jittery regimes — unlike "
             r"the per-round update yield (Fig.~\ref{fig:exp3:update_yield}), "
             r"which is biased upward in regimes where upload pressure "
-            r"truncates Pass~1 to fewer rounds."
+            r"truncates Pass~1 to fewer rounds. \emph{Jittery cap:} "
+            r"A1's jittery distribution is hard-capped near "
+            r"$1 - p_{\text{dead}}$ (default $p_{\text{dead}} = 0.6$), "
+            r"reflecting persistent long-range dead zones — clients "
+            r"that are blocked, beyond effective range, or in SNR "
+            r"collapse for the entire mission and therefore unreachable "
+            r"from the central server regardless of how many FedAvg "
+            r"rounds run. Mule arms have no analogous cap because the "
+            r"short-range device$\leftrightarrow$mule contact is "
+            r"reliable by design."
         ),
     ),
     (
@@ -905,7 +938,17 @@ _LATEX_CAPTIONS: tuple = (
             r"four arms. Higher is better. A round closes when at "
             r"least $k_{\min}$ aggregated updates arrive within "
             r"deadline; the metric thus rewards consistency rather "
-            r"than averaging high-yield and empty rounds."
+            r"than averaging high-yield and empty rounds. "
+            r"\emph{Schedule-honest denominator:} for the mule arms, "
+            r"every admitted-but-unvisited cluster contributes a "
+            r"failed round to the denominator (zero updates, deadline "
+            r"missed), so a strategy that truncates Pass~1 under "
+            r"upload pressure pays for the unvisited clusters as "
+            r"missed rounds rather than silently dropping them from "
+            r"the average. This removes the survivorship bias that "
+            r"otherwise inverts the clean / jittery comparison when "
+            r"only the surviving (early, dense) clusters enter the "
+            r"per-round mean."
         ),
     ),
     (
@@ -969,9 +1012,21 @@ _LATEX_CAPTIONS: tuple = (
             r"truncates Pass~1 to fewer rounds, the per-round mean is "
             r"biased upward by survivorship on a non-random sample of "
             r"clusters (early/dense clusters dominate the surviving "
-            r"contacts). Use this panel for within-arm trends and "
-            r"refer to the round-count-invariant metrics in "
-            r"Figs.~\ref{fig:exp3:mission_completion_rate}, "
+            r"contacts). The mule-arm denominator is now "
+            r"\emph{schedule-honest}: every admitted-but-unvisited "
+            r"cluster contributes a failed round (zero updates, "
+            r"deadline missed), so a strategy that truncates Pass~1 "
+            r"under upload pressure pays for those clusters as "
+            r"missed rounds rather than silently dropping them from "
+            r"the average. \emph{Jittery damage on this panel} "
+            r"reflects the per-round i.i.d. failure components "
+            r"(2\% packet loss, 30\% latency jitter, 0.4 long-range "
+            r"link-quality multiplier); the persistent dead-zone "
+            r"mechanism that drives A1's collapse on cumulative "
+            r"metrics is not visible here, because dead-zone clients "
+            r"never enter the round average. Use this panel for "
+            r"within-arm trends and refer to the round-count-invariant "
+            r"metrics in Figs.~\ref{fig:exp3:mission_completion_rate}, "
             r"\ref{fig:exp3:close_rate}, and \ref{fig:exp3:coverage} "
             r"for cross-arm and cross-regime comparisons."
         ),

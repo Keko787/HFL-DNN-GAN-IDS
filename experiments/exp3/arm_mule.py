@@ -119,6 +119,27 @@ def run_mule_trial(
         round_idx += 1
 
     # ------------------------------------------------------------------ #
+    # Pad ``rounds`` with ghost entries for every admitted-but-unvisited
+    # cluster, so the per-round metrics (update_yield, round_close_rate)
+    # use a *schedule-honest* denominator instead of a survivor-biased
+    # one. Without this, regimes with heavy upload pressure visit fewer
+    # contacts and the per-round mean is taken over a non-random sample
+    # of clusters (early/dense clusters dominate the survivors), which
+    # can flip the apparent comparison so jittery > clean for arms that
+    # truncate harder. Treating an unvisited cluster as a failed round
+    # (n_updates = 0, deadline_met = False) is the metric-fair model
+    # for a paper claim: if your strategy can't even reach an admitted
+    # cluster, that's a scheduling miss, not a non-event.
+    for unvisited in sim.candidates():
+        rounds.append(Exp3RoundLog(
+            round_index=round_idx,
+            n_updates=0,
+            n_target=len(unvisited.devices),
+            deadline_met=False,
+        ))
+        round_idx += 1
+
+    # ------------------------------------------------------------------ #
     # Inter-pass dock — UP/DOWN bundle exchange at nearest BS
     # ------------------------------------------------------------------ #
     dock_result = sim.dock_at_bs()
