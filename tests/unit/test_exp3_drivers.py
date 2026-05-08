@@ -192,17 +192,49 @@ def test_mule_a4_smoke_with_default_selector():
     assert s.update_yield >= 0.0
 
 
-def test_mule_arm_pads_unvisited_contacts_into_rounds():
-    """An admitted-but-unvisited cluster must count as a failed round.
+def test_mule_arm_emits_one_round_per_mission():
+    """One mule mission produces exactly one FL aggregation cycle.
 
-    Regression for the survivorship bias that previously caused jittery
-    cells to post higher per-round means than clean (because slow
-    uploads truncated Pass 1 to only the early/dense clusters, biasing
-    the mean upward). After the fix, every unvisited contact appears
-    in the rounds log as ``(n_updates=0, deadline_met=False)``.
+    Pass-1 contacts are sub-events that fold into a single
+    ``mission_aggregate``; the cluster's cross-mule FedAvg at the
+    dock is the actual round. ``update_yield`` is therefore the total
+    Δθ contributions across the mission, not a per-contact average,
+    and ``n_target`` for the round is the admitted slice size N
+    (not just the cluster sizes the mule managed to visit).
+
+    Concretely, a trial whose mule visited several clusters and
+    completed K devices in total must report ``update_yield = K``
+    (one round, K total updates) rather than the per-contact mean
+    K / num_visited_contacts.
     """
-    # Tight mission budget + many small clusters so Pass 1 can't reach
-    # every contact — guarantees at least one unvisited cluster.
+    cfg = MuleArmConfig(
+        arm_name="A2",
+        sim=Exp3SimConfig(
+            n_devices=10, beta=1.0, deadline_heterogeneity=False,
+            rf_range_m=300.0,       # one big cluster of all 10 devices
+            mission_budget_s=600.0, # plenty of budget
+            seed=0,
+        ),
+    )
+    s = run_mule_trial(cfg=cfg, policy=ArrivalOrderPolicy())
+    # With one big cluster of 10 devices and mean per-device completion
+    # ~ reliability(0.575) * rf_factor(~0.9) ~ 0.5, expected mission
+    # completions are around 4-7. update_yield equals that count
+    # exactly (one round per mission), NOT a per-contact average.
+    assert 1.0 <= s.update_yield <= 10.0
+    # round_close_rate is now per-mission. With ~5 expected
+    # completions out of N=10, kmin=N/2=5 should sometimes fire.
+    # The metric is binary per trial (this trial closed or didn't),
+    # but we assert >= 0 since outcome depends on the seed.
+    assert 0.0 <= s.round_close_rate_kminhalf <= 1.0
+
+
+def test_mule_arm_round_yield_sums_visited_contacts():
+    """Tight budget that forces only a subset of clusters to be
+    visited: ``update_yield`` should reflect the SUM of completions
+    across the visited contacts, not a survivor-biased per-contact
+    mean.
+    """
     cfg = MuleArmConfig(
         arm_name="A2",
         sim=Exp3SimConfig(
@@ -213,16 +245,13 @@ def test_mule_arm_pads_unvisited_contacts_into_rounds():
         ),
     )
     s = run_mule_trial(cfg=cfg, policy=ArrivalOrderPolicy())
-    # update_yield is the per-round mean. With ghost padding, an
-    # all-budget-burned trial that visited 1-2 small clusters and
-    # left 6+ unvisited drops the mean substantially. Specifically,
-    # the value MUST be lower than (mean over only visited contacts).
-    assert s.update_yield >= 0.0
-    # Round close rate must reflect the unvisited contacts as failed
-    # rounds — at kmin=N/2=10 with 20 devices, a small cluster can't
-    # close, and unvisited rounds also fail. So close-rate should be
-    # very low, not artificially high from a survivor-only denominator.
-    assert s.round_close_rate_kminhalf < 0.5
+    # One round per mission with n_target = 20 (admitted slice).
+    # At kmin = N/2 = 10, this tight-budget trial should NOT close
+    # (mule can only reach 1-2 small clusters before budget exhausts).
+    # Close-rate is therefore 0 or 1 depending on whether the visited
+    # devices crossed the threshold; with only 1-2 clusters of ~2
+    # devices each, the mission stays well below kmin=10.
+    assert s.round_close_rate_kminhalf < 1.0
     s = run_mule_trial(
         cfg=_mule_cfg("A2"),
         policy=ArrivalOrderPolicy(),

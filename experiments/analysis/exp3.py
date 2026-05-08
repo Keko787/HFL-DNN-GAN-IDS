@@ -30,6 +30,7 @@ from __future__ import annotations
 import argparse
 import csv
 import logging
+import math
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -450,6 +451,67 @@ def write_figures(
                 for patch in bp_j["boxes"]:
                     patch.set_facecolor(jittery_color)
                     patch.set_alpha(0.65)
+
+                # Jittered strip-plot overlay — shows the actual point
+                # density inside each box. Critical visual aid when a
+                # regime's distribution is hard-capped (e.g., A1's
+                # jittery MCR sitting at the dead-zone ceiling
+                # 1 - p_dead): the box collapses to a thin sliver, but
+                # the cluster of dots makes the data still visually
+                # legible without distorting any value.
+                _rng = np.random.default_rng(0xA1A1A1)
+                for i, data in enumerate(clean_data):
+                    if not data or (len(data) == 1
+                                     and (isinstance(data[0], float)
+                                          and math.isnan(data[0]))):
+                        continue
+                    pos = clean_pos[i]
+                    jit_offsets = (_rng.random(len(data)) - 0.5) * width * 0.7
+                    ax.scatter(
+                        np.full(len(data), pos) + jit_offsets, data,
+                        s=3.5, alpha=0.22, color=clean_color,
+                        edgecolors="none", zorder=2,
+                    )
+                for i, data in enumerate(jittery_data):
+                    if not data or (len(data) == 1
+                                     and (isinstance(data[0], float)
+                                          and math.isnan(data[0]))):
+                        continue
+                    pos = jit_pos[i]
+                    jit_offsets = (_rng.random(len(data)) - 0.5) * width * 0.7
+                    ax.scatter(
+                        np.full(len(data), pos) + jit_offsets, data,
+                        s=3.5, alpha=0.22, color=jittery_color,
+                        edgecolors="none", zorder=2,
+                    )
+
+                # A1 jittery dead-zone cap annotation, but only on the
+                # two metrics where the cap is mathematically meaningful
+                # (mission_completion_rate is hard-bounded by
+                # 1 - p_dead; completion_fairness on a fully-uniform
+                # alive subset bottoms out at the same fraction). The
+                # empirical max of A1's jittery distribution is a
+                # robust proxy for the theoretical cap.
+                if metric in ("mission_completion_rate",
+                              "completion_fairness") and "A1" in kept_arms:
+                    a1_idx = kept_arms.index("A1")
+                    a1_jit = jittery_data[a1_idx]
+                    if a1_jit and not (
+                        len(a1_jit) == 1
+                        and isinstance(a1_jit[0], float)
+                        and math.isnan(a1_jit[0])
+                    ):
+                        cap = float(np.max(a1_jit))
+                        ax.axhline(
+                            y=cap, color="#7a3a05", linestyle="--",
+                            linewidth=0.9, alpha=0.55, zorder=1,
+                        )
+                        ax.text(
+                            0.985, cap, f" A1 jittery cap ≈ {cap:.2f}",
+                            transform=ax.get_yaxis_transform(),
+                            fontsize=7, color="#7a3a05",
+                            va="bottom", ha="right",
+                        )
 
                 tick_positions = [i * spacing + 1
                                   for i in range(len(kept_arms))]
@@ -951,18 +1013,18 @@ _LATEX_CAPTIONS: tuple = (
             r"\textbf{Round close rate} at $k_{\min} = N/2$ across the "
             r"four arms. Higher is better. A round closes when at "
             r"least $k_{\min}$ aggregated updates arrive within "
-            r"deadline; the metric thus rewards consistency rather "
-            r"than averaging high-yield and empty rounds. "
-            r"\emph{Schedule-honest denominator:} for the mule arms, "
-            r"every admitted-but-unvisited cluster contributes a "
-            r"failed round to the denominator (zero updates, deadline "
-            r"missed), so a strategy that truncates Pass~1 under "
-            r"upload pressure pays for the unvisited clusters as "
-            r"missed rounds rather than silently dropping them from "
-            r"the average. This removes the survivorship bias that "
-            r"otherwise inverts the clean / jittery comparison when "
-            r"only the surviving (early, dense) clusters enter the "
-            r"per-round mean."
+            r"deadline. \emph{Round semantics, apples-to-apples:} a "
+            r"``round'' is one FL aggregation cycle for both A1 and "
+            r"the mule arms. For A1 each FedAvg round samples $N$ "
+            r"clients and aggregates whatever completes within the "
+            r"per-round deadline. For the mule arms each mission is "
+            r"one round: Pass~1 visits multiple clusters, folds the "
+            r"per-contact partial-FedAvg outputs into a single "
+            r"mission\_aggregate, and the dock's cross-mule FedAvg "
+            r"folds that into the global $\theta$ exactly once. "
+            r"$n_{\text{target}}$ is the admitted slice size $N$ for "
+            r"both arms, so ``does the round close at $k_{\min}=N/2$?'' "
+            r"asks the same question of A1 and the mule arms."
         ),
     ),
     (
@@ -1028,39 +1090,29 @@ _LATEX_CAPTIONS: tuple = (
     (
         "exp3_fig0f_update_yield",
         "fig:exp3:update_yield",
-        "Update yield across arms (supporting; round-count-biased)",
+        "Update yield per FL round across arms",
         (
-            r"\textbf{Update yield} per round across A1 (centralized FL), "
+            r"\textbf{Update yield per round} across A1 (centralized FL), "
             r"A2 (arrival-order), A3 (EDF heuristic), A4 (RL). "
-            r"Reported here for completeness; the headline cross-arm "
-            r"metric is mission completion rate "
-            r"(Fig.~\ref{fig:exp3:mission_completion_rate}). "
-            r"\emph{Caveat:} ``round'' is per-FedAvg-round in A1 "
-            r"($\sim N$ candidates) and per-contact-event in the mule "
-            r"arms ($\sim \rho_{\text{contact}}$ candidates); the "
-            r"absolute scale therefore differs structurally and the "
-            r"A1-vs-mule comparison should not be read off this panel "
-            r"directly. Furthermore, in regimes where upload pressure "
-            r"truncates Pass~1 to fewer rounds, the per-round mean is "
-            r"biased upward by survivorship on a non-random sample of "
-            r"clusters (early/dense clusters dominate the surviving "
-            r"contacts). The mule-arm denominator is now "
-            r"\emph{schedule-honest}: every admitted-but-unvisited "
-            r"cluster contributes a failed round (zero updates, "
-            r"deadline missed), so a strategy that truncates Pass~1 "
-            r"under upload pressure pays for those clusters as "
-            r"missed rounds rather than silently dropping them from "
-            r"the average. \emph{Jittery damage on this panel} "
-            r"reflects the per-round i.i.d. failure components "
-            r"(2\% packet loss, 30\% latency jitter, 0.4 long-range "
-            r"link-quality multiplier); the persistent dead-zone "
-            r"mechanism that drives A1's collapse on cumulative "
-            r"metrics is not visible here, because dead-zone clients "
-            r"never enter the round average. Use this panel for "
-            r"within-arm trends and refer to the round-count-invariant "
-            r"metrics in Figs.~\ref{fig:exp3:mission_completion_rate}, "
-            r"\ref{fig:exp3:close_rate}, and \ref{fig:exp3:coverage} "
-            r"for cross-arm and cross-regime comparisons."
+            r"Higher is better. ``Round'' is one FL aggregation cycle "
+            r"for both A1 and the mule arms — for A1 that is one "
+            r"FedAvg round (samples $N$ clients, aggregates the "
+            r"completing ones), for the mule arms it is one mission "
+            r"(Pass~1 sums completions across every visited cluster "
+            r"into a single mission\_aggregate, which the dock then "
+            r"folds into the global $\theta$ via cross-mule FedAvg). "
+            r"This puts the panel on the same denominator across "
+            r"arms, so the A1-vs-mule comparison is meaningful here: "
+            r"in clean cells the mule arms can match or exceed A1's "
+            r"per-round yield by visiting multiple clusters per "
+            r"mission, and in jittery cells A1's dead-zone collapse "
+            r"shows up directly on this metric. The "
+            r"round-count-invariant cross-arm headline remains "
+            r"mission completion rate "
+            r"(Fig.~\ref{fig:exp3:mission_completion_rate}) — that "
+            r"metric measures \emph{which} devices contributed at all, "
+            r"while this one measures the \emph{volume} of "
+            r"contributions per FL aggregation cycle."
         ),
     ),
     (

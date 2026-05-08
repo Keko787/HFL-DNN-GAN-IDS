@@ -80,13 +80,35 @@ def run_mule_trial(
       ``θ_disc'`` via :meth:`Exp3Sim.step_deliver`. Stops when the
       contact list exhausts or residual budget can't cover one more
       delivery.
+
+    **Round semantics.** One mule mission produces one FL aggregation
+    cycle (the cluster's cross-mule FedAvg at the dock folds the
+    mission_aggregate into the global θ exactly once per mission).
+    This driver therefore emits a single ``Exp3RoundLog`` per mission
+    with ``n_updates`` summed across every visited contact and
+    ``n_target = n_devices`` (the admitted slice, not the visited
+    cluster sizes). That puts ``update_yield`` and ``round_close_rate``
+    on the same denominator as A1's per-FedAvg-round metrics, so
+    cross-arm comparisons on those panels are now apples-to-apples.
     """
     sim = Exp3Sim(cfg.sim)
     sim.reset()
 
     rounds: List[Exp3RoundLog] = []
     n_devices = cfg.sim.n_devices
-    round_idx = 0
+    # Mission-level accumulators. The mule's per-contact stops are
+    # *not* FL aggregation cycles — they are sub-events within Pass 1
+    # that fold into a single ``mission_aggregate``. The cluster's
+    # cross-mule FedAvg at the dock then folds that mission_aggregate
+    # into the global θ once per mission, which IS the FL round.
+    # See HERMES_FL_Scheduler_Design.md §V — "one mission ≡ one FL
+    # aggregation cycle." This driver therefore emits exactly one
+    # ``Exp3RoundLog`` per mission, summing completions across every
+    # visited contact, with ``n_target = n_devices`` (the slice's
+    # admitted count, not just the cluster sizes the mule managed to
+    # visit). That keeps ``update_yield`` and ``round_close_rate`` on
+    # the same denominator as A1's per-FedAvg-round metrics.
+    mission_completions = 0
 
     # ------------------------------------------------------------------ #
     # Pass 1 — collect Δθ via selector-driven contact walk
@@ -110,34 +132,23 @@ def run_mule_trial(
             break
         chosen = ranked[0]
         result = sim.step(chosen)
-        rounds.append(Exp3RoundLog(
-            round_index=round_idx,
-            n_updates=result.completed_count,
-            n_target=result.member_count,
-            deadline_met=True,
-        ))
-        round_idx += 1
+        mission_completions += result.completed_count
 
-    # ------------------------------------------------------------------ #
-    # Pad ``rounds`` with ghost entries for every admitted-but-unvisited
-    # cluster, so the per-round metrics (update_yield, round_close_rate)
-    # use a *schedule-honest* denominator instead of a survivor-biased
-    # one. Without this, regimes with heavy upload pressure visit fewer
-    # contacts and the per-round mean is taken over a non-random sample
-    # of clusters (early/dense clusters dominate the survivors), which
-    # can flip the apparent comparison so jittery > clean for arms that
-    # truncate harder. Treating an unvisited cluster as a failed round
-    # (n_updates = 0, deadline_met = False) is the metric-fair model
-    # for a paper claim: if your strategy can't even reach an admitted
-    # cluster, that's a scheduling miss, not a non-event.
-    for unvisited in sim.candidates():
-        rounds.append(Exp3RoundLog(
-            round_index=round_idx,
-            n_updates=0,
-            n_target=len(unvisited.devices),
-            deadline_met=False,
-        ))
-        round_idx += 1
+    # Emit the mission as ONE round.  ``deadline_met = True`` because
+    # the mission itself ran to its scheduled close — per-device
+    # readiness deadlines are already accounted for in ``mission_completions``
+    # via the deadline gate inside ``Exp3Sim.step``. With round = mission,
+    # ghost padding for unvisited contacts is no longer needed: the
+    # denominator is now ``n_devices`` (the admitted slice), not the
+    # number of visited clusters, so a strategy that truncates Pass 1
+    # naturally reports a lower per-round count without survivorship
+    # bias.
+    rounds.append(Exp3RoundLog(
+        round_index=0,
+        n_updates=mission_completions,
+        n_target=n_devices,
+        deadline_met=True,
+    ))
 
     # ------------------------------------------------------------------ #
     # Inter-pass dock — UP/DOWN bundle exchange at nearest BS
