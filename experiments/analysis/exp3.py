@@ -452,39 +452,6 @@ def write_figures(
                     patch.set_facecolor(jittery_color)
                     patch.set_alpha(0.65)
 
-                # Jittered strip-plot overlay — shows the actual point
-                # density inside each box. Critical visual aid when a
-                # regime's distribution is hard-capped (e.g., A1's
-                # jittery MCR sitting at the dead-zone ceiling
-                # 1 - p_dead): the box collapses to a thin sliver, but
-                # the cluster of dots makes the data still visually
-                # legible without distorting any value.
-                _rng = np.random.default_rng(0xA1A1A1)
-                for i, data in enumerate(clean_data):
-                    if not data or (len(data) == 1
-                                     and (isinstance(data[0], float)
-                                          and math.isnan(data[0]))):
-                        continue
-                    pos = clean_pos[i]
-                    jit_offsets = (_rng.random(len(data)) - 0.5) * width * 0.7
-                    ax.scatter(
-                        np.full(len(data), pos) + jit_offsets, data,
-                        s=3.5, alpha=0.22, color=clean_color,
-                        edgecolors="none", zorder=2,
-                    )
-                for i, data in enumerate(jittery_data):
-                    if not data or (len(data) == 1
-                                     and (isinstance(data[0], float)
-                                          and math.isnan(data[0]))):
-                        continue
-                    pos = jit_pos[i]
-                    jit_offsets = (_rng.random(len(data)) - 0.5) * width * 0.7
-                    ax.scatter(
-                        np.full(len(data), pos) + jit_offsets, data,
-                        s=3.5, alpha=0.22, color=jittery_color,
-                        edgecolors="none", zorder=2,
-                    )
-
                 # A1 jittery dead-zone cap annotation, but only on the
                 # two metrics where the cap is mathematically meaningful
                 # (mission_completion_rate is hard-bounded by
