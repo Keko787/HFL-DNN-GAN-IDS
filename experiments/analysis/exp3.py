@@ -734,6 +734,10 @@ def write_figures(
                 ax.set_xticks([i + 1 for i in range(len(kept_arms))])
                 ax.set_xticklabels(kept_arms)
                 from matplotlib.patches import Patch
+                # Vertical legend placed outside the plot on the right
+                # edge, so the high-J outlier circles in jittery cells
+                # (regularly reaching 6000-9000 J for individual trials)
+                # don't get covered by the legend frame.
                 ax.legend(
                     handles=[
                         Patch(facecolor=clean_color, alpha=0.65,
@@ -741,14 +745,14 @@ def write_figures(
                         Patch(facecolor=jittery_color, alpha=0.65,
                               label="Jittery"),
                     ],
-                    loc="upper right",
-                    ncol=2,
-                    fontsize=7.5,
+                    loc="center left",
+                    bbox_to_anchor=(1.02, 0.5),
+                    ncol=1,
+                    fontsize=8.5,
                     frameon=True,
-                    borderpad=0.3,
-                    columnspacing=1.2,
-                    handlelength=1.2,
-                    handletextpad=0.4,
+                    borderpad=0.4,
+                    handlelength=1.4,
+                    handletextpad=0.5,
                 )
             else:
                 data: List[List[float]] = []
