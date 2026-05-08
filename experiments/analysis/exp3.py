@@ -103,6 +103,22 @@ class Exp3Row:
     def is_ok(self) -> bool:
         return self.status == "ok"
 
+    @property
+    def round_participation_rate(self) -> float:
+        """Mean fraction of admitted devices participating per FL round.
+
+        Continuous bounded ``[0, 1]`` metric — the per-round-average of
+        ``n_updates / n_target``, computed from the trial's
+        ``update_yield`` and admitted slice size ``N``. Replaces the
+        binary-per-trial close-rate as the headline panel because the
+        close-rate distribution collapses to a degenerate
+        ``{0, 1}``-only set under per-mission round semantics, while
+        this metric has real spread.
+        """
+        if self.N <= 0:
+            return 0.0
+        return float(self.update_yield) / float(self.N)
+
 
 def _opt_float(s: Any) -> Optional[float]:
     if s in (None, "", "None"):
@@ -382,15 +398,19 @@ def write_figures(
     metric_figs = [
         ("fig0a", "mission_completion_rate",
          "Fraction of devices contributing ≥1 update (per mission)"),
-        # fig0b: FL-quorum close rate. kmin=2 is the floor for a
-        # meaningful FedAvg aggregation (one update is just SGD; two
-        # is the smallest non-trivial federation). The previous
-        # kmin=N/2 strict-majority threshold was visually degenerate
-        # under the per-mission round semantics — most jittery trials
-        # missed the bar and the box collapsed to 0. The quorum
-        # threshold is more discriminative across regimes.
-        ("fig0b", "round_close_rate_kmin2",
-         "Fraction of rounds reaching FL quorum (k_min = 2)"),
+        # fig0b: per-round participation rate (mean fraction of N
+        # devices actually contributing per FL aggregation cycle).
+        # Continuous bounded [0, 1] — replaces the binary-per-trial
+        # ``round_close_rate_kmin2`` close-rate as the headline panel
+        # because the close-rate is structurally binary under
+        # per-mission round semantics, which collapses the box
+        # distribution to a degenerate {0, 1} set. The participation
+        # rate has real spread and shows *how many* devices the round
+        # actually included, not just whether the FL quorum was met.
+        # The kmin=2 close-rate is still emitted to the CSV for
+        # paired tests where the quorum threshold matters.
+        ("fig0b", "round_participation_rate",
+         "Mean fraction of N participating per FL round"),
         # fig0c: completion-based fairness rather than visit-based.
         # A1's universal sampling makes visit-based ``jains_fairness``
         # trivially 1.0; ``completion_fairness`` is contestable across
@@ -959,32 +979,33 @@ _LATEX_CAPTIONS: tuple = (
         ),
     ),
     (
-        "exp3_fig0b_round_close_rate_kmin2",
-        "fig:exp3:close_rate",
-        "Round close rate at FL quorum (k\\textsubscript{min} = 2) across arms",
+        "exp3_fig0b_round_participation_rate",
+        "fig:exp3:participation_rate",
+        "Mean fraction of N participating per FL round across arms",
         (
-            r"\textbf{Round close rate at the FL quorum threshold} "
-            r"$k_{\min} = 2$ across the four arms. Higher is better. "
-            r"A round ``closes'' when at least two device updates are "
-            r"aggregated within deadline — the floor for a meaningful "
-            r"FedAvg step. One device alone is just local SGD; two "
-            r"is the smallest non-trivial federation. We adopt this "
-            r"quorum threshold rather than a strict-majority "
-            r"$k_{\min} = N/2$ because (a) FL aggregation is well-"
-            r"defined at any $\geq 2$ contributions, and (b) under "
-            r"the per-mission round semantics, the strict-majority "
-            r"variant produces near-zero close-rates for every mule "
-            r"trial in jittery cells, collapsing the panel into a "
-            r"non-discriminative line at zero. "
-            r"\emph{Round semantics, apples-to-apples:} a ``round'' "
-            r"is one FL aggregation cycle for both A1 and the mule "
-            r"arms. For A1 each FedAvg round samples $N$ clients "
-            r"and aggregates whatever completes within the per-round "
-            r"deadline. For the mule arms each mission is one round: "
-            r"Pass~1 visits multiple clusters, folds the per-contact "
-            r"partial-FedAvg outputs into a single mission\_aggregate, "
-            r"and the dock's cross-mule FedAvg folds that into the "
-            r"global $\theta$ exactly once."
+            r"\textbf{Per-round participation rate} across the four "
+            r"arms — the mean fraction of admitted devices "
+            r"$n_{\text{updates}}/N$ that actually contributed to a "
+            r"round, computed per trial and box-plotted across all "
+            r"trials. Higher is better; bounded $[0, 1]$. This metric "
+            r"answers ``how much of the slice did the round actually "
+            r"aggregate?'' rather than the binary ``did the round "
+            r"clear the FL quorum threshold?'' The companion CSV "
+            r"emits ``round\_close\_rate\_kmin2'' (fraction of rounds "
+            r"with $\geq 2$ contributions, the FL quorum floor) for "
+            r"paired tests where the binary outcome is the right "
+            r"unit; that metric is omitted from this figure because "
+            r"its per-trial values are structurally $\{0, 1\}$ under "
+            r"per-mission round semantics, which collapses box-plot "
+            r"summaries. \emph{Round semantics, apples-to-apples:} a "
+            r"``round'' is one FL aggregation cycle for both A1 and "
+            r"the mule arms. For A1 each FedAvg round samples $N$ "
+            r"clients and aggregates whatever completes within the "
+            r"per-round deadline. For the mule arms each mission is "
+            r"one round: Pass~1 visits multiple clusters, folds the "
+            r"per-contact partial-FedAvg outputs into a single "
+            r"mission\_aggregate, and the dock's cross-mule FedAvg "
+            r"folds that into the global $\theta$ exactly once."
         ),
     ),
     (
