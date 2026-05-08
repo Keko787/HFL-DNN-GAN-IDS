@@ -305,17 +305,18 @@ def summarize(rows: Sequence[Exp3Row]) -> str:
     ]
 
     pairings = (
-        # Headline cross-arm tests — mission_completion_rate is the
-        # round-count-invariant metric, comparable across A1 and the
-        # mule arms even when A1 has 20 FedAvg rounds and the mule
-        # arms have a handful of contacts.
-        ("A2", "A1", "mission_completion_rate", "A2 vs A1 (slow-deadline claim)"),
-        ("A4", "A1", "mission_completion_rate", "A4 vs A1 (RL vs centralized FL)"),
-        ("A2", "A1", "jains_fairness", "A2 vs A1 fairness"),
-        ("A3", "A2", "round_close_rate_kmin2", "A3 vs A2 close-rate (quorum)"),
-        ("A3", "A2", "propulsion_energy_J", "A3 vs A2 mission energy"),
+        # Cross-arm headline (mule vs centralized FL).
+        ("A2", "A1", "mission_completion_rate", "A2 vs A1 mission completion"),
+        ("A4", "A1", "mission_completion_rate", "A4 vs A1 mission completion"),
+        ("A4", "A1", "round_participation_rate", "A4 vs A1 round participation"),
+        # Within-mule ablation.
+        ("A3", "A2", "round_participation_rate", "A3 vs A2 round participation"),
         ("A4", "A3", "mission_completion_rate", "A4 vs A3 mission completion"),
-        ("A4", "A3", "round_close_rate_kmin2", "A4 vs A3 close-rate (quorum)"),
+        ("A4", "A3", "round_participation_rate", "A4 vs A3 round participation"),
+        ("A4", "A3", "completion_fairness", "A4 vs A3 completion fairness"),
+        # Operational efficiency.
+        ("A4", "A3", "propulsion_energy_per_completion",
+         "A4 vs A3 J per completed device"),
     )
     for arm_a, arm_b, metric, label in pairings:
         result = paired_test(rows, arm_a, arm_b, metric)
@@ -788,8 +789,86 @@ def write_figures(
     except Exception as e:  # pragma: no cover
         log.warning("LaTeX captions skipped: %s", e)
 
-    # 1 + 2 + 3 — paired tests CSV (three rows: A2vsA1, A3vsA2, A4vsA3).
+    # Paired tests CSV — paper-table-ready. Comparisons are organized
+    # into three blocks that match the headline figure set
+    # (fig0b, fig0g, fig4):
+    #
+    #   Block 1 — Cross-arm (mule vs centralized FL, jittery story):
+    #     A2 vs A1 and A4 vs A1 on the bounded [0,1] participation
+    #     and completion metrics.  These are the rows that support
+    #     the paper's central claim that the mule architecture out-
+    #     performs centralized FL when A1's long-range dead zones
+    #     bite.
+    #
+    #   Block 2 — Within-mule scheduling ablation:
+    #     A3 vs A2 (heuristic EDF gain over arrival-order) and A4
+    #     vs A3 (RL primary novelty) on multiple metrics so the
+    #     paper's "RL beats heuristic" claim doesn't rest on a
+    #     single number.  The metrics chosen are aligned with
+    #     fig0b (round_participation_rate), fig3
+    #     (completion_fairness), and fig0g
+    #     (propulsion_energy_per_completion).
+    #
+    #   Block 3 — Operational efficiency:
+    #     propulsion_energy_per_completion comparisons matching
+    #     fig0g.
+    #
+    # Removed: A2 vs A1 update_yield and jains_fairness (redundant
+    # with mission_completion_rate; visit-based fairness is trivially
+    # 1.0 for A1).  A3/A4 vs A2/A3 update_yield (redundant with
+    # round_participation_rate after the round redefinition).
+    # round_close_rate_kmin2 (binary per trial; Wilcoxon on a {0,1}
+    # distribution is degenerate).  Raw propulsion_energy_J
+    # (counterintuitive without the per-completion normalization).
     try:
+        comparisons = (
+            # Block 1 — cross-arm (mule vs centralized FL).
+            ("A2", "A1", "mission_completion_rate"),
+            ("A4", "A1", "mission_completion_rate"),
+            ("A2", "A1", "round_participation_rate"),
+            ("A4", "A1", "round_participation_rate"),
+            # Block 2 — within-mule scheduling ablation.
+            ("A3", "A2", "round_participation_rate"),
+            ("A3", "A2", "completion_fairness"),
+            ("A4", "A3", "mission_completion_rate"),
+            ("A4", "A3", "round_participation_rate"),
+            ("A4", "A3", "completion_fairness"),
+            # Block 3 — operational efficiency (matches fig0g).
+            ("A3", "A2", "propulsion_energy_per_completion"),
+            ("A4", "A3", "propulsion_energy_per_completion"),
+        )
+        # Block boundaries (zero-indexed row at which a midrule
+        # divider should follow): the last row of block 1 is index 3,
+        # last row of block 2 is index 8.
+        block_breaks = (3, 8)
+
+        # Run every test once and stash the results so the CSV and
+        # the LaTeX table read from the same source of truth.
+        results: List[Dict[str, Any]] = []
+        for arm_a, arm_b, metric in comparisons:
+            pt = paired_test(rows, arm_a, arm_b, metric)
+            if pt.test is None:
+                results.append({
+                    "comparison": f"{arm_a}_vs_{arm_b}",
+                    "metric": metric,
+                    "n_pairs": pt.n_pairs,
+                    "statistic": None,
+                    "p_value": None,
+                    "cliffs_delta": None,
+                    "delta_magnitude": "",
+                })
+            else:
+                results.append({
+                    "comparison": f"{arm_a}_vs_{arm_b}",
+                    "metric": metric,
+                    "n_pairs": pt.n_pairs,
+                    "statistic": pt.test.statistic,
+                    "p_value": pt.test.p_value,
+                    "cliffs_delta": pt.test.cliffs_delta,
+                    "delta_magnitude": pt.test.delta_magnitude,
+                })
+
+        # Write the CSV (paper-toolchain-friendly, archival).
         sig_path = figures_dir / "exp3_paired_tests.csv"
         with open(sig_path, "w", newline="", encoding="utf-8") as f:
             w = csv.writer(f)
@@ -797,36 +876,24 @@ def write_figures(
                 "comparison", "metric", "n_pairs",
                 "W", "p", "cliffs_delta", "delta_magnitude",
             ])
-            comparisons = (
-                # Headline: mission_completion_rate is the round-count-
-                # invariant cross-arm metric. The A2-vs-A1 and A4-vs-A1
-                # rows are the central jittery-regime claim — they show
-                # whether the mule architecture out-performs centralized
-                # FL when A1's long-range dead zones bite.
-                ("A2", "A1", "mission_completion_rate"),
-                ("A4", "A1", "mission_completion_rate"),
-                # Within-strategy paired tests retained for the
-                # progressive-sophistication ablation.
-                ("A2", "A1", "update_yield"),
-                ("A2", "A1", "jains_fairness"),
-                ("A3", "A2", "round_close_rate_kmin2"),
-                ("A3", "A2", "propulsion_energy_J"),
-                ("A4", "A3", "mission_completion_rate"),
-                ("A4", "A3", "update_yield"),
-                ("A4", "A3", "round_close_rate_kmin2"),
-            )
-            for arm_a, arm_b, metric in comparisons:
-                pt = paired_test(rows, arm_a, arm_b, metric)
-                if pt.test is None:
-                    w.writerow([f"{arm_a}_vs_{arm_b}", metric, pt.n_pairs,
-                                "", "", "", ""])
-                    continue
+            for r in results:
                 w.writerow([
-                    f"{arm_a}_vs_{arm_b}", metric, pt.n_pairs,
-                    pt.test.statistic, pt.test.p_value,
-                    pt.test.cliffs_delta, pt.test.delta_magnitude,
+                    r["comparison"], r["metric"], r["n_pairs"],
+                    "" if r["statistic"] is None else r["statistic"],
+                    "" if r["p_value"] is None else r["p_value"],
+                    "" if r["cliffs_delta"] is None else r["cliffs_delta"],
+                    r["delta_magnitude"] or "",
                 ])
         written.append(sig_path)
+
+        # Write the LaTeX table (paper-figure-environment-friendly).
+        try:
+            tex_path = _write_latex_paired_table(
+                figures_dir, results, block_breaks=block_breaks,
+            )
+            written.append(tex_path)
+        except Exception as e:  # pragma: no cover
+            log.warning("paired tests LaTeX table skipped: %s", e)
     except Exception as e:  # pragma: no cover
         log.warning("paired tests CSV skipped: %s", e)
 
@@ -889,13 +956,23 @@ def write_figures(
         log.warning("fig2 skipped: %s", e)
 
     # Figure 3 — A4 vs A3 (jittery only, primary novelty).
-    # Both panels are round-count-invariant.
+    # Both panels are continuous bounded [0,1]: mission_completion_rate
+    # (fraction of devices contributing at all) on the left, and
+    # completion_fairness (Jain's J on contribution counts) on the
+    # right. The previous version paired mission_completion_rate with
+    # round_close_rate_kmin2 — but the close-rate metric is binary
+    # per trial under per-mission round semantics, which collapsed
+    # its boxes to a {0, 1}-only set and made A4-vs-A3 visually
+    # impossible to compare. completion_fairness has real per-trial
+    # spread and exposes a different angle on the within-mule
+    # ablation: whether RL-driven scheduling produces more equitable
+    # contribution distributions than the EDF heuristic.
     try:
         fig, axes = plt.subplots(1, 2, figsize=(10, 4))
         for ax, metric, title in zip(
             axes,
-            ("mission_completion_rate", "round_close_rate_kmin2"),
-            ("Mission completion rate", "Round close rate (kmin=2)"),
+            ("mission_completion_rate", "completion_fairness"),
+            ("Mission completion rate", "Completion fairness (Jain's J)"),
         ):
             a, b = _pairs(jittery_rows, "A4", "A3", metric)
             if a and b:
@@ -1347,6 +1424,139 @@ def _write_latex_captions(figures_dir: Path) -> Path:
             "",
         ])
     out.write_text("\n".join(lines), encoding="utf-8")
+    return out
+
+
+# Pretty labels for the metrics that appear in the paired-test
+# table — keep the LaTeX text compact but unambiguous.
+_LATEX_METRIC_LABELS: Dict[str, str] = {
+    "mission_completion_rate": "Mission completion rate",
+    "round_participation_rate": "Round participation rate",
+    "completion_fairness": "Completion fairness ($J$)",
+    "propulsion_energy_per_completion":
+        "Propulsion $\\mathrm{J}/\\Delta\\theta$",
+    # Legacy / supporting metrics retained so older comparison sets
+    # don't crash if a future caller adds them back.
+    "update_yield": "Update yield",
+    "jains_fairness": "Jain's fairness (visit-based)",
+    "round_close_rate_kmin1": "Close rate ($k_{\\min}{=}1$)",
+    "round_close_rate_kmin2": "Close rate at FL quorum ($k_{\\min}{=}2$)",
+    "round_close_rate_kminhalf": "Close rate ($k_{\\min}{=}N/2$)",
+    "round_close_rate_kminN": "Close rate ($k_{\\min}{=}N$)",
+    "propulsion_energy_J": "Propulsion energy (J)",
+}
+
+
+def _format_p_value(p: Optional[float]) -> str:
+    """Format a p-value for the LaTeX table.
+
+    * ``None`` / missing → em-dash
+    * < 0.001 → ``$<\\!.001$``
+    * >= 0.05 → ``\\textit{n.s.}``
+    * otherwise → 3 significant figures.
+    """
+    if p is None:
+        return "---"
+    if p < 0.001:
+        return r"$<\!.001$"
+    if p >= 0.05:
+        return r"\textit{n.s.}"
+    return f"${p:.3f}$"
+
+
+def _format_cliffs_delta(d: Optional[float]) -> str:
+    """Format Cliff's δ for the LaTeX table — signed, 3 decimals."""
+    if d is None:
+        return "---"
+    sign = "+" if d >= 0 else "-"
+    return f"${sign}{abs(d):.3f}$"
+
+
+def _write_latex_paired_table(
+    figures_dir: Path,
+    results: Sequence[Mapping[str, Any]],
+    *,
+    block_breaks: Sequence[int] = (),
+) -> Path:
+    """Emit a paper-ready LaTeX table of paired-test results.
+
+    ``results`` is a list of dicts with keys
+    ``{comparison, metric, n_pairs, statistic, p_value, cliffs_delta,
+    delta_magnitude}`` — the same data the ``exp3_paired_tests.csv``
+    file carries. ``block_breaks`` is a list of row indices after
+    which a ``\\midrule`` should be inserted; use this to visually
+    separate the table into logical groups (cross-arm / within-mule
+    / efficiency).
+
+    Returns the path to the generated ``.tex`` file. Wrapped in a
+    ``table`` environment with a caption and label so the paper can
+    ``\\input{tab/exp3_paired_tests.tex}`` directly.
+    """
+    out = figures_dir / "exp3_paired_tests.tex"
+    figures_dir.mkdir(parents=True, exist_ok=True)
+
+    lines: List[str] = [
+        r"% Auto-generated by experiments.analysis.exp3.write_figures().",
+        r"% Paired Wilcoxon signed-rank tests with Cliff's delta",
+        r"% effect-size estimates over (cell_id, trial_index)-paired",
+        r"% trials. Generated alongside exp3_paired_tests.csv.",
+        r"% Re-render via:",
+        r"%   python -m experiments.analysis.exp3 \\",
+        r"%       --csv results/exp3.csv --figures-dir figures/exp3 \\",
+        r"%       --jittery-filter all",
+        r"\begin{table}[t]",
+        r"  \centering",
+        r"  \caption[Paired statistical comparisons across arms and "
+        r"metrics]{Paired Wilcoxon signed-rank tests with Cliff's "
+        r"$\delta$ effect-size estimates over the trial grid. "
+        r"$n$ is the number of paired (cell, trial) tuples; positive "
+        r"$\delta$ favors the first arm of each comparison. "
+        r"Magnitude categories follow Romano et al. "
+        r"(\textit{negligible}: $|\delta|<0.147$, "
+        r"\textit{small}: $<0.33$, "
+        r"\textit{medium}: $<0.474$, "
+        r"\textit{large}: $\geq 0.474$). "
+        r"$p$-values are reported as $<\!.001$, the rounded value "
+        r"for $0.001 \leq p < 0.05$, or \textit{n.s.} for "
+        r"$p \geq 0.05$.}",
+        r"  \label{tab:exp3:paired}",
+        r"  \small",
+        r"  \begin{tabular}{l l r r r l}",
+        r"    \toprule",
+        r"    Comparison & Metric & $n$ & $\delta$ & $p$ & "
+        r"Magnitude \\",
+        r"    \midrule",
+    ]
+
+    breaks = set(int(i) for i in block_breaks)
+    for i, row in enumerate(results):
+        comp = str(row.get("comparison", "")).replace("_vs_", " vs.\\ ")
+        metric_key = str(row.get("metric", ""))
+        metric_pretty = _LATEX_METRIC_LABELS.get(metric_key, metric_key)
+        n_pairs = row.get("n_pairs", 0)
+        delta = row.get("cliffs_delta")
+        p = row.get("p_value")
+        mag = str(row.get("delta_magnitude", "")) or "---"
+        delta_s = _format_cliffs_delta(
+            float(delta) if delta is not None and delta != "" else None
+        )
+        p_s = _format_p_value(
+            float(p) if p is not None and p != "" else None
+        )
+        lines.append(
+            f"    {comp} & {metric_pretty} & {int(n_pairs)} & "
+            f"{delta_s} & {p_s} & \\textit{{{mag}}} \\\\"
+        )
+        if i in breaks and i < len(results) - 1:
+            lines.append(r"    \midrule")
+
+    lines.extend([
+        r"    \bottomrule",
+        r"  \end{tabular}",
+        r"\end{table}",
+    ])
+
+    out.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return out
 
 

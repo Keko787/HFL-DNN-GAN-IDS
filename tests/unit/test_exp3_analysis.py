@@ -161,8 +161,10 @@ def test_write_figures_smoke(tmp_path: Path):
     loaded = load_trials(csv_path)
     written = write_figures(loaded, figures_dir=figs_dir)
     written_names = {p.name for p in written}
-    # The paired-tests CSV plus at least three of the six figures.
+    # The paired-tests CSV + paper-ready LaTeX table sidecar plus at
+    # least three of the six figures.
     assert "exp3_paired_tests.csv" in written_names
+    assert "exp3_paired_tests.tex" in written_names
     assert any("a4_vs_a3" in n for n in written_names)
     assert any("rho_contact" in n for n in written_names)
     # All-arms per-metric figures (one per metric) + mule-only energy.
