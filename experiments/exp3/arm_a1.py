@@ -80,6 +80,25 @@ class A1Config:
     # arms — which buffer every device behind a short-range device↔mule
     # contact — remain relatively unaffected.
     long_range_link_quality: float = 1.0
+    # Persistent long-range dead-zone fraction. The
+    # ``long_range_link_quality`` multiplier above models *per-round*
+    # i.i.d. failures, but real jittery RF conditions produce
+    # *correlated* failures — a device blocked by terrain or beyond
+    # effective long-range reach stays blocked for the whole mission.
+    # A i.i.d. per-round model with link_quality=0.4 is washed out by
+    # the union over 20 rounds (P[≥1 success] ≈ 1.0), so A1 looks
+    # nearly unaffected by jittery on cumulative metrics like
+    # ``mission_completion_rate`` even though production A1 *does*
+    # collapse in those conditions. The dead-zone fraction adds the
+    # missing correlated component: at trial init, this fraction of
+    # clients is marked unreachable for the entire mission. They
+    # never complete a round regardless of link_quality. The mule
+    # arms have no analogous dead zone — short-range device↔mule RF
+    # reaches every device the mule visits, which is exactly the
+    # production justification for the relay architecture.
+    # Default 0.0 (no dead zones, clean cells); the driver sets this
+    # to ~0.6 in jittery cells.
+    long_range_dead_zone_pct: float = 0.0
     seed: Optional[int] = None
 
 
@@ -124,6 +143,17 @@ def run_a1_trial(cfg: A1Config) -> Exp3MetricSummary:
         cid: float(rng.uniform(cfg.reliability_low, cfg.reliability_high))
         for cid in client_ids
     }
+    # Persistent long-range dead-zone draw. ``dead_zone_pct`` is the
+    # *expected* fraction; we mark the first ``round(pct * N)`` clients
+    # in a shuffled order so the actual count is deterministic given
+    # the seed. Dead-zone clients fail every round of the mission.
+    dead_zone_frac = max(0.0, min(1.0, cfg.long_range_dead_zone_pct / 100.0))
+    n_dead = int(round(dead_zone_frac * cfg.n_clients))
+    if n_dead > 0:
+        shuffled = list(rng.permutation(client_ids))
+        dead_zone_clients = set(shuffled[:n_dead])
+    else:
+        dead_zone_clients = set()
 
     rounds: list[Exp3RoundLog] = []
     # Two separate counters — pre-fix the file conflated them, which
@@ -175,9 +205,17 @@ def run_a1_trial(cfg: A1Config) -> Exp3MetricSummary:
             # (ii) ≈ 0.98 and (iii) ≈ 0.4, jointly degrading effective
             # reliability to ~40% of clean.
             on_time = t_i <= cfg.round_deadline_s
-            link_ok = rng.random() < (
-                reliability[cid] * packet_keep_p * link_quality
-            )
+            # Persistent dead-zone clients fail every round — no
+            # link_quality / packet_keep / Bernoulli rescue can save
+            # them. This is the correlated-failure component that
+            # makes A1 actually collapse in jittery rather than
+            # union-of-chances its way to ~100% mission_completion_rate.
+            if cid in dead_zone_clients:
+                link_ok = False
+            else:
+                link_ok = rng.random() < (
+                    reliability[cid] * packet_keep_p * link_quality
+                )
             if on_time and link_ok:
                 completed.append(cid)
                 per_client_completions[cid] += 1

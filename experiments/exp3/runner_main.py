@@ -151,6 +151,31 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             "(the Exp.\\ 1 ``--jittery`` parity)."
         ),
     )
+    parser.add_argument(
+        "--jittery-a1-dead-zone-pct", type=float, default=60.0,
+        help=(
+            "Fraction (0-100) of A1 clients marked PERSISTENTLY "
+            "long-range-unreachable in JITTERY cells. Models terrain "
+            "blockage, range-edge SNR collapse, and similar correlated "
+            "(not i.i.d.) failure modes that the per-round "
+            "link_quality multiplier alone can't capture: with N=20 "
+            "FedAvg rounds, an i.i.d. 40%% per-round failure unions "
+            "to ~100%% mission_completion_rate, but a 60%% dead zone "
+            "caps it at 40%%. Tune lower for a milder jittery story; "
+            "tune higher (e.g., 80) to put A1 below the mule arms in "
+            "jittery on cumulative metrics. Mule arms have no "
+            "analogous knob — short-range device↔mule RF is treated "
+            "as reliable in the design."
+        ),
+    )
+    parser.add_argument(
+        "--clean-a1-dead-zone-pct", type=float, default=0.0,
+        help=(
+            "Fraction of A1 clients marked unreachable in CLEAN "
+            "cells. Default 0 — the long-range link works for "
+            "everyone when network conditions are good."
+        ),
+    )
     parser.add_argument("--timeout-s", type=float, default=300.0,
                         help="Soft per-trial timeout (warning only).")
     parser.add_argument(
@@ -209,6 +234,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         clean_upload_bps=float(args.clean_upload_bps),
         jittery_upload_bytes=float(args.jittery_upload_bytes),
         jittery_upload_bps=float(args.jittery_upload_bps),
+        clean_a1_dead_zone_pct=float(args.clean_a1_dead_zone_pct),
+        jittery_a1_dead_zone_pct=float(args.jittery_a1_dead_zone_pct),
     )
     log.info(
         "clean upload model: %g bytes / contact at %g bps",

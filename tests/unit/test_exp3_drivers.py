@@ -57,6 +57,102 @@ def test_a1_invalid_config_rejected():
 
 
 # --------------------------------------------------------------------------- #
+# A1 — long-range dead-zone modelling (persistent correlated failures)
+# --------------------------------------------------------------------------- #
+
+def test_a1_full_dead_zone_zeros_completion():
+    """100% dead zone ⇒ no client ever completes a round, no matter how
+    favourable link_quality / packet loss / round deadlines are.
+    """
+    cfg = A1Config(
+        n_clients=10, n_rounds=20,
+        long_range_dead_zone_pct=100.0,
+        long_range_link_quality=1.0,
+        packet_loss_pct=0.0,
+        latency_jitter_pct=0.0,
+        seed=0,
+    )
+    s = run_a1_trial(cfg)
+    assert s.update_yield == pytest.approx(0.0)
+    assert s.mission_completion_rate == pytest.approx(0.0)
+
+
+def test_a1_no_dead_zone_matches_legacy_behaviour():
+    """0% dead zone is a no-op — completions are gated only by the
+    link_quality / packet_loss / reliability triple, as before.
+    """
+    cfg_no_dz = A1Config(
+        n_clients=10, n_rounds=20,
+        long_range_dead_zone_pct=0.0,
+        long_range_link_quality=0.4,
+        packet_loss_pct=2.0, latency_jitter_pct=30.0,
+        seed=42,
+    )
+    s = run_a1_trial(cfg_no_dz)
+    # Without dead zones, the union over 20 rounds essentially
+    # guarantees every client lands at least once → MCR ≳ 0.9.
+    assert s.mission_completion_rate >= 0.9
+
+
+def test_a1_dead_zone_caps_mission_completion_rate():
+    """With ``dead_zone_pct = 60``, ≥1-completion rate must be capped
+    by the reachable fraction (~0.4) regardless of how many rounds run.
+    """
+    cfg = A1Config(
+        n_clients=10, n_rounds=20,
+        long_range_dead_zone_pct=60.0,
+        long_range_link_quality=0.4,
+        packet_loss_pct=2.0, latency_jitter_pct=30.0,
+        seed=7,
+    )
+    s = run_a1_trial(cfg)
+    # Cap is hard: 6 of 10 clients are unreachable for the whole
+    # mission, so MCR can't exceed (10 - 6) / 10 = 0.4. Allow a small
+    # tolerance for rounding when n_clients * pct is non-integer.
+    assert s.mission_completion_rate <= 0.4 + 1e-9
+
+
+def test_a1_dead_zone_deterministic_under_same_seed():
+    cfg = A1Config(
+        n_clients=8, n_rounds=10,
+        long_range_dead_zone_pct=50.0, seed=123,
+    )
+    a = run_a1_trial(cfg)
+    b = run_a1_trial(cfg)
+    assert a.mission_completion_rate == b.mission_completion_rate
+    assert a.update_yield == b.update_yield
+
+
+def test_driver_jittery_cell_engages_a1_dead_zone():
+    """The driver must pass ``jittery_a1_dead_zone_pct`` into A1's
+    config in jittery cells (and the clean value in clean cells), so
+    a jittery trial's A1 row reflects the correlated-failure damage.
+    """
+    drv = Exp3Driver(
+        calibration=_fake_cal(),
+        jittery_a1_dead_zone_pct=100.0,  # everyone unreachable
+        clean_a1_dead_zone_pct=0.0,
+    )
+    cell_clean = Cell(
+        cell_id="clean", arm="A1", trial_index=0, seed=42,
+        params={"N": 10, "beta": 1.0, "deadline_het": False,
+                "rrf": 60.0, "jittery": False},
+    )
+    cell_jittery = Cell(
+        cell_id="jittery", arm="A1", trial_index=0, seed=42,
+        params={"N": 10, "beta": 1.0, "deadline_het": False,
+                "rrf": 60.0, "jittery": True},
+    )
+    row_clean = drv.run_trial(cell_clean)
+    row_jittery = drv.run_trial(cell_jittery)
+    # Clean: no dead zone → completions land normally.
+    assert row_clean["update_yield"] > 0.0
+    # Jittery: 100% dead zone → no client completes anything.
+    assert row_jittery["update_yield"] == pytest.approx(0.0)
+    assert row_jittery["mission_completion_rate"] == pytest.approx(0.0)
+
+
+# --------------------------------------------------------------------------- #
 # Mule arms
 # --------------------------------------------------------------------------- #
 

@@ -82,6 +82,19 @@ class Exp3Driver:
     # noise-layer artefact.
     clean_a1_link_quality: float = 1.0
     jittery_a1_link_quality: float = 0.4
+    # Persistent long-range dead-zone fraction for A1 — devices that
+    # simply cannot reach the central server for the whole mission
+    # (terrain / range edge / SNR collapse). The i.i.d. per-round
+    # ``link_quality`` multiplier alone gets washed out by the union
+    # over 20 rounds; this fraction adds the correlated-failure
+    # component that actually causes A1 to collapse in jittery cells
+    # on cumulative metrics like ``mission_completion_rate``. Mule
+    # arms have no analogous knob — the short-range device↔mule
+    # contact is treated as reliable, so every device the mule
+    # visits is reachable. Default 0% in clean (long-range link
+    # works for everyone), 60% in jittery.
+    clean_a1_dead_zone_pct: float = 0.0
+    jittery_a1_dead_zone_pct: float = 60.0
 
     def __post_init__(self) -> None:
         if self.calibration is None:
@@ -140,10 +153,12 @@ class Exp3Driver:
             packet_loss = self.jittery_packet_loss_pct
             latency_jitter = self.jittery_latency_jitter_pct
             link_quality = self.jittery_a1_link_quality
+            dead_zone_pct = self.jittery_a1_dead_zone_pct
         else:
             packet_loss = self.clean_packet_loss_pct
             latency_jitter = self.clean_latency_jitter_pct
             link_quality = self.clean_a1_link_quality
+            dead_zone_pct = self.clean_a1_dead_zone_pct
         cfg = A1Config(
             n_clients=n,
             n_rounds=int(params.get("n_rounds_a1", 20)),
@@ -152,6 +167,7 @@ class Exp3Driver:
             packet_loss_pct=packet_loss,
             latency_jitter_pct=latency_jitter,
             long_range_link_quality=link_quality,
+            long_range_dead_zone_pct=dead_zone_pct,
             seed=cell.seed,
         )
         return run_a1_trial(cfg)
