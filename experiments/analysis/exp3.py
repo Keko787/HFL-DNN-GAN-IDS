@@ -616,18 +616,25 @@ def write_figures(
                 ax.set_xticks([i + 1 for i in range(len(kept_arms))])
                 ax.set_xticklabels(kept_arms)
                 from matplotlib.patches import Patch
+                # Compact regime legend in the top-right corner.
+                # Two boxes, single line, small font — matches the
+                # compact style used on fig0a-d so readers don't have
+                # to relearn the legend per panel.
                 ax.legend(
                     handles=[
-                        Patch(facecolor=clean_color, alpha=0.65, label="Clean"),
+                        Patch(facecolor=clean_color, alpha=0.65,
+                              label="Clean"),
                         Patch(facecolor=jittery_color, alpha=0.65,
-                              label="Jittery (2% loss + 30% jit.)"),
+                              label="Jittery"),
                     ],
-                    loc="upper center",
-                    bbox_to_anchor=(0.5, -0.15),
+                    loc="upper right",
                     ncol=2,
-                    fontsize=9,
-                    title="Network regime", title_fontsize=9,
+                    fontsize=7.5,
                     frameon=True,
+                    borderpad=0.3,
+                    columnspacing=1.2,
+                    handlelength=1.2,
+                    handletextpad=0.4,
                 )
             else:
                 data: List[List[float]] = []
@@ -704,7 +711,15 @@ def write_figures(
     except Exception as e:  # pragma: no cover
         log.warning("paired tests CSV skipped: %s", e)
 
-    # Figure 1 — A2 vs A1 paired comparison panel.
+    # Figures 1-3 are pairwise comparisons; restrict to jittery
+    # trials only since that is the regime where the scheduling
+    # ablation is most informative — clean cells produce overlapping
+    # distributions across the four arms (the network handles
+    # everything regardless of strategy), so the jittery slice is
+    # what reveals the strategy difference.
+    jittery_rows = [r for r in rows if r.is_ok and r.jittery]
+
+    # Figure 1 — A2 vs A1 paired comparison panel (jittery only).
     # Lead with mission_completion_rate (round-count-invariant,
     # bounded [0,1] for both arms — the cleanest one-number cross-
     # arm comparison). Fairness is the secondary panel; update_yield
@@ -716,13 +731,13 @@ def write_figures(
             ("mission_completion_rate", "jains_fairness"),
             ("Mission completion rate", "Jain's fairness"),
         ):
-            a, b = _pairs(rows, "A2", "A1", metric)
+            a, b = _pairs(jittery_rows, "A2", "A1", metric)
             if a and b:
                 ax.boxplot([b, a], labels=["A1", "A2"], showmeans=True)
             ax.set_ylabel(title)
-            ax.set_title(f"{title}: A2 vs A1")
+            ax.set_title(f"{title}: A2 vs A1 (jittery)")
             _watermark(ax)
-        fig.suptitle("A2 vs A1 (slow-deadline claim)")
+        fig.suptitle("A2 vs A1 — jittery regime only")
         fig.tight_layout()
         out = figures_dir / "exp3_fig1_a2_vs_a1.png"
         fig.savefig(out, dpi=150, bbox_inches="tight")
@@ -731,7 +746,7 @@ def write_figures(
     except Exception as e:  # pragma: no cover
         log.warning("fig1 skipped: %s", e)
 
-    # Figure 2 — A3 vs A2 (close rate + propulsion energy).
+    # Figure 2 — A3 vs A2 (jittery only).
     try:
         fig, axes = plt.subplots(1, 2, figsize=(10, 4))
         for ax, metric, title in zip(
@@ -739,13 +754,13 @@ def write_figures(
             ("round_close_rate_kmin2", "propulsion_energy_J"),
             ("Round close rate (kmin=2)", "Propulsion energy (J)"),
         ):
-            a, b = _pairs(rows, "A3", "A2", metric)
+            a, b = _pairs(jittery_rows, "A3", "A2", metric)
             if a and b:
                 ax.boxplot([b, a], labels=["A2", "A3"], showmeans=True)
             ax.set_ylabel(title)
-            ax.set_title(f"{title}: A3 vs A2")
+            ax.set_title(f"{title}: A3 vs A2 (jittery)")
             _watermark(ax)
-        fig.suptitle("A3 vs A2 (heuristic EDF gain)")
+        fig.suptitle("A3 vs A2 — jittery regime only")
         fig.tight_layout()
         out = figures_dir / "exp3_fig2_a3_vs_a2.png"
         fig.savefig(out, dpi=150, bbox_inches="tight")
@@ -754,12 +769,8 @@ def write_figures(
     except Exception as e:  # pragma: no cover
         log.warning("fig2 skipped: %s", e)
 
-    # Figure 3 — A4 vs A3 (mission completion + close rate; primary novelty).
-    # Both panels are round-count-invariant; the round-definition
-    # caveat that demoted update_yield to fig0f does not apply within
-    # the mule-arm ablation (A3 and A4 share the same per-contact
-    # round semantics), but we keep the comparable metric for
-    # consistency with fig1 and the headline cross-arm story.
+    # Figure 3 — A4 vs A3 (jittery only, primary novelty).
+    # Both panels are round-count-invariant.
     try:
         fig, axes = plt.subplots(1, 2, figsize=(10, 4))
         for ax, metric, title in zip(
@@ -767,13 +778,13 @@ def write_figures(
             ("mission_completion_rate", "round_close_rate_kmin2"),
             ("Mission completion rate", "Round close rate (kmin=2)"),
         ):
-            a, b = _pairs(rows, "A4", "A3", metric)
+            a, b = _pairs(jittery_rows, "A4", "A3", metric)
             if a and b:
                 ax.boxplot([b, a], labels=["A3", "A4"], showmeans=True)
             ax.set_ylabel(title)
-            ax.set_title(f"{title}: A4 vs A3")
+            ax.set_title(f"{title}: A4 vs A3 (jittery)")
             _watermark(ax)
-        fig.suptitle("A4 vs A3 (HERMES RL primary novelty)")
+        fig.suptitle("A4 vs A3 — jittery regime only (RL primary novelty)")
         fig.tight_layout()
         out = figures_dir / "exp3_fig3_a4_vs_a3.png"
         fig.savefig(out, dpi=150, bbox_inches="tight")
@@ -805,6 +816,16 @@ def write_figures(
 
             fig, ax = plt.subplots(figsize=(7.5, 5))
             arms_in_data = [a for a in ("A2", "A3", "A4") if a in arms]
+            # Plot clean and jittery as separate line sets per
+            # (arm, N). Regime is encoded by transparency: clean is
+            # fully opaque (the reference), jittery is faded (40%
+            # alpha) and uses an open marker so it overlays cleanly
+            # without obscuring the clean line beneath. Same color
+            # (arm) and line style (N) — only the regime varies.
+            regime_specs = [
+                ("clean", False, 1.0, True),    # alpha 1.0, filled marker
+                ("jittery", True, 0.45, False),  # alpha 0.45, open marker
+            ]
             for arm in arms_in_data:
                 color = arm_colors.get(arm, "black")
                 for i, N in enumerate(Ns):
@@ -812,24 +833,30 @@ def write_figures(
                     marker = n_markers[i % len(n_markers)]
                     betas = sorted({r.beta for r in rows
                                     if r.is_ok and r.N == N})
-                    ys: List[float] = []
-                    for b in betas:
-                        cell = [r for r in rows
-                                if r.is_ok and r.arm == arm
-                                and r.N == N and r.beta == b]
-                        ys.append(np.mean([r.update_yield for r in cell])
-                                  if cell else float("nan"))
-                    ax.plot(
-                        betas, ys,
-                        color=color, linestyle=style, marker=marker,
-                        markersize=6, linewidth=1.8,
-                    )
+                    for _label, jit_flag, alpha, filled in regime_specs:
+                        ys: List[float] = []
+                        for b in betas:
+                            cell = [r for r in rows
+                                    if r.is_ok and r.arm == arm
+                                    and r.N == N and r.beta == b
+                                    and r.jittery == jit_flag]
+                            ys.append(np.mean([r.update_yield for r in cell])
+                                      if cell else float("nan"))
+                        ax.plot(
+                            betas, ys,
+                            color=color, linestyle=style, marker=marker,
+                            markersize=6, linewidth=1.8,
+                            alpha=alpha,
+                            markerfacecolor=color if filled else "white",
+                            markeredgecolor=color,
+                        )
             ax.set_xlabel("β (deadline tightness)")
             ax.set_ylabel("Update yield (mean)")
             ax.grid(True, alpha=0.3)
 
-            # Two legends: arm (color) and N (line style). Drawn as
-            # proxy artists so they don't clutter the data lines.
+            # Three legends: arm (color), N (line style), regime
+            # (alpha + marker fill). Proxy artists so the legends
+            # are decoupled from the data lines.
             from matplotlib.lines import Line2D
             arm_handles = [
                 Line2D([0], [0], color=arm_colors.get(a, "black"),
@@ -844,22 +871,34 @@ def write_figures(
                        label=f"N = {N}")
                 for i, N in enumerate(Ns)
             ]
-            # Group both legends side-by-side along the top edge:
-            # Bucket size pinned to the upper-right corner, Arm legend
-            # placed just to its left so the two read as a single
-            # horizontal legend cluster. With A1 omitted, the mule-arm
-            # lines top out around y ≈ 2.2 (axes-fraction ≈ 0.85),
-            # leaving the upper ~15% empty for the legend strip.
+            regime_handles = [
+                Line2D([0], [0], color="black", linewidth=1.8,
+                       marker="o", markersize=6,
+                       markerfacecolor="black", alpha=1.0,
+                       label="Clean"),
+                Line2D([0], [0], color="black", linewidth=1.8,
+                       marker="o", markersize=6,
+                       markerfacecolor="white", markeredgecolor="black",
+                       alpha=0.45, label="Jittery"),
+            ]
+            # Stack the three legend boxes along the top edge.
+            # Regime → upper-right; Arm and Bucket size flow leftward.
+            regime_legend = ax.legend(
+                handles=regime_handles, title="Regime",
+                loc="upper right",
+                fontsize=8.5, title_fontsize=8.5,
+            )
+            ax.add_artist(regime_legend)
             arm_legend = ax.legend(
                 handles=arm_handles, title="Arm",
                 loc="upper right", bbox_to_anchor=(0.78, 1.0),
-                fontsize=9, title_fontsize=9,
+                fontsize=8.5, title_fontsize=8.5,
             )
             ax.add_artist(arm_legend)
             ax.legend(
                 handles=n_handles, title="Bucket size",
-                loc="upper right",
-                fontsize=9, title_fontsize=9,
+                loc="upper right", bbox_to_anchor=(0.56, 1.0),
+                fontsize=8.5, title_fontsize=8.5,
             )
             # Annotate the two distinct regimes the chart contains. A1
             # (blue) is a centralized-FL upper bound — its yield reflects
