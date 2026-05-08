@@ -507,10 +507,10 @@ def write_figures(
                             linewidth=0.9, alpha=0.55, zorder=1,
                         )
                         ax.text(
-                            0.985, cap, f" A1 jittery cap ≈ {cap:.2f}",
+                            0.015, cap, f"A1 jittery cap ≈ {cap:.2f} ",
                             transform=ax.get_yaxis_transform(),
                             fontsize=7, color="#7a3a05",
-                            va="bottom", ha="right",
+                            va="bottom", ha="left",
                         )
 
                 tick_positions = [i * spacing + 1
