@@ -405,8 +405,25 @@ class Exp3Sim:
                 else MissionOutcome.TIMEOUT
             )
 
-            # Deadline heterogeneity: half tighter, half looser.
-            base_deadline = 60.0
+            # Per-device prepared-Δθ deadline. Scales with the mission
+            # budget so the gating produces real selection pressure for
+            # EDF without nuking every contact past the first:
+            #
+            # * uniform mode (deadline_heterogeneity=False): every
+            #   device gets ~50% of the (β-scaled) mission budget.
+            #   With mission_budget_s=600 and β=1, that's 300 s — the
+            #   mule can reach 4-5 contacts before the boundary bites.
+            # * heterogeneous mode: half tight (25% of budget), half
+            #   loose (75%). Gives EDF a clear ranking signal — tight-
+            #   deadline contacts must be visited early.
+            #
+            # The legacy 60 s constant was harmless when deadlines only
+            # fed EDF's heuristic; now that ``step`` actually gates
+            # completion on them, the value must be in scale with the
+            # mission. cfg.beta is *not* applied a second time here —
+            # mission_budget_s already includes the β scaling further
+            # down (mission_budget = mission_budget_s * beta).
+            base_deadline = cfg.mission_budget_s * 0.5
             if cfg.deadline_heterogeneity:
                 deadline_window = base_deadline * (0.5 if k % 2 == 0 else 1.5)
             else:
