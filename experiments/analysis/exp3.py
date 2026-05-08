@@ -996,26 +996,38 @@ def write_figures(
                        alpha=0.45, label="Jittery"),
             ]
             # Three legend boxes flowing left-to-right along the top
-            # edge: Regime, Arm, Bucket size. Anchored at the upper-
-            # left corner so they sit above the data lines without
-            # overlapping the curves at the right where yields tend to
-            # peak.
+            # edge: Regime, Arm, Bucket size. Tightly spaced so the
+            # cluster reads as one horizontal strip rather than three
+            # widely-separated panels. Anchored at the upper-left corner
+            # so they sit above the data lines without overlapping the
+            # peak yield curves on the right side.
+            #
+            # ``borderpad`` and ``labelspacing`` are reduced from the
+            # defaults so each legend's internal padding shrinks too —
+            # without that, even with closer ``bbox_to_anchor`` x-values
+            # the boxes still look spread because of their own internal
+            # whitespace.
+            legend_kwargs = dict(
+                fontsize=8.5, title_fontsize=8.5,
+                borderpad=0.3, labelspacing=0.3,
+                handletextpad=0.4, handlelength=1.5,
+            )
             regime_legend = ax.legend(
                 handles=regime_handles, title="Regime",
                 loc="upper left", bbox_to_anchor=(0.0, 1.0),
-                fontsize=8.5, title_fontsize=8.5,
+                **legend_kwargs,
             )
             ax.add_artist(regime_legend)
             arm_legend = ax.legend(
                 handles=arm_handles, title="Arm",
-                loc="upper left", bbox_to_anchor=(0.20, 1.0),
-                fontsize=8.5, title_fontsize=8.5,
+                loc="upper left", bbox_to_anchor=(0.13, 1.0),
+                **legend_kwargs,
             )
             ax.add_artist(arm_legend)
             ax.legend(
                 handles=n_handles, title="Bucket size",
-                loc="upper left", bbox_to_anchor=(0.40, 1.0),
-                fontsize=8.5, title_fontsize=8.5,
+                loc="upper left", bbox_to_anchor=(0.24, 1.0),
+                **legend_kwargs,
             )
             # Annotate the two distinct regimes the chart contains. A1
             # (blue) is a centralized-FL upper bound — its yield reflects
