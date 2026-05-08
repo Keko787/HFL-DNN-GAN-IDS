@@ -169,7 +169,7 @@ def test_write_figures_smoke(tmp_path: Path):
     # update_yield is demoted to fig0f as a supporting panel.
     assert "exp3_fig0a_mission_completion_rate.png" in written_names
     assert "exp3_fig0b_round_close_rate_kminhalf.png" in written_names
-    assert "exp3_fig0c_jains_fairness.png" in written_names
+    assert "exp3_fig0c_completion_fairness.png" in written_names
     assert "exp3_fig0d_coverage.png" in written_names
     assert "exp3_fig0e_propulsion_energy.png" in written_names
     assert "exp3_fig0f_update_yield.png" in written_names
@@ -179,7 +179,7 @@ def test_write_figures_smoke(tmp_path: Path):
     for stem in (
         "exp3_fig0a_mission_completion_rate",
         "exp3_fig0b_round_close_rate_kminhalf",
-        "exp3_fig0c_jains_fairness", "exp3_fig0d_coverage",
+        "exp3_fig0c_completion_fairness", "exp3_fig0d_coverage",
         "exp3_fig0e_propulsion_energy",
         "exp3_fig0f_update_yield",
     ):

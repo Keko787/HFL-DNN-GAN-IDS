@@ -73,6 +73,13 @@ class Exp3MetricSummary:
     # Pass 1 to fewer rounds. See ``mission_completion_rate`` in
     # ``metrics.py`` for the docstring.
     mission_completion_rate: float
+    # Jain's fairness over per-device *completion* counts. Unlike
+    # ``jains_fairness`` (which is on visit counts and trivially 1.0
+    # for A1's universal sampling), this index reveals contribution
+    # inequality — e.g., A1's jittery dead-zone clients with zero
+    # completions vs the rest contributing every round. Bounded
+    # ``[1/N, 1]`` like the visit-based version.
+    completion_fairness: float
 
     # Mule-only — A1 emits None.
     rho_contact: Optional[float]
@@ -95,6 +102,7 @@ class Exp3MetricSummary:
             "round_close_rate_kminhalf": self.round_close_rate_kminhalf,
             "round_close_rate_kminN": self.round_close_rate_kminN,
             "mission_completion_rate": self.mission_completion_rate,
+            "completion_fairness": self.completion_fairness,
         }
         for k, v in (
             ("rho_contact", self.rho_contact),
@@ -120,6 +128,7 @@ class Exp3MetricSummary:
             "round_close_rate_kminhalf",
             "round_close_rate_kminN",
             "mission_completion_rate",
+            "completion_fairness",
             "rho_contact",
             "pass2_coverage",
             "propulsion_energy_J",
@@ -214,6 +223,45 @@ def coverage(
         return 0.0
     n_seen = sum(1 for v in per_device_visits.values() if v > 0)
     return n_seen / n_total
+
+
+def completion_fairness(
+    per_device_completions: Mapping[object, int], *, n_devices: int,
+) -> float:
+    """Jain's fairness index over per-device *completion* counts.
+
+    Mirrors :func:`jains_fairness` but operates on completions rather
+    than visits, which makes the metric contestable across A1 and the
+    mule arms even when A1 trivially saturates visit-based fairness.
+    Specifically, A1's centralized FedAvg samples every client every
+    round, so visit-based ``jains_fairness`` is constant 1.0 by
+    construction; this hides the inequality introduced by persistent
+    long-range dead zones (a fraction of clients with zero completions
+    while the rest contribute at every round).
+
+    Padding to ``n_devices`` so devices that completed zero times still
+    count toward the denominator. Without this, a trial where only 4
+    of 10 clients ever completed would compute J on the 4 non-zero
+    entries and report a misleadingly high fairness; the right answer
+    treats the 6 silent clients as full participants in the
+    distribution that the index summarises.
+
+    Returns 1.0 for an empty / all-zero distribution (degenerate but
+    sensible for a CSV cell).
+    """
+    if n_devices <= 0:
+        return 1.0
+    counts = [int(per_device_completions.get(k, 0))
+              for k in per_device_completions]
+    n_pad = max(0, n_devices - len(counts))
+    counts.extend([0] * n_pad)
+    s = sum(counts)
+    if s == 0:
+        return 1.0
+    sq = sum(c * c for c in counts)
+    if sq == 0:
+        return 1.0
+    return (s * s) / (n_devices * sq)
 
 
 def mission_completion_rate(
@@ -360,6 +408,9 @@ def summarise_trial(
         mcr = mission_completion_rate(
             metrics.per_device_completions, n_devices=n_devices,
         )
+        cf = completion_fairness(
+            metrics.per_device_completions, n_devices=n_devices,
+        )
         rc = (
             metrics.devices_visited / metrics.contacts_visited
             if metrics.contacts_visited > 0
@@ -404,6 +455,9 @@ def summarise_trial(
         mcr = mission_completion_rate(
             per_client_visits, n_devices=n_devices,
         )
+        cf = completion_fairness(
+            per_client_visits, n_devices=n_devices,
+        )
         rc = None
         p2 = None
         energy_total = energy_idle = energy_tx = energy_prop = None
@@ -419,6 +473,7 @@ def summarise_trial(
         round_close_rate_kminhalf=close_rate_by_k.get(k_half, 0.0),
         round_close_rate_kminN=close_rate_by_k.get(k_full, 0.0),
         mission_completion_rate=mcr,
+        completion_fairness=cf,
         rho_contact=rc,
         pass2_coverage=p2,
         propulsion_energy_J=energy_total,

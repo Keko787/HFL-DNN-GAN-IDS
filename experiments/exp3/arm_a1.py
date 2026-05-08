@@ -247,7 +247,9 @@ def run_a1_trial(cfg: A1Config) -> Exp3MetricSummary:
     # uses a synthetic mapping that doesn't reflect sampling skew.
     # Replace those four fields.
     from .metrics import (
-        coverage, jains_fairness, mission_completion_rate as _mcr,
+        completion_fairness as _cf,
+        coverage, jains_fairness,
+        mission_completion_rate as _mcr,
         participation_entropy,
     )
 
@@ -255,6 +257,7 @@ def run_a1_trial(cfg: A1Config) -> Exp3MetricSummary:
     jf = jains_fairness(per_client_visits)
     pe = participation_entropy(per_client_visits)
     mcr = _mcr(per_client_completions, n_devices=cfg.n_clients)
+    cf = _cf(per_client_completions, n_devices=cfg.n_clients)
     return Exp3MetricSummary(
         update_yield=summary.update_yield,
         coverage=cov,
@@ -264,6 +267,7 @@ def run_a1_trial(cfg: A1Config) -> Exp3MetricSummary:
         round_close_rate_kminhalf=summary.round_close_rate_kminhalf,
         round_close_rate_kminN=summary.round_close_rate_kminN,
         mission_completion_rate=mcr,
+        completion_fairness=cf,
         rho_contact=None,
         pass2_coverage=None,
         propulsion_energy_J=None,

@@ -79,6 +79,11 @@ class Exp3Row:
     # ≥1 completed Δθ contribution. Defaults to 0.0 when loading
     # legacy CSVs without this column so older results still parse.
     mission_completion_rate: float
+    # Jain's fairness over per-device *completion* counts — contestable
+    # across A1 and the mule arms even when visit-based fairness
+    # trivially saturates at 1.0 for A1's universal sampling.
+    # Defaults to 0.0 for legacy-CSV compatibility.
+    completion_fairness: float
     rho_contact: Optional[float]
     pass2_coverage: Optional[float]
     propulsion_energy_J: Optional[float]
@@ -157,6 +162,9 @@ def load_trials(csv_path: Path) -> List[Exp3Row]:
                     ),
                     mission_completion_rate=float(
                         raw.get("mission_completion_rate", "") or 0.0
+                    ),
+                    completion_fairness=float(
+                        raw.get("completion_fairness", "") or 0.0
                     ),
                     rho_contact=_opt_float(raw["rho_contact"]),
                     pass2_coverage=_opt_float(raw["pass2_coverage"]),
@@ -368,7 +376,13 @@ def write_figures(
          "Fraction of devices contributing ≥1 update (per mission)"),
         ("fig0b", "round_close_rate_kminhalf",
          "Fraction of rounds closed (k_min = N/2)"),
-        ("fig0c", "jains_fairness", "Jain's fairness index"),
+        # fig0c: completion-based fairness rather than visit-based.
+        # A1's universal sampling makes visit-based ``jains_fairness``
+        # trivially 1.0; ``completion_fairness`` is contestable across
+        # arms because it counts whether contributions distribute
+        # equally, not whether the scheduler asked equally.
+        ("fig0c", "completion_fairness",
+         "Jain's fairness on contribution counts"),
         ("fig0d", "coverage", "Fraction of scheduled devices serviced"),
         ("fig0f", "update_yield", "Updates aggregated per round (mean)"),
     ]
@@ -952,16 +966,23 @@ _LATEX_CAPTIONS: tuple = (
         ),
     ),
     (
-        "exp3_fig0c_jains_fairness",
+        "exp3_fig0c_completion_fairness",
         "fig:exp3:fairness",
-        "Jain's fairness across arms",
+        "Contribution-distribution fairness across arms",
         (
-            r"\textbf{Jain's fairness index} on per-device service "
-            r"counts, $J = (\sum_i x_i)^2 / (N \cdot \sum_i x_i^2)$, "
-            r"range $[1/N, 1]$. Higher is better; $J = 1$ is "
-            r"perfectly equal service. The metric exposes whether a "
-            r"scheduling strategy concentrates service on a small "
-            r"subset of devices or spreads it across the slice."
+            r"\textbf{Jain's fairness index} on per-device "
+            r"\emph{contribution counts}, $J = (\sum_i x_i)^2 / "
+            r"(N \cdot \sum_i x_i^2)$, range $[1/N, 1]$. Higher is "
+            r"better; $J = 1$ is a perfectly equal contribution "
+            r"distribution. \emph{Contribution} here means $\Delta\theta$ "
+            r"updates that the FL aggregator actually consumed — not "
+            r"sampling attempts. This makes the metric contestable "
+            r"across A1 and the mule arms; the visit-based variant "
+            r"saturates at $J = 1$ for A1 by construction (universal "
+            r"sampling: every client is asked every round), which "
+            r"masks the contribution inequality introduced by jittery "
+            r"dead zones (a fraction of clients with zero completions "
+            r"while the rest contribute every round)."
         ),
     ),
     (
@@ -974,7 +995,18 @@ _LATEX_CAPTIONS: tuple = (
             r"during the mission. Higher is better; range $[0, 1]$. "
             r"Coverage is the binary complement of the per-device "
             r"miss rate and is independent of how many times a "
-            r"device was served beyond the first visit."
+            r"device was served beyond the first visit. \emph{A1 is "
+            r"exactly 1.0 by construction:} centralized FedAvg "
+            r"samples every client every round (full universal "
+            r"sampling), so its visit-based coverage is trivially "
+            r"perfect regardless of regime. The contestable cross-arm "
+            r"comparison on contribution outcomes lives in "
+            r"Fig.~\ref{fig:exp3:mission_completion_rate} (mission "
+            r"completion rate) and "
+            r"Fig.~\ref{fig:exp3:fairness} (contribution fairness); "
+            r"this panel is most informative for the intra-mule-arm "
+            r"comparison (A2 vs A3 vs A4 differ on physical reach "
+            r"under budget pressure)."
         ),
     ),
     (

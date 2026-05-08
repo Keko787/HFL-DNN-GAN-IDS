@@ -11,6 +11,7 @@ from experiments.exp3.metrics import (
     Exp3MetricSummary,
     Exp3RoundLog,
     aggregate_round_logs,
+    completion_fairness,
     coverage,
     jains_fairness,
     mission_completion_rate,
@@ -233,6 +234,7 @@ def test_to_row_writes_blank_for_none_values():
         round_close_rate_kmin1=1.0, round_close_rate_kminhalf=1.0,
         round_close_rate_kminN=1.0,
         mission_completion_rate=1.0,
+        completion_fairness=1.0,
         rho_contact=None, pass2_coverage=None,
         propulsion_energy_J=None, propulsion_idle_J=None,
         propulsion_tx_J=None, propulsion_prop_J=None,
@@ -292,6 +294,59 @@ def test_mission_completion_rate_in_summarise_trial_for_mule_arm():
     )
     # 2 of 4 admitted devices completed → 0.5
     assert s.mission_completion_rate == pytest.approx(0.5)
+
+
+def test_completion_fairness_perfect_when_all_clients_complete_equally():
+    completions = {f"d{i}": 5 for i in range(10)}
+    assert completion_fairness(
+        completions, n_devices=10,
+    ) == pytest.approx(1.0)
+
+
+def test_completion_fairness_drops_with_dead_zones():
+    """Half of clients with zero completions, half with 20 each. The
+    fairness must collapse — that's the whole reason this metric
+    exists, to expose the hidden inequality A1's universal-sampling
+    visit-based fairness ignores.
+    """
+    # 5 silent clients, 5 active clients each with 20 completions.
+    completions = {f"silent-{i}": 0 for i in range(5)}
+    completions.update({f"active-{i}": 20 for i in range(5)})
+    cf = completion_fairness(completions, n_devices=10)
+    # J = (5*20)^2 / (10 * 5*400) = 10000 / 20000 = 0.5
+    assert cf == pytest.approx(0.5)
+
+
+def test_completion_fairness_uses_n_devices_for_padding():
+    """A sparse completion map (only 3 entries for n_devices=10) must
+    be padded to 10 zeros before computing J — otherwise a trial where
+    only 3 clients ever completed would report misleadingly high
+    fairness on the 3-entry distribution.
+    """
+    completions = {"d0": 5, "d1": 5, "d2": 5}
+    cf = completion_fairness(completions, n_devices=10)
+    # J = (15)^2 / (10 * (3*25)) = 225 / 750 = 0.3
+    assert cf == pytest.approx(0.3)
+
+
+def test_completion_fairness_zero_devices_returns_neutral():
+    assert completion_fairness({}, n_devices=0) == 1.0
+
+
+def test_completion_fairness_in_summarise_trial_mule_arm():
+    metrics = Exp3EpisodeMetrics(
+        contacts_visited=2, devices_visited=4, devices_completed=2,
+        per_device_visits={"d0": 1, "d1": 1, "d2": 1, "d3": 1},
+        per_device_completions={"d0": 1, "d1": 1, "d2": 0, "d3": 0},
+    )
+    rounds = [Exp3RoundLog(0, 1, 2, True), Exp3RoundLog(1, 1, 2, True)]
+    s = summarise_trial(
+        rounds=rounds, metrics=metrics, cal=None,
+        n_devices=4, is_mule_arm=True,
+    )
+    # 2 of 4 clients completed once each → distribution [1,1,0,0]
+    # J = (2)^2 / (4 * 2) = 0.5
+    assert s.completion_fairness == pytest.approx(0.5)
 
 
 def test_mission_completion_rate_unaffected_by_round_count():
