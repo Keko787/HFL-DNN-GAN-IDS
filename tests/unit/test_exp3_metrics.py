@@ -13,6 +13,7 @@ from experiments.exp3.metrics import (
     aggregate_round_logs,
     coverage,
     jains_fairness,
+    mission_completion_rate,
     participation_entropy,
     propulsion_energy,
     rho_contact,
@@ -231,6 +232,7 @@ def test_to_row_writes_blank_for_none_values():
         participation_entropy=1.0,
         round_close_rate_kmin1=1.0, round_close_rate_kminhalf=1.0,
         round_close_rate_kminN=1.0,
+        mission_completion_rate=1.0,
         rho_contact=None, pass2_coverage=None,
         propulsion_energy_J=None, propulsion_idle_J=None,
         propulsion_tx_J=None, propulsion_prop_J=None,
@@ -239,3 +241,91 @@ def test_to_row_writes_blank_for_none_values():
     row = s.to_row()
     assert row["rho_contact"] == ""
     assert row["update_yield"] == 1.0
+
+
+# --------------------------------------------------------------------------- #
+# mission_completion_rate — round-count-invariant yield
+# --------------------------------------------------------------------------- #
+
+def test_mission_completion_rate_fraction_with_at_least_one_completion():
+    completions = {"d0": 2, "d1": 0, "d2": 1, "d3": 0}
+    # 2 of 4 devices had ≥1 completion → 0.5
+    assert mission_completion_rate(
+        completions, n_devices=4,
+    ) == pytest.approx(0.5)
+
+
+def test_mission_completion_rate_clamps_when_sparse_map():
+    # Only 3 entries in the map but 5 admitted devices — the missing
+    # ones count as zero completions, so the denominator stays 5.
+    completions = {"d0": 1, "d1": 1, "d2": 1}
+    assert mission_completion_rate(
+        completions, n_devices=5,
+    ) == pytest.approx(3 / 5)
+
+
+def test_mission_completion_rate_zero_devices():
+    assert mission_completion_rate({}, n_devices=0) == 0.0
+
+
+def test_mission_completion_rate_all_zero_completions():
+    assert mission_completion_rate(
+        {"d0": 0, "d1": 0}, n_devices=2,
+    ) == 0.0
+
+
+def test_mission_completion_rate_in_summarise_trial_for_mule_arm():
+    """``summarise_trial`` must populate ``mission_completion_rate`` for
+    mule arms from the episode-metrics ``per_device_completions`` map.
+    """
+    metrics = Exp3EpisodeMetrics(
+        contacts_visited=2,
+        devices_visited=4,
+        devices_completed=2,
+        per_device_visits={"d0": 1, "d1": 1, "d2": 1, "d3": 1},
+        per_device_completions={"d0": 1, "d1": 1, "d2": 0, "d3": 0},
+    )
+    rounds = [Exp3RoundLog(0, 1, 2, True), Exp3RoundLog(1, 1, 2, True)]
+    s = summarise_trial(
+        rounds=rounds, metrics=metrics, cal=None,
+        n_devices=4, is_mule_arm=True,
+    )
+    # 2 of 4 admitted devices completed → 0.5
+    assert s.mission_completion_rate == pytest.approx(0.5)
+
+
+def test_mission_completion_rate_unaffected_by_round_count():
+    """Two trials with the same completions but different round counts
+    must report the same ``mission_completion_rate`` — that's the whole
+    reason this metric exists.
+    """
+    completions = {"d0": 1, "d1": 1, "d2": 0, "d3": 0}
+    # Two-round trial with same completion set:
+    metrics_short = Exp3EpisodeMetrics(
+        contacts_visited=2, devices_visited=4, devices_completed=2,
+        per_device_visits={"d0": 1, "d1": 1, "d2": 1, "d3": 1},
+        per_device_completions=dict(completions),
+    )
+    # Eight-round trial with same completion set (e.g. multiple
+    # revisits each contributing zero):
+    metrics_long = Exp3EpisodeMetrics(
+        contacts_visited=8, devices_visited=10, devices_completed=2,
+        per_device_visits={"d0": 4, "d1": 4, "d2": 1, "d3": 1},
+        per_device_completions=dict(completions),
+    )
+    short_rounds = [Exp3RoundLog(i, 1, 2, True) for i in range(2)]
+    long_rounds = [Exp3RoundLog(i, 0, 2, True) for i in range(8)]
+    s_short = summarise_trial(
+        rounds=short_rounds, metrics=metrics_short, cal=None,
+        n_devices=4, is_mule_arm=True,
+    )
+    s_long = summarise_trial(
+        rounds=long_rounds, metrics=metrics_long, cal=None,
+        n_devices=4, is_mule_arm=True,
+    )
+    # update_yield differs (per-round mean shifts) — that's the bias.
+    assert s_short.update_yield != s_long.update_yield
+    # mission_completion_rate is identical.
+    assert s_short.mission_completion_rate == pytest.approx(
+        s_long.mission_completion_rate
+    )

@@ -165,23 +165,30 @@ def test_write_figures_smoke(tmp_path: Path):
     assert any("a4_vs_a3" in n for n in written_names)
     assert any("rho_contact" in n for n in written_names)
     # All-arms per-metric figures (one per metric) + mule-only energy.
-    assert "exp3_fig0a_update_yield.png" in written_names
+    # fig0a now leads with the round-count-invariant headline metric;
+    # update_yield is demoted to fig0f as a supporting panel.
+    assert "exp3_fig0a_mission_completion_rate.png" in written_names
     assert "exp3_fig0b_round_close_rate_kminhalf.png" in written_names
     assert "exp3_fig0c_jains_fairness.png" in written_names
     assert "exp3_fig0d_coverage.png" in written_names
     assert "exp3_fig0e_propulsion_energy.png" in written_names
+    assert "exp3_fig0f_update_yield.png" in written_names
     # LaTeX caption sidecar — one \begin{figure} per metric figure.
     assert "exp3_fig_captions.tex" in written_names
     tex = (figs_dir / "exp3_fig_captions.tex").read_text(encoding="utf-8")
     for stem in (
-        "exp3_fig0a_update_yield", "exp3_fig0b_round_close_rate_kminhalf",
+        "exp3_fig0a_mission_completion_rate",
+        "exp3_fig0b_round_close_rate_kminhalf",
         "exp3_fig0c_jains_fairness", "exp3_fig0d_coverage",
         "exp3_fig0e_propulsion_energy",
+        "exp3_fig0f_update_yield",
     ):
         assert stem in tex, f"caption .tex missing reference to {stem}"
     # Use \end{figure} as the canonical count — \begin{figure} appears
-    # in the file's leading comment line as well. Six figures: fig0a-e
+    # in the file's leading comment line as well. Seven figures:
+    # fig0a-f (a=mission_completion_rate, b=round_close, c=fairness,
+    # d=coverage, e=propulsion_energy, f=update_yield/supporting)
     # plus fig4 (consolidated β-sweep).
-    assert tex.count(r"\end{figure}") == 6
+    assert tex.count(r"\end{figure}") == 7
     assert r"\caption" in tex and r"\label" in tex
     assert "fig:exp3:beta_sweep" in tex

@@ -66,6 +66,13 @@ class Exp3MetricSummary:
     round_close_rate_kmin1: float
     round_close_rate_kminhalf: float
     round_close_rate_kminN: float
+    # Round-count-invariant yield: fraction of admitted devices with
+    # ≥1 completed Δθ contribution to the mission. Bounded [0, 1] for
+    # both A1 and the mule arms — unaffected by the survivorship bias
+    # that distorts ``update_yield`` when upload pressure truncates
+    # Pass 1 to fewer rounds. See ``mission_completion_rate`` in
+    # ``metrics.py`` for the docstring.
+    mission_completion_rate: float
 
     # Mule-only — A1 emits None.
     rho_contact: Optional[float]
@@ -87,6 +94,7 @@ class Exp3MetricSummary:
             "round_close_rate_kmin1": self.round_close_rate_kmin1,
             "round_close_rate_kminhalf": self.round_close_rate_kminhalf,
             "round_close_rate_kminN": self.round_close_rate_kminN,
+            "mission_completion_rate": self.mission_completion_rate,
         }
         for k, v in (
             ("rho_contact", self.rho_contact),
@@ -111,6 +119,7 @@ class Exp3MetricSummary:
             "round_close_rate_kmin1",
             "round_close_rate_kminhalf",
             "round_close_rate_kminN",
+            "mission_completion_rate",
             "rho_contact",
             "pass2_coverage",
             "propulsion_energy_J",
@@ -205,6 +214,31 @@ def coverage(
         return 0.0
     n_seen = sum(1 for v in per_device_visits.values() if v > 0)
     return n_seen / n_total
+
+
+def mission_completion_rate(
+    per_device_completions: Mapping[object, int], *, n_devices: int,
+) -> float:
+    """Fraction of admitted devices with ≥1 completed Δθ contribution.
+
+    Round-count-invariant yield metric, bounded ``[0, 1]`` for every
+    arm. Use this in cross-regime / cross-arm comparisons where
+    ``update_yield`` (mean updates per round) is biased by survivorship:
+    when upload pressure truncates Pass 1 to fewer rounds, the mean
+    is taken over a non-random sample of contacts (early/dense
+    clusters), and a regime that visits *fewer* contacts can post a
+    *higher* per-round average even though fewer devices contribute
+    overall.
+
+    ``mission_completion_rate`` measures *what fraction of the device
+    population produced any usable Δθ in this mission*, which is what
+    the FL aggregator actually consumes. It is the single most honest
+    one-number yield for cross-regime plots.
+    """
+    if n_devices <= 0:
+        return 0.0
+    n_completed = sum(1 for v in per_device_completions.values() if v > 0)
+    return n_completed / n_devices
 
 
 # --------------------------------------------------------------------------- #
@@ -323,6 +357,9 @@ def summarise_trial(
         cov = coverage(device_visits, scheduled_count=n_devices)
         jf = jains_fairness(device_visits)
         pe = participation_entropy(device_visits)
+        mcr = mission_completion_rate(
+            metrics.per_device_completions, n_devices=n_devices,
+        )
         rc = (
             metrics.devices_visited / metrics.contacts_visited
             if metrics.contacts_visited > 0
@@ -357,6 +394,16 @@ def summarise_trial(
         cov = coverage(per_client_visits, scheduled_count=n_devices)
         jf = jains_fairness(per_client_visits)
         pe = participation_entropy(per_client_visits)
+        # A1's ``client_ids`` log is the *completed* set per round —
+        # ``per_client_visits`` is therefore semantically completion
+        # counts. ``mission_completion_rate`` here is the fraction of
+        # clients that completed at least one round across the trial.
+        # arm_a1.py overrides this in its post-processing using the
+        # canonical per-client maps it tracks during the Monte Carlo;
+        # the value computed here is a sensible fallback.
+        mcr = mission_completion_rate(
+            per_client_visits, n_devices=n_devices,
+        )
         rc = None
         p2 = None
         energy_total = energy_idle = energy_tx = energy_prop = None
@@ -371,6 +418,7 @@ def summarise_trial(
         round_close_rate_kmin1=close_rate_by_k.get(1, 0.0),
         round_close_rate_kminhalf=close_rate_by_k.get(k_half, 0.0),
         round_close_rate_kminN=close_rate_by_k.get(k_full, 0.0),
+        mission_completion_rate=mcr,
         rho_contact=rc,
         pass2_coverage=p2,
         propulsion_energy_J=energy_total,

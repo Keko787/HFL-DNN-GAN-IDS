@@ -75,6 +75,10 @@ class Exp3Row:
     round_close_rate_kmin1: float
     round_close_rate_kminhalf: float
     round_close_rate_kminN: float
+    # Round-count-invariant yield: fraction of admitted devices with
+    # ≥1 completed Δθ contribution. Defaults to 0.0 when loading
+    # legacy CSVs without this column so older results still parse.
+    mission_completion_rate: float
     rho_contact: Optional[float]
     pass2_coverage: Optional[float]
     propulsion_energy_J: Optional[float]
@@ -150,6 +154,9 @@ def load_trials(csv_path: Path) -> List[Exp3Row]:
                     ),
                     round_close_rate_kminN=float(
                         raw["round_close_rate_kminN"] or 0.0
+                    ),
+                    mission_completion_rate=float(
+                        raw.get("mission_completion_rate", "") or 0.0
                     ),
                     rho_contact=_opt_float(raw["rho_contact"]),
                     pass2_coverage=_opt_float(raw["pass2_coverage"]),
@@ -340,12 +347,25 @@ def write_figures(
     # omitted from the rendered figures; they belong in the LaTeX caption
     # produced by ``write_latex_captions`` so the paper figure environment
     # owns the prose layer.
+    # The first four panels are round-count-invariant metrics —
+    # bounded [0,1] for both A1 and the mule arms, comparable across
+    # clean/jittery regardless of how many contacts/rounds a trial
+    # contained. ``update_yield`` (fig0f) is kept as a supporting
+    # panel with a paper footnote: it is per-FedAvg-round for A1 and
+    # per-contact-event for the mule arms, so the absolute scale
+    # differs structurally and a regime that visits *fewer* contacts
+    # under upload pressure can post a *higher* per-round mean
+    # (survivorship bias on a non-random sample of clusters).
+    # ``fig0e`` is reserved for the existing propulsion-energy panel
+    # rendered separately below.
     metric_figs = [
-        ("fig0a", "update_yield", "Updates aggregated per round (mean)"),
+        ("fig0a", "mission_completion_rate",
+         "Fraction of devices contributing ≥1 update (per mission)"),
         ("fig0b", "round_close_rate_kminhalf",
          "Fraction of rounds closed (k_min = N/2)"),
         ("fig0c", "jains_fairness", "Jain's fairness index"),
         ("fig0d", "coverage", "Fraction of scheduled devices serviced"),
+        ("fig0f", "update_yield", "Updates aggregated per round (mean)"),
     ]
     # In "all" mode, render paired (clean+jittery) boxes when both
     # regimes are present in the data. Otherwise fall back to single
@@ -860,16 +880,20 @@ def write_figures(
 # them without re-running the figure generation.
 _LATEX_CAPTIONS: tuple = (
     (
-        "exp3_fig0a_update_yield",
-        "fig:exp3:update_yield",
-        "Update yield across arms",
+        "exp3_fig0a_mission_completion_rate",
+        "fig:exp3:mission_completion_rate",
+        "Mission completion rate across arms",
         (
-            r"\textbf{Update yield} per round across A1 (centralized FL), "
+            r"\textbf{Mission completion rate} across A1 (centralized FL), "
             r"A2 (arrival-order), A3 (EDF heuristic), A4 (RL). "
-            r"Higher is better. Update yield is the mean count of "
-            r"client updates aggregated per round; it captures how "
-            r"effectively each scheduling strategy converts a round "
-            r"of mission time into committed FL contributions."
+            r"Higher is better; bounded $[0, 1]$. Defined as the "
+            r"fraction of admitted devices that contributed at least "
+            r"one $\Delta\theta$ to the mission, this metric is "
+            r"round-count-invariant and therefore directly comparable "
+            r"across arms and across clean / jittery regimes — unlike "
+            r"the per-round update yield (Fig.~\ref{fig:exp3:update_yield}), "
+            r"which is biased upward in regimes where upload pressure "
+            r"truncates Pass~1 to fewer rounds."
         ),
     ),
     (
@@ -924,6 +948,32 @@ _LATEX_CAPTIONS: tuple = (
             r"The three mule arms produce overlapping distributions in "
             r"the studied parameter range; the energy ledger does not "
             r"discriminate among A2, A3, and A4."
+        ),
+    ),
+    (
+        "exp3_fig0f_update_yield",
+        "fig:exp3:update_yield",
+        "Update yield across arms (supporting; round-count-biased)",
+        (
+            r"\textbf{Update yield} per round across A1 (centralized FL), "
+            r"A2 (arrival-order), A3 (EDF heuristic), A4 (RL). "
+            r"Reported here for completeness; the headline cross-arm "
+            r"metric is mission completion rate "
+            r"(Fig.~\ref{fig:exp3:mission_completion_rate}). "
+            r"\emph{Caveat:} ``round'' is per-FedAvg-round in A1 "
+            r"($\sim N$ candidates) and per-contact-event in the mule "
+            r"arms ($\sim \rho_{\text{contact}}$ candidates); the "
+            r"absolute scale therefore differs structurally and the "
+            r"A1-vs-mule comparison should not be read off this panel "
+            r"directly. Furthermore, in regimes where upload pressure "
+            r"truncates Pass~1 to fewer rounds, the per-round mean is "
+            r"biased upward by survivorship on a non-random sample of "
+            r"clusters (early/dense clusters dominate the surviving "
+            r"contacts). Use this panel for within-arm trends and "
+            r"refer to the round-count-invariant metrics in "
+            r"Figs.~\ref{fig:exp3:mission_completion_rate}, "
+            r"\ref{fig:exp3:close_rate}, and \ref{fig:exp3:coverage} "
+            r"for cross-arm and cross-regime comparisons."
         ),
     ),
     (

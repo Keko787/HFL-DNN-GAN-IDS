@@ -126,7 +126,14 @@ def run_a1_trial(cfg: A1Config) -> Exp3MetricSummary:
     }
 
     rounds: list[Exp3RoundLog] = []
+    # Two separate counters — pre-fix the file conflated them, which
+    # made A1's ``coverage`` (visit-based in the rest of the codebase)
+    # silently behave like ``mission_completion_rate`` (completion-
+    # based). Keeping them separate aligns A1's metrics with the mule
+    # arms': ``coverage`` is fraction of clients sampled at least once,
+    # ``mission_completion_rate`` is fraction with ≥1 completion.
     per_client_visits: dict[str, int] = {cid: 0 for cid in client_ids}
+    per_client_completions: dict[str, int] = {cid: 0 for cid in client_ids}
 
     # Jittery-mode multipliers applied per-client, per-round. Defaults
     # are neutral (no effect) so clean cells produce the legacy
@@ -147,6 +154,8 @@ def run_a1_trial(cfg: A1Config) -> Exp3MetricSummary:
         times = []
         completed = []
         for cid in sampled:
+            # Every sampled client counts as a visit (coverage input).
+            per_client_visits[cid] += 1
             t_i = float(rng.normal(cfg.mean_round_time_s, cfg.round_time_std_s))
             t_i = max(0.0, t_i)
             # Long-range link latency jitter — multiply each client's
@@ -171,7 +180,7 @@ def run_a1_trial(cfg: A1Config) -> Exp3MetricSummary:
             )
             if on_time and link_ok:
                 completed.append(cid)
-                per_client_visits[cid] += 1
+                per_client_completions[cid] += 1
         round_time = max(times) if times else 0.0
         deadline_met = round_time <= cfg.round_deadline_s
         log = Exp3RoundLog(
@@ -195,14 +204,19 @@ def run_a1_trial(cfg: A1Config) -> Exp3MetricSummary:
         n_devices=cfg.n_clients,
         is_mule_arm=False,
     )
-    # Recompute coverage / fairness / entropy from the real per-client
-    # visits — summarise_trial's A1 fallback uses a synthetic mapping
-    # that doesn't reflect sampling skew. Replace those three fields.
-    from .metrics import coverage, jains_fairness, participation_entropy
+    # Recompute coverage / fairness / entropy / mission_completion_rate
+    # from the real per-client maps — summarise_trial's A1 fallback
+    # uses a synthetic mapping that doesn't reflect sampling skew.
+    # Replace those four fields.
+    from .metrics import (
+        coverage, jains_fairness, mission_completion_rate as _mcr,
+        participation_entropy,
+    )
 
     cov = coverage(per_client_visits, scheduled_count=cfg.n_clients)
     jf = jains_fairness(per_client_visits)
     pe = participation_entropy(per_client_visits)
+    mcr = _mcr(per_client_completions, n_devices=cfg.n_clients)
     return Exp3MetricSummary(
         update_yield=summary.update_yield,
         coverage=cov,
@@ -211,6 +225,7 @@ def run_a1_trial(cfg: A1Config) -> Exp3MetricSummary:
         round_close_rate_kmin1=summary.round_close_rate_kmin1,
         round_close_rate_kminhalf=summary.round_close_rate_kminhalf,
         round_close_rate_kminN=summary.round_close_rate_kminN,
+        mission_completion_rate=mcr,
         rho_contact=None,
         pass2_coverage=None,
         propulsion_energy_J=None,
