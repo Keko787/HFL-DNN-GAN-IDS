@@ -174,6 +174,7 @@ def test_write_figures_smoke(tmp_path: Path):
     assert "exp3_fig0d_coverage.png" in written_names
     assert "exp3_fig0e_propulsion_energy.png" in written_names
     assert "exp3_fig0f_update_yield.png" in written_names
+    assert "exp3_fig0g_energy_per_completion.png" in written_names
     # LaTeX caption sidecar — one \begin{figure} per metric figure.
     assert "exp3_fig_captions.tex" in written_names
     tex = (figs_dir / "exp3_fig_captions.tex").read_text(encoding="utf-8")
@@ -183,13 +184,15 @@ def test_write_figures_smoke(tmp_path: Path):
         "exp3_fig0c_completion_fairness", "exp3_fig0d_coverage",
         "exp3_fig0e_propulsion_energy",
         "exp3_fig0f_update_yield",
+        "exp3_fig0g_energy_per_completion",
     ):
         assert stem in tex, f"caption .tex missing reference to {stem}"
     # Use \end{figure} as the canonical count — \begin{figure} appears
-    # in the file's leading comment line as well. Seven figures:
-    # fig0a-f (a=mission_completion_rate, b=round_close, c=fairness,
-    # d=coverage, e=propulsion_energy, f=update_yield/supporting)
+    # in the file's leading comment line as well. Eight figures:
+    # fig0a-g (a=mission_completion_rate, b=participation_rate,
+    # c=fairness, d=coverage, e=propulsion_energy,
+    # f=update_yield/supporting, g=energy_per_completion)
     # plus fig4 (consolidated β-sweep).
-    assert tex.count(r"\end{figure}") == 7
+    assert tex.count(r"\end{figure}") == 8
     assert r"\caption" in tex and r"\label" in tex
     assert "fig:exp3:beta_sweep" in tex

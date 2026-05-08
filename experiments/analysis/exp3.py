@@ -119,6 +119,32 @@ class Exp3Row:
             return 0.0
         return float(self.update_yield) / float(self.N)
 
+    @property
+    def propulsion_energy_per_completion(self) -> Optional[float]:
+        """Propulsion energy in joules per completed device update.
+
+        Normalizes ``propulsion_energy_J`` by the number of useful FL
+        contributions the mission produced, so cross-regime comparisons
+        reflect operational efficiency rather than mission truncation.
+        The raw ``propulsion_energy_J`` panel (fig0e) shows jittery <
+        clean because slow uploads truncate Pass 1 to fewer cluster
+        visits — the mule simply does less flying, not more efficient
+        flying. This per-completion normalization inverts the
+        comparison: jittery cells deliver fewer Δθ contributions per
+        joule, exposing the real energy cost of the network regime.
+
+        Returns ``None`` for A1 (no mule, no propulsion) and for any
+        trial that completed zero devices (avoids division by zero).
+        For mule arms the denominator is ``update_yield``, which under
+        per-mission round semantics equals total mission completions.
+        """
+        if self.propulsion_energy_J is None:
+            return None
+        completions = float(self.update_yield)
+        if completions <= 0.0:
+            return None
+        return float(self.propulsion_energy_J) / completions
+
 
 def _opt_float(s: Any) -> Optional[float]:
     if s in (None, "", "None"):
@@ -662,6 +688,94 @@ def write_figures(
     except Exception as e:  # pragma: no cover
         log.warning("fig0e (propulsion energy) skipped: %s", e)
 
+    # Figure 0g — propulsion energy normalized by completed device
+    # updates (J per Δθ). Counterpart to fig0e that inverts the
+    # raw-energy story: clean cells deliver many Δθs per joule;
+    # jittery cells truncate the mule's mission, so the few Δθs they
+    # do produce cost much more energy each. Reveals the operational
+    # cost of the network regime, which raw mission-energy hides.
+    try:
+        mule_arms = [a for a in ("A2", "A3", "A4") if a in arms]
+        if len(mule_arms) >= 2:
+            fig, ax = plt.subplots(
+                figsize=(7.5, 4.5) if paired_mode else (6, 4),
+            )
+            if paired_mode:
+                clean_data = []
+                jittery_data = []
+                kept_arms = []
+                for arm in mule_arms:
+                    cv = [r.propulsion_energy_per_completion for r in rows
+                          if r.is_ok and r.arm == arm and not r.jittery
+                          and r.propulsion_energy_per_completion is not None]
+                    jv = [r.propulsion_energy_per_completion for r in rows
+                          if r.is_ok and r.arm == arm and r.jittery
+                          and r.propulsion_energy_per_completion is not None]
+                    if cv or jv:
+                        clean_data.append(cv if cv else [float("nan")])
+                        jittery_data.append(jv if jv else [float("nan")])
+                        kept_arms.append(arm)
+                offset = 0.22
+                width = 0.35
+                clean_pos = [i + 1 - offset for i in range(len(kept_arms))]
+                jit_pos = [i + 1 + offset for i in range(len(kept_arms))]
+                bp_c = ax.boxplot(
+                    clean_data, positions=clean_pos, widths=width,
+                    patch_artist=True, showmeans=True,
+                )
+                for patch in bp_c["boxes"]:
+                    patch.set_facecolor(clean_color); patch.set_alpha(0.65)
+                bp_j = ax.boxplot(
+                    jittery_data, positions=jit_pos, widths=width,
+                    patch_artist=True, showmeans=True,
+                )
+                for patch in bp_j["boxes"]:
+                    patch.set_facecolor(jittery_color); patch.set_alpha(0.65)
+                ax.set_xticks([i + 1 for i in range(len(kept_arms))])
+                ax.set_xticklabels(kept_arms)
+                from matplotlib.patches import Patch
+                ax.legend(
+                    handles=[
+                        Patch(facecolor=clean_color, alpha=0.65,
+                              label="Clean"),
+                        Patch(facecolor=jittery_color, alpha=0.65,
+                              label="Jittery"),
+                    ],
+                    loc="upper right",
+                    ncol=2,
+                    fontsize=7.5,
+                    frameon=True,
+                    borderpad=0.3,
+                    columnspacing=1.2,
+                    handlelength=1.2,
+                    handletextpad=0.4,
+                )
+            else:
+                data: List[List[float]] = []
+                labels: List[str] = []
+                for arm in mule_arms:
+                    vals = [
+                        r.propulsion_energy_per_completion for r in rows
+                        if r.is_ok and r.arm == arm
+                        and r.propulsion_energy_per_completion is not None
+                    ]
+                    if vals:
+                        data.append(vals)
+                        labels.append(arm)
+                if data:
+                    ax.boxplot(data, labels=labels, showmeans=True)
+            ax.set_ylabel("Propulsion energy per completed device update (J)")
+            ax.set_xlabel("Arm")
+            ax.grid(True, axis="y", alpha=0.3)
+            _watermark(ax)
+            fig.tight_layout()
+            out = figures_dir / "exp3_fig0g_energy_per_completion.png"
+            fig.savefig(out, dpi=150, bbox_inches="tight")
+            plt.close(fig)
+            written.append(out)
+    except Exception as e:  # pragma: no cover
+        log.warning("fig0g (energy per completion) skipped: %s", e)
+
     # Emit LaTeX caption blocks for every metric figure produced above.
     try:
         latex_path = _write_latex_captions(figures_dir)
@@ -881,23 +995,26 @@ def write_figures(
                        markerfacecolor="white", markeredgecolor="black",
                        alpha=0.45, label="Jittery"),
             ]
-            # Stack the three legend boxes along the top edge.
-            # Regime → upper-right; Arm and Bucket size flow leftward.
+            # Three legend boxes flowing left-to-right along the top
+            # edge: Regime, Arm, Bucket size. Anchored at the upper-
+            # left corner so they sit above the data lines without
+            # overlapping the curves at the right where yields tend to
+            # peak.
             regime_legend = ax.legend(
                 handles=regime_handles, title="Regime",
-                loc="upper right",
+                loc="upper left", bbox_to_anchor=(0.0, 1.0),
                 fontsize=8.5, title_fontsize=8.5,
             )
             ax.add_artist(regime_legend)
             arm_legend = ax.legend(
                 handles=arm_handles, title="Arm",
-                loc="upper right", bbox_to_anchor=(0.78, 1.0),
+                loc="upper left", bbox_to_anchor=(0.20, 1.0),
                 fontsize=8.5, title_fontsize=8.5,
             )
             ax.add_artist(arm_legend)
             ax.legend(
                 handles=n_handles, title="Bucket size",
-                loc="upper right", bbox_to_anchor=(0.56, 1.0),
+                loc="upper left", bbox_to_anchor=(0.40, 1.0),
                 fontsize=8.5, title_fontsize=8.5,
             )
             # Annotate the two distinct regimes the chart contains. A1
@@ -1133,6 +1250,32 @@ _LATEX_CAPTIONS: tuple = (
             r"metric measures \emph{which} devices contributed at all, "
             r"while this one measures the \emph{volume} of "
             r"contributions per FL aggregation cycle."
+        ),
+    ),
+    (
+        "exp3_fig0g_energy_per_completion",
+        "fig:exp3:energy_per_completion",
+        "Propulsion energy per completed device update across mule arms",
+        (
+            r"\textbf{Propulsion energy normalized by completed device "
+            r"updates} (joules per $\Delta\theta$) for the three mule "
+            r"arms. Lower is better. Counterpart to "
+            r"Fig.~\ref{fig:exp3:propulsion_energy} that exposes the "
+            r"true operational cost of the network regime: the raw "
+            r"per-mission energy panel shows jittery cells consuming "
+            r"\emph{less} energy than clean cells, but that reflects "
+            r"\emph{mission truncation} (the mule's "
+            r"\texttt{mission\_budget\_s} is exhausted by slow "
+            r"uploads, so the mule physically flies fewer cluster "
+            r"legs) rather than network-induced efficiency. "
+            r"Normalizing by the number of useful FL contributions "
+            r"the mission produced inverts the comparison: jittery "
+            r"missions deliver several-fold fewer $\Delta\theta$ per "
+            r"joule of propulsion than clean missions, because the "
+            r"propulsion expenditure is amortised over many fewer "
+            r"successful contacts. This is the panel that supports "
+            r"any operational efficiency claim about regime "
+            r"sensitivity; the raw-energy panel is bookkeeping."
         ),
     ),
     (
