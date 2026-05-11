@@ -38,7 +38,7 @@ The repo ships:
 - Dr. Prasad Calyam
 
 **Graduate Students (2026)**
-- Kostage Kevin 
+- Kostage, Kevin 
 - Wagle, Bishwas
 - Bhamidipati, Subrahmanya Chandra
 - Neupane, Kiran
