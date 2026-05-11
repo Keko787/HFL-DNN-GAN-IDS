@@ -42,6 +42,7 @@ The repo ships:
 - Wagle, Bishwas
 - Bhamidipati, Subrahmanya Chandra
 - Neupane, Kiran
+- Peppers, Sean
 
 ---
 
