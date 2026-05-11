@@ -320,7 +320,7 @@ The mode-switch contract (M1–M7) is enforced by [`tests/unit/test_mode_switch.
 
 ## Experiments
 
-The paper-experiment harness is under [`experiments/`](experiments/). It owns the seed schedule, writes per-trial CSV rows, and is checkpoint-and-resume safe so multi-session AERPAW reservations don't lose work.
+The paper-experiment harness is under [`experiments/`](experiments/). It owns the seed schedule, writes per-trial CSV rows, and is checkpoint-and-resume safe (the CSV log's already-done set is consulted on every trial) so multi-session AERPAW reservations don't lose work.
 
 | # | What it measures | Status |
 |---|---|---|
@@ -329,13 +329,152 @@ The paper-experiment harness is under [`experiments/`](experiments/). It owns th
 | **3** | Centralized FL vs mule heuristics vs HERMES scheduling (A1–A4 ablation) | in-flight |
 | **4** | Integrated HERMES vs traditional FL — all metrics | blocked on Exp 1 + 3 closing |
 
-Run a resumable experiment grid:
+Per-experiment drivers, sim envs, arm definitions (`arm_a1.py`, `arm_mule.py`, `train_a4.py`), metrics, and analysis notebooks live under `experiments/exp1/`, `experiments/exp3/`, and `experiments/analysis/`. See [`DeveloperDocs/HERMES_Experiments_Implementation_Plan.md`](DeveloperDocs/HERMES_Experiments_Implementation_Plan.md) for the full design and Definition of Done per chunk; [`DeveloperDocs/Exp3_Future_Energy_Models.md`](DeveloperDocs/Exp3_Future_Energy_Models.md) covers the Option B / Option C propulsion-energy extensions kept in the back pocket.
+
+**Standalone run guides** (full prerequisites, topology, knobs, resume, troubleshooting):
+- [`DeveloperDocs/Experiment_1_Run_Guide.md`](DeveloperDocs/Experiment_1_Run_Guide.md)
+- [`DeveloperDocs/Experiment_3_Run_Guide.md`](DeveloperDocs/Experiment_3_Run_Guide.md)
+
+The two subsections below are quick-reference distillations of those guides.
+
+### Experiment 1 — Federated vs Centralized at fixed radio
+
+**Topology.** 1 server + 4 clients, each client owning one disjoint partition of CIC-IoT-2023. The server is the single clock authority and the only writer of the trial CSV. The grid sweeps `D_pd ∈ {payload sizes}`, `R ∈ {round counts}`, and `arm ∈ {Centralized, FL}`.
+
+**Single-host quick run** (4 client subprocesses + 1 server, all on `127.0.0.1`):
 ```bash
-python -m experiments.runner --exp 1 --resume
-python -m experiments.runner --exp 3 --resume
+# Smoke (2 trials per cell, one filter cell):
+N_TRIALS=2 FILTER=Dpd=10MB,R=5 bash experiments/exp1/setup/launch_local.sh
+
+# Full grid → results/exp1.csv:
+bash experiments/exp1/setup/launch_local.sh
+
+# Custom output path (e.g., the jittery cell):
+OUT=results/exp1_jittery.csv bash experiments/exp1/setup/launch_local.sh
 ```
 
-Per-experiment drivers, sim envs, arm definitions (`arm_a1.py`, `arm_mule.py`, `train_a4.py`), metrics, and analysis notebooks live under `experiments/exp1/`, `experiments/exp3/`, and `experiments/analysis/`. See [`DeveloperDocs/HERMES_Experiments_Implementation_Plan.md`](DeveloperDocs/HERMES_Experiments_Implementation_Plan.md) for the full design and Definition of Done per chunk; [`DeveloperDocs/Exp3_Future_Energy_Models.md`](DeveloperDocs/Exp3_Future_Energy_Models.md) covers the Option B / Option C propulsion-energy extensions kept in the back pocket.
+`launch_local.sh` reads `OUT`, `N_TRIALS`, `BASE_SEED`, `SERVER_PORT`, `N_CLIENTS`, and `FILTER` from the environment and tees server / client logs into `logs/exp1_*.log`.
+
+**Manual server + clients** (when you want to run clients on different hosts):
+```bash
+python -m experiments.exp1.server \
+    --client d1@127.0.0.1:partition=0 \
+    --client d2@127.0.0.1:partition=1 \
+    --client d3@127.0.0.1:partition=2 \
+    --client d4@127.0.0.1:partition=3 \
+    --bind-port 9000 \
+    --output results/exp1.csv \
+    --n-trials 20 --base-seed 42
+
+# In a separate shell per client:
+python -m experiments.exp1.client \
+    --client-id d1 --server 127.0.0.1:9000 --data-partition 0
+```
+
+A pre-built Chameleon topology is shipped at [`experiments/exp1/setup/configs/exp1_chameleon.json`](experiments/exp1/setup/configs/exp1_chameleon.json).
+
+**Network shaping (Chameleon side).** Use `shape_link.sh` on each client node to apply or remove the 10 Mbps cap (and the optional jittery overlay):
+```bash
+sudo bash experiments/exp1/setup/shape_link.sh apply               # 10 Mbps TBF cap
+sudo bash experiments/exp1/setup/shape_link.sh apply --jittery     # +30% delay jitter + 2% loss
+sudo bash experiments/exp1/setup/shape_link.sh status              # show current qdiscs
+sudo bash experiments/exp1/setup/shape_link.sh remove --jittery    # drop netem only (TBF stays)
+sudo bash experiments/exp1/setup/shape_link.sh remove              # drop ALL shaping
+```
+
+**Resume.** Re-running the same `--output` CSV skips already-completed `(cell_id, arm, trial_index)` rows; a crashed mid-grid run picks up exactly where it stopped.
+
+**Analysis.** Six driver scripts under [`experiments/analysis/`](experiments/analysis/) consume the trial CSVs directly. Run the top-level panel first, then the cleaner / single-purpose figures:
+```bash
+# Full panel + summary + paired-tests CSV → DeveloperDocs/figures/exp1/
+python -m experiments.analysis.exp1 \
+    --csv results/exp1_chameleon.csv \
+    --figures-dir DeveloperDocs/figures/exp1
+
+# Cleaner energy figure (FL pooled across Dpd, Centralized broken out by Dpd):
+python -m experiments.analysis.exp1_energy_clean \
+    --csv results/exp1_chameleon_no1gb.csv \
+    --out DeveloperDocs/figures/exp1/exp1_energy_clean.png
+
+# R* regression + residuals + per-cell-means table:
+python -m experiments.analysis.exp1_rstar_clean \
+    --csv results/exp1_chameleon_no1gb.csv \
+    --out-dir DeveloperDocs/figures/exp1
+
+# Primary-vs-jittery deep dive (3 figures: walltime, energy, per-trial scatter):
+python -m experiments.analysis.exp1_jittery_deep_dive \
+    --csv-primary results/exp1_chameleon_no1gb.csv \
+    --csv-jittery results/exp1_chameleon_jittery.csv \
+    --out-dir DeveloperDocs/figures/exp1_jittery
+
+# Calibration sensitivity (combined 2×5 grid, primary vs jittery):
+python -m experiments.analysis.exp1_sensitivity_combined \
+    --csv-primary results/exp1_chameleon_no1gb.csv \
+    --csv-jittery results/exp1_chameleon_jittery.csv \
+    --out DeveloperDocs/figures/exp1/sensitivity_combined.png
+```
+Each script also exposes loaders (`load_trials`, `summarize`, `per_row_energy`) for notebook use; `--help` lists the full knob set. See [`DeveloperDocs/Experiment_1_Run_Guide.md` §8](DeveloperDocs/Experiment_1_Run_Guide.md) for the end-to-end procedure.
+
+### Experiment 3 — A1–A4 scheduler ablation
+
+The A1 (Centralized FL), A2 (round-robin mule), A3 (deadline-feasibility mule), and A4 (HERMES `TargetSelectorRL`) arms run against [`experiments.exp3.sim_env.Exp3Sim`](experiments/exp3/sim_env.py) — no real subprocesses needed. The grid sweeps `N`, `β` (deadline tightness), `rrf` (RF range), `deadline_het`, and `jittery`.
+
+**Step 1 — train the A4 selector** (paper-grade runs require trained weights; otherwise A4 falls back to a random-init DDQN and the runner refuses with `--require-trained-a4`):
+```bash
+python -m experiments.exp3.train_a4 \
+    --episodes 400 \
+    --rf-range-m 60 \
+    --output weights/a4_selector.npz
+```
+
+**Step 2 — run the trial grid:**
+```bash
+# Full grid (A1–A4 × N×β×rrf×deadline_het×jittery × n_trials), paper-grade:
+python -m experiments.exp3.runner_main \
+    --csv results/exp3.csv \
+    --selector-weights weights/a4_selector.npz \
+    --require-trained-a4 \
+    --n-trials 20
+
+# Smoke (subset of arms / axes):
+python -m experiments.exp3.runner_main \
+    --csv results/exp3_smoke.csv \
+    --arms A1 A4 \
+    --N 5 --beta 1.0 --rrf 60 --deadline-het 0 --jittery 0 \
+    --n-trials 2 \
+    --selector-weights weights/a4_selector.npz
+```
+
+Useful knobs (full list via `python -m experiments.exp3.runner_main --help`):
+
+- `--N 5 10 20`, `--beta 0.25 0.5 1.0 2.0`, `--rrf 30 60 120`, `--deadline-het 0 1`, `--jittery 0 1` — independent-variable sweeps.
+- `--clean-upload-bytes / --clean-upload-bps / --jittery-upload-bytes / --jittery-upload-bps` — per-cell network model (default jittery cell is 10 MB / 1 Mbps + 2 % loss + 30 % latency jitter, matching Exp 1's `--jittery`).
+- `--jittery-a1-dead-zone-pct` — fraction of A1 clients marked persistently long-range-unreachable in jittery cells (defaults: clean = 0 %, jittery = 60 %). Models correlated terrain blockage / range-edge SNR collapse that an i.i.d. per-round failure rate can't capture.
+- `--timeout-s 300` — soft per-trial wall-clock budget (warning only; the runner records `status=timeout` and continues).
+- `--base-seed 42` — paired-seed reproducibility across arms.
+
+**Resume.** `--csv` is checkpoint-and-resume; re-running with the same path picks up only the cells not yet written.
+
+**Analysis.** Run the cross-arm sanity audit first (it confirms A2 / A3 / A4 actually make different decisions before you trust the panel), then render the six paper figures:
+```bash
+# Step A — sanity check: do A2/A3/A4 disagree on which contact to visit?
+python -m experiments.exp3.audit_arm_agreement \
+    --selector-weights weights/a4_selector.npz \
+    --seeds 20 --n-devices 10 --beta 0.25 --rrf 60.0
+
+# Step B — full panel (all regimes pooled, paired clean+jittery boxes per arm):
+python -m experiments.analysis.exp3 \
+    --csv results/exp3.csv \
+    --figures-dir DeveloperDocs/figures/exp3 \
+    --jittery-filter all
+
+# Step C — regime-specific panels for the appendix:
+python -m experiments.analysis.exp3 --csv results/exp3.csv \
+    --figures-dir DeveloperDocs/figures/exp3_clean   --jittery-filter clean
+python -m experiments.analysis.exp3 --csv results/exp3.csv \
+    --figures-dir DeveloperDocs/figures/exp3_jittery --jittery-filter jittery
+```
+The panel writes six figures (A2-vs-A1, A3-vs-A2, A4-vs-A3, β-sweep, rrf-sweep, ρ_contact bar chart) plus `exp3_paired_tests.csv` for paper-table reproducibility. Sensitivity TOMLs under [`experiments/calibration_sensitivity/`](experiments/calibration_sensitivity/) swap the energy / idle priors for the calibration sweep. See [`DeveloperDocs/Experiment_3_Run_Guide.md` §9](DeveloperDocs/Experiment_3_Run_Guide.md) for the end-to-end procedure.
 
 ---
 
@@ -377,6 +516,8 @@ Authoritative design / planning docs (under [`DeveloperDocs/`](DeveloperDocs/)):
 - [`HERMES_Configuration_Reference.md`](DeveloperDocs/HERMES_Configuration_Reference.md) — single source of truth for every tunable.
 - [`HERMES_Operations_Runbook.md`](DeveloperDocs/HERMES_Operations_Runbook.md) — first-boot guide, diagnostics, deployment.
 - [`HERMES_Experiments_Implementation_Plan.md`](DeveloperDocs/HERMES_Experiments_Implementation_Plan.md) — paper-experiment scaffolding (Exp 1, Exp 3, shared trial harness).
+- [`Experiment_1_Run_Guide.md`](DeveloperDocs/Experiment_1_Run_Guide.md) — standalone run guide for Experiment 1.
+- [`Experiment_3_Run_Guide.md`](DeveloperDocs/Experiment_3_Run_Guide.md) — standalone run guide for Experiment 3.
 - [`Exp3_Future_Energy_Models.md`](DeveloperDocs/Exp3_Future_Energy_Models.md) — Option B (retry/revisit) and Option C (adaptive in-cluster positioning) propulsion-energy extensions.
 - AC-GAN analyses & fix plans:
   - [`GAN_Training_Mode_Collapse_Analysis.md`](DeveloperDocs/GAN_Training_Mode_Collapse_Analysis.md)
