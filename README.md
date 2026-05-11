@@ -42,6 +42,8 @@ The repo ships:
 - Wagle, Bishwas
 - Bhamidipati, Subrahmanya Chandra
 - Neupane, Kiran
+
+**Undergraduate Students (2026)**
 - Peppers, Sean
 
 ---
