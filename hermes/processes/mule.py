@@ -195,6 +195,29 @@ class MuleService:
                     "mule %s: mission %d complete (queue_size=%d)",
                     self.cfg.mule_id, result.mission_round, queue_size,
                 )
+                # EX-4.0 instrumentation — surface the Pass-1 aggregation
+                # ledger so an integrated-experiment consumer can compute
+                # update-yield / round-close-rate from the real event
+                # stream. ``report`` is the MissionRoundCloseReport from
+                # ``close_round`` (populated by both the single-pass and
+                # two-pass paths); ``pass_1_queue`` carries the scheduled
+                # contact membership. All three fields are additive and
+                # optional per the observability schema policy, so adding
+                # them does not break existing consumers.
+                report = getattr(result, "report", None)
+                if report is not None:
+                    pass_1_updates = report.counts()[0]  # CLEAN collections
+                    pass_1_clean_devices = [
+                        str(line.device_id)
+                        for line in report.lines
+                        if line.outcome.is_on_time()
+                    ]
+                else:
+                    pass_1_updates = None
+                    pass_1_clean_devices = None
+                pass_1_scheduled = (
+                    sum(len(c.devices) for c in result.pass_1_queue) or None
+                )
                 self.events.emit(
                     "mission_completed",
                     mission_round=result.mission_round,
@@ -202,6 +225,9 @@ class MuleService:
                     pass_1_contacts=len(result.pass_1_queue),
                     pass_2_contacts=len(result.pass_2_queue),
                     duration_s=duration_s,
+                    pass_1_updates=pass_1_updates,
+                    pass_1_scheduled=pass_1_scheduled,
+                    pass_1_clean_devices=pass_1_clean_devices,
                     delivered=(
                         result.delivery_report.counts()[0]
                         if result.delivery_report is not None
