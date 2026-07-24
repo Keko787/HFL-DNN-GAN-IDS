@@ -103,6 +103,12 @@ class MuleService:
         # 3. Supervisor (Sprint 1.5 two-pass when rf_range_m is set).
         # EX-4.2 arm H2: an RL target selector is injected when configured;
         # otherwise the supervisor uses deterministic distance ranking (H1).
+        # EX-4.3 arm H3: a real L1 RF prior (mean SNR of the chosen channel)
+        # feeds the selector instead of the hardcoded 20.0 default.
+        sup_kwargs = {}
+        rf_prior = getattr(cfg, "rf_prior_snr_db", None)
+        if rf_prior is not None:
+            sup_kwargs["rf_prior_snr_db"] = float(rf_prior)
         self.supervisor = MuleSupervisor(
             mule_id=MuleID(cfg.mule_id),
             rf=self.rf,
@@ -110,6 +116,7 @@ class MuleService:
             session_ttl_s=cfg.session_ttl_s,
             rf_range_m=cfg.rf_range_m,
             target_selector=_build_target_selector(cfg),
+            **sup_kwargs,
         )
 
         self.events.emit(

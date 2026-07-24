@@ -56,6 +56,10 @@ def build_exp4_topology(
     # EX-4.2 arm H2 — RL target selector on the mule.
     use_rl_selector: bool = False,
     selector_weights_path: Optional[str] = None,
+    # EX-4.3 arm H3 — L1 channel model: per-mission backhaul-loss schedule
+    # (cluster) + the chosen channel's mean SNR as the selector's RF prior (mule).
+    backhaul_loss_schedule: Optional[List[float]] = None,
+    rf_prior_snr_db: Optional[float] = None,
 ) -> TopologyConfig:
     """Return a validated :class:`TopologyConfig` for one H1 trial.
 
@@ -133,6 +137,7 @@ def build_exp4_topology(
         input_dim=input_dim,
         backhaul_loss_pct=backhaul_loss_pct,
         backhaul_rng_seed=backhaul_rng_seed,
+        backhaul_loss_schedule=backhaul_loss_schedule,
     )
     mule = MuleConfig(
         mule_id=mule_id,
@@ -143,6 +148,7 @@ def build_exp4_topology(
         n_missions=int(n_missions),
         use_rl_selector=use_rl_selector,
         selector_weights_path=selector_weights_path,
+        rf_prior_snr_db=rf_prior_snr_db,
     )
     topo = TopologyConfig(cluster=cluster, mules=[mule], devices=devices)
     topo.validate()

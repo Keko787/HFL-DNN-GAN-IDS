@@ -233,6 +233,48 @@ def test_exp4_h2_rl_selector_runs_end_to_end():
 
 
 @pytest.mark.slow
+def test_exp4_h3_l1_channel_runs_end_to_end():
+    """EX-4.3 arm H3 — the adaptive L1 channel is wired through the REAL stack.
+
+    Proves the plumbing: the driver builds a per-mission backhaul-loss
+    schedule from the channel model, threads it into the cluster (which
+    applies it as the per-mission Bernoulli drop), and feeds the chosen
+    channel's mean SNR to the mule's target selector as its RF prior. The
+    jittery trial completes end-to-end with a convergence trace.
+
+    (That adaptive H3 loses less backhaul than fixed H2 is proved
+    deterministically across seeds in tests/unit/test_exp4_channel.py; the
+    stochastic subprocess trial only pins the wiring here.)
+    """
+    driver = Exp4Driver(
+        real_model=True,
+        data_source="synthetic",
+        realism=True,
+        l1_channel=True,            # arm H3 backhaul comes from the channel model
+        default_n_devices=6,
+        local_epochs=2,
+        synth_rows_per_device=160,
+        synth_test_rows=240,
+        h1_field_radius_m=90.0,
+        trial_budget_s=300.0,
+        startup_timeout_s=60.0,
+    )
+    cell = Cell(
+        cell_id="h3", arm="H3", trial_index=0, seed=17,
+        params={"N": 6, "rrf": 60.0, "n_missions": 4, "regime": "jittery"},
+    )
+    row = dict(driver.run_trial(cell))
+    assert set(row.keys()) == set(Exp4MetricSummary.csv_columns())
+    # The integrated stack ran with the channel-driven backhaul + RL selector.
+    assert row["missions_completed"] >= 1, row
+    assert row["rounds_closed"] >= 1, row
+    assert row["rounds_evaluated"] >= 2, row
+    # H3 still reaches devices over short-range contact (jitter hits only the
+    # long-range backhaul), so it does not collapse.
+    assert float(row["update_yield"]) > 0.0
+
+
+@pytest.mark.slow
 def test_exp4_h0_requires_real_model():
     """H0 without real_model is a clear error, not a silent stub run."""
     driver = Exp4Driver(real_model=False)

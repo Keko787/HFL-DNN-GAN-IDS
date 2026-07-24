@@ -159,6 +159,20 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         help="Arm H2: trained DDQN .npz (from experiments.exp3.train_a4). "
              "Omit for a random-init selector (H2 plumbing smoke only).",
     )
+    parser.add_argument(
+        "--l1-channel", action="store_true",
+        help="Arm H3: L1 adaptive channel selection. The mule arms' "
+             "backhaul-loss schedule comes from the multi-band RF channel "
+             "model (experiments.exp4.channel): H1/H2 hold the best-average "
+             "fixed band; H3 runs the U(c,t) controller that re-selects the "
+             "band per mission. Under 'jittery' this gives H3 lower backhaul "
+             "loss (the paper's L1-adaptivity claim); under 'clean' the "
+             "effect is ~null by construction. Use with --realism.",
+    )
+    parser.add_argument(
+        "--l1-channel-bands", type=int, default=3,
+        help="Arm H3: number of RF bands the controller chooses among.",
+    )
     args = parser.parse_args(argv)
 
     logging.basicConfig(
@@ -208,6 +222,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         jittery_backhaul_loss_pct=float(args.jittery_backhaul_loss_pct),
         h1_field_radius_m=float(args.h1_field_radius_m),
         selector_weights_path=(str(args.selector_weights) if args.selector_weights else None),
+        l1_channel=bool(args.l1_channel),
+        l1_channel_bands=int(args.l1_channel_bands),
     )
     if args.real_model:
         log.info(

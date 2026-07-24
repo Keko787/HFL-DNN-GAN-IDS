@@ -88,6 +88,12 @@ class ClusterConfig:
     # Seed for the backhaul-loss RNG so the loss pattern is deterministic and
     # varies per trial. Set by the driver from the paired trial seed.
     backhaul_rng_seed: Optional[int] = None
+    # EX-4.3 arm H3 — per-mission backhaul-loss probabilities from the L1
+    # channel model (index = mission_round-1). When set, it overrides the
+    # flat ``backhaul_loss_pct``: adaptive channel selection (H3) yields a
+    # lower-loss schedule than the fixed channel (H1/H2), so L1's effect is
+    # a real, seed-consistent reduction in dropped rounds.
+    backhaul_loss_schedule: Optional[List[float]] = None
 
 
 @dataclass
@@ -120,6 +126,11 @@ class MuleConfig:
     # only — not paper-grade).
     use_rl_selector: bool = False
     selector_weights_path: Optional[str] = None
+    # EX-4.3 arm H3 — the L1->L2 edge. When set, the mule's scheduler feeds
+    # this (the mean effective SNR of the L1-chosen channel) to the target
+    # selector's rf_prior feature, instead of the hardcoded 20.0 default. This
+    # is the real RF prior the SEC26 audit found was never wired at runtime.
+    rf_prior_snr_db: Optional[float] = None
 
 
 @dataclass

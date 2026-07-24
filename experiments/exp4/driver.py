@@ -50,7 +50,7 @@ from .topology_builder import build_exp4_topology
 log = logging.getLogger("experiments.exp4.driver")
 
 
-ARMS = ("H0", "H1", "H2")
+ARMS = ("H0", "H1", "H2", "H3")
 
 
 class Exp4TrialTimeout(RuntimeError):
@@ -135,6 +135,12 @@ class Exp4Driver:
     h1_world_radius_m: float = 100.0
     clean_backhaul_loss_pct: float = 0.0
     jittery_backhaul_loss_pct: float = 2.0
+    # EX-4.3 arm H3 — L1 adaptive channel selection. When on, the mule arms'
+    # backhaul loss comes from the RF channel model (experiments.exp4.channel):
+    # H1/H2 hold the best-average fixed band, H3 runs the U(c,t) controller.
+    # Use with --realism (contact reliability) for the H1->H2->H3 ladder.
+    l1_channel: bool = False
+    l1_channel_bands: int = 3
 
     def run_trial(self, cell: Cell) -> Mapping[str, Any]:
         params = cell.params
@@ -181,11 +187,38 @@ class Exp4Driver:
                 backhaul_rng_seed=(cell.seed ^ 0x0BACC0DE),
             )
 
-        # EX-4.2 arm H2 = H1 + RL target selector; H1 = deterministic ranking.
+        # EX-4.2/4.3 arms: H1 deterministic ranking; H2 = H1 + RL selector;
+        # H3 = H2 + adaptive L1 channel.
         selector_kwargs = dict(
-            use_rl_selector=(arm == "H2"),
+            use_rl_selector=(arm in ("H2", "H3")),
             selector_weights_path=self.selector_weights_path,
         )
+
+        # EX-4.3 arm H3 — L1 adaptive channel. H1/H2 hold the best-average
+        # fixed band; H3 runs the U(c,t) controller. The per-mission loss
+        # schedule (cluster) + chosen-channel mean SNR (selector RF prior)
+        # replace the flat backhaul loss for all mule arms in this mode.
+        if self.l1_channel:
+            from .channel import ChannelModel, backhaul_plan
+            model = ChannelModel(
+                n_bands=self.l1_channel_bands, n_missions=n_missions,
+                seed=cell.seed, jittery=(regime == "jittery"),
+            )
+            plan = backhaul_plan(model, adaptive=(arm == "H3"))
+            realism_kwargs["backhaul_loss_schedule"] = plan.loss_schedule
+            realism_kwargs["rf_prior_snr_db"] = plan.mean_chosen_snr_db
+            # The schedule drives the cluster's per-mission Bernoulli draw; seed
+            # it off the paired seed so H1/H2/H3 share the identical draw
+            # sequence (paired comparison holds even without --realism).
+            realism_kwargs.setdefault("backhaul_rng_seed", cell.seed ^ 0x0BACC0DE)
+            log.info(
+                "exp4 %s L1 channel cell=%s trial=%d regime=%s: adaptive=%s "
+                "mean_snr=%.1fdB mean_loss=%.3f bands=%s",
+                arm, cell.cell_id, cell.trial_index, regime, plan.adaptive,
+                plan.mean_chosen_snr_db,
+                sum(plan.loss_schedule) / max(1, len(plan.loss_schedule)),
+                plan.chosen_bands,
+            )
 
         prep_dir: Optional[Path] = None
         try:

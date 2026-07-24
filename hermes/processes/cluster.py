@@ -133,6 +133,9 @@ class ClusterService:
         # EX-4.2 — long-range backhaul (mule->BS) upload loss.
         self._backhaul_loss_pct = float(getattr(cfg, "backhaul_loss_pct", 0.0) or 0.0)
         self._backhaul_rng = np.random.default_rng(getattr(cfg, "backhaul_rng_seed", None))
+        # EX-4.3 — per-mission loss schedule (probabilities, 0..1) from the L1
+        # channel model; overrides the flat pct when set.
+        self._backhaul_loss_schedule = getattr(cfg, "backhaul_loss_schedule", None)
         if getattr(cfg, "eval_test_path", None) and self._eval_input_dim:
             from experiments.exp4.model_task import load_xy
             self._eval_X, self._eval_y = load_xy(cfg.eval_test_path)
@@ -308,7 +311,7 @@ class ClusterService:
             # last iteration, regardless of whether an UP arrived.
             self._dispatch_to_new_mules(bootstrapped)
 
-            if up is not None and self._backhaul_dropped():
+            if up is not None and self._backhaul_dropped(getattr(up, "mission_round", None)):
                 # EX-4.2: model long-range mule->BS backhaul upload loss.
                 # Drop this mule's aggregate (the round does not close) but
                 # still send DOWN with the current θ so the mule can finish
@@ -429,8 +432,18 @@ class ClusterService:
             )
             self.metrics.increment("tier3_refinement_fold_failures")
 
-    def _backhaul_dropped(self) -> bool:
-        """EX-4.2 — Bernoulli draw for a lost mule->BS backhaul upload."""
+    def _backhaul_dropped(self, mission_round=None) -> bool:
+        """EX-4.2/4.3 — Bernoulli draw for a lost mule->BS backhaul upload.
+
+        Uses the per-mission L1 loss schedule (probabilities, index =
+        mission_round-1) when configured; otherwise the flat pct.
+        """
+        sched = self._backhaul_loss_schedule
+        if sched:
+            idx = (int(mission_round) - 1) if mission_round else 0
+            idx = min(max(idx, 0), len(sched) - 1)
+            p = float(sched[idx])
+            return p > 0.0 and float(self._backhaul_rng.random()) < p
         if self._backhaul_loss_pct <= 0.0:
             return False
         return float(self._backhaul_rng.random()) < (self._backhaul_loss_pct / 100.0)
