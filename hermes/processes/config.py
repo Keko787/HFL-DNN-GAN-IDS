@@ -112,6 +112,14 @@ class MuleConfig:
     # Number of mission cycles to run before the service exits. None =
     # run until shutdown signal.
     n_missions: Optional[int] = None
+    # EX-4.2 arm H2 — RL target selector (S3.5 tie-break). When
+    # ``use_rl_selector`` is set, the mule builds a ``TargetSelectorRL`` and
+    # passes it to its supervisor (deterministic distance ranking otherwise,
+    # = arm H1). ``selector_weights_path`` loads a trained DDQN (.npz from
+    # experiments.exp3.train_a4); omit it for a random-init selector (smoke
+    # only — not paper-grade).
+    use_rl_selector: bool = False
+    selector_weights_path: Optional[str] = None
 
 
 @dataclass

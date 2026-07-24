@@ -46,6 +46,32 @@ from .config import MuleConfig, mule_config_from_json
 log = logging.getLogger("hermes.processes.mule")
 
 
+def _build_target_selector(cfg: MuleConfig):
+    """EX-4.2 — build the S3.5 RL target selector when configured (arm H2).
+
+    Returns ``None`` (deterministic distance ranking = arm H1) unless
+    ``cfg.use_rl_selector`` is set. With ``selector_weights_path`` it loads a
+    trained DDQN (.npz); otherwise it builds a random-init selector — a
+    plumbing smoke, NOT paper-grade (train weights via
+    ``experiments.exp3.train_a4`` for a real H2-vs-H1 comparison).
+    """
+    if not getattr(cfg, "use_rl_selector", False):
+        return None
+    from hermes.scheduler.selector import TargetSelectorRL
+
+    path = getattr(cfg, "selector_weights_path", None)
+    if path:
+        from hermes.scheduler.selector.ddqn import DDQN
+        log.info("mule %s: RL target selector from trained weights %s",
+                 cfg.mule_id, path)
+        return TargetSelectorRL(ddqn=DDQN.load(path), epsilon=0.0)
+    log.warning(
+        "mule %s: RL target selector with RANDOM-INIT weights (H2 plumbing "
+        "smoke only — not paper-grade)", cfg.mule_id,
+    )
+    return TargetSelectorRL(epsilon=0.0, rng_seed=0)
+
+
 class MuleService:
     """Lifecycle holder for a mule-process service loop."""
 
@@ -75,12 +101,15 @@ class MuleService:
         )
 
         # 3. Supervisor (Sprint 1.5 two-pass when rf_range_m is set).
+        # EX-4.2 arm H2: an RL target selector is injected when configured;
+        # otherwise the supervisor uses deterministic distance ranking (H1).
         self.supervisor = MuleSupervisor(
             mule_id=MuleID(cfg.mule_id),
             rf=self.rf,
             dock=self.dock,
             session_ttl_s=cfg.session_ttl_s,
             rf_range_m=cfg.rf_range_m,
+            target_selector=_build_target_selector(cfg),
         )
 
         self.events.emit(

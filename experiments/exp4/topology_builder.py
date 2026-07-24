@@ -53,6 +53,9 @@ def build_exp4_topology(
     field_radius_m: Optional[float] = None,
     backhaul_loss_pct: float = 0.0,
     backhaul_rng_seed: Optional[int] = None,
+    # EX-4.2 arm H2 — RL target selector on the mule.
+    use_rl_selector: bool = False,
+    selector_weights_path: Optional[str] = None,
 ) -> TopologyConfig:
     """Return a validated :class:`TopologyConfig` for one H1 trial.
 
@@ -138,6 +141,8 @@ def build_exp4_topology(
         rf_range_m=float(rf_range_m),
         session_ttl_s=session_ttl_s,
         n_missions=int(n_missions),
+        use_rl_selector=use_rl_selector,
+        selector_weights_path=selector_weights_path,
     )
     topo = TopologyConfig(cluster=cluster, mules=[mule], devices=devices)
     topo.validate()

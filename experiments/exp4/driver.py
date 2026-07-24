@@ -50,7 +50,7 @@ from .topology_builder import build_exp4_topology
 log = logging.getLogger("experiments.exp4.driver")
 
 
-ARMS = ("H0", "H1")
+ARMS = ("H0", "H1", "H2")
 
 
 class Exp4TrialTimeout(RuntimeError):
@@ -96,6 +96,9 @@ class Exp4Driver:
     # synthetic loader knobs
     synth_rows_per_device: int = 512
     synth_test_rows: int = 512
+    # EX-4.2 arm H2 — trained DDQN target selector (.npz from exp3.train_a4).
+    # None -> H2 uses a random-init selector (plumbing smoke, not paper-grade).
+    selector_weights_path: Optional[str] = None
     # H0 (traditional flat FL) — fraction of clients sampled per round.
     # 1.0 = every client every round (the reliable-infrastructure baseline,
     # matching Exp 1's fully-participating clients).
@@ -178,6 +181,12 @@ class Exp4Driver:
                 backhaul_rng_seed=(cell.seed ^ 0x0BACC0DE),
             )
 
+        # EX-4.2 arm H2 = H1 + RL target selector; H1 = deterministic ranking.
+        selector_kwargs = dict(
+            use_rl_selector=(arm == "H2"),
+            selector_weights_path=self.selector_weights_path,
+        )
+
         prep_dir: Optional[Path] = None
         try:
             if self.real_model:
@@ -202,6 +211,7 @@ class Exp4Driver:
                     init_theta_path=prep.init_theta_path,
                     eval_test_path=prep.test_path,
                     **realism_kwargs,
+                    **selector_kwargs,
                 )
             else:
                 topo = build_exp4_topology(
@@ -210,6 +220,7 @@ class Exp4Driver:
                     n_missions=n_missions,
                     seed=cell.seed,
                     **realism_kwargs,
+                    **selector_kwargs,
                 )
 
             return self._run_topology(

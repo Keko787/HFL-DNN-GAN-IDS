@@ -202,6 +202,37 @@ def test_exp4_h1_realism_is_imperfect_and_does_not_collapse():
 
 
 @pytest.mark.slow
+def test_exp4_h2_rl_selector_runs_end_to_end():
+    """EX-4.2 arm H2 — the RL target selector runs through the REAL
+    orchestrator (S3.5 tie-break in FLScheduler), producing a valid trial.
+
+    (Whether H2 beats H1 needs trained weights + a paired sweep; here we
+    only pin that the selector is wired and the integrated trial completes.)
+    """
+    driver = Exp4Driver(
+        real_model=True,
+        data_source="synthetic",
+        realism=True,               # spread -> multiple contacts, so the
+        default_n_devices=6,        # selector actually has candidates to rank
+        local_epochs=2,
+        synth_rows_per_device=160,
+        synth_test_rows=240,
+        h1_field_radius_m=90.0,
+        trial_budget_s=300.0,
+        startup_timeout_s=60.0,
+    )
+    cell = Cell(
+        cell_id="h2", arm="H2", trial_index=0, seed=9,
+        params={"N": 6, "rrf": 60.0, "n_missions": 3, "regime": "clean"},
+    )
+    row = dict(driver.run_trial(cell))
+    assert set(row.keys()) == set(Exp4MetricSummary.csv_columns())
+    assert row["missions_completed"] >= 1
+    assert row["rounds_closed"] >= 1
+    assert row["rounds_evaluated"] >= 2
+
+
+@pytest.mark.slow
 def test_exp4_h0_requires_real_model():
     """H0 without real_model is a clear error, not a silent stub run."""
     driver = Exp4Driver(real_model=False)

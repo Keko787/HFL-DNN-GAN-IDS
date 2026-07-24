@@ -154,6 +154,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "--h1-field-radius-m", type=float, default=100.0,
         help="H1 realism: device scatter radius (larger -> more contacts).",
     )
+    parser.add_argument(
+        "--selector-weights", type=Path, default=None,
+        help="Arm H2: trained DDQN .npz (from experiments.exp3.train_a4). "
+             "Omit for a random-init selector (H2 plumbing smoke only).",
+    )
     args = parser.parse_args(argv)
 
     logging.basicConfig(
@@ -202,6 +207,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         realism=bool(args.realism),
         jittery_backhaul_loss_pct=float(args.jittery_backhaul_loss_pct),
         h1_field_radius_m=float(args.h1_field_radius_m),
+        selector_weights_path=(str(args.selector_weights) if args.selector_weights else None),
     )
     if args.real_model:
         log.info(
