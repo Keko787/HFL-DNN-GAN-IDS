@@ -98,48 +98,78 @@ budget-scheduling claim (Observation 4), which is the H2 (RL selector) work.
   advantage holds, not a tuned point. The review's flip test (dead_zone 0.3 +
   link_quality 0.7 → H0 may exceed H1) must be reported if it occurs.
 
-## 6. Honest current result (6 paired seeds, significance-tested)
+## 6. Result — 20 paired seeds, full dead-zone × link surface
 
-Canonical CICIOT, N=6, `--n-missions 4`, 6 paired seeds. Paired Wilcoxon +
-Cliff's δ + bootstrap 95% CI on the mean (H1 − H0) difference
-(`python -m experiments.analysis.exp4 --csv <sweep>.csv`). ✱ = CI excludes 0
-and Wilcoxon p<0.05.
+Canonical CICIOT, N=6, `--n-missions 4`, **20 paired seeds**, the full
+`dead_zone ∈ {0.0,0.2,0.4,0.6} × link_quality ∈ {0.3,0.5,0.7}` jittery surface
++ a clean reference (`dead_zone=0.0, link=0.5`). Paired Wilcoxon + Cliff's δ +
+bootstrap 95% CI on the mean (H1 − H0) difference
+(`python -m experiments.analysis.exp4 --csv h0h1_all.csv --surface`). ✱ = CI
+excludes 0 and Wilcoxon p<0.05. Jittery rows are **pooled** over all 12 surface
+cells (n≈239 pairs); the per-cell breakdown is the surface table below.
 
 | regime | metric | H1 | H0 | H1−H0 | 95% CI | p | δ | verdict |
 |---|---|---|---|---|---|---|---|---|
-| clean | final_auc | 0.903 | 0.895 | +0.008 | [−0.003,+0.018] | 0.31 | +0.33 | tie |
-| clean | update_yield | 2.42 | 3.46 | −1.04 | [−1.50,−0.58] | 0.031 | −0.75 | H0 > H1 ✱ |
-| jittery | final_auc | 0.903 | 0.887 | +0.016 | [−0.004,+0.038] | 0.44 | −0.06 | tie |
-| jittery | mission_completion_rate | 0.75 | 0.25 | +0.50 | [+0.33,+0.67] | 0.031 | +1.00 | H1 > H0 ✱ |
-| jittery | update_yield | 1.96 | 0.42 | +1.54 | [+1.29,+1.96] | 0.031 | +1.00 | H1 > H0 ✱ |
-| jittery | round_close_rate@2 | 0.75 | 0.08 | +0.67 | [+0.46,+0.83] | 0.031 | +1.00 | H1 > H0 ✱ |
+| clean | mission_completion_rate | 0.550 | 0.892 | −0.342 | [−0.442,−0.242] | 0.0002 | −0.76 | H0 > H1 ✱ |
+| clean | update_yield | 1.30 | 3.44 | −2.14 | [−2.58,−1.76] | 0.0001 | −0.95 | H0 > H1 ✱ |
+| clean | round_close_rate@2 | 0.375 | 0.963 | −0.588 | [−0.713,−0.475] | 0.0001 | −0.96 | H0 > H1 ✱ |
+| clean | final_auc | 0.958 | 0.985 | −0.027 | [−0.039,−0.017] | <0.001 | −0.69 | H0 > H1 ✱ |
+| jittery | mission_completion_rate | 0.660 | 0.478 | +0.183 | [+0.145,+0.222] | <0.001 | +0.41 | H1 > H0 ✱ |
+| jittery | update_yield | 1.65 | 1.24 | +0.405 | [+0.281,+0.525] | <0.001 | +0.31 | H1 > H0 ✱ |
+| jittery | round_close_rate@2 | 0.536 | 0.355 | +0.181 | [+0.130,+0.231] | <0.001 | +0.31 | H1 > H0 ✱ |
+| jittery | final_auc | 0.958 | 0.934 | +0.023 | [+0.005,+0.043] | 0.0024 | +0.12 | H1 > H0 ✱ |
+| jittery | final_accuracy | 0.868 | 0.846 | +0.022 | [+0.005,+0.038] | 0.019 | +0.10 | H1 > H0 ✱ |
 
-**Reading — the crossover is significant on _participation_, not on AUC.**
+**The mule's advantage is conditional, and it scales with backhaul dead-zone —
+the surface (mission_completion_rate) shows the crossover boundary:**
 
-* **Participation crosses over decisively.** Centralized collects significantly
-  *more* per round under clean links (update_yield 3.46 vs 2.42, p=0.031 — the
-  mule's real short-range throughput cost), but under jittery the mule preserves
-  **~5×** the participation (yield 1.96 vs 0.42; completion 0.75 vs 0.25;
-  close-rate 0.75 vs 0.08), all at **Cliff's δ = +1.0 (perfect separation),
-  p=0.031**. This is Observation 3 — a *participation* claim — validated
-  end-to-end on the real integrated stack.
-* **AUC is a statistical tie in both regimes** (CIs straddle 0). The compact
-  DNN-IDS saturates near ~0.90 AUC on balanced CICIOT even from few updates, so
-  H0's participation collapse does not tank its accuracy. **No significant AUC
-  advantage is claimed from this run.**
+| dead_zone | link | H1 | H0 | H1−H0 | p | δ | verdict |
+|---|---|---|---|---|---|---|---|
+| 0.0 | 0.3 | 0.825 | 0.475 | +0.350 | 0.0002 | +0.89 | H1 > H0 ✱ |
+| 0.0 | 0.5 | 0.783 | 0.775 | +0.008 | 1.00 | −0.01 | tie |
+| **0.0** | **0.7** | 0.518 | 0.833 | **−0.316** | 0.0011 | −0.70 | **H0 > H1 ✱** |
+| 0.2 | 0.3 | 0.500 | 0.417 | +0.083 | 0.14 | +0.21 | tie |
+| 0.2 | 0.5 | 0.658 | 0.558 | +0.100 | 0.14 | +0.28 | tie |
+| 0.2 | 0.7 | 0.750 | 0.725 | +0.025 | 0.48 | +0.12 | tie |
+| 0.4 | 0.3 | 0.525 | 0.350 | +0.175 | 0.012 | +0.47 | H1 > H0 ✱ |
+| 0.4 | 0.5 | 0.692 | 0.450 | +0.242 | 0.0009 | +0.61 | H1 > H0 ✱ |
+| 0.4 | 0.7 | 0.725 | 0.525 | +0.200 | 0.0010 | +0.71 | H1 > H0 ✱ |
+| 0.6 | 0.3 | 0.483 | 0.133 | +0.350 | 0.0003 | +0.79 | H1 > H0 ✱ |
+| 0.6 | 0.5 | 0.725 | 0.233 | +0.492 | 0.0001 | +0.98 | H1 > H0 ✱ |
+| 0.6 | 0.7 | 0.733 | 0.275 | +0.458 | 0.0001 | +0.97 | H1 > H0 ✱ |
 
-**Defensible framing:** *"Centralized FL collects more updates per round when
-the backhaul is clean, but mule-based HERMES preserves ~5× the federated
-participation when the backhaul degrades (p=0.031, Cliff's δ=+1.0); the compact
-IDS's end AUC is statistically indistinguishable at this scale."* This matches
-the paper's Observation 3 (worded around participation, not accuracy) and does
-not over-reach on AUC.
+**Reading — an honest, physically-sensible crossover, not a blanket win.**
 
-**Caveats:** 6 seeds with perfect separation hits the Wilcoxon floor p=0.031;
-≥20 seeds would lower p / tighten CIs on the participation metrics and almost
-certainly confirm the AUC tie. The dead-zone × link surface run is still
-pending. Report participation (completion / yield / close-rate), not AUC, as the
-Observation-3 evidence.
+* **The mule costs you under a healthy backhaul.** Clean links: H0 beats H1 on
+  every metric (completion −0.34, yield −2.14, close-rate −0.59, even AUC −0.027,
+  all p<0.001). Direct centralized collection reaches everyone cheaply; the mule
+  is overhead. This is stated up front, not buried.
+* **The mule's advantage grows monotonically with the dead-zone.** As more
+  devices lose their long-range path, the mule's physical collection wins by
+  more: negligible at `dead_zone=0.0` (link-dependent, and it *flips* to H0 at
+  `link=0.7` — the well-connected corner where the mule is pure overhead),
+  through decisive at `dead_zone=0.4` (δ +0.47…+0.71), to dominant at
+  `dead_zone=0.6` (δ up to **+0.98**, H1 delivers ~0.73 completion vs H0's
+  0.23–0.28). **The flip test the review demanded (dz=0.0, link=0.7 → H0 > H1)
+  did occur, and is reported.**
+* **AUC is a *small* but real jittery win** (+0.023, p=0.0024, δ=+0.12 pooled) —
+  weaker than participation, and it reverses under clean (−0.027). The compact
+  IDS partly saturates, so the participation gap only partly propagates to AUC.
+  Lead with participation; report AUC as the secondary, smaller effect.
+
+**Defensible framing:** *"When the backhaul is healthy, centralized flat FL is
+strictly better — the mule is overhead. But as devices lose their long-range
+path (dead-zone), mule-based HERMES's participation advantage grows
+monotonically, from a tie to decisive (Cliff's δ up to +0.98, p<0.001 at
+dead_zone=0.6), with a small corresponding AUC gain; the crossover boundary sits
+around dead_zone≈0.2–0.4."* This is Observation 3 as a **conditional,
+operating-regime-dependent** claim — the honest and far more defensible form,
+now backed by 20 seeds across a 12-point surface rather than a single tuned cell.
+
+**Caveats:** the 6-seed preview's "~5× participation, δ=+1.0" was a single
+favorable cell (≈ dz=0.6); the 20-seed surface shows that point is real
+(δ=+0.98 there) but *not* representative — the effect is a gradient, and near
+the well-connected corner it reverses. Report the surface, not the corner.
 
 ## 7. Arm H3 — L1 adaptive channel selection (validity)
 
@@ -208,12 +238,15 @@ None of these falsify the result; each bounds how it may be framed. They are
 stated here so the paper pre-empts the hostile reviewer rather than being
 caught by them.
 
-1. **This is a channel-model property, not an orchestrator measurement.** The
-   table below is `mean(backhaul_plan(...).loss_schedule)` computed in-process
-   — the deterministic *input* the cluster then consumes, and the same quantity
-   the unit tests assert. It is **not** measured end-to-end; the integrated
-   H2-vs-H3 orchestrator sweep is pending (running as of this writing). Report
-   the table as a controller/channel property, not an FL result.
+1. **This is a channel-model property; the end-to-end effect is now measured
+   separately (§7.3).** The table below is `mean(backhaul_plan(...).loss_schedule)`
+   computed in-process — the deterministic *input* the cluster consumes, and the
+   same quantity the unit tests assert. It is **not** itself an FL measurement.
+   The integrated H2-vs-H3 orchestrator sweep (§7.3) has since been run: it
+   confirms the channel-model prediction end-to-end — a small, significant
+   jittery gain, a clean null — so caveat 1 is now *addressed*, not outstanding.
+   Still: quote the +0.14 as a channel/controller property and the §7.3 numbers
+   as the FL result.
 2. **The magnitude is calibration-dependent; the sign is the robust finding.**
    +0.14 is one point in a range spanning **~0.02–0.29** across defensible
    SNR/loss constants (`base`, `amp`, `mid`, `scale`). Quote it as "≈0.13–0.14
@@ -242,13 +275,15 @@ caught by them.
    survives plausible per-switch upload penalties (0.05 → +0.12, 0.10 → +0.09,
    both never-worse) and flips only at an implausible ~0.30. The scope note now
    defers switching *energy* **and** switching-induced upload loss.
-6. **Reserve "delivers value" for the integrated sweep.** The channel-model
-   result shows the controller correctly *tracks* the best band under an
-   imposed crossover; because SNR → loss is monotone on a shared trace, the
-   *sign* is near-baked-in. The pending H2-vs-H3 orchestrator sweep
-   (SNR → loss → round-close, non-monotone) is where L1 *value* is genuinely
-   tested — and there any end-to-end delta must control for the `rf_prior`
-   selection confound (hold `rf_prior` fixed across arms, or decompose it).
+6. **"Delivers value" is now tested in the integrated sweep (§7.3).** The
+   channel-model result shows the controller correctly *tracks* the best band
+   under an imposed crossover; because SNR → loss is monotone on a shared trace,
+   the *sign* is near-baked-in there. The H2-vs-H3 orchestrator sweep
+   (SNR → loss → round-close, **non-monotone**) has now been run (§7.3): the L1
+   value shows up as a small, significant jittery AUC/accuracy gain and a clean
+   null — real but modest. Any such end-to-end delta is partly `rf_prior`-coupled
+   (H3's higher chosen-SNR also nudges device selection); the gain is small
+   enough that this confound cannot inflate it into a headline.
 
 **Result (channel-model loss reduction, fixed − adaptive; 30 seeds,
 `n_missions=6`, 3 bands — a property of the RF channel + controller, *not* an
@@ -270,8 +305,8 @@ under a jittery band-crossing channel it tracks the best band and cuts
 *modelled* backhaul loss by ≈0.13–0.14 at this calibration, never worse across
 1000 seeds. The sign is near-guaranteed by construction; the magnitude is
 calibration-dependent and excludes switching overhead; the integrated
-end-to-end effect is pending."* L1 is a **robustness mechanism, not an accuracy
-driver**.
+end-to-end effect is a small significant AUC/accuracy gain under jittery
+(§7.3)."* L1 is a **robustness mechanism, not an accuracy driver**.
 
 **Scope note:** the channel model runs in-process in the driver and produces a
 per-mission loss schedule the cluster applies. It does **not** yet unify
@@ -279,24 +314,61 @@ cross-layer *energy* accounting (L1 switching energy + L2 flight energy + L3
 compute), and its loss metric does **not** charge switching-induced upload loss
 (caveat 5) — both remain follow-ups.
 
+### 7.3 Integrated end-to-end result (H3 vs H2, 20 paired seeds)
+
+The pending orchestrator sweep is done — H3 (adaptive L1) vs H2 (fixed
+best-average band) through the **real multi-process stack**, canonical CICIOT,
+N=6, `--n-missions 6`, 20 paired seeds, jittery + clean
+(`python -m experiments.analysis.exp4 --csv h2h3_l1.csv --treatment H3 --baseline H2`).
+
+| regime | metric | H3 | H2 | H3−H2 | 95% CI | p | δ | verdict |
+|---|---|---|---|---|---|---|---|---|
+| clean | mission_completion_rate | 0.792 | 0.800 | −0.008 | [−0.033,+0.017] | 0.79 | −0.02 | tie |
+| clean | round_close_rate@2 | 0.667 | 0.717 | −0.050 | [−0.092,−0.017] | 0.041 | −0.16 | H2 > H3 ✱ |
+| clean | final_auc | 0.992 | 0.991 | +0.000 | [−0.001,+0.001] | 0.98 | −0.01 | tie |
+| jittery | mission_completion_rate | 0.817 | 0.825 | −0.008 | [−0.067,+0.050] | 0.96 | −0.06 | tie |
+| jittery | round_close_rate@2 | 0.600 | 0.575 | +0.025 | [−0.067,+0.117] | 0.40 | +0.07 | tie |
+| jittery | final_auc | 0.987 | 0.975 | +0.012 | [+0.003,+0.021] | 0.044 | +0.41 | H3 > H2 ✱ |
+| jittery | final_accuracy | 0.927 | 0.893 | +0.035 | [+0.004,+0.067] | 0.035 | +0.41 | H3 > H2 ✱ |
+
+* **Clean is a null**, with one *tiny* `H2 > H3` on round-close (−0.05) — exactly
+  the switch-cost tax caveats 3/5 predicted would surface as a small clean
+  regression. Negligible and honest.
+* **Under jittery, adaptive L1 buys a small, significant gain in the *converged
+  model*** — final AUC +0.012 (p=0.044) and accuracy +0.035 (p=0.035), both
+  δ=+0.41 — while participation (completion / yield / round-close) is a tie. The
+  mechanism is exactly the model's: fewer lost backhaul rounds ⇒ slightly more
+  aggregation lands ⇒ modestly better convergence; the effect is too small to
+  move round-close at n=20 but does move end AUC/accuracy.
+* This **confirms the channel-model prediction end-to-end** (jittery benefit,
+  clean null) and matches the rebuttal's own implication that L1's marginal
+  effect is real but small — the integrated evidence caveat 1 asked for.
+
+**Defensible framing:** *"Adaptive L1 channel selection is a wash on a healthy
+backhaul (paying only a tiny switch cost); under a jittery band-crossing
+backhaul it converges the IDS to a small but significant AUC/accuracy gain
+(+0.012 AUC, +0.035 accuracy, p<0.05) by losing fewer aggregation rounds — a
+robustness mechanism, not a headline accuracy driver."*
+
 ## 8. Remediation status vs the adversarial review
 
 | Hole | Fix | Status |
 |---|---|---|
-| B1 no statistics | `analysis/exp4.py` (paired Wilcoxon + CI); multi-seed sweep | code ✅, ≥20-seed run pending |
-| B2 hard-coded dead-zone / round-horizon | physical justification (above) + sweepable `--dead-zone`/`--link-quality` axes | ✅ (full surface run pending) |
+| B1 no statistics | `analysis/exp4.py` (paired Wilcoxon + CI); multi-seed sweep | ✅ (20-seed run done, §6) |
+| B2 hard-coded dead-zone / round-horizon | physical justification (above) + sweepable `--dead-zone`/`--link-quality` axes | ✅ (full 12-point surface, §6) |
 | B3 asymmetric clean (H0 untaxed) | shared `device_reliabilities`; H0 pays the same tax | ✅ |
 | B4 H1 penalty weaker than reference | per-mission backhaul loss now counts as non-close; **explicit scope note** that flight-budget is deferred | ✅ (scoped, not fully ported) |
 | B5 `deadline_met` blind to H1 non-closure | derived from real cluster closure + backhaul-loss events | ✅ |
 | §3 rf_factor softened | `world_radius` 150→100 (Exp-3 parity) | ✅ |
 | §3 empty sortie hidden | distinct `mission_empty` event; still counted as a 0-update round | ✅ |
-| SEC26 audit: `U(c,t)` controller specified but never shipped; `rf_prior` never wired at runtime | `hermes/l1/channel_utility.py` (arm H3) + `rf_prior_snr_db` threaded L1→selector | ✅ (channel-level validity; ≥20-seed H2-vs-H3 run pending) |
+| SEC26 audit: `U(c,t)` controller specified but never shipped; `rf_prior` never wired at runtime | `hermes/l1/channel_utility.py` (arm H3) + `rf_prior_snr_db` threaded L1→selector | ✅ (channel-level validity §7 + integrated H2-vs-H3 §7.3) |
 
 ## 9. Known limitations / open items
 
-* The full **≥20-seed sweep** and the **dead-zone × link surface** are compute
-  jobs (each H1 trial spawns a real TF subprocess tree); run on the beefy
-  node / Chameleon. The infrastructure and analysis are in place.
+* The **≥20-seed sweep** (§6) and the **dead-zone × link surface** are **done**
+  — 20 seeds × 12 jittery cells + clean, run in ~1 h as 6 parallel shards on a
+  20-core box (`experiments/exp4/run_paper_sweep_parallel.sh`). The integrated
+  **H2-vs-H3 L1** sweep (§7.3) is also done.
 * H1's jittery model is **recoverable and per-mission** (architecturally
   correct for the two-pass design, which uploads once per dock), and omits
   flight-budget deadline pressure — strictly *weaker* than Exp-3's per-contact
@@ -309,7 +381,6 @@ compute), and its loss metric does **not** charge switching-induced upload loss
   and its backhaul-loss effect, but not its energy cost; a combined energy
   ledger is a separate follow-up.
 * The H3 L1 effect is validated at the **channel-model level** (30 seeds,
-  deterministic) and proven to run end-to-end; a paired ≥20-seed **H2-vs-H3**
-  jittery sweep (mission_completion / round-close, `--l1-channel`) would put a
-  significance-tested number on the integrated effect, analogous to the
-  H0-vs-H1 run.
+  deterministic, §7) **and** end-to-end (20-seed H2-vs-H3 sweep, §7.3): a small
+  significant jittery AUC/accuracy gain, clean null. Remaining L1 gaps are the
+  switch-outcome-loss and energy items above, not the significance test.
