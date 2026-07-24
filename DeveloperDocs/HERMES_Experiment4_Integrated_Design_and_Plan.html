@@ -1,0 +1,642 @@
+<title>HERMES Experiment 4 — Integrated End-to-End Design & Plan</title>
+<style>
+  :root{
+    --bg:#f4f6f8; --surface:#ffffff; --surface-2:#eef1f4;
+    --ink:#141a20; --ink-2:#47525d; --ink-3:#6c7883;
+    --line:#dbe1e7; --line-2:#c8d0d8;
+    --accent:#0c7d8a; --accent-2:#0a5f6a; --accent-soft:#e0f0f2;
+    --ok:#2f8f56; --ok-bg:#e5f3ea; --ok-line:#a9d8bd;
+    --warn:#a8720c; --warn-bg:#f7efdb; --warn-line:#e3c483;
+    --gap:#bf3b4e; --gap-bg:#fbe5e8; --gap-line:#eeaeb7;
+    --font-display:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    --font-body:ui-serif,"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,Cambria,serif;
+    --font-mono:ui-monospace,"Cascadia Code","SF Mono","Segoe UI Mono",Menlo,Consolas,monospace;
+    --maxw:1200px; --prose:800px;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --bg:#0d1116; --surface:#141a21; --surface-2:#1a222b;
+      --ink:#e7ecf1; --ink-2:#a3afba; --ink-3:#74818d;
+      --line:#26303a; --line-2:#333f4b;
+      --accent:#2fc0d0; --accent-2:#5bd4e0; --accent-soft:#10333a;
+      --ok:#4cc47e; --ok-bg:#12301f; --ok-line:#245a3a;
+      --warn:#e0a63a; --warn-bg:#31260f; --warn-line:#5c4820;
+      --gap:#e56b7d; --gap-bg:#331a1f; --gap-line:#5e3038;
+    }
+  }
+  :root[data-theme="light"]{
+    --bg:#f4f6f8; --surface:#ffffff; --surface-2:#eef1f4;
+    --ink:#141a20; --ink-2:#47525d; --ink-3:#6c7883;
+    --line:#dbe1e7; --line-2:#c8d0d8;
+    --accent:#0c7d8a; --accent-2:#0a5f6a; --accent-soft:#e0f0f2;
+    --ok:#2f8f56; --ok-bg:#e5f3ea; --ok-line:#a9d8bd;
+    --warn:#a8720c; --warn-bg:#f7efdb; --warn-line:#e3c483;
+    --gap:#bf3b4e; --gap-bg:#fbe5e8; --gap-line:#eeaeb7;
+  }
+  :root[data-theme="dark"]{
+    --bg:#0d1116; --surface:#141a21; --surface-2:#1a222b;
+    --ink:#e7ecf1; --ink-2:#a3afba; --ink-3:#74818d;
+    --line:#26303a; --line-2:#333f4b;
+    --accent:#2fc0d0; --accent-2:#5bd4e0; --accent-soft:#10333a;
+    --ok:#4cc47e; --ok-bg:#12301f; --ok-line:#245a3a;
+    --warn:#e0a63a; --warn-bg:#31260f; --warn-line:#5c4820;
+    --gap:#e56b7d; --gap-bg:#331a1f; --gap-line:#5e3038;
+  }
+
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:var(--font-body); font-size:17px; line-height:1.62;
+    -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+  }
+  .shell{max-width:var(--maxw); margin:0 auto; padding:0 clamp(18px,4vw,40px)}
+
+  /* ---------- Masthead ---------- */
+  header.mast{padding:clamp(40px,7vw,84px) 0 34px; border-bottom:1px solid var(--line)}
+  .eyebrow{
+    font-family:var(--font-mono); font-size:12px; letter-spacing:.14em;
+    text-transform:uppercase; color:var(--accent); font-weight:600;
+    display:flex; gap:10px; flex-wrap:wrap; align-items:center;
+  }
+  .eyebrow .sep{color:var(--ink-3)}
+  h1.title{
+    font-family:var(--font-display); font-weight:760;
+    font-size:clamp(30px,5.4vw,52px); line-height:1.04; letter-spacing:-.022em;
+    margin:.42em 0 .28em; max-width:16ch; text-wrap:balance;
+  }
+  .deck{
+    font-size:clamp(17px,2.1vw,21px); color:var(--ink-2); max-width:60ch;
+    line-height:1.5; margin:0;
+  }
+  .deck b{color:var(--ink); font-weight:600}
+  .metabar{
+    margin-top:26px; display:flex; flex-wrap:wrap; gap:8px 20px;
+    font-family:var(--font-mono); font-size:12.5px; color:var(--ink-3);
+  }
+  .metabar b{color:var(--ink-2); font-weight:600}
+
+  /* ---------- Layout with TOC rail ---------- */
+  .body-grid{display:block}
+  @media(min-width:1040px){
+    .body-grid{display:grid; grid-template-columns:216px minmax(0,1fr); gap:48px; align-items:start}
+    nav.toc{position:sticky; top:24px; align-self:start}
+  }
+  nav.toc{padding:30px 0 0}
+  nav.toc .toc-h{
+    font-family:var(--font-mono); font-size:11px; letter-spacing:.14em;
+    text-transform:uppercase; color:var(--ink-3); margin:0 0 12px; font-weight:600;
+  }
+  nav.toc ol{list-style:none; margin:0; padding:0; counter-reset:toc}
+  nav.toc li{counter-increment:toc; margin:2px 0}
+  nav.toc a{
+    display:block; text-decoration:none; color:var(--ink-2);
+    font-family:var(--font-display); font-size:14px; line-height:1.35;
+    padding:6px 10px 6px 30px; border-radius:7px; position:relative;
+  }
+  nav.toc a::before{
+    content:counter(toc,decimal-leading-zero); position:absolute; left:8px;
+    font-family:var(--font-mono); font-size:11px; color:var(--accent);
+    top:8px; font-weight:600;
+  }
+  nav.toc a:hover{background:var(--surface-2); color:var(--ink)}
+  @media(max-width:1039px){ nav.toc{display:none} }
+
+  main{padding-top:8px; min-width:0}
+
+  /* ---------- Sections & prose ---------- */
+  section{padding:38px 0; border-bottom:1px solid var(--line); scroll-margin-top:20px}
+  section:last-of-type{border-bottom:0}
+  .sec-eyebrow{
+    font-family:var(--font-mono); font-size:12px; letter-spacing:.13em;
+    text-transform:uppercase; color:var(--accent); font-weight:600; margin-bottom:8px;
+  }
+  h2{
+    font-family:var(--font-display); font-weight:720; letter-spacing:-.016em;
+    font-size:clamp(22px,3.2vw,30px); line-height:1.14; margin:0 0 .55em;
+    max-width:24ch; text-wrap:balance;
+  }
+  h3{
+    font-family:var(--font-display); font-weight:660; letter-spacing:-.008em;
+    font-size:19px; line-height:1.25; margin:1.9em 0 .5em; color:var(--ink);
+  }
+  h4{
+    font-family:var(--font-mono); font-weight:600; font-size:13px; letter-spacing:.04em;
+    text-transform:uppercase; color:var(--ink-2); margin:1.5em 0 .5em;
+  }
+  p{max-width:var(--prose); margin:0 0 1.05em}
+  main ul,main ol{max-width:var(--prose); margin:0 0 1.1em; padding-left:1.25em}
+  main li{margin:.34em 0}
+  strong{font-weight:600; color:var(--ink)}
+  a.ref{color:var(--accent-2); text-decoration:none; border-bottom:1px solid transparent}
+  :root[data-theme="dark"] a.ref{color:var(--accent)}
+  @media(prefers-color-scheme:dark){a.ref{color:var(--accent)}}
+  a.ref:hover{border-bottom-color:currentColor}
+
+  code,.mono{font-family:var(--font-mono); font-size:.86em}
+  p code,li code,td code{
+    background:var(--surface-2); padding:.08em .38em; border-radius:5px;
+    font-size:.82em; color:var(--ink); border:1px solid var(--line);
+    white-space:nowrap;
+  }
+  .path{color:var(--ink-3); font-family:var(--font-mono); font-size:.8em; white-space:nowrap}
+
+  /* ---------- Callouts ---------- */
+  .callout{
+    border:1px solid var(--line); border-left-width:3px; border-radius:10px;
+    background:var(--surface); padding:18px 20px; margin:1.4em 0; max-width:var(--prose);
+  }
+  .callout .k{
+    font-family:var(--font-mono); font-size:11px; letter-spacing:.12em; text-transform:uppercase;
+    font-weight:600; margin-bottom:7px; display:block;
+  }
+  .callout p{margin:.2em 0}
+  .callout.accent{border-left-color:var(--accent); background:var(--accent-soft)}
+  .callout.accent .k{color:var(--accent-2)}
+  :root[data-theme="dark"] .callout.accent .k{color:var(--accent-2)}
+  @media(prefers-color-scheme:dark){.callout.accent .k{color:var(--accent-2)}}
+  .callout.warn{border-left-color:var(--warn); background:var(--warn-bg)}
+  .callout.warn .k{color:var(--warn)}
+  .callout.gap{border-left-color:var(--gap); background:var(--gap-bg)}
+  .callout.gap .k{color:var(--gap)}
+  .callout.accent{background:var(--accent-soft)}
+
+  /* ---------- Formula ---------- */
+  .formula{
+    font-family:var(--font-mono); font-size:14px; line-height:1.55;
+    background:var(--surface-2); border:1px solid var(--line);
+    border-radius:9px; padding:13px 16px; margin:1em 0; max-width:var(--prose);
+    overflow-x:auto; color:var(--ink);
+  }
+  .formula .lbl{color:var(--ink-3)}
+
+  /* ---------- Tables ---------- */
+  .tablewrap{overflow-x:auto; margin:1.2em 0 1.5em; border:1px solid var(--line);
+    border-radius:11px; background:var(--surface)}
+  table{border-collapse:collapse; width:100%; font-size:14px; min-width:640px}
+  table.wide{min-width:820px}
+  thead th{
+    font-family:var(--font-mono); font-weight:600; font-size:11.5px; letter-spacing:.03em;
+    text-transform:uppercase; text-align:left; color:var(--ink-2);
+    background:var(--surface-2); padding:11px 14px; border-bottom:1px solid var(--line-2);
+    position:sticky; top:0; vertical-align:bottom;
+  }
+  tbody td{padding:11px 14px; border-bottom:1px solid var(--line); vertical-align:top;
+    line-height:1.42; color:var(--ink-2)}
+  tbody tr:last-child td{border-bottom:0}
+  tbody td:first-child{color:var(--ink); font-weight:500}
+  tbody td .path,tbody td code{white-space:normal}
+  td .mname{font-family:var(--font-mono); font-size:12.5px; color:var(--ink); font-weight:600; display:block}
+  tbody tr:hover td{background:color-mix(in srgb,var(--accent-soft) 34%, transparent)}
+  .num{font-variant-numeric:tabular-nums}
+
+  /* ---------- Pills / badges ---------- */
+  .pill{
+    display:inline-flex; align-items:center; gap:5px; font-family:var(--font-mono);
+    font-size:11px; font-weight:600; letter-spacing:.02em; padding:2px 8px 2px 6px;
+    border-radius:20px; border:1px solid var(--line-2); white-space:nowrap; line-height:1.5;
+  }
+  .pill .dot{width:7px; height:7px; border-radius:50%; background:currentColor; flex:0 0 auto}
+  .pill.ok{color:var(--ok); background:var(--ok-bg); border-color:var(--ok-line)}
+  .pill.warn{color:var(--warn); background:var(--warn-bg); border-color:var(--warn-line)}
+  .pill.gap{color:var(--gap); background:var(--gap-bg); border-color:var(--gap-line)}
+  .pill.plain{color:var(--ink-3); background:var(--surface-2)}
+
+  .legend{display:flex; flex-wrap:wrap; gap:8px 14px; margin:.3em 0 1.1em; font-size:13px; align-items:center}
+  .legend .lg{display:inline-flex; align-items:center; gap:6px; color:var(--ink-2); font-family:var(--font-mono); font-size:11.5px}
+
+  /* ---------- Verdict cards ---------- */
+  .verdicts{display:grid; gap:14px; margin:1.3em 0; max-width:var(--prose)}
+  .vcard{border:1px solid var(--line); border-radius:12px; background:var(--surface); overflow:hidden}
+  .vcard .vhead{display:flex; align-items:flex-start; gap:12px; padding:15px 18px 12px; border-bottom:1px solid var(--line)}
+  .vbadge{font-family:var(--font-mono); font-size:11px; font-weight:700; letter-spacing:.05em;
+    padding:4px 9px; border-radius:6px; flex:0 0 auto; margin-top:1px}
+  .vbadge.confirmed{color:#fff; background:var(--gap)}
+  .vbadge.partial{color:var(--ink); background:var(--warn)}
+  :root[data-theme="dark"] .vbadge.partial{color:#20160a}
+  @media(prefers-color-scheme:dark){.vbadge.partial{color:#20160a}}
+  .vcard .vclaim{font-family:var(--font-display); font-weight:600; font-size:15.5px; line-height:1.34; color:var(--ink); margin:0}
+  .vcard .vbody{padding:13px 18px 16px; font-size:14px; color:var(--ink-2)}
+  .vcard .vbody p{margin:.1em 0 .7em; max-width:none}
+  .vcard .vbody .imp{margin-top:.4em; padding-top:.7em; border-top:1px dashed var(--line-2)}
+  .vcard .vbody .imp .k{font-family:var(--font-mono); font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--accent); font-weight:600; display:block; margin-bottom:3px}
+  :root[data-theme="dark"] .vcard .vbody .imp .k{color:var(--accent-2)}
+  @media(prefers-color-scheme:dark){.vcard .vbody .imp .k{color:var(--accent-2)}}
+
+  /* ---------- Stage cards ---------- */
+  .stages{display:grid; gap:16px; margin:1.4em 0; max-width:var(--prose)}
+  .stage{border:1px solid var(--line); border-radius:12px; background:var(--surface); padding:0; overflow:hidden}
+  .stage .shead{display:flex; align-items:baseline; gap:12px; padding:16px 20px 12px; background:var(--surface-2); border-bottom:1px solid var(--line)}
+  .stage .snum{font-family:var(--font-mono); font-weight:700; font-size:13px; color:var(--accent); letter-spacing:.02em; flex:0 0 auto}
+  :root[data-theme="dark"] .stage .snum{color:var(--accent-2)}
+  @media(prefers-color-scheme:dark){.stage .snum{color:var(--accent-2)}}
+  .stage .stitle{font-family:var(--font-display); font-weight:660; font-size:16.5px; color:var(--ink); line-height:1.25; margin:0}
+  .stage .schip{margin-left:auto; flex:0 0 auto}
+  .stage .sbody{padding:15px 20px 18px; font-size:14.5px}
+  .stage .sbody ul{max-width:none; margin:.2em 0 .3em}
+  .stage .grid2{display:grid; gap:4px 22px; grid-template-columns:1fr}
+  @media(min-width:620px){.stage .grid2{grid-template-columns:1fr 1fr}}
+  .stage .fld{margin:.6em 0}
+  .stage .fld .k{font-family:var(--font-mono); font-size:10.5px; letter-spacing:.09em; text-transform:uppercase; color:var(--ink-3); font-weight:600; display:block; margin-bottom:3px}
+  .stage .fld p{margin:0; font-size:13.5px; color:var(--ink-2); max-width:none}
+  .stage .dod{margin-top:.7em; padding-top:.8em; border-top:1px dashed var(--line-2)}
+
+  /* ---------- Misc ---------- */
+  .lead{font-size:19px; line-height:1.5; color:var(--ink); max-width:var(--prose)}
+  .lead b{color:var(--ink)}
+  hr.soft{border:0; border-top:1px solid var(--line); margin:1.6em 0; max-width:var(--prose)}
+  .foot{padding:34px 0 70px; color:var(--ink-3); font-size:13px; max-width:var(--prose)}
+  .foot p{max-width:none; margin:.5em 0; font-size:13px; color:var(--ink-3)}
+  .foot .mono{font-size:12px}
+  .kexcerpt{font-family:var(--font-mono); font-size:12.5px; color:var(--ink-2); background:var(--surface-2);
+    border:1px solid var(--line); border-radius:8px; padding:10px 13px; margin:.7em 0; max-width:var(--prose); line-height:1.5}
+  sup.fn{font-family:var(--font-mono); font-size:.62em; color:var(--accent); font-weight:600}
+  :focus-visible{outline:2px solid var(--accent); outline-offset:2px; border-radius:3px}
+  @media(prefers-reduced-motion:no-preference){html{scroll-behavior:smooth}}
+</style>
+
+<div class="shell">
+  <header class="mast">
+    <div class="eyebrow">
+      <span>SEC&nbsp;2026 · HERMES #74</span><span class="sep">/</span>
+      <span>Revision-scope experiment</span><span class="sep">/</span>
+      <span>Deferred 4th study</span>
+    </div>
+    <h1 class="title">Experiment&nbsp;4 — Integrated HERMES, End-to-End</h1>
+    <p class="deck">The measured realization of <b>Algorithm&nbsp;2</b> — L1 + L2 + L3 composed in a single trial, against traditional FL. A sketch of what it needs, a design, and a phased implementation plan.</p>
+    <div class="metabar">
+      <span><b>Date</b> 2026-07-23</span>
+      <span><b>Companion to</b> HERMES_Experiments_Implementation_Plan.md</span>
+      <span><b>Grounded in</b> paper §III–IV · SEC26 rebuttal · 16-agent code audit</span>
+    </div>
+  </header>
+
+  <div class="body-grid">
+    <nav class="toc" aria-label="Contents">
+      <p class="toc-h">Contents</p>
+      <ol>
+        <li><a href="#why">Why this experiment exists</a></li>
+        <li><a href="#sketch">The sketch: metrics, arms, wiring</a></li>
+        <li><a href="#verified">What the code actually shows</a></li>
+        <li><a href="#design">Design &amp; recommended approach</a></li>
+        <li><a href="#plan">Implementation plan · Stages 0–3</a></li>
+        <li><a href="#risks">Risks &amp; open decisions</a></li>
+        <li><a href="#dod">Definition of Done</a></li>
+      </ol>
+    </nav>
+
+    <main>
+      <!-- 0 -->
+      <section id="why">
+        <div class="sec-eyebrow">00 · The mandate</div>
+        <h2>Why Experiment 4 exists</h2>
+        <p class="lead">Experiment 4 is not in the paper yet. §IV ships two measured groups — the fixed-radio <b>comm baseline</b> (Exp 1) and the <b>scheduling ablation</b> A1–A4 (Exp 3) — plus the preliminary L1 radio validation (Exp 2, Table II). Exp 4 is the one the rebuttal promises next.</p>
+        <p>The reviewers' sharpest surviving criticism, and the authors' own concession:</p>
+        <div class="callout warn">
+          <span class="k">From the SEC26 author response</span>
+          <p>“The three layers are exercised together only in <b>integration tests</b>, not in one end-to-end experiment … those are the honest weaknesses, and they are our first priorities for a revision … build the end-to-end experiment first (it answers the layers-not-integrated concern directly).”</p>
+        </div>
+        <p>The design already exists on paper. <strong>Algorithm 2 is literally titled “Integrated HERMES Mission Round.”</strong> It threads all three layers through one round:</p>
+        <div class="formula">
+<span class="lbl">Algorithm 2 — one integrated round</span>
+  L1 →  chan_idx = <b>L1CHANNELSELECT()</b> ; navigate to c*.pos
+  L2 →  c*        = <b>SCHEDULERROUND</b>(M, A)         (Algorithm 1: gated + RL tie-break)
+  L3 →  batch_agg = <b>PARTIALFEDAVG</b>({Δθ_j})        (Pass 1 · COLLECT)
+        θ'        = <b>CROSSMULEFEDAVG</b>({mission_agg}) (dock)
+        push θ' to devices                        (Pass 2 · DELIVER)
+        </div>
+        <p>Exp 4 is the <strong>measured realization</strong> of that algorithm: one trial that runs the three real layers and emits <em>both</em> metric families — Exp 1's communication metrics and Exp 3's scheduling metrics — plus new convergence metrics, against a traditional-FL null.</p>
+
+        <h3>The claim it must support, and the null it must beat</h3>
+        <div class="callout accent">
+          <span class="k">Scientific claim</span>
+          <p>When L1 (RF-adaptive comm), L2 (mobility-aware gated scheduling + RL selection), and L3 (two-pass hierarchical FedAvg) are composed end-to-end on a UAV data-mule network, integrated HERMES delivers the DNN-IDS to convergence with materially better communication efficiency, scheduling yield/fairness, and mission/propulsion energy than traditional flat FL under the same shaped-radio conditions — <b>and each layer contributes measurably (the layers compose, not merely coexist).</b></p>
+        </div>
+        <p><strong>Null (H₀).</strong> Integrated HERMES shows no statistically significant improvement (paired Wilcoxon, p ≥ 0.05, negligible Cliff's δ) over traditional FL on the joint metric vector at matched seeds. The paired-seed grid — <code>_derive_seed</code> already omits the arm from the seed <span class="path">(grid.py:175)</span> — is exactly the instrument, just as it is for Exp 1 (FL vs Centralized) and Exp 3 (A1–A4).</p>
+
+        <div class="callout gap">
+          <span class="k">Two honesty constraints — verified against the code</span>
+          <p><strong>No real DNN-IDS runs in any loop today.</strong> The FedAvg math is real numpy, but devices “train” via <code>θ + rng.normal(0, 0.01)</code> <span class="path">(processes/device.py:51)</span> and the generator is a 13-param <code>StubGeneratorHost</code>. The <code>create_CICIOT_Model</code> → <code>ClientMission.local_train</code> bridge is an unimplemented stub that raises <span class="path">(TrainingClient.py:192)</span>.</p>
+          <p style="margin-top:.6em"><strong>L1 is decoupled from L2/L3 at runtime.</strong> The selector's RF feature is a hardcoded constant <code>20.0</code>, never sourced from any live prior. Algorithm 2 line 5 is unrealized outside a single in-process test.</p>
+        </div>
+      </section>
+
+      <!-- 1 -->
+      <section id="sketch">
+        <div class="sec-eyebrow">01 · The sketch</div>
+        <h2>Metrics, comparators, and what already wires together</h2>
+        <p>Three things were asked for: the <strong>metrics</strong>, the <strong>comparators</strong>, and <strong>which existing components already compose</strong>. Taken in that order.</p>
+
+        <h3>1a · Metrics union</h3>
+        <p>The Exp 4 row is a <strong>superset</strong> of Exp 1's comm columns + Exp 3's scheduling columns + new convergence metrics. The harness accepts this directly: <code>TrialRunner</code> takes a caller-supplied <code>metric_columns</code> and <code>CSVTrialLog(allow_schema_change=True)</code> unions schemas <span class="path">(csv_log.py:174)</span>. What changes per metric is the <em>source signal</em> when the same trial must emit both families.</p>
+
+        <h4>Comm-baseline metrics (Exp 1) — apply, but need redefinition</h4>
+        <div class="tablewrap">
+          <table class="wide">
+            <thead><tr><th>Metric</th><th>Exp 1 definition</th><th>Redefinition for Exp 4</th><th>Real-runtime source · gap</th></tr></thead>
+            <tbody>
+              <tr><td><span class="mname">T_proc</span></td><td>server wall-time <code>perf_counter()−t0</code> <span class="path">server.py:381</span></td><td>mission-round wall-time spanning L1 select + navigate + L2 schedule + L3 aggregate</td><td>mule <code>mission_duration_s</code> timer / <code>mission_completed</code> JSONL. <span class="pill gap"><span class="dot"></span>needs trial clock</span></td></tr>
+              <tr><td><span class="mname">B_pw</span></td><td>analytic <code>R·2·|θ|</code> (FL) / <code>|D|_pd</code> (Cent) <span class="path">server.py:382</span></td><td>real bytes-on-wire of θ push + Δθ return over RF + dock legs</td><td>wrap <code>wire.encode_message</code> — the single TCP funnel. <span class="pill warn"><span class="dot"></span>instrument</span></td></tr>
+              <tr><td><span class="mname">T_tx</span></td><td><code>=T_proc</code> / <code>Σ round_dur</code> <span class="path">server.py:398</span></td><td>transmission time of bundles over the shaped link</td><td>timestamp <code>sendall</code>/<code>recv_exactly</code>. <span class="pill gap"><span class="dot"></span>needs shaping</span></td></tr>
+              <tr><td><span class="mname">η</span> throughput eff.</td><td>constant <code>1.0</code>/<code>0.5</code> <span class="path">server.py:383</span></td><td>useful-payload ÷ total wire bytes for the two-pass exchange — genuinely non-constant for HERMES</td><td>derived from instrumented B_pw. <span class="pill warn"><span class="dot"></span>derived</span></td></tr>
+              <tr><td><span class="mname">P_complete</span></td><td><code>1 if T_proc ≤ D</code>, D at notional 10 Mbps <span class="path">server.py:434</span></td><td>deadline met — but the <em>real</em> L2 deadline <code>Deadline(j)=now+Φ−ι</code> <span class="path">s3_deadline.py:78</span>, not the notional one</td><td><code>MissionRoundCloseReport.deadline_met</code> per round. <span class="pill ok"><span class="dot"></span>exists</span></td></tr>
+              <tr><td><span class="mname">E</span> energy proxy</td><td>post-hoc <code>T_proc·P_idle + B_pw·8·ε_bit</code> <span class="path">calibration.py:198</span></td><td>fold into the unified Eq. 5 decomposition (below)</td><td>pure fn of T_proc + B_pw once those columns exist. <span class="pill ok"><span class="dot"></span>free</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h4>Scheduling metrics (Exp 3) — real-computable vs sim-only</h4>
+        <p>The load-bearing split: the federation-side metrics are pure roll-ups over a per-round / per-device log <span class="path">(exp3/metrics.py)</span> — they apply to <em>any</em> source that emits that accounting, including the real orchestrator's event stream. The UAV-physics metrics are currently modeled inside the sim and need new telemetry.</p>
+        <div class="tablewrap">
+          <table class="wide">
+            <thead><tr><th>Metric</th><th>Formula (as coded)</th><th>Real-run source</th><th>Status</th></tr></thead>
+            <tbody>
+              <tr><td><span class="mname">Round close rate @k</span></td><td><code>hits/rounds</code>, hit = <code>deadline_met ∧ n_updates ≥ k</code>; k ∈ {1,2,⌊N/2⌋,N}</td><td><code>cluster_round_closed</code> events → <code>Exp3RoundLog</code></td><td><span class="pill ok"><span class="dot"></span>real</span></td></tr>
+              <tr><td><span class="mname">Update yield</span></td><td><code>Σ n_updates / rounds</code></td><td>close events / <code>up_bundle_ingested</code></td><td><span class="pill ok"><span class="dot"></span>real</span></td></tr>
+              <tr><td><span class="mname">Coverage · Jain J · Entropy</span></td><td><code>J=(Σx)²/(N·Σx²)</code>; Shannon H of service share</td><td>per-device participation from close-lines / <code>DeviceRegistry</code></td><td><span class="pill ok"><span class="dot"></span>real</span></td></tr>
+              <tr><td><span class="mname">Pass-2 coverage</span></td><td><code>min(1, reached/N)</code></td><td><code>MissionDeliveryReport.delivered()</code> → JSONL</td><td><span class="pill ok"><span class="dot"></span>real</span></td></tr>
+              <tr><td><span class="mname">Mission completion time</span></td><td><code>Σ modeled durations</code> <span class="path">sim_env.py:302</span></td><td>must become a <em>measured</em> elapsed clock; <code>mission_duration_s</code> exists but doesn't decompose transit/dock/deliver</td><td><span class="pill warn"><span class="dot"></span>remodel</span></td></tr>
+              <tr><td><span class="mname">Propulsion energy (Eq. 5)</span></td><td><code>T_miss·P_idle + B_tx·8·ε_bit + L_path·ε_prop</code></td><td>needs a <b>path-length integrator</b> over real waypoints + calibrated constants</td><td><span class="pill warn"><span class="dot"></span>new telemetry</span></td></tr>
+              <tr><td><span class="mname">ρ_contact</span></td><td><code>devices_visited / contacts_visited</code></td><td>computable iff L2 logs per-contact device membership (S3a forms the contacts; counters are Pass-1 sim today)</td><td><span class="pill warn"><span class="dot"></span>borderline</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h4>New integrated metrics — the reason this is a <em>new</em> experiment</h4>
+        <div class="tablewrap">
+          <table class="wide">
+            <thead><tr><th>New metric</th><th>Definition</th><th>Requirement</th></tr></thead>
+            <tbody>
+              <tr><td><span class="mname">Model convergence</span> (acc / AUC / loss over rounds)</td><td>per global round r, evaluate the aggregated θ_r on a held-out CICIOT test set</td><td>wire <code>create_CICIOT_Model.fit()</code> into <code>ClientMission.local_train</code> + an eval hook after <code>cross_mule_fedavg</code>. <strong>THE metric a NIDS experiment exists to produce — not producible today.</strong></td></tr>
+              <tr><td><span class="mname">Time-to-target-accuracy</span> (T@τ)</td><td>smallest wall-clock / round count where <code>acc_r ≥ τ</code> (e.g. 0.90)</td><td>convergence trace + trial clock. Directly supports “HERMES reaches target faster.”</td></tr>
+              <tr><td><span class="mname">Isolated L1 contribution</span></td><td>Δ in {B_pw, T_tx, P_complete, close-rate} between L1-on and L1-off arms at matched seed</td><td>requires L1 to actually actuate channel choice and feed a real RF prior. <strong>Identically zero by construction until then.</strong></td></tr>
+              <tr><td><span class="mname">Staleness / rounds-to-deliver</span></td><td>per device, round index of its last fresh-θ delivery</td><td><code>MissionDeliveryReport</code> per device — emitted, just not aggregated.</td></tr>
+              <tr><td><span class="mname">RL selector compute overhead</span></td><td><code>selector.mean_µs / placeholder.mean_µs</code></td><td>already computed in the Exp 3 A/B path <span class="path">selector_train.py:493</span> — lift into the trial.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout warn">
+          <span class="k">Unified energy — two blockers Exp 4 inherits</span>
+          <p><strong>ε_bit fork (~1.714×).</strong> Exp 1 uses <code>7.0e-10 J/bit</code>, Exp 3 uses <code>1.2e-9 J/bit</code>, under a “same physics — same constants” comment that the numbers contradict. The file itself flags: “One of the two is wrong.” One trial cannot emit a comm-tx and a mission-tx energy with two per-bit costs.</p>
+          <p style="margin-top:.55em"><strong>ε_prop placeholder.</strong> <code>10.0 J/m</code>, marked <code>REPLACE-FROM-PLATFORM-SPEC</code>, and the one constant the ±50% sensitivity sweep never varies. <code>P_idle = 5.0 W</code> is the only energy constant already consistent. There is no <code>[exp4]</code> table — any figure drawing on Exp 3 constants stays <b>placeholder-watermarked</b> until both are settled.</p>
+        </div>
+
+        <h3>1b · Comparators — a layer-ablation ladder</h3>
+        <p>The reused axis is “integrated HERMES vs traditional FL,” but the scientific point is that the layers <em>compose</em> — so the arms are a layer-ablation ladder, all paired-seeded through <code>TrialGrid.arms</code>.</p>
+        <div class="tablewrap">
+          <table class="wide">
+            <thead><tr><th>Arm</th><th>What it turns on</th><th>Maps to existing code</th><th>Must be built</th></tr></thead>
+            <tbody>
+              <tr><td><span class="mname">H0 · Traditional FL</span> <span class="pill plain">null</span></td><td>flat FL: no mule, all clients each round, uniform sampling, single-hop, no gating, no RL, no two-pass</td><td>Exp 1 <code>FL</code> transport arm + Exp 3 <code>A1</code> uniform-sampling model</td><td>a real-model version — neither existing A1 (pure RNG) nor Exp1-FL (filler bytes) trains a model</td></tr>
+              <tr><td><span class="mname">H1 · +L2 gated</span></td><td>mule + Four-Stage Gated Scheduler + two-pass HFL, deterministic distance ranking (no RL), no L1</td><td><b>exactly what <code>test_e2e_topology.py</code> runs today</b> — <code>FLScheduler(target_selector=None)</code></td><td>metric emission + real model only</td></tr>
+              <tr><td><span class="mname">H2 · +L2 RL</span></td><td>H1 + <code>TargetSelectorRL</code> DDQN in the S3.5 tie-break slot</td><td>Exp 3 <code>A4</code> proves the selector object works, trained → <code>.npz</code></td><td>surface <code>target_selector</code> as a <code>MuleConfig</code> field — doesn't exist today</td></tr>
+              <tr><td><span class="mname">H3 · Full HERMES</span></td><td>H2 + L1 channel selection consulted and its <code>rf_prior_snr</code> feeding the selector</td><td>the pieces exist: <code>ChannelDDQN</code>, <code>RFPriorStore</code>, selector feature idx 10</td><td><b>the largest build</b> — L1 must actuate/log a choice AND populate the prior so it stops being <code>20.0</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>Optional: an <strong>A3-equivalent EDF arm</strong> between H1 and H2 for parity with the Exp 3 A2/A3/A4 ladder. Note the re-hosting cost: Exp 3's A2–A4 run the real <em>policy objects</em> against the abstracted <code>Exp3Sim</code>, bypassing <code>FLScheduler</code>/<code>HFLHostMission</code>/<code>ClientMission</code> entirely. Exp 4's arms must run the same objects through the <strong>real</strong> path — that re-hosting is the core new work.</p>
+
+        <h3>1c · Component wiring map — what composes vs the gap</h3>
+        <div class="legend">
+          <span class="lg"><span class="pill ok"><span class="dot"></span>composes</span> exists &amp; wired</span>
+          <span class="lg"><span class="pill warn"><span class="dot"></span>partial</span> exists, bounded build</span>
+          <span class="lg"><span class="pill gap"><span class="dot"></span>gap</span> must be built</span>
+        </div>
+        <div class="tablewrap">
+          <table class="wide">
+            <thead><tr><th>Component</th><th>Runtime state</th><th>The gap for Exp 4</th></tr></thead>
+            <tbody>
+              <tr><td>Shared harness <span class="path">runner / grid / csv_log</span></td><td><span class="pill ok"><span class="dot"></span>composes</span></td><td>reusable as-is: paired seeds, idempotent resumable CSV keyed <code>(cell_id,arm,trial_index)</code>, schema-union, soft-timeout + error isolation. Exp 4 adds a driver module only.</td></tr>
+              <tr><td>MultiProcessOrchestrator</td><td><span class="pill warn"><span class="dot"></span>partial</span></td><td>spawns cluster + N mules + M devices over real TCP, but <b>no round barrier / <code>run_round()</code> / completion API</b>; rounds emerge from async loops. Windows <code>terminate()</code> skips the final <code>metrics_snapshot</code>.</td></tr>
+              <tr><td>L2 gated scheduler (S1/S3/S3a)</td><td><span class="pill ok"><span class="dot"></span>composes</span></td><td>real and running in the e2e test. Carries the documented <code>is_new</code>/bucket-starvation residual (mitigated by <code>NEW_BUCKET_ATTEMPT_LIMIT=3</code>).</td></tr>
+              <tr><td>L2 RL selector (<code>TargetSelectorRL</code>)</td><td><span class="pill warn"><span class="dot"></span>partial</span></td><td>works in-process via constructor kwarg; <b><code>MuleConfig</code> has no <code>target_selector</code> field</b> so the subprocess mule can't be told to use it. A4 weights trained on legacy teleport sim — transfer to real path untested.</td></tr>
+              <tr><td>L3 partial + cross-mule FedAvg</td><td><span class="pill warn"><span class="dot"></span>partial</span></td><td>math is real (weighted numpy average, shape/round/checksum verify); <b>the model is a stub</b> (θ+noise, 13-param generator).</td></tr>
+              <tr><td>Real DNN-IDS (<code>create_CICIOT_Model</code>)</td><td><span class="pill gap"><span class="dot"></span>gap</span></td><td>exists (~4.7K params) but <b>never in any loop</b>; <code>local_train</code> uses a stub; real bridge raises. Must implement real local-train + a global eval hook.</td></tr>
+              <tr><td>L1 channel selector (<code>ChannelDDQN</code>)</td><td><span class="pill gap"><span class="dot"></span>gap</span></td><td>inference-only, no trainer; the paper's <code>U(c,t)</code> utility controller is <b>not implemented at all</b>. Production mule is built with no <code>channel_actor</code>; the pick is “recorded, not actuated.”</td></tr>
+              <tr><td>rf_prior consumption (L1→L2)</td><td><span class="pill gap"><span class="dot"></span>gap</span></td><td><b>the key edge is missing.</b> <code>rf_prior_snr_db</code> is a constant <code>20.0</code> threaded ctor→scheduler→<code>SelectorEnv</code>. Feature idx 10 = <code>0.667</code> for every candidate — zero discriminative signal.</td></tr>
+              <tr><td>Bandwidth shaping / jitter</td><td><span class="pill gap"><span class="dot"></span>gap</span></td><td><code>ChannelEmulator</code> is a stub: per-message drop+delay, <b>no rate knob</b>, can't express 10 Mbps. Exp 1 shapes via external <code>tc</code>/netem; Exp 3 shapes numerically in-sim. No shared transport-level path.</td></tr>
+              <tr><td>Energy calibration unification</td><td><span class="pill warn"><span class="dot"></span>partial</span></td><td>ε_bit fork (7.0e-10 vs 1.2e-9), ε_prop placeholder (10.0), no <code>[exp4]</code> table → aggregate status <code>placeholder</code> → watermark.</td></tr>
+              <tr><td>Metric emission → CSV</td><td><span class="pill gap"><span class="dot"></span>gap</span></td><td>JSONL events + operational counters only. <b>No paper metric is computed; no CSV writer.</b> Must build a JSONL → metric → CSV layer.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="callout gap">
+          <span class="k">The single biggest gap</span>
+          <p>There is <strong>no runtime data edge from L1 into L2/L3</strong>, and the real orchestrator <strong>trains no real model</strong> — so the two things Exp 4 exists to demonstrate (that L1 helps L2/L3, and that the integrated stack converges a real DNN-IDS) are both un-instrumented today. Everything else — harness, orchestrator L2+L3 over TCP, real FedAvg math, real policy objects, byte/tx instrumentation points, post-hoc energy — either composes already or is a bounded additive build.</p>
+        </div>
+      </section>
+
+      <!-- 2 -->
+      <section id="verified">
+        <div class="sec-eyebrow">02 · Evidence</div>
+        <h2>What the code actually shows</h2>
+        <p>Five load-bearing claims the design rests on, each re-checked by an adversarial verifier reading the source directly. These are the facts that make the plan honest rather than aspirational.</p>
+
+        <div class="verdicts">
+          <article class="vcard">
+            <div class="vhead"><span class="vbadge confirmed">CONFIRMED</span><p class="vclaim">L1's RF prior is never consumed by the L2 selector at runtime — and the data flow is actually reversed.</p></div>
+            <div class="vbody">
+              <p><code>RFPriorStore</code> — the design's read-only env API for the selector — is never instantiated or read in runtime code; its readers are called only in <code>test_l1_rf_prior.py</code>. The value the selector actually consumes is the literal <code>20.0</code> (<code>SelectorEnv.rf_prior_snr_db</code> default), passed unchanged from every call site. And in <code>_pick_channel_at_position</code>, the constant feeds <em>into</em> the <code>ChannelDDQN</code> state; the DDQN's output is collected into <code>channel_choices</code> and — per its own docstring — “recorded, not actuated.” No measured experiment even instantiates L1.</p>
+              <div class="imp"><span class="k">Implication for Exp 4</span>The L1→L2 edge must be <b>built, not wired</b>: an L1 producer that records real per-band SNR into the store, a scheduler that reads it instead of the constant, and an Exp 4 run driven through <code>MuleSupervisor</code> (with a <code>channel_actor</code>) rather than the L1-less sim. Until then, any “all three layers” claim measures L2+L3 with an L1 stub — the exact limitation the rebuttal admits.</div>
+            </div>
+          </article>
+
+          <article class="vcard">
+            <div class="vhead"><span class="vbadge confirmed">CONFIRMED</span><p class="vclaim">Exp 3's measured arms run on the abstracted sim (Bernoulli/byte proxies); real FedAvg lives only in the orchestrator path. No trial today does both.</p></div>
+            <div class="vbody">
+              <p><code>run_mule_trial</code> instantiates <code>Exp3Sim</code> and models an “update” as <code>completed = rng.random() &lt; p_complete</code> — no tensor, no gradient. Grep across <code>experiments/</code> for <code>partial_fedavg | cross_mule_fedavg | MultiProcessOrchestrator</code> → “No matches found.” The real weighted FedAvg is reachable only through the subprocess orchestrator (which itself runs a <code>StubGeneratorHost</code>). The two halves of Algorithm 2 are physically separated in code.</p>
+              <div class="imp"><span class="k">Implication for Exp 4</span>New wiring, not a config flip. Either substitute real <code>GradientSubmission</code>s + partial/cross-mule FedAvg into the Exp 3 step (smaller lift — the driver already invokes the real scheduler surface), or drive the orchestrator's <code>HFLHostMission</code>/<code>HFLHostCluster</code> <em>through</em> the L2 scheduler and instrument both metric families.</div>
+            </div>
+          </article>
+
+          <article class="vcard">
+            <div class="vhead"><span class="vbadge partial">PARTIAL</span><p class="vclaim">The shared harness hosts an Exp 4 driver with zero edits — but the assumed signature and dispatch entry don't exist.</p></div>
+            <div class="vbody">
+              <p><b>Confirmed:</b> <code>TrialRunner</code>/<code>TrialGrid</code>/<code>CSVTrialLog</code> are fully generic — arbitrary metric columns, schema-union, resumable keys. Both existing drivers plug in identically. <b>Corrected:</b> the contract is single-argument <code>run_trial(cell) → Mapping</code> (arm/seed are fields on the frozen <code>Cell</code>), <em>not</em> <code>run_trial(arm, cell, seed)</code>; and there is <b>no <code>--exp</code> dispatcher</b> — each experiment ships its own <code>main()</code>. Exp 4 needs its own entrypoint module, e.g. <code>experiments/exp4/runner_main.py</code>, modeled on Exp 3's.</p>
+              <div class="imp"><span class="k">Implication for Exp 4</span>Harness half is free; the driver <em>body</em> is net-new. It must also choose its scaffold: Exp 1's live-socket server lifecycle or Exp 3's sim loop — the harness hosts either.</div>
+            </div>
+          </article>
+
+          <article class="vcard">
+            <div class="vhead"><span class="vbadge confirmed">CONFIRMED</span><p class="vclaim">The energy calibration is internally inconsistent and partly placeholder — a unified Exp 4 energy model cannot reuse both tables as-is.</p></div>
+            <div class="vbody">
+              <p><code>exp1.ε_bit = 7.0e-10</code> vs <code>exp3.ε_bit = 1.2e-9</code> (a 1.714× fork) under a “same constants” comment; the provenance block flags “One of the two is wrong,” status <code>placeholder</code>. <code>ε_prop = 10.0 J/m</code> is <code>REPLACE-FROM-PLATFORM-SPEC</code> and excluded from the ±50% sweep. Both proxies apply <code>bytes×8×ε_bit</code> identically, so the divergence propagates directly. <code>P_idle = 5.0 W</code> is the one consistent constant.</p>
+              <div class="imp"><span class="k">Implication for Exp 4</span>Reconcile ε_bit to one value across L1 radio + L3 mule-transport energy; measure or explicitly declare ε_prop; add an <code>[exp4]</code>/<code>Exp4Calibration</code> table. Until then the provenance machinery correctly watermarks every Exp 4 energy figure.</div>
+            </div>
+          </article>
+
+          <article class="vcard">
+            <div class="vhead"><span class="vbadge partial">PARTIAL</span><p class="vclaim">Exp 1 shapes real sockets via tc/netem; Exp 3 shapes numbers in-sim. Exp 4 needs one consistent impairment mechanism — and a third, stub, mechanism already exists.</p></div>
+            <div class="vbody">
+              <p>Exp 1: <code>tbf rate 10mbit</code> + <code>netem delay 30ms 9ms loss 2%</code> on a live NIC (note: the “30% jitter” is 30 ms mean latency with 9 ms latency jitter — <em>not</em> bandwidth variation). Exp 3: multiplicative <code>Normal(1,σ)</code> on the upload term only + a per-contact Bernoulli loss — a different <em>kind</em> of impairment. A <code>ChannelEmulator</code> is already wired into the TCP link but is a bandwidth-less stub.</p>
+              <div class="imp"><span class="k">Implication for Exp 4</span>Cleanest single mechanism: drive the real HERMES stack (<code>TCPRFLink</code>) over <code>tc</code>/netem-shaped loopback, so both metric families are emitted under one physically-shaped link — rather than reconciling two numerically-different jitter models.</div>
+            </div>
+          </article>
+        </div>
+        <p class="path" style="margin-top:1em">Provenance: 16-agent extraction + verification workflow over the FL-DNN-GAN-IDS tree. The orchestrator end-to-end capability (below) is established directly from <code>tests/integration/test_e2e_topology.py</code> and <code>test_mule_supervisor_two_pass.py</code>.</p>
+      </section>
+
+      <!-- 3 -->
+      <section id="design">
+        <div class="sec-eyebrow">03 · Design</div>
+        <h2>Design &amp; the recommended approach</h2>
+        <p>The one true end-to-end path that exists today — <code>test_e2e_topology.py::test_e2e_one_mission_runs_pass_1_dock_pass_2</code> — drives real subprocesses over real TCP through Pass 1 → dock → Pass 2 with real cross-mule FedAvg (proven by the <code>cluster_round_closed</code> assert). But it wires <em>neither</em> L1 channel selection <em>nor</em> the L2 RL selector, over a stub model. So today's “integrated” test is really <strong>L3 + deterministic-gated-L2 only</strong>. That test is the seed; the design is about what to add around it.</p>
+
+        <h3>Three options</h3>
+        <div class="tablewrap">
+          <table class="wide">
+            <thead><tr><th>Option</th><th>Shape</th><th>Trade-off</th></tr></thead>
+            <tbody>
+              <tr><td><span class="mname">1 · Extend the orchestrator to a fully-integrated real run</span></td><td>add <code>channel_actor</code>+<code>target_selector</code> to <code>MuleConfig</code>, real <code>local_train</code>, populate/read <code>RFPriorStore</code>, transport rate-shaping, a round barrier, a JSONL→CSV consumer</td><td>highest fidelity, answers the rebuttal head-on, every metric <em>measured</em> — but the largest build, real keras training in M subprocesses dominates runtime, transport shaping is genuinely new code</td></tr>
+              <tr><td><span class="mname">2 · Hybrid: Exp 1 transport + Exp 3 sim, stitched</span></td><td>two engines behind one <code>run_trial</code>: shaped-TCP byte transport for comm metrics, <code>Exp3Sim</code> for scheduling metrics, joined at matched seed into one wide row</td><td>fast, reuses two validated engines — but <b>not actually integrated</b>; two decoupled measurements concatenated, exactly what the rebuttal criticizes. L1 still absent, no real convergence. Weakest claim.</td></tr>
+              <tr><td><span class="mname">3 · Staged layer-ablation over the real stack</span> <span class="pill ok"><span class="dot"></span>recommended</span></td><td>Option 1's engine, but the arms are staged so each milestone is independently shippable and closes one gap</td><td>a genuinely integrated measured trial at <em>every</em> stage; front-loads the cheap high-value wins; defers the expensive/risky legs into isolable milestones so one slip doesn't block the core claim</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="callout accent">
+          <span class="k">Recommendation — Option 3</span>
+          <p>Build the Exp 4 driver on the <code>MultiProcessOrchestrator</code> (the path that already runs end-to-end), and make the <strong>staged arms themselves the layer-ablation</strong> that demonstrates composition. Each stage below is shippable on its own; the harness, real FedAvg, real policy objects, and post-hoc energy are reused unchanged. Stage 0 already emits a real integrated L2+L3 measurement from the one path that works today.</p>
+        </div>
+      </section>
+
+      <!-- 4 -->
+      <section id="plan">
+        <div class="sec-eyebrow">04 · Implementation</div>
+        <h2>Phased plan · Stages 0–3</h2>
+        <p>Each stage is a chunk in the style of the existing <code>EX-*</code> plan. The staging is a real dependency order: Stage 0 gives a shippable integrated measurement; each later stage closes exactly one verified gap and unlocks one arm.</p>
+
+        <div class="stages">
+          <article class="stage">
+            <div class="shead"><span class="snum">EX-4.0</span><p class="stitle">Instrumentation — real L2+L3 metrics, no new physics</p><span class="schip"><span class="pill ok"><span class="dot"></span>ships arm H1</span></span></div>
+            <div class="sbody">
+              <p>Build <code>experiments/exp4/{runner_main.py, driver.py}</code> on the shared runner. The driver spawns the orchestrator with finite <code>n_missions</code>/<code>n_serves</code>, waits for natural exit (capturing <code>metrics_snapshot</code>; <code>cleanup_tmpdir=False</code>), harvests JSONL, and computes the federation-side scheduling metrics + Pass-2 coverage from real <code>cluster_round_closed</code> / <code>mission_completed</code> / <code>device_served</code> events. Add <code>wire.encode_message</code> byte instrumentation for real B_pw.</p>
+              <div class="grid2">
+                <div class="fld"><span class="k">Builds</span><p>exp4 driver + entrypoint; JSONL→metric→CSV consumer; byte counter at the wire funnel; an orchestrator natural-exit helper.</p></div>
+                <div class="fld"><span class="k">Where</span><p><code>experiments/exp4/</code>, <code>hermes/transport/wire.py</code>, <code>hermes/processes/orchestrator.py</code>.</p></div>
+              </div>
+              <div class="dod"><span class="fld"><span class="k">Definition of done</span><p>One <code>python -m experiments.exp4.runner_main</code> writes a resumable CSV of arm H1 over a small grid, with the 6 federation-side metrics + B_pw computed from the <em>real</em> two-pass orchestrator. A unit test pins JSONL→metric aggregation.</p></span></div>
+            </div>
+          </article>
+
+          <article class="stage">
+            <div class="shead"><span class="snum">EX-4.1</span><p class="stitle">Real DNN-IDS in the loop</p><span class="schip"><span class="pill ok"><span class="dot"></span>ships convergence</span></span></div>
+            <div class="sbody">
+              <p>Replace <code>_stub_train</code> with <code>create_CICIOT_Model.fit()</code> in <code>ClientMission.local_train</code>; add a post-<code>cross_mule_fedavg</code> eval hook on a held-out CICIOT shard. <code>LocalTrainResult</code> already carries <code>accuracy/auc/loss</code> — currently faked; now real. H0 (traditional FL) gets the same real model for a fair null.</p>
+              <div class="grid2">
+                <div class="fld"><span class="k">Builds</span><p>real local-train bridge; global eval hook; convergence / T@τ metrics; H0 real-model driver.</p></div>
+                <div class="fld"><span class="k">Where</span><p><code>hermes/mission/client_mission.py</code>, <code>TrainingClient.py</code>, <code>Config/modelStructures/NIDS/</code>.</p></div>
+              </div>
+              <div class="dod"><span class="fld"><span class="k">Definition of done</span><p>A trial emits an accuracy/AUC-over-rounds trace and T@τ for both H0 and H1 on real CICIOT data; the aggregated θ improves monotonically on the held-out set within tolerance.</p></span></div>
+            </div>
+          </article>
+
+          <article class="stage">
+            <div class="shead"><span class="snum">EX-4.2</span><p class="stitle">RL selector + shaped radio</p><span class="schip"><span class="pill ok"><span class="dot"></span>ships arm H2</span></span></div>
+            <div class="sbody">
+              <p>Add <code>target_selector</code> (and <code>channel_actor</code>) fields to <code>MuleConfig</code> so the subprocess mule can be told to use the DDQN — enabling arm H2. Add byte-rate shaping to the transport (byte-count ÷ rate delay in <code>wire.send_message</code>) or run subprocesses over <code>tc</code>-shaped loopback, so T_tx / η / P_complete are meaningful under the shaped-radio condition. Retrain / re-validate A4 against the real path first (see risk 3).</p>
+              <div class="grid2">
+                <div class="fld"><span class="k">Builds</span><p><code>MuleConfig</code> selector/actor fields; transport rate-shaping; A4 re-validation harness on the real stack.</p></div>
+                <div class="fld"><span class="k">Where</span><p><code>hermes/processes/config.py</code>, <code>hermes/mule/mule_main.py</code>, <code>hermes/transport/</code>, <code>experiments/exp3/train_a4.py</code>.</p></div>
+              </div>
+              <div class="dod"><span class="fld"><span class="k">Definition of done</span><p>H2 runs the trained selector through the real <code>FLScheduler</code> path over a shaped link; the shaped condition reproduces the Exp 1 jittery-cell behaviour; paired H1↔H2 rows differ only by the selector.</p></span></div>
+            </div>
+          </article>
+
+          <article class="stage">
+            <div class="shead"><span class="snum">EX-4.3</span><p class="stitle">L1 made real — close the loop</p><span class="schip"><span class="pill ok"><span class="dot"></span>ships arm H3</span></span></div>
+            <div class="sbody">
+              <p>Populate <code>RFPriorStore</code> from the mule's per-band channel observations and read it into <code>rf_prior_snr_db</code> (ideally per-device <code>SpectrumSig</code>, per the implementation plan's roadmap); actuate/log the <code>ChannelDDQN</code> choice so it affects the link. Enables arm H3 and the isolated-L1-contribution metric. Reconcile ε_bit, replace ε_prop, and add an <code>[exp4]</code> calibration table so figures clear the watermark.</p>
+              <div class="grid2">
+                <div class="fld"><span class="k">Builds</span><p>L1 producer → store; scheduler reads real prior; channel actuation; <code>Exp4Calibration</code> + reconciled constants; L1-on/off ablation metric.</p></div>
+                <div class="fld"><span class="k">Where</span><p><code>hermes/l1/</code>, <code>hermes/scheduler/fl_scheduler.py</code>, <code>experiments/calibration.toml</code> + <code>calibration.py</code>.</p></div>
+              </div>
+              <div class="dod"><span class="fld"><span class="k">Definition of done</span><p>H3 shows a <em>non-zero, measurable</em> L1 effect vs H2 at matched seed; the unified energy figure is no longer placeholder-watermarked; <code>analysis/exp4.py</code> reproduces the paired-Wilcoxon-over-the-joint-vector figure set.</p></span></div>
+            </div>
+          </article>
+        </div>
+
+        <h3>Sequencing &amp; dependencies</h3>
+        <div class="tablewrap">
+          <table>
+            <thead><tr><th>Stage</th><th>Unlocks arm</th><th>Hard prerequisite</th><th>Independent of</th></tr></thead>
+            <tbody>
+              <tr><td class="mono">EX-4.0</td><td>H1</td><td>the e2e orchestrator path (exists)</td><td>everything below</td></tr>
+              <tr><td class="mono">EX-4.1</td><td>H0 (real), H1 convergence</td><td>EX-4.0 metric layer</td><td>EX-4.2, EX-4.3</td></tr>
+              <tr><td class="mono">EX-4.2</td><td>H2</td><td>EX-4.0; A4 re-validation</td><td>EX-4.1 (parallelizable)</td></tr>
+              <tr><td class="mono">EX-4.3</td><td>H3</td><td>EX-4.2 (selector must read the prior)</td><td>—</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>A slip in EX-4.1 (real training cost) or EX-4.3 (L1) does not block the paper's core “layers compose” claim, which lands with H0/H1/H2. That is the point of the staging.</p>
+      </section>
+
+      <!-- 5 -->
+      <section id="risks">
+        <div class="sec-eyebrow">05 · Risks</div>
+        <h2>Risks &amp; open decisions</h2>
+        <div class="tablewrap">
+          <table class="wide">
+            <thead><tr><th>Risk</th><th>Impact</th><th>Decision / mitigation</th></tr></thead>
+            <tbody>
+              <tr><td><b>Real training cost vs grid size</b></td><td>keras <code>fit()</code> across M devices × arms × trials × cells is orders slower than filler bytes/RNG — the exact reason Exp 3 chose a sim</td><td>cap rounds/epochs, shrink the cell grid for real-model arms, or run convergence on a reduced-N topology. The driver must own a <b>hard</b> timeout/kill — the harness soft-timeout only labels.</td></tr>
+              <tr><td><b>L1 ablation may be a null manipulation</b></td><td>until the store is populated and the DDQN actuates, L1-on vs L1-off differ by nothing measurable</td><td>implement real per-band SNR + actuation before claiming any L1 effect, or scope the claim to L2+L3 and label L1 “instrumented, effect deferred.” Note the paper's <code>U(c,t)</code> controller is not implemented at all.</td></tr>
+              <tr><td><b>A4 train/eval environment mismatch</b></td><td>DDQN trained on legacy teleport sim, only evaluated on fixed-speed physics; the real <code>FLScheduler</code> path is a third, untested environment</td><td>retrain the selector against the real stack (or Exp3Sim-with-real-transit) before H2/H3 are paper-grade; guard with <code>--require-trained-a4</code>.</td></tr>
+              <tr><td><b>Transport cannot express 10 Mbps</b></td><td><code>ChannelEmulator</code> is rate-less; without shaping, T_tx/η/P_complete under “shaped radio” aren't realizable on the real stack</td><td>add byte-count÷rate delay in <code>wire.send_message</code>, or run over <code>tc</code>/netem (external, non-portable to this win32 dev box).</td></tr>
+              <tr><td><b>Windows observability fragility</b></td><td><code>terminate()</code> skips the <code>finally</code> that emits the final snapshot; this repo runs win32</td><td>always use finite <code>n_missions</code>/<code>n_serves</code> and wait for natural exit; harvest JSONL before teardown.</td></tr>
+              <tr><td><b>Energy reconciliation is a prerequisite</b></td><td>ε_bit fork + placeholder ε_prop mean any unified figure is watermarked and its propulsion uncertainty untested</td><td>pick the correct ε_bit (physics review), obtain a measured airframe ε_prop, add an <code>[exp4]</code> table — before running the grid.</td></tr>
+              <tr><td><b>Metric-semantics collision</b></td><td>P_complete's deadline is notional in Exp 1 but real-L2 in HERMES; “mission time” is modeled in Exp 3 but measured in Exp 4; close-rate thresholds are <code>{1,2,⌊N/2⌋,N}</code> vs the paper's <code>{1,⌈N/2⌉,N}</code></td><td>freeze one definition per metric in an Exp 4 metric spec; document each redefinition so the same quantity means the same thing across arms.</td></tr>
+              <tr><td><b>No combined analyzer</b></td><td><code>analysis/exp1.py</code> and <code>exp3.py</code> are separate; a wide Exp 4 CSV has no analyzer or figure set</td><td>build <code>analysis/exp4.py</code> reusing <code>stats.paired_wilcoxon_with_cliffs_delta</code> + <code>bootstrap_R_star_ci</code>, keyed on <code>(cell, trial_index)</code> across arms.</td></tr>
+              <tr><td><b>Scope-of-claim decision</b></td><td>if EX-4.1/4.3 slip, the honest fallback is “integrated L2+L3 over the real orchestrator, fixed-size model proxy, instrumented-but-inert L1” — more than any current test, less than Algorithm 2</td><td>decide and state which claim the paper makes <em>before</em> running the grid.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- 6 -->
+      <section id="dod">
+        <div class="sec-eyebrow">06 · Exit</div>
+        <h2>Definition of Done</h2>
+        <p>Experiment 4 is “ready to run” when:</p>
+        <ol>
+          <li>The Exp 4 driver + entrypoint host on the shared harness, producing a resumable wide CSV over a parametric grid (arm × N × r_rf × β × regime × seed).</li>
+          <li>Arms <strong>H0–H3</strong> each run through the <em>real</em> orchestrator stack (not the abstracted sim), paired-seeded.</li>
+          <li>The <strong>union metric set</strong> emits per trial: the 6 comm metrics, the 9 scheduling metrics, and the new convergence / T@τ / isolated-L1 metrics.</li>
+          <li>A real <strong>DNN-IDS</strong> trains and aggregates in-loop; convergence traces reproduce for H0 and integrated HERMES.</li>
+          <li>The <strong>unified energy model</strong> is reconciled (single ε_bit, measured-or-declared ε_prop, <code>[exp4]</code> table) so figures clear the placeholder watermark.</li>
+          <li><code>analysis/exp4.py</code> reproduces the paired-Wilcoxon-over-the-joint-vector figure set from any trial CSV.</li>
+          <li>A full local-emulation dry run completes; AERPAW/Chameleon deployment is a config swap for the arms that need real RF.</li>
+        </ol>
+        <div class="callout accent">
+          <span class="k">The one-line takeaway</span>
+          <p>Exp 4 is mostly an <b>integration + instrumentation</b> effort, not a from-scratch build: the harness, the two-pass orchestrator, real FedAvg math, the real policy objects, and the post-hoc energy proxies already exist. The net-new work is the three verified gaps — <b>L1→L2 wiring, a real model in the loop, and one consistent link-shaping mechanism</b> — plus the driver and analyzer that fold both metric families into one paired-seed trial.</p>
+        </div>
+      </section>
+
+      <div class="foot">
+        <hr class="soft">
+        <p><strong>How this was produced.</strong> Grounded in the SEC26 paper (§III Algorithm 1/2, §IV metrics &amp; Tables IV–VII), the SEC26 author response, and a 16-agent extraction + adversarial-verification pass over the <span class="mono">FL-DNN-GAN-IDS</span> tree. Five of six load-bearing claims were independently verified against source; the orchestrator end-to-end capability is established directly from <span class="mono">test_e2e_topology.py</span> and <span class="mono">test_mule_supervisor_two_pass.py</span>.</p>
+        <p class="mono">Companion to HERMES_Experiments_Implementation_Plan.md · HERMES_FL_Scheduler_Design.md · HERMES_Configuration_Reference.md §13. File:line references are to the repository as read on 2026-07-23; verify against current source before implementation.</p>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script>
+  // Minimal TOC active-state; no animation, respects reduced-motion via CSS.
+  (function(){
+    var links = Array.prototype.slice.call(document.querySelectorAll('nav.toc a'));
+    var secs = links.map(function(a){ return document.querySelector(a.getAttribute('href')); });
+    if(!('IntersectionObserver' in window)) return;
+    var io = new IntersectionObserver(function(entries){
+      entries.forEach(function(e){
+        if(e.isIntersecting){
+          var i = secs.indexOf(e.target);
+          links.forEach(function(l){ l.style.background=''; l.style.color=''; });
+          if(i>-1){ var l=links[i]; l.style.background='var(--surface-2)'; l.style.color='var(--ink)'; }
+        }
+      });
+    },{rootMargin:'-10% 0px -80% 0px'});
+    secs.forEach(function(s){ if(s) io.observe(s); });
+  })();
+</script>
