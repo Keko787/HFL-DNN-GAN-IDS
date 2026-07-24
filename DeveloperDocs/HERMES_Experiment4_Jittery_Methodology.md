@@ -141,7 +141,62 @@ certainly confirm the AUC tie. The dead-zone × link surface run is still
 pending. Report participation (completion / yield / close-rate), not AUC, as the
 Observation-3 evidence.
 
-## 7. Remediation status vs the adversarial review
+## 7. Arm H3 — L1 adaptive channel selection (validity)
+
+Arm **H3 = H2 + a real L1 adaptive channel**. It exercises the paper's
+deterministic controller `U(c,t) = R(γ₁(t)+g(c)) − κ(c) − λ(c,t)`
+(`hermes/l1/channel_utility.py`, the HERMES-Heuristic Eq. 1 the SEC26 audit
+found was specified but never shipped as runtime code). An RF channel
+environment (`experiments/exp4/channel.py`) gives each of `n_bands` a
+time-varying effective SNR over the mission sequence and maps the chosen
+channel's SNR to a per-mission **backhaul-loss probability**. The controller
+picks a band each mission; the resulting loss schedule drives the cluster's
+per-mission backhaul drop, and the chosen channel's mean SNR feeds the mule
+selector's `rf_prior` feature (closing the L1→L2 edge the audit flagged).
+
+**What makes it a fair, non-rigged test** — the same discipline as the
+jittery remediation:
+
+* **Bands cross over.** Each band peaks at a *different* time (distinct
+  phases), so **no single fixed band is best throughout**. Adaptation can
+  only help when the best band changes — the realistic time-varying case. If
+  one band dominated, the fixed baseline would tie and L1 would earn nothing.
+* **Fair static baseline.** H1/H2 hold `best_average_band` — the band a
+  deployer picks from historical averages *without* real-time tracking (Exp-2's
+  "Expected fixed"), **not** a retrospective per-instant oracle.
+* **Identical conditions.** H2 and H3 read the same seeded SNR trace and share
+  the backhaul-RNG seed, so only the per-mission loss thresholds differ.
+* **Clean ⇒ ~no benefit, by construction.** Under clean links all bands sit
+  high and stable, so fixed ≈ adaptive and L1's effect is correctly negligible.
+
+**Result (mean per-mission backhaul-loss reduction, fixed − adaptive, 30
+seeds, `n_missions=6`, 3 bands):**
+
+| regime | mean reduction | worst seed | best seed | adaptive ≤ fixed |
+|---|---|---|---|---|
+| clean | **+0.0003** | −0.0005 | +0.0020 | 29/30 |
+| jittery | **+0.1379** | +0.0540 | +0.2357 | **30/30** |
+
+Clean is a wash (the −0.0005 worst case is switch-cost noise, not a real
+regression); jittery is a consistent ~14-percentage-point loss reduction that
+never flips sign. Codified deterministically in
+`tests/unit/test_exp4_channel.py` (31 fast tests) and proven to run over the
+real subprocess orchestrator in
+`test_exp4_realmodel_smoke.py::test_exp4_h3_l1_channel_runs_end_to_end`.
+
+**Defensible framing:** *"Real-time L1 channel adaptation earns essentially
+nothing on a clean backhaul (as it should — there is nothing to track) and
+cuts mule→BS backhaul loss by ~14 points under a jittery, band-crossing
+channel, consistently across seeds."* This is deliberately modest and matches
+the rebuttal's own implication that L1's marginal effect is real but small —
+it is a *robustness* mechanism, not a headline accuracy driver.
+
+**Scope note:** the channel model runs in-process in the driver and produces a
+per-mission loss schedule the cluster applies; it does **not** yet unify
+cross-layer *energy* accounting (L1 switching energy + L2 flight energy + L3
+compute), which remains a separate follow-up.
+
+## 8. Remediation status vs the adversarial review
 
 | Hole | Fix | Status |
 |---|---|---|
@@ -152,8 +207,9 @@ Observation-3 evidence.
 | B5 `deadline_met` blind to H1 non-closure | derived from real cluster closure + backhaul-loss events | ✅ |
 | §3 rf_factor softened | `world_radius` 150→100 (Exp-3 parity) | ✅ |
 | §3 empty sortie hidden | distinct `mission_empty` event; still counted as a 0-update round | ✅ |
+| SEC26 audit: `U(c,t)` controller specified but never shipped; `rf_prior` never wired at runtime | `hermes/l1/channel_utility.py` (arm H3) + `rf_prior_snr_db` threaded L1→selector | ✅ (channel-level validity; ≥20-seed H2-vs-H3 run pending) |
 
-## 8. Known limitations / open items
+## 9. Known limitations / open items
 
 * The full **≥20-seed sweep** and the **dead-zone × link surface** are compute
   jobs (each H1 trial spawns a real TF subprocess tree); run on the beefy
@@ -165,3 +221,12 @@ Observation-3 evidence.
   advantage.
 * Backhaul loss is drawn per dock, so at very short horizons its effect is
   small; longer `--n-missions` exercises it more.
+* **Unified cross-layer energy** (L1 channel-switching + L2 flight + L3
+  compute in one budget) is not yet modelled. Arm H3 wires L1 *adaptivity*
+  and its backhaul-loss effect, but not its energy cost; a combined energy
+  ledger is a separate follow-up.
+* The H3 L1 effect is validated at the **channel-model level** (30 seeds,
+  deterministic) and proven to run end-to-end; a paired ≥20-seed **H2-vs-H3**
+  jittery sweep (mission_completion / round-close, `--l1-channel`) would put a
+  significance-tested number on the integrated effect, analogous to the
+  H0-vs-H1 run.
