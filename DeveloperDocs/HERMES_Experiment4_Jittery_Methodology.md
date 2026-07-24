@@ -98,24 +98,48 @@ budget-scheduling claim (Observation 4), which is the H2 (RL selector) work.
   advantage holds, not a tuned point. The review's flip test (dead_zone 0.3 +
   link_quality 0.7 → H0 may exceed H1) must be reported if it occurs.
 
-## 6. Honest current result (pending the full sweep)
+## 6. Honest current result (6 paired seeds, significance-tested)
 
-Preliminary, canonical CICIOT, N=6, 2 seeds (illustrative, **not** yet
-significance-tested):
+Canonical CICIOT, N=6, `--n-missions 4`, 6 paired seeds. Paired Wilcoxon +
+Cliff's δ + bootstrap 95% CI on the mean (H1 − H0) difference
+(`python -m experiments.analysis.exp4 --csv <sweep>.csv`). ✱ = CI excludes 0
+and Wilcoxon p<0.05.
 
-| regime | metric | H0 | H1 |
-|---|---|---|---|
-| clean | final_auc | 0.929 | 0.930 |
-| clean | mission_completion_rate | 0.83 | 0.92 |
-| jittery | final_auc | 0.905 | 0.922 |
-| jittery | mission_completion_rate | 0.33 | 0.75 |
-| jittery | update_yield | 0.50 | 1.75 |
+| regime | metric | H1 | H0 | H1−H0 | 95% CI | p | δ | verdict |
+|---|---|---|---|---|---|---|---|---|
+| clean | final_auc | 0.903 | 0.895 | +0.008 | [−0.003,+0.018] | 0.31 | +0.33 | tie |
+| clean | update_yield | 2.42 | 3.46 | −1.04 | [−1.50,−0.58] | 0.031 | −0.75 | H0 > H1 ✱ |
+| jittery | final_auc | 0.903 | 0.887 | +0.016 | [−0.004,+0.038] | 0.44 | −0.06 | tie |
+| jittery | mission_completion_rate | 0.75 | 0.25 | +0.50 | [+0.33,+0.67] | 0.031 | +1.00 | H1 > H0 ✱ |
+| jittery | update_yield | 1.96 | 0.42 | +1.54 | [+1.29,+1.96] | 0.031 | +1.00 | H1 > H0 ✱ |
+| jittery | round_close_rate@2 | 0.75 | 0.08 | +0.67 | [+0.46,+0.83] | 0.031 | +1.00 | H1 > H0 ✱ |
 
-Reading: **clean is a tie** (symmetric reliability removed the fabricated clean
-win); **the mule wins jittery**. The defensible framing is therefore *"the mule
-matches centralized under clean links and is substantially more resilient under
-a degraded backhaul,"* pending the ≥20-seed significance run and the dead-zone ×
-link sensitivity surface.
+**Reading — the crossover is significant on _participation_, not on AUC.**
+
+* **Participation crosses over decisively.** Centralized collects significantly
+  *more* per round under clean links (update_yield 3.46 vs 2.42, p=0.031 — the
+  mule's real short-range throughput cost), but under jittery the mule preserves
+  **~5×** the participation (yield 1.96 vs 0.42; completion 0.75 vs 0.25;
+  close-rate 0.75 vs 0.08), all at **Cliff's δ = +1.0 (perfect separation),
+  p=0.031**. This is Observation 3 — a *participation* claim — validated
+  end-to-end on the real integrated stack.
+* **AUC is a statistical tie in both regimes** (CIs straddle 0). The compact
+  DNN-IDS saturates near ~0.90 AUC on balanced CICIOT even from few updates, so
+  H0's participation collapse does not tank its accuracy. **No significant AUC
+  advantage is claimed from this run.**
+
+**Defensible framing:** *"Centralized FL collects more updates per round when
+the backhaul is clean, but mule-based HERMES preserves ~5× the federated
+participation when the backhaul degrades (p=0.031, Cliff's δ=+1.0); the compact
+IDS's end AUC is statistically indistinguishable at this scale."* This matches
+the paper's Observation 3 (worded around participation, not accuracy) and does
+not over-reach on AUC.
+
+**Caveats:** 6 seeds with perfect separation hits the Wilcoxon floor p=0.031;
+≥20 seeds would lower p / tighten CIs on the participation metrics and almost
+certainly confirm the AUC tie. The dead-zone × link surface run is still
+pending. Report participation (completion / yield / close-rate), not AUC, as the
+Observation-3 evidence.
 
 ## 7. Remediation status vs the adversarial review
 
