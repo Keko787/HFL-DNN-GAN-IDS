@@ -263,11 +263,12 @@
       <span>Deferred 4th study</span>
     </div>
     <h1 class="title">Experiment&nbsp;4 — Integrated HERMES, End-to-End</h1>
-    <p class="deck">The measured realization of <b>Algorithm&nbsp;2</b> — L1 + L2 + L3 composed in a single trial, against traditional FL. A sketch of what it needs, a design, and a phased implementation plan.</p>
+    <p class="deck">The measured realization of <b>Algorithm&nbsp;2</b> — L1 + L2 + L3 composed in a single trial, against traditional FL. A sketch of what it needs, a design, a phased plan — and, as of the update below, <b>a record of what shipped</b>.</p>
     <div class="metabar">
-      <span><b>Date</b> 2026-07-23</span>
-      <span><b>Companion to</b> HERMES_Experiments_Implementation_Plan.md</span>
-      <span><b>Grounded in</b> paper §III–IV · SEC26 rebuttal · 16-agent code audit</span>
+      <span><b>Drafted</b> 2026-07-23</span>
+      <span><b>Updated</b> 2026-07-24 — Stages 0–3 shipped (see §01)</span>
+      <span><b>Companion to</b> HERMES_Experiments_Implementation_Plan.md · HERMES_Experiment4_Jittery_Methodology.md</span>
+      <span><b>Grounded in</b> paper §III–IV · SEC26 rebuttal · code audits</span>
     </div>
   </header>
 
@@ -276,6 +277,7 @@
       <p class="toc-h">Contents</p>
       <ol>
         <li><a href="#why">Why this experiment exists</a></li>
+        <li><a href="#status">Build status — what shipped</a></li>
         <li><a href="#sketch">The sketch: metrics, arms, wiring</a></li>
         <li><a href="#verified">What the code actually shows</a></li>
         <li><a href="#design">Design &amp; recommended approach</a></li>
@@ -318,12 +320,41 @@
           <span class="k">Two honesty constraints — verified against the code</span>
           <p><strong>No real DNN-IDS runs in any loop today.</strong> The FedAvg math is real numpy, but devices “train” via <code>θ + rng.normal(0, 0.01)</code> <span class="path">(processes/device.py:51)</span> and the generator is a 13-param <code>StubGeneratorHost</code>. The <code>create_CICIOT_Model</code> → <code>ClientMission.local_train</code> bridge is an unimplemented stub that raises <span class="path">(TrainingClient.py:192)</span>.</p>
           <p style="margin-top:.6em"><strong>L1 is decoupled from L2/L3 at runtime.</strong> The selector's RF feature is a hardcoded constant <code>20.0</code>, never sourced from any live prior. Algorithm 2 line 5 is unrealized outside a single in-process test.</p>
+          <p style="margin-top:.75em; padding-top:.65em; border-top:1px dashed var(--gap-line)"><strong style="color:var(--ok)">Both resolved (2026-07-24).</strong> EX-4.1 puts the real <code>create_CICIOT_Model</code> in the device training loop and aggregates it with the real FedAvg. EX-4.3 ships the <code>U(c,t)</code> controller and feeds the L1-chosen channel's mean SNR into the selector's <code>rf_prior</code> feature, so the <code>20.0</code> constant is gone and Algorithm 2 line 5 is realized. See §<a class="ref" href="#status">01</a>.</p>
         </div>
+      </section>
+
+      <!-- STATUS (added 2026-07-24) -->
+      <section id="status">
+        <div class="sec-eyebrow">01 · Build status</div>
+        <h2>What shipped since this plan</h2>
+        <p class="lead">This document began as a forward-looking design. <b>Stages EX-4.0 through EX-4.3 are now implemented</b> on the real <code>MultiProcessOrchestrator</code>: all four arms H0–H3 run through the real stack, a real DNN-IDS trains and aggregates in-loop, and the L1→L2 edge the audit flagged as missing is built. A paper-grade ≥20-seed paired sweep is running as of this update.</p>
+
+        <div class="callout accent">
+          <span class="k">Headline</span>
+          <p>The three gaps this plan called net-new are <b>closed</b>: (1) a real DNN-IDS is in the loop (EX-4.1), (2) the L1→L2 <code>rf_prior</code> edge is wired and L1's <code>U(c,t)</code> controller — previously “not implemented at all” — now ships (EX-4.3), and (3) network impairment is modelled as a physically-justified loss/reliability regime rather than left absent (EX-4.2). Two adversarial audits — the jittery H0/H1 remediation and a 20-skeptic H3 review — hardened the results. Still open: unified <b>energy</b> reconciliation, and the <b>integrated</b> H2-vs-H3 measurement (the sweep in flight).</p>
+        </div>
+
+        <div class="tablewrap">
+          <table class="wide">
+            <thead><tr><th>Stage · arm</th><th>State</th><th>What landed</th></tr></thead>
+            <tbody>
+              <tr><td><span class="mname">EX-4.0 · H1</span></td><td><span class="pill ok"><span class="dot"></span>shipped</span></td><td>exp4 <code>driver</code> + <code>runner_main</code> on the shared harness; a JSONL→metric→CSV consumer; the federation-side scheduling metrics + Pass-2 coverage computed from the <em>real</em> two-pass orchestrator's event stream. Natural-exit harvest (finite <code>n_missions</code>) sidesteps the Windows <code>terminate()</code> snapshot loss.</td></tr>
+              <tr><td><span class="mname">EX-4.1 · H0, H1 conv.</span></td><td><span class="pill ok"><span class="dot"></span>shipped</span></td><td>real <code>create_CICIOT_Model</code> trains in every device subprocess; a canonical balanced-CICIOT loader (21 features) + a synthetic real-shaped fallback; per-round held-out AUC / accuracy / loss + T@τ; H0 flat-FL null on the <em>same</em> real model (driver-prepares-once).</td></tr>
+              <tr><td><span class="mname">EX-4.2 · H2 + jitter</span></td><td><span class="pill warn"><span class="dot"></span>shipped · remediated</span></td><td><code>TargetSelectorRL</code> DDQN through the real orchestrator (via new <code>MuleConfig</code> fields); a jittery regime. A “is the test rigged?” challenge found the first jittery result was <em>manufactured</em> — a full remediation followed: symmetric device reliability (H0 taxed too), honest <code>deadline_met</code>, paired Wilcoxon + Cliff's δ + bootstrap CI (<code>analysis/exp4.py</code>), and a dead-zone×link sensitivity surface. Recorded in the Jittery Methodology doc.</td></tr>
+              <tr><td><span class="mname">EX-4.3 · H3</span></td><td><span class="pill warn"><span class="dot"></span>shipped · audited</span></td><td>the paper's deterministic <code>U(c,t)</code> controller (<code>hermes/l1/channel_utility.py</code>) + a multi-band RF channel model → a per-mission backhaul-loss schedule; <code>schedule→cluster</code> and <code>rf_prior→selector</code> both wired; 31 unit tests + an e2e test. A 20-skeptic adversarial audit found <b>no rigging</b> (0 blocking after verification); six framing caveats are now recorded.</td></tr>
+              <tr><td><span class="mname">≥20-seed sweep</span></td><td><span class="pill warn"><span class="dot"></span>running</span></td><td>the paper-grade paired job: H0-vs-H1 dead-zone×link surface + clean reference, and H2-vs-H3 <code>--l1-channel</code> — canonical CICIOT, 20 seeds, resumable. Paired analysis + methodology-table upgrade land on completion.</td></tr>
+              <tr><td><span class="mname">Unified energy</span></td><td><span class="pill gap"><span class="dot"></span>open</span></td><td>the one original gap still outstanding: ε_bit fork fix in progress, ε_prop still placeholder, no <code>[exp4]</code> table yet — so energy figures stay watermarked. H3's channel model also does not yet charge switching-<em>outcome</em> loss (audit caveat 5).</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>The sketch, evidence, and design sections below are preserved as the original rationale. Where they describe a gap as “not built,” the table above and the stage cards in §<a class="ref" href="#plan">Implementation</a> record how it was closed; the validity discipline for the jittery and L1 results lives in <span class="mono">HERMES_Experiment4_Jittery_Methodology.md</span>.</p>
       </section>
 
       <!-- 1 -->
       <section id="sketch">
-        <div class="sec-eyebrow">01 · The sketch</div>
+        <div class="sec-eyebrow">02 · The sketch</div>
         <h2>Metrics, comparators, and what already wires together</h2>
         <p>Three things were asked for: the <strong>metrics</strong>, the <strong>comparators</strong>, and <strong>which existing components already compose</strong>. Taken in that order.</p>
 
@@ -424,12 +455,13 @@
         <div class="callout gap">
           <span class="k">The single biggest gap</span>
           <p>There is <strong>no runtime data edge from L1 into L2/L3</strong>, and the real orchestrator <strong>trains no real model</strong> — so the two things Exp 4 exists to demonstrate (that L1 helps L2/L3, and that the integrated stack converges a real DNN-IDS) are both un-instrumented today. Everything else — harness, orchestrator L2+L3 over TCP, real FedAvg math, real policy objects, byte/tx instrumentation points, post-hoc energy — either composes already or is a bounded additive build.</p>
+          <p style="margin-top:.75em; padding-top:.65em; border-top:1px dashed var(--gap-line)"><strong style="color:var(--ok)">Closed (2026-07-24).</strong> Both edges are now built and tested: the real DNN-IDS converges in-loop (EX-4.1) and the L1→L2 <code>rf_prior</code> edge feeds the selector (EX-4.3). What remains genuinely open is the <em>magnitude</em> question — L1's end-to-end contribution is measured at the channel-model level (a ~0.13–0.14 jittery backhaul-loss reduction, ~0 clean) but not yet through the orchestrator; that integrated H2-vs-H3 measurement is the sweep now running.</p>
         </div>
       </section>
 
       <!-- 2 -->
       <section id="verified">
-        <div class="sec-eyebrow">02 · Evidence</div>
+        <div class="sec-eyebrow">03 · Evidence</div>
         <h2>What the code actually shows</h2>
         <p>Five load-bearing claims the design rests on, each re-checked by an adversarial verifier reading the source directly. These are the facts that make the plan honest rather than aspirational.</p>
 
@@ -479,7 +511,7 @@
 
       <!-- 3 -->
       <section id="design">
-        <div class="sec-eyebrow">03 · Design</div>
+        <div class="sec-eyebrow">04 · Design</div>
         <h2>Design &amp; the recommended approach</h2>
         <p>The one true end-to-end path that exists today — <code>test_e2e_topology.py::test_e2e_one_mission_runs_pass_1_dock_pass_2</code> — drives real subprocesses over real TCP through Pass 1 → dock → Pass 2 with real cross-mule FedAvg (proven by the <code>cluster_round_closed</code> assert). But it wires <em>neither</em> L1 channel selection <em>nor</em> the L2 RL selector, over a stub model. So today's “integrated” test is really <strong>L3 + deterministic-gated-L2 only</strong>. That test is the seed; the design is about what to add around it.</p>
 
@@ -502,14 +534,15 @@
 
       <!-- 4 -->
       <section id="plan">
-        <div class="sec-eyebrow">04 · Implementation</div>
+        <div class="sec-eyebrow">05 · Implementation</div>
         <h2>Phased plan · Stages 0–3</h2>
         <p>Each stage is a chunk in the style of the existing <code>EX-*</code> plan. The staging is a real dependency order: Stage 0 gives a shippable integrated measurement; each later stage closes exactly one verified gap and unlocks one arm.</p>
 
         <div class="stages">
           <article class="stage">
-            <div class="shead"><span class="snum">EX-4.0</span><p class="stitle">Instrumentation — real L2+L3 metrics, no new physics</p><span class="schip"><span class="pill ok"><span class="dot"></span>ships arm H1</span></span></div>
+            <div class="shead"><span class="snum">EX-4.0</span><p class="stitle">Instrumentation — real L2+L3 metrics, no new physics</p><span class="schip"><span class="pill ok"><span class="dot"></span>shipped · H1</span></span></div>
             <div class="sbody">
+              <p style="margin:0 0 .85em; padding:9px 13px; background:var(--ok-bg); border:1px solid var(--ok-line); border-radius:8px; font-size:13px; color:var(--ink-2); max-width:none"><strong style="color:var(--ok); font-family:var(--font-mono); font-size:10.5px; letter-spacing:.08em; text-transform:uppercase">Landed</strong> — Built as planned. <code>experiments/exp4/{driver,runner_main,metrics,events_consumer}.py</code> drive the real orchestrator to natural exit and roll the JSONL event stream up into the metric row; a unit test pins the aggregation.</p>
               <p>Build <code>experiments/exp4/{runner_main.py, driver.py}</code> on the shared runner. The driver spawns the orchestrator with finite <code>n_missions</code>/<code>n_serves</code>, waits for natural exit (capturing <code>metrics_snapshot</code>; <code>cleanup_tmpdir=False</code>), harvests JSONL, and computes the federation-side scheduling metrics + Pass-2 coverage from real <code>cluster_round_closed</code> / <code>mission_completed</code> / <code>device_served</code> events. Add <code>wire.encode_message</code> byte instrumentation for real B_pw.</p>
               <div class="grid2">
                 <div class="fld"><span class="k">Builds</span><p>exp4 driver + entrypoint; JSONL→metric→CSV consumer; byte counter at the wire funnel; an orchestrator natural-exit helper.</p></div>
@@ -520,8 +553,9 @@
           </article>
 
           <article class="stage">
-            <div class="shead"><span class="snum">EX-4.1</span><p class="stitle">Real DNN-IDS in the loop</p><span class="schip"><span class="pill ok"><span class="dot"></span>ships convergence</span></span></div>
+            <div class="shead"><span class="snum">EX-4.1</span><p class="stitle">Real DNN-IDS in the loop</p><span class="schip"><span class="pill ok"><span class="dot"></span>shipped · convergence</span></span></div>
             <div class="sbody">
+              <p style="margin:0 0 .85em; padding:9px 13px; background:var(--ok-bg); border:1px solid var(--ok-line); border-radius:8px; font-size:13px; color:var(--ink-2); max-width:none"><strong style="color:var(--ok); font-family:var(--font-mono); font-size:10.5px; letter-spacing:.08em; text-transform:uppercase">Landed</strong> — The real <code>create_CICIOT_Model</code> trains in each device subprocess and is FedAvg-aggregated; a post-aggregation hook scores held-out AUC/acc/loss per round. Data is either the canonical balanced-CICIOT pipeline (21 features) or a real-shaped synthetic fallback; H0 uses the same model for a fair null.</p>
               <p>Replace <code>_stub_train</code> with <code>create_CICIOT_Model.fit()</code> in <code>ClientMission.local_train</code>; add a post-<code>cross_mule_fedavg</code> eval hook on a held-out CICIOT shard. <code>LocalTrainResult</code> already carries <code>accuracy/auc/loss</code> — currently faked; now real. H0 (traditional FL) gets the same real model for a fair null.</p>
               <div class="grid2">
                 <div class="fld"><span class="k">Builds</span><p>real local-train bridge; global eval hook; convergence / T@τ metrics; H0 real-model driver.</p></div>
@@ -532,8 +566,9 @@
           </article>
 
           <article class="stage">
-            <div class="shead"><span class="snum">EX-4.2</span><p class="stitle">RL selector + shaped radio</p><span class="schip"><span class="pill ok"><span class="dot"></span>ships arm H2</span></span></div>
+            <div class="shead"><span class="snum">EX-4.2</span><p class="stitle">RL selector + shaped radio</p><span class="schip"><span class="pill warn"><span class="dot"></span>shipped · remediated · H2</span></span></div>
             <div class="sbody">
+              <p style="margin:0 0 .85em; padding:9px 13px; background:var(--warn-bg); border:1px solid var(--warn-line); border-radius:8px; font-size:13px; color:var(--ink-2); max-width:none"><strong style="color:var(--warn); font-family:var(--font-mono); font-size:10.5px; letter-spacing:.08em; text-transform:uppercase">Landed · with a course-correction</strong> — <code>MuleConfig</code> now carries <code>use_rl_selector</code>/<code>selector_weights_path</code>, so the DDQN runs through the real <code>FLScheduler</code>. <b>Divergence:</b> the “shaped radio” is modelled as a <em>physical loss/reliability regime</em> (a per-device short-range contact reliability that jitter can't touch, plus a recoverable long-range backhaul loss), not tc/netem byte-rate shaping — a cleaner, more defensible impairment for the participation claim. A challenge (“is the test rigged to win?”) exposed the first jittery result as manufactured; the full remediation (symmetric H0 tax, honest <code>deadline_met</code>, paired stats, sensitivity surface) is recorded in the Jittery Methodology doc.</p>
               <p>Add <code>target_selector</code> (and <code>channel_actor</code>) fields to <code>MuleConfig</code> so the subprocess mule can be told to use the DDQN — enabling arm H2. Add byte-rate shaping to the transport (byte-count ÷ rate delay in <code>wire.send_message</code>) or run subprocesses over <code>tc</code>-shaped loopback, so T_tx / η / P_complete are meaningful under the shaped-radio condition. Retrain / re-validate A4 against the real path first (see risk 3).</p>
               <div class="grid2">
                 <div class="fld"><span class="k">Builds</span><p><code>MuleConfig</code> selector/actor fields; transport rate-shaping; A4 re-validation harness on the real stack.</p></div>
@@ -544,8 +579,9 @@
           </article>
 
           <article class="stage">
-            <div class="shead"><span class="snum">EX-4.3</span><p class="stitle">L1 made real — close the loop</p><span class="schip"><span class="pill ok"><span class="dot"></span>ships arm H3</span></span></div>
+            <div class="shead"><span class="snum">EX-4.3</span><p class="stitle">L1 made real — close the loop</p><span class="schip"><span class="pill warn"><span class="dot"></span>shipped · audited · H3</span></span></div>
             <div class="sbody">
+              <p style="margin:0 0 .85em; padding:9px 13px; background:var(--warn-bg); border:1px solid var(--warn-line); border-radius:8px; font-size:13px; color:var(--ink-2); max-width:none"><strong style="color:var(--warn); font-family:var(--font-mono); font-size:10.5px; letter-spacing:.08em; text-transform:uppercase">Landed · scope stated honestly</strong> — The <code>U(c,t)</code> controller ships (<code>hermes/l1/channel_utility.py</code>); a multi-band RF model yields a per-mission backhaul-loss schedule that drives the cluster, and the chosen channel's mean SNR feeds the selector's <code>rf_prior</code>. A 20-skeptic adversarial audit found <b>no rigging</b>. <b>Two honest scopes:</b> the +0.13–0.14 jittery loss reduction is a <em>channel-model</em> property (not yet an orchestrator measurement — the integrated H2-vs-H3 sweep is running), and the sign is near-guaranteed by construction so the <em>magnitude</em>, not the direction, is the interesting quantity. Energy reconciliation (below) is still open.</p>
               <p>Populate <code>RFPriorStore</code> from the mule's per-band channel observations and read it into <code>rf_prior_snr_db</code> (ideally per-device <code>SpectrumSig</code>, per the implementation plan's roadmap); actuate/log the <code>ChannelDDQN</code> choice so it affects the link. Enables arm H3 and the isolated-L1-contribution metric. Reconcile ε_bit, replace ε_prop, and add an <code>[exp4]</code> calibration table so figures clear the watermark.</p>
               <div class="grid2">
                 <div class="fld"><span class="k">Builds</span><p>L1 producer → store; scheduler reads real prior; channel actuation; <code>Exp4Calibration</code> + reconciled constants; L1-on/off ablation metric.</p></div>
@@ -573,7 +609,7 @@
 
       <!-- 5 -->
       <section id="risks">
-        <div class="sec-eyebrow">05 · Risks</div>
+        <div class="sec-eyebrow">06 · Risks</div>
         <h2>Risks &amp; open decisions</h2>
         <div class="tablewrap">
           <table class="wide">
@@ -595,9 +631,13 @@
 
       <!-- 6 -->
       <section id="dod">
-        <div class="sec-eyebrow">06 · Exit</div>
+        <div class="sec-eyebrow">07 · Exit</div>
         <h2>Definition of Done</h2>
         <p>Experiment 4 is “ready to run” when:</p>
+        <div class="callout accent">
+          <span class="k">Current state · 2026-07-24</span>
+          <p><span class="pill ok"><span class="dot"></span>done</span> the driver + harness (1), arms <b>H0–H3</b> on the real orchestrator (2), real DNN-IDS convergence for H0 &amp; HERMES (4), and <code>analysis/exp4.py</code> (6). <span class="pill warn"><span class="dot"></span>partial</span> the union metric set (3) — scheduling, convergence/T@τ, and the isolated-L1 (channel-model) metric emit; the comm-shaping metrics were reframed around the physical loss regime rather than byte-rate shaping. <span class="pill warn"><span class="dot"></span>in flight</span> the local dry run (7) — the ≥20-seed paired sweep is running. <span class="pill gap"><span class="dot"></span>open</span> the unified energy model (5).</p>
+        </div>
         <ol>
           <li>The Exp 4 driver + entrypoint host on the shared harness, producing a resumable wide CSV over a parametric grid (arm × N × r_rf × β × regime × seed).</li>
           <li>Arms <strong>H0–H3</strong> each run through the <em>real</em> orchestrator stack (not the abstracted sim), paired-seeded.</li>
@@ -616,7 +656,8 @@
       <div class="foot">
         <hr class="soft">
         <p><strong>How this was produced.</strong> Grounded in the SEC26 paper (§III Algorithm 1/2, §IV metrics &amp; Tables IV–VII), the SEC26 author response, and a 16-agent extraction + adversarial-verification pass over the <span class="mono">FL-DNN-GAN-IDS</span> tree. Five of six load-bearing claims were independently verified against source; the orchestrator end-to-end capability is established directly from <span class="mono">test_e2e_topology.py</span> and <span class="mono">test_mule_supervisor_two_pass.py</span>.</p>
-        <p class="mono">Companion to HERMES_Experiments_Implementation_Plan.md · HERMES_FL_Scheduler_Design.md · HERMES_Configuration_Reference.md §13. File:line references are to the repository as read on 2026-07-23; verify against current source before implementation.</p>
+        <p><strong>2026-07-24 update.</strong> §01 (Build status), the resolved-gap notes, the stage-card “Landed” banners, and the Definition-of-Done state were added after Stages EX-4.0–4.3 were implemented and put through two adversarial validity audits. The original sketch/evidence/design sections are unchanged, preserved as the drafting-time rationale. The as-built validity record lives in <span class="mono">HERMES_Experiment4_Jittery_Methodology.md</span>.</p>
+        <p class="mono">Companion to HERMES_Experiments_Implementation_Plan.md · HERMES_Experiment4_Jittery_Methodology.md · HERMES_FL_Scheduler_Design.md · HERMES_Configuration_Reference.md §13. File:line references are to the repository as read on 2026-07-23; verify against current source before implementation.</p>
       </div>
     </main>
   </div>
