@@ -513,3 +513,40 @@ def _u32(base_seed: int, *parts) -> int:
     import hashlib
     payload = "|".join([str(base_seed), *(str(p) for p in parts)])
     return int.from_bytes(hashlib.sha256(payload.encode()).digest()[:4], "big")
+
+
+# --------------------------------------------------------------------------- #
+# (De)serialization for the driver -> subprocess handoff (numpy .npz only)
+# --------------------------------------------------------------------------- #
+# These read/write plain numeric ndarray archives. np.load defaults to
+# refusing object arrays, so the handoff is data-only (no code execution).
+
+def save_weights(path, weights: Weights) -> None:
+    """Serialize a list of ndarrays (a model's ``get_weights()``) to ``.npz``."""
+    np.savez(
+        str(path),
+        _n=np.array(len(weights), dtype=np.int64),
+        **{f"w{i}": np.asarray(w) for i, w in enumerate(weights)},
+    )
+
+
+def load_weights(path) -> Weights:
+    """Inverse of :func:`save_weights` — preserves layer order."""
+    with np.load(str(path)) as d:
+        n = int(d["_n"])
+        return [np.array(d[f"w{i}"]) for i in range(n)]
+
+
+def save_xy(path, X: np.ndarray, y: np.ndarray) -> None:
+    """Serialize an ``(X, y)`` shard / test set to ``.npz`` (float32)."""
+    np.savez(
+        str(path),
+        X=np.asarray(X, dtype=np.float32),
+        y=np.asarray(y, dtype=np.float32).reshape(-1),
+    )
+
+
+def load_xy(path) -> Tuple[np.ndarray, np.ndarray]:
+    """Inverse of :func:`save_xy`."""
+    with np.load(str(path)) as d:
+        return np.array(d["X"], dtype=np.float32), np.array(d["y"], dtype=np.float32)

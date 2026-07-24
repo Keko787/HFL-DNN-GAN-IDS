@@ -53,6 +53,21 @@ class MissionRecord:
     duration_s: Optional[float]
 
 
+@dataclass(frozen=True)
+class ModelEvalPoint:
+    """One held-out convergence point (EX-4.1 ``model_eval`` event).
+
+    ``cluster_round`` 0 is the seeded init θ baseline; 1..R are the
+    aggregated models after each cross-mule FedAvg.
+    """
+
+    cluster_round: int
+    accuracy: float
+    auc: float
+    loss: float
+    n_test: int
+
+
 @dataclass
 class Exp4Observation:
     """Everything the metric layer needs from one finished trial."""
@@ -62,6 +77,8 @@ class Exp4Observation:
     up_bundles_ingested: int
     missions: List[MissionRecord] = field(default_factory=list)
     mission_failures: int = 0
+    # EX-4.1 real-model convergence trace (empty on the stub path).
+    model_evals: List[ModelEvalPoint] = field(default_factory=list)
     # Per-device Pass-1+Pass-2 serve counts, padded to every device that
     # announced itself (``device_ready``) so zero-serve devices still
     # count toward fairness / entropy denominators.
@@ -103,6 +120,19 @@ def observation_from_rows(
     cluster_rounds_closed = len(_events(cluster_rows, "cluster_round_closed"))
     up_bundles_ingested = len(_events(cluster_rows, "up_bundle_ingested"))
     cluster_ready = bool(_events(cluster_rows, "cluster_ready"))
+
+    model_evals: List[ModelEvalPoint] = []
+    for r in _events(cluster_rows, "model_eval"):
+        model_evals.append(
+            ModelEvalPoint(
+                cluster_round=int(r.get("cluster_round", 0) or 0),
+                accuracy=float(r.get("accuracy", 0.0) or 0.0),
+                auc=float(r.get("auc", 0.0) or 0.0),
+                loss=float(r.get("loss", 0.0) or 0.0),
+                n_test=int(r.get("n_test", 0) or 0),
+            )
+        )
+    model_evals.sort(key=lambda p: p.cluster_round)
 
     # ------------------------------- mule -------------------------------- #
     missions: List[MissionRecord] = []
@@ -152,6 +182,7 @@ def observation_from_rows(
         up_bundles_ingested=up_bundles_ingested,
         missions=missions,
         mission_failures=mission_failures,
+        model_evals=model_evals,
         per_device_serves=per_device_serves,
         device_serve_failures=device_serve_failures,
         cluster_ready=cluster_ready,

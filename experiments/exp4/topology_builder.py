@@ -39,17 +39,33 @@ def build_exp4_topology(
     min_participation: int = 1,
     cluster_id: str = "exp4-cluster",
     mule_id: str = "exp4-mule",
+    # EX-4.1 real-model wiring (all optional; omitted -> EX-4.0 stub path).
+    train_shard_paths: Optional[List[str]] = None,
+    input_dim: Optional[int] = None,
+    local_epochs: int = 1,
+    local_batch_size: int = 64,
+    init_theta_path: Optional[str] = None,
+    eval_test_path: Optional[str] = None,
 ) -> TopologyConfig:
     """Return a validated :class:`TopologyConfig` for one H1 trial.
 
     ``spread_m`` bounds the square the devices are scattered in; it
     defaults to a fraction of ``rf_range_m`` (capped) so the cluster
     stays inside one contact radius.
+
+    When ``train_shard_paths`` is given (EX-4.1 real-model path), device
+    ``i`` is pointed at ``train_shard_paths[i]`` and the cluster is seeded
+    from ``init_theta_path`` + scored on ``eval_test_path``.
     """
     if n_devices < 1:
         raise ValueError(f"n_devices must be >= 1, got {n_devices}")
     if n_missions < 1:
         raise ValueError(f"n_missions must be >= 1, got {n_missions}")
+    if train_shard_paths is not None and len(train_shard_paths) != n_devices:
+        raise ValueError(
+            f"train_shard_paths has {len(train_shard_paths)} entries, "
+            f"expected n_devices={n_devices}"
+        )
 
     rng = random.Random(seed)
     if spread_m is None:
@@ -63,6 +79,12 @@ def build_exp4_topology(
             DeviceConfig(
                 device_id=f"exp4-dev-{i:03d}",
                 position=(float(x), float(y), 0.0),
+                train_shard_path=(
+                    train_shard_paths[i] if train_shard_paths else None
+                ),
+                input_dim=input_dim,
+                local_epochs=local_epochs,
+                local_batch_size=local_batch_size,
             )
         )
 
@@ -72,6 +94,9 @@ def build_exp4_topology(
         dock_port=0,
         synth_batch_size=synth_batch_size,
         min_participation=min_participation,
+        init_theta_path=init_theta_path,
+        eval_test_path=eval_test_path,
+        input_dim=input_dim,
     )
     mule = MuleConfig(
         mule_id=mule_id,

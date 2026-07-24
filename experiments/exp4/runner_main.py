@@ -83,6 +83,35 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         help="Soft harness timeout (warning-only label). Defaults to "
              "trial-budget-s so a killed trial is also labelled.",
     )
+    # ---- EX-4.1 real-model flags ---- #
+    parser.add_argument(
+        "--real-model", action="store_true",
+        help="Run the real canonical DNN-IDS in the loop (EX-4.1): real "
+             "training on each device + per-round held-out convergence. "
+             "Omit for the EX-4.0 stub (federation metrics only).",
+    )
+    parser.add_argument(
+        "--data-source", choices=["canonical", "synthetic"], default="canonical",
+        help="Real-model data: 'canonical' = the production CICIOT pipeline "
+             "(balanced, 21 features, paper-faithful); 'synthetic' = a "
+             "real-shaped separable task (fast, no dataset needed).",
+    )
+    parser.add_argument("--local-epochs", type=int, default=1)
+    parser.add_argument("--local-batch-size", type=int, default=64)
+    parser.add_argument("--tau", type=float, default=0.9,
+                        help="Target accuracy for the T@tau metric.")
+    parser.add_argument("--train-files", type=int, default=3,
+                        help="canonical: CICIOT csv parts to draw train from.")
+    parser.add_argument("--test-files", type=int, default=1,
+                        help="canonical: CICIOT csv parts to draw test from.")
+    parser.add_argument("--train-dataset-size", type=int, default=20000,
+                        help="canonical: total balanced train rows (50/50).")
+    parser.add_argument("--test-dataset-size", type=int, default=8000,
+                        help="canonical: total balanced test rows before attack reduction.")
+    parser.add_argument("--attack-eval-ratio", type=float, default=0.5,
+                        help="canonical: attack fraction kept in the test set.")
+    parser.add_argument("--synth-rows-per-device", type=int, default=512)
+    parser.add_argument("--synth-test-rows", type=int, default=512)
     args = parser.parse_args(argv)
 
     logging.basicConfig(
@@ -102,7 +131,24 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     driver = Exp4Driver(
         trial_budget_s=float(args.trial_budget_s),
         startup_timeout_s=float(args.startup_timeout_s),
+        real_model=bool(args.real_model),
+        data_source=args.data_source,
+        local_epochs=int(args.local_epochs),
+        local_batch_size=int(args.local_batch_size),
+        tau=float(args.tau),
+        train_files=int(args.train_files),
+        test_files=int(args.test_files),
+        train_dataset_size=int(args.train_dataset_size),
+        test_dataset_size=int(args.test_dataset_size),
+        attack_eval_ratio=float(args.attack_eval_ratio),
+        synth_rows_per_device=int(args.synth_rows_per_device),
+        synth_test_rows=int(args.synth_test_rows),
     )
+    if args.real_model:
+        log.info(
+            "EX-4.1 real-model run: source=%s epochs=%d batch=%d tau=%.2f",
+            args.data_source, args.local_epochs, args.local_batch_size, args.tau,
+        )
     runner = TrialRunner(
         grid=grid,
         log_path=args.csv,

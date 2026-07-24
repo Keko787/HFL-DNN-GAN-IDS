@@ -76,6 +76,22 @@ class Exp4MetricSummary:
     rf_range_m: float
     n_missions_target: int
 
+    # EX-4.1 — real-model convergence on the held-out set. None/0 on the
+    # EX-4.0 stub path (no ``model_eval`` events). ``init_*`` is the seeded
+    # baseline (round 0); ``final_*`` is the last aggregated model;
+    # ``t_at_tau_round`` is the first round to reach accuracy >= ``tau``.
+    init_auc: Optional[float] = None
+    init_accuracy: Optional[float] = None
+    init_loss: Optional[float] = None
+    final_auc: Optional[float] = None
+    final_accuracy: Optional[float] = None
+    final_loss: Optional[float] = None
+    best_auc: Optional[float] = None
+    delta_auc: Optional[float] = None
+    rounds_evaluated: int = 0
+    t_at_tau_round: Optional[int] = None
+    tau: Optional[float] = None
+
     def to_row(self) -> Dict[str, object]:
         return {
             "update_yield": self.update_yield,
@@ -99,6 +115,17 @@ class Exp4MetricSummary:
             "n_devices": self.n_devices,
             "rf_range_m": self.rf_range_m,
             "n_missions_target": self.n_missions_target,
+            "init_auc": _blank(self.init_auc),
+            "init_accuracy": _blank(self.init_accuracy),
+            "init_loss": _blank(self.init_loss),
+            "final_auc": _blank(self.final_auc),
+            "final_accuracy": _blank(self.final_accuracy),
+            "final_loss": _blank(self.final_loss),
+            "best_auc": _blank(self.best_auc),
+            "delta_auc": _blank(self.delta_auc),
+            "rounds_evaluated": self.rounds_evaluated,
+            "t_at_tau_round": _blank(self.t_at_tau_round),
+            "tau": _blank(self.tau),
         }
 
     @staticmethod
@@ -125,6 +152,17 @@ class Exp4MetricSummary:
             "n_devices",
             "rf_range_m",
             "n_missions_target",
+            "init_auc",
+            "init_accuracy",
+            "init_loss",
+            "final_auc",
+            "final_accuracy",
+            "final_loss",
+            "best_auc",
+            "delta_auc",
+            "rounds_evaluated",
+            "t_at_tau_round",
+            "tau",
         ]
 
 
@@ -134,6 +172,7 @@ def summarise_observation(
     n_devices: int,
     rf_range_m: float,
     n_missions_target: int,
+    tau: float = 0.9,
 ) -> Exp4MetricSummary:
     """Roll one trial's :class:`Exp4Observation` up to the reportables."""
 
@@ -193,6 +232,36 @@ def summarise_observation(
         m.duration_s for m in obs.missions if m.duration_s is not None
     )
 
+    # ---- EX-4.1 convergence from the held-out model_eval trace ---- #
+    evals = obs.model_evals
+    if evals:
+        init_e, final_e = evals[0], evals[-1]
+        t_at_tau = next(
+            (e.cluster_round for e in evals
+             if e.cluster_round > 0 and e.accuracy >= tau),
+            None,
+        )
+        conv = dict(
+            init_auc=init_e.auc,
+            init_accuracy=init_e.accuracy,
+            init_loss=init_e.loss,
+            final_auc=final_e.auc,
+            final_accuracy=final_e.accuracy,
+            final_loss=final_e.loss,
+            best_auc=max(e.auc for e in evals),
+            delta_auc=final_e.auc - init_e.auc,
+            rounds_evaluated=len(evals),
+            t_at_tau_round=t_at_tau,
+            tau=float(tau),
+        )
+    else:
+        conv = dict(
+            init_auc=None, init_accuracy=None, init_loss=None,
+            final_auc=None, final_accuracy=None, final_loss=None,
+            best_auc=None, delta_auc=None, rounds_evaluated=0,
+            t_at_tau_round=None, tau=None,
+        )
+
     return Exp4MetricSummary(
         update_yield=yield_mean,
         round_close_rate_kmin1=close_by_k.get(1, 0.0),
@@ -215,6 +284,7 @@ def summarise_observation(
         n_devices=int(n_devices),
         rf_range_m=float(rf_range_m),
         n_missions_target=int(n_missions_target),
+        **conv,
     )
 
 
@@ -223,3 +293,8 @@ def _mean(xs) -> float:
     if not xs:
         return 0.0
     return sum(xs) / len(xs)
+
+
+def _blank(v):
+    """CSV cell for an optional metric — empty string when absent."""
+    return v if v is not None else ""

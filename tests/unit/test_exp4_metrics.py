@@ -188,6 +188,47 @@ def test_empty_observation_is_degenerate_not_crashing():
     assert s.jains_fairness == pytest.approx(1.0)
 
 
+def test_convergence_metrics_from_model_eval_events():
+    """EX-4.1 — model_eval trace -> init/final/best AUC, ΔAUC, T@τ."""
+    cluster_rows = [
+        {"event": "cluster_ready", "role": "cluster", "id": "c"},
+        {"event": "model_eval", "role": "cluster", "id": "c",
+         "cluster_round": 0, "accuracy": 0.50, "auc": 0.50, "loss": 0.70, "n_test": 100},
+        {"event": "model_eval", "role": "cluster", "id": "c",
+         "cluster_round": 1, "accuracy": 0.80, "auc": 0.85, "loss": 0.40, "n_test": 100},
+        {"event": "model_eval", "role": "cluster", "id": "c",
+         "cluster_round": 2, "accuracy": 0.92, "auc": 0.95, "loss": 0.25, "n_test": 100},
+    ]
+    obs = observation_from_rows(
+        cluster_rows=cluster_rows, mule_rows=[], device_rows=[], n_devices=4,
+    )
+    assert len(obs.model_evals) == 3
+    s = summarise_observation(
+        obs, n_devices=4, rf_range_m=60.0, n_missions_target=2, tau=0.9,
+    )
+    assert s.init_auc == pytest.approx(0.50)
+    assert s.final_auc == pytest.approx(0.95)
+    assert s.best_auc == pytest.approx(0.95)
+    assert s.delta_auc == pytest.approx(0.45)
+    assert s.rounds_evaluated == 3
+    assert s.t_at_tau_round == 2      # first round>0 hitting acc>=0.9
+    assert s.tau == pytest.approx(0.9)
+
+
+def test_convergence_absent_on_stub_path():
+    """No model_eval events -> convergence columns are blank, not crashing."""
+    obs = observation_from_rows(
+        cluster_rows=[], mule_rows=[], device_rows=[], n_devices=4,
+    )
+    s = summarise_observation(obs, n_devices=4, rf_range_m=60.0, n_missions_target=2)
+    assert s.final_auc is None
+    assert s.rounds_evaluated == 0
+    assert s.t_at_tau_round is None
+    row = s.to_row()
+    assert row["final_auc"] == ""    # blank CSV cell
+    assert row["rounds_evaluated"] == 0
+
+
 def test_consume_run_dir_reads_role_globs(tmp_path):
     """End-to-end of the file layer: role-prefixed JSONL -> observation."""
     import json

@@ -105,12 +105,40 @@ class ClusterService:
         # "no submissions to aggregate".
         self._seed_registry_from_config()
 
-        self.generator = StubGeneratorHost(
-            disc_weights=[
+        # EX-4.1 — seed the global model. When ``init_theta_path`` is set,
+        # broadcast the *real* DNN-IDS weights so the whole pipeline carries
+        # its shapes (partial_fedavg enforces shape consistency); otherwise
+        # the Sprint-2 13-param stub the integration tests rely on.
+        if getattr(cfg, "init_theta_path", None):
+            from experiments.exp4.model_task import load_weights
+            disc_weights = load_weights(cfg.init_theta_path)
+            log.info(
+                "cluster %s: seeded real DNN-IDS global model from %s "
+                "(%d layers)",
+                cfg.cluster_id, cfg.init_theta_path, len(disc_weights),
+            )
+        else:
+            disc_weights = [
                 np.zeros((4,), dtype=np.float32),
                 np.ones((3, 3), dtype=np.float32) * 0.01,
             ]
-        )
+        self.generator = StubGeneratorHost(disc_weights=disc_weights)
+
+        # EX-4.1 — held-out eval set for per-round convergence (``model_eval``).
+        # Loaded as plain numpy here (cheap); the TF evaluate happens in the
+        # service loop so it never delays port binding at startup.
+        self._eval_X = None
+        self._eval_y = None
+        self._eval_input_dim = getattr(cfg, "input_dim", None)
+        if getattr(cfg, "eval_test_path", None) and self._eval_input_dim:
+            from experiments.exp4.model_task import load_xy
+            self._eval_X, self._eval_y = load_xy(cfg.eval_test_path)
+            log.info(
+                "cluster %s: loaded held-out eval set %s (rows=%d, dim=%s)",
+                cfg.cluster_id, cfg.eval_test_path,
+                len(self._eval_y), self._eval_input_dim,
+            )
+
         self.cluster = HFLHostCluster(
             registry=self.registry,
             generator=self.generator,
@@ -236,6 +264,10 @@ class ClusterService:
             self.cfg.cluster_id, self.actual_dock_port, len(expected_mules),
         )
 
+        # EX-4.1 — baseline convergence point (round 0, the seeded init θ),
+        # before any aggregation. Also warms TensorFlow while mules register.
+        self._emit_model_evaluation(0)
+
         if expected_mules:
             if not self.dock.wait_for_mules(expected_mules, timeout=60.0):
                 log.error(
@@ -290,6 +322,8 @@ class ClusterService:
                             cluster_round=self.cluster._cluster_round,
                         )
                         self.metrics.increment("cluster_rounds_closed")
+                        # EX-4.1 — convergence point for the just-aggregated θ'.
+                        self._emit_model_evaluation(self.cluster._cluster_round)
                         # Dispatch a fresh DOWN to every currently-docked
                         # mule (registered_mules, not expected_mules —
                         # if a mule is offline we'd just hit a write
@@ -373,6 +407,43 @@ class ClusterService:
                 refinement.refinement_round,
             )
             self.metrics.increment("tier3_refinement_fold_failures")
+
+    def _emit_model_evaluation(self, cluster_round: int) -> None:
+        """EX-4.1 — score the current global θ on the held-out test set.
+
+        No-op when the real-model eval set was not configured (the stub
+        integration path). Best-effort: a scoring failure logs and drops the
+        sample rather than killing the cluster loop.
+        """
+        if self._eval_X is None:
+            return
+        try:
+            from experiments.exp4.model_task import evaluate_theta
+
+            theta = self.cluster.generator.get_global_disc_weights()
+            m = evaluate_theta(
+                theta, self._eval_X, self._eval_y,
+                input_dim=self._eval_input_dim,
+            )
+            self.events.emit(
+                "model_eval",
+                cluster_round=int(cluster_round),
+                accuracy=float(m["accuracy"]),
+                auc=float(m["auc"]),
+                loss=float(m["loss"]),
+                n_test=int(len(self._eval_y)),
+            )
+            self.metrics.observe("model_auc", float(m["auc"]))
+            log.info(
+                "cluster %s: model_eval round=%d acc=%.4f auc=%.4f loss=%.4f",
+                self.cfg.cluster_id, cluster_round,
+                m["accuracy"], m["auc"], m["loss"],
+            )
+        except Exception:
+            log.exception(
+                "cluster %s: model scoring failed", self.cfg.cluster_id,
+            )
+            self.metrics.increment("model_eval_failures")
 
     def shutdown(self) -> None:
         self.request_stop()

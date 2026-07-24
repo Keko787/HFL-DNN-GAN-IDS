@@ -73,6 +73,38 @@ def _stub_train_factory(seed: int = 0):
     return _train
 
 
+def _build_local_train(cfg: DeviceConfig, seed: int):
+    """Select the device's local-training callback.
+
+    EX-4.1: when ``cfg.train_shard_path`` is set, build a *real*
+    ``local_train`` that fits the canonical DNN-IDS on this device's
+    CICIOT shard (lazy import so the default stub path never pulls in
+    TensorFlow / the experiments package). Otherwise fall back to the
+    Sprint-2 noise stub — the multi-process integration tests rely on it.
+    """
+    if getattr(cfg, "train_shard_path", None):
+        # Layer note: hermes is the core library; this reaches up into the
+        # experiments package only on the opt-in real-model path, and only
+        # in a spawned device subprocess whose CWD is the repo root.
+        from experiments.exp4.model_task import load_xy, make_local_train_fn
+
+        X, y = load_xy(cfg.train_shard_path)
+        log.info(
+            "device %s: real DNN-IDS local_train over shard %s "
+            "(rows=%d, input_dim=%s, epochs=%d)",
+            cfg.device_id, cfg.train_shard_path, len(y),
+            cfg.input_dim, cfg.local_epochs,
+        )
+        return make_local_train_fn(
+            X, y,
+            input_dim=cfg.input_dim,
+            epochs=cfg.local_epochs,
+            batch_size=cfg.local_batch_size,
+            seed=seed,
+        )
+    return _stub_train_factory(seed)
+
+
 class DeviceService:
     """Lifecycle holder for a device-process service loop."""
 
@@ -101,6 +133,14 @@ class DeviceService:
         digest = hashlib.sha256(cfg.device_id.encode("utf-8")).digest()
         seed = int.from_bytes(digest[:4], "big") % (2**31)
 
+        # EX-4.1: build the training callback FIRST. On the real-model path
+        # this imports TensorFlow and constructs the Keras model, which can
+        # take several seconds; doing it before the RF client connects means
+        # the device only registers on the mule's RF link once it is truly
+        # ready to serve a contact, so the mule's ``wait_for_devices``
+        # barrier doubles as a serve-readiness barrier and the first solicit
+        # can't race an unbuilt model.
+        local_train = _build_local_train(cfg, seed)
         self.rf = TCPRFLinkClient(
             device_id=DeviceID(cfg.device_id),
             host=cfg.mule_rf_host,
@@ -109,7 +149,7 @@ class DeviceService:
         self.client = ClientMission(
             device_id=DeviceID(cfg.device_id),
             rf=self.rf,
-            local_train=_stub_train_factory(seed),
+            local_train=local_train,
             solicit_timeout_s=2.0,
             disc_push_timeout_s=10.0,
         )

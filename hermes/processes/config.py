@@ -70,6 +70,15 @@ class ClusterConfig:
     # Optional Tier-3 endpoint (cloud link). When set, the cluster
     # service polls / posts on its own cadence. None = no cloud link.
     tier3_url: Optional[str] = None
+    # EX-4.1 — real DNN-IDS. When ``init_theta_path`` is set, the global
+    # model is seeded from those weights (real create_CICIOT_Model) instead
+    # of the 13-param stub, so the whole pipeline carries the real shapes.
+    # When ``eval_test_path`` + ``input_dim`` are set, the cluster evaluates
+    # the aggregated θ on the held-out test set after each round and emits a
+    # ``model_eval`` event (accuracy/auc/loss). All None -> the stub path.
+    init_theta_path: Optional[str] = None
+    eval_test_path: Optional[str] = None
+    input_dim: Optional[int] = None
 
 
 @dataclass
@@ -107,6 +116,15 @@ class DeviceConfig:
     position: Position = (0.0, 0.0, 0.0)
     # Number of solicits to serve before exiting. None = run forever.
     n_serves: Optional[int] = None
+    # EX-4.1 — real DNN-IDS training. When ``train_shard_path`` points at a
+    # serialized ``(X, y)`` CICIOT shard, the device builds a real
+    # ``local_train`` over it (experiments.exp4.model_task) instead of the
+    # noise stub. ``input_dim`` must match the cluster's seeded model.
+    # Left None -> the Sprint-2 stub trainer (backward compatible).
+    train_shard_path: Optional[str] = None
+    input_dim: Optional[int] = None
+    local_epochs: int = 1
+    local_batch_size: int = 64
 
 
 class TopologyValidationError(ValueError):
