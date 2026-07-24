@@ -50,7 +50,7 @@ from .topology_builder import build_exp4_topology
 log = logging.getLogger("experiments.exp4.driver")
 
 
-ARMS = ("H1",)
+ARMS = ("H0", "H1")
 
 
 class Exp4TrialTimeout(RuntimeError):
@@ -96,6 +96,10 @@ class Exp4Driver:
     # synthetic loader knobs
     synth_rows_per_device: int = 512
     synth_test_rows: int = 512
+    # H0 (traditional flat FL) — fraction of clients sampled per round.
+    # 1.0 = every client every round (the reliable-infrastructure baseline,
+    # matching Exp 1's fully-participating clients).
+    h0_client_fraction: float = 1.0
 
     def run_trial(self, cell: Cell) -> Mapping[str, Any]:
         params = cell.params
@@ -110,6 +114,18 @@ class Exp4Driver:
         rf_range_m = float(params.get("rrf", params.get("rf_range_m", self.default_rf_range_m)))
         n_missions = int(params.get("n_missions", self.default_n_missions))
 
+        if arm == "H0":
+            if not self.real_model:
+                raise ValueError(
+                    "arm H0 (traditional flat FL) is a real-model convergence "
+                    "baseline; run with real_model=True (--real-model)"
+                )
+            return self._run_h0(
+                cell, n_devices=n_devices, rf_range_m=rf_range_m,
+                n_rounds=n_missions,
+            )
+
+        # arm H1 — integrated stack over the real multi-process orchestrator.
         prep_dir: Optional[Path] = None
         try:
             if self.real_model:
@@ -153,6 +169,107 @@ class Exp4Driver:
     # ------------------------------------------------------------------ #
     # Internals
     # ------------------------------------------------------------------ #
+
+    def _run_h0(self, cell: Cell, *, n_devices, rf_range_m, n_rounds):
+        """Traditional flat FL (H0) — the paired real-model null.
+
+        Runs synchronous FedAvg **in process** (no mule, no orchestrator):
+        every round each sampled client trains the real DNN-IDS from the
+        current global θ, the server ``partial_fedavg``-aggregates their
+        weights, and the aggregated θ is scored on the shared held-out set.
+        Uses the same task (same paired seed -> same shards), same seeded
+        init θ, and the same convergence definitions as H1, so the two arms
+        are directly comparable.
+        """
+        import numpy as np
+
+        from hermes.mission.partial_fedavg import partial_fedavg
+        from hermes.types import DeviceID, GradientSubmission, MuleID
+
+        from .events_consumer import ModelEvalPoint
+        from .metrics import summarise_flat_fl
+        from .model_task import _u32, initial_theta, make_local_train_fn
+        from experiments.exp3.metrics import Exp3RoundLog
+
+        task = self._build_task(n_devices, cell.seed)
+        input_dim = task.input_dim
+        log.info(
+            "exp4 H0 flat-FL cell=%s trial=%d: source=%s input_dim=%d "
+            "n_train=%d rounds=%d synthetic=%s",
+            cell.cell_id, cell.trial_index, self.data_source, input_dim,
+            task.n_train, n_rounds, task.is_synthetic,
+        )
+
+        # Same seeded init θ as H1 so both arms start from the same model.
+        theta = initial_theta(input_dim, seed=self.theta_seed)
+        # One persistent trainer per client (model built once, reused).
+        client_fns = [
+            make_local_train_fn(
+                X, y, input_dim=input_dim, epochs=self.local_epochs,
+                batch_size=self.local_batch_size, seed=self.theta_seed,
+            )
+            for (X, y) in task.device_shards
+        ]
+
+        evals = [self._eval_point(0, theta, task, input_dim)]
+        round_logs: list = []
+        participation = {i: 0 for i in range(n_devices)}
+        rng = np.random.default_rng(_u32(cell.seed, "h0_sampling"))
+        n_sample = max(1, int(round(n_devices * self.h0_client_fraction)))
+
+        for r in range(1, n_rounds + 1):
+            if n_sample >= n_devices:
+                sampled = list(range(n_devices))
+            else:
+                sampled = sorted(
+                    int(i) for i in rng.choice(n_devices, size=n_sample, replace=False)
+                )
+            subs = []
+            for i in sampled:
+                res = client_fns[i](theta, [])
+                participation[i] += 1
+                subs.append(
+                    GradientSubmission(
+                        device_id=DeviceID(f"exp4-dev-{i:03d}"),
+                        mule_id=MuleID("h0-server"),
+                        mission_round=r,
+                        delta_theta=res.delta_theta,
+                        num_examples=res.num_examples,
+                        submitted_at=0.0,
+                    )
+                )
+            theta = partial_fedavg(MuleID("h0-server"), r, subs).weights
+            evals.append(self._eval_point(r, theta, task, input_dim))
+            round_logs.append(
+                Exp3RoundLog(
+                    round_index=r, n_updates=len(subs),
+                    n_target=n_devices, deadline_met=True,
+                )
+            )
+
+        summary = summarise_flat_fl(
+            model_evals=evals,
+            round_logs=round_logs,
+            per_client_participation=participation,
+            n_devices=n_devices,
+            rf_range_m=rf_range_m,
+            n_missions_target=n_rounds,
+            tau=self.tau,
+        )
+        return summary.to_row()
+
+    def _eval_point(self, cluster_round, theta, task, input_dim):
+        from .events_consumer import ModelEvalPoint
+        from .model_task import evaluate_theta
+
+        m = evaluate_theta(theta, task.X_test, task.y_test, input_dim=input_dim)
+        return ModelEvalPoint(
+            cluster_round=int(cluster_round),
+            accuracy=float(m["accuracy"]),
+            auc=float(m["auc"]),
+            loss=float(m["loss"]),
+            n_test=int(len(task.y_test)),
+        )
 
     def _build_task(self, n_devices: int, seed: int):
         from .model_task import load_ciciot_task_canonical, synthetic_task

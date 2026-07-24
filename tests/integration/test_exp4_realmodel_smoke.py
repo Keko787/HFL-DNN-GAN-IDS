@@ -66,3 +66,55 @@ def test_exp4_real_model_synthetic_converges():
     assert float(row["best_auc"]) > 0.65, (
         f"model did not learn the separable task: best_auc={row['best_auc']}"
     )
+
+
+@pytest.mark.slow
+def test_exp4_h0_flat_fl_synthetic_converges():
+    """H0 (traditional flat FL) — the paired null — also converges.
+
+    Runs in-process (no mule / orchestrator) and emits the same convergence
+    columns as H1, with the mule-only metrics blanked (N/A).
+    """
+    driver = Exp4Driver(
+        real_model=True,
+        data_source="synthetic",
+        default_n_devices=3,
+        local_epochs=8,
+        synth_rows_per_device=400,
+        synth_test_rows=400,
+        tau=0.9,
+        h0_client_fraction=1.0,
+    )
+    cell = Cell(
+        cell_id="h0-smoke", arm="H0", trial_index=0, seed=11,
+        params={"N": 3, "rrf": 60.0, "n_missions": 3},
+    )
+
+    row = dict(driver.run_trial(cell))
+
+    assert set(row.keys()) == set(Exp4MetricSummary.csv_columns())
+    # Baseline (round 0) + 3 aggregated rounds.
+    assert row["rounds_evaluated"] >= 4
+    assert row["rounds_closed"] == 3
+    assert row["missions_completed"] == 0        # no mule
+    # Mule-only metrics are N/A for flat FL.
+    assert row["pass2_coverage"] == ""
+    assert row["rho_contact"] == ""
+    # All 3 clients participate every round at fraction 1.0.
+    assert row["update_yield"] == pytest.approx(3.0)
+    assert row["coverage"] == pytest.approx(1.0)
+    # Convergence off the random baseline.
+    assert float(row["best_auc"]) >= float(row["init_auc"])
+    assert float(row["best_auc"]) > 0.65
+
+
+@pytest.mark.slow
+def test_exp4_h0_requires_real_model():
+    """H0 without real_model is a clear error, not a silent stub run."""
+    driver = Exp4Driver(real_model=False)
+    cell = Cell(
+        cell_id="h0-err", arm="H0", trial_index=0, seed=1,
+        params={"N": 2, "rrf": 60.0, "n_missions": 1},
+    )
+    with pytest.raises(ValueError, match="H0.*real"):
+        driver.run_trial(cell)

@@ -119,8 +119,17 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         format="%(asctime)s %(levelname)s %(name)s | %(message)s",
     )
 
+    # H0 (traditional flat FL) is a real-model convergence baseline; drop it
+    # from a stub run rather than erroring every H0 trial.
+    arms = list(args.arms)
+    if not args.real_model and "H0" in arms:
+        log.warning("H0 requires --real-model; dropping it from this stub run")
+        arms = [a for a in arms if a != "H0"]
+    if not arms:
+        parser.error("no runnable arms left (H0 needs --real-model)")
+
     grid = _build_grid(
-        arms=args.arms,
+        arms=arms,
         Ns=args.N,
         rrfs=args.rrf,
         n_missions_values=args.n_missions,

@@ -42,7 +42,7 @@ from experiments.exp3.metrics import (
     participation_entropy,
 )
 
-from .events_consumer import Exp4Observation
+from .events_consumer import Exp4Observation, ModelEvalPoint
 
 
 @dataclass(frozen=True)
@@ -61,20 +61,21 @@ class Exp4MetricSummary:
     participation_entropy: float
     mission_completion_rate: float
     completion_fairness: float
-    # Two-pass / contact-event structure.
-    pass2_coverage: float
-    rho_contact: float
+    # Two-pass / contact-event structure. None (blank) for mule-less arms
+    # such as H0 traditional FL, per the paper's A1 "N/A" convention.
+    pass2_coverage: Optional[float] = None
+    rho_contact: Optional[float] = None
     # Run-shape counters (integration health + denominators).
-    rounds_closed: int
-    missions_completed: int
-    mission_failures: int
-    pass1_contacts_mean: float
-    pass2_contacts_mean: float
-    mission_duration_s_mean: float
+    rounds_closed: int = 0
+    missions_completed: int = 0
+    mission_failures: int = 0
+    pass1_contacts_mean: float = 0.0
+    pass2_contacts_mean: float = 0.0
+    mission_duration_s_mean: float = 0.0
     # Cell echo (handy for filtering the CSV without re-parsing cell_id).
-    n_devices: int
-    rf_range_m: float
-    n_missions_target: int
+    n_devices: int = 0
+    rf_range_m: float = 0.0
+    n_missions_target: int = 0
 
     # EX-4.1 — real-model convergence on the held-out set. None/0 on the
     # EX-4.0 stub path (no ``model_eval`` events). ``init_*`` is the seeded
@@ -104,8 +105,8 @@ class Exp4MetricSummary:
             "participation_entropy": self.participation_entropy,
             "mission_completion_rate": self.mission_completion_rate,
             "completion_fairness": self.completion_fairness,
-            "pass2_coverage": self.pass2_coverage,
-            "rho_contact": self.rho_contact,
+            "pass2_coverage": _blank(self.pass2_coverage),
+            "rho_contact": _blank(self.rho_contact),
             "rounds_closed": self.rounds_closed,
             "missions_completed": self.missions_completed,
             "mission_failures": self.mission_failures,
@@ -232,35 +233,7 @@ def summarise_observation(
         m.duration_s for m in obs.missions if m.duration_s is not None
     )
 
-    # ---- EX-4.1 convergence from the held-out model_eval trace ---- #
-    evals = obs.model_evals
-    if evals:
-        init_e, final_e = evals[0], evals[-1]
-        t_at_tau = next(
-            (e.cluster_round for e in evals
-             if e.cluster_round > 0 and e.accuracy >= tau),
-            None,
-        )
-        conv = dict(
-            init_auc=init_e.auc,
-            init_accuracy=init_e.accuracy,
-            init_loss=init_e.loss,
-            final_auc=final_e.auc,
-            final_accuracy=final_e.accuracy,
-            final_loss=final_e.loss,
-            best_auc=max(e.auc for e in evals),
-            delta_auc=final_e.auc - init_e.auc,
-            rounds_evaluated=len(evals),
-            t_at_tau_round=t_at_tau,
-            tau=float(tau),
-        )
-    else:
-        conv = dict(
-            init_auc=None, init_accuracy=None, init_loss=None,
-            final_auc=None, final_accuracy=None, final_loss=None,
-            best_auc=None, delta_auc=None, rounds_evaluated=0,
-            t_at_tau_round=None, tau=None,
-        )
+    conv = _convergence_from_evals(obs.model_evals, tau)
 
     return Exp4MetricSummary(
         update_yield=yield_mean,
@@ -285,6 +258,101 @@ def summarise_observation(
         rf_range_m=float(rf_range_m),
         n_missions_target=int(n_missions_target),
         **conv,
+    )
+
+
+def summarise_flat_fl(
+    *,
+    model_evals: List[ModelEvalPoint],
+    round_logs: List[Exp3RoundLog],
+    per_client_participation: Dict[object, int],
+    n_devices: int,
+    rf_range_m: float,
+    n_missions_target: int,
+    tau: float = 0.9,
+) -> Exp4MetricSummary:
+    """Roll up a traditional flat-FL (H0) trial.
+
+    H0 has no mule, so the mule-only metrics (``pass2_coverage``,
+    ``rho_contact``) are N/A (None -> blank), matching the paper's A1
+    convention. The federation-side metrics and the convergence trace use
+    the **same** definitions as the mule arms, so H0 and H1 rows are
+    directly comparable at a paired seed.
+    """
+    yield_mean, close_by_k = aggregate_round_logs(round_logs)
+    n_target_max = max((r.n_target for r in round_logs), default=n_devices)
+    k_half = max(1, n_target_max // 2)
+    k_full = max(1, n_target_max)
+
+    visits = dict(per_client_participation)
+    cov = coverage(visits, scheduled_count=n_devices)
+    jf = jains_fairness(visits)
+    pe = participation_entropy(visits)
+    # In flat FL every sampled client contributes a completed update, so
+    # completion counts == participation counts.
+    mcr = mission_completion_rate(visits, n_devices=n_devices)
+    cf = completion_fairness(visits, n_devices=n_devices)
+
+    conv = _convergence_from_evals(model_evals, tau)
+    return Exp4MetricSummary(
+        update_yield=yield_mean,
+        round_close_rate_kmin1=close_by_k.get(1, 0.0),
+        round_close_rate_kmin2=close_by_k.get(2, 0.0),
+        round_close_rate_kminhalf=close_by_k.get(k_half, 0.0),
+        round_close_rate_kminN=close_by_k.get(k_full, 0.0),
+        coverage=cov,
+        jains_fairness=jf,
+        participation_entropy=pe,
+        mission_completion_rate=mcr,
+        completion_fairness=cf,
+        pass2_coverage=None,   # no Pass 2 in flat FL
+        rho_contact=None,      # no contact events in flat FL
+        rounds_closed=len(round_logs),
+        missions_completed=0,  # no mule missions
+        mission_failures=0,
+        pass1_contacts_mean=0.0,
+        pass2_contacts_mean=0.0,
+        mission_duration_s_mean=0.0,
+        n_devices=int(n_devices),
+        rf_range_m=float(rf_range_m),
+        n_missions_target=int(n_missions_target),
+        **conv,
+    )
+
+
+def _convergence_from_evals(model_evals: List[ModelEvalPoint], tau: float) -> Dict[str, object]:
+    """Init/final/best AUC, ΔAUC, and T@τ from a held-out eval trace.
+
+    Shared by the mule-arm (:func:`summarise_observation`) and flat-FL
+    (:func:`summarise_flat_fl`) paths so the convergence numbers mean the
+    same thing across arms. All fields are None (blank) when the trace is
+    empty (the EX-4.0 stub path).
+    """
+    if not model_evals:
+        return dict(
+            init_auc=None, init_accuracy=None, init_loss=None,
+            final_auc=None, final_accuracy=None, final_loss=None,
+            best_auc=None, delta_auc=None, rounds_evaluated=0,
+            t_at_tau_round=None, tau=None,
+        )
+    init_e, final_e = model_evals[0], model_evals[-1]
+    t_at_tau = next(
+        (e.cluster_round for e in model_evals
+         if e.cluster_round > 0 and e.accuracy >= tau),
+        None,
+    )
+    return dict(
+        init_auc=init_e.auc,
+        init_accuracy=init_e.accuracy,
+        init_loss=init_e.loss,
+        final_auc=final_e.auc,
+        final_accuracy=final_e.accuracy,
+        final_loss=final_e.loss,
+        best_auc=max(e.auc for e in model_evals),
+        delta_auc=final_e.auc - init_e.auc,
+        rounds_evaluated=len(model_evals),
+        t_at_tau_round=t_at_tau,
+        tau=float(tau),
     )
 
 
