@@ -40,6 +40,8 @@ def _build_grid(
     rrfs: Sequence[float],
     n_missions_values: Sequence[int],
     regimes: Sequence[str],
+    dead_zones: Sequence[float],
+    link_qualities: Sequence[float],
     n_trials: int,
     base_seed: int = 42,
 ) -> TrialGrid:
@@ -49,6 +51,8 @@ def _build_grid(
             "rrf": list(rrfs),
             "n_missions": list(n_missions_values),
             "regime": list(regimes),
+            "dead_zone": list(dead_zones),
+            "link_quality": list(link_qualities),
         },
         arms=list(arms),
         n_trials=n_trials,
@@ -123,13 +127,16 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser.add_argument("--synth-rows-per-device", type=int, default=512)
     parser.add_argument("--synth-test-rows", type=int, default=512)
     parser.add_argument(
-        "--jittery-dead-zone-frac", type=float, default=0.6,
-        help="H0 jittery: fraction of clients persistently unreachable from "
-             "the central server (Exp 3's A1 dead-zone). H1 gets none.",
+        "--dead-zone", nargs="+", type=float, default=[0.6],
+        help="H0 jittery dead-zone fraction — a SWEEP axis (B2 sensitivity "
+             "surface). Fraction of clients with no long-range path (physical: "
+             "terrain / range-edge). Sweep e.g. 0.0 0.2 0.4 0.6 to find where "
+             "the mule's jittery advantage holds vs flips.",
     )
     parser.add_argument(
-        "--jittery-link-quality", type=float, default=0.4,
-        help="H0 jittery: per-round success prob for a reachable client.",
+        "--link-quality", nargs="+", type=float, default=[0.4],
+        help="H0 jittery per-round success prob for a reachable client — a "
+             "SWEEP axis. Sweep e.g. 0.3 0.5 0.7.",
     )
     parser.add_argument(
         "--realism", action="store_true",
@@ -169,6 +176,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         rrfs=args.rrf,
         n_missions_values=args.n_missions,
         regimes=args.regime,
+        dead_zones=args.dead_zone,
+        link_qualities=args.link_quality,
         n_trials=args.n_trials,
         base_seed=args.base_seed,
     )
@@ -188,8 +197,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         attack_eval_ratio=float(args.attack_eval_ratio),
         synth_rows_per_device=int(args.synth_rows_per_device),
         synth_test_rows=int(args.synth_test_rows),
-        jittery_dead_zone_frac=float(args.jittery_dead_zone_frac),
-        jittery_link_quality=float(args.jittery_link_quality),
+        jittery_dead_zone_frac=float(args.dead_zone[0]),
+        jittery_link_quality=float(args.link_quality[0]),
         realism=bool(args.realism),
         jittery_backhaul_loss_pct=float(args.jittery_backhaul_loss_pct),
         h1_field_radius_m=float(args.h1_field_radius_m),

@@ -120,6 +120,41 @@ def analyze(
     return results
 
 
+def analyze_surface(
+    df: pd.DataFrame,
+    *,
+    metric: str = "final_auc",
+    regime: str = "jittery",
+    keys: Sequence[str] = ("param_dead_zone", "param_link_quality"),
+) -> List[PairedMetricResult]:
+    """Paired verdict at each (dead_zone x link_quality) point — the B2 surface.
+
+    Shows where the mule's jittery advantage holds, is a tie, or flips, so
+    the headline operating point is not a single tuned value.
+    """
+    d = df[df["param_regime"].astype(str) == regime]
+    keys = [k for k in keys if k in d.columns]
+    if not keys:
+        r = analyze_metric(d, regime, metric)
+        return [r] if r else []
+    results: List[PairedMetricResult] = []
+    for vals, grp in d.groupby(keys):
+        r = analyze_metric(grp, regime, metric)
+        if r is None:
+            continue
+        vals_t = vals if isinstance(vals, tuple) else (vals,)
+        label = ",".join(
+            f"{k.replace('param_', '')}={v}" for k, v in zip(keys, vals_t)
+        )
+        results.append(PairedMetricResult(
+            regime=f"{regime}[{label}]", metric=r.metric, n_pairs=r.n_pairs,
+            mean_h1=r.mean_h1, mean_h0=r.mean_h0, mean_diff=r.mean_diff,
+            ci_lo=r.ci_lo, ci_hi=r.ci_hi, p_value=r.p_value,
+            cliffs_delta=r.cliffs_delta, magnitude=r.magnitude, verdict=r.verdict,
+        ))
+    return results
+
+
 def format_report(results: Sequence[PairedMetricResult]) -> str:
     if not results:
         return "(no paired results — need >=2 paired seeds per regime)"
@@ -150,11 +185,23 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "--metrics", nargs="+", default=list(DEFAULT_METRICS),
         help="Higher-is-better metrics to test (H1 - H0).",
     )
+    parser.add_argument(
+        "--surface", action="store_true",
+        help="Also report the jittery verdict at each dead_zone x "
+             "link_quality point (the B2 sensitivity surface).",
+    )
+    parser.add_argument(
+        "--surface-metric", default="final_auc",
+        help="Metric for the sensitivity surface (default final_auc).",
+    )
     args = parser.parse_args(argv)
     df = load_exp4(args.csv)
     n_seeds = df["trial_index"].nunique() if "trial_index" in df.columns else 0
     print(f"loaded {len(df)} ok rows; ~{n_seeds} seeds per cell\n")
     print(format_report(analyze(df, metrics=args.metrics)))
+    if args.surface:
+        print("\n=== jittery sensitivity surface (metric=%s) ===" % args.surface_metric)
+        print(format_report(analyze_surface(df, metric=args.surface_metric)))
     return 0
 
 

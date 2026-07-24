@@ -253,8 +253,15 @@ class Exp4Driver:
         from experiments.exp3.metrics import Exp3RoundLog
 
         jittery = regime == "jittery"
-        dead_zone_frac = self.jittery_dead_zone_frac if jittery else self.clean_dead_zone_frac
-        link_quality = self.jittery_link_quality if jittery else self.clean_link_quality
+        # Dead-zone / link-quality are sweepable per cell (the sensitivity
+        # surface, B2) — a cell param overrides the driver default. Only
+        # meaningful under jittery.
+        if jittery:
+            dead_zone_frac = float(cell.params.get("dead_zone", self.jittery_dead_zone_frac))
+            link_quality = float(cell.params.get("link_quality", self.jittery_link_quality))
+        else:
+            dead_zone_frac = self.clean_dead_zone_frac
+            link_quality = self.clean_link_quality
         # Shared per-device reliability — the SAME draw H1 uses, so the clean
         # comparison is fair (H0 is not idealised to perfect participation).
         # H0 is all long-range: a reachable client contributes each round with
