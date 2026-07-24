@@ -195,6 +195,15 @@ class MuleService:
                     "mule %s: mission %d complete (queue_size=%d)",
                     self.cfg.mule_id, result.mission_round, queue_size,
                 )
+                # EX-4.2 — flag a recoverable empty round so it isn't mistaken
+                # for a productive mission. It is still emitted as a
+                # (zero-update, non-closing) mission_completed below so it
+                # counts as a round in the metrics.
+                if getattr(result, "empty", False):
+                    self.events.emit(
+                        "mission_empty", mission_round=result.mission_round,
+                    )
+                    self.metrics.increment("missions_empty")
                 # EX-4.0 instrumentation — surface the Pass-1 aggregation
                 # ledger so an integrated-experiment consumer can compute
                 # update-yield / round-close-rate from the real event

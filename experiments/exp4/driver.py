@@ -100,24 +100,36 @@ class Exp4Driver:
     # 1.0 = every client every round (the reliable-infrastructure baseline,
     # matching Exp 1's fully-participating clients).
     h0_client_fraction: float = 1.0
-    # ---- EX-4.2 jittery-regime knobs (asymmetric, per the paper) ---- #
-    # H0's long-range backhaul degrades under jittery: a fraction of clients
-    # are persistently unreachable from the central server (dead-zone), and
-    # the reachable ones succeed each round only with prob link_quality.
-    # H1's mule reaches devices over reliable short-range contact, so it gets
-    # NO dead-zone (matching Exp 3's model). Defaults mirror Exp 3.
+    # ---- EX-4.2 jittery-regime knobs ---- #
+    # H0's long-range backhaul degrades under jittery: a dead-zone fraction of
+    # clients are persistently unreachable from the central server, and the
+    # reachable ones contribute each round with prob reliability_i x
+    # link_quality. H1's mule reaches devices over short-range contact
+    # (jitter-immune), so it gets NO dead-zone.
+    #
+    # PROVENANCE + CAVEAT: this dead-zone / link_quality mechanism is the
+    # flat-FL (A1) model from experiments/exp3/arm_a1.py + the exp3 driver —
+    # NOT from the Exp 3 simulator (sim_env), which has no flat-FL arm. It was
+    # tuned there for A1's 20-round horizon; Exp 4 runs few rounds, so the
+    # dead-zone rate must be justified physically (fraction of devices with no
+    # long-range path — terrain / range-edge) and reported as a SENSITIVITY
+    # axis, not a single tuned point. The 0.6 default is one point on the sweep.
     clean_dead_zone_frac: float = 0.0
     jittery_dead_zone_frac: float = 0.6
     clean_link_quality: float = 1.0
     jittery_link_quality: float = 0.4
-    # H1 (mule) realism, opt-in. When on, the integrated stack applies Exp 3's
-    # own mule-arm impairment: per-device short-range contact reliability
-    # (U(0.15,1.0) x rf_factor) in every regime, plus — under jittery — a
-    # recoverable long-range backhaul upload loss. Devices are spread across
-    # the field so S3a forms multiple contacts. Off -> the ideal EX-4.1 links.
+    # H1 (mule) realism, opt-in. Applies the per-device short-range contact
+    # reliability (reliability_i x rf_factor, the SAME reliability draw H0
+    # uses) in every regime, plus — under jittery — a long-range backhaul
+    # upload loss that marks the round as not-closed (the recoverable, one-hop
+    # cost of routing through the mule). SCOPE: this models the NETWORK +
+    # computation layers only; it does NOT model mule flight-budget / deadline
+    # pressure (fewer contacts under a tight budget) — that is the scheduling
+    # experiment's (Exp 3) domain and is deferred here. Devices are spread so
+    # S3a forms multiple contacts. Off -> the ideal EX-4.1 links.
     realism: bool = False
     h1_field_radius_m: float = 100.0
-    h1_world_radius_m: float = 150.0
+    h1_world_radius_m: float = 100.0
     clean_backhaul_loss_pct: float = 0.0
     jittery_backhaul_loss_pct: float = 2.0
 
@@ -153,8 +165,10 @@ class Exp4Driver:
         # devices).
         realism_kwargs: dict = {}
         if self.realism:
+            from .model_task import device_reliabilities
             realism_kwargs = dict(
                 device_reliability=True,
+                reliabilities=device_reliabilities(cell.seed, n_devices),
                 world_radius_m=self.h1_world_radius_m,
                 field_radius_m=self.h1_field_radius_m,
                 backhaul_loss_pct=(
@@ -233,12 +247,20 @@ class Exp4Driver:
         from hermes.types import DeviceID, GradientSubmission, MuleID
 
         from .metrics import summarise_flat_fl
-        from .model_task import _u32, initial_theta, make_local_train_fn
+        from .model_task import (
+            _u32, device_reliabilities, initial_theta, make_local_train_fn,
+        )
         from experiments.exp3.metrics import Exp3RoundLog
 
         jittery = regime == "jittery"
         dead_zone_frac = self.jittery_dead_zone_frac if jittery else self.clean_dead_zone_frac
         link_quality = self.jittery_link_quality if jittery else self.clean_link_quality
+        # Shared per-device reliability — the SAME draw H1 uses, so the clean
+        # comparison is fair (H0 is not idealised to perfect participation).
+        # H0 is all long-range: a reachable client contributes each round with
+        # prob reliability_i x link_quality (link_quality = 1.0 clean, <1
+        # jittery). Dead-zoned clients never contribute (permanent).
+        rels = device_reliabilities(cell.seed, n_devices)
 
         task = self._build_task(n_devices, cell.seed)
         input_dim = task.input_dim
@@ -289,8 +311,12 @@ class Exp4Driver:
                 )
             subs = []
             for i in sampled:
-                # Intermittent long-range link failure for reachable clients.
-                if link_quality < 1.0 and float(link_rng.random()) >= link_quality:
+                # Long-range participation: device availability x link quality.
+                # Applies in clean too (link_quality=1.0 -> prob = reliability),
+                # so H0 pays the same heterogeneity tax as H1 — no idealised
+                # clean win.
+                p_i = rels[i] * link_quality
+                if float(link_rng.random()) >= p_i:
                     continue
                 res = client_fns[i](theta, [])
                 participation[i] += 1

@@ -515,6 +515,24 @@ def _u32(base_seed: int, *parts) -> int:
     return int.from_bytes(hashlib.sha256(payload.encode()).digest()[:4], "big")
 
 
+def device_reliabilities(
+    seed: int, n_devices: int, *, low: float = 0.15, high: float = 1.0,
+) -> List[float]:
+    """Per-device intrinsic availability ~ Uniform(low, high), shared by arms.
+
+    A device's reliability (how often it is up and has a prepared Δθ) is a
+    property of the *device*, not of which arm collects from it — so H0 and
+    H1 must see the **same** draw at a given paired seed. Centralising it
+    here (both ``_run_h0`` and the H1 topology call it) is what makes the
+    clean-regime comparison fair: H0 no longer gets idealised full
+    participation while H1 pays a heterogeneity tax. Deterministic in
+    ``seed``. Mirrors Exp 3's ``reliability = rng.uniform(0.15, 1.0)``.
+    """
+    import random as _random
+    rng = _random.Random(_u32(seed, "device_reliability", n_devices))
+    return [rng.uniform(low, high) for _ in range(n_devices)]
+
+
 # --------------------------------------------------------------------------- #
 # (De)serialization for the driver -> subprocess handoff (numpy .npz only)
 # --------------------------------------------------------------------------- #

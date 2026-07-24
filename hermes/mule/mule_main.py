@@ -105,6 +105,11 @@ class MissionRunResult:
     delivery_report: Optional[MissionDeliveryReport] = None
     pass_1_channel_choices: List[int] = field(default_factory=list)
     pass_2_channel_choices: List[int] = field(default_factory=list)
+    # EX-4.2 — True when Pass 1 collected zero updates (a recoverable empty
+    # round: no dock, no Pass 2, θ carried forward). Still a counted round
+    # (0 updates, does not close), but flagged so it isn't mistaken for a
+    # productive mission.
+    empty: bool = False
 
 
 class MuleSupervisor:
@@ -401,6 +406,7 @@ class MuleSupervisor:
                 mission_round=mission_round,
                 pass_1_queue=list(pass_1_queue),
                 pass_1_channel_choices=pass_1_channel_choices,
+                empty=True,
             )
 
         # ===================== Inter-pass dock =====================

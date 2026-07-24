@@ -185,15 +185,19 @@ def summarise_observation(
         else:
             n_up = len(m.pass_1_clean_devices)
         n_target = m.pass_1_scheduled if m.pass_1_scheduled else n_devices
+        # EX-4.2 honesty fix: a round "closes" only if it actually produced
+        # a cross-mule aggregate at the cluster — i.e. it had >=1 update AND
+        # its mule->BS backhaul upload was not dropped. Empty rounds (no
+        # uplink succeeded) and backhaul-dropped rounds do NOT close, so H1's
+        # jittery penalty is visible in round_close_rate (previously this was
+        # hard-coded True, masking H1 non-closure).
+        closed = int(n_up) > 0 and m.mission_round not in obs.backhaul_lost_rounds
         rounds.append(
             Exp3RoundLog(
                 round_index=i,
                 n_updates=int(n_up),
                 n_target=int(n_target),
-                # No deadline model in the loopback stack yet — a
-                # completed mission is a closed round (EX-4.2 replaces
-                # this with the shaped-link deadline).
-                deadline_met=True,
+                deadline_met=closed,
             )
         )
     yield_mean, close_by_k = aggregate_round_logs(rounds)

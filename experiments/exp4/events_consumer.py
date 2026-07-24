@@ -24,7 +24,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Dict, List, Optional, Sequence, Set, Tuple
 
 
 # --------------------------------------------------------------------------- #
@@ -77,6 +77,12 @@ class Exp4Observation:
     up_bundles_ingested: int
     missions: List[MissionRecord] = field(default_factory=list)
     mission_failures: int = 0
+    missions_empty: int = 0
+    # EX-4.2 — mission_rounds whose mule->BS backhaul upload was dropped
+    # (round did not close; recoverable). Used to mark those rounds as
+    # not-closed in round_close_rate, so H1's jittery penalty is visible.
+    backhaul_lost_rounds: Set[int] = field(default_factory=set)
+    backhaul_losses: int = 0
     # EX-4.1 real-model convergence trace (empty on the stub path).
     model_evals: List[ModelEvalPoint] = field(default_factory=list)
     # Per-device Pass-1+Pass-2 serve counts, padded to every device that
@@ -121,6 +127,16 @@ def observation_from_rows(
     up_bundles_ingested = len(_events(cluster_rows, "up_bundle_ingested"))
     cluster_ready = bool(_events(cluster_rows, "cluster_ready"))
 
+    backhaul_lost_rounds: Set[int] = set()
+    for r in _events(cluster_rows, "backhaul_upload_lost"):
+        mr = r.get("mission_round")
+        if mr is not None:
+            try:
+                backhaul_lost_rounds.add(int(mr))
+            except (TypeError, ValueError):
+                pass
+    backhaul_losses = len(_events(cluster_rows, "backhaul_upload_lost"))
+
     model_evals: List[ModelEvalPoint] = []
     for r in _events(cluster_rows, "model_eval"):
         model_evals.append(
@@ -155,6 +171,7 @@ def observation_from_rows(
             )
         )
     mission_failures = len(_events(mule_rows, "mission_failed"))
+    missions_empty = len(_events(mule_rows, "mission_empty"))
     mule_ready = bool(_events(mule_rows, "mule_ready"))
     dock_bootstrapped = bool(_events(mule_rows, "dock_bootstrapped"))
 
@@ -182,6 +199,9 @@ def observation_from_rows(
         up_bundles_ingested=up_bundles_ingested,
         missions=missions,
         mission_failures=mission_failures,
+        missions_empty=missions_empty,
+        backhaul_lost_rounds=backhaul_lost_rounds,
+        backhaul_losses=backhaul_losses,
         model_evals=model_evals,
         per_device_serves=per_device_serves,
         device_serve_failures=device_serve_failures,

@@ -48,7 +48,8 @@ def build_exp4_topology(
     eval_test_path: Optional[str] = None,
     # EX-4.2 realism wiring (all optional; omitted -> ideal links).
     device_reliability: bool = False,
-    world_radius_m: float = 150.0,
+    reliabilities: Optional[List[float]] = None,
+    world_radius_m: float = 100.0,
     field_radius_m: Optional[float] = None,
     backhaul_loss_pct: float = 0.0,
     backhaul_rng_seed: Optional[int] = None,
@@ -78,8 +79,12 @@ def build_exp4_topology(
         # field_radius_m (EX-4.2) spreads devices across the field so S3a
         # forms multiple contacts; otherwise the tight EX-4.0/4.1 cluster.
         spread_m = field_radius_m if field_radius_m is not None else min(rf_range_m * 0.4, 25.0)
-    # Separate RNG so contact reliability doesn't correlate with placement.
-    rel_rng = random.Random(seed ^ 0x5555AAAA)
+    # Shared per-device reliability draw (same values H0 uses) — set by the
+    # driver for a paired comparison; fall back to the canonical draw so the
+    # builder is usable standalone.
+    if device_reliability and reliabilities is None:
+        from .model_task import device_reliabilities as _dr
+        reliabilities = _dr(seed, n_devices)
 
     devices: List[DeviceConfig] = []
     for i in range(n_devices):
@@ -87,20 +92,19 @@ def build_exp4_topology(
         y = rng.uniform(-spread_m, spread_m)
         contact_reliability: Optional[float] = None
         if device_reliability:
-            # Exp 3's model: per-device reliability ~ U(0.15, 1.0) times a
-            # distance falloff rf_factor = max(0.4, 1 - d/(3*world_radius)),
-            # where d is the device's distance from the field centre (a
-            # proxy for its distance to the mule's contact stop). Applies in
-            # clean too, so H1 coverage is realistically < 1.0.
-            reliability = rel_rng.uniform(0.15, 1.0)
+            # Short-range device<->mule completion: p = reliability x rf_factor
+            # (Exp 3's model). ``reliability`` is the shared per-device draw;
+            # rf_factor = max(0.4, 1 - d_eff/(3*world_radius)) with d_eff the
+            # device's distance to the mule's contact stop, bounded by rf_range
+            # (the mule flies to within rf_range). This is REGIME-INDEPENDENT:
+            # jitter degrades long-range links, not this short hop — the whole
+            # point of routing collection through the mule. The jittery cost
+            # falls only on the mule's one long-range backhaul upload.
+            rel_i = float(reliabilities[i]) if reliabilities else 0.575
             d = (float(x) ** 2 + float(y) ** 2) ** 0.5
-            # The mule flies to *within* rf_range of the contact, so the
-            # effective device<->mule distance is bounded by rf_range — Exp 3
-            # uses device-to-contact-stop distance, not device-to-origin.
-            # Without this cap, spread devices are over-penalised.
             d_eff = min(d, rf_range_m)
             rf_factor = max(0.4, 1.0 - d_eff / (3.0 * world_radius_m))
-            contact_reliability = max(0.0, min(1.0, reliability * rf_factor))
+            contact_reliability = max(0.0, min(1.0, rel_i * rf_factor))
         devices.append(
             DeviceConfig(
                 device_id=f"exp4-dev-{i:03d}",

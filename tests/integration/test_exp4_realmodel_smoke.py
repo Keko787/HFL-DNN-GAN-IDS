@@ -101,8 +101,11 @@ def test_exp4_h0_flat_fl_synthetic_converges():
     assert row["pass2_coverage"] == ""
     assert row["rho_contact"] == ""
     # All 3 clients participate every round at fraction 1.0.
-    assert row["update_yield"] == pytest.approx(3.0)
-    assert row["coverage"] == pytest.approx(1.0)
+    # H0 now pays the same per-device reliability tax as H1 (fair clean
+    # comparison), so per-round yield is below the client count and coverage
+    # need not be a trivial 1.0.
+    assert 0.0 < row["update_yield"] <= 3.0
+    assert 0.0 < row["coverage"] <= 1.0
     # Convergence off the random baseline.
     assert float(row["best_auc"]) >= float(row["init_auc"])
     assert float(row["best_auc"]) > 0.65
@@ -138,13 +141,15 @@ def test_exp4_h0_jittery_collapses_participation():
     )))
 
     # Clean: every client every round.
-    assert clean["coverage"] == pytest.approx(1.0)
-    assert clean["update_yield"] == pytest.approx(5.0)
+    # Clean H0 now pays the reliability tax too (fair), so it need not be
+    # perfect — but it is far healthier than jittery.
+    assert 0.0 < clean["update_yield"] <= 5.0
+    assert clean["coverage"] > 0.4
 
-    # Jittery collapses participation.
+    # Jittery collapses participation relative to clean.
     assert jittery["coverage"] < clean["coverage"]
     assert jittery["update_yield"] < clean["update_yield"]
-    # At most the reachable 2/5 can ever be covered.
+    # At most the reachable 2/5 can ever be covered (dead-zone 0.6).
     assert float(jittery["coverage"]) <= 0.4 + 1e-9
     # Round-close rate does not improve under jitter.
     assert float(jittery["round_close_rate_kmin1"]) <= float(clean["round_close_rate_kmin1"])
