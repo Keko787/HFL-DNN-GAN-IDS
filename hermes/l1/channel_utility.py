@@ -54,6 +54,13 @@ class AdaptiveChannelController:
     """
 
     channel_use_cost: Tuple[float, ...] = (0.0, 0.0, 0.0)
+    # switch_cost (lambda) is in rate-tier units, NOT a physical retune cost. It
+    # only damps oscillation in the DECISION; the realised backhaul loss does
+    # not charge for switching (see EX-4 methodology §7 caveat 5). The 0.5
+    # default sits on a plateau where "adaptive never worse under jittery" holds
+    # for switch_cost in [0, ~1]; at switch_cost -> 0 the controller degenerates
+    # to a per-instant argmax-SNR oracle, so that superlative is near-tautological
+    # (§7 caveat 3). Justify against a real retune-time model before publishing.
     switch_cost: float = 0.5
 
     def utility(self, effective_snr_db: float, band: int, current_band: int) -> float:

@@ -169,32 +169,115 @@ jittery remediation:
 * **Clean ⇒ ~no benefit, by construction.** Under clean links all bands sit
   high and stable, so fixed ≈ adaptive and L1's effect is correctly negligible.
 
-**Result (mean per-mission backhaul-loss reduction, fixed − adaptive, 30
-seeds, `n_missions=6`, 3 bands):**
+### 7.1 What a 20-skeptic adversarial audit confirmed is sound
+
+The H3 model was put through the same adversarial gauntlet as the jittery
+H0/H1 work: five independent skeptics, each attacking a distinct validity
+dimension (rigging / researcher-DOF, fair-baseline, loss-map, wiring-integrity,
+robustness), every finding then independently verified by a second agent
+tasked to *refute* it. **No rigging was found** (13 findings confirmed as
+framing caveats, 0 blocking/major after verification, 2 refuted). What held up:
+
+* **The direction is structural, not tuned.** Jittery reduction stays positive
+  and clean stays ~0 across `n_bands` 2–5, `n_missions` 2–12, noise 0–5, base
+  2–12, amp 1–10, and the full loss-map grid. The **median** jittery reduction
+  over 400 random reasonable parameterizations is **+0.129 ≈ the reported
+  +0.138** — the reported point is the *typical* genuinely-jittery outcome, not
+  a cherry-picked corner.
+* **The fixed baseline is fair — if anything generous.** Replacing
+  `best_average_band` with the *strongest* fair fixed strategy (the
+  loss-optimal fixed band, `argmin` mean loss — the exact objective, not mean
+  SNR) still loses **+0.1344** (closes only 2.5 % of the gap, 30/30);
+  median-SNR and worst-case-SNR baselines rank identically. No fixed band
+  competes because a high-amplitude crossover trace forces every single band
+  into deep loss troughs.
+* **The wiring is correct.** `adaptive=(arm=="H3")` (H1/H2 hold the fixed band,
+  only H3 adapts); the schedule reaches `cluster._backhaul_dropped` per
+  mission; the shared `backhaul_rng_seed` makes H1/H2/H3 face the identical
+  Bernoulli draws; `use_rl_selector` is True for **both** H2 and H3 (the
+  selector is not a confound between them); `rf_prior` is a *live* selector
+  feature (H2 ≈ 8 dB, H3 ≈ 12 dB).
+* **It is robust at scale.** Jittery "adaptive never worse" survives
+  **1000/1000** seeds and every horizon `n_missions` 2–20; the sign test gives
+  **p = 1.9e-9**, three orders of magnitude below the p = 0.031 Wilcoxon floor
+  that constrained the H0/H1 n = 6 work.
+
+### 7.2 Six reviewer-grade caveats to state honestly
+
+None of these falsify the result; each bounds how it may be framed. They are
+stated here so the paper pre-empts the hostile reviewer rather than being
+caught by them.
+
+1. **This is a channel-model property, not an orchestrator measurement.** The
+   table below is `mean(backhaul_plan(...).loss_schedule)` computed in-process
+   — the deterministic *input* the cluster then consumes, and the same quantity
+   the unit tests assert. It is **not** measured end-to-end; the integrated
+   H2-vs-H3 orchestrator sweep is pending (running as of this writing). Report
+   the table as a controller/channel property, not an FL result.
+2. **The magnitude is calibration-dependent; the sign is the robust finding.**
+   +0.14 is one point in a range spanning **~0.02–0.29** across defensible
+   SNR/loss constants (`base`, `amp`, `mid`, `scale`). Quote it as "≈0.13–0.14
+   *at this calibration*" and lead with the direction + clean/jittery contrast,
+   not the point value.
+3. **"Never worse" is near-guaranteed by construction at the chosen switch
+   penalty.** The controller maximises `rate_tier(SNR)` while loss *decreases*
+   in the same SNR on the same trace, so at `switch_cost → 0` adaptive is the
+   per-instant SNR oracle and never-worse is a mathematical identity. It holds
+   on a plateau `switch_cost ∈ [0, 1]` (30/30), softening to 29/30 (1.5), 26/30
+   (2.0). `switch_cost = 0.5` is the dataclass default with no physical
+   derivation — justify it (or report never-worse as a function of it) and
+   present "never worse" as *near-tautological*, not a hard empirical
+   separation.
+4. **Clean is negligible, not an exact null.** At 1000 seeds it is a small,
+   directionally-positive, *significant* win (~+0.0003, sign-test p = 0.001,
+   897/1000 no-worse ≈ 90 %, worst −0.0008) — ~460× smaller than jittery. It is
+   partly a logistic flat-top artifact: `mid = 3` maps healthy ~13 dB SNR to
+   ~0 loss, hiding a real ~0.1 dB adaptation gap. State "a ~35× smaller
+   adaptation gap, further compressed by the healthy-channel loss map," **not**
+   "nothing to track."
+5. **The metric excludes switching *outcome* loss.** `switch_cost` is charged
+   only in the controller's *decision* utility; the realised `loss_schedule`
+   never charges for actually switching bands (~2.8 switches / 6-mission
+   trial). So +0.14 is an **upper bound assuming lossless switching**. It
+   survives plausible per-switch upload penalties (0.05 → +0.12, 0.10 → +0.09,
+   both never-worse) and flips only at an implausible ~0.30. The scope note now
+   defers switching *energy* **and** switching-induced upload loss.
+6. **Reserve "delivers value" for the integrated sweep.** The channel-model
+   result shows the controller correctly *tracks* the best band under an
+   imposed crossover; because SNR → loss is monotone on a shared trace, the
+   *sign* is near-baked-in. The pending H2-vs-H3 orchestrator sweep
+   (SNR → loss → round-close, non-monotone) is where L1 *value* is genuinely
+   tested — and there any end-to-end delta must control for the `rf_prior`
+   selection confound (hold `rf_prior` fixed across arms, or decompose it).
+
+**Result (channel-model loss reduction, fixed − adaptive; 30 seeds,
+`n_missions=6`, 3 bands — a property of the RF channel + controller, *not* an
+orchestrator measurement):**
 
 | regime | mean reduction | worst seed | best seed | adaptive ≤ fixed |
 |---|---|---|---|---|
-| clean | **+0.0003** | −0.0005 | +0.0020 | 29/30 |
-| jittery | **+0.1379** | +0.0540 | +0.2357 | **30/30** |
+| clean | **+0.0003** | −0.0005 | +0.0020 | 29/30 (≈90 % at 1000 seeds) |
+| jittery | **+0.1379** | +0.0540 | +0.2357 | **30/30** (1000/1000 at 1000 seeds) |
 
-Clean is a wash (the −0.0005 worst case is switch-cost noise, not a real
-regression); jittery is a consistent ~14-percentage-point loss reduction that
-never flips sign. Codified deterministically in
-`tests/unit/test_exp4_channel.py` (31 fast tests) and proven to run over the
-real subprocess orchestrator in
-`test_exp4_realmodel_smoke.py::test_exp4_h3_l1_channel_runs_end_to_end`.
+Codified deterministically in `tests/unit/test_exp4_channel.py` (31 fast
+tests). The arm is proven to *run* over the real subprocess orchestrator in
+`test_exp4_realmodel_smoke.py::test_exp4_h3_l1_channel_runs_end_to_end` — that
+smoke test pins the wiring, **not** the +0.14 (see caveat 1).
 
-**Defensible framing:** *"Real-time L1 channel adaptation earns essentially
-nothing on a clean backhaul (as it should — there is nothing to track) and
-cuts mule→BS backhaul loss by ~14 points under a jittery, band-crossing
-channel, consistently across seeds."* This is deliberately modest and matches
-the rebuttal's own implication that L1's marginal effect is real but small —
-it is a *robustness* mechanism, not a headline accuracy driver.
+**Defensible framing (audit-hardened):** *"Under a healthy backhaul, real-time
+L1 channel adaptation is a wash (≈+0.0003, ~460× below the jittery effect);
+under a jittery band-crossing channel it tracks the best band and cuts
+*modelled* backhaul loss by ≈0.13–0.14 at this calibration, never worse across
+1000 seeds. The sign is near-guaranteed by construction; the magnitude is
+calibration-dependent and excludes switching overhead; the integrated
+end-to-end effect is pending."* L1 is a **robustness mechanism, not an accuracy
+driver**.
 
 **Scope note:** the channel model runs in-process in the driver and produces a
-per-mission loss schedule the cluster applies; it does **not** yet unify
+per-mission loss schedule the cluster applies. It does **not** yet unify
 cross-layer *energy* accounting (L1 switching energy + L2 flight energy + L3
-compute), which remains a separate follow-up.
+compute), and its loss metric does **not** charge switching-induced upload loss
+(caveat 5) — both remain follow-ups.
 
 ## 8. Remediation status vs the adversarial review
 
