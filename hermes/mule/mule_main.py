@@ -384,11 +384,24 @@ class MuleSupervisor:
         try:
             agg, report, contacts = self.mission.close_round()
         except MissionSessionError as e:
-            log.error(
-                "mule=%s round=%d Pass 1 close_round failed: %s",
+            # EX-4.2: no device uplink succeeded this Pass 1 (e.g. under lossy
+            # short-range links). This is a recoverable outcome, not a fatal
+            # error: per the design principle that FL never stalls on absent
+            # devices, we record a zero-update round, skip the inter-pass dock
+            # and Pass 2 (nothing to aggregate or deliver), restage the same θ,
+            # and let the sortie continue to the next mission.
+            log.warning(
+                "mule=%s round=%d Pass 1 collected no updates; recording an "
+                "empty round and continuing: %s",
                 self.mule_id, mission_round, e,
             )
-            raise
+            self._next_theta = theta_pass_1
+            self._next_synth = synth_pass_1
+            return MissionRunResult(
+                mission_round=mission_round,
+                pass_1_queue=list(pass_1_queue),
+                pass_1_channel_choices=pass_1_channel_choices,
+            )
 
         # ===================== Inter-pass dock =====================
         # H3 — ride the *previous* mission's Pass-2 delivery report up

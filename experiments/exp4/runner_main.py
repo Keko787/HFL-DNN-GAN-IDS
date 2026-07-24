@@ -131,6 +131,22 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "--jittery-link-quality", type=float, default=0.4,
         help="H0 jittery: per-round success prob for a reachable client.",
     )
+    parser.add_argument(
+        "--realism", action="store_true",
+        help="Enable H1 (mule) realism: Exp 3's per-device short-range "
+             "contact reliability (U(0.15,1.0) x rf_factor) in every regime, "
+             "plus a recoverable long-range backhaul loss under jittery, with "
+             "devices spread so S3a forms multiple contacts. Without this, H1 "
+             "runs over ideal links (not review-grade for the jittery claim).",
+    )
+    parser.add_argument(
+        "--jittery-backhaul-loss-pct", type=float, default=2.0,
+        help="H1 jittery: mule->BS backhaul upload loss (%%). Recoverable.",
+    )
+    parser.add_argument(
+        "--h1-field-radius-m", type=float, default=100.0,
+        help="H1 realism: device scatter radius (larger -> more contacts).",
+    )
     args = parser.parse_args(argv)
 
     logging.basicConfig(
@@ -174,6 +190,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         synth_test_rows=int(args.synth_test_rows),
         jittery_dead_zone_frac=float(args.jittery_dead_zone_frac),
         jittery_link_quality=float(args.jittery_link_quality),
+        realism=bool(args.realism),
+        jittery_backhaul_loss_pct=float(args.jittery_backhaul_loss_pct),
+        h1_field_radius_m=float(args.h1_field_radius_m),
     )
     if args.real_model:
         log.info(

@@ -115,6 +115,8 @@ class ClientMission:
         fl_threshold: float = 0.0,
         solicit_timeout_s: float = 30.0,
         disc_push_timeout_s: float = 30.0,
+        contact_reliability: Optional[float] = None,
+        contact_rng_seed: Optional[int] = None,
     ) -> None:
         self.device_id = device_id
         self.rf = rf
@@ -125,6 +127,12 @@ class ClientMission:
         self.fl_threshold = fl_threshold
         self.solicit_timeout_s = solicit_timeout_s
         self.disc_push_timeout_s = disc_push_timeout_s
+        # EX-4.2 — short-range contact reliability (device<->mule uplink).
+        # None => every collect completes (the default). Otherwise a
+        # per-collect Bernoulli models Exp 3's ``reliability x rf_factor``
+        # completion, so some contacts fail even under clean links.
+        self._contact_reliability = contact_reliability
+        self._contact_rng = np.random.default_rng(contact_rng_seed)
 
         self._lock = threading.RLock()
         self._state: FLState = FLState.UNAVAILABLE
@@ -335,6 +343,23 @@ class ClientMission:
 
     def _handle_collect_push(self, push: DiscPush) -> MissionOutcome:
         """Pass-1 path — ship the prepared Δθ (or fall back to inline training)."""
+        # EX-4.2 — short-range contact reliability. With prob
+        # (1 - contact_reliability) this device's Δθ does not reach the mule
+        # this contact (a failed short-range uplink, modelling Exp 3's
+        # ``reliability x rf_factor``). The device still received θ, so it
+        # adopts the basis and retrains for the next mission; the mule sees a
+        # non-CLEAN outcome and this device does not count toward the round.
+        if (
+            self._contact_reliability is not None
+            and float(self._contact_rng.random()) >= self._contact_reliability
+        ):
+            self._set_theta_basis(push.theta_disc, push.synth_batch)
+            self._set_last_outcome(MissionOutcome.TIMEOUT)
+            log.info(
+                "device=%s: Pass-1 contact uplink dropped (reliability=%.3f)",
+                self.device_id, self._contact_reliability,
+            )
+            return MissionOutcome.TIMEOUT
         # H2 — atomic take-and-clear: read AND null out the prepared
         # slot under a single lock acquisition so a concurrent
         # train_offline() call can't lose its result between read and

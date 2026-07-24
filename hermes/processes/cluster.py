@@ -130,6 +130,9 @@ class ClusterService:
         self._eval_X = None
         self._eval_y = None
         self._eval_input_dim = getattr(cfg, "input_dim", None)
+        # EX-4.2 — long-range backhaul (mule->BS) upload loss.
+        self._backhaul_loss_pct = float(getattr(cfg, "backhaul_loss_pct", 0.0) or 0.0)
+        self._backhaul_rng = np.random.default_rng(getattr(cfg, "backhaul_rng_seed", None))
         if getattr(cfg, "eval_test_path", None) and self._eval_input_dim:
             from experiments.exp4.model_task import load_xy
             self._eval_X, self._eval_y = load_xy(cfg.eval_test_path)
@@ -305,6 +308,24 @@ class ClusterService:
             # last iteration, regardless of whether an UP arrived.
             self._dispatch_to_new_mules(bootstrapped)
 
+            if up is not None and self._backhaul_dropped():
+                # EX-4.2: model long-range mule->BS backhaul upload loss.
+                # Drop this mule's aggregate (the round does not close) but
+                # still send DOWN with the current θ so the mule can finish
+                # its two-pass mission — the update is carried, not lost
+                # (reconciled at a later dock, unlike H0's permanent loss).
+                self.events.emit(
+                    "backhaul_upload_lost",
+                    mule_id=str(up.mule_id),
+                    mission_round=getattr(up, "mission_round", None),
+                )
+                self.metrics.increment("backhaul_uploads_lost")
+                try:
+                    self.dock.send_down(self.cluster.dispatch_down_bundle(up.mule_id))
+                except Exception:
+                    log.exception("post-loss DOWN failed for %s", up.mule_id)
+                up = None  # consumed as lost; skip the ingest path below
+
             if up is not None:
                 try:
                     self.cluster.ingest_up_bundle(up)
@@ -407,6 +428,12 @@ class ClusterService:
                 refinement.refinement_round,
             )
             self.metrics.increment("tier3_refinement_fold_failures")
+
+    def _backhaul_dropped(self) -> bool:
+        """EX-4.2 — Bernoulli draw for a lost mule->BS backhaul upload."""
+        if self._backhaul_loss_pct <= 0.0:
+            return False
+        return float(self._backhaul_rng.random()) < (self._backhaul_loss_pct / 100.0)
 
     def _emit_model_evaluation(self, cluster_round: int) -> None:
         """EX-4.1 — score the current global θ on the held-out test set.

@@ -151,6 +151,52 @@ def test_exp4_h0_jittery_collapses_participation():
 
 
 @pytest.mark.slow
+def test_exp4_h1_realism_is_imperfect_and_does_not_collapse():
+    """EX-4.2 — with realism on, H1 is not a perfect line.
+
+    Per-device short-range contact reliability (U(0.15,1.0) x rf_factor)
+    means some contacts fail even under clean links, so H1's per-round
+    update-yield is strictly below N and clean coverage is not trivially
+    1.0. Under jittery the recoverable backhaul loss adds a small penalty,
+    but H1 does NOT collapse (the mule still physically reaches devices) —
+    the authentic contrast with H0's dead-zone collapse.
+    """
+    driver = Exp4Driver(
+        real_model=True,
+        data_source="synthetic",
+        realism=True,
+        default_n_devices=6,
+        local_epochs=2,
+        synth_rows_per_device=160,
+        synth_test_rows=240,
+        h1_field_radius_m=90.0,
+        jittery_backhaul_loss_pct=2.0,
+        trial_budget_s=300.0,
+        startup_timeout_s=60.0,
+    )
+    common = dict(arm="H1", trial_index=0, seed=5)
+    clean = dict(driver.run_trial(Cell(
+        cell_id="rl", params={"N": 6, "rrf": 60.0, "n_missions": 4, "regime": "clean"},
+        **common,
+    )))
+    jittery = dict(driver.run_trial(Cell(
+        cell_id="rl", params={"N": 6, "rrf": 60.0, "n_missions": 4, "regime": "jittery"},
+        **common,
+    )))
+
+    # The stack still ran end to end.
+    assert clean["missions_completed"] >= 1
+    assert clean["rounds_closed"] >= 1
+    # Realism fired: contacts fail, so per-round yield is strictly below N
+    # (without realism it is exactly N). This is the anti-rig check.
+    assert 0.0 < float(clean["update_yield"]) < float(clean["n_devices"])
+    # H1 does not collapse under jittery — it still reaches most devices,
+    # far above H0's jittery dead-zone floor.
+    assert float(jittery["coverage"]) > 0.4
+    assert float(jittery["update_yield"]) > 0.0
+
+
+@pytest.mark.slow
 def test_exp4_h0_requires_real_model():
     """H0 without real_model is a clear error, not a silent stub run."""
     driver = Exp4Driver(real_model=False)

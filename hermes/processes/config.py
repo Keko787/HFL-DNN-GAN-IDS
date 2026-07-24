@@ -79,6 +79,15 @@ class ClusterConfig:
     init_theta_path: Optional[str] = None
     eval_test_path: Optional[str] = None
     input_dim: Optional[int] = None
+    # EX-4.2 — long-range mule->base-station backhaul loss (%). Under the
+    # jittery regime the mule's aggregate upload drops with this probability
+    # per dock; the round does not close but θ' still flows for Pass 2, so
+    # the update is carried, not lost (recoverable — unlike H0's permanent
+    # dead-zone). 0.0 -> reliable backhaul.
+    backhaul_loss_pct: float = 0.0
+    # Seed for the backhaul-loss RNG so the loss pattern is deterministic and
+    # varies per trial. Set by the driver from the paired trial seed.
+    backhaul_rng_seed: Optional[int] = None
 
 
 @dataclass
@@ -125,6 +134,12 @@ class DeviceConfig:
     input_dim: Optional[int] = None
     local_epochs: int = 1
     local_batch_size: int = 64
+    # EX-4.2 — per-device short-range contact reliability (device<->mule).
+    # p that a Pass-1 collect delivers this device's Δθ, modelling Exp 3's
+    # ``reliability x rf_factor`` completion. None -> always completes
+    # (the EX-4.0/4.1 behaviour). Set by the driver from a seeded
+    # Uniform(0.15, 1.0) reliability x distance falloff.
+    contact_reliability: Optional[float] = None
 
 
 class TopologyValidationError(ValueError):

@@ -46,6 +46,12 @@ def build_exp4_topology(
     local_batch_size: int = 64,
     init_theta_path: Optional[str] = None,
     eval_test_path: Optional[str] = None,
+    # EX-4.2 realism wiring (all optional; omitted -> ideal links).
+    device_reliability: bool = False,
+    world_radius_m: float = 150.0,
+    field_radius_m: Optional[float] = None,
+    backhaul_loss_pct: float = 0.0,
+    backhaul_rng_seed: Optional[int] = None,
 ) -> TopologyConfig:
     """Return a validated :class:`TopologyConfig` for one H1 trial.
 
@@ -69,12 +75,32 @@ def build_exp4_topology(
 
     rng = random.Random(seed)
     if spread_m is None:
-        spread_m = min(rf_range_m * 0.4, 25.0)
+        # field_radius_m (EX-4.2) spreads devices across the field so S3a
+        # forms multiple contacts; otherwise the tight EX-4.0/4.1 cluster.
+        spread_m = field_radius_m if field_radius_m is not None else min(rf_range_m * 0.4, 25.0)
+    # Separate RNG so contact reliability doesn't correlate with placement.
+    rel_rng = random.Random(seed ^ 0x5555AAAA)
 
     devices: List[DeviceConfig] = []
     for i in range(n_devices):
         x = rng.uniform(-spread_m, spread_m)
         y = rng.uniform(-spread_m, spread_m)
+        contact_reliability: Optional[float] = None
+        if device_reliability:
+            # Exp 3's model: per-device reliability ~ U(0.15, 1.0) times a
+            # distance falloff rf_factor = max(0.4, 1 - d/(3*world_radius)),
+            # where d is the device's distance from the field centre (a
+            # proxy for its distance to the mule's contact stop). Applies in
+            # clean too, so H1 coverage is realistically < 1.0.
+            reliability = rel_rng.uniform(0.15, 1.0)
+            d = (float(x) ** 2 + float(y) ** 2) ** 0.5
+            # The mule flies to *within* rf_range of the contact, so the
+            # effective device<->mule distance is bounded by rf_range — Exp 3
+            # uses device-to-contact-stop distance, not device-to-origin.
+            # Without this cap, spread devices are over-penalised.
+            d_eff = min(d, rf_range_m)
+            rf_factor = max(0.4, 1.0 - d_eff / (3.0 * world_radius_m))
+            contact_reliability = max(0.0, min(1.0, reliability * rf_factor))
         devices.append(
             DeviceConfig(
                 device_id=f"exp4-dev-{i:03d}",
@@ -85,6 +111,7 @@ def build_exp4_topology(
                 input_dim=input_dim,
                 local_epochs=local_epochs,
                 local_batch_size=local_batch_size,
+                contact_reliability=contact_reliability,
             )
         )
 
@@ -97,6 +124,8 @@ def build_exp4_topology(
         init_theta_path=init_theta_path,
         eval_test_path=eval_test_path,
         input_dim=input_dim,
+        backhaul_loss_pct=backhaul_loss_pct,
+        backhaul_rng_seed=backhaul_rng_seed,
     )
     mule = MuleConfig(
         mule_id=mule_id,

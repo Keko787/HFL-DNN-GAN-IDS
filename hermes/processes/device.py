@@ -152,6 +152,9 @@ class DeviceService:
             local_train=local_train,
             solicit_timeout_s=2.0,
             disc_push_timeout_s=10.0,
+            contact_reliability=getattr(cfg, "contact_reliability", None),
+            # Distinct from the training seed so contact luck != data shuffle.
+            contact_rng_seed=(seed ^ 0x9E3779B9),
         )
         self.client.set_state(FLState.FL_OPEN)
 

@@ -110,6 +110,16 @@ class Exp4Driver:
     jittery_dead_zone_frac: float = 0.6
     clean_link_quality: float = 1.0
     jittery_link_quality: float = 0.4
+    # H1 (mule) realism, opt-in. When on, the integrated stack applies Exp 3's
+    # own mule-arm impairment: per-device short-range contact reliability
+    # (U(0.15,1.0) x rf_factor) in every regime, plus — under jittery — a
+    # recoverable long-range backhaul upload loss. Devices are spread across
+    # the field so S3a forms multiple contacts. Off -> the ideal EX-4.1 links.
+    realism: bool = False
+    h1_field_radius_m: float = 100.0
+    h1_world_radius_m: float = 150.0
+    clean_backhaul_loss_pct: float = 0.0
+    jittery_backhaul_loss_pct: float = 2.0
 
     def run_trial(self, cell: Cell) -> Mapping[str, Any]:
         params = cell.params
@@ -137,6 +147,23 @@ class Exp4Driver:
             )
 
         # arm H1 — integrated stack over the real multi-process orchestrator.
+        # EX-4.2 realism (opt-in): Exp 3's mule-arm impairment, asymmetric to
+        # H0 (short-range contact reliability always; recoverable backhaul
+        # loss under jittery; no dead-zone — the mule physically reaches
+        # devices).
+        realism_kwargs: dict = {}
+        if self.realism:
+            realism_kwargs = dict(
+                device_reliability=True,
+                world_radius_m=self.h1_world_radius_m,
+                field_radius_m=self.h1_field_radius_m,
+                backhaul_loss_pct=(
+                    self.jittery_backhaul_loss_pct if regime == "jittery"
+                    else self.clean_backhaul_loss_pct
+                ),
+                backhaul_rng_seed=(cell.seed ^ 0x0BACC0DE),
+            )
+
         prep_dir: Optional[Path] = None
         try:
             if self.real_model:
@@ -144,10 +171,10 @@ class Exp4Driver:
                 task = self._build_task(n_devices, cell.seed)
                 prep = prepare_trial(prep_dir, task=task, theta_seed=self.theta_seed)
                 log.info(
-                    "exp4 real-model trial cell=%s trial=%d: source=%s "
-                    "input_dim=%d n_train=%d synthetic=%s",
-                    cell.cell_id, cell.trial_index, self.data_source,
-                    prep.input_dim, prep.n_train, prep.is_synthetic,
+                    "exp4 real-model H1 trial cell=%s trial=%d regime=%s "
+                    "realism=%s: source=%s input_dim=%d n_train=%d synthetic=%s",
+                    cell.cell_id, cell.trial_index, regime, self.realism,
+                    self.data_source, prep.input_dim, prep.n_train, prep.is_synthetic,
                 )
                 topo = build_exp4_topology(
                     n_devices=n_devices,
@@ -160,6 +187,7 @@ class Exp4Driver:
                     local_batch_size=self.local_batch_size,
                     init_theta_path=prep.init_theta_path,
                     eval_test_path=prep.test_path,
+                    **realism_kwargs,
                 )
             else:
                 topo = build_exp4_topology(
@@ -167,6 +195,7 @@ class Exp4Driver:
                     rf_range_m=rf_range_m,
                     n_missions=n_missions,
                     seed=cell.seed,
+                    **realism_kwargs,
                 )
 
             return self._run_topology(
