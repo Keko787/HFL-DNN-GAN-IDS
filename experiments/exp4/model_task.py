@@ -345,6 +345,115 @@ def load_ciciot_task(
     )
 
 
+def load_ciciot_task_canonical(
+    *,
+    n_devices: int,
+    seed: int,
+    data_dir: Optional[Path] = None,
+    train_files: int = 3,
+    test_files: int = 1,
+    train_dataset_size: int = 20000,
+    test_dataset_size: int = 8000,
+    attack_eval_ratio: float = 0.5,
+) -> CiciotTask:
+    """Paper-faithful CICIOT task via the **production** pipeline.
+
+    Reuses the exact canonical logic the standalone DNN-IDS was trained on:
+    ``load_and_balance_data_stratified`` (50/50 Attack/Benign stratified
+    undersampling, ``DICT_2CLASSES`` label collapse) + the real
+    ``preprocess_dataset`` (drops the 25 ``IRRELEVANT_FEATURES`` → 21
+    features, Benign=0/Attack=1 encoding, MinMax[0,1] scaling, stratified
+    train/val split). Only the file-discovery loop is re-implemented so the
+    dataset directory is configurable — the canonical ``loadCICIOT``
+    hardcodes a relative path and takes no directory argument.
+
+    The balanced train rows (train+val recombined) are partitioned across
+    ``n_devices`` with the EX-1.2 deterministic index partition; the
+    canonical held-out test split is the shared eval set. Falls back to
+    :func:`synthetic_task` when the dataset is unavailable.
+    """
+    data_dir = data_dir or default_ciciot_dir()
+    if data_dir is None:
+        log.warning(
+            "CICIOT-2023 not found (set HERMES_CICIOT_DIR); canonical "
+            "loader falling back to a synthetic real-shaped task"
+        )
+        return synthetic_task(
+            n_devices=n_devices, rows_per_device=2000, test_rows=2000, seed=seed,
+        )
+
+    import contextlib
+    import io
+    import random as _random
+
+    import numpy as _np
+    import pandas as pd
+
+    # The fidelity-defining canonical helpers — reused verbatim.
+    from Config.DatasetConfig.CICIOT2023_Sampling.ciciot2023DatasetLoadV2 import (
+        DICT_2CLASSES,
+        IRRELEVANT_FEATURES,
+        load_and_balance_data_stratified,
+        reduce_attack_samples,
+    )
+    from Config.DatasetConfig.Dataset_Preprocessing.datasetPreprocess import (
+        preprocess_dataset,
+    )
+
+    csvs = sorted(str(p) for p in Path(data_dir).glob("*.csv"))
+    if len(csvs) < train_files + test_files:
+        raise ValueError(
+            f"need >= {train_files + test_files} CICIOT csv files, "
+            f"found {len(csvs)} in {data_dir}"
+        )
+    # Deterministic disjoint train/test file selection (mirrors loadCICIOT).
+    rs = _random.Random(seed)
+    tr_files = rs.sample(csvs, train_files)
+    te_files = rs.sample([c for c in csvs if c not in tr_files], test_files)
+
+    benign_train_limit = train_dataset_size // 2
+    benign_test_limit = test_dataset_size // 2
+
+    def _load_balanced(files, benign_limit):
+        pool = pd.DataFrame()
+        benign = 0
+        for f in files:
+            if benign >= benign_limit:
+                break
+            df, bc = load_and_balance_data_stratified(
+                f, DICT_2CLASSES, benign, benign_limit, verbose=False,
+            )
+            pool = pd.concat([pool, df])
+            benign += bc
+        return pool
+
+    train_df = _load_balanced(tr_files, benign_train_limit)
+    test_df = _load_balanced(te_files, benign_test_limit)
+    test_df = reduce_attack_samples(test_df, attack_eval_ratio)
+
+    # The canonical preprocess is chatty — silence its prints.
+    with contextlib.redirect_stdout(io.StringIO()):
+        X_tr, X_val, y_tr, y_val, X_te, y_te = preprocess_dataset(
+            "CICIOT", train_df, test_df,
+            irrelevant_features_ciciot=list(IRRELEVANT_FEATURES),
+        )
+
+    X_train = pd.concat([X_tr, X_val]).to_numpy(dtype=_np.float32)
+    y_train = pd.concat([y_tr, y_val]).to_numpy(dtype=_np.float32).reshape(-1)
+    X_test = X_te.to_numpy(dtype=_np.float32)
+    y_test = y_te.to_numpy(dtype=_np.float32).reshape(-1)
+
+    shards = _partition_rows(X_train, y_train, n_devices=n_devices, seed=seed)
+    return CiciotTask(
+        input_dim=int(X_train.shape[1]),
+        device_shards=shards,
+        X_test=X_test,
+        y_test=y_test,
+        is_synthetic=False,
+        feature_names=tuple(X_tr.columns),
+    )
+
+
 def synthetic_task(
     *,
     n_devices: int,
