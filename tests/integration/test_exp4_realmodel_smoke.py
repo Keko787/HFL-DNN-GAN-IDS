@@ -109,6 +109,48 @@ def test_exp4_h0_flat_fl_synthetic_converges():
 
 
 @pytest.mark.slow
+def test_exp4_h0_jittery_collapses_participation():
+    """EX-4.2 — under jittery, H0's backhaul dead-zone collapses participation.
+
+    Clean: all clients reach the server every round. Jittery: a dead-zone
+    fraction is persistently unreachable + reachable clients fail
+    intermittently, so coverage / update-yield / round-close all drop.
+    """
+    driver = Exp4Driver(
+        real_model=True,
+        data_source="synthetic",
+        default_n_devices=5,
+        local_epochs=4,
+        synth_rows_per_device=200,
+        synth_test_rows=300,
+        tau=0.9,
+        jittery_dead_zone_frac=0.6,   # 3 of 5 unreachable
+        jittery_link_quality=0.4,
+    )
+    common = dict(arm="H0", trial_index=0, seed=21)
+    clean = dict(driver.run_trial(Cell(
+        cell_id="rg", params={"N": 5, "rrf": 60.0, "n_missions": 4, "regime": "clean"},
+        **common,
+    )))
+    jittery = dict(driver.run_trial(Cell(
+        cell_id="rg", params={"N": 5, "rrf": 60.0, "n_missions": 4, "regime": "jittery"},
+        **common,
+    )))
+
+    # Clean: every client every round.
+    assert clean["coverage"] == pytest.approx(1.0)
+    assert clean["update_yield"] == pytest.approx(5.0)
+
+    # Jittery collapses participation.
+    assert jittery["coverage"] < clean["coverage"]
+    assert jittery["update_yield"] < clean["update_yield"]
+    # At most the reachable 2/5 can ever be covered.
+    assert float(jittery["coverage"]) <= 0.4 + 1e-9
+    # Round-close rate does not improve under jitter.
+    assert float(jittery["round_close_rate_kmin1"]) <= float(clean["round_close_rate_kmin1"])
+
+
+@pytest.mark.slow
 def test_exp4_h0_requires_real_model():
     """H0 without real_model is a clear error, not a silent stub run."""
     driver = Exp4Driver(real_model=False)

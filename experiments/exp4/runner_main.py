@@ -39,6 +39,7 @@ def _build_grid(
     Ns: Sequence[int],
     rrfs: Sequence[float],
     n_missions_values: Sequence[int],
+    regimes: Sequence[str],
     n_trials: int,
     base_seed: int = 42,
 ) -> TrialGrid:
@@ -47,6 +48,7 @@ def _build_grid(
             "N": list(Ns),
             "rrf": list(rrfs),
             "n_missions": list(n_missions_values),
+            "regime": list(regimes),
         },
         arms=list(arms),
         n_trials=n_trials,
@@ -69,6 +71,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                         help="rf_range_m sweep.")
     parser.add_argument("--n-missions", nargs="+", type=int, default=[2],
                         help="Missions (FL rounds) per trial.")
+    parser.add_argument(
+        "--regime", nargs="+", choices=["clean", "jittery"], default=["clean"],
+        help="Network-regime axis. 'jittery' degrades H0's long-range "
+             "backhaul (dead-zone unreachable clients + intermittent link "
+             "failures); H1's short-range mule contact stays reliable, so "
+             "H0 participation collapses while H1 holds (the paper's "
+             "Observation 3). Sweep both for the clean-vs-jittery contrast.",
+    )
     parser.add_argument(
         "--trial-budget-s", type=float, default=120.0,
         help="Hard per-trial wall-clock budget; the process tree is "
@@ -112,6 +122,15 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                         help="canonical: attack fraction kept in the test set.")
     parser.add_argument("--synth-rows-per-device", type=int, default=512)
     parser.add_argument("--synth-test-rows", type=int, default=512)
+    parser.add_argument(
+        "--jittery-dead-zone-frac", type=float, default=0.6,
+        help="H0 jittery: fraction of clients persistently unreachable from "
+             "the central server (Exp 3's A1 dead-zone). H1 gets none.",
+    )
+    parser.add_argument(
+        "--jittery-link-quality", type=float, default=0.4,
+        help="H0 jittery: per-round success prob for a reachable client.",
+    )
     args = parser.parse_args(argv)
 
     logging.basicConfig(
@@ -133,6 +152,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         Ns=args.N,
         rrfs=args.rrf,
         n_missions_values=args.n_missions,
+        regimes=args.regime,
         n_trials=args.n_trials,
         base_seed=args.base_seed,
     )
@@ -152,6 +172,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         attack_eval_ratio=float(args.attack_eval_ratio),
         synth_rows_per_device=int(args.synth_rows_per_device),
         synth_test_rows=int(args.synth_test_rows),
+        jittery_dead_zone_frac=float(args.jittery_dead_zone_frac),
+        jittery_link_quality=float(args.jittery_link_quality),
     )
     if args.real_model:
         log.info(
@@ -165,8 +187,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         timeout_s=(args.timeout_s if args.timeout_s is not None else args.trial_budget_s),
     )
     log.info(
-        "exp4 grid: arms=%s N=%s rrf=%s n_missions=%s trials=%d (%d cells)",
-        args.arms, args.N, args.rrf, args.n_missions, args.n_trials,
+        "exp4 grid: arms=%s N=%s rrf=%s n_missions=%s regime=%s trials=%d (%d cells)",
+        arms, args.N, args.rrf, args.n_missions, args.regime, args.n_trials,
         grid.total(),
     )
     n = runner.run(driver.run_trial)

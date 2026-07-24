@@ -100,6 +100,16 @@ class Exp4Driver:
     # 1.0 = every client every round (the reliable-infrastructure baseline,
     # matching Exp 1's fully-participating clients).
     h0_client_fraction: float = 1.0
+    # ---- EX-4.2 jittery-regime knobs (asymmetric, per the paper) ---- #
+    # H0's long-range backhaul degrades under jittery: a fraction of clients
+    # are persistently unreachable from the central server (dead-zone), and
+    # the reachable ones succeed each round only with prob link_quality.
+    # H1's mule reaches devices over reliable short-range contact, so it gets
+    # NO dead-zone (matching Exp 3's model). Defaults mirror Exp 3.
+    clean_dead_zone_frac: float = 0.0
+    jittery_dead_zone_frac: float = 0.6
+    clean_link_quality: float = 1.0
+    jittery_link_quality: float = 0.4
 
     def run_trial(self, cell: Cell) -> Mapping[str, Any]:
         params = cell.params
@@ -113,6 +123,7 @@ class Exp4Driver:
         n_devices = int(params.get("N", params.get("n_devices", self.default_n_devices)))
         rf_range_m = float(params.get("rrf", params.get("rf_range_m", self.default_rf_range_m)))
         n_missions = int(params.get("n_missions", self.default_n_missions))
+        regime = str(params.get("regime", "clean"))
 
         if arm == "H0":
             if not self.real_model:
@@ -122,7 +133,7 @@ class Exp4Driver:
                 )
             return self._run_h0(
                 cell, n_devices=n_devices, rf_range_m=rf_range_m,
-                n_rounds=n_missions,
+                n_rounds=n_missions, regime=regime,
             )
 
         # arm H1 — integrated stack over the real multi-process orchestrator.
@@ -170,62 +181,88 @@ class Exp4Driver:
     # Internals
     # ------------------------------------------------------------------ #
 
-    def _run_h0(self, cell: Cell, *, n_devices, rf_range_m, n_rounds):
+    def _run_h0(self, cell: Cell, *, n_devices, rf_range_m, n_rounds, regime="clean"):
         """Traditional flat FL (H0) — the paired real-model null.
 
         Runs synchronous FedAvg **in process** (no mule, no orchestrator):
-        every round each sampled client trains the real DNN-IDS from the
-        current global θ, the server ``partial_fedavg``-aggregates their
-        weights, and the aggregated θ is scored on the shared held-out set.
-        Uses the same task (same paired seed -> same shards), same seeded
-        init θ, and the same convergence definitions as H1, so the two arms
-        are directly comparable.
+        every round each reachable+sampled client trains the real DNN-IDS
+        from the current global θ, the server ``partial_fedavg``-aggregates
+        their weights, and the aggregated θ is scored on the shared held-out
+        set. Uses the same task (same paired seed -> same shards), same
+        seeded init θ, and the same convergence definitions as H1.
+
+        EX-4.2 jittery regime: H0 relies on the long-range backhaul to every
+        client, so under jitter a ``dead_zone_frac`` of clients are
+        persistently unreachable and the reachable ones succeed each round
+        only with prob ``link_quality`` — modelling the degraded-line-of-sight
+        backhaul that collapses centralized participation (Exp 3's A1 model).
+        A round with no successful updates does not close (deadline unmet).
         """
         import numpy as np
 
         from hermes.mission.partial_fedavg import partial_fedavg
         from hermes.types import DeviceID, GradientSubmission, MuleID
 
-        from .events_consumer import ModelEvalPoint
         from .metrics import summarise_flat_fl
         from .model_task import _u32, initial_theta, make_local_train_fn
         from experiments.exp3.metrics import Exp3RoundLog
 
+        jittery = regime == "jittery"
+        dead_zone_frac = self.jittery_dead_zone_frac if jittery else self.clean_dead_zone_frac
+        link_quality = self.jittery_link_quality if jittery else self.clean_link_quality
+
         task = self._build_task(n_devices, cell.seed)
         input_dim = task.input_dim
+
+        # Persistent long-range dead zone — clients the central server never
+        # reaches this mission (deterministic from the paired seed).
+        n_dead = int(round(n_devices * dead_zone_frac))
+        dz_rng = np.random.default_rng(_u32(cell.seed, "h0_deadzone"))
+        dead = set(
+            int(i) for i in dz_rng.choice(n_devices, size=n_dead, replace=False)
+        ) if n_dead > 0 else set()
+        reachable = [i for i in range(n_devices) if i not in dead]
+
         log.info(
-            "exp4 H0 flat-FL cell=%s trial=%d: source=%s input_dim=%d "
-            "n_train=%d rounds=%d synthetic=%s",
-            cell.cell_id, cell.trial_index, self.data_source, input_dim,
-            task.n_train, n_rounds, task.is_synthetic,
+            "exp4 H0 flat-FL cell=%s trial=%d regime=%s: source=%s input_dim=%d "
+            "n_train=%d rounds=%d reachable=%d/%d link_quality=%.2f",
+            cell.cell_id, cell.trial_index, regime, self.data_source, input_dim,
+            task.n_train, n_rounds, len(reachable), n_devices, link_quality,
         )
 
         # Same seeded init θ as H1 so both arms start from the same model.
         theta = initial_theta(input_dim, seed=self.theta_seed)
-        # One persistent trainer per client (model built once, reused).
-        client_fns = [
-            make_local_train_fn(
-                X, y, input_dim=input_dim, epochs=self.local_epochs,
+        # Build a trainer only for reachable clients (dead ones never fit).
+        client_fns = {
+            i: make_local_train_fn(
+                task.device_shards[i][0], task.device_shards[i][1],
+                input_dim=input_dim, epochs=self.local_epochs,
                 batch_size=self.local_batch_size, seed=self.theta_seed,
             )
-            for (X, y) in task.device_shards
-        ]
+            for i in reachable
+        }
 
         evals = [self._eval_point(0, theta, task, input_dim)]
         round_logs: list = []
         participation = {i: 0 for i in range(n_devices)}
-        rng = np.random.default_rng(_u32(cell.seed, "h0_sampling"))
-        n_sample = max(1, int(round(n_devices * self.h0_client_fraction)))
+        samp_rng = np.random.default_rng(_u32(cell.seed, "h0_sampling"))
+        link_rng = np.random.default_rng(_u32(cell.seed, "h0_link"))
+        n_sample = max(1, int(round(len(reachable) * self.h0_client_fraction))) if reachable else 0
 
         for r in range(1, n_rounds + 1):
-            if n_sample >= n_devices:
-                sampled = list(range(n_devices))
+            if not reachable:
+                sampled = []
+            elif n_sample >= len(reachable):
+                sampled = list(reachable)
             else:
                 sampled = sorted(
-                    int(i) for i in rng.choice(n_devices, size=n_sample, replace=False)
+                    int(i) for i in samp_rng.choice(reachable, size=n_sample, replace=False)
                 )
             subs = []
             for i in sampled:
+                # Intermittent long-range link failure for reachable clients.
+                if link_quality < 1.0 and float(link_rng.random()) >= link_quality:
+                    continue
                 res = client_fns[i](theta, [])
                 participation[i] += 1
                 subs.append(
@@ -238,12 +275,18 @@ class Exp4Driver:
                         submitted_at=0.0,
                     )
                 )
-            theta = partial_fedavg(MuleID("h0-server"), r, subs).weights
+            if subs:
+                theta = partial_fedavg(MuleID("h0-server"), r, subs).weights
+                closed = True
+            else:
+                # No client reached the server this round — no aggregation,
+                # θ carries over, the round does not close.
+                closed = False
             evals.append(self._eval_point(r, theta, task, input_dim))
             round_logs.append(
                 Exp3RoundLog(
                     round_index=r, n_updates=len(subs),
-                    n_target=n_devices, deadline_met=True,
+                    n_target=n_devices, deadline_met=closed,
                 )
             )
 
