@@ -57,23 +57,29 @@ pip install -r AppSetup/requirements_core.txt
 pip install pytest
 ```
 
-**B. The exact environment that produced the committed results.** The
-`results/exp4_paper/*.csv` in this repo were generated on:
+**B. The exact environment that produced the committed results**, pinned in
+[`AppSetup/requirements_exp4.txt`](../AppSetup/requirements_exp4.txt):
+```bash
+python3.11 -m venv .venv311
+source .venv311/Scripts/activate            # Git Bash on Windows
+pip install -r AppSetup/requirements_exp4.txt
+pip install pytest
+```
+The `results/exp4_paper/*.csv` in this repo were generated on Python 3.11.9 with:
 
 | | version |
 |---|---|
-| Python | 3.11.9 (Windows) |
 | numpy | 1.26.4 |
 | pandas | 2.2.2 |
 | scipy | 1.17.1 |
-| matplotlib | 3.8.4 |
 | scikit-learn | 1.8.0 |
+| matplotlib | 3.8.4 |
 | tensorflow | 2.21.0 |
 | keras | 3.14.1 |
 
 The code is tolerant of both (it runs on the 3.10/tf-2.15 base venv and on this
 newer 3.11/tf-2.21/keras-3 stack). If you need bit-identical reproduction of the
-committed CSVs, match table B; for a fresh run, either works.
+committed CSVs, use `requirements_exp4.txt` (table B); for a fresh run, either works.
 
 **Dataset.** The `canonical` data source reads the real CICIOT-2023 CSVs. They are
 **gitignored** — place them at `../datasets/CICIOT2023/` (one level above the repo)

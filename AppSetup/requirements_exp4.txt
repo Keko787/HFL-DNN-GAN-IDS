@@ -1,0 +1,35 @@
+# Experiment 4 — pinned environment that produced results/exp4_paper/*.csv
+#
+# The integrated experiment (arms H0-H3, real DNN-IDS, the crossover surface +
+# L1 result) was run on Python 3.11.9 with the versions below — newer than the
+# base .venv310 stack in requirements_core.txt (Python 3.10 / tf 2.15 / keras 2).
+# The code runs on either; use this file for bit-faithful reproduction of the
+# committed exp4 CSVs.
+#
+# These are the DIRECT third-party dependencies of the exp4 pipeline; pip
+# resolves the transitive rest (absl-py, h5py, protobuf, etc.).
+#
+#   python3.11 -m venv .venv311
+#   source .venv311/Scripts/activate      # Git Bash on Windows
+#   pip install -r AppSetup/requirements_exp4.txt
+#   pip install pytest                    # test runner (markers in pytest.ini)
+#
+# Data: place CICIOT-2023 at ../datasets/CICIOT2023 or set HERMES_CICIOT_DIR;
+# or pass `--data-source synthetic` to run without the dataset.
+#
+# What each is used for:
+#   numpy         - arrays throughout (model_task, channel, stats, analysis, figures)
+#   pandas        - analysis/exp4.py + the canonical CICIOT loader
+#   scipy         - analysis/stats.py Wilcoxon signed-rank (scipy.stats)
+#   scikit-learn  - roc_auc_score (model eval) + train_test_split/scalers (loader)
+#   matplotlib    - the rebuttal figures (exp4_figure*.py)
+#   tensorflow    - create_CICIOT_Model (Config/modelStructures/NIDS/NIDS_Struct.py)
+#   keras         - Keras 3 backend that tf.keras routes to under tensorflow>=2.16
+
+numpy==1.26.4
+pandas==2.2.2
+scipy==1.17.1
+scikit-learn==1.8.0
+matplotlib==3.8.4
+tensorflow==2.21.0
+keras==3.14.1
