@@ -6,6 +6,7 @@
 - [`HERMES_Experiments_Implementation_Plan.md`](HERMES_Experiments_Implementation_Plan.md) — design and Definition of Done for the experiment.
 - [`HERMES_Operations_Runbook.md`](HERMES_Operations_Runbook.md) — environment setup that this guide assumes is already done.
 - [`Experiment_3_Run_Guide.md`](Experiment_3_Run_Guide.md) — sibling guide for the A1–A4 ablation.
+- [`Experiment_4_Run_Guide.md`](Experiment_4_Run_Guide.md) — sibling guide for the integrated end-to-end experiment (L1+L2+L3, real DNN-IDS, crossover surface).
 
 ---
 

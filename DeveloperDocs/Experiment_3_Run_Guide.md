@@ -8,6 +8,7 @@
 - [`HERMES_Configuration_Reference.md`](HERMES_Configuration_Reference.md) — every tunable in the selector, sim, and reward shape.
 - [`Exp3_Future_Energy_Models.md`](Exp3_Future_Energy_Models.md) — Option B (retry/revisit) and Option C (adaptive in-cluster positioning) propulsion-energy extensions.
 - [`Experiment_1_Run_Guide.md`](Experiment_1_Run_Guide.md) — sibling guide for the federated-vs-centralized experiment.
+- [`Experiment_4_Run_Guide.md`](Experiment_4_Run_Guide.md) — sibling guide for the integrated end-to-end experiment (all three layers, real DNN-IDS). Exp 4 runs the same policy objects through the **real** multi-process orchestrator rather than `Exp3Sim`.
 
 ---
 
