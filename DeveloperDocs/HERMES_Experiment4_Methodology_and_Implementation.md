@@ -59,12 +59,28 @@ shards, initial θ, and per-device reliabilities in every arm.
 | **H2** | + `TargetSelectorRL` (DDQN) in the S3.5 tie-break | real orchestrator |
 | **H3** | + real L1 adaptive channel (`U(c,t)`) | real orchestrator |
 | **B1** | **SOTA baseline** — MAX-AoI greedy replaces our ranking; H1's transport and realism otherwise | real orchestrator |
+| **B2** | **SOTA baseline** — Oort's statistical-utility selection replaces our ranking; H1's transport and realism otherwise. **Real-model only** | real orchestrator |
 
-> **B1 is the reviewer-facing comparison.** It shares H1's transport, realism and seeds and differs
-> **only** in the contact-ranking policy, so **B1-vs-H1 isolates the scheduling policy**. A baseline
-> replaces our *policy*, not our *physics*: S1 eligibility, S3a clustering and S3b feasibility are
-> kept (contacts are a physical fact of `rf_range_m`, and both arms must face the same budget or the
-> comparison is meaningless), while S3's bucket tiers and S3.5's ordering are replaced.
+> **B1/B2 are the reviewer-facing comparisons.** Each shares H1's transport, realism and seeds and
+> differs **only** in the contact-ranking policy, so **B1-vs-H1 and B2-vs-H1 isolate the scheduling
+> policy**. A baseline replaces our *policy*, not our *physics*: S1 eligibility, S3a clustering and
+> S3b feasibility are kept (contacts are a physical fact of `rf_range_m`, and every arm must face
+> the same budget or the comparison is meaningless), while S3's bucket tiers and S3.5's ordering are
+> replaced.
+
+> **Why these two, and why not FedCS.** Full-text verification (see
+> [`HERMES_SOTA_Baseline_Candidates.md`](HERMES_SOTA_Baseline_Candidates.md)) found the decisive
+> property is **when a policy obtains its ranking signal**. **FedCS** and Power-of-Choice's `pow-d`
+> require every candidate to *report* channel state, capacity or current loss **before** the round's
+> selection — a data mule cannot obtain that without flying there, so they are not implementable
+> without handing them information the architecture denies. **Oort** and **MAX-AoI** are
+> **retrospective** — they rank on what was learned *last visit* — and port directly.
+
+> **B2 is "Oort's statistical-utility selection", not "Oort".** Three deviations, each forced by our
+> model: no system-speed straggler term (we model no per-device compute speed), mean loss where Oort
+> specifies the RMS over per-sample losses, and rounds rather than wall-clock for staleness. It also
+> **requires `--real-model`** — the stub's loss is a random draw, so ranking on it would be a random
+> ordering; the driver and the policy both refuse rather than produce one.
 
 > **Do not compare H2/H3 against H0/H1.** They are run with `--l1-channel`, which replaces the flat
 > backhaul loss with the RF channel model in *both* arms, and their per-trial seeds do not line up

@@ -206,9 +206,11 @@ def test_a_device_outside_the_admitted_set_is_refused():
 # 4. The stub guard — the failure this policy must NOT fail silently
 # --------------------------------------------------------------------------- #
 
-def test_served_devices_with_no_loss_signal_raise():
+def test_repeatedly_served_devices_with_no_loss_raise():
     """Running B2 without --real-model must fail loudly, not rank on noise."""
-    states = {DeviceID("a"): _st("a", loss=None, n=0, contact_ts=NOW - 5)}
+    st_a = _st("a", loss=None, n=0, served_round=2, contact_ts=NOW - 5)
+    st_a.on_time_count = 2
+    states = {DeviceID("a"): st_a}
     with pytest.raises(OortUnusableError, match="real-model"):
         _rank([_wp(1.0, "a")], states)
 
@@ -217,6 +219,45 @@ def test_a_first_round_with_nobody_served_yet_is_fine():
     """Round 1 legitimately has no measurements — that is not the stub bug."""
     states = {DeviceID("a"): _st("a", contact_ts=0.0)}
     assert len(_rank([_wp(1.0, "a")], states)) == 1
+
+
+def test_the_warm_up_round_is_tolerated():
+    """Oort is retrospective: after ONE service the signal may still be in
+    flight. Raising here killed a healthy run at mission 2 — the guard must
+    distinguish "not yet" from "never"."""
+    st_a = _st("a", loss=None, n=0, served_round=1, contact_ts=NOW - 5)
+    st_a.on_time_count = 1
+    assert len(_rank([_wp(1.0, "a")], {DeviceID("a"): st_a})) == 1
+
+
+def test_repeated_FAILED_contacts_do_not_trip_the_guard():
+    """Contacted twice, both sessions failed -> no loss, entirely legitimate.
+    Keying the guard on contact count instead of successful participation
+    killed healthy trials mid-sweep."""
+    st_a = _st("a", loss=None, n=0, served_round=3, contact_ts=NOW - 5)
+    st_a.on_time_count = 0           # contacted repeatedly, never succeeded
+    assert len(_rank([_wp(1.0, "a")], {DeviceID("a"): st_a})) == 1
+
+
+def test_signal_on_any_device_suppresses_the_guard():
+    states = {
+        DeviceID("a"): _st("a", loss=None, n=0, served_round=3),
+        DeviceID("b"): _st("b", loss=0.4, n=10, served_round=3),
+    }
+    assert len(_rank([_wp(1.0, "a"), _wp(2.0, "b")], states)) == 2
+
+
+def test_the_gradient_carries_the_loss_so_it_arrives_in_session():
+    """The advertisement is built BEFORE training, so its loss describes the
+    previous round. Carrying it on the gradient removes a full round of lag."""
+    from hermes.types import GradientSubmission
+    import numpy as np
+    g = GradientSubmission(
+        device_id=DeviceID("a"), mule_id=MuleID("m1"), mission_round=1,
+        delta_theta=[np.zeros((2, 2), dtype=np.float32)], num_examples=64,
+        submitted_at=0.0, local_loss=0.25,
+    )
+    assert g.local_loss == pytest.approx(0.25) and g.num_examples == 64
 
 
 # --------------------------------------------------------------------------- #

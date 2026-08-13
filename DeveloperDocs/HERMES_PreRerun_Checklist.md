@@ -11,23 +11,23 @@ frozen**, amended twice since (§1a). Phase 2 — **done, full-text verified**; 
 the reading *reversed* the first pass's recommendation (§4). Phase 3 — **§5.0 pilot run, result in
 §5.0a**; the matrix itself (§5.1) is **the remaining blocker**. Phase 4 — not started.
 
-**Exit criteria status: 4 of 6 met.** ✅ 2 (frozen; amended three times, each inert by default) ·
-✅ 3 (baselines chosen **and implemented** — nothing is retroactively scorable, so both are re-run
-arms) · ✅ 4 (pilot recorded, §5.0a). ❌ 1 (three Phase-0 items need an explicit
-*deferred-with-reason* decision) · ❌ 5 (**the matrix is not written or costed**) · ❌ 6 (follows
-from 5).
+**Exit criteria status: 5 of 6 met.** ✅ 2 (frozen; amended three times, each inert by default) ·
+✅ 3 (baselines chosen **and implemented**) · ✅ 4 (pilot recorded, §5.0a) · ✅ 5 (**matrix written
+and costed**, §5.1). ❌ 1 (three Phase-0 items need an explicit *deferred-with-reason* decision) ·
+❌ 6 (follows once §5.1's remaining pre-launch boxes are ticked).
 
-**Both §5.1a decisions are taken.** Enforcement is **ON** in the headline; **MAX-AoI (`B1`)** and
-**Oort's statistical-utility selection (`B2`)** are **both implemented and tested**. Six arms now
-exist: `H0 H1 H2 H3 B1 B2`.
+**The matrix is written and costed: 680 trials, ≈2.4 h at concurrency 3** (§5.1). Six arms exist:
+`H0 H1 H2 H3 B1 B2`. Enforcement is **ON**; S3c is **pinned off**.
 
-**Next action — write and cost the matrix (§5.1).** The last substantive blocker. It needs: the arm
-list and which pairings are valid, the axes and their ranges, seeds per cell, a justified
-`mission_budget_s`, and a wall-clock cost at concurrency 3 before anything launches.
+**Next action — close the last Phase-0 items (§2), then launch.** Three items remain, all
+**no-re-run**: `ε_prop` is a placeholder (report normalized energy only), the manuscript deadline
+equation prints the sign reversed, and the provenance table is unwritten. Each needs an explicit
+*done or deferred-with-reason* decision — that is exit criterion 1, and it is the only thing
+between here and running the matrix.
 
-> **Two constraints the matrix must respect.** `B2` is **real-model-only** (the stub's loss is a
-> random draw), so it cannot appear in stub pilots. And **`--keep-event-traces` goes on every run**
-> from here (§4) — without it, the next comparator a reviewer asks for costs another full re-run.
+> **Two constraints the matrix respects.** `B2` is **real-model-only** (the stub's loss is a random
+> draw), so it cannot appear in stub pilots. And **`--keep-event-traces` goes on every run** (§4) —
+> without it, the next comparator a reviewer asks for costs another full re-run.
 
 ---
 
@@ -478,37 +478,95 @@ utility + staleness* ranking on mule-visible state, which is precisely the part 
 > **Still to do for B1:** decide whether it is paired with H1 (same backhaul model ⇒ yes) and add
 > it to §5.1's arm list and cost.
 
-### 5.1 The matrix itself
+### 5.1 The matrix — WRITTEN AND COSTED ✅ *(2026-08-13)*
 
-Finalize E1–E4, baselines, scaling, sensitivity, statistics, provenance labels — **once**.
+**Costed by [`experiments/exp4/cost_matrix.py`](../experiments/exp4/cost_matrix.py)**, not by
+arithmetic in prose — re-run it whenever an input changes.
 
-- [ ] Arms: H0, H1, H2, H3 + whichever baselines §5.1a-B selects. State which pairwise comparisons
-      are valid (today: H1-vs-H0 and H3-vs-H2 only; H2/H3-vs-H0/H1 is **not** paired). A new
-      baseline arm is paired with the mule arms only if it shares their backhaul model.
-- [ ] **S3c: pinned, not swept** (§5.0a). It interacts with *mission count*, not with the other
-      axes, so it is a fixed setting here. If the transient claim is wanted, cost the separate
-      `n_missions` 4/8/16 ladder instead of doubling every cell.
-- [ ] Axes and their ranges: `dead_zone × link_quality`, regime, N, mule count, `n_missions`,
-      mission budget.
-- [ ] **Decide the two scheduler toggles (§1a).** `--mission-budget-s` carries A1+A2 with it;
-      `--mission-window-adaptation` is independent. Both default off, so *not* deciding means
-      shipping a scheduler whose deadline is a sort key — defensible only if stated plainly.
-- [ ] **Window adaptation enters as a paired A/B, never as a new default** — and only if §5.0's
-      pilot says it earns a place. It is a one-flag delta on an otherwise identical configuration,
-      which is the cheapest clean comparison available and the reason it was built as a toggle. Its
-      own parameters (`--mission-window-target`, `--mission-window-gain`,
-      `--mission-window-history`, `--mission-window-max-scale`) are matrix values, not code
-      defaults — the same rule as D1. Expect it to matter **only** when the S3b gate binds; with no
-      budget there is nothing for a wider window to rescue, so an adaptation-only arm should read
-      as a tie by construction.
-- [ ] Seeds per cell (≥20) and the pairing key.
-- [ ] Statistics: paired Wilcoxon + Cliff's δ + bootstrap CI; claim only when CI excludes 0 **and**
-      p<0.05.
-- [ ] Provenance label per row.
-- [ ] **Cost the matrix in wall-clock before launching**, and cap shard concurrency at **3** — at 5
-      concurrent shards the box exhausted memory and ~30 % of trials failed. Use the measured
-      per-trial means in §5.0 rather than the old ~47 s rule of thumb: cost depends strongly on
-      `n_missions` (37.8 s at 4, 69.5 s at 6, real-model).
+#### The design principle that shapes it
+
+**Freeze D5: `dead_zone` and `link_quality` are consumed only in the H0 branch.** Sweeping them
+across mule arms is one configuration under different seeds — the exact error already made once in
+the H2/H3 dead-zone sweep. So the surface is swept **for H0-vs-H1 and nowhere else**. That single
+decision is what keeps this matrix at 680 trials instead of several thousand.
+
+#### Three sweeps, because three comparisons are not poolable
+
+| # | Sweep | Arms | Cells | Seeds | Trials | Wall |
+|---|---|---|---|---|---|---|
+| **A** | Architecture surface | H0, H1 | 13 | 20 | 520 | **101 m** |
+| **B** | Scheduling policy | H1, B1, B2 | 2 | 20 | 120 | **32 m** |
+| **C** | L1 adaptivity | H2, H3 | 1 | 20 | 40 | **13 m** |
+| | | | | | **680** | **≈2.4 h** |
+
+Upper bound if every arm ran at its sweep's slowest arm: **3.0 h**. Traces: **6.4 MB**.
+
+* **A** — the headline participation claim. 13 cells = clean (1; `dead_zone`/`link_quality` do not
+  apply) + jittery (4 × 3). This is the committed design **re-run with enforcement ON**.
+* **B** — the reviewer-facing baseline comparison, at **one fixed** `(dead_zone, link_quality)`
+  point, clean and jittery. One flag differs between arms, so it isolates the ranking policy.
+* **C** — the L1 claim. Separate because `--l1-channel` changes the backhaul model in both arms.
+
+#### Fixed parameters, with reasons
+
+| Parameter | Value | Why |
+|---|---|---|
+| `--mission-budget-s` | **120 s** | Decided ON (§5.1a-A). 120 s is the "slack" point where the enforcement cost was *measured* (−0.225 completion), so the headline is priced against a figure we already have rather than a fresh unknown. The S3b probe puts the deadline floor at ~34 % of contacts at *any* budget and the knee near 60 s, so 120 s binds without being punitive. |
+| `--mission-window-adaptation` | **off** | Pinned, not swept (§5.0a). The pilot effect was narrow, did not survive multiplicity correction, and is **transient** — it interacts with mission count, not with these axes. Reported as a separate finding. |
+| `--keep-event-traces` | **on** | Without it no future baseline can be scored against this matrix (§4), and the next comparator costs a third full re-run. |
+| `N`, `rrf`, `n_missions` | 6, 60 m, 4 | Unchanged from the committed design, so A is a like-for-like re-run and the enforcement delta is attributable to enforcement. |
+| Seeds | **20** paired | Pairing key `(cell_id, trial_index)`. |
+| Concurrency | **3** | At 5, the box exhausted memory and ~30 % of trials failed. |
+
+#### Valid comparisons — and the one that is not
+
+* ✅ **H1 vs H0** (A) — the architecture claim.
+* ✅ **B1 vs H1**, **B2 vs H1** (B) — the policy claim; same transport, realism and seeds.
+* ✅ **H3 vs H2** (C) — the L1 claim.
+* ❌ **H2/H3 vs H0/H1** — different backhaul model *and* non-aligned seeds. Not paired, never pool.
+* ❌ **B1/B2 vs H0** — the baselines are mule arms; comparing them to flat FL confounds policy with
+  architecture.
+
+#### Statistics and provenance
+
+Paired Wilcoxon + Cliff's δ + percentile bootstrap CI, via
+[`experiments/analysis/stats.py`](../experiments/analysis/stats.py) — one implementation, so the
+claim rule means the same thing everywhere. **Claim only when the CI excludes 0 AND p < 0.05.**
+With several metrics per comparison, **state the multiplicity position explicitly** rather than
+reporting the one that hit (the §5.0a pilot is the worked example of why). Every row carries
+`mission_budget_s` and `mission_window_adaptation`, so the file is self-describing.
+
+#### A bug the costing caught — worth carrying as a lesson
+
+Calibrating B2 first showed it at **0.45× H1**, which would have looked like good news. It was not
+a routing effect: **B2 was dying at mission 2** and was cheap because it was doing less
+(`missions_completed` 1.0 vs 4.0). Two defects, both found only because the calibration checked
+*what the arms accomplished*, not just how long they took:
+
+1. **The ranking signal lagged a full round.** `FLReadyAdv` is built *before* the session trains, so
+   its loss describes the **previous** round. Fixed by carrying the loss on `GradientSubmission`
+   (which already carried `num_examples`), so it arrives **in-session** with the update it
+   summarises. Without this the baseline would have been silently handicapped — ranking on
+   round-old information — and it would have lost for the wrong reason.
+2. **The stub guard was over-eager.** It keyed on *contacts*, so a device contacted twice whose
+   sessions both failed — legitimately lossless — tripped it and killed the mission. Now keyed on
+   `on_time_count` (successful participations).
+
+After the fix: H1 39.0 s, B1 38.6 s, B2 39.6 s, all 4/4 missions, 0 failures.
+
+> **The transferable lesson:** a baseline that is unexpectedly *cheap* is a red flag, not a saving.
+> Cost calibration must check what a trial accomplished, or a broken arm gets priced in as a fast
+> one — and would then have gone into the matrix and lost, looking like a real result.
+
+#### Before launching
+
+- [x] Calibrate `B1`/`B2` against `H1` — done, all within 3 %.
+- [ ] Re-run `cost_matrix.py` if any input changed.
+- [ ] Firm up `H2`/`H3`, still the only **estimated** figures (scaled from no-budget runs by H1's
+      enforcement ratio). A 2-trial calibration would settle them; sweep C is only 13 m, so the
+      exposure is small.
+- [ ] Start **new** CSVs — committed files cannot be resumed now that rows carry provenance (§1a).
+- [ ] Free memory check before launch; cap concurrency at 3.
 
 ### Exit criteria — re-run only when all are true
 

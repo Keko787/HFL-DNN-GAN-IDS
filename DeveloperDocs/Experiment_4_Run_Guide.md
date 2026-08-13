@@ -105,7 +105,7 @@ One entry point drives every arm: [`experiments.exp4.runner_main`](../experiment
 | Flag | Default | Meaning |
 |---|---|---|
 | `--csv` | required | Per-trial CSV (created if missing; **resumable**). |
-| `--arms` | `H0 H1 H2 H3` | Subset of arms. H0 needs `--real-model`. |
+| `--arms` | `H0 H1 H2 H3 B1 B2` | Subset of arms. **H0 and B2 need `--real-model`.** See §2.3. |
 | `--N` | `2` | Device-population sweep. |
 | `--rrf` | `60` | `rf_range_m` sweep. |
 | `--n-missions` | `2` | Missions (FL rounds) per trial. |
@@ -123,6 +123,27 @@ One entry point drives every arm: [`experiments.exp4.runner_main`](../experiment
 
 **H0 needs `--real-model`** (it is a real-model convergence baseline); it is dropped
 with a warning from a stub run.
+
+### 2.3 The arms
+
+| Arm | What it is | Notes |
+|---|---|---|
+| `H0` | Traditional flat FL, no mule | **needs `--real-model`** |
+| `H1` | + mule, gated scheduler, two-pass HFL, deterministic ranking | |
+| `H2` | + `TargetSelectorRL` in the S3.5 tie-break | random-init unless `--selector-weights` |
+| `H3` | + L1 adaptive channel | use with `--l1-channel` |
+| `B1` | **SOTA baseline** — MAX-AoI greedy ranking | stub or real-model |
+| `B2` | **SOTA baseline** — Oort's statistical-utility ranking | **needs `--real-model`** |
+
+**Valid pairings.** `B1`/`B2`/`H2` vs `H1` isolate the ranking policy — same transport, same
+realism, same seeds, one thing different. `H1` vs `H0` is the architecture comparison. `H3` vs `H2`
+is the L1 comparison. **`H2`/`H3` must not be compared against `H0`/`H1`** — they run with
+`--l1-channel`, which changes the backhaul model in both, and their seeds do not line up.
+
+> **Why `B2` refuses without `--real-model`.** Oort ranks on each device's training loss. The stub
+> reports a *random* loss, so ranking on it would be a random ordering wearing Oort's name — a
+> result-shaped artefact. The driver raises, and the policy raises `OortUnusableError` if devices
+> were served but no loss arrived. Do not work around it; run `B2` with real training or not at all.
 
 ### 2.1 The two scheduler toggles — both off, and every committed result is an "off" run
 

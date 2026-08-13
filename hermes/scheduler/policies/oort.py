@@ -149,10 +149,21 @@ class OortPolicy:
             default=0,
         )
 
-        # Guard the stub path. If no candidate has ever reported a usable loss
-        # AND at least one has been served, we are ranking on nothing.
-        served_any = any(
-            (st := device_states.get(d)) is not None and st.last_contact_ts > 0.0
+        # Guard the stub path — but tolerate the legitimate warm-up.
+        #
+        # Oort is retrospective, so a device's utility simply does not exist
+        # until it has participated. Raising the first time a served device has
+        # no loss would kill a healthy run during its warm-up. What is NOT
+        # legitimate is a device that has been served REPEATEDLY and still
+        # reports nothing: that is the stub path, where the loss is a random
+        # draw and ranking on it would be a random ordering wearing Oort's name.
+        # `on_time_count`, not `last_served_round`: the latter counts CONTACTS,
+        # including failed ones, and a device contacted twice whose sessions both
+        # failed has no loss entirely legitimately. Only a device that has
+        # *successfully participated* twice and still reports nothing indicates
+        # the stub.
+        repeatedly_served = any(
+            (st := device_states.get(d)) is not None and st.on_time_count >= 2
             for d in members
         )
         has_signal = any(
@@ -161,12 +172,13 @@ class OortPolicy:
             and st.last_num_examples > 0
             for d in members
         )
-        if served_any and not has_signal:
+        if repeatedly_served and not has_signal:
             raise OortUnusableError(
                 "arm B2 (Oort) has no per-device loss to rank on although "
-                "devices have been served — this is what running B2 without "
-                "--real-model looks like. The stub's loss is a random draw, so "
-                "ranking on it would be a random ordering wearing Oort's name."
+                "devices have now been served twice or more — this is what "
+                "running B2 without --real-model looks like. The stub's loss is "
+                "a random draw, so ranking on it would be a random ordering "
+                "wearing Oort's name."
             )
 
         def _contact_utility(wp: ContactWaypoint) -> float:

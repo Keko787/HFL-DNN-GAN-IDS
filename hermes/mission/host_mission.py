@@ -312,8 +312,14 @@ class HFLHostMission:
             outcome=outcome,
             contact_ts=grad.submitted_at,
             utility=adv.utility,
-            local_loss=adv.local_loss,
-            num_examples=adv.num_examples,
+            # Prefer the GRADIENT's values over the advertisement's. The adv was
+            # built before this session trained, so its loss describes the
+            # PREVIOUS round; the gradient's describes the update we just took.
+            # Using the adv here would lag Oort's ranking signal a full mission
+            # behind the training it summarises.
+            local_loss=(grad.local_loss if grad.local_loss is not None
+                        else adv.local_loss),
+            num_examples=(grad.num_examples or adv.num_examples),
             bytes_received=grad.byte_count,
             bytes_sent=push_byte_count(push),
         )

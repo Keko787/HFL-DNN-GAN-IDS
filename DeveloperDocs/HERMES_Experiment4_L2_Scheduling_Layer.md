@@ -352,7 +352,7 @@ different weights; no seed → still nondeterministic, by design. Regression-tes
 |---|---|
 | Scheduler entry points (Exp-4 path) | `FLScheduler.build_contact_queue` / `build_pass_2_queue` — [`hermes/scheduler/fl_scheduler.py`](../hermes/scheduler/fl_scheduler.py) |
 | Stages | [`hermes/scheduler/stages/`](../hermes/scheduler/stages/) — `s1_eligibility`, `s2a_readiness`*, `s2b_flag`*, `s3_deadline`, `s3a_cluster`, `s3b_feasibility`, `s3c_mission_window`, `s35_selector`* (*not on the Exp-4 path) |
-| Baseline policies (arm B1) | [`hermes/scheduler/policies/`](../hermes/scheduler/policies/) — `max_aoi.py` (MAX-AoI greedy), plus Exp-3's `arrival_order` / `edf_feasibility`. All expose `rank_contacts`, so they swap through the same `target_selector` slot. **Outside the frozen surface** |
+| Baseline policies (arms B1/B2) | [`hermes/scheduler/policies/`](../hermes/scheduler/policies/) — `max_aoi.py` (MAX-AoI greedy, B1), `oort.py` (Oort statistical utility, B2), plus Exp-3's `arrival_order` / `edf_feasibility`. All expose `rank_contacts`, so they swap through the same `target_selector` slot. **Outside the frozen surface** |
 | In-flight abort + abandoned-device widening | `MuleSupervisor._remaining_is_feasible` / `._widen_abandoned` — [`hermes/mule/mule_main.py`](../hermes/mule/mule_main.py) |
 | Mission accounting that feeds S3c | `mission_planned_devices` / `mission_served_devices` — [`hermes/mule/mule_main.py`](../hermes/mule/mule_main.py) |
 | Selector | [`hermes/scheduler/selector/`](../hermes/scheduler/selector/) — `target_selector_rl.py`, `features.py`, `ddqn.py`, `scope_guard.py` |

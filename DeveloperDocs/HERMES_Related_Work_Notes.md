@@ -170,7 +170,7 @@ Guardrails, so the revision does not overreach in either direction:
 
 * **Do not claim** UAV-FL scheduling is unstudied. It is well studied — for a *different*
   architecture. The taxonomy in §1 is the honest framing.
-* **If we run Oort, do not call it "Oort".** Scoping it against the code (checklist §5.1a) found we
+* **✅ Implemented as arm `B2` (2026-08-13) — and do not call it "Oort".** Scoping it against the code (checklist §5.1a) found we
   can port its **statistical utility + staleness** — the parts needing only retrospective,
   mule-visible state — but **not its system-speed straggler penalty**, because no per-device compute
   speed exists in our model. Our loss is also the **mean** where Oort specifies the **RMS** over

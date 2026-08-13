@@ -408,6 +408,7 @@ class ClientMission:
             delta_theta=result.delta_theta,
             num_examples=result.num_examples,
             submitted_at=time.time(),
+            local_loss=float(result.loss),
         )
         self.rf.send_gradient(grad)
 

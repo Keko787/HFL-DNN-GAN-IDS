@@ -130,6 +130,11 @@ class GradientSubmission:
     submitted_at: float
     byte_count: int = 0
     checksum: str = ""
+    # Oort baseline input (arm B2). Carried HERE rather than only on the next
+    # advertisement so it arrives in the SAME session as the update it describes
+    # — otherwise the mule's ranking signal lags a full mission round behind the
+    # training it summarises, which would handicap the baseline unfairly.
+    local_loss: Optional[float] = None
 
     def __post_init__(self) -> None:
         if self.byte_count == 0:
