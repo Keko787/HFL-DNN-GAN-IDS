@@ -178,6 +178,21 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
              "is only a sort key -- that is what the committed results used.",
     )
     parser.add_argument(
+        "--keep-event-traces", action="store_true",
+        help="Keep each trial's raw per-contact event stream (and the configs "
+             "carrying device positions) next to the CSV, instead of deleting "
+             "the run dir at teardown. Costs a little disk and changes NO trial "
+             "behaviour. Without it a finished sweep cannot be re-scored "
+             "against any new scheduling baseline -- the per-contact record is "
+             "gone -- so answering 'how would policy X have done?' means "
+             "re-running everything.",
+    )
+    parser.add_argument(
+        "--trace-dir", type=Path, default=None,
+        help="Where --keep-event-traces writes. Defaults to a '<csv-stem>_traces' "
+             "directory beside the CSV.",
+    )
+    parser.add_argument(
         "--mission-window-adaptation", action="store_true",
         help="S3c: adapt the deadline window at MISSION level from the mule's "
              "recent success history. The per-device rule only sees 'this "
@@ -266,6 +281,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         mission_window_target=float(args.mission_window_target),
         mission_window_gain=float(args.mission_window_gain),
         mission_window_max_scale=float(args.mission_window_max_scale),
+        trace_root=(
+            (args.trace_dir or args.csv.with_name(f"{args.csv.stem}_traces"))
+            if args.keep_event_traces else None
+        ),
     )
     if args.real_model:
         log.info(

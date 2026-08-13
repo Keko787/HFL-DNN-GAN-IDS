@@ -145,8 +145,27 @@ Two things to know before using them:
   against pooling toggled rows with historical ones. Write to a new path instead.
 
 ```bash
-python -m experiments.exp4.runner_main --csv results/exp4_s3c/on.csv --arms H1 --N 6 --rrf 50 --n-missions 6 --n-trials 20 --realism --mission-budget-s 120 --mission-window-adaptation
+python -m experiments.exp4.runner_main --csv results/exp4_s3c/on.csv --arms H1 --N 6 --rrf 50 --n-missions 8 --n-trials 20 --realism --mission-budget-s 120 --mission-window-adaptation --keep-event-traces
 ```
+
+### 2.2 `--keep-event-traces` — pass this on anything you might want to re-analyse
+
+Each trial's per-contact event stream normally lives in a temp run dir, gets folded into the
+aggregate metrics, and is **deleted at teardown**. That is why a finished sweep cannot be re-scored
+against a new scheduling baseline — there is nothing left to replay, so "how would policy X have
+done?" costs a full re-run.
+
+`--keep-event-traces` copies each trial's raw events next to the CSV instead
+(`<csv-stem>_traces/`, or `--trace-dir`). It changes **no** trial behaviour.
+
+| | |
+|---|---|
+| **Cost** | ~9.7 KB per trial — about **2.3 MB for a 240-trial matrix** |
+| **What you get** | `device_served` / `device_serve_failed` with timestamps, plus **device positions** (kept from the configs — the events do not carry them, and no spatial policy can be scored without them) |
+| **Failed trials** | captured too — traces are taken *before* the timeout check, so timed-out runs keep theirs |
+| **Caveat** | `device_served` has no `mission_round`; attribute rounds by joining timestamps against `mission_started` / `mission_completed` |
+
+**Rule of thumb: if a run is expensive enough that you would not want to repeat it, pass this flag.**
 
 ---
 

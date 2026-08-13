@@ -11,14 +11,11 @@ frozen**, amended twice since (see §1a). Phase 2 — **done, full-text verified
 and the reading *reversed* the first pass's recommendation (§4). Phase 3 — not started; its **§5.0
 S3c pilot is costed and ready**. Phase 4 — not started.
 
-**Next two actions**, in order:
+**Next action:** the **~8-minute S3c stub pilot** (§5.0) — the cheapest decision on the board; it
+can only shrink the matrix.
 
-1. ⚠ **Add `--keep-event-traces` before anything expensive runs** (§4). The per-contact trace is
-   currently deleted at trial teardown, so **no baseline can be scored retroactively** — including
-   against the matrix we are about to pay for. Small change, and it is the difference between the
-   next comparator being a re-parse and being a third full re-run.
-2. **The ~8-minute S3c stub pilot** (§5.0) — the cheapest decision on the board; it can only shrink
-   the matrix.
+> Trace retention is **done** (§4) — pass `--keep-event-traces` on every run from here, including
+> the pilot, so nothing expensive is paid for twice.
 
 ---
 
@@ -37,7 +34,7 @@ The single most useful distinction here. Most open items do **not** need new tri
 | Apply `dead_zone` to the mule arms | **Yes** (H2/H3 only) | Would make the L1 sweep a real severity sweep |
 | Add a SOTA baseline arm | **Yes** (new arm) | No existing data for it |
 | Score **any** baseline retroactively | **Not possible** | The per-contact trace is deleted at trial teardown (§4), so there is nothing to replay. Both chosen baselines are re-run items |
-| Retain event traces (`--keep-event-traces`) | **No** — but do it *with* the matrix | Changes no trial behaviour; it only stops the run-dir JSONL being deleted. Skipping it means the next baseline request costs another full re-run |
+| Retain event traces (`--keep-event-traces`) | **No** — but do it *with* the matrix | Changes no trial behaviour; it only stops the run-dir JSONL being deleted. ~9.7 KB/trial. Skipping it means the next baseline request costs another full re-run |
 | Change N, mule count, or `n_missions` | **Yes** | Different operating point |
 | Wire S2A/S2B readiness gating | **Yes** if it changes admission | Currently inert |
 | — | — | — |
@@ -185,11 +182,18 @@ The gap flagged by 74A. Closed at the reading stage; implementation choices rema
       readiness term (`w1·perf + w2·diversity`), not a training loss, so it is not a stand-in for
       Oort's utility. **Both chosen baselines are therefore re-run items** — see the new ledger row
       in §1.
-- [ ] ⚠ **Add trace retention before the matrix runs** (`--keep-event-traces`). Small change; the
-      driver already shuts down with `cleanup_tmpdir=False` and only deletes in the `finally`.
-      **Without it the matrix produces no data any future baseline can be scored against**, and the
-      next comparator a reviewer asks for costs a third full re-run. With it, future baselines are
-      re-parses. *This is the single cheapest insurance on the board — do it before, not after.*
+- [x] ✅ **Trace retention implemented** — `--keep-event-traces` (plus `--trace-dir`). Off by
+      default, changes **no** trial behaviour; it only stops the run dir being deleted. Verified
+      end-to-end: a captured trace yields per-contact `device_served` / `device_serve_failed`
+      events with timestamps **and** device positions (positions live only in the configs, so both
+      `*.jsonl` and `*.json` are kept), from which last-served time — what MAX-AoI needs — is
+      directly derivable. Traces are captured **before** the timeout check, so timed-out trials
+      keep theirs too. **Cost: ~9.7 KB per trial, ≈2.3 MB for a 240-trial matrix.**
+      *Known limitation:* `device_served` carries no `mission_round`; round attribution requires a
+      timestamp interval join against `mission_started` / `mission_completed`. Recoverable, but not
+      a direct field — worth knowing before writing a scorer.
+      **Use it on the matrix run.** Without it, the next comparator a reviewer asks for costs a
+      third full re-run; with it, future baselines are re-parses.
 - [ ] Document the chosen baselines + the fairness argument (same harness, same seeds) before running.
 - [x] **Related Work material captured** — [`HERMES_Related_Work_Notes.md`](HERMES_Related_Work_Notes.md)
       holds the reading, the verified findings, the architectural taxonomy, and the starvation/fairness
@@ -237,7 +241,8 @@ Per-trial means behind those figures: real-model `n_missions=4` **37.8 s** (p90 
 > be interpreted, which is the worst outcome available. Use `n_missions≥8`, or lower
 > `--mission-window-history` to 3, and say which in the write-up.
 
-- [ ] Run the stub pilot (2 configurations × 20 paired seeds, budget on, `n_missions≥8`).
+- [ ] Run the stub pilot (2 configurations × 20 paired seeds, budget on, `n_missions≥8`), **with
+      `--keep-event-traces`** so even the pilot is re-analysable.
 - [ ] Record which of the three outcomes above it produced, **in this document**, before the matrix
       is fixed.
 - [ ] Only if it is non-null: decide axis-vs-pinned and carry the decision into §5's arm/axis lists.

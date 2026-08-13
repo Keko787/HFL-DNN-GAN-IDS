@@ -60,6 +60,33 @@ ARMS = ("H0", "H1", "H2", "H3")
 #: how the trial was configured, not what it measured.
 PROVENANCE_COLUMNS = ("mission_budget_s", "mission_window_adaptation")
 
+#: Characters Windows forbids in a path component. Cell ids are built from the
+#: grid axes and contain ``|`` and ``=`` (e.g.
+#: ``N=6|dead_zone=0.0|regime=jittery``), so a trace directory named after one
+#: is unopenable on Windows unless it is sanitised.
+_ILLEGAL_PATH_CHARS = '<>:"/\\|?*'
+#: Keep a comfortable margin under Windows' 260-char MAX_PATH once the results
+#: root and the per-file names are appended.
+_MAX_TRACE_NAME = 120
+
+
+def trace_dir_name(cell) -> str:
+    """Filesystem-safe, collision-free directory name for one trial's traces.
+
+    Encodes cell / arm / trial / seed so a trace can be matched back to its CSV
+    row, which is the entire point of keeping it. Over-long names are truncated
+    and given a hash suffix rather than silently colliding — two trials sharing
+    a directory would interleave their events and quietly corrupt both.
+    """
+    raw = f"{cell.cell_id}__{cell.arm}__t{cell.trial_index}__s{cell.seed}"
+    safe = "".join("-" if c in _ILLEGAL_PATH_CHARS else c for c in raw)
+    safe = safe.strip(" .")  # Windows rejects trailing dots/spaces
+    if len(safe) > _MAX_TRACE_NAME:
+        import hashlib
+        digest = hashlib.sha1(raw.encode("utf-8")).hexdigest()[:8]
+        safe = f"{safe[: _MAX_TRACE_NAME - 9]}-{digest}"
+    return safe
+
 
 class Exp4TrialTimeout(RuntimeError):
     """Raised when a trial blows its hard wall-clock budget.
@@ -161,6 +188,14 @@ class Exp4Driver:
     mission_window_target: float = 0.8
     mission_window_gain: float = 2.0
     mission_window_max_scale: float = 4.0
+    # Per-contact event traces. The run-dir JSONL is normally folded into
+    # aggregate metrics and then DELETED at teardown, which is why no scheduling
+    # policy can be scored retroactively against a finished sweep — there is
+    # nothing left to replay. Setting a trace root copies each trial's raw
+    # events (and the configs carrying device positions) alongside the CSV, so a
+    # future baseline is a re-parse instead of another full re-run. Changes no
+    # trial behaviour; it only stops the deletion.
+    trace_root: Optional[Path] = None
 
     def run_trial(self, cell: Cell) -> Mapping[str, Any]:
         params = cell.params
@@ -475,6 +510,41 @@ class Exp4Driver:
             f"expected 'canonical' or 'synthetic'"
         )
 
+    def _capture_traces(self, run_dir, cell) -> None:
+        """Copy this trial's raw events + configs out before teardown deletes them.
+
+        Copies both kinds of file deliberately:
+
+        * ``*.jsonl`` — the per-contact event stream (``device_served``,
+          ``device_serve_failed``, ``mission_completed`` …) with timestamps.
+        * ``*.json``  — the process configs, which carry **device positions**.
+          The events do not; without positions no spatial policy (MAX-AoI's
+          nearest-predecessor pathing, any travel-cost rule) can be scored.
+
+        Never raises. Losing a trace is a nuisance; losing the trial that
+        produced it because bookkeeping failed is not acceptable.
+        """
+        if self.trace_root is None:
+            return
+        try:
+            dest = Path(self.trace_root) / trace_dir_name(cell)
+            dest.mkdir(parents=True, exist_ok=True)
+            n = 0
+            for pattern in ("*.jsonl", "*.json"):
+                for src in Path(run_dir).glob(pattern):
+                    shutil.copy2(src, dest / src.name)
+                    n += 1
+            log.info(
+                "exp4 trial cell=%s trial=%d arm=%s: kept %d trace file(s) in %s",
+                cell.cell_id, cell.trial_index, cell.arm, n, dest,
+            )
+        except Exception:
+            log.warning(
+                "exp4 trial cell=%s trial=%d arm=%s: could not keep event "
+                "traces (continuing; the trial itself is unaffected)",
+                cell.cell_id, cell.trial_index, cell.arm, exc_info=True,
+            )
+
     def _run_topology(self, topo, *, cell, n_devices, rf_range_m, n_missions):
         orch = MultiProcessOrchestrator(topo, capture_output=True)
         try:
@@ -483,6 +553,11 @@ class Exp4Driver:
             orch.shutdown_all(
                 timeout=self.shutdown_timeout_s, cleanup_tmpdir=False,
             )
+            # Capture BEFORE the timeout check below, so a timed-out trial keeps
+            # its trace too — those are the runs whose events are most worth
+            # having, and they are exactly the ones that would otherwise raise
+            # straight past this and be deleted in the `finally`.
+            self._capture_traces(orch.tmpdir, cell)
             if timed_out:
                 raise Exp4TrialTimeout(
                     f"exp4 trial exceeded {self.trial_budget_s:.0f}s budget "
