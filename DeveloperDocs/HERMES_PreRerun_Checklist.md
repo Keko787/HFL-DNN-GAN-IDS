@@ -7,12 +7,18 @@ either done or explicitly deferred with a reason. It exists so we pay the comput
 **Status:** open. Nothing is scheduled to re-run until §5's exit criteria are met.
 
 **Progress:** Phase 0 — 8 of 11 closed (3 open, all no-re-run). Phase 1 — **done, scheduler
-frozen**, amended twice since (see §1a). Phase 2 — first pass done, **full-text verification is the
-current blocker**. Phase 3 — not started; its **§5.0 S3c pilot is costed and ready to run** the
-moment Phase 2 clears. Phase 4 — not started.
+frozen**, amended twice since (see §1a). Phase 2 — **done, full-text verified**; baselines chosen,
+and the reading *reversed* the first pass's recommendation (§4). Phase 3 — not started; its **§5.0
+S3c pilot is costed and ready**. Phase 4 — not started.
 
-**Next action when Phase 2 clears:** the ~8-minute stub pilot in §5.0. It is the cheapest decision
-on the board — it can only shrink the matrix.
+**Next two actions**, in order:
+
+1. ⚠ **Add `--keep-event-traces` before anything expensive runs** (§4). The per-contact trace is
+   currently deleted at trial teardown, so **no baseline can be scored retroactively** — including
+   against the matrix we are about to pay for. Small change, and it is the difference between the
+   next comparator being a re-parse and being a third full re-run.
+2. **The ~8-minute S3c stub pilot** (§5.0) — the cheapest decision on the board; it can only shrink
+   the matrix.
 
 ---
 
@@ -30,6 +36,8 @@ The single most useful distinction here. Most open items do **not** need new tri
 | Selector seeding fix | **Yes** (H2/H3 only) | Weights differ from the committed rows |
 | Apply `dead_zone` to the mule arms | **Yes** (H2/H3 only) | Would make the L1 sweep a real severity sweep |
 | Add a SOTA baseline arm | **Yes** (new arm) | No existing data for it |
+| Score **any** baseline retroactively | **Not possible** | The per-contact trace is deleted at trial teardown (§4), so there is nothing to replay. Both chosen baselines are re-run items |
+| Retain event traces (`--keep-event-traces`) | **No** — but do it *with* the matrix | Changes no trial behaviour; it only stops the run-dir JSONL being deleted. Skipping it means the next baseline request costs another full re-run |
 | Change N, mule count, or `n_missions` | **Yes** | Different operating point |
 | Wire S2A/S2B readiness gating | **Yes** if it changes admission | Currently inert |
 | — | — | — |
@@ -140,33 +148,48 @@ Audit equations, code behaviour, provenance, calibration, trial counts, question
 
 ---
 
-## 4. Phase 2 — SOTA baseline research  *(first pass done)*
+## 4. Phase 2 — SOTA baseline research  ✅ **FULL-TEXT VERIFIED — blocker cleared**
 
-> **First pass:** [`HERMES_SOTA_Baseline_Candidates.md`](HERMES_SOTA_Baseline_Candidates.md) —
-> a scoped scan, **abstract-level only, not yet full-text verified**. Recommends picking **two**:
-> a **FedCS-style deadline-feasibility** selector (the closest analogue to our own gates) and an
-> **AoI/staleness-greedy** policy (implementable on mule-visible state, and retroactively
-> scoreable). It also argues why Oort / Power-of-Choice are *not* faithfully implementable here —
-> they assume the server can poll clients before choosing, which a data mule cannot — and that this
-> is a capability argument worth making in Related Work rather than a gap to apologise for.
+> **Verified:** [`HERMES_SOTA_Baseline_Candidates.md`](HERMES_SOTA_Baseline_Candidates.md).
+> **The full text overturned the first pass.** The scan recommended **FedCS** and dismissed
+> **Oort**; the papers say the opposite:
 >
-> Run `/deep-research` (prompt in that document's §5) for the exhaustive, verified version.
+> * **FedCS** has an explicit **Resource Request** step *before* selection — clients report channel
+>   state, capacity and data size **every round**. A mule cannot obtain that without flying there.
+> * **Oort** is retrospective by design — "a client's utility can only be determined **after** it
+>   has participated" — with utilities cached from prior participation and an explicit staleness
+>   term. That is exactly the state a mule has.
+> * **Power-of-Choice** splits: `pow-d` does query loss pre-selection (as suspected), but the
+>   published `rpow-d` variant reuses the last loss a client reported, and ports directly.
+>
+> **The capability argument survives but narrows.** The obstacle is not learned selection or
+> utility ranking — it is specifically **pre-selection reporting**. That is a sharper and more
+> defensible claim, and it says our architecture is compatible with the strong baselines.
 
-The gap flagged by 74A and still unanswered. Do the reading **before** the matrix is fixed, so a
-baseline arm can be designed in rather than bolted on.
+The gap flagged by 74A. Closed at the reading stage; implementation choices remain.
 
-- [x] Survey recent UAV-FL / FL-UAV scheduling work — **first pass done** (Tier A general FL
-      selection, Tier B UAV-specific, Tier C AoI/freshness). Abstract-level only.
-- [x] Reduce each candidate to a decision rule and judge implementability — **done for the scan**,
-      including the finding that Oort / Power-of-Choice assume the server can *poll* clients before
-      choosing, which a data mule cannot, so they are not faithfully implementable here.
-- [ ] **Full-text verification of every rule.** ⚠ **Blocking** — the scan is abstract-level, so
-      treat its readings as hypotheses. Run `/deep-research` (prompt in the candidates doc §5) or
-      read the papers directly before implementing or citing anything.
-- [ ] **Decide the comparison mode — retroactive first.** Recommendation on the table: **FedCS-style
-      deadline-feasibility** + **AoI/staleness-greedy**, both scoreable against committed data with
-      no re-run. Needs confirming against the harness (does it expose last-served time and
-      per-contact history?).
+- [x] Survey recent UAV-FL / FL-UAV scheduling work (Tier A general FL selection, Tier B
+      UAV-specific, Tier C AoI/freshness).
+- [x] Reduce each candidate to a decision rule and judge implementability.
+- [x] **Full-text verification of every rule that affects the decision** — done; see the candidates
+      doc §2 (correction table) and §6 (verification log). Three non-recommended candidates remain
+      abstract-level and are flagged **not cleared for citation**.
+- [x] **Choose the baselines.** **Oort** (cited, faithfully implementable, and its staleness term is
+      a direct rival to our Φ-widening) + **MAX-AoI / staleness-greedy** (established named
+      comparator, needs only last-served time), with **FedCS in degraded form** as the explicit
+      capability contrast.
+- [x] **Comparison mode — checked against the harness. Retroactive scoring is impossible.** Not
+      just for Oort: the per-contact record lives in the run-dir JSONL, `consume_run_dir` folds it
+      into aggregates, and `driver.py`'s `finally: orch.cleanup()` **deletes the trace at
+      teardown**. The committed CSVs keep only aggregate loss. `RoundCloseDelta.utility` is an S2B
+      readiness term (`w1·perf + w2·diversity`), not a training loss, so it is not a stand-in for
+      Oort's utility. **Both chosen baselines are therefore re-run items** — see the new ledger row
+      in §1.
+- [ ] ⚠ **Add trace retention before the matrix runs** (`--keep-event-traces`). Small change; the
+      driver already shuts down with `cleanup_tmpdir=False` and only deletes in the `finally`.
+      **Without it the matrix produces no data any future baseline can be scored against**, and the
+      next comparator a reviewer asks for costs a third full re-run. With it, future baselines are
+      re-parses. *This is the single cheapest insurance on the board — do it before, not after.*
 - [ ] Document the chosen baselines + the fairness argument (same harness, same seeds) before running.
 
 ---
