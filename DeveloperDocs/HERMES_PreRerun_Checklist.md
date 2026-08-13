@@ -11,22 +11,23 @@ frozen**, amended twice since (§1a). Phase 2 — **done, full-text verified**; 
 the reading *reversed* the first pass's recommendation (§4). Phase 3 — **§5.0 pilot run, result in
 §5.0a**; the matrix itself (§5.1) is **the remaining blocker**. Phase 4 — not started.
 
-**Exit criteria status: 3 of 6 met.** ✅ 2 (frozen) · ✅ 3 (baselines chosen — nothing is
-retroactively scorable, so both are re-run arms) · ✅ 4 (pilot recorded). ❌ 1 (three Phase-0 items
-need an explicit *deferred-with-reason* decision) · ❌ 5 (**the matrix is not written or costed**)
-· ❌ 6 (follows from 5).
+**Exit criteria status: 4 of 6 met.** ✅ 2 (frozen; amended three times, each inert by default) ·
+✅ 3 (baselines chosen **and implemented** — nothing is retroactively scorable, so both are re-run
+arms) · ✅ 4 (pilot recorded, §5.0a). ❌ 1 (three Phase-0 items need an explicit
+*deferred-with-reason* decision) · ❌ 5 (**the matrix is not written or costed**) · ❌ 6 (follows
+from 5).
 
-**Next action — the two decisions that unblock everything, in §5.1a.** Neither costs compute; both
-are design calls that the matrix cannot be written without:
+**Both §5.1a decisions are taken.** Enforcement is **ON** in the headline; **MAX-AoI (`B1`)** and
+**Oort's statistical-utility selection (`B2`)** are **both implemented and tested**. Six arms now
+exist: `H0 H1 H2 H3 B1 B2`.
 
-1. **Is deadline enforcement on in the headline?** The single biggest re-run driver (−0.225 mission
-   completion, measured). Freeze D1 deliberately left this to the matrix so it is costed once.
-2. **Do the two SOTA baselines ship as arms?** They are **re-run items** (§4) and, unlike every
-   other arm, they **do not exist in code yet** — that is implementation work which must be scoped
-   *before* the matrix is costed, not discovered during it.
+**Next action — write and cost the matrix (§5.1).** The last substantive blocker. It needs: the arm
+list and which pairings are valid, the axes and their ranges, seeds per cell, a justified
+`mission_budget_s`, and a wall-clock cost at concurrency 3 before anything launches.
 
-> Trace retention is **done** (§4) — pass `--keep-event-traces` on every run from here, so nothing
-> expensive is paid for twice.
+> **Two constraints the matrix must respect.** `B2` is **real-model-only** (the stub's loss is a
+> random draw), so it cannot appear in stub pilots. And **`--keep-event-traces` goes on every run**
+> from here (§4) — without it, the next comparator a reviewer asks for costs another full re-run.
 
 ---
 
