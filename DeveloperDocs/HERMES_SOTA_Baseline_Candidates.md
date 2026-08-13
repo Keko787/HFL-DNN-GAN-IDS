@@ -9,6 +9,11 @@ overturned the central conclusion.** Candidates that do not affect the choice ar
 un-implementable. The full text says the opposite. FedCS polls clients before selecting; Oort is
 retrospective and runs on exactly the state a data mule has.
 
+> **Writing the paper, not choosing arms?** See
+> [`HERMES_Related_Work_Notes.md`](HERMES_Related_Work_Notes.md). This document decides *which
+> baselines we run*; that one holds *what we say about the literature* — including papers worth
+> discussing that are unusable as arms.
+
 ---
 
 ## 1. What we actually need

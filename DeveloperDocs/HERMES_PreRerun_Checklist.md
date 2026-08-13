@@ -191,6 +191,9 @@ The gap flagged by 74A. Closed at the reading stage; implementation choices rema
       next comparator a reviewer asks for costs a third full re-run. With it, future baselines are
       re-parses. *This is the single cheapest insurance on the board — do it before, not after.*
 - [ ] Document the chosen baselines + the fairness argument (same harness, same seeds) before running.
+- [x] **Related Work material captured** — [`HERMES_Related_Work_Notes.md`](HERMES_Related_Work_Notes.md)
+      holds the reading, the verified findings, the architectural taxonomy, and the starvation/fairness
+      thread that positions Amendments 1–2 against prior art. *(No re-run; it is a writing input.)*
 
 ---
 
