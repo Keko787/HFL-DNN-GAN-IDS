@@ -7,15 +7,26 @@ either done or explicitly deferred with a reason. It exists so we pay the comput
 **Status:** open. Nothing is scheduled to re-run until §5's exit criteria are met.
 
 **Progress:** Phase 0 — 8 of 11 closed (3 open, all no-re-run). Phase 1 — **done, scheduler
-frozen**, amended twice since (see §1a). Phase 2 — **done, full-text verified**; baselines chosen,
-and the reading *reversed* the first pass's recommendation (§4). Phase 3 — not started; its **§5.0
-S3c pilot is costed and ready**. Phase 4 — not started.
+frozen**, amended twice since (§1a). Phase 2 — **done, full-text verified**; baselines chosen, and
+the reading *reversed* the first pass's recommendation (§4). Phase 3 — **§5.0 pilot run, result in
+§5.0a**; the matrix itself (§5.1) is **the remaining blocker**. Phase 4 — not started.
 
-**Next action:** the **~8-minute S3c stub pilot** (§5.0) — the cheapest decision on the board; it
-can only shrink the matrix.
+**Exit criteria status: 3 of 6 met.** ✅ 2 (frozen) · ✅ 3 (baselines chosen — nothing is
+retroactively scorable, so both are re-run arms) · ✅ 4 (pilot recorded). ❌ 1 (three Phase-0 items
+need an explicit *deferred-with-reason* decision) · ❌ 5 (**the matrix is not written or costed**)
+· ❌ 6 (follows from 5).
 
-> Trace retention is **done** (§4) — pass `--keep-event-traces` on every run from here, including
-> the pilot, so nothing expensive is paid for twice.
+**Next action — the two decisions that unblock everything, in §5.1a.** Neither costs compute; both
+are design calls that the matrix cannot be written without:
+
+1. **Is deadline enforcement on in the headline?** The single biggest re-run driver (−0.225 mission
+   completion, measured). Freeze D1 deliberately left this to the matrix so it is costed once.
+2. **Do the two SOTA baselines ship as arms?** They are **re-run items** (§4) and, unlike every
+   other arm, they **do not exist in code yet** — that is implementation work which must be scoped
+   *before* the matrix is costed, not discovered during it.
+
+> Trace retention is **done** (§4) — pass `--keep-event-traces` on every run from here, so nothing
+> expensive is paid for twice.
 
 ---
 
@@ -303,12 +314,58 @@ that would also settle caveat 1.
 Both configurations write **one new CSV each** — an existing file cannot be resumed now that rows
 carry provenance columns (§1a).
 
+### 5.1a The two decisions that block the matrix *(no compute — design calls)*
+
+The matrix cannot be written, let alone costed, until these are settled. Both were deliberately
+deferred to this point so each is paid for once.
+
+#### Decision A — is deadline enforcement on in the headline?
+
+Freeze **D1** left this to the matrix on purpose. The facts, all measured:
+
+* **On:** the scheduler the paper describes — a deadline that actually binds. Costs **−0.225
+  mission completion (−29 %)**, and carries Amendments A1 (in-flight abort) and A2 (starvation
+  fix) with it, since both ride the same toggle. Every published participation figure changes.
+* **Off:** reproduces the committed numbers, but ships a scheduler whose "deadline" is a sort key.
+  That is exactly what the L2 trace flagged, and it is only defensible if stated plainly in the
+  text.
+
+> **Recommendation: on.** The paper's contribution is a *deadline-aware* scheduler; a 29 % honest
+> cost is easier to defend than a deadline that does not bind, and the audit already found it once.
+
+#### Decision B — do the SOTA baselines ship as arms, and which?
+
+**They do not exist in code.** `ARMS = ("H0","H1","H2","H3")`; nothing implements Oort, MAX-AoI or
+FedCS. Neither is retroactively scorable (§4), so each is a **new arm** — implementation work that
+must be scoped *before* the matrix is costed rather than discovered inside it.
+
+The two are **not** equal effort, and this asymmetry should drive the choice:
+
+| Baseline | What it needs | State available today? | Effort |
+|---|---|---|---|
+| **MAX-AoI / staleness-greedy** | last-served time + positions, ranked highest-age first with nearest-predecessor pathing | **Yes — already in `DeviceSchedulerState`** (`last_contact_ts`, `idle_time_ref_ts`, `missed_count`); positions known; slots into the existing `target_selector` extension point | **Low** — a new selector, no new data path |
+| **Oort** | statistical utility `\|B_i\|·√(mean Loss²)` + speed + staleness | **No.** There is **no per-device training loss anywhere in the device→mule types.** `RoundCloseDelta.utility` is `w1·perf + w2·diversity`, an S2B readiness term — not a loss, and using it would be a different algorithm wearing Oort's name | **High** — new data path: device computes loss → new protocol field → selector |
+
+**Both touch the frozen L2 surface** (`selector/`), so this is **Freeze Amendment 3**. As with
+Amendments 1–2: doing it *before* the matrix costs nothing, doing it *after* costs a second full
+re-run.
+
+> **Recommendation: MAX-AoI first, Oort second.** MAX-AoI is cheap, needs no new data, and is the
+> UAV/AoI-shaped comparator 74A actually asked for — it directly rivals our bucket+deadline
+> ordering. Oort is the more citable name but costs a protocol change; take it if the schedule
+> allows, and if not, Related Work already states precisely why (§3 of the candidates doc) rather
+> than pretending it was infeasible.
+
 ### 5.1 The matrix itself
 
 Finalize E1–E4, baselines, scaling, sensitivity, statistics, provenance labels — **once**.
 
-- [ ] Arms: H0, H1, H2, H3 + SOTA baseline(s). State which pairwise comparisons are valid
-      (today: H1-vs-H0 and H3-vs-H2 only; H2/H3-vs-H0/H1 is **not** paired).
+- [ ] Arms: H0, H1, H2, H3 + whichever baselines §5.1a-B selects. State which pairwise comparisons
+      are valid (today: H1-vs-H0 and H3-vs-H2 only; H2/H3-vs-H0/H1 is **not** paired). A new
+      baseline arm is paired with the mule arms only if it shares their backhaul model.
+- [ ] **S3c: pinned, not swept** (§5.0a). It interacts with *mission count*, not with the other
+      axes, so it is a fixed setting here. If the transient claim is wanted, cost the separate
+      `n_missions` 4/8/16 ladder instead of doubling every cell.
 - [ ] Axes and their ranges: `dead_zone × link_quality`, regime, N, mule count, `n_missions`,
       mission budget.
 - [ ] **Decide the two scheduler toggles (§1a).** `--mission-budget-s` carries A1+A2 with it;
