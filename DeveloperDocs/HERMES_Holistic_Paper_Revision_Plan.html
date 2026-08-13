@@ -309,6 +309,15 @@
           the window, reliable service tightens it. The manuscript text still needs correcting.</td>
       </tr>
       <tr>
+        <td>Deadline <em>enforcement</em> (new — §7.7)</td>
+        <td>Assumed the scheduler enforced the deadline it computed</td>
+        <td class="priority-high"><strong>It did not.</strong> A source trace found
+          <code>Deadline(j)</code> was a <em>sort key only</em> — never compared to a clock — so a
+          device whose deadline could not be met was still served. Now enforced by a hard gate, and
+          the cost measured: <strong>−29 % mission completion</strong> at a slack budget. Every
+          committed E4 result was recorded with enforcement <em>off</em>.</td>
+      </tr>
+      <tr>
         <td>Statistics &amp; figures</td>
         <td>Not specified beyond “paired tests + effect sizes”</td>
         <td class="priority-med"><strong>Now a hard standard</strong> (§7.6). Two figure defects were
@@ -433,6 +442,14 @@
     while a failed or partial contact should widen the window and preserve the previous reference.
     <strong>The code now implements this correctly, with unit coverage</strong>; what remains is
     correcting the manuscript text and Algorithm 1, which still print the update with the sign reversed.
+  </p>
+  <div class="callout warning">
+    <strong>Separately — and more seriously — the deadline was never <em>enforced</em>.</strong>
+    It was computed and used to sort, but nothing compared it to a clock, so the scheduler was not
+    deadline-aware in the sense the paper claims. That is now fixed and, more usefully, quantified
+    (§7.7): enforcing it costs <strong>29 % of mission completion</strong>, because roughly a third
+    of the queue was being served in violation of deadlines the scheduler had already computed.
+    This is a <em>result</em>, not just a bug-fix, and it directly answers reviewer 74B.
   </p>
 
   <h3>3.2 Correct experiment provenance</h3>
@@ -873,6 +890,70 @@
       </tr>
     </tbody>
   </table>
+
+  <h3>7.7 Deadline enforcement — a new result, and the answer to 74B</h3>
+  <p>
+    A source trace of Layer 2 found that <code>Deadline(j)</code> was computed by S3 and propagated
+    by S3a but <strong>never compared to a clock</strong>. It was a sort key; a device whose deadline
+    could not be met was still queued and still served. The scheduler was therefore not
+    "deadline-aware" in the sense the paper claims.
+  </p>
+  <p>
+    That is now enforced by a hard feasibility gate placed <em>before</em> ordering — so the learned
+    selector cannot resurrect a contact it drops, preserving the architectural guarantee — and,
+    more usefully for the paper, <strong>the cost of enforcement has been measured</strong>.
+  </p>
+
+  <table>
+    <thead>
+      <tr><th>Mission budget</th><th>update_yield</th><th>mission_completion</th><th>round_close@2</th><th>&Delta; completion vs control</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><strong>enforcement off</strong> (every committed E4 result)</td><td>2.09</td><td>0.767</td><td>0.663</td><td>baseline</td></tr>
+      <tr><td><strong>120 s</strong> — deadline only, budget slack</td><td>1.26</td><td><strong>0.542</strong></td><td>0.388</td><td class="priority-high"><strong>&minus;0.225</strong> &#10003;</td></tr>
+      <tr><td>60 s</td><td>1.20</td><td>0.483</td><td>0.375</td><td>&minus;0.283 &#10003;</td></tr>
+      <tr><td>30 s</td><td>0.55</td><td>0.308</td><td>0.100</td><td>&minus;0.458 &#10003;</td></tr>
+      <tr><td>15 s</td><td>0.43</td><td>0.283</td><td>0.013</td><td>&minus;0.483 &#10003;</td></tr>
+    </tbody>
+  </table>
+  <p class="small">
+    H1 only (so the untrained selector cannot confound it), jittery, N=6, <code>n_missions=4</code>,
+    20 paired seeds per shard, 100/100 valid trials, each budget compared to the control paired by
+    seed. &#10003; = CI excludes 0 and paired Wilcoxon p&lt;0.05.
+  </p>
+
+  <div class="callout success">
+    <strong>The 120 s row is the finding.</strong> That budget is deliberately slack — well above the
+    77.8 s mean queue cost — so almost nothing is dropped for <em>budget</em> reasons. The entire loss
+    is contacts that cannot be <em>reached</em> before their own deadline, and it costs
+    <strong>29 % of mission completion</strong>. An independent offline probe over the same device
+    layouts agrees: ~34 % of contacts are unreachable in time at 5 m/s across a 100 m field, at any
+    budget. <strong>So the deadline was never slack — about a third of the queue was being served in
+    violation of deadlines the scheduler had already computed.</strong> Enforcement does not add a
+    constraint; it reveals one that was always there.
+  </div>
+
+  <p><strong>How to use this in the paper.</strong> It converts 74B from a documentation complaint
+  into a measured trade-off, which is a much stronger position:</p>
+  <ul>
+    <li>State the rule and its rationale (as §3.1 already requires), <em>and</em> report that
+      enforcing it costs ~29 % of coverage at these settings. Deadline compliance is not free, and
+      quantifying the price is more convincing than asserting the design is sound.</li>
+    <li>Note that the budget is <strong>not</strong> the binding constraint at realistic values —
+      120 s → 60 s barely moves anything. Below ~30 s it dominates and round-closure collapses to
+      &asymp;0. That is a sensitivity result in its own right.</li>
+    <li>Do <strong>not</strong> read the AUC column as an ordering: 60 s scores higher than 120 s
+      because the bimodal collapse mode dominates at this n. Participation is the trustworthy signal.</li>
+  </ul>
+
+  <div class="callout warning">
+    <strong>Two boundaries to keep.</strong> (1) Every committed E4 result was recorded with
+    enforcement <em>off</em>, so those participation figures are upper bounds relative to a
+    deadline-respecting scheduler; the internal comparisons remain valid because both arms ran the
+    same configuration. (2) This licenses claims about deadline <em>enforcement and its cost</em>,
+    not about the deadline <em>design</em> — the adaptation rule, its bounds, its sensitivity — which
+    still needs Exp 3's flight-budget model.
+  </div>
 </section>
 
 <section id="sota">
@@ -1014,6 +1095,11 @@
     <li><strong>Keep the provenance table.</strong> Distinguishing Chameleon Cloud, AERPAW digital
       twin, simulation, and full multi-process execution is unusually rigorous for a 6-page venue and
       directly defuses the “real vs simulated” critique.</li>
+    <li><strong>Use the deadline-enforcement trade-off (§7.7) as the scheduling result.</strong> A
+      networking audience reads “compliance costs 29 % of coverage, and here is the budget ladder”
+      as a systems finding, and it answers 74B with a measurement rather than a justification. It
+      also pairs naturally with the gated-decision framing: hard constraints bind, and the paper
+      reports what they cost.</li>
   </ul>
 
   <h3>10.2 What to cut for a short-format venue</h3>
@@ -1064,7 +1150,7 @@
       <tr><td>74A — Scheduling appears to be EDF</td><td>Formal gated methodology + multi-objective state/cost + ablations.</td></tr>
       <tr><td>74A — Scale is too small</td><td>Expand node/mule population and report scaling curves.</td></tr>
       <tr><td>74B — No new algorithm</td><td>Elevate scheduling methodology; formalize constraints, adaptation, RL boundary, and optional GAN decision.</td></tr>
-      <tr><td>74B — Deadline function unexplained</td><td>Correct equation, add rationale, bounds, and sensitivity analysis.</td></tr>
+      <tr><td>74B — Deadline function unexplained</td><td>Correct equation, add rationale, bounds, and sensitivity analysis. <strong>Now also has empirical backing</strong> (§7.7): the deadline is enforced, and the cost of enforcing it is measured across a budget ladder — 29 % of mission completion at a slack budget, from contacts that cannot be reached in time.</td></tr>
       <tr><td>74B — Buckets unexplained</td><td>Define bucket semantics and separate admission class from urgency.</td></tr>
       <tr><td>74C — Layers not evaluated end-to-end</td><td><span class="priority-low">Done.</span> E4 runs H0–H3 on the real orchestrator with a real DNN-IDS in the loop; §7.4.</td></tr>
       <tr><td>74C — FL-vs-centralized baseline weak</td><td>Demote E1 to an architectural transport microbenchmark.</td></tr>

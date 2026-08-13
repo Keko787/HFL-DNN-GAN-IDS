@@ -130,6 +130,62 @@ scheduling simulator and are complementary. Consequently this experiment
 validates **participation/convergence resilience** (Observation 3), not the
 budget-scheduling claim (Observation 4), which is the H2 (RL selector) work.
 
+### 4.1 Deadline enforcement — a scope caveat that applies to every result here
+
+> **Every result in this document was produced with the L2 deadline
+> *unenforced*.** A source trace found that `Deadline(j)` was computed by S3 and
+> propagated by S3a but **never compared to a clock** — it was a sort key only,
+> so a device whose deadline could not be met was still queued and still served.
+> The gap has since been closed by an opt-in feasibility gate (S3b), but the
+> gate was **off** for every sweep recorded below, so these numbers describe the
+> non-enforcing configuration.
+
+This is not a small bookkeeping point, because enforcement is **not free**. On a
+matched 5-shard sweep (H1, jittery, N=6, `n_missions=4`, 20 paired seeds per
+shard, 100/100 valid trials, each budget compared to the gate-off control
+*paired by seed*):
+
+| Mission budget | update_yield | mission_completion_rate | round_close@2 | Δ completion |
+|---|---|---|---|---|
+| **off** (as recorded here) | 2.09 | 0.767 | 0.663 | baseline |
+| **120 s** — deadline only, budget slack | 1.26 | **0.542** | 0.388 | **−0.225** ✱ |
+| 60 s | 1.20 | 0.483 | 0.375 | −0.283 ✱ |
+| 30 s | 0.55 | 0.308 | 0.100 | −0.458 ✱ |
+| 15 s | 0.43 | 0.283 | 0.013 | −0.483 ✱ |
+
+✱ = CI excludes 0 **and** paired Wilcoxon p<0.05.
+
+The 120 s budget is deliberately slack — well above the 77.8 s mean queue cost —
+so almost nothing is dropped for *budget* reasons there. The entire loss is
+contacts that **cannot be reached before their own deadline**, and it costs
+**29 % of mission completion**. An independent offline probe over the same real
+device layouts agrees: ~34 % of contacts are unreachable in time at 5 m/s across
+a 100 m field, *at any budget*.
+
+> **Read that carefully: the deadline was never slack here.** About a third of
+> the queue was being served in violation of deadlines the scheduler had already
+> computed; it only *looked* slack because nothing checked. Enforcement does not
+> add a constraint — it reveals one that was always present.
+
+**What this does and does not change.**
+
+* It does **not** invalidate the results below. Both arms of every comparison ran
+  under the same non-enforcing configuration, so the H1-vs-H0 and H3-vs-H2
+  contrasts remain internally valid and paired.
+* It **does** mean the participation levels reported here are *upper bounds*
+  relative to a deadline-respecting scheduler, for the mule arms.
+* It **does not** license any claim about the deadline *design* — the adaptation
+  rule, its bounds, its sensitivity. Exp 4 still models no flight budget or
+  propulsion energy; that remains Exp 3's territory. Exp 4 can now speak to
+  deadline *enforcement and its cost*, which is a different (and narrower) claim.
+
+Reproduce with [`experiments/exp4/probe_s3b_binding.py`](../experiments/exp4/probe_s3b_binding.py)
+(where the gate binds, offline, in a second) and
+[`run_s3b_budget_sweep.sh`](../experiments/exp4/run_s3b_budget_sweep.sh) +
+[`analyze_s3b_sweep.py`](../experiments/exp4/analyze_s3b_sweep.py) (what it costs).
+Full detail in
+[`HERMES_Experiment4_L2_Scheduling_Layer.md`](HERMES_Experiment4_L2_Scheduling_Layer.md) §4.2.
+
 ## 5. Statistical protocol (B1)
 
 * **≥20 paired seeds per cell.** For each regime × metric, form the paired
@@ -581,6 +637,8 @@ means. Re-running at concurrency 3 with staggered starts gave **0 failures in
 | Figures incommensurable with each other / with the tables | shared `figstyle.py` (one set of scales) + numbers taken from `analysis/exp4.py`; both figures now three panels on identical axes, incl. one fixed difference range (§5.1) | ✅ |
 | Zero-evaluation trials recorded `status=ok` (blank AUC dropped, fabricated 0.0 participation averaged) | driver stamps `status=no_eval`; excluded from **every** metric; regression tests | ✅ (22/190 rows in the superseded sweep; clean re-run = 0/200) |
 | Layer-1 figure built from a different sweep than the table it illustrated, with **unpaired** effect sizes | regenerated from the clean `h2h3_dz_*` sweep using `analysis/exp4.py` itself (same estimator as the tables), paired, with CIs | ✅ — and it **retracted** the apparent L1 effect (§7.4) |
+| L2 deadline computed but **never enforced** (sort key only; a device whose deadline could not be met was still served) | S3b feasibility gate — hard, and applied *before* ordering so the selector cannot resurrect a drop; opt-in via `--mission-budget-s` so recorded results stay reproducible | ✅ mechanism + cost measured (§4.1); every result here was recorded with it **off** |
+| Untrained selector **not reproducible** — `rng_seed` seeded only the unused epsilon RNG, so the network drew from OS entropy | seed threaded to the network (`DDQN(..., seed=rng_seed)`); verified same-seed → identical weights | ✅ (committed H2/H3 rows predate it and need a re-run to be reproducible) |
 
 ## 9. Known limitations / open items
 
@@ -595,6 +653,10 @@ means. Re-running at concurrency 3 with staggered starts gave **0 failures in
   advantage.
 * Backhaul loss is drawn per dock, so at very short horizons its effect is
   small; longer `--n-missions` exercises it more.
+* **Deadline enforcement was off for every result here** (§4.1). The mechanism
+  now exists and its cost is measured (−0.225 mission completion at a slack
+  budget), but a deadline-respecting re-run of the headline sweeps has not been
+  done. Until it is, the mule arms' participation figures are upper bounds.
 * **Unified cross-layer energy** (L1 channel-switching + L2 flight + L3
   compute in one budget) is not yet modelled. Arm H3 wires L1 *adaptivity*
   and its backhaul-loss effect, but not its energy cost; a combined energy
