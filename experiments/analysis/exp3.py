@@ -1755,7 +1755,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         figs = write_figures(
             rows,
             figures_dir=args.figures_dir,
-            placeholder_watermark=not cal.is_paper_grade,
+            placeholder_watermark=not cal.exp3_is_paper_grade,
             jittery_filter=args.jittery_filter,
         )
         log.info(

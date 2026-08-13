@@ -194,3 +194,117 @@ def test_exp3_energy_propulsion_dominates_at_long_paths():
     assert long.total_J > short.total_J
     # The delta is purely propulsion.
     assert (long.prop_J - short.prop_J) == pytest.approx(9000.0)
+
+
+# --------------------------------------------------------------------------- #
+# Per-constant status
+#
+# The constants are not all sourced the same way: the USRP figures are
+# modeled inside a documented Ettus envelope, while epsilon_prop is a
+# generic platform estimate. A single file-level status meant one
+# "verified" cleared the placeholder watermark on every figure, including
+# the ones whose dominant constant was still an estimate.
+# --------------------------------------------------------------------------- #
+
+def _toml(status: str = "verified", per_constant: str = "") -> str:
+    return f'''
+[exp1.aerpaw_usrp]
+P_idle_W = 5.0
+epsilon_bit_J_per_bit = 7.0e-10
+B_nominal_bps = 10_000_000
+
+[exp3.mule_platform]
+P_idle_W = 5.0
+epsilon_bit_J_per_bit = 7.0e-10
+epsilon_prop_J_per_m = 10.0
+mule_cruise_speed_m_s = 5.0
+
+[provenance]
+last_verified = "2026-05-05"
+source = "test"
+status = "{status}"
+{per_constant}
+'''
+
+
+def test_shipped_calibration_splits_exp1_verified_from_exp3_placeholder():
+    """The repo's own TOML: exp1 constants documented, exp3 propulsion not."""
+    cal = load_calibration()
+    assert cal.exp1_status == "verified"
+    assert cal.exp1_is_paper_grade is True
+    assert cal.exp3_status == "placeholder"
+    assert cal.exp3_is_paper_grade is False
+    assert "exp3.epsilon_prop_J_per_m" in cal.unverified_constants()
+
+
+def test_absent_table_inherits_file_default(tmp_path):
+    """Back-compat: no per-constant table means every constant inherits."""
+    p = tmp_path / "c.toml"
+    p.write_text(_toml(status="verified"), encoding="utf-8")
+    cal = load_calibration(p)
+    assert cal.exp1_status == "verified"
+    assert cal.exp3_status == "verified"
+    assert cal.status == "verified"
+    assert cal.unverified_constants() == {}
+
+
+def test_placeholder_constant_does_not_leak_across_experiments(tmp_path):
+    """A constant only Exp 3 uses must not un-verify Exp 1."""
+    p = tmp_path / "c.toml"
+    p.write_text(
+        _toml(
+            per_constant='[provenance.status_by_constant]\n'
+                         '"exp3.epsilon_prop_J_per_m" = "placeholder"\n'
+        ),
+        encoding="utf-8",
+    )
+    cal = load_calibration(p)
+    assert cal.exp1_is_paper_grade is True
+    assert cal.exp3_is_paper_grade is False
+    # Aggregate stays conservative for callers reading .status directly.
+    assert cal.status == "placeholder"
+    assert cal.is_paper_grade is False
+
+
+def test_constant_status_falls_back_to_declared(tmp_path):
+    p = tmp_path / "c.toml"
+    p.write_text(
+        _toml(
+            status="placeholder",
+            per_constant='[provenance.status_by_constant]\n'
+                         '"exp1.P_idle_W" = "verified"\n',
+        ),
+        encoding="utf-8",
+    )
+    cal = load_calibration(p)
+    assert cal.constant_status("exp1", "P_idle_W") == "verified"
+    # Unlisted constant inherits the file default.
+    assert cal.constant_status("exp1", "B_nominal_bps") == "placeholder"
+    assert cal.exp1_status == "placeholder"
+
+
+def test_unknown_constant_key_is_rejected(tmp_path):
+    """A typo must not silently leave a constant marked verified."""
+    p = tmp_path / "c.toml"
+    p.write_text(
+        _toml(
+            per_constant='[provenance.status_by_constant]\n'
+                         '"exp3.epsilon_prop" = "placeholder"\n'
+        ),
+        encoding="utf-8",
+    )
+    with pytest.raises(KeyError, match="unknown constant"):
+        load_calibration(p)
+
+
+def test_invalid_per_constant_status_is_rejected(tmp_path):
+    p = tmp_path / "c.toml"
+    p.write_text(
+        _toml(
+            per_constant='[provenance.status_by_constant]\n'
+                         '"exp1.P_idle_W" = "probably-fine"\n'
+        ),
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="status must be"):
+        load_calibration(p)

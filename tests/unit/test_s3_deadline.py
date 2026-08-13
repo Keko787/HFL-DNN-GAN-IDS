@@ -14,6 +14,7 @@ from hermes.scheduler.stages.s3_deadline import (
     FAST_PHASE_MISSED_WIDEN_S,
     FAST_PHASE_ON_TIME_SHRINK_S,
     MIN_DEADLINE_FULFILMENT_S,
+    NEW_BUCKET_ATTEMPT_LIMIT,
     compute_idle_time,
 )
 from hermes.types import (
@@ -112,6 +113,90 @@ def test_classify_unbucketable_raises():
     )
     with pytest.raises(ValueError):
         classify_bucket(st, now=1000.0)
+
+
+# --------------------------------------------------------------------------- #
+# classify_bucket — NEW-bucket probation
+#
+# ``is_new`` is cleared only on a CLEAN outcome, so a physically
+# unreachable node never clears it. Without a probation limit such a node
+# holds the top rank tier forever and outranks scheduled work on every
+# round, while the widening fulfilment window that is meant to shed it
+# only ever reorders it within its own bucket.
+# --------------------------------------------------------------------------- #
+
+def test_new_device_holds_bucket_while_on_probation():
+    st = DeviceSchedulerState(
+        device_id=DeviceID("d"),
+        is_new=True,
+        is_in_slice=True,
+        missed_count=NEW_BUCKET_ATTEMPT_LIMIT - 1,
+    )
+    assert classify_bucket(st, now=1000.0) is Bucket.NEW
+
+
+def test_new_device_demoted_to_scheduled_past_attempt_limit():
+    st = DeviceSchedulerState(
+        device_id=DeviceID("d"),
+        is_new=True,
+        is_in_slice=True,
+        missed_count=NEW_BUCKET_ATTEMPT_LIMIT,
+    )
+    assert classify_bucket(st, now=1000.0) is Bucket.SCHEDULED_THIS_ROUND
+
+
+def test_new_device_demoted_to_beacon_when_not_in_slice():
+    st = DeviceSchedulerState(
+        device_id=DeviceID("d"),
+        is_new=True,
+        is_in_slice=False,
+        last_beacon_ts=995.0,
+        missed_count=NEW_BUCKET_ATTEMPT_LIMIT,
+    )
+    assert classify_bucket(st, now=1000.0) is Bucket.BEACON_ACTIVE
+
+
+def test_exhausted_new_device_keeps_bucket_when_nowhere_to_demote():
+    """Demotion must never turn a bucketed device into a silent drop.
+
+    The caller treats ``ValueError`` as "drop and warn", so a device with
+    no lower tier available (admitted on a deadline override alone) stays
+    in NEW rather than vanishing from the queue.
+    """
+    st = DeviceSchedulerState(
+        device_id=DeviceID("d"),
+        is_new=True,
+        is_in_slice=False,
+        missed_count=NEW_BUCKET_ATTEMPT_LIMIT * 10,
+    )
+    assert classify_bucket(st, now=1000.0) is Bucket.NEW
+
+
+def test_probation_limit_is_configurable():
+    st = DeviceSchedulerState(
+        device_id=DeviceID("d"),
+        is_new=True,
+        is_in_slice=True,
+        missed_count=1,
+    )
+    assert classify_bucket(st, now=1000.0, new_attempt_limit=5) is Bucket.NEW
+    assert (
+        classify_bucket(st, now=1000.0, new_attempt_limit=1)
+        is Bucket.SCHEDULED_THIS_ROUND
+    )
+
+
+def test_clean_contact_clears_probation_entirely():
+    """A device that succeeds leaves NEW via is_new, not via the limit."""
+    st = DeviceSchedulerState(
+        device_id=DeviceID("d"),
+        is_new=True,
+        is_in_slice=True,
+        missed_count=NEW_BUCKET_ATTEMPT_LIMIT - 1,
+    )
+    fold_round_close_delta(st, _delta(MissionOutcome.CLEAN))
+    assert st.is_new is False
+    assert classify_bucket(st, now=1000.0) is Bucket.SCHEDULED_THIS_ROUND
 
 
 # --------------------------------------------------------------------------- #

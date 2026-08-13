@@ -589,7 +589,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         figs = write_figures(
             rows, cal.exp1,
             figures_dir=args.figures_dir,
-            placeholder_watermark=not cal.is_paper_grade,
+            placeholder_watermark=not cal.exp1_is_paper_grade,
         )
         log.info("wrote %d figures/CSVs to %s", len(figs), args.figures_dir)
 

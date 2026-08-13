@@ -65,8 +65,12 @@ B_nominal_bps = 10_000_000
 # Reuses the AERPAW USRP idle / per-bit energy from exp1.
 # (Same physics — same constants, accessed from this table to keep
 # the analysis script's lookup namespace clean.)
+# RECONCILED 2026-07-24: previously declared 1.2e-9, which contradicted the
+# "same constants" claim (exp1 derives 7.0e-10 = (P_tx−P_idle)/B_nominal).
+# The 1.2e-9 was an unexplained ~1.7x outlier; set to exp1's derived value
+# (also matches the calibration_sensitivity/ variants).
 P_idle_W = 5.0
-epsilon_bit_J_per_bit = 1.2e-9
+epsilon_bit_J_per_bit = 7.0e-10
 
 # Energy per metre of mule propulsion, joules per metre.
 # REPLACE-FROM-PLATFORM-SPEC: depends on UAV / UGV mass + speed +
@@ -105,8 +109,39 @@ P_idle and P_tx are modeled within the 18 W envelope and sensitivity-tested at \
 ±50 % in the analysis appendix. ε_bit derived as (P_tx − P_idle) / B_nominal \
 at the experiment's 10 Mbps shaped-link rate."""
 
-# The status word the analysis tooling reads to decide whether the
-# constants are paper-grade. Allowed values: "placeholder" | "verified".
-# A "placeholder" calibration causes the analysis notebook to stamp
-# every figure with a watermark.
+# File-level default status. Allowed values: "placeholder" | "verified".
+# Any constant not listed in [provenance.status_by_constant] below
+# inherits this value.
 status = "verified"
+
+# Per-constant status. The constants are NOT all sourced the same way,
+# and collapsing them into one word is how a single "verified" came to
+# clear the placeholder watermark on figures whose dominant constant was
+# still an unmeasured estimate.
+#
+# The analysis tooling watermarks Experiment 1 and Experiment 3 figures
+# independently, from exp1_status / exp3_status, so a placeholder in a
+# constant that only Experiment 3 uses no longer silences the marker on
+# Experiment 1 figures — nor vice versa.
+[provenance.status_by_constant]
+# Modeled inside the documented Ettus 18 W envelope, with the derivation
+# and citations recorded in the source block above. Not per-mode measured
+# (Ettus publishes no such table), but traceable to a published spec and
+# sensitivity-tested at +/-50 % in calibration_sensitivity/.
+"exp1.P_idle_W" = "verified"
+"exp1.epsilon_bit_J_per_bit" = "verified"
+"exp1.B_nominal_bps" = "verified"
+"exp3.P_idle_W" = "verified"
+"exp3.mule_cruise_speed_m_s" = "verified"
+
+# RESOLVED 2026-07-24: exp3 now uses exp1's derived 7.0e-10 (the 1.2e-9 was
+# an unexplained ~1.7x outlier contradicting the "same constants" claim).
+# Consistent with exp1's derivation and the calibration_sensitivity/ variants.
+"exp3.epsilon_bit_J_per_bit" = "verified"
+
+# UNRESOLVED: still carries the REPLACE-FROM-PLATFORM-SPEC marker above.
+# 10 J/m is a generic small-quadcopter cruise figure, not a measurement of
+# our airframe, and it is the constant that scales every propulsion-energy
+# number in the Experiment 3 results. It is also the one constant the
+# +/-50 % sweep in calibration_sensitivity/ does NOT vary.
+"exp3.epsilon_prop_J_per_m" = "placeholder"

@@ -18,3 +18,11 @@ mule_cruise_speed_m_s = 5.0
 last_verified = "2026-05-05"
 source = "Sensitivity variant of verified calibration: epsilon_bit scaled to 0.5x baseline (7.0e-10 -> 3.5e-10 J/bit). All other values unchanged. See experiments/calibration.toml for primary provenance."
 status = "verified"
+
+# Per-constant status (see experiments/calibration.toml for the rationale).
+# This variant sweeps an Experiment 1 constant; it carries the same
+# un-replaced propulsion coefficient as the primary calibration, so that
+# constant stays marked placeholder here too. Experiment 1 figures are
+# unaffected because epsilon_prop is not an Experiment 1 constant.
+[provenance.status_by_constant]
+"exp3.epsilon_prop_J_per_m" = "placeholder"

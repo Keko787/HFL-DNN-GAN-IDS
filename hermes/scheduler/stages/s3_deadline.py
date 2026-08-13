@@ -47,6 +47,16 @@ FAST_PHASE_MISSED_WIDEN_S: float = 10.0
 # Floor on the fulfilment window — never let the formula drive it to zero.
 MIN_DEADLINE_FULFILMENT_S: float = 5.0
 
+# Probation length for the NEW bucket. A never-served device holds the
+# top rank tier so it cannot be starved before its first contact, but a
+# node that is physically unreachable never succeeds, so ``is_new`` never
+# clears and it would hold that tier forever — outranking scheduled work
+# on every round while the widening fulfilment window that is supposed to
+# shed it only ever moves it within its own bucket. After this many failed
+# attempts the device is demoted to the ordinary tier, where its large
+# Φ deprioritises it as intended.
+NEW_BUCKET_ATTEMPT_LIMIT: int = 3
+
 
 # --------------------------------------------------------------------------- #
 # Deadline math
@@ -86,23 +96,36 @@ def classify_bucket(
     state: DeviceSchedulerState,
     now: float,
     beacon_window_s: float = 30.0,
+    new_attempt_limit: int = NEW_BUCKET_ATTEMPT_LIMIT,
 ) -> Bucket:
     """Assign the design §4 bucket tag.
 
     Priority (see :data:`BUCKET_PRIORITY`):
 
-    1. ``NEW``  — registered but never served (``is_new=True``)
+    1. ``NEW``  — registered but never served (``is_new=True``), for up to
+       ``new_attempt_limit`` failed attempts; see
+       :data:`NEW_BUCKET_ATTEMPT_LIMIT`
     2. ``SCHEDULED_THIS_ROUND`` — in the current slice with a deadline
     3. ``BEACON_ACTIVE`` — recent beacon but not in slice (opportunistic)
 
     Devices that fit none of the above trigger a ``ValueError`` — the
     caller (S1) should not have admitted them.
     """
+    beacon_fresh = (
+        state.last_beacon_ts > 0.0
+        and (now - state.last_beacon_ts) <= beacon_window_s
+    )
     if state.is_new:
-        return Bucket.NEW
+        # Hold the top tier while the device is still on probation. Past
+        # the limit, demote — but only when a lower tier will actually
+        # accept it, so demotion never converts a bucketed device into a
+        # silent drop at the caller's ``except ValueError``.
+        still_on_probation = state.missed_count < new_attempt_limit
+        if still_on_probation or not (state.is_in_slice or beacon_fresh):
+            return Bucket.NEW
     if state.is_in_slice:
         return Bucket.SCHEDULED_THIS_ROUND
-    if state.last_beacon_ts > 0.0 and (now - state.last_beacon_ts) <= beacon_window_s:
+    if beacon_fresh:
         return Bucket.BEACON_ACTIVE
     raise ValueError(
         f"classify_bucket: device {state.device_id!r} has no bucket "

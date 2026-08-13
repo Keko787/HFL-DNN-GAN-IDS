@@ -57,19 +57,92 @@ class Exp3Calibration:
     mule_cruise_speed_m_s: float
 
 
+# Which constants belong to which experiment's energy proxy. Used to
+# resolve a per-experiment status from the per-constant table.
+EXP1_CONSTANTS = ("P_idle_W", "epsilon_bit_J_per_bit", "B_nominal_bps")
+EXP3_CONSTANTS = (
+    "P_idle_W",
+    "epsilon_bit_J_per_bit",
+    "epsilon_prop_J_per_m",
+    "mule_cruise_speed_m_s",
+)
+
+
 @dataclass(frozen=True)
 class Calibration:
-    """Aggregated view of the whole calibration TOML."""
+    """Aggregated view of the whole calibration TOML.
+
+    Status is tracked *per constant*, because the constants are not all
+    sourced the same way: the USRP idle/per-bit figures are modeled
+    inside a documented Ettus power envelope, whereas the mule
+    propulsion coefficient is a generic platform estimate that has never
+    been measured for our airframe. Collapsing both into one word meant
+    a single "verified" silently cleared the placeholder watermark on
+    figures whose dominant constant was still an estimate.
+
+    ``declared_status`` is the file-level default; any constant absent
+    from ``status_by_constant`` inherits it. ``status`` is the aggregate
+    (verified only if every constant is), so existing callers that read
+    ``.status`` / ``.is_paper_grade`` keep conservative behaviour.
+    """
 
     exp1: Exp1Calibration
     exp3: Exp3Calibration
     last_verified: str
     source: str
-    status: str  # "placeholder" | "verified"
+    declared_status: str  # "placeholder" | "verified"
+    status_by_constant: Dict[str, str]
+
+    def constant_status(self, experiment: str, name: str) -> str:
+        """Status of one constant, falling back to the file default."""
+        return self.status_by_constant.get(
+            f"{experiment}.{name}", self.declared_status
+        )
+
+    def _worst(self, experiment: str, names: tuple) -> str:
+        return (
+            "verified"
+            if all(self.constant_status(experiment, n) == "verified" for n in names)
+            else "placeholder"
+        )
+
+    @property
+    def exp1_status(self) -> str:
+        return self._worst("exp1", EXP1_CONSTANTS)
+
+    @property
+    def exp3_status(self) -> str:
+        return self._worst("exp3", EXP3_CONSTANTS)
+
+    @property
+    def status(self) -> str:
+        """Aggregate: verified only if every constant is verified."""
+        return (
+            "verified"
+            if self.exp1_status == "verified" and self.exp3_status == "verified"
+            else "placeholder"
+        )
+
+    @property
+    def exp1_is_paper_grade(self) -> bool:
+        return self.exp1_status == "verified"
+
+    @property
+    def exp3_is_paper_grade(self) -> bool:
+        return self.exp3_status == "verified"
 
     @property
     def is_paper_grade(self) -> bool:
         return self.status == "verified"
+
+    def unverified_constants(self) -> Dict[str, str]:
+        """``{"exp3.epsilon_prop_J_per_m": "placeholder", ...}`` for reporting."""
+        out: Dict[str, str] = {}
+        for exp, names in (("exp1", EXP1_CONSTANTS), ("exp3", EXP3_CONSTANTS)):
+            for n in names:
+                if self.constant_status(exp, n) != "verified":
+                    out[f"{exp}.{n}"] = self.constant_status(exp, n)
+        return out
 
 
 def load_calibration(path: Optional[Path] = None) -> Calibration:
@@ -101,7 +174,8 @@ def load_calibration(path: Optional[Path] = None) -> Calibration:
         ),
         last_verified=str(_require(prov_raw, "last_verified")),
         source=str(_require(prov_raw, "source")),
-        status=_validate_status(_require(prov_raw, "status")),
+        declared_status=_validate_status(_require(prov_raw, "status")),
+        status_by_constant=_status_table(prov_raw.get("status_by_constant", {})),
     )
 
 
@@ -195,3 +269,29 @@ def _validate_status(s: Any) -> str:
             f"provenance.status must be 'placeholder' or 'verified', got {s!r}"
         )
     return s
+
+
+def _status_table(raw: Any) -> Dict[str, str]:
+    """Validate ``[provenance.status_by_constant]``.
+
+    Optional; absent means every constant inherits the file default.
+    Unknown keys are rejected rather than ignored — a typo here would
+    silently leave a constant marked verified.
+    """
+    if not isinstance(raw, dict):
+        raise TypeError(
+            "provenance.status_by_constant must be a table, got "
+            f"{type(raw).__name__}"
+        )
+    known = {f"exp1.{n}" for n in EXP1_CONSTANTS} | {
+        f"exp3.{n}" for n in EXP3_CONSTANTS
+    }
+    out: Dict[str, str] = {}
+    for key, val in raw.items():
+        if key not in known:
+            raise KeyError(
+                f"provenance.status_by_constant has unknown constant {key!r}; "
+                f"expected one of {sorted(known)}"
+            )
+        out[str(key)] = _validate_status(val)
+    return out
