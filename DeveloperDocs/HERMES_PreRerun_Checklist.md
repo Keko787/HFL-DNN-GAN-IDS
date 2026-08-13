@@ -4,26 +4,25 @@
 *after* a sweep invalidates it. This document is a **gate**: we re-run when everything below is
 either done or explicitly deferred with a reason. It exists so we pay the compute once.
 
-**Status:** open. Nothing is scheduled to re-run until §5's exit criteria are met.
+**Status:** ✅ **GATE OPEN** (2026-08-13). All six exit criteria met; the matrix in §5.1 is cleared to run.
 
 **Progress:** Phase 0 — 8 of 11 closed (3 open, all no-re-run). Phase 1 — **done, scheduler
 frozen**, amended twice since (§1a). Phase 2 — **done, full-text verified**; baselines chosen, and
 the reading *reversed* the first pass's recommendation (§4). Phase 3 — **§5.0 pilot run, result in
 §5.0a**; the matrix itself (§5.1) is **the remaining blocker**. Phase 4 — not started.
 
-**Exit criteria status: 5 of 6 met.** ✅ 2 (frozen; amended three times, each inert by default) ·
-✅ 3 (baselines chosen **and implemented**) · ✅ 4 (pilot recorded, §5.0a) · ✅ 5 (**matrix written
-and costed**, §5.1). ❌ 1 (three Phase-0 items need an explicit *deferred-with-reason* decision) ·
-❌ 6 (follows once §5.1's remaining pre-launch boxes are ticked).
+**Exit criteria status: 6 of 6 met — THE GATE IS OPEN.** ✅ 1 (Phase-0 items closed: two deferred
+with reasons, provenance table written — §2, §2a) · ✅ 2 (frozen; amended three times, each inert by
+default) · ✅ 3 (baselines chosen **and implemented**) · ✅ 4 (pilot recorded, §5.0a) · ✅ 5 (matrix
+written and costed, §5.1) · ✅ 6 (every "forces a re-run" ledger item is **in** the matrix or
+explicitly **out**).
 
 **The matrix is written and costed: 680 trials, ≈2.4 h at concurrency 3** (§5.1). Six arms exist:
 `H0 H1 H2 H3 B1 B2`. Enforcement is **ON**; S3c is **pinned off**.
 
-**Next action — close the last Phase-0 items (§2), then launch.** Three items remain, all
-**no-re-run**: `ε_prop` is a placeholder (report normalized energy only), the manuscript deadline
-equation prints the sign reversed, and the provenance table is unwritten. Each needs an explicit
-*done or deferred-with-reason* decision — that is exit criterion 1, and it is the only thing
-between here and running the matrix.
+**Next action — run the matrix (§5.1).** 680 trials, ≈2.4 h at concurrency 3. Smoke every arm
+first: the B2 calibration showed that a broken arm can look like a *fast* one, so two trials per arm
+before committing 2.4 h is cheap insurance.
 
 > **Two constraints the matrix respects.** `B2` is **real-model-only** (the stub's loss is a random
 > draw), so it cannot appear in stub pilots. And **`--keep-event-traces` goes on every run** (§4) —
@@ -107,18 +106,70 @@ Audit equations, code behaviour, provenance, calibration, trial counts, question
 - [x] Layer-1 figure built from a different sweep than its table → regenerated, effect **retracted**
 - [x] `ε_bit` fork (7.0e-10 vs 1.2e-9) → reconciled, marked verified
 
-**Still open:**
+**Now closed — all three resolved 2026-08-13, none forces a re-run:**
 
-- [ ] **`ε_prop` is a placeholder** (10.0 J/m, `REPLACE-FROM-PLATFORM-SPEC`). Until measured or
-      explicitly declared, report **normalized energy only**. *(No re-run.)*
-- [ ] **Manuscript deadline equation + Algorithm 1** still print the update with the sign reversed.
-      Code is correct; the paper is not. *(No re-run.)*
-- [ ] **Provenance table** for the paper: which results are Chameleon, AERPAW DT, simulation, full
-      multi-process. *(No re-run.)*
+- [x] **`ε_prop` is a placeholder (10.0 J/m)** → **DEFERRED, with the deferral already enforced in
+      code.** Two facts settle this:
+      1. It is an **Experiment-3 constant** (`exp3.epsilon_prop_J_per_m`). **Experiment 4 models no
+         propulsion energy at all** (scope boundary), so it cannot affect the matrix — this was
+         never an Exp-4 blocker.
+      2. The deferral is **not a promise, it is wired**: `calibration.toml` marks it
+         `"exp3.epsilon_prop_J_per_m" = "placeholder"`, `Calibration.exp3_is_paper_grade` returns
+         False as a result, and `analysis/exp3.py:1758` passes
+         `placeholder_watermark=not cal.exp3_is_paper_grade` — so **every Exp-3 energy figure is
+         watermarked automatically** until a platform spec replaces the value.
+
+      *Action to un-defer:* replace the value in `calibration.toml` and flip its status to
+      `verified`; the watermark disappears on its own. Report **normalized energy only** until then.
+
+- [x] **Manuscript deadline equation + Algorithm 1 print the update with the sign reversed** →
+      **DEFERRED — prose-only, and it cannot be fixed from this repository.** The only manuscript
+      artefact here is `Presentation Documents/sec26-paper74.pdf`, a compiled PDF; the LaTeX source
+      lives with the author. Recording the exact correction so it can be applied without re-deriving
+      it. **The code is correct**; the paper is not:
+
+      | Outcome | What the code does (`s3_deadline.py:190-200`) | Effect on Φ |
+      |---|---|---|
+      | **CLEAN** (served on time) | `Φ ← max(MIN, Φ − FAST_PHASE_ON_TIME_SHRINK_S)`, shrink **5 s** | **narrows** |
+      | **MISSED** | `Φ ← Φ + FAST_PHASE_MISSED_WIDEN_S`, widen **10 s** | **widens** |
+
+      The intuition the text must match: *a device we keep reaching earns a tighter window; a device
+      we miss earns a looser one.* Widening is deliberately **twice** the shrink (10 s vs 5 s), so
+      recovery from neglect is faster than the drift back to strictness — that asymmetry is a design
+      choice and worth one sentence in the paper.
+
+- [x] **Provenance table** → **WRITTEN**, below (§2a).
+
 - [x] ~~**Decide the status of inert L2 machinery**~~ — **resolved by the freeze.** S2A/S2B
       readiness and beacons / `BEACON_ACTIVE` are **removed from the claims, not wired**
       (Freeze D3, D6); `mule_energy` stays frozen at 1.0 and is stated as a scope limit. No re-run:
       nothing about trial behaviour changed.
+
+## 2a. Provenance table — what each result actually ran on
+
+Written to close the Phase-0 item. **Every claim in the paper must carry one of these labels**, so a
+reader never has to guess whether a number came from hardware, a simulator, or a process tree on one
+box.
+
+| Experiment | Environment | What that means concretely | Artefacts |
+|---|---|---|---|
+| **Exp 1** | **Chameleon testbed** | Real distributed hardware, real network between nodes. The strongest provenance we have. | `results/exp1_chameleon*.csv` |
+| **Exp 3** | **Simulation** (`experiments/exp3/sim_env.py`) | An abstracted event simulator. **No processes, no sockets.** Flight budget, propulsion energy and the deadline *design* live here — and so does the `ε_prop` placeholder, which is why Exp-3 energy figures carry a watermark. | `results/exp3*/` |
+| **Exp 4** | **Full multi-process, single host** | Real OS processes, real TCP sockets, real TensorFlow training, real two-pass hierarchical FedAvg — but all on **one machine over loopback**. Not a distributed deployment: latency and bandwidth are loopback, not WAN. | `results/exp4_paper/`, `results/exp4_s3b/`, `results/exp4_s3c/` |
+| **AERPAW digital twin** | **NOT USED** | No AERPAW artefacts exist in this repository. Any figure or text implying AERPAW provenance is **wrong** and must be corrected — see the architecture review's divergence **D-1**, which found Fig. 2 annotating the RF selector "Training: CTDE on AERPAW digital twin" while §III-A correctly calls it future work. | — |
+
+**Three honesty notes that belong with the table:**
+
+1. **Exp 4 is "real processes", not "real deployment".** The distinction matters: it validates the
+   *software integration* — that L2 and L3 actually work end to end over sockets — not network
+   behaviour under real RF or WAN conditions.
+2. **Exp 3 and Exp 4 measure different things and must not be pooled.** The scheduling results in
+   the manuscript come from `sim_env.py`, not the multi-process topology (architecture review
+   divergence **D-3**).
+3. **The GAN contribution has never executed inside HERMES** (divergence **D-2**):
+   `StubGeneratorHost` returns zero tensors and `exp4/model_task.py` discards the synth batch. Real
+   DNN-IDS weights *are* aggregated; the generator's contribution is not. Any claim that HERMES
+   exercises the GAN is unsupported by these results.
 
 ---
 
