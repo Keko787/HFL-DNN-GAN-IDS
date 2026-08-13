@@ -20,9 +20,13 @@ explicitly **out**).
 **The matrix is written and costed: 680 trials, ≈2.4 h at concurrency 3** (§5.1). Six arms exist:
 `H0 H1 H2 H3 B1 B2`. Enforcement is **ON**; S3c is **pinned off**.
 
-**Next action — run the matrix (§5.1).** 680 trials, ≈2.4 h at concurrency 3. Smoke every arm
-first: the B2 calibration showed that a broken arm can look like a *fast* one, so two trials per arm
-before committing 2.4 h is cheap insurance.
+**RUNNING (2026-08-13).** Sweeps **A** (H0 vs H1, 520 trials) and **C** (H2 vs H3, 40 trials) are
+executing — `experiments/exp4/run_matrix.sh` → `results/exp4_matrix/`.
+
+**Sweep B is ON HOLD (§5.1b).** The pre-launch smoke found H1/B1/B2 produce **identical** results at
+the designed operating point: S3b fixes *who* is served before the policy runs, and the policy only
+reorders an already-decided set. It needs re-targeting at the binding band first — a redesign is
+proposed in §5.1b and needs a decision, because the band sits in a heavily-degraded regime.
 
 > **Two constraints the matrix respects.** `B2` is **real-model-only** (the stub's loss is a random
 > draw), so it cannot appear in stub pilots. And **`--keep-event-traces` goes on every run** (§4) —
@@ -586,6 +590,54 @@ claim rule means the same thing everywhere. **Claim only when the CI excludes 0 
 With several metrics per comparison, **state the multiplicity position explicitly** rather than
 reporting the one that hit (the §5.0a pilot is the worked example of why). Every row carries
 `mission_budget_s` and `mission_window_adaptation`, so the file is self-describing.
+
+### 5.1b Sweep B is ON HOLD — the policy comparison is vacuous as designed
+
+**Caught by the pre-launch smoke, before spending the 32 minutes.** At the designed operating point
+(N=6, `rrf`=60, budget 120 s) **H1, B1, B2, H2 and H3 all produce byte-identical `final_auc` and
+`update_yield`.** Not similar — identical. A budget ladder confirms it is not a budget-value
+problem:
+
+| budget | H1 yield | B1 yield | H1 AUC | B1 AUC | |
+|---|---|---|---|---|---|
+| 120 s | 1.25 | 1.25 | 0.92506 | 0.92506 | identical |
+| 60 s | 1.25 | 1.25 | 0.92506 | 0.92506 | identical |
+| 30 s | 0.75 | 0.75 | 0.41002 | 0.41002 | identical |
+| 15 s | 0.75 | 0.75 | 0.68892 | 0.68892 | identical |
+
+The budget *is* binding — yield falls from 1.25 to 0.75 — and the arms are still identical.
+
+**Why, structurally.** **S3b decides _who_ is served; the policy only decides the _order_ of an
+already-decided set.** S3b runs *before* the bucket walk (deliberately — so a learned selector
+cannot resurrect what it drops), and the mule then visits every contact remaining in its queue. If
+the whole queue gets served, ordering changes nothing that any metric records. Ordering can only
+change outcomes when the queue is **truncated in flight** — i.e. when the A1 abort fires — or when
+contacts fail stochastically part-way.
+
+**There is a binding band, and it is narrow.** Probing wider/tighter configurations:
+
+| N | field radius | budget | Result |
+|---|---|---|---|
+| 6 | 100–150 m | 15–120 s | identical — mule serves its whole queue |
+| 12 | 300 m | 45 s | **DIFFER** — B1 yield 0.75 vs H1 0.25; completion 0.167 vs 0.083 |
+| 12 | 300 m | 25 s | identical — both collapse |
+| 16 | 400 m | 30 s | identical — coverage 0.0 for both |
+
+So the comparison is only non-vacuous in a band between "serves everyone" and "serves nobody".
+
+**This is a finding, not just an obstacle.** *Scheduling policy only matters when the mule can serve
+some but not all of its queue* — and that is worth stating in the paper, because it bounds the
+claim. A baseline comparison run outside that band would have produced a tie and been reported as
+"our policy is no better", which would have been **false for the wrong reason**.
+
+**Recommended redesign — sweep the budget rather than fixing it.** Make the arc itself the result:
+`N=12`, `field_radius=300`, budgets `{120, 60, 45, 30}` × {H1, B1, B2} × 20 seeds = **240 trials,
+≈50 min**. That reports *where* policy matters instead of asserting it at one point, and it
+subsumes the tie as evidence rather than hiding it.
+
+> **Decision required before running B.** The binding band sits at ~8–17 % mission completion — a
+> stressed regime. Reporting "our policy wins where the system is heavily degraded" is honest but
+> narrow, and that trade-off is a judgement call about what the paper claims, not a technical one.
 
 #### A bug the costing caught — worth carrying as a lesson
 
