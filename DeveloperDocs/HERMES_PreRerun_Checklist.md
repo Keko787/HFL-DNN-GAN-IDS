@@ -23,6 +23,15 @@ explicitly **out**).
 **RUNNING (2026-08-13).** Sweeps **A** (H0 vs H1, 520 trials) and **C** (H2 vs H3, 40 trials) are
 executing — `experiments/exp4/run_matrix.sh` → `results/exp4_matrix/`.
 
+> **Sweep A is two invocations, not one cross product** — and this was caught only after a first
+> launch had to be killed. `dead_zone` and `link_quality` describe how the clean regime is *degraded
+> into* the jittery one; under `clean` they are **inert**. Passing all three axes to one grid gives
+> 2 × 4 × 3 = **24 cells**, of which the 12 clean ones are the *same configuration repeated* — ~440
+> wasted trials, and 12 cells that look distinct in analysis but are not. Running clean at one point
+> and jittery across the surface gives 1 + 12 = **13 cells / 520 trials**, matching the committed
+> design and the cost model. *Same class of error as Freeze D5: sweeping an axis that varies nothing
+> for the condition under test.*
+
 **Sweep B is ON HOLD (§5.1b).** The pre-launch smoke found H1/B1/B2 produce **identical** results at
 the designed operating point: S3b fixes *who* is served before the policy runs, and the policy only
 reorders an already-decided set. It needs re-targeting at the binding band first — a redesign is
