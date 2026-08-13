@@ -56,9 +56,9 @@ and the first attached figure shows where it pays for itself.
 
 A second run isolates the radio layer, varying only whether the mule adapts its band and
 holding the rest of the stack fixed. This one is a negative result and we report it as such:
-across five blockage levels at twenty paired seeds each, adapting the band did not measurably
-change final model quality — every condition is a statistical tie at this sample size, and two
-are nominally negative (second figure). The effect the layer does have sits one level down, on
+across a hundred paired trials, adapting the band did not measurably change final model
+quality — every condition is a statistical tie at this sample size, and two are nominally
+negative (second figure). The effect the layer does have sits one level down, on
 the mule's uplink, where adaptive selection lowers modelled backhaul loss under a jittery,
 band-crossing channel and costs nothing when the channel is healthy. We therefore present the
 adaptive radio as a robustness mechanism for the backhaul rather than an accuracy driver, and
@@ -139,6 +139,11 @@ so this is a tie, not a claim. Do not quote the p-value on its own.
 
 Extending to `mission_completion_rate`, `update_yield` and `round_close_rate@2`: **all 20
 condition × metric tests are ties.** Two AUC cells are nominally negative.
+
+**Know this if pressed on the cells:** `dead_zone` is applied only in the H0 arm, so for H2/H3 the
+four jittery rows are the *same* configuration under different derived seeds. Describe the result
+as ~80 paired seeds of one jittery condition (plus 20 clean), all ties — not as a severity sweep.
+It makes the null stronger, but the wording must be right.
 
 **What this supports:** nothing about layer-1 improving the end model. **Do not claim an
 end-to-end accuracy benefit for the adaptive radio.** Delete the body's "the layer buys

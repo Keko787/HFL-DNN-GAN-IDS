@@ -87,7 +87,12 @@ channel coordination — producing a `BackhaulPlan` that splits into two consume
 | Consumer | Field | Effect |
 |---|---|---|
 | **Cluster** | `backhaul_loss_schedule` | `_backhaul_dropped(mission_round)` indexes it and draws a Bernoulli. On a drop the mule's aggregate is lost, **the round does not close**, and θ is carried forward (recoverable, per-mission). |
-| **Mule** | `mean_chosen_snr_db` → `rf_prior_snr_db` | feeds `build_target_queue`'s S3.5 selector feature. **This is the L1→L2 edge the audit flagged as never wired** — previously a hardcoded `20.0` for every candidate, i.e. zero discriminative signal. |
+| **Mule** | `mean_chosen_snr_db` → `rf_prior_snr_db` | becomes **slot 10 of the S3.5 selector's 11-feature vector** (`selector/features.py:49,233`), consumed via `FLScheduler.build_contact_queue` → `TargetSelectorRL.rank_contacts`. **This is the L1→L2 edge the audit flagged as never wired** — previously a hardcoded `20.0` for every candidate, i.e. zero discriminative signal. |
+
+> **Correction to earlier drafts:** this edge is *not* reached through `build_target_queue`. Because
+> Exp 4 always sets `rf_range_m`, the mule takes the two-pass path, so `build_target_queue` is never
+> called; the live entry point is `build_contact_queue` → `rank_contacts`. See the
+> [L2 document](HERMES_Experiment4_L2_Scheduling_Layer.md) §1.
 
 Crucially, **H1/H2/H3 share the same `backhaul_rng_seed`**, so all arms face the identical
 Bernoulli draw sequence — only the thresholds differ. A difference between arms therefore cannot
@@ -133,8 +138,15 @@ fixed baseline (the loss-optimal band, not merely the mean-SNR one) still loses 
 
 > **This is the honest headline, and it must not be softened.**
 
-Across the H3-vs-H2 dead-zone sweep (200/200 valid trials, 20/20 paired seeds per cell,
-`n_missions=4`), **all 5 conditions × 4 metrics are ties**; two AUC cells are nominally negative.
+Across the H3-vs-H2 sweep (200/200 valid trials, 20/20 paired seeds per cell, `n_missions=4`),
+**all 5 conditions × 4 metrics are ties**; two AUC cells are nominally negative.
+
+> **Read the "conditions" correctly.** `dead_zone` and `link_quality` are consumed **only in the H0
+> branch** (`driver.py:304-308`), so for the mule arms the four jittery dead-zone cells are the
+> *same physical configuration* under different derived seeds. The table below is therefore best
+> read as **~80 paired seeds of one jittery condition (all tying) plus 20 clean** — which makes the
+> null stronger, not weaker, but means this is **not** a severity sweep. See the
+> [L2 document](HERMES_Experiment4_L2_Scheduling_Layer.md) §5.1.
 
 | condition | H2 | H3 | H3−H2 | 95 % CI | verdict |
 |---|---|---|---|---|---|

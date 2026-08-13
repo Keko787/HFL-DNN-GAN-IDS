@@ -191,8 +191,10 @@ participation; report AUC as the downstream consequence.
 
 ### 5.3 Layer 1 — a reported null
 
-Across the H3-vs-H2 dead-zone sweep (200/200 valid trials, 20/20 paired seeds per cell),
-**all 5 conditions × 4 metrics are ties**. The channel-model-level effect is real
+Across the H3-vs-H2 sweep (200/200 valid trials, 20/20 paired seeds per cell),
+**all 5 conditions × 4 metrics are ties**. Note that `dead_zone` is consumed only in the H0
+branch, so for these arms the four jittery cells are one configuration under different seeds —
+read it as ~80 paired seeds of a single jittery condition, all tying (L2 doc §5.1). The channel-model-level effect is real
 (§ L1 doc), but it does not resolve end-to-end at this sample size. **No end-to-end accuracy
 benefit is claimed for L1.**
 

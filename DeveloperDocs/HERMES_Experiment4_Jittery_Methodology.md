@@ -502,6 +502,15 @@ wider sweep varies the terrain dead-zone at a shorter horizon
 20 paired seeds per cell, `results/exp4_paper/h2h3_dz_*.csv`). The result is
 **null across the board**:
 
+> **⚠ The dead-zone axis does not vary anything for these arms.** A later source trace established
+> that `dead_zone` and `link_quality` are consumed **only inside the H0 branch**
+> (`driver.py:304-308`); the mule arms' `realism_kwargs` carries neither. The four jittery cells
+> below are therefore the **same physical configuration** under different derived seeds (the
+> dead-zone value enters `cell_id`, which seeds the trial). Read this table as **~80 paired seeds
+> of one jittery condition, plus 20 clean** — which makes the null *stronger* than a five-condition
+> sweep would, but it is **not** a severity sweep and must not be described as one. See
+> [`HERMES_Experiment4_L2_Scheduling_Layer.md`](HERMES_Experiment4_L2_Scheduling_Layer.md) §5.1.
+
 | condition | n | H2 | H3 | H3−H2 | 95% CI | p | verdict |
 |---|---|---|---|---|---|---|---|
 | clean | 20 | 0.8487 | 0.8634 | +0.0148 | [−0.0903,+0.1169] | 0.31 | tie |
@@ -530,8 +539,8 @@ protocol of §5. On clean, properly paired data the effect disappears.
 
 **Honest conclusion: no end-to-end accuracy benefit for L1 is claimed.** The
 integrated effect is at best small and horizon-dependent — detectable in one
-cell at `n_missions=6` (§7.3, +0.012, CI excluding 0), absent across five cells
-at `n_missions=4`. Mechanistically that ordering is plausible (a longer horizon
+cell at `n_missions=6` (§7.3, +0.012, CI excluding 0), absent across ~80 paired
+seeds at `n_missions=4`. Mechanistically that ordering is plausible (a longer horizon
 means more per-dock backhaul draws, so a loss-rate difference has more chances
 to accumulate into model quality), but one significant cell against five ties is
 **not** a robust result and must not be reported as one.
@@ -541,8 +550,8 @@ reduces modelled mule→BS backhaul loss under a jittery, band-crossing channel
 (§7: ≈0.13–0.14 at this calibration, never worse across 1000 seeds), and is a
 wash on a healthy backhaul. End-to-end, that advantage is small and not robustly
 detectable: it reaches significance at a 6-mission horizon (+0.012 AUC) but is
-statistically indistinguishable from zero across a 5-condition dead-zone sweep
-at a 4-mission horizon. We therefore present L1 as a **backhaul-robustness
+statistically indistinguishable from zero across ~80 paired seeds at a 4-mission
+horizon. We therefore present L1 as a **backhaul-robustness
 mechanism**, not as an accuracy driver."*
 
 **Attrition note (why this sweep was re-run).** The first attempt lost ~30 % of
