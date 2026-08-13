@@ -52,7 +52,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from experiments.analysis.exp4 import analyze_metric, load_exp4  # noqa: E402
 from experiments.analysis.figstyle import (  # noqa: E402
-    DIFF_YLIM, METRIC_YLIM, draw_diff_panel, draw_metric_panel,
+    AUC_ZOOM_YLIM, DIFF_YLIM, METRIC_YLIM, assert_within_zoom, draw_diff_panel,
+    draw_metric_panel, draw_zoomed_point_panel,
 )
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -98,30 +99,31 @@ def vals(regime, dz, arm, metric):
     return pd.to_numeric(d[d["arm"] == arm][metric], errors="coerce").dropna().tolist()
 
 
-fig, axes = plt.subplots(1, 3, figsize=(15.2, 4.6))
+fig, axes = plt.subplots(1, 3, figsize=(14.4, 5.4))
 x = np.arange(len(CONDS))
 labels = [c[0] for c in CONDS]
 drawn = {}
 
-# ---- Panels 1-2: absolute levels, both on [0,1] --------------------------- #
-for ax, metric, ylabel, title, chance, collapse in [
-    (axes[0], "final_auc", "Final model AUC",
-     "Model quality by band policy", True, 0.5),
-    (axes[1], "participation", f"Participation (updates/round ÷ {N_DEVICES})",
-     "Devices contributing per round", False, None),
-]:
-    series = [[vals(rg, dz, arm, metric) for _, rg, dz in CONDS]
+# ---- Panel 1: AUC on the shared ZOOMED axis (dot + CI, not bars) --------- #
+auc_series = [[vals(rg, dz, arm, "final_auc") for _, rg, dz in CONDS]
               for arm in (BASELINE, TREATMENT)]
-    drawn[ylabel] = draw_metric_panel(
-        ax, x, labels, series, ARM_LABELS,
-        ylabel=ylabel, title=title, show_chance=chance,
-        collapse_below=collapse, divider_after=1,
-    )
-    ax.set_xlabel(XLABEL, fontsize=9.5)
+zoom = draw_zoomed_point_panel(
+    axes[0], x, labels, auc_series, ARM_LABELS,
+    ylabel="Final model AUC", title="Model quality by band policy",
+    below_axis_note="sessions at untrained init", divider_after=1,
+)
+axes[0].set_xlabel(XLABEL, fontsize=9.5)
+assert_within_zoom(zoom["min"], zoom["max"])
 
-init = pd.to_numeric(df["init_auc"], errors="coerce").dropna().mean()
-axes[0].axhline(init, color="black", ls=":", lw=1.5, zorder=1,
-                label="untrained init θ₀ — sessions with no aggregated update")
+# ---- Panel 2: participation, full [0,1] (bars are honest from a zero base) - #
+part_series = [[vals(rg, dz, arm, "participation") for _, rg, dz in CONDS]
+               for arm in (BASELINE, TREATMENT)]
+PART_LABEL = f"Participation (updates/round ÷ {N_DEVICES})"
+drawn[PART_LABEL] = draw_metric_panel(
+    axes[1], x, labels, part_series, ARM_LABELS,
+    ylabel=PART_LABEL, title="Devices contributing per round", divider_after=1,
+)
+axes[1].set_xlabel(XLABEL, fontsize=9.5)
 
 # ---- Panel 3: the paired difference, on the axis shared with figure 1 ----- #
 diff_results = []
@@ -154,12 +156,14 @@ fig.suptitle(
     "Isolating the radio layer: same selector, same seeds, only the band policy differs",
     fontsize=11.5, y=0.985)
 fig.text(0.5, 0.085,
-         f"All metrics normalized to [0,1] (participation = updates/round ÷ {N_DEVICES} "
-         f"devices). Bars = mean, whiskers = percentile bootstrap 95% CI (the estimator "
-         f"the tables use); points = individual seeds; n/N = seeds whose session received "
-         f"no aggregated update. Right panel shares its axis with figure 1, so the two "
+         f"Metrics normalized to [0,1] (participation = updates/round ÷ {N_DEVICES} devices). "
+         f"AUC panel is zoomed to {AUC_ZOOM_YLIM[0]:.2f}–{AUC_ZOOM_YLIM[1]:.2f} — the same "
+         f"window as figure 1 — and drawn as means with percentile bootstrap 95% CIs rather "
+         f"than bars, since bar length is meaningless off a zero baseline; ↓n counts sessions "
+         f"that received no aggregated update and sit at the untrained init, below the window. "
+         f"Both the AUC and difference panels share their axes with figure 1, so the two "
          f"effect sizes are directly comparable.",
-         ha="center", fontsize=7.4, color="0.30")
+         ha="center", fontsize=7.2, color="0.30")
 fig.tight_layout(rect=[0, 0.115, 1, 0.935])
 fig.savefig(OUT, dpi=220, bbox_inches="tight")
 print("wrote", OUT)

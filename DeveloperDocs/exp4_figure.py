@@ -5,20 +5,30 @@ across a benign→severe sweep of the terrain dead-zone. The crossover is the
 finding: the mule costs under a clean link and rescues the session under
 blockage.
 
-Three panels, all normalized to [0,1] (see experiments/analysis/figstyle.py):
+Three panels, all metrics normalized to [0,1] (see
+experiments/analysis/figstyle.py), with every axis shared with figure 2 so the
+two can be read side by side:
 
-  1. Final model AUC                — already a fraction
-  2. Participation                  — updates/round ÷ N devices
-  3. Paired H1−H0 difference        — with bootstrap 95% CIs and a zero line
+  1. Final model AUC          — zoomed to AUC_ZOOM_YLIM, means + bootstrap CIs
+  2. Participation            — updates/round ÷ N devices, full [0,1] bars
+  3. Paired H1−H0 difference  — bootstrap 95% CIs on the shared difference axis
 
-Panels 1–2 share one [0,1] axis so their bar heights are directly comparable;
-panel 3 shares a fixed difference axis with figure 2 (the layer-1 figure), so
-the size of the mule effect and the size of the L1 effect can be compared by
-eye. Bars are means with percentile bootstrap 95% CIs — the same estimator the
-methodology tables use — and per-seed points are overlaid because final_auc is
-bimodal: a session either trains (~0.98) or receives no aggregated update and
-stays at the untrained init (~0.25). A symmetric ±1 SD whisker would imply a
-unimodal spread that does not exist and would extend above AUC = 1.0.
+**Why panel 1 is a dot plot, not bars.** On a full [0,1] axis the AUC
+differences (0.01–0.12) are invisible, so the panel is zoomed. A bar encodes
+magnitude by its length from zero, which is meaningless once the baseline is
+non-zero — so a zoomed bar chart exaggerates differences. A marker plus an
+interval encodes a point estimate and its uncertainty honestly at any baseline.
+
+**Why the zoom floor is 0.60, not 0.80.** It is the tightest window that still
+contains every mean and every bootstrap CI bound in *both* figures (the lowest
+is 0.657). A 0.80 floor would have cropped a bar mean of 0.7997 and four CI
+bounds — hiding real results, which is the failure this figure already had once.
+
+Per-seed points are overlaid because final_auc is bimodal: a session either
+trains (~0.98) or receives no aggregated update and stays at the untrained init
+(~0.25). Those below-window sessions are counted as ↓n rather than dropped. A
+symmetric ±1 SD whisker is never used: it implies a unimodal spread that does
+not exist and extends above AUC = 1.0.
 
 Grayscale-safe: hatches, greys and distinct markers only.
 """
@@ -37,8 +47,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from experiments.analysis.exp4 import analyze_metric, load_exp4  # noqa: E402
 from experiments.analysis.figstyle import (  # noqa: E402
-    DIFF_YLIM, METRIC_YLIM, boot_ci, draw_diff_panel, draw_metric_panel,
-    normalize_yield,
+    AUC_ZOOM_YLIM, DIFF_YLIM, METRIC_YLIM, assert_within_zoom, draw_diff_panel,
+    draw_metric_panel, draw_zoomed_point_panel,
 )
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -75,31 +85,31 @@ def vals(regime, dz, arm, metric):
     return pd.to_numeric(d[d["arm"] == arm][metric], errors="coerce").dropna().tolist()
 
 
-fig, axes = plt.subplots(1, 3, figsize=(15.2, 4.6))
+fig, axes = plt.subplots(1, 3, figsize=(14.4, 5.4))
 x = np.arange(len(CONDS))
 labels = [c[0] for c in CONDS]
 drawn = {}
 
-# ---- Panels 1-2: absolute levels, both on [0,1] --------------------------- #
-for ax, metric, ylabel, title, chance, collapse in [
-    (axes[0], "final_auc", "Final model AUC",
-     "Model quality after the session", True, 0.5),
-    (axes[1], "participation", f"Participation (updates/round ÷ {N_DEVICES})",
-     "Devices contributing per round", False, None),
-]:
-    series = [[vals(rg, dz, arm, metric) for _, rg, dz in CONDS]
+# ---- Panel 1: AUC on the shared ZOOMED axis (dot + CI, not bars) --------- #
+auc_series = [[vals(rg, dz, arm, "final_auc") for _, rg, dz in CONDS]
               for arm in (BASELINE, TREATMENT)]
-    drawn[ylabel] = draw_metric_panel(
-        ax, x, labels, series, ARM_LABELS,
-        ylabel=ylabel, title=title, show_chance=chance,
-        collapse_below=collapse, divider_after=1,
-    )
-    ax.set_xlabel(XLABEL, fontsize=9.5)
+zoom = draw_zoomed_point_panel(
+    axes[0], x, labels, auc_series, ARM_LABELS,
+    ylabel="Final model AUC", title="Model quality after the session",
+    below_axis_note="sessions at untrained init", divider_after=1,
+)
+axes[0].set_xlabel(XLABEL, fontsize=9.5)
+assert_within_zoom(zoom["min"], zoom["max"])
 
-# The untrained starting point, shared by both arms (theta_seed is fixed).
-init = pd.to_numeric(df["init_auc"], errors="coerce").dropna().mean()
-axes[0].axhline(init, color="black", ls=":", lw=1.5, zorder=1,
-                label="untrained init θ₀ — sessions with no aggregated update")
+# ---- Panel 2: participation, full [0,1] (bars are honest from a zero base) - #
+part_series = [[vals(rg, dz, arm, "participation") for _, rg, dz in CONDS]
+               for arm in (BASELINE, TREATMENT)]
+PART_LABEL = f"Participation (updates/round ÷ {N_DEVICES})"
+drawn[PART_LABEL] = draw_metric_panel(
+    axes[1], x, labels, part_series, ARM_LABELS,
+    ylabel=PART_LABEL, title="Devices contributing per round", divider_after=1,
+)
+axes[1].set_xlabel(XLABEL, fontsize=9.5)
 
 # ---- Panel 3: the paired difference, on the shared difference axis -------- #
 diff_results = []
@@ -129,12 +139,13 @@ fig.suptitle(
     "Experiment 4 (integrated, real model): the mule costs under a clean link and "
     "rescues the session under severe blockage", fontsize=11.5, y=0.985)
 fig.text(0.5, 0.085,
-         f"All metrics normalized to [0,1] (participation = updates/round ÷ {N_DEVICES} "
-         f"devices). Bars = mean, whiskers = percentile bootstrap 95% CI (the estimator "
-         f"the tables use); points = individual seeds; n/N = seeds whose session received "
-         f"no aggregated update. Right panel shares its axis with figure 2; "
-         f"* = CI excludes 0 and p<0.05.",
-         ha="center", fontsize=7.4, color="0.30")
+         f"Metrics normalized to [0,1] (participation = updates/round ÷ {N_DEVICES} devices). "
+         f"AUC panel is zoomed to {AUC_ZOOM_YLIM[0]:.2f}–{AUC_ZOOM_YLIM[1]:.2f} — shared with "
+         f"figure 2 — and drawn as means with percentile bootstrap 95% CIs rather than bars, "
+         f"since bar length is meaningless off a zero baseline; ↓n counts sessions that "
+         f"received no aggregated update and sit at the untrained init, below the window. "
+         f"Right panel also shares its axis with figure 2; * = CI excludes 0 and p<0.05.",
+         ha="center", fontsize=7.2, color="0.30")
 fig.tight_layout(rect=[0, 0.115, 1, 0.935])
 fig.savefig(OUT, dpi=220, bbox_inches="tight")
 print("wrote", OUT)
