@@ -62,6 +62,12 @@ def build_exp4_topology(
     rf_prior_snr_db: Optional[float] = None,
     # S3b — per-mission time budget; when set, the deadline is ENFORCED.
     mission_budget_s: Optional[float] = None,
+    # S3c — mission-level window adaptation; off reproduces recorded sweeps.
+    mission_window_adaptation: bool = False,
+    mission_window_history: int = 5,
+    mission_window_target: float = 0.8,
+    mission_window_gain: float = 2.0,
+    mission_window_max_scale: float = 4.0,
 ) -> TopologyConfig:
     """Return a validated :class:`TopologyConfig` for one H1 trial.
 
@@ -152,6 +158,11 @@ def build_exp4_topology(
         selector_weights_path=selector_weights_path,
         rf_prior_snr_db=rf_prior_snr_db,
         mission_budget_s=mission_budget_s,
+        mission_window_adaptation=bool(mission_window_adaptation),
+        mission_window_history=int(mission_window_history),
+        mission_window_target=float(mission_window_target),
+        mission_window_gain=float(mission_window_gain),
+        mission_window_max_scale=float(mission_window_max_scale),
     )
     topo = TopologyConfig(cluster=cluster, mules=[mule], devices=devices)
     topo.validate()

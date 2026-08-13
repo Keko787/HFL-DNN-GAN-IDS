@@ -27,7 +27,7 @@ from typing import Optional, Sequence
 
 from experiments.runner import TrialGrid, TrialRunner
 
-from .driver import ARMS, Exp4Driver
+from .driver import ARMS, PROVENANCE_COLUMNS, Exp4Driver
 from .metrics import Exp4MetricSummary
 
 log = logging.getLogger("experiments.exp4.runner_main")
@@ -178,6 +178,34 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
              "is only a sort key -- that is what the committed results used.",
     )
     parser.add_argument(
+        "--mission-window-adaptation", action="store_true",
+        help="S3c: adapt the deadline window at MISSION level from the mule's "
+             "recent success history. The per-device rule only sees 'this "
+             "device was missed'; this sees 'the mule is systematically not "
+             "completing its circuit' and widens every window together. Off by "
+             "default -- that is what the committed results used. Toggle it to "
+             "measure its effect against an otherwise identical run.",
+    )
+    parser.add_argument(
+        "--mission-window-history", type=int, default=5,
+        help="S3c: how many recent missions inform the scale (default 5).",
+    )
+    parser.add_argument(
+        "--mission-window-target", type=float, default=0.8,
+        help="S3c: served/planned at or above which NO widening is applied "
+             "(default 0.8).",
+    )
+    parser.add_argument(
+        "--mission-window-gain", type=float, default=2.0,
+        help="S3c: widening per unit of shortfall below the target "
+             "(default 2.0).",
+    )
+    parser.add_argument(
+        "--mission-window-max-scale", type=float, default=4.0,
+        help="S3c: hard cap on the window multiplier (default 4.0), so an "
+             "impossible configuration degrades to wide rather than unbounded.",
+    )
+    parser.add_argument(
         "--l1-channel-bands", type=int, default=3,
         help="Arm H3: number of RF bands the controller chooses among.",
     )
@@ -233,6 +261,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         l1_channel=bool(args.l1_channel),
         l1_channel_bands=int(args.l1_channel_bands),
         mission_budget_s=args.mission_budget_s,
+        mission_window_adaptation=bool(args.mission_window_adaptation),
+        mission_window_history=int(args.mission_window_history),
+        mission_window_target=float(args.mission_window_target),
+        mission_window_gain=float(args.mission_window_gain),
+        mission_window_max_scale=float(args.mission_window_max_scale),
     )
     if args.real_model:
         log.info(
@@ -242,7 +275,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     runner = TrialRunner(
         grid=grid,
         log_path=args.csv,
-        metric_columns=Exp4MetricSummary.csv_columns(),
+        metric_columns=list(Exp4MetricSummary.csv_columns()) + list(PROVENANCE_COLUMNS),
         timeout_s=(args.timeout_s if args.timeout_s is not None else args.trial_budget_s),
     )
     log.info(

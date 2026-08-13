@@ -81,6 +81,7 @@ class FLScheduler:
         target_selector=None,
         mission_budget_s: Optional[float] = None,
         feasibility_model=None,
+        mission_window_adapter=None,
     ):
         self._device_states: Dict[DeviceID, DeviceSchedulerState] = {}
         self._current_slice: Optional[MissionSlice] = None
@@ -105,6 +106,13 @@ class FLScheduler:
         # Stamped when a mission slice opens; the budget is measured from it.
         self._mission_start_ts: Optional[float] = None
         self.last_feasibility: Optional[object] = None
+        # S3c — mission-level window adaptation. ``None`` (the default) means no
+        # global widening at all: the scale is 1.0 and every deadline is exactly
+        # what the per-device rule produced, which is how every recorded sweep
+        # ran. Supply an *enabled* adapter to let systemic mission shortfall
+        # widen all windows together — see s3c_mission_window for why the
+        # per-device rule cannot see that signal on its own.
+        self._window_adapter = mission_window_adapter
 
     # ------------------------------------------------------------------ #
     # Introspection — tests & observability
@@ -121,6 +129,30 @@ class FLScheduler:
 
     def get_state(self, device_id: DeviceID) -> Optional[DeviceSchedulerState]:
         return self._device_states.get(device_id)
+
+    @property
+    def window_scale(self) -> float:
+        """S3c multiplier applied to every fulfilment window this round.
+
+        Exactly 1.0 when no adapter is attached or the attached one is
+        disabled — which is the configuration every recorded sweep ran under.
+        """
+        if self._window_adapter is None:
+            return 1.0
+        return float(self._window_adapter.scale)
+
+    def record_mission_outcome(self, *, served: int, planned: int) -> None:
+        """Feed one mission's served/planned into S3c. No-op without an adapter.
+
+        Called by the mule once per mission, after the collection pass — the
+        only place that knows how much of the plan actually happened.
+        """
+        if self._window_adapter is None:
+            return
+        try:
+            self._window_adapter.record(served, planned)
+        except Exception:  # bookkeeping must never kill a mission
+            log.warning("scheduler: mission-outcome record failed", exc_info=True)
 
     # ------------------------------------------------------------------ #
     # Slow-phase ingest — dock
@@ -257,6 +289,7 @@ class FLScheduler:
         learned selector; they're ignored by the placeholder.
         """
         _now = self._now() if now is None else now
+        _wscale = self.window_scale  # S3c; 1.0 unless enabled
 
         # S1 — eligibility.
         eligible_ids = filter_eligible(
@@ -278,7 +311,7 @@ class FLScheduler:
                 continue
             st.bucket = bucket
             by_bucket[bucket].append(did)
-            deadlines[did] = compute_deadline(st, now=_now)
+            deadlines[did] = compute_deadline(st, now=_now, window_scale=_wscale)
 
         # S3.5 — intra-bucket order.
         selector_env = None
@@ -356,6 +389,7 @@ class FLScheduler:
                 f"build_contact_queue requires rf_range_m > 0, got {rf_range_m}"
             )
         _now = self._now() if now is None else now
+        _wscale = self.window_scale  # S3c; 1.0 unless enabled
 
         eligible_ids = filter_eligible(
             self._device_states, now=_now, beacon_window_s=self._beacon_window_s
@@ -375,7 +409,7 @@ class FLScheduler:
                 log.warning("build_contact_queue: S3 refused to bucket %s", did)
                 continue
             st.bucket = bucket
-            deadlines[did] = compute_deadline(st, now=_now)
+            deadlines[did] = compute_deadline(st, now=_now, window_scale=_wscale)
 
         # Filter out anyone S3 couldn't bucket (kept simple — drop them).
         bucketed = [d for d in eligible_ids if self._device_states[d].bucket is not None]
@@ -499,6 +533,7 @@ class FLScheduler:
                 f"build_pass_2_queue requires rf_range_m > 0, got {rf_range_m}"
             )
         _now = self._now() if now is None else now
+        _wscale = self.window_scale  # S3c; 1.0 unless enabled
 
         # Pass 2 must reach every slice member regardless of S1's
         # eligibility gate — even devices whose deadlines have passed
@@ -521,7 +556,7 @@ class FLScheduler:
         shadow_states: Dict[DeviceID, DeviceSchedulerState] = {}
         for did in slice_ids:
             st = self._device_states[did]
-            deadlines[did] = compute_deadline(st, now=_now)
+            deadlines[did] = compute_deadline(st, now=_now, window_scale=_wscale)
             if st.bucket is None:
                 # Build a shallow copy with a transient bucket — the
                 # original state row is left untouched.

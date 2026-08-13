@@ -21,6 +21,9 @@ S3   deadline + bucket  RANK TIER     — computes Deadline(j), classifies bucke
 S3a  RF clustering      REGROUP       — devices within rf_range_m → ContactWaypoints
 S3b  deadline feasibility HARD GATE   — drops contacts that cannot be served in time
 S3.5 intra-bucket order ORDERING ONLY — deterministic distance, or the learned selector
+
+S3c  mission window     SCALES S3     — mission-level widening; feeds back into S3, not a stage
+                                        in the per-round path (Amendment 2, default off)
 ```
 
 **The architectural guarantee — frozen.** Learning may only reorder within an already-admitted
@@ -72,6 +75,7 @@ hermes/scheduler/stages/s1_eligibility.py
 hermes/scheduler/stages/s3_deadline.py
 hermes/scheduler/stages/s3a_cluster.py
 hermes/scheduler/stages/s3b_feasibility.py
+hermes/scheduler/stages/s3c_mission_window.py
 hermes/scheduler/stages/s35_selector.py
 hermes/scheduler/selector/          (target_selector_rl, features, ddqn, scope_guard)
 hermes/mule/mule_main.py            (MuleSupervisor: queue construction, two-pass mission)
@@ -104,6 +108,43 @@ in its knowable form.
 previously recorded sweep remains reproducible. 8 new tests; 573 unit tests pass.
 
 **D1 is unchanged:** the mechanism is frozen, the default remains a Phase-3 matrix parameter.
+
+## 5b. Amendment 2 — mission-level window adaptation, S3c (2026-08-13)
+
+**Same-day amendment, again before any sweep ran against the freeze** — nothing recorded was
+invalidated.
+
+**The gap.** S3's adaptation is *per device*: a clean contact shrinks that device's window, a
+missed one widens it. Amendment 1 (A2) made sure devices the gate skipped also get that signal —
+but every one of those loops is still per-device. None of them can see **"the mule is
+systematically failing to complete its circuit"**, because from any single device's point of view a
+systemically over-tight schedule is indistinguishable from ordinary bad luck. A2 stops a starved
+device from being starved *forever*; it does not diagnose a fleet-wide mismatch between the
+schedule and the geometry, cruise speed and budget the mule actually has.
+
+**The fix — S3c.** The mule reports `served/planned` after each mission. Over a rolling window the
+adapter derives a multiplier applied to **every** device's fulfilment term in `compute_deadline`.
+
+| Property | Choice | Why |
+|---|---|---|
+| **Derived, not accumulated** | The scale is a pure function of the recent record, recomputed each read | An integrator would wind up and drift; a pure function means the same history always yields the same scale, and reading it never perturbs it |
+| **Widen-only** | At or above `target_success` the scale is exactly 1.0 | Shrinking is the per-device rule's job — it knows *whom* to reward; S3c only knows that the fleet is behind |
+| **Bounded** | `max_scale` (default 4.0) | An impossible configuration degrades to "windows are wide", never "windows are unbounded" |
+| **Pooled, not averaged** | `Σserved / Σplanned`, not the mean of per-mission ratios | A 100-device mission must outweigh a 1-device one |
+| **Denominator includes S3b's own drops** | `planned` = queue **+** pre-flight drops | Otherwise the gate flatters itself: drop nine contacts, serve the tenth, report 100 % success, never widen — the starvation loop hiding inside its own success metric |
+| **Cluster override still wins** | `deadline_override_ts` short-circuits before scaling | The slow-phase amendment stays authoritative (§6.8) |
+
+**Scope note.** S3c is *not* a gate and not a stage in the per-round decision path — it changes no
+admission and no ordering. It only scales the S3 term that S3b later tests against, which is why it
+sits outside the S1→S3.5 pipeline in §1.
+
+**Inert by default,** pinned by test: with the toggle off the scale is exactly 1.0 and
+`compute_deadline` reduces to the original formula term for term. 44 tests now cover Amendments 1
+and 2 (8 abort/starvation + 36 S3c); **609 unit tests pass**.
+
+**Matrix parameter, not a code default** — same rule as D1. The toggle
+(`--mission-window-adaptation`) and its four tunables belong to the Phase-3 matrix. Expect it to
+matter only where the S3b gate binds: with no budget there is nothing for a wider window to rescue.
 
 ## 6. Unfreezing
 

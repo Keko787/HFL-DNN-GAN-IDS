@@ -52,6 +52,14 @@ log = logging.getLogger("experiments.exp4.driver")
 
 ARMS = ("H0", "H1", "H2", "H3")
 
+#: Scheduler-configuration columns the driver stamps on every row, on top of
+#: the metric schema. They exist so a results CSV is self-describing: rows
+#: recorded with the S3b deadline gate or S3c window adaptation active are NOT
+#: comparable with historical rows, and without these nothing in the file says
+#: which is which. Owned by the driver, not the metric summary — they describe
+#: how the trial was configured, not what it measured.
+PROVENANCE_COLUMNS = ("mission_budget_s", "mission_window_adaptation")
+
 
 class Exp4TrialTimeout(RuntimeError):
     """Raised when a trial blows its hard wall-clock budget.
@@ -145,6 +153,14 @@ class Exp4Driver:
     # previously-recorded result: the S3 deadline stays a sort key. Setting it
     # turns on the feasibility gate so the deadline actually binds.
     mission_budget_s: Optional[float] = None
+    # S3c — mission-level window adaptation. False (default) reproduces every
+    # previously-recorded result exactly: the window scale stays 1.0. Toggled
+    # on, systemic mission shortfall widens all windows together.
+    mission_window_adaptation: bool = False
+    mission_window_history: int = 5
+    mission_window_target: float = 0.8
+    mission_window_gain: float = 2.0
+    mission_window_max_scale: float = 4.0
 
     def run_trial(self, cell: Cell) -> Mapping[str, Any]:
         params = cell.params
@@ -199,6 +215,14 @@ class Exp4Driver:
         )
         if self.mission_budget_s is not None:
             selector_kwargs["mission_budget_s"] = float(self.mission_budget_s)
+        if self.mission_window_adaptation:
+            selector_kwargs.update(
+                mission_window_adaptation=True,
+                mission_window_history=int(self.mission_window_history),
+                mission_window_target=float(self.mission_window_target),
+                mission_window_gain=float(self.mission_window_gain),
+                mission_window_max_scale=float(self.mission_window_max_scale),
+            )
 
         # EX-4.3 arm H3 — L1 adaptive channel. H1/H2 hold the best-average
         # fixed band; H3 runs the U(c,t) controller. The per-mission loss
@@ -482,6 +506,14 @@ class Exp4Driver:
                 tau=self.tau,
             )
             row = summary.to_row()
+            # Provenance for the two opt-in scheduler mechanisms. Recorded on
+            # every row so a CSV is self-describing: without these, an
+            # enforcement or window-adaptation run is indistinguishable from a
+            # historical one after the fact, and the two must never be pooled.
+            row["mission_budget_s"] = (
+                "" if self.mission_budget_s is None else float(self.mission_budget_s)
+            )
+            row["mission_window_adaptation"] = int(bool(self.mission_window_adaptation))
             # A trial that produced NO model evaluation at all never trained a
             # model — its convergence columns are blank while its federation
             # columns are hard zeros. Recorded as `ok`, that asymmetry biases

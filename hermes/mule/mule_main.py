@@ -75,6 +75,34 @@ class MuleSupervisorError(RuntimeError):
     """Raised when the supervisor's invariants are violated."""
 
 
+# --------------------------------------------------------------------------- #
+# S3c mission accounting — pure, so the ratio that drives window adaptation
+# can be tested without a live process tree.
+# --------------------------------------------------------------------------- #
+
+def mission_planned_devices(queue, feasibility=None) -> int:
+    """Devices this mission INTENDED to serve.
+
+    The queue *plus* whatever S3b already dropped before take-off. Counting
+    only the surviving queue would let the gate flatter itself: drop nine
+    contacts, serve the tenth, report 100 % success, and never widen — the
+    starvation loop, hidden inside its own success metric.
+    """
+    planned = sum(len(c.devices) for c in queue)
+    for wp in (
+        list(getattr(feasibility, "dropped_overdue", ()))
+        + list(getattr(feasibility, "dropped_budget", ()))
+    ):
+        planned += len(getattr(wp, "devices", ()))
+    return planned
+
+
+def mission_served_devices(queue, aborted=()) -> int:
+    """Devices actually reached: the queue minus any tail the abort abandoned."""
+    n_aborted = len(list(aborted))
+    return sum(len(c.devices) for c in queue[: len(queue) - n_aborted])
+
+
 @dataclass
 class MissionRunResult:
     """One mission's run, summarised for callers / tests.
@@ -135,6 +163,7 @@ class MuleSupervisor:
         session_ttl_s: float = 5.0,
         rf_range_m: Optional[float] = None,
         mission_budget_s: Optional[float] = None,
+        mission_window_adapter=None,
         now_fn=time.time,
     ) -> None:
         self.mule_id = mule_id
@@ -153,6 +182,10 @@ class MuleSupervisor:
             # S3b — when set, the deadline stops being a sort key and becomes
             # an enforced constraint (see stages/s3b_feasibility.py).
             mission_budget_s=mission_budget_s,
+            # S3c — when an *enabled* adapter is supplied, systemic mission
+            # shortfall widens every device's window together
+            # (see stages/s3c_mission_window.py).
+            mission_window_adapter=mission_window_adapter,
         )
 
         # Mission server — emits one RoundCloseDelta per session into the
@@ -376,6 +409,8 @@ class MuleSupervisor:
                 mission_round=mission_round,
             )
 
+        planned_devices = mission_planned_devices(pass_1_queue, _feas)
+
         # M5 — split channel choices per pass for clean attribution.
         pass_1_channel_choices: List[int] = []
         aborted_wps: List[ContactWaypoint] = []
@@ -428,6 +463,19 @@ class MuleSupervisor:
             # the Pass-2 nearest-first ordering both plan from the
             # *current* location, not from origin.
             self.mule_pose = wp.position
+
+        # S3c — hand this mission's outcome to the mission-level adapter.
+        # No-op unless an enabled adapter is attached.
+        _served_devices = mission_served_devices(pass_1_queue, aborted_wps)
+        self.scheduler.record_mission_outcome(
+            served=_served_devices, planned=planned_devices,
+        )
+        if getattr(self.scheduler, "_window_adapter", None) is not None:
+            log.info(
+                "mule=%s round=%d S3c mission outcome served=%d/%d -> %s",
+                self.mule_id, mission_round, _served_devices, planned_devices,
+                self.scheduler._window_adapter.describe(),
+            )
 
         try:
             agg, report, contacts = self.mission.close_round()

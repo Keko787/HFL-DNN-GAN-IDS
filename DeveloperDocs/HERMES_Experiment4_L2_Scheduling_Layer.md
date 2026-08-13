@@ -46,7 +46,9 @@ S1  eligibility        →  S3  deadline + bucket classify (per device)
 | **S1 — eligibility** | admits on mission-slice membership | **hard gate** (removes candidates) |
 | **S3 — deadline + bucket** | computes `deadline_ts`, classifies into buckets | **rank tier** — a hard tier the selector cannot cross |
 | **S3a — RF clustering** | groups devices within `rf_range_m` into `ContactWaypoint`s | lossless regrouping (no removal) |
+| **S3b — deadline feasibility** | drops contacts that cannot be reached in time (opt-in, §4.2) | **hard gate** (removes candidates) |
 | **S3.5 — intra-bucket** | orders candidates *within* one bucket | **ordering only** |
+| **S3c — mission window** | scales the S3 fulfilment term from mission history (opt-in, §4.8) | neither — it changes *when*, not *who* |
 | S2A — readiness | **not invoked** (see §4) | — |
 | S2B — FL_READY threshold | **not invoked** (see §4) | — |
 
@@ -208,6 +210,57 @@ discriminating on a narrower signal than the feature vector suggests.
 
 N=6 devices, one mule. Multi-mule coordination and larger-N bucket behaviour are untested here.
 
+### 4.8 The mule flew doomed queues, and the gate could starve its own drops — now fixed, both off by default
+
+Enforcing the deadline (§4.2) fixed one defect and created two more. Both are now closed, and like
+enforcement itself both are **opt-in**, so every recorded result stands.
+
+**(a) The abort was missing.** S3b filtered the queue *before* take-off and nothing re-checked en
+route. Contacts take real time and can fail, so the mule falls behind its own plan — and then keeps
+flying stops it can no longer serve, burning budget and delaying delivery of the updates already
+aboard. `MuleSupervisor._remaining_is_feasible()` now re-runs the S3b check from the mule's
+**current** pose and clock before each stop; when the remainder is unreachable the Pass-1 loop
+breaks and `close_round` + the dock deliver what was collected.
+
+> **What "knows it will fail" can and cannot mean.** This foresees running out of **time** — a
+> deterministic function of clock and geometry. It cannot foresee a *random link failure*, which is
+> stochastic by construction. The edge case is implemented in its knowable form; the unknowable
+> half is not a gap to be closed but a property of the model.
+
+**(b) The gate could starve the devices it dropped.** `RoundCloseDelta` is emitted only from inside
+a contact session (`host_mission.py:838`). A device dropped by S3b, or abandoned by an abort, has
+no session — so it received **no feedback at all**, its fulfilment window never widened, and it was
+just as un-serveable next mission. *A starvation loop created by the S3b gate itself.*
+`_widen_abandoned()` now feeds those devices a `TIMEOUT` delta, exactly as a missed contact does.
+
+**(c) S3c — the signal none of the per-device loops can see.** Fixing (b) closes the loop *per
+device*. But every loop in S3 is per-device, and none of them can diagnose **"the mule is
+systematically failing to complete its circuit"** — from any single device's point of view, a
+schedule that is globally too tight looks identical to ordinary bad luck. So S3c adds a second,
+mission-level signal: the mule reports `served/planned` after each mission, and while the rolling
+rate sits below target the adapter widens **every** device's window together.
+
+Four properties are worth stating because each rules out a way this could have gone wrong:
+
+* **Derived, not accumulated.** The scale is a pure function of the recent record, recomputed on
+  each read rather than nudged up and down — so it cannot wind up or drift, and reading it never
+  perturbs it.
+* **Widen-only.** At or above target the scale is exactly 1.0. Shrinking stays with the per-device
+  rule, which knows *whom* to reward; S3c only knows the fleet is behind.
+* **Bounded.** `max_scale` caps the stretch, so an impossible configuration degrades to "windows
+  are wide" rather than "windows are unbounded".
+* **The denominator includes S3b's own pre-flight drops.** Counting only the surviving queue would
+  let the gate flatter itself — drop nine contacts, serve the tenth, report 100 % success, and
+  never widen. That is the starvation loop hiding inside its own success metric.
+
+S3c is **not a gate**: it changes no admission and no ordering, only the S3 term that S3b later
+tests against. Enable it with `--mission-window-adaptation`; the four tunables
+(`--mission-window-target|gain|history|max-scale`) are matrix parameters, not code defaults.
+
+**Expect it to do nothing without a budget.** If the deadline is only a sort key there is nothing
+for a wider window to rescue, so an adaptation-only arm should read as a tie by construction — a
+useful negative control, and a check that the toggle is wired the way this section claims.
+
 ---
 
 ## 5. Two defects this trace uncovered
@@ -270,7 +323,9 @@ different weights; no seed → still nondeterministic, by design. Regression-tes
 | What | Path |
 |---|---|
 | Scheduler entry points (Exp-4 path) | `FLScheduler.build_contact_queue` / `build_pass_2_queue` — [`hermes/scheduler/fl_scheduler.py`](../hermes/scheduler/fl_scheduler.py) |
-| Stages | [`hermes/scheduler/stages/`](../hermes/scheduler/stages/) — `s1_eligibility`, `s2a_readiness`*, `s2b_flag`*, `s3_deadline`, `s3a_cluster`, `s35_selector`* (*not on the Exp-4 path) |
+| Stages | [`hermes/scheduler/stages/`](../hermes/scheduler/stages/) — `s1_eligibility`, `s2a_readiness`*, `s2b_flag`*, `s3_deadline`, `s3a_cluster`, `s3b_feasibility`, `s3c_mission_window`, `s35_selector`* (*not on the Exp-4 path) |
+| In-flight abort + abandoned-device widening | `MuleSupervisor._remaining_is_feasible` / `._widen_abandoned` — [`hermes/mule/mule_main.py`](../hermes/mule/mule_main.py) |
+| Mission accounting that feeds S3c | `mission_planned_devices` / `mission_served_devices` — [`hermes/mule/mule_main.py`](../hermes/mule/mule_main.py) |
 | Selector | [`hermes/scheduler/selector/`](../hermes/scheduler/selector/) — `target_selector_rl.py`, `features.py`, `ddqn.py`, `scope_guard.py` |
 | Mule supervisor / two-pass mission | [`hermes/mule/mule_main.py`](../hermes/mule/mule_main.py) |
 | Subprocess wiring (`use_rl_selector`) | [`hermes/processes/mule.py`](../hermes/processes/mule.py) |

@@ -211,13 +211,20 @@ history is kept deliberately — it is the evidence that the numbers survived sc
 | 20-skeptic L1 audit | **No rigging found** across rigging/fair-baseline/loss-map/wiring/robustness lenses; 6 framing caveats confirmed | §7.2 caveats recorded; magnitude reported as calibration-dependent |
 | AUC>1.0 investigation | Data always in range (max 0.9940); the **figure** misrepresented it via ±SD whiskers on a bounded, bimodal metric | Figure standards now enforced in code (§5.1 of the validity record) |
 | — same investigation | **Data-integrity bug:** trials that produced no model were recorded `status=ok`, their blank AUC dropped from one mean while their fabricated 0.0 participation was averaged into another | Driver now records `status=no_eval`; contaminated sweep re-run clean (0/200 failures); the apparent L1 effect **retracted** |
+| L2 scheduler trace | The S3 deadline was **computed but never enforced** — a sort key wearing a constraint's name | S3b feasibility gate added; enforcement cost measured (mission completion 0.767 → 0.542) and kept **opt-in**, so committed results stand |
+| — follow-on inspection | Enforcement introduced two defects of its own: the mule **flew queues it could no longer serve**, and devices the gate dropped got **no feedback at all**, so their windows never widened and they were dropped again forever — *a starvation loop created by the gate* | In-flight abort + `TIMEOUT` widening for abandoned devices (Freeze Amendment 1). Both ride the enforcement toggle, so they are inert by default — pinned by test |
+| — same inspection | Every remaining adaptation loop is **per device**, so none can diagnose "the mule is systematically failing to complete its circuit": from one device's view that is indistinguishable from bad luck | S3c mission-level window adaptation (Freeze Amendment 2), behind its own toggle so its effect can be measured as a one-flag delta rather than assumed |
 
-**Two lessons worth carrying into every future experiment**, because both defects were *silent*:
+**Three lessons worth carrying into every future experiment**, because each defect was *silent*:
 
 1. A trial must **assert it produced what it claims to have produced** — a run that trained no
    model must not be able to masquerade as a success.
 2. A figure must draw its numbers from **the same code that produces the tables**, or the two will
    eventually disagree — as they did, by ~0.19 AUC.
+3. **A gate must not be allowed to grade itself.** S3b's own success metric counted only the
+   contacts it had not already dropped, so dropping nine and serving the tenth would have scored
+   100 %. Any mechanism that removes work must have those removals in the denominator of whatever
+   measures it, or the failure it causes is invisible in exactly the number meant to detect it.
 
 ---
 
@@ -233,6 +240,12 @@ model:
   normalized energy is reportable**.
 * **Real RF** — the channel is modelled, with perfect cost-free sensing (see the L1 document).
 * **Scale** — N=6 devices and a single mule; multi-mule behaviour is untested here.
+* **An enforced deadline.** The S3b feasibility gate, the in-flight abort, and S3c mission-level
+  window adaptation are all implemented and tested, but **off in every committed result** — so the
+  reported participation figures come from a scheduler whose deadline is a sort key, not a
+  constraint. Turning enforcement on costs ~29 % of mission completion, which is why the decision
+  belongs to the final matrix and is costed once
+  ([pre-re-run checklist](HERMES_PreRerun_Checklist.md) §1a).
 
 Consequently Exp 4 validates **participation/convergence resilience** (Observation 3), not the
 budget-scheduling claim (Observation 4).

@@ -137,6 +137,19 @@ class MuleConfig:
     # dropped before ordering. ``None`` keeps the historical behaviour in
     # which Deadline(j) is only a sort key.
     mission_budget_s: Optional[float] = None
+    # S3c — mission-level deadline-window adaptation. Off by default, which is
+    # exactly how every recorded sweep ran: the window scale stays 1.0 and the
+    # per-device rule alone sets Deadline(j). Turned on, the mule tracks how
+    # much of each mission it actually served and widens ALL windows together
+    # when it is systematically falling short — the systemic signal the
+    # per-device rule is blind to. Kept as scalars rather than an adapter
+    # object because this config crosses a process boundary; the mule process
+    # builds the adapter from these.
+    mission_window_adaptation: bool = False
+    mission_window_history: int = 5
+    mission_window_target: float = 0.8
+    mission_window_gain: float = 2.0
+    mission_window_max_scale: float = 4.0
 
 
 @dataclass

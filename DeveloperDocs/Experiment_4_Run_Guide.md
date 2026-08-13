@@ -124,6 +124,30 @@ One entry point drives every arm: [`experiments.exp4.runner_main`](../experiment
 **H0 needs `--real-model`** (it is a real-model convergence baseline); it is dropped
 with a warning from a stub run.
 
+### 2.1 The two scheduler toggles — both off, and every committed result is an "off" run
+
+These change what the scheduler *does*, so a run with either one on is **not comparable** with the
+committed CSVs. Both default off; leaving them off reproduces the recorded behaviour exactly.
+
+| Flag | Default | Meaning |
+|---|---|---|
+| `--mission-budget-s` | (none) | **Enforce the deadline.** Without it `Deadline(j)` is only a sort key. With it the S3b gate drops contacts that cannot be reached in time, the mule **aborts** a remainder it can no longer serve and returns with what it has, and skipped devices get their window widened. Measured cost at a slack budget: **mission completion 0.767 → 0.542**. |
+| `--mission-window-adaptation` | off | **S3c mission-level widening.** Tracks `served/planned` across missions and widens *every* device's window while the mule is below target. Tunables: `--mission-window-target` (`0.8`), `--mission-window-gain` (`2.0`), `--mission-window-history` (`5`), `--mission-window-max-scale` (`4.0`). |
+
+Two things to know before using them:
+
+* **Adaptation without a budget should be a no-op.** If the deadline never binds, a wider window
+  rescues nothing. Run S3c *with* `--mission-budget-s`; an adaptation-only arm is a negative
+  control, not a result.
+* **Start a new CSV.** Rows now carry `mission_budget_s` and `mission_window_adaptation`, so a
+  results file is self-describing. A pre-existing CSV therefore **cannot be resumed** — the runner
+  stops with `pass allow_schema_change=True to override`. Do not override: that error is the guard
+  against pooling toggled rows with historical ones. Write to a new path instead.
+
+```bash
+python -m experiments.exp4.runner_main --csv results/exp4_s3c/on.csv --arms H1 --N 6 --rrf 50 --n-missions 6 --n-trials 20 --realism --mission-budget-s 120 --mission-window-adaptation
+```
+
 ---
 
 ## 3. Smoke run (one trial, no dataset)

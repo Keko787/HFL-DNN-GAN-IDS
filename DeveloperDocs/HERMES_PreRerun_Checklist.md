@@ -6,9 +6,9 @@ either done or explicitly deferred with a reason. It exists so we pay the comput
 
 **Status:** open. Nothing is scheduled to re-run until §5's exit criteria are met.
 
-**Progress:** Phase 0 — 7 of 10 closed (3 open, all no-re-run). Phase 1 — **done, scheduler
-frozen**. Phase 2 — first pass done, **full-text verification is the current blocker**.
-Phases 3–4 — not started.
+**Progress:** Phase 0 — 8 of 11 closed (3 open, all no-re-run). Phase 1 — **done, scheduler
+frozen**, amended twice since (see §1a). Phase 2 — first pass done, **full-text verification is the
+current blocker**. Phases 3–4 — not started.
 
 ---
 
@@ -19,6 +19,9 @@ The single most useful distinction here. Most open items do **not** need new tri
 | Change | Forces a re-run? | Why |
 |---|---|---|
 | Turn on deadline enforcement (`--mission-budget-s`) | **Yes** | Changes participation by ~29 % (measured) |
+| Turn on in-flight abort (Amendment 1, A1) | **Only with** `--mission-budget-s` | Rides the same toggle; inert without a budget |
+| Turn on abandoned-device widening (Amendment 1, A2) | **Only with** `--mission-budget-s` | Same toggle; changes Φ trajectories once the gate drops anyone |
+| Turn on window adaptation (`--mission-window-adaptation`, Amendment 2) | **Yes** if enabled | Changes every deadline once the mule falls below target |
 | Trained selector weights instead of random-init | **Yes** (H2/H3 only) | Changes the arm being measured |
 | Selector seeding fix | **Yes** (H2/H3 only) | Weights differ from the committed rows |
 | Apply `dead_zone` to the mule arms | **Yes** (H2/H3 only) | Would make the L1 sweep a real severity sweep |
@@ -35,6 +38,35 @@ The single most useful distinction here. Most open items do **not** need new tri
 > **Rule of thumb:** if it changes what the *trial does*, it forces a re-run; if it changes what we
 > *say about the trial*, it does not. Prefer the latter wherever it is honest to do so.
 
+## 1a. Scheduler amendments since the freeze — and why nothing recorded was lost
+
+Three mechanisms have been added to the **frozen** L2 surface since 2026-08-13. All were taken
+*before* the Phase-3 matrix ran, which is the only reason they were cheap: batching them in costs
+nothing now, whereas adding them after the matrix would have cost a second full re-run.
+
+| # | Mechanism | Toggle | Default |
+|---|---|---|---|
+| **A1** | **In-flight abort.** S3b was pre-flight only; the mule kept flying stops it could no longer serve, burning budget and delaying delivery of updates already aboard. It now re-checks feasibility from its **current** pose and clock before each stop and turns for home when the remainder is unreachable. | `--mission-budget-s` | off |
+| **A2** | **Abandoned-device widening.** `RoundCloseDelta` is emitted only from inside a contact session, so devices S3b dropped — or an abort abandoned — never widened Φ and were dropped again next mission. **A starvation loop created by the S3b gate itself.** They now receive a `TIMEOUT` delta, exactly as a missed contact does. | `--mission-budget-s` | off |
+| **A3** | **Mission-level window adaptation (S3c).** The per-device rule only ever learns "this device was missed"; it is blind to "the mule is systematically not completing its circuit". S3c tracks served/planned over a rolling window of missions and widens **every** window together while the mule is below target. Bounded, and it only ever widens — shrinking stays the per-device rule's job. | `--mission-window-adaptation` | off |
+
+**Why the recorded sweeps still stand.** Every one of these is **inert at its default**, and that
+inertness is pinned by test rather than asserted: with no budget the abort never fires and nothing
+is widened, and with the S3c toggle off the window scale is exactly `1.0`, so `compute_deadline`
+reduces to the original formula term for term. 44 tests cover the three; the full unit suite is
+**609 passing**.
+
+**The honest caveat.** Inert-by-default means the *numbers* are reproducible, not that the frozen
+files are unchanged — they are changed, and anyone re-deriving a committed CSV must check out the
+matching commit rather than assume `main` reproduces it.
+
+**Operational consequence — new CSV columns.** Rows now carry `mission_budget_s` and
+`mission_window_adaptation`, so a results file says for itself which mechanisms were live. This
+means **an existing CSV cannot be resumed** by a newer runner: it fails loudly with
+`pass allow_schema_change=True to override`. That is the desired behaviour, not a defect — rows
+recorded with these mechanisms active must never be pooled with historical rows, so being forced
+into a new file is the correct outcome. Start a new CSV; do not override.
+
 ---
 
 ## 2. Phase 0 — Correctness & provenance *(highest priority)*
@@ -44,6 +76,10 @@ Audit equations, code behaviour, provenance, calibration, trial counts, question
 **Already closed** (this session — no action):
 
 - [x] Deadline computed but never enforced → S3b gate, cost measured (−0.225 completion)
+- [x] **S3b could starve the devices it dropped** → they never received a `RoundCloseDelta`, so Φ
+      never widened and the same devices were dropped every mission. Closed by A2 (§1a); the mule
+      also aborts a doomed remainder rather than flying it (A1), and S3c adds the mission-level
+      signal the per-device rule cannot see (A3).
 - [x] Selector unseeded → `rng_seed` threaded to the network
 - [x] Zero-evaluation trials recorded `status=ok` → now `no_eval`, excluded from every metric
 - [x] AUC rendered above 1.0 → bootstrap CIs, bounded axes, guards in `figstyle.py`
@@ -139,6 +175,16 @@ Finalize E1–E4, baselines, scaling, sensitivity, statistics, provenance labels
       (today: H1-vs-H0 and H3-vs-H2 only; H2/H3-vs-H0/H1 is **not** paired).
 - [ ] Axes and their ranges: `dead_zone × link_quality`, regime, N, mule count, `n_missions`,
       mission budget.
+- [ ] **Decide the two scheduler toggles (§1a).** `--mission-budget-s` carries A1+A2 with it;
+      `--mission-window-adaptation` is independent. Both default off, so *not* deciding means
+      shipping a scheduler whose deadline is a sort key — defensible only if stated plainly.
+- [ ] **If window adaptation is in, run it as a paired A/B, not as a new default.** It is a
+      one-flag delta on an otherwise identical configuration, which is the cheapest clean
+      comparison available and the reason it was built as a toggle. Its own parameters
+      (`--mission-window-target`, `--mission-window-gain`, `--mission-window-history`,
+      `--mission-window-max-scale`) are matrix values, not code defaults — the same rule as D1.
+      Expect it to matter **only** when the S3b gate binds; with no budget there is nothing for a
+      wider window to rescue, so an adaptation-only arm should read as a tie by construction.
 - [ ] Seeds per cell (≥20) and the pairing key.
 - [ ] Statistics: paired Wilcoxon + Cliff's δ + bootstrap CI; claim only when CI excludes 0 **and**
       p<0.05.
@@ -171,9 +217,12 @@ unresolved methodological claim.
 | `results/exp4_s3b/*.csv` | 100 ok | Deadline-enforcement cost ladder |
 | `results/exp4_paper/h2h3_l1.csv` | 80 ok | §7.3 single-cell L1 result |
 
-**Caveat carried on all of them:** recorded with deadline enforcement **off** and an **unseeded,
-untrained** selector. Fine for the comparisons they support (both arms shared the configuration);
-not fine as absolute participation figures.
+**Caveat carried on all of them:** recorded with deadline enforcement **off**, window adaptation
+**off**, and an **unseeded, untrained** selector. Fine for the comparisons they support (both arms
+shared the configuration); not fine as absolute participation figures. None of them carry the
+`mission_budget_s` / `mission_window_adaptation` provenance columns, because they predate them —
+their absence *is* the provenance, and it is why they cannot be resumed or extended in place
+(§1a).
 
 **Sequence when the gate opens:** re-parse first → then the smallest sweep that answers what
 re-parsing cannot → then the full matrix.

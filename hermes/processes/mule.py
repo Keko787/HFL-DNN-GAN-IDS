@@ -112,6 +112,21 @@ class MuleService:
         budget = getattr(cfg, "mission_budget_s", None)
         if budget is not None:
             sup_kwargs["mission_budget_s"] = float(budget)
+        # S3c — build the adapter here rather than in the config, because it
+        # carries live per-mission history and this config crosses a process
+        # boundary. Only attached when the toggle is on, so the default path is
+        # byte-identical to every recorded sweep.
+        if getattr(cfg, "mission_window_adaptation", False):
+            from hermes.scheduler.stages.s3c_mission_window import (
+                MissionWindowAdapter,
+            )
+            sup_kwargs["mission_window_adapter"] = MissionWindowAdapter(
+                enabled=True,
+                window=int(getattr(cfg, "mission_window_history", 5)),
+                target_success=float(getattr(cfg, "mission_window_target", 0.8)),
+                gain=float(getattr(cfg, "mission_window_gain", 2.0)),
+                max_scale=float(getattr(cfg, "mission_window_max_scale", 4.0)),
+            )
         self.supervisor = MuleSupervisor(
             mule_id=MuleID(cfg.mule_id),
             rf=self.rf,

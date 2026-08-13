@@ -75,17 +75,27 @@ def compute_idle_time(state: DeviceSchedulerState, now: float) -> float:
     return max(0.0, now - state.idle_time_ref_ts)
 
 
-def compute_deadline(state: DeviceSchedulerState, now: float) -> float:
+def compute_deadline(
+    state: DeviceSchedulerState,
+    now: float,
+    window_scale: float = 1.0,
+) -> float:
     """Design §6.8 formula.
 
     ``deadline_override_ts`` short-circuits the formula — the cluster
     amendment is authoritative when present (slow-phase wins over
     fast-phase drift for this round).
+
+    ``window_scale`` is the mission-level multiplier from S3c
+    (:class:`~hermes.scheduler.stages.s3c_mission_window.MissionWindowAdapter`).
+    It stretches the *fulfilment* term only, leaving the per-device state it was
+    derived from untouched — so the two adaptation loops stay separable, and at
+    the default of 1.0 this is exactly the original formula.
     """
     if state.deadline_override_ts is not None:
         return state.deadline_override_ts
     fulfilment = max(MIN_DEADLINE_FULFILMENT_S, state.deadline_fulfilment_s)
-    return now + fulfilment - compute_idle_time(state, now)
+    return now + fulfilment * window_scale - compute_idle_time(state, now)
 
 
 # --------------------------------------------------------------------------- #
