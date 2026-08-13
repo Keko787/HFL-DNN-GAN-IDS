@@ -1170,6 +1170,15 @@
 <section id="workflow">
   <h2>12. Recommended Execution Order</h2>
 
+  <div class="callout">
+    <strong>Working checklist:</strong>
+    <code>DeveloperDocs/HERMES_PreRerun_Checklist.md</code> turns the phases below into a
+    <em>re-run gate</em> — a tracked list of what must be settled before any sweep is launched, plus
+    a ledger of which open items actually force a re-run and which are re-analysis only. Sweeps cost
+    ~30–60 min each and any decision that lands after one invalidates it, so the gate exists to make
+    us pay the compute once. Update it as items close; launch nothing until its exit criteria are met.
+  </div>
+
   <div class="phase">
     <div class="num">0</div>
     <div>
