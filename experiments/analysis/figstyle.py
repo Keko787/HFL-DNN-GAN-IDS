@@ -89,6 +89,21 @@ def boot_ci(values: Sequence[float], n: int = BOOT_N, seed: int = BOOT_SEED):
     return m, means[int(0.025 * n)], means[int(0.975 * n)]
 
 
+def draw_axis_break(ax, *, size: float = 0.011, y: float = 0.030) -> None:
+    """Draw the conventional ``//`` break marks on a truncated y-axis.
+
+    Required whenever bars are drawn on an axis that does not start at zero. A
+    bar encodes magnitude by its length from zero, so a truncated bar chart
+    silently exaggerates differences unless the break is marked; the slashes are
+    the standard signal that the axis is cut.
+    """
+    kw = dict(transform=ax.transAxes, clip_on=False, color="black", lw=1.1,
+              zorder=6, solid_capstyle="butt")
+    for dy in (0.0, 0.020):
+        ax.plot([-size, size], [y + dy - size, y + dy + size], **kw)
+        ax.plot([1 - size, 1 + size], [y + dy - size, y + dy + size], **kw)
+
+
 def draw_metric_panel(
     ax,
     x: np.ndarray,
@@ -98,19 +113,28 @@ def draw_metric_panel(
     *,
     ylabel: str,
     title: str,
+    ylim=METRIC_YLIM,
     width: float = 0.36,
     show_chance: bool = False,
     collapse_below: Optional[float] = None,
     divider_after: int = 0,
-) -> float:
+) -> dict:
     """Grouped bars = mean, whiskers = bootstrap CI, points = per-seed values.
 
     ``series_by_arm[a][c]`` is the list of per-seed values for arm ``a`` in
-    condition ``c``. Returns the highest y any artist reaches, so the caller can
-    assert nothing was drawn outside the metric's bounds.
+    condition ``c``.
+
+    When ``ylim`` starts above 0 the axis is truncated, so break marks are drawn
+    automatically and any value falling below the window is counted and flagged
+    as ``↓n`` rather than silently dropped.
+
+    Returns ``{"min", "max"}`` over the drawn means/CIs so the caller can assert
+    nothing was cropped.
     """
     styles = [BASELINE_STYLE, TREATMENT_STYLE]
-    top = 0.0
+    lo_b, hi_b = ylim
+    truncated = lo_b > 0.0
+    out = {"min": float("inf"), "max": float("-inf")}
     for ai, (series, label) in enumerate(zip(series_by_arm, arm_labels)):
         color, hatch, marker, mcol = styles[ai % len(styles)]
         off = (ai - (len(series_by_arm) - 1) / 2) * width
@@ -118,41 +142,52 @@ def draw_metric_panel(
         means = [s[0] for s in stats]
         lo = [s[0] - s[1] if s[0] == s[0] else 0.0 for s in stats]
         hi = [s[2] - s[0] if s[0] == s[0] else 0.0 for s in stats]
+        for s in stats:
+            if s[0] == s[0]:
+                out["min"] = min(out["min"], s[1])
+                out["max"] = max(out["max"], s[2])
         ax.bar(x + off, means, width, yerr=[lo, hi], capsize=3, label=label,
                color=color, edgecolor="black", hatch=hatch, linewidth=1.1,
                error_kw=dict(ecolor="0.15", lw=1.2), zorder=2)
         rng = random.Random(JITTER_SEED)
-        for xi, v in zip(x, series):
-            jx = [xi + off + (rng.random() - 0.5) * width * 0.78 for _ in v]
+        for ci_, (xi, v) in enumerate(zip(x, series)):
+            inside = [y for y in v if lo_b <= y <= hi_b]
+            jx = [xi + off + (rng.random() - 0.5) * width * 0.78 for _ in inside]
             kw = (dict(facecolors="none", edgecolors=mcol) if marker == "o"
                   else dict(color=mcol))
-            ax.scatter(jx, v, s=8, marker=marker, linewidths=0.65, alpha=0.5,
+            ax.scatter(jx, inside, s=8, marker=marker, linewidths=0.65, alpha=0.5,
                        zorder=3, **kw)
+            # Values below a truncated window are flagged, never hidden.
+            n_below = sum(1 for y in v if y < lo_b)
+            if truncated and n_below:
+                ax.annotate(f"↓{n_below}", xy=(xi + off, lo_b + (hi_b - lo_b) * 0.022),
+                            ha="center", fontsize=6.8, color="0.10",
+                            bbox=dict(fc="white", ec="none", pad=0.6, alpha=0.9))
         # Name the failure mode in numbers instead of hiding it in a whisker.
-        if collapse_below is not None:
+        if collapse_below is not None and not truncated:
             for xi, v in zip(x, series):
                 c = sum(1 for y in v if y < collapse_below)
                 if c:
                     ax.annotate(f"{c}/{len(v)}", xy=(xi + off, 0.045), ha="center",
                                 fontsize=6.8, color="0.10",
                                 bbox=dict(fc="white", ec="none", pad=0.7, alpha=0.85))
-        vals = [s[2] for s in stats if s[2] == s[2]] + [max(v) for v in series if v]
-        top = max([top] + vals)
 
     if divider_after:
         ax.axvline(divider_after - 0.5, color="black", ls="--", lw=1.4, zorder=1)
-    if show_chance:
+    if show_chance and lo_b < CHANCE_LINE < hi_b:
         ax.axhline(CHANCE_LINE, color="0.45", ls=(0, (1, 3)), lw=1.0, zorder=1)
         ax.annotate("chance (0.50)", xy=(len(labels) - 0.62, CHANCE_LINE + 0.014),
                     fontsize=7.2, color="0.35", style="italic")
     ax.set_xticks(x)
     ax.set_xticklabels(labels)
-    ax.set_ylim(*METRIC_YLIM)
+    ax.set_ylim(*ylim)
     ax.set_ylabel(ylabel)
     ax.set_title(title, fontsize=10.5)
     ax.grid(axis="y", ls="--", alpha=0.45)
     ax.set_axisbelow(True)
-    return top
+    if truncated:
+        draw_axis_break(ax)
+    return out
 
 
 def draw_zoomed_point_panel(

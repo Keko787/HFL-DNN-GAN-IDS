@@ -53,7 +53,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from experiments.analysis.exp4 import analyze_metric, load_exp4  # noqa: E402
 from experiments.analysis.figstyle import (  # noqa: E402
     AUC_ZOOM_YLIM, DIFF_YLIM, METRIC_YLIM, assert_within_zoom, draw_diff_panel,
-    draw_metric_panel, draw_zoomed_point_panel,
+    draw_metric_panel,
 )
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -104,13 +104,13 @@ x = np.arange(len(CONDS))
 labels = [c[0] for c in CONDS]
 drawn = {}
 
-# ---- Panel 1: AUC on the shared ZOOMED axis (dot + CI, not bars) --------- #
+# ---- Panel 1: AUC as bars on the shared ZOOMED axis ---------------------- #
 auc_series = [[vals(rg, dz, arm, "final_auc") for _, rg, dz in CONDS]
               for arm in (BASELINE, TREATMENT)]
-zoom = draw_zoomed_point_panel(
+zoom = draw_metric_panel(
     axes[0], x, labels, auc_series, ARM_LABELS,
     ylabel="Final model AUC", title="Model quality by band policy",
-    below_axis_note="sessions at untrained init", divider_after=1,
+    ylim=AUC_ZOOM_YLIM, divider_after=1,
 )
 axes[0].set_xlabel(XLABEL, fontsize=9.5)
 assert_within_zoom(zoom["min"], zoom["max"])
@@ -158,9 +158,10 @@ fig.suptitle(
 fig.text(0.5, 0.085,
          f"Metrics normalized to [0,1] (participation = updates/round ÷ {N_DEVICES} devices). "
          f"AUC panel is zoomed to {AUC_ZOOM_YLIM[0]:.2f}–{AUC_ZOOM_YLIM[1]:.2f} — the same "
-         f"window as figure 1 — and drawn as means with percentile bootstrap 95% CIs rather "
-         f"than bars, since bar length is meaningless off a zero baseline; ↓n counts sessions "
-         f"that received no aggregated update and sit at the untrained init, below the window. "
+         f"window as figure 1; the // break marks the truncated axis, so bar lengths there are "
+         f"NOT proportional to magnitude — read the whiskers (bootstrap 95% CI) and the "
+         f"difference panel. ↓n counts sessions that received no aggregated update and sit at "
+         f"the untrained init, below the window. "
          f"Both the AUC and difference panels share their axes with figure 1, so the two "
          f"effect sizes are directly comparable.",
          ha="center", fontsize=7.2, color="0.30")
@@ -169,7 +170,8 @@ fig.savefig(OUT, dpi=220, bbox_inches="tight")
 print("wrote", OUT)
 
 # ---- Guards --------------------------------------------------------------- #
-for ylabel, top in drawn.items():
+for ylabel, res in drawn.items():
+    top = res["max"]
     assert top <= METRIC_YLIM[1] + 1e-9, f"{ylabel} panel draws to {top} > {METRIC_YLIM[1]}"
     print(f"  {ylabel}: highest drawn {top:.4f} <= {METRIC_YLIM[1]}")
 for results in diff_results:
