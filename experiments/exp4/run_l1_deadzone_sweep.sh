@@ -37,11 +37,30 @@ run() {
   echo "[$(date +%H:%M:%S)] DONE  $name (exit $?)"
 }
 
-run clean --csv $D/h2h3_dz_clean.csv $COMMON --regime clean   --dead-zone 0.0 &
-run dz00  --csv $D/h2h3_dz_dz00.csv  $COMMON --regime jittery --dead-zone 0.0 &
-run dz02  --csv $D/h2h3_dz_dz02.csv  $COMMON --regime jittery --dead-zone 0.2 &
-run dz04  --csv $D/h2h3_dz_dz04.csv  $COMMON --regime jittery --dead-zone 0.4 &
-run dz06  --csv $D/h2h3_dz_dz06.csv  $COMMON --regime jittery --dead-zone 0.6 &
+# Concurrency is capped at MAX_PAR (default 3), with staggered starts.
+#
+# Why: unlike the H0/H1 sweep — where H0 runs in-process and only H1 spawns a
+# tree — BOTH arms here spawn a full tree (1 cluster + 1 mule + N devices, each
+# loading TensorFlow, ~1.6 GB apiece). At 5 concurrent shards that is ~40 TF
+# processes; the box ran out of memory and the mule's dock bootstrap failed on
+# ~30% of trials (all clustered in each shard's first trials, when every shard
+# hits its peak simultaneously). Those show up as status=no_eval. Fewer, staggered
+# shards trade wall-clock for a usable success rate.
+MAX_PAR="${MAX_PAR:-3}"
+STAGGER_S="${STAGGER_S:-25}"
+
+launch() {
+  # Block until a slot frees up, then start this shard.
+  while [ "$(jobs -rp | wc -l)" -ge "$MAX_PAR" ]; do sleep 5; done
+  run "$@" &
+  sleep "$STAGGER_S"
+}
+
+launch clean --csv $D/h2h3_dz_clean.csv $COMMON --regime clean   --dead-zone 0.0
+launch dz00  --csv $D/h2h3_dz_dz00.csv  $COMMON --regime jittery --dead-zone 0.0
+launch dz02  --csv $D/h2h3_dz_dz02.csv  $COMMON --regime jittery --dead-zone 0.2
+launch dz04  --csv $D/h2h3_dz_dz04.csv  $COMMON --regime jittery --dead-zone 0.4
+launch dz06  --csv $D/h2h3_dz_dz06.csv  $COMMON --regime jittery --dead-zone 0.6
 
 wait
 echo "======================================================================"

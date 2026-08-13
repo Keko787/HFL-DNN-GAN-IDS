@@ -222,8 +222,16 @@ python DeveloperDocs/exp4_analysis.py       # pure-stdlib Cliff's-δ tables to s
 ```
 
 `exp4_figure.py` reads `h0h1_all.csv` (the crossover); `exp4_figure_layer1.py` reads
-`h2h3_m_*.csv` (H2/H3 across the full dead-zone surface). Both hard-code absolute
-`results/exp4_paper/` paths at the top — edit for a different checkout.
+`h2h3_dz_*.csv` (H2/H3 across the dead-zone sweep, produced by
+[`run_l1_deadzone_sweep.sh`](../experiments/exp4/run_l1_deadzone_sweep.sh)). Both
+hard-code absolute `results/exp4_paper/` paths at the top — edit for a different
+checkout.
+
+Both figures draw uncertainty as a **percentile bootstrap 95 % CI** (bounded in
+[0,1] by construction) with per-seed points overlaid, and assert that nothing is
+drawn above AUC = 1.0. Do **not** reintroduce a symmetric ±SD whisker: `final_auc`
+is bimodal (a session either trains or stays at its untrained init), so ±SD both
+implies a spread that does not exist and renders above the metric's ceiling.
 
 ---
 
@@ -231,7 +239,7 @@ python DeveloperDocs/exp4_analysis.py       # pure-stdlib Cliff's-δ tables to s
 
 | What | Path |
 |---|---|
-| Committed result CSVs | [`results/exp4_paper/`](../results/exp4_paper/) (`h0h1_all.csv`, `h0h1_*.csv`, `h2h3_l1.csv`, `h2h3_m_*.csv`) |
+| Committed result CSVs | [`results/exp4_paper/`](../results/exp4_paper/) (`h0h1_all.csv`, `h0h1_*.csv`, `h2h3_l1.csv`, `h2h3_dz_*.csv`) |
 | Figures | `results/exp4_paper/fig_exp4_crossover.png`, `fig_exp4_layer1.png` |
 | Runner CLI | [`experiments/exp4/runner_main.py`](../experiments/exp4/runner_main.py) |
 | Driver (per-trial logic) | [`experiments/exp4/driver.py`](../experiments/exp4/driver.py) |

@@ -373,9 +373,10 @@ L1 channel adaptation is a wash (≈+0.0003, ~460× below the jittery effect);
 under a jittery band-crossing channel it tracks the best band and cuts
 *modelled* backhaul loss by ≈0.13–0.14 at this calibration, never worse across
 1000 seeds. The sign is near-guaranteed by construction; the magnitude is
-calibration-dependent and excludes switching overhead; the integrated
-end-to-end effect is a small significant AUC/accuracy gain under jittery
-(§7.3)."* L1 is a **robustness mechanism, not an accuracy driver**.
+calibration-dependent and excludes switching overhead; and end-to-end the
+effect is **small and not robustly detectable** — significant at a 6-mission
+horizon (§7.3) but a tie across the whole dead-zone sweep at 4 missions
+(§7.4)."* L1 is a **robustness mechanism, not an accuracy driver**.
 
 **Scope note:** the channel model runs in-process in the driver and produces a
 per-mission loss schedule the cluster applies. It does **not** yet unify
@@ -409,15 +410,71 @@ N=6, `--n-missions 6`, 20 paired seeds, jittery + clean
   mechanism is exactly the model's: fewer lost backhaul rounds ⇒ slightly more
   aggregation lands ⇒ modestly better convergence; the effect is too small to
   move round-close at n=20 but does move end AUC/accuracy.
-* This **confirms the channel-model prediction end-to-end** (jittery benefit,
-  clean null) and matches the rebuttal's own implication that L1's marginal
-  effect is real but small — the integrated evidence caveat 1 asked for.
+* This is the integrated evidence caveat 1 asked for — but it is **a single
+  cell at one horizon**, and it does **not** replicate across the dead-zone
+  sweep at a shorter horizon (§7.4). Read it together with §7.4, not alone.
 
-**Defensible framing:** *"Adaptive L1 channel selection is a wash on a healthy
-backhaul (paying only a tiny switch cost); under a jittery band-crossing
-backhaul it converges the IDS to a small but significant AUC/accuracy gain
-(+0.012 AUC, +0.035 accuracy, p<0.05) by losing fewer aggregation rounds — a
-robustness mechanism, not a headline accuracy driver."*
+### 7.4 The dead-zone L1 sweep — no detectable end-to-end effect
+
+§7.3 tests one operating point (`dead_zone=0.0`, `n_missions=6`). A second,
+wider sweep varies the terrain dead-zone at a shorter horizon
+(`n_missions=4`, `dead_zone ∈ {0.0,0.2,0.4,0.6}` jittery + a clean reference,
+20 paired seeds per cell, `results/exp4_paper/h2h3_dz_*.csv`). The result is
+**null across the board**:
+
+| condition | n | H2 | H3 | H3−H2 | 95% CI | p | verdict |
+|---|---|---|---|---|---|---|---|
+| clean | 20 | 0.8487 | 0.8634 | +0.0148 | [−0.0903,+0.1169] | 0.31 | tie |
+| jittery dz=0.0 | 20 | 0.9100 | 0.9110 | +0.0010 | [−0.0919,+0.0918] | 0.60 | tie |
+| jittery dz=0.2 | 20 | 0.7997 | 0.8674 | +0.0677 | [−0.0699,+0.2055] | 0.33 | tie |
+| jittery dz=0.4 | 20 | 0.9490 | 0.9378 | **−0.0112** | [−0.0881,+0.0432] | 0.26 | tie |
+| jittery dz=0.6 | 20 | 0.9531 | 0.9429 | **−0.0102** | [−0.0952,+0.0468] | 0.15 | tie |
+| jittery pooled | 80 | 0.9029 | 0.9148 | +0.0118 | [−0.0383,+0.0576] | 0.045 | tie † |
+
+† p<0.05 but the CI **includes 0**, so by the §5 rule (CI *and* Wilcoxon must
+agree) this is a tie, not a claim.
+
+Extending to `mission_completion_rate`, `update_yield` and
+`round_close_rate@2`, **all 20 condition × metric tests are ties** — two of the
+five AUC cells are even nominally negative. Data quality is not the excuse: this
+sweep is 200/200 `ok` rows with **20/20 paired seeds in every cell** (see the
+attrition note below).
+
+**What this means — and what it retracts.** An earlier version of the layer-1
+figure appeared to show a positive, severity-increasing L1 effect (Cliff's
+δ +0.14…+0.37). That was an artifact of two defects, both now fixed: the
+underlying sweep was contaminated (22/190 `ok` rows had produced no model at
+all, their fabricated 0.0 participation biasing the means — §8), and the effect
+size was computed **unpaired** on unequal-n groups, contradicting the paired
+protocol of §5. On clean, properly paired data the effect disappears.
+
+**Honest conclusion: no end-to-end accuracy benefit for L1 is claimed.** The
+integrated effect is at best small and horizon-dependent — detectable in one
+cell at `n_missions=6` (§7.3, +0.012, CI excluding 0), absent across five cells
+at `n_missions=4`. Mechanistically that ordering is plausible (a longer horizon
+means more per-dock backhaul draws, so a loss-rate difference has more chances
+to accumulate into model quality), but one significant cell against five ties is
+**not** a robust result and must not be reported as one.
+
+**Defensible framing (both sections together):** *"Adaptive L1 channel selection
+reduces modelled mule→BS backhaul loss under a jittery, band-crossing channel
+(§7: ≈0.13–0.14 at this calibration, never worse across 1000 seeds), and is a
+wash on a healthy backhaul. End-to-end, that advantage is small and not robustly
+detectable: it reaches significance at a 6-mission horizon (+0.012 AUC) but is
+statistically indistinguishable from zero across a 5-condition dead-zone sweep
+at a 4-mission horizon. We therefore present L1 as a **backhaul-robustness
+mechanism**, not as an accuracy driver."*
+
+**Attrition note (why this sweep was re-run).** The first attempt lost ~30 % of
+trials to `status=no_eval` — the mule's dock bootstrap failing under memory
+pressure when 5 shards × ~8 TensorFlow processes ran concurrently. Failures were
+arm-balanced (H2 10 / H3 9) and clustered in each shard's first trials, so they
+cost statistical power rather than introducing bias — but under the pre-fix
+driver they were recorded as `ok` and silently corrupted the participation
+means. Re-running at concurrency 3 with staggered starts gave **0 failures in
+200 trials**. Reproduce with
+[`experiments/exp4/run_l1_deadzone_sweep.sh`](../experiments/exp4/run_l1_deadzone_sweep.sh)
+(`MAX_PAR` caps concurrency; raise it only if the box has the RAM).
 
 ## 8. Remediation status vs the adversarial review
 
@@ -430,7 +487,10 @@ robustness mechanism, not a headline accuracy driver."*
 | B5 `deadline_met` blind to H1 non-closure | derived from real cluster closure + backhaul-loss events | ✅ |
 | §3 rf_factor softened | `world_radius` 150→100 (Exp-3 parity) | ✅ |
 | §3 empty sortie hidden | distinct `mission_empty` event; still counted as a 0-update round | ✅ |
-| SEC26 audit: `U(c,t)` controller specified but never shipped; `rf_prior` never wired at runtime | `hermes/l1/channel_utility.py` (arm H3) + `rf_prior_snr_db` threaded L1→selector | ✅ (channel-level validity §7 + integrated H2-vs-H3 §7.3) |
+| SEC26 audit: `U(c,t)` controller specified but never shipped; `rf_prior` never wired at runtime | `hermes/l1/channel_utility.py` (arm H3) + `rf_prior_snr_db` threaded L1→selector | ✅ wired; channel-level effect §7, end-to-end effect **not robustly detectable** (§7.3 vs §7.4) |
+| AUC drawn above 1.0 in the figures | symmetric ±SD whisker on a bounded metric → percentile bootstrap CI (bounded by construction) + per-seed strip; AUC axis clamped to [0,1] | ✅ (data was always in range; max 0.9940) |
+| Zero-evaluation trials recorded `status=ok` (blank AUC dropped, fabricated 0.0 participation averaged) | driver stamps `status=no_eval`; excluded from **every** metric; regression tests | ✅ (22/190 rows in the superseded sweep; clean re-run = 0/200) |
+| Layer-1 figure built from a different sweep than the table it illustrated, with **unpaired** effect sizes | regenerated from the clean `h2h3_dz_*` sweep using `analysis/exp4.py` itself (same estimator as the tables), paired, with CIs | ✅ — and it **retracted** the apparent L1 effect (§7.4) |
 
 ## 9. Known limitations / open items
 
