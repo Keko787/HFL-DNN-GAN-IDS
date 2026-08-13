@@ -122,15 +122,61 @@ logged, so a device that is not served can be explained rather than vanishing.
 > Enforcement turns on by supplying a budget:
 > `--mission-budget-s <seconds>` (→ `MuleConfig.mission_budget_s` → `FLScheduler`).
 
-> **What this does and does not change for the paper.** The mechanism now exists and is tested, so
-> the scheduler is honestly deadline-aware. But **the committed Exp-4 results were produced with the
-> gate off**, and Exp 4 still has no propulsion-energy or flight-budget model — so claims about the
-> deadline *design* (the adaptation rule, its bounds, its sensitivity) still belong to Experiment 3.
-> To make Exp 4 speak to the deadline, re-run with a budget tight enough to bind: with the default
-> timings, deadlines sit 35–110 s out and a generous budget will not fire the gate.
->
 > Note also that Exp 4's `deadline_met` column is **redefined** as a quorum-plus-backhaul indicator
 > (≥1 update **and** the backhaul upload was not dropped). It is not the L2 deadline.
+
+#### What enforcement actually costs — measured
+
+Two measurements, one cheap and one real.
+
+**(a) Where the gate binds** — [`probe_s3b_binding.py`](../experiments/exp4/probe_s3b_binding.py)
+runs the real scheduler over the real device layouts with no subprocesses, and separates the two
+ways the gate can bite (N=6, rf_range 60 m, field radius 100 m, cruise 5 m/s, 20 layouts):
+
+| | threshold |
+|---|---|
+| **Deadline floor** | **~34 % of contacts (26/76) are dropped at _any_ budget** — they cannot be *reached* before their own deadline at 5 m/s. Independent of `mission_budget_s`. |
+| **Budget knee** | **~60 s.** Below it budget drops appear and grow: 46 % dropped @50 s, 58 % @40 s, 72 % @30 s, 93 % @5 s. |
+
+**(b) What it costs end-to-end** — a 5-shard sweep (H1, jittery, N=6, `n_missions=4`, **20 paired
+seeds per shard, 100/100 valid trials**), each budget compared to the gate-off control *paired by
+seed* (`results/exp4_s3b/`, analysed by
+[`analyze_s3b_sweep.py`](../experiments/exp4/analyze_s3b_sweep.py)):
+
+| Budget | update_yield | mission_completion | round_close@2 | Δ completion vs control |
+|---|---|---|---|---|
+| **gate OFF** (control) | 2.09 | 0.767 | 0.663 | baseline |
+| **120 s** — deadline only | 1.26 | **0.542** | 0.388 | **−0.225** ✱ |
+| 60 s — at the knee | 1.20 | 0.483 | 0.375 | −0.283 ✱ |
+| 30 s | 0.55 | 0.308 | 0.100 | −0.458 ✱ |
+| 15 s | 0.43 | 0.283 | 0.013 | −0.483 ✱ |
+
+✱ = CI excludes 0 **and** paired Wilcoxon p<0.05.
+
+**The 120 s row is the result.** That budget is deliberately slack — well above the 77.8 s mean
+queue cost — so almost nothing is dropped for *budget* reasons. The entire loss is contacts that
+cannot be reached before their own deadline, and it costs **−0.225 mission completion (−29 %)**,
+closely matching the probe's ~34 % contact-drop prediction.
+
+> **So the deadline was never slack in Experiment 4.** Roughly a third of the queue was being served
+> in violation of deadlines the scheduler had already computed; it only *looked* slack because
+> nothing checked. Enforcement does not add a constraint — it reveals one that was always there.
+
+Two secondary reads:
+
+* **The budget is not the binding constraint at realistic values.** 120 s → 60 s barely moves
+  anything (yield 1.26 → 1.20), exactly as the probe predicted. Below ~30 s it dominates and
+  round-closure collapses to ≈0.
+* **Do not read the AUC column as an ordering.** 60 s shows *higher* AUC than 120 s despite being
+  tighter — the bimodal collapse mode (§3.1 of the validity record) dominates at this n.
+  Participation is the trustworthy signal.
+
+> **What this does and does not change for the paper.** Exp 4 can now speak to deadline
+> *enforcement* and its cost. It still cannot speak to the deadline *design* — the adaptation rule,
+> its bounds, its sensitivity — because there is still no propulsion-energy or flight-budget model
+> here; that remains Experiment 3's territory. And **every committed Exp-4 result in
+> `results/exp4_paper/` was produced with the gate off**, so those numbers describe the
+> non-enforcing configuration.
 
 ### 4.3 No flight budget, travel time, or energy
 
