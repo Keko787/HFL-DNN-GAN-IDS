@@ -1,0 +1,87 @@
+# Layer-2 scheduling methodology — FROZEN
+
+**Frozen:** 2026-08-13, at commit of this document.
+**Means:** the L2 decision pipeline, its gates, and their guarantees are settled. **Any change to
+the files listed in §5 after this point invalidates recorded sweeps** and must go through the
+[pre-re-run checklist](HERMES_PreRerun_Checklist.md).
+
+State at freeze: working tree clean for `hermes/scheduler/` and `hermes/mule/`; **153 scheduler
+tests passing**.
+
+---
+
+## 1. The frozen pipeline
+
+The path Experiment 4 actually executes (`rf_range_m` is always set, so the two-pass branch is
+taken and `build_target_queue` is never called):
+
+```
+S1   eligibility        HARD GATE     — admits on mission-slice membership
+S3   deadline + bucket  RANK TIER     — computes Deadline(j), classifies bucket
+S3a  RF clustering      REGROUP       — devices within rf_range_m → ContactWaypoints
+S3b  deadline feasibility HARD GATE   — drops contacts that cannot be served in time
+S3.5 intra-bucket order ORDERING ONLY — deterministic distance, or the learned selector
+```
+
+**The architectural guarantee — frozen.** Learning may only reorder within an already-admitted
+bucket. Enforced by three independent mechanisms, all under test:
+
+1. the candidate list is already post-S1/S3/S3a/S3b;
+2. a **scope guard** re-checks every contact member against the round's admitted set;
+3. a **pass-kind guard** hard-fails if the selector is invoked during Pass 2.
+
+S3b is placed **before** S3.5 deliberately — a feasibility check after ordering could be
+resurrected by the selector, and would also be skipped for single-candidate buckets, which
+short-circuit around the selector.
+
+## 2. Decisions taken at freeze
+
+| # | Decision | Rationale |
+|---|---|---|
+| **D1** | **The S3b mechanism is frozen; its _default_ is a matrix parameter, not a code default.** `mission_budget_s=None` (no enforcement) remains the code default. | The default only matters when we re-run. Freezing the mechanism unblocks everything else; the enforcement/no-enforcement choice belongs to the Phase-3 matrix, where it is costed once. |
+| **D2** | **Feasibility constants frozen at `cruise_speed_m_s=5.0`, `session_time_s=1.0`.** | These *are* the experiment — the probe shows the ~34 % deadline floor is driven by cruise speed and field radius, not by the budget. **They still need a platform citation before publication** (same class of problem as `ε_prop`). |
+| **D3** | **S2A/S2B readiness gating is REMOVED from the contribution claims, not wired.** | `ingest_ready_adv` has no runtime callers; the design's `FL_Threshold = 0.60` and 5 s advert-freshness window never execute. The gate that does run (`min_utility = 0.0`, inline in `HFLHostMission`) cannot reject anything. Wiring it would cost code **and** a re-run for a gate that currently rejects nothing. Documented as designed-but-not-exercised; future work. |
+| **D4** | **Experiment 4 makes no RL claim.** The selector stays random-init there; the RL question belongs to Experiment 3. | H2-vs-H1 differs only in within-bucket ordering, with untrained weights on partly-constant features. Training weights would force a re-run for a claim Exp 3 already owns. |
+| **D5** | **`dead_zone` remains H0-only. This is correct, not a bug.** | Dead-zone models *the server's* loss of reach; the mule bypasses it by flying to the device — that is the architectural thesis under test. The earlier error was **sweeping it in an H2-vs-H3 comparison where it does nothing**, which is a matrix-design fix (§3), not a code fix. |
+| **D6** | **Beacon ingest / `BEACON_ACTIVE` bucket remain unexercised.** | No beacon source is wired in Exp 4, so S1 admits on slice membership alone. Stated as a scope limit rather than claimed. |
+
+## 3. Matrix consequences (carry into Phase 3)
+
+* **Do not sweep `dead_zone` in any mule-only comparison** (H1/H2/H3 against each other) — it varies
+  nothing for those arms. Use it only where H0 is present.
+* **Valid pairwise comparisons:** `H1 vs H0` and `H3 vs H2`. `H2/H3 vs H0/H1` is **not** paired —
+  different backhaul model and non-aligned seeds.
+* **If enforcement is turned on**, every mule-arm participation figure changes (−0.225 mission
+  completion at a slack budget), so it must be decided *before* the matrix is launched, not after.
+
+## 4. What this freeze does **not** cover
+
+Deliberately out of scope, so the freeze is not read as more than it is:
+
+* **The deadline _design_** — the adaptation rule, its bounds, its sensitivity. Exp 4 models no
+  flight budget or propulsion energy; that remains Experiment 3's.
+* **Manuscript text.** Algorithm 1 and the deadline equation still print the update with the sign
+  reversed. The code is correct; the paper is not. *(Prose fix, no re-run.)*
+* **The learned selector's training.** Frozen as *not claimed* here (D4), not as *finished*.
+
+## 5. Frozen surface — changing any of these invalidates recorded sweeps
+
+```
+hermes/scheduler/fl_scheduler.py
+hermes/scheduler/stages/s1_eligibility.py
+hermes/scheduler/stages/s3_deadline.py
+hermes/scheduler/stages/s3a_cluster.py
+hermes/scheduler/stages/s3b_feasibility.py
+hermes/scheduler/stages/s35_selector.py
+hermes/scheduler/selector/          (target_selector_rl, features, ddqn, scope_guard)
+hermes/mule/mule_main.py            (MuleSupervisor: queue construction, two-pass mission)
+```
+
+Not frozen (safe to change): analysis, figures, documentation, and the *values* of matrix
+parameters (`mission_budget_s`, N, `n_missions`, seeds) — those are experiment design, chosen in
+Phase 3.
+
+## 6. Unfreezing
+
+Amend this document with the reason, the changed files, and which recorded sweeps are invalidated.
+Then re-open the [pre-re-run checklist](HERMES_PreRerun_Checklist.md).

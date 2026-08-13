@@ -60,31 +60,52 @@ Audit equations, code behaviour, provenance, calibration, trial counts, question
 
 ---
 
-## 3. Phase 1 — Freeze the scheduling methodology
+## 3. Phase 1 — Freeze the scheduling methodology ✅ **DONE**
 
-Correct and formalize, add trust/readiness **only if implemented**, define gates and guarantees,
-then **freeze** before final experiments.
+> **Frozen 2026-08-13** — see [`HERMES_Scheduler_Freeze.md`](HERMES_Scheduler_Freeze.md) for the
+> six decisions (D1–D6), the frozen file surface, and the unfreeze procedure. Changing anything in
+> that surface invalidates recorded sweeps.
+>
+> Decisions in brief: **D1** the S3b mechanism is frozen but its default is a *matrix* parameter,
+> not a code default — so the enforcement choice is costed once in Phase 3; **D2** feasibility
+> constants frozen (they still need a platform citation); **D3** S2A/S2B readiness removed from the
+> claims rather than wired; **D4** Exp 4 makes no RL claim; **D5** `dead_zone` stays H0-only — that
+> is correct, the error was sweeping it in a mule-only comparison; **D6** beacons stay unexercised.
 
-- [ ] **Decide the deadline-enforcement default.** Options: keep opt-in (committed results stand,
+<details><summary>Original task list (all resolved by the freeze)</summary>
+
+- [x] **Decide the deadline-enforcement default.** Options: keep opt-in (committed results stand,
       but the scheduler ships non-enforcing), or make it default-on (honest, costs 29 % completion,
       forces a re-run of everything). *Pick one and write it down — this is the single biggest
       re-run driver.*
-- [ ] **If enforcing: fix the feasibility constants.** `cruise_speed_m_s`, `session_time_s`, and the
+- [x] **If enforcing: fix the feasibility constants.** `cruise_speed_m_s`, `session_time_s`, and the
       budget itself. The probe shows the deadline floor (~34 % of contacts unreachable) is driven by
       cruise speed and field radius, not by the budget — so those constants *are* the experiment.
-- [ ] **Resolve S2A/S2B**: wire the real readiness gate (`FL_Threshold = 0.60`, 5 s advert freshness)
+- [x] **Resolve S2A/S2B**: wire the real readiness gate (`FL_Threshold = 0.60`, 5 s advert freshness)
       or drop readiness from the contribution claims. Today an inline gate with `min_utility = 0.0`
       runs instead, which cannot reject anything.
-- [ ] **Decide the selector story.** Train weights (`experiments.exp3.train_a4`) and re-run H2/H3, or
+- [x] **Decide the selector story.** Train weights (`experiments.exp3.train_a4`) and re-run H2/H3, or
       state plainly that Exp 4 makes no RL claim. Currently random-init, so H2-vs-H1 measures only
       within-bucket ordering.
-- [ ] **Decide whether `dead_zone` should apply to the mule arms.** Today it is H0-only, which is why
+- [x] **Decide whether `dead_zone` should apply to the mule arms.** Today it is H0-only, which is why
       the H2/H3 "dead-zone sweep" was one configuration under different seeds.
-- [ ] **Freeze.** After this point, scheduler changes invalidate sweeps.
+- [x] **Freeze.** After this point, scheduler changes invalidate sweeps.
+
+</details>
 
 ---
 
-## 4. Phase 2 — SOTA baseline research
+## 4. Phase 2 — SOTA baseline research  *(first pass done)*
+
+> **First pass:** [`HERMES_SOTA_Baseline_Candidates.md`](HERMES_SOTA_Baseline_Candidates.md) —
+> a scoped scan, **abstract-level only, not yet full-text verified**. Recommends picking **two**:
+> a **FedCS-style deadline-feasibility** selector (the closest analogue to our own gates) and an
+> **AoI/staleness-greedy** policy (implementable on mule-visible state, and retroactively
+> scoreable). It also argues why Oort / Power-of-Choice are *not* faithfully implementable here —
+> they assume the server can poll clients before choosing, which a data mule cannot — and that this
+> is a capability argument worth making in Related Work rather than a gap to apologise for.
+>
+> Run `/deep-research` (prompt in that document's §5) for the exhaustive, verified version.
 
 The gap flagged by 74A and still unanswered. Do the reading **before** the matrix is fixed, so a
 baseline arm can be designed in rather than bolted on.
