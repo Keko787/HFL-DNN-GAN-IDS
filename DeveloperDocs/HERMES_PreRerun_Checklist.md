@@ -333,6 +333,17 @@ Freeze **D1** left this to the matrix on purpose. The facts, all measured:
 > **Recommendation: on.** The paper's contribution is a *deadline-aware* scheduler; a 29 % honest
 > cost is easier to defend than a deadline that does not bind, and the audit already found it once.
 
+> ### ✅ **DECIDED 2026-08-13: enforcement is ON in the headline matrix.**
+> Consequences, all now committed to:
+> * Every mule-arm participation figure changes; §6's published numbers are superseded, not
+>   amended. The −0.225 completion cost becomes a **reported result**, not a footnote.
+> * A1 (in-flight abort) and A2 (starvation widening) are **live** in every headline trial, since
+>   they ride this toggle. They stop being "implemented but unexercised".
+> * `mission_budget_s` must be **fixed and justified** as a matrix value. The S3b probe puts the
+>   deadline floor at ~34 % of contacts at *any* budget (driven by cruise speed and field radius,
+>   not the budget) with a knee near 60 s — so the chosen value needs a stated rationale, not a
+>   round number.
+
 #### Decision B — do the SOTA baselines ship as arms, and which?
 
 **They do not exist in code.** `ARMS = ("H0","H1","H2","H3")`; nothing implements Oort, MAX-AoI or
@@ -346,15 +357,65 @@ The two are **not** equal effort, and this asymmetry should drive the choice:
 | **MAX-AoI / staleness-greedy** | last-served time + positions, ranked highest-age first with nearest-predecessor pathing | **Yes — already in `DeviceSchedulerState`** (`last_contact_ts`, `idle_time_ref_ts`, `missed_count`); positions known; slots into the existing `target_selector` extension point | **Low** — a new selector, no new data path |
 | **Oort** | statistical utility `\|B_i\|·√(mean Loss²)` + speed + staleness | **No.** There is **no per-device training loss anywhere in the device→mule types.** `RoundCloseDelta.utility` is `w1·perf + w2·diversity`, an S2B readiness term — not a loss, and using it would be a different algorithm wearing Oort's name | **High** — new data path: device computes loss → new protocol field → selector |
 
-**Both touch the frozen L2 surface** (`selector/`), so this is **Freeze Amendment 3**. As with
-Amendments 1–2: doing it *before* the matrix costs nothing, doing it *after* costs a second full
-re-run.
+**Correction (checked, not assumed): MAX-AoI needs _no_ freeze amendment.** An earlier draft of
+this section said both baselines touch the frozen surface. They do not. `hermes/scheduler/policies/`
+is **absent from the frozen file list** (§5 of the freeze), and so is `experiments/exp4/driver.py`.
+The project already ships `ArrivalOrderPolicy` and `EdfFeasibilityPolicy` there, both exposing the
+same `rank_contacts` call shape as `TargetSelectorRL` and swapped through the same constructor
+slot — so a MAX-AoI arm is *a new file in an unfrozen package plus driver wiring*.
+
+**Oort still does** need one, because it requires a new per-device loss field on the device→mule
+path. That part remains a **Freeze Amendment 3** when we get to it.
 
 > **Recommendation: MAX-AoI first, Oort second.** MAX-AoI is cheap, needs no new data, and is the
 > UAV/AoI-shaped comparator 74A actually asked for — it directly rivals our bucket+deadline
 > ordering. Oort is the more citable name but costs a protocol change; take it if the schedule
 > allows, and if not, Related Work already states precisely why (§3 of the candidates doc) rather
 > than pretending it was infeasible.
+
+> ### ✅ **DECIDED 2026-08-13: MAX-AoI first, then Oort if the schedule allows.**
+>
+> **Fairness design — what a baseline arm may and may not replace.** A baseline must replace our
+> *policy*, not our *physics*, or the comparison is rigged in either direction:
+>
+> | Stage | Baseline arm | Why |
+> |---|---|---|
+> | **S1** eligibility | **kept** | slice membership is structural, not a policy choice |
+> | **S3a** RF clustering | **kept** | contacts are a physical fact of `rf_range_m`, not a ranking |
+> | **S3b** feasibility | **kept** | both arms must face the *same* budget constraint or the comparison is meaningless |
+> | **S3** bucket tiers | **replaced** | this *is* our policy |
+> | **S3.5** ordering | **replaced** | this *is* our policy |
+>
+> So the arm is `S1 → S3a → S3b → order by age descending`, with distance as the tie-break
+> (matching the literature's greedy form: highest AoI, then nearest predecessor).
+>
+> **The bucket-tier worry turned out to be moot — verified, not assumed.** The concern was that a
+> policy in the `target_selector` slot only re-orders *within* a bucket, so our tier order would
+> outrank the baseline's ranking and flatter us. Probing the real scheduler across six rounds shows
+> **every round has exactly one non-empty bucket** — `NEW` in round 1 (all devices are new),
+> `SCHEDULED_THIS_ROUND` thereafter, with `BEACON_ACTIVE` never populated (Freeze D6). So the tier
+> walk never discriminates in Exp 4, and a policy in that slot orders the **whole round**. It is a
+> faithful full-ordering baseline through the existing extension point.
+>
+> *Carry this into the write-up:* the bucket tiers are **not exercised** by Exp 4 — one more item
+> for the scope-limits list, alongside S2A/S2B and beacons.
+>
+> ### ✅ **MAX-AoI is IMPLEMENTED — arm `B1`, 2026-08-13.**
+> `hermes/scheduler/policies/max_aoi.py`, exposed through the existing
+> `target_selector` slot; `--arms B1`. **No frozen file touched.** 17 policy tests;
+> **651 unit tests pass**. Verified end to end: `contact_policy='max_aoi'` reaches the mule
+> process (H1 records `None`), and the two arms produce **genuinely different visit orders** on
+> the same seed — so B1-vs-H1 isolates the ranking policy and nothing else.
+>
+> Design points worth keeping: a contact's age is its **stalest member** (max, not mean — a
+> neglected device must not hide behind well-served neighbours in the same cluster); a
+> never-served device is **infinitely stale**, which is both correct AoI semantics and the
+> "explore the unvisited" behaviour; and the ordering is **deterministic and independent of input
+> order**, so the paired comparison is reproducible. A test pins that it ranks on age and **not**
+> on `deadline_ts` — otherwise it would be our own policy wearing a baseline's name.
+>
+> **Still to do for B1:** decide whether it is paired with H1 (same backhaul model ⇒ yes) and add
+> it to §5.1's arm list and cost.
 
 ### 5.1 The matrix itself
 

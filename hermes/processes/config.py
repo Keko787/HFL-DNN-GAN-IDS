@@ -137,6 +137,12 @@ class MuleConfig:
     # dropped before ordering. ``None`` keeps the historical behaviour in
     # which Deadline(j) is only a sort key.
     mission_budget_s: Optional[float] = None
+    # SOTA baseline arm. ``None`` = our scheduler. ``"max_aoi"`` swaps the
+    # ranking for the Age-of-Information greedy comparator
+    # (hermes/scheduler/policies/max_aoi.py). Mutually exclusive with
+    # ``use_rl_selector`` — both occupy the single target-selector slot, so
+    # setting both is a configuration error rather than a blend.
+    contact_policy: Optional[str] = None
     # S3c — mission-level deadline-window adaptation. Off by default, which is
     # exactly how every recorded sweep ran: the window scale stays 1.0 and the
     # per-device rule alone sets Deadline(j). Turned on, the mule tracks how

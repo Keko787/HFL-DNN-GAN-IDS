@@ -50,7 +50,10 @@ from .topology_builder import build_exp4_topology
 log = logging.getLogger("experiments.exp4.driver")
 
 
-ARMS = ("H0", "H1", "H2", "H3")
+#: "B1" is the MAX-AoI SOTA baseline arm. It shares H1's transport and realism
+#: and differs ONLY in the contact-ranking policy, so B1-vs-H1 isolates the
+#: scheduling policy — which is the comparison reviewer 74A asked for.
+ARMS = ("H0", "H1", "H2", "H3", "B1")
 
 #: Scheduler-configuration columns the driver stamps on every row, on top of
 #: the metric schema. They exist so a results CSV is self-describing: rows
@@ -248,6 +251,10 @@ class Exp4Driver:
             use_rl_selector=(arm in ("H2", "H3")),
             selector_weights_path=self.selector_weights_path,
         )
+        # B1 — MAX-AoI baseline. Replaces the ranking outright; it does not
+        # compose with the RL selector, which is why use_rl_selector stays off.
+        if arm == "B1":
+            selector_kwargs["contact_policy"] = "max_aoi"
         if self.mission_budget_s is not None:
             selector_kwargs["mission_budget_s"] = float(self.mission_budget_s)
         if self.mission_window_adaptation:

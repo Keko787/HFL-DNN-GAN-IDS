@@ -32,8 +32,11 @@ from __future__ import annotations
 
 from .arrival_order import ArrivalOrderPolicy
 from .edf_feasibility import EdfFeasibilityPolicy
+from .max_aoi import MaxAoIPolicy, contact_age
 
 __all__ = [
     "ArrivalOrderPolicy",
     "EdfFeasibilityPolicy",
+    "MaxAoIPolicy",
+    "contact_age",
 ]

@@ -55,6 +55,20 @@ def _build_target_selector(cfg: MuleConfig):
     plumbing smoke, NOT paper-grade (train weights via
     ``experiments.exp3.train_a4`` for a real H2-vs-H1 comparison).
     """
+    # SOTA baseline arm — MAX-AoI greedy. Checked first: it is an alternative
+    # POLICY, so it replaces the ranking entirely rather than composing with the
+    # RL selector. Both occupying one slot is a configuration error, not a blend.
+    policy = getattr(cfg, "contact_policy", None)
+    if policy:
+        if policy == "max_aoi":
+            from hermes.scheduler.policies import MaxAoIPolicy
+            log.info("mule %s: MAX-AoI baseline policy (SOTA comparator)",
+                     cfg.mule_id)
+            return MaxAoIPolicy()
+        raise ValueError(
+            f"unknown contact_policy {policy!r}; expected 'max_aoi' or None"
+        )
+
     if not getattr(cfg, "use_rl_selector", False):
         return None
     from hermes.scheduler.selector import TargetSelectorRL

@@ -62,6 +62,8 @@ def build_exp4_topology(
     rf_prior_snr_db: Optional[float] = None,
     # S3b — per-mission time budget; when set, the deadline is ENFORCED.
     mission_budget_s: Optional[float] = None,
+    # SOTA baseline arm: None = our scheduler, "max_aoi" = the AoI comparator.
+    contact_policy: Optional[str] = None,
     # S3c — mission-level window adaptation; off reproduces recorded sweeps.
     mission_window_adaptation: bool = False,
     mission_window_history: int = 5,
@@ -158,6 +160,7 @@ def build_exp4_topology(
         selector_weights_path=selector_weights_path,
         rf_prior_snr_db=rf_prior_snr_db,
         mission_budget_s=mission_budget_s,
+        contact_policy=contact_policy,
         mission_window_adaptation=bool(mission_window_adaptation),
         mission_window_history=int(mission_window_history),
         mission_window_target=float(mission_window_target),
