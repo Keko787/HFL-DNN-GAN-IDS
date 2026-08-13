@@ -7,6 +7,14 @@ review found the first jittery result was *manufactured* by asymmetric,
 hand-tuned knobs rather than measured; the fixes below make the comparison
 fair, and this document states exactly what is and is not claimed.
 
+**This is the validity record — the place where caveats, retractions and
+statistical rules live.** For the experiment itself, see the companion set:
+[`HERMES_Experiment4_Methodology_and_Implementation.md`](HERMES_Experiment4_Methodology_and_Implementation.md)
+(holistic overview — start there),
+[`HERMES_Experiment4_L1_RF_Layer.md`](HERMES_Experiment4_L1_RF_Layer.md) (Layer 1),
+[`HERMES_Experiment4_L2_Scheduling_Layer.md`](HERMES_Experiment4_L2_Scheduling_Layer.md) (Layer 2),
+and [`Experiment_4_Run_Guide.md`](Experiment_4_Run_Guide.md) (reproducer).
+
 ---
 
 ## 1. What the experiment compares

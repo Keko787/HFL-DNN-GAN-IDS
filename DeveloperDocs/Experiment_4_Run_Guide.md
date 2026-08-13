@@ -6,6 +6,9 @@
 environment → smoke → the parallel paper sweep → analysis → figures.
 
 **Companion docs:**
+- [`HERMES_Experiment4_Methodology_and_Implementation.md`](HERMES_Experiment4_Methodology_and_Implementation.md) — **start here**: the holistic account of what Exp 4 is, how it is built, what it measured, and what it does not cover.
+- [`HERMES_Experiment4_L1_RF_Layer.md`](HERMES_Experiment4_L1_RF_Layer.md) — Layer 1 in depth: channel model, `U(c,t)` controller, backhaul-loss schedule.
+- [`HERMES_Experiment4_L2_Scheduling_Layer.md`](HERMES_Experiment4_L2_Scheduling_Layer.md) — Layer 2 in depth: the gated scheduler and the bounded RL tie-break.
 - [`HERMES_Experiment4_Integrated_Design_and_Plan.html`](HERMES_Experiment4_Integrated_Design_and_Plan.html) — design, the arm-ablation ladder, and per-stage build status.
 - [`HERMES_Experiment4_Jittery_Methodology.md`](HERMES_Experiment4_Jittery_Methodology.md) — the validity record: the crossover surface (§6), the L1 audit + integrated result (§7), and the adversarial-review remediation table (§8).
 - [`HERMES_Operations_Runbook.md`](HERMES_Operations_Runbook.md) §0 — base environment setup this guide builds on.
