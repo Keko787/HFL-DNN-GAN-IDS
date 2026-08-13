@@ -58,6 +58,13 @@ shards, initial θ, and per-device reliabilities in every arm.
 | **H1** | + mule, gated scheduler, two-pass hierarchical FL, **deterministic** ranking | real orchestrator |
 | **H2** | + `TargetSelectorRL` (DDQN) in the S3.5 tie-break | real orchestrator |
 | **H3** | + real L1 adaptive channel (`U(c,t)`) | real orchestrator |
+| **B1** | **SOTA baseline** — MAX-AoI greedy replaces our ranking; H1's transport and realism otherwise | real orchestrator |
+
+> **B1 is the reviewer-facing comparison.** It shares H1's transport, realism and seeds and differs
+> **only** in the contact-ranking policy, so **B1-vs-H1 isolates the scheduling policy**. A baseline
+> replaces our *policy*, not our *physics*: S1 eligibility, S3a clustering and S3b feasibility are
+> kept (contacts are a physical fact of `rf_range_m`, and both arms must face the same budget or the
+> comparison is meaningless), while S3's bucket tiers and S3.5's ordering are replaced.
 
 > **Do not compare H2/H3 against H0/H1.** They are run with `--l1-channel`, which replaces the flat
 > backhaul loss with the RF channel model in *both* arms, and their per-trial seeds do not line up
@@ -240,12 +247,19 @@ model:
   normalized energy is reportable**.
 * **Real RF** — the channel is modelled, with perfect cost-free sensing (see the L1 document).
 * **Scale** — N=6 devices and a single mule; multi-mule behaviour is untested here.
-* **An enforced deadline.** The S3b feasibility gate, the in-flight abort, and S3c mission-level
-  window adaptation are all implemented and tested, but **off in every committed result** — so the
-  reported participation figures come from a scheduler whose deadline is a sort key, not a
-  constraint. Turning enforcement on costs ~29 % of mission completion, which is why the decision
-  belongs to the final matrix and is costed once
-  ([pre-re-run checklist](HERMES_PreRerun_Checklist.md) §1a).
+* **An enforced deadline — in the *committed* results.** The S3b gate, the in-flight abort and S3c
+  are implemented and tested but **off in every committed row**, so the published participation
+  figures come from a scheduler whose deadline is a sort key rather than a constraint.
+  **Decided 2026-08-13: enforcement is ON in the re-run matrix**, at a measured −0.225 mission
+  completion. When that lands, these figures are **superseded, not amended**
+  ([checklist](HERMES_PreRerun_Checklist.md) §5.1a).
+* **The bucket tiers.** S3 classifies contacts into `NEW` / `SCHEDULED_THIS_ROUND` /
+  `BEACON_ACTIVE` and walks them in priority order — but in Exp 4 **every round contains exactly
+  one non-empty bucket** (`NEW` in round 1, `SCHEDULED_THIS_ROUND` after; beacons never fire, so
+  `BEACON_ACTIVE` is always empty). The tier mechanism therefore never discriminates here. It is
+  implemented and correct, but Exp 4 provides **no evidence about it** — the same status as S2A/S2B
+  readiness and beacons. *(Discovered while checking that the B1 baseline could not be flattered by
+  our own tier order — it cannot, because there is no tier order to flatter it.)*
 
 Consequently Exp 4 validates **participation/convergence resilience** (Observation 3), not the
 budget-scheduling claim (Observation 4).

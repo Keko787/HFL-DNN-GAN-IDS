@@ -103,8 +103,17 @@ The closest *problem shape* to a data mule: which stale node to visit next, unde
 
 * **MAX-AoI greedy** is an established named comparator — evaluations in this literature routinely
   report against "random, round-robin, periodic update, and MAX-AoI". The greedy form selects the
-  highest-AoI device and recursively finds the nearest predecessor for the path. **This is our
-  second baseline arm**, and its being standard is exactly why it is defensible.
+  highest-AoI device and recursively finds the nearest predecessor for the path. ✅ **Implemented
+  as arm `B1`** (`hermes/scheduler/policies/max_aoi.py`, 2026-08-13). Its being standard is exactly
+  why it is defensible.
+
+  **What to write about it.** B1 shares H1's transport, realism and seeds and differs *only* in the
+  ranking, so B1-vs-H1 isolates the scheduling policy. Two implementation choices are worth a
+  sentence each because a careful reader will ask: a contact's age is its **stalest member** (max,
+  not mean — peak AoI is what the greedy rule targets, and a mean lets a neglected device hide
+  behind well-served neighbours in the same cluster), and a **never-served device is infinitely
+  stale**, which is both correct AoI semantics and the explore-the-unvisited behaviour. Distance is
+  a tie-break only, never overriding age.
 * **Topology-coupled urgency scheduling** (UAV swarm IoT collection) weights each cluster's AoI
   urgency by a connectivity score.
 * AoI minimisation in UAV-aided collection is an established review area, so an AoI-greedy baseline
@@ -161,6 +170,13 @@ Guardrails, so the revision does not overreach in either direction:
 
 * **Do not claim** UAV-FL scheduling is unstudied. It is well studied — for a *different*
   architecture. The taxonomy in §1 is the honest framing.
+* **If we run Oort, do not call it "Oort".** Scoping it against the code (checklist §5.1a) found we
+  can port its **statistical utility + staleness** — the parts needing only retrospective,
+  mule-visible state — but **not its system-speed straggler penalty**, because no per-device compute
+  speed exists in our model. Our loss is also the **mean** where Oort specifies the **RMS** over
+  per-sample losses: monotone in the same direction, not identical. Describe the arm as *"Oort's
+  statistical-utility selection"* with both deviations stated. Overclaiming exactness here is the
+  same error we just corrected in the other direction.
 * **Do not claim** Oort or Power-of-Choice are inapplicable to our setting. `rpow-d` and Oort port
   directly; **FedCS** and `pow-d` do not. State the boundary, not a blanket dismissal.
 * **Do not claim** measured benefit for S3c, deadline enforcement, or the in-flight abort. All three

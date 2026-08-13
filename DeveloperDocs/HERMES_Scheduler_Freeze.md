@@ -85,6 +85,15 @@ Not frozen (safe to change): analysis, figures, documentation, and the *values* 
 parameters (`mission_budget_s`, N, `n_missions`, seeds) — those are experiment design, chosen in
 Phase 3.
 
+**`hermes/scheduler/policies/` is deliberately NOT frozen.** It holds *alternative* ranking policies
+(`ArrivalOrderPolicy`, `EdfFeasibilityPolicy`, and the MAX-AoI baseline `MaxAoIPolicy`), all exposing
+the same `rank_contacts` surface and swapped through the same `target_selector` slot. Adding a
+comparator there **cannot change any HERMES arm's behaviour** — an arm that does not select the
+policy never constructs it — so baseline work does not invalidate recorded sweeps and does not need
+an amendment. What *would* need one is a baseline requiring new **state**: Oort needs a per-device
+training loss that the device→mule path does not carry, and adding that field touches the frozen
+surface.
+
 ## 5a. Amendment 1 — in-flight abort + deadline feedback (2026-08-13)
 
 **Unfrozen, amended, re-frozen the same day**, before any sweep was run against the original

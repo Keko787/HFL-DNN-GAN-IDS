@@ -186,6 +186,34 @@ There is no flight-budget, travel-time, propulsion-energy or communication-energ
 the Exp-4 path — all of that lives in Exp 3's `sim_env`. `mule_energy` is a frozen `1.0`, never
 mutated anywhere in `hermes/`.
 
+### 4.3a The bucket tiers never discriminate
+
+S3 classifies each contact into `NEW` / `SCHEDULED_THIS_ROUND` / `BEACON_ACTIVE`, and
+`build_contact_queue` walks them in `BUCKET_PRIORITY` order — a **hard tier the selector cannot
+cross**, and one of the three mechanisms enforcing the architectural guarantee (§2).
+
+**In Experiment 4 that tier is never exercised.** Probing the real scheduler across six rounds:
+
+| round | 1 | 2 | 3 | 4 | 5 | 6 |
+|---|---|---|---|---|---|---|
+| buckets present | `NEW`×6 | `SCHEDULED`×6 | `SCHEDULED`×6 | `SCHEDULED`×6 | `SCHEDULED`×6 | `SCHEDULED`×6 |
+
+Every round contains **exactly one non-empty bucket**: all devices are new in round 1 and settled
+thereafter, and `BEACON_ACTIVE` never populates because no beacon source is wired (§4.4). So the
+priority walk is a no-op with respect to ordering — with one bucket, walking it in priority order
+changes nothing.
+
+**Two consequences, and they pull in opposite directions:**
+
+* **Against us:** Exp 4 offers **no evidence** that the tier mechanism works. It is implemented,
+  correct and tested, but unexercised here — the same status as S2A/S2B and beacons. It should be
+  stated as a scope limit, not claimed.
+* **For us:** it is what makes the **B1 MAX-AoI baseline fair**. The worry was that a policy in the
+  `target_selector` slot only re-orders *within* a bucket, so our tiers would outrank the
+  baseline's ranking and flatter us. With one bucket per round, a policy in that slot orders the
+  **entire round** — B1 is a genuine full-ordering baseline rather than a re-ranking inside our own
+  structure.
+
 ### 4.4 Beacons are dead; S1 rejects nothing
 
 No beacon source is wired, so `ingest_beacon` is never called, `last_beacon_ts` stays 0, and the
@@ -324,6 +352,7 @@ different weights; no seed → still nondeterministic, by design. Regression-tes
 |---|---|
 | Scheduler entry points (Exp-4 path) | `FLScheduler.build_contact_queue` / `build_pass_2_queue` — [`hermes/scheduler/fl_scheduler.py`](../hermes/scheduler/fl_scheduler.py) |
 | Stages | [`hermes/scheduler/stages/`](../hermes/scheduler/stages/) — `s1_eligibility`, `s2a_readiness`*, `s2b_flag`*, `s3_deadline`, `s3a_cluster`, `s3b_feasibility`, `s3c_mission_window`, `s35_selector`* (*not on the Exp-4 path) |
+| Baseline policies (arm B1) | [`hermes/scheduler/policies/`](../hermes/scheduler/policies/) — `max_aoi.py` (MAX-AoI greedy), plus Exp-3's `arrival_order` / `edf_feasibility`. All expose `rank_contacts`, so they swap through the same `target_selector` slot. **Outside the frozen surface** |
 | In-flight abort + abandoned-device widening | `MuleSupervisor._remaining_is_feasible` / `._widen_abandoned` — [`hermes/mule/mule_main.py`](../hermes/mule/mule_main.py) |
 | Mission accounting that feeds S3c | `mission_planned_devices` / `mission_served_devices` — [`hermes/mule/mule_main.py`](../hermes/mule/mule_main.py) |
 | Selector | [`hermes/scheduler/selector/`](../hermes/scheduler/selector/) — `target_selector_rl.py`, `features.py`, `ddqn.py`, `scope_guard.py` |

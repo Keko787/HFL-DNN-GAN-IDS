@@ -367,6 +367,51 @@ slot — so a MAX-AoI arm is *a new file in an unfrozen package plus driver wiri
 **Oort still does** need one, because it requires a new per-device loss field on the device→mule
 path. That part remains a **Freeze Amendment 3** when we get to it.
 
+#### Oort — exact implementation scope *(traced against the code, 2026-08-13)*
+
+**Smaller than expected. The transport already exists.** `adv.utility` already travels
+device → `FLReadyAdv` → `RoundCloseDelta` → `fold_round_close_delta` → `state.last_utility`. Oort
+needs two more values down that same live pipe, not a new pipe.
+
+**Both ingredients are already computed and then thrown away.** `LocalTrainResult` carries
+**`loss`** and **`num_examples`** — exactly Oort's `√(mean Loss²)` and `|B_i|`. Today
+`_update_utility` reads them only to derive `performance_score` and discards the raw values.
+
+| File | Change | ~LOC | Frozen? |
+|---|---|---|---|
+| `hermes/types/scheduler.py` | 2 optional fields each on `FLReadyAdv`, `RoundCloseDelta`, `DeviceSchedulerState` | ~8 | no |
+| `hermes/mission/client_mission.py` | retain `result.loss` / `result.num_examples`; pass them in `build_ready_adv` | ~8 | no |
+| `hermes/mission/host_mission.py` | copy both into `RoundCloseDelta` at its 3 construction sites | ~6 | no |
+| `hermes/scheduler/stages/s3_deadline.py` | fold both into state, beside the existing `last_utility` line | **~2** | **YES ⇒ Amendment 3** |
+| `hermes/scheduler/policies/oort.py` | new `OortPolicy` | ~90 | no |
+| `experiments/exp4/driver.py` | arm `B2` | ~4 | no |
+| `tests/unit/test_oort_policy.py` | policy + plumbing | ~180 | — |
+
+**Total ≈ 300 LOC, and the frozen surface is touched by two lines** that are strictly inert for
+H0–H3 (the new fields default to `None`/`0`, so existing arms fold nothing). Comparable to, or
+slightly smaller than, the S3c work.
+
+**Three judgement calls that must be decided and _stated_, not silently resolved:**
+
+1. **⚠ Oort is real-model-only — this is the real constraint, not the code.** The stub's
+   `LocalTrainResult` returns `loss=uniform(0.1,0.3)` and `num_examples=randint(4,16)` — **pure
+   noise**. Ranking on that is a random-ordering baseline wearing Oort's name, which is worse than
+   not running it. *Cost impact is nil for the headline* (H0 already forces `--real-model`, so the
+   matrix is real-model anyway), but it means **Oort cannot be smoke-tested on the fast stub path**,
+   which slows iteration and rules it out of cheap pilots.
+2. **The system-speed term.** Oort's utility multiplies statistical utility by a straggler penalty
+   over client compute/comm speed. **We have no per-device compute speed.** Either drop the term
+   (and say so) or map it to per-device contact reliability (and say so). Dropping is the more
+   honest default: it is the *statistical utility* half of Oort, and the paper should call it
+   "Oort's statistical-utility selection" rather than "Oort".
+3. **Loss semantics.** Oort defines `√(Σ_k Loss(k)²/|B_i|)` — the RMS over per-sample losses. Keras
+   `evaluate` hands us the **mean** loss. Close, monotone in the same direction, **not identical**.
+   Record it as a stated approximation rather than letting a reader assume exactness.
+
+**Verdict: ~300 LOC, one 2-line freeze amendment, and no new data path — but three fidelity
+statements the paper must carry.** The honest framing is that we implement Oort's *statistical
+utility + staleness* ranking on mule-visible state, which is precisely the part that ports.
+
 > **Recommendation: MAX-AoI first, Oort second.** MAX-AoI is cheap, needs no new data, and is the
 > UAV/AoI-shaped comparator 74A actually asked for — it directly rivals our bucket+deadline
 > ordering. Oort is the more citable name but costs a protocol change; take it if the schedule
