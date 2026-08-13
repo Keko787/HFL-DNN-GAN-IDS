@@ -367,10 +367,49 @@ class MuleSupervisor:
             self.mule_id, mission_round, len(pass_1_queue),
             sum(len(c.devices) for c in pass_1_queue),
         )
+        # Close the other half of the starvation loop: devices S3b dropped
+        # PRE-flight also never get a contact, so they too would never widen.
+        _feas = getattr(self.scheduler, "last_feasibility", None)
+        if _feas is not None and getattr(_feas, "n_dropped", 0):
+            self._widen_abandoned(
+                list(_feas.dropped_overdue) + list(_feas.dropped_budget),
+                mission_round=mission_round,
+            )
 
         # M5 — split channel choices per pass for clean attribution.
         pass_1_channel_choices: List[int] = []
-        for wp in pass_1_queue:
+        aborted_wps: List[ContactWaypoint] = []
+        for idx, wp in enumerate(pass_1_queue):
+            # S3b in-flight — re-check feasibility from where the mule ACTUALLY
+            # is and what the clock ACTUALLY says, not from the pre-flight plan.
+            #
+            # The queue was filtered before take-off, but contacts take real
+            # time and can fail, so the mule can fall behind its own plan. Once
+            # the remainder is unreachable there is nothing to gain by flying
+            # the rest of it: continuing burns budget and delays delivery of the
+            # updates already aboard. Break, and let close_round + the dock
+            # deliver what was collected.
+            #
+            # Note this can only foresee running out of TIME — a deterministic
+            # function of clock and geometry. It cannot foresee a random link
+            # failure, which is stochastic by construction.
+            if not self._remaining_is_feasible(pass_1_queue[idx:]):
+                aborted_wps = list(pass_1_queue[idx:])
+                log.info(
+                    "mule=%s round=%d Pass 1 ABORTING at contact %d/%d: "
+                    "remaining queue is no longer reachable in time; "
+                    "returning with %d contact(s) already collected",
+                    self.mule_id, mission_round, idx, len(pass_1_queue), idx,
+                )
+                # Close the feedback loop for everyone we are abandoning.
+                # Without this they receive NO RoundCloseDelta at all (deltas
+                # are only emitted from inside a contact session), so their
+                # fulfilment window never widens and S3b is free to drop them
+                # again next mission — a starvation loop introduced by the gate
+                # itself. Feeding a TIMEOUT widens Φ, which is exactly the
+                # signal "we could not get to you in time".
+                self._widen_abandoned(aborted_wps, mission_round=mission_round)
+                break
             ch_idx = self._pick_channel_contact(wp)
             if ch_idx is not None:
                 pass_1_channel_choices.append(ch_idx)
@@ -517,6 +556,70 @@ class MuleSupervisor:
         if self.channel_actor is None:
             return None
         return self._pick_channel_at_position(wp.position)
+
+    def _remaining_is_feasible(self, remaining: List[ContactWaypoint]) -> bool:
+        """S3b in-flight — can the rest of the queue still be served in time?
+
+        Re-runs the same feasibility check the scheduler applied before
+        take-off, but from the mule's **current** pose and clock. Returns True
+        (fly on) when no mission budget is configured, so this is inert unless
+        deadline enforcement is switched on — matching S3b's opt-in contract.
+
+        Only the *first* remaining contact needs to be reachable for the mission
+        to be worth continuing: if it survives, we fly it and re-check at the
+        next stop. That keeps the decision incremental rather than committing to
+        a whole-queue prediction that the next contact's outcome may invalidate.
+        """
+        if not remaining:
+            return False
+        budget = getattr(self.scheduler, "_mission_budget_s", None)
+        if budget is None:
+            return True
+        start = getattr(self.scheduler, "_mission_start_ts", None)
+        if start is None:
+            return True
+
+        from hermes.scheduler.stages.s3b_feasibility import filter_feasible
+
+        feas = filter_feasible(
+            remaining[:1],
+            now=self._now(),
+            mule_pose=self.mule_pose,
+            mission_deadline_ts=start + budget,
+            model=getattr(self.scheduler, "_feasibility_model", None),
+        )
+        return bool(feas.kept)
+
+    def _widen_abandoned(
+        self, abandoned: List[ContactWaypoint], *, mission_round: int,
+    ) -> None:
+        """Feed a TIMEOUT delta for every device we could not reach.
+
+        Deltas are normally emitted only from inside a contact session, so a
+        device that is never visited gets no feedback and its fulfilment window
+        never adapts. That matters most for devices S3b drops or an in-flight
+        abort abandons: without a signal they stay just as un-serveable next
+        mission. Widening Φ is the same response the scheduler already gives a
+        missed contact.
+        """
+        from hermes.types import MissionOutcome, RoundCloseDelta
+
+        now = self._now()
+        for wp in abandoned:
+            for did in wp.devices:
+                try:
+                    self.scheduler.ingest_round_close_delta(
+                        RoundCloseDelta(
+                            device_id=did,
+                            mule_id=self.mule_id,
+                            mission_round=mission_round,
+                            outcome=MissionOutcome.TIMEOUT,
+                            utility=0.0,
+                            contact_ts=now,
+                        )
+                    )
+                except Exception:  # never let bookkeeping kill the sortie
+                    log.exception("failed to widen deadline for %s", did)
 
     def _pick_channel_contact(self, wp: ContactWaypoint) -> Optional[int]:
         """Same as :meth:`_pick_channel` but for a Sprint-1.5 contact event."""

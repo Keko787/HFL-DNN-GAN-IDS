@@ -81,6 +81,30 @@ Not frozen (safe to change): analysis, figures, documentation, and the *values* 
 parameters (`mission_budget_s`, N, `n_missions`, seeds) — those are experiment design, chosen in
 Phase 3.
 
+## 5a. Amendment 1 — in-flight abort + deadline feedback (2026-08-13)
+
+**Unfrozen, amended, re-frozen the same day**, before any sweep was run against the original
+freeze — so nothing recorded was invalidated. Taken now precisely *because* the Phase-3 re-run had
+not happened yet: batching these in costs nothing, whereas adding them after the matrix runs would
+have cost a second full re-run.
+
+Two gaps, both found by inspection:
+
+| # | Gap | Fix |
+|---|---|---|
+| **A1** | **S3b was pre-flight only.** The queue was filtered before take-off and never re-checked, so once the mule fell behind its plan it kept flying stops it could no longer serve — burning budget and delaying delivery of updates already aboard. | `MuleSupervisor._remaining_is_feasible()` re-runs the S3b check from the mule's **current** pose and clock before each stop; if the next contact is unreachable in time the Pass-1 loop **breaks**, and `close_round` + the dock deliver what was collected. |
+| **A2** | **Unreached devices got no feedback.** `RoundCloseDelta` is emitted only from inside a contact session, so a device dropped by S3b or abandoned by an abort never widened its window — leaving it equally un-serveable next mission. **A starvation loop created by the S3b gate itself.** | `_widen_abandoned()` feeds a `TIMEOUT` delta for every device dropped pre-flight *or* abandoned in flight, widening Φ exactly as a missed contact does. |
+
+**Scope note.** A1 can only foresee running out of **time** — a deterministic function of clock and
+geometry. It cannot foresee a *random link failure*, which is stochastic by construction. The
+proposal "abort when the drone knows it will fail to reach the next node" is therefore implemented
+in its knowable form.
+
+**Both are inert without enforcement** (`mission_budget_s=None`), pinned by test — so every
+previously recorded sweep remains reproducible. 8 new tests; 573 unit tests pass.
+
+**D1 is unchanged:** the mechanism is frozen, the default remains a Phase-3 matrix parameter.
+
 ## 6. Unfreezing
 
 Amend this document with the reason, the changed files, and which recorded sweeps are invalidated.
