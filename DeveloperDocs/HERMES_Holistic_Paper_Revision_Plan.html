@@ -339,7 +339,7 @@
     <li><a href="#phase0">Phase 0: Correctness & Provenance Audit</a></li>
     <li><a href="#scheduler">Scheduling Methodology Redesign</a></li>
     <li><a href="#hfl">Reposition HFL as Core Infrastructure</a></li>
-    <li><a href="#gan">GAN Decision Gate</a></li>
+    <li><a href="#gan">GAN Decision Gate <em>(deferred)</em></a></li>
     <li><a href="#experiments">Four-Experiment Evaluation Plan</a></li>
     <li><a href="#sota">State-of-the-Art Comparison Plan</a></li>
     <li><a href="#structure">Revised Paper Structure</a></li>
@@ -621,11 +621,41 @@
 </section>
 
 <section id="gan">
-  <h2>6. GAN Decision Gate</h2>
+  <h2>6. GAN Decision Gate <span class="priority-med">[DEFERRED — not in the ICNC submission]</span></h2>
+
+  <div class="callout warning">
+    <strong>Decision: deferred, not dropped.</strong> The GAN direction is held out of the ICNC
+    submission — the page budget cannot carry a second algorithmic thread alongside the gated
+    scheduler, and no reviewer asked for one. The section is retained here because the decision gate
+    below is the thing that matters: it defines <em>what would have to be true</em> for the GAN to
+    earn its place, so the question can be reopened for the journal/extended version without
+    re-litigating it from scratch. Nothing in the ICNC paper should reference it.
+  </div>
+
   <p>
     The professor OKR proposes elevating the GAN component to strengthen algorithmic novelty.
     This should only be done if the GAN addresses a HERMES-specific failure mode.
   </p>
+
+  <h3>6.0 What would have to be true to un-defer it</h3>
+  <p>
+    Concretely, the GAN becomes worth including when all three of these hold — and E4 now gives a
+    cheap way to test the first two:
+  </p>
+  <ol>
+    <li><strong>The failure mode is real in our own data.</strong> E4 already surfaces a candidate:
+      sessions that receive no aggregated update end at the untrained initialization (~1.9 % of
+      trials overall, 3.35 % for flat FL under jitter). If devices in blocked regions are also
+      class-starved — not merely unreachable — that is a HERMES-specific learning failure a
+      generative augmentation could address. <em>Currently unmeasured:</em> we have not characterized
+      per-device class distributions in the dead-zone cells.</li>
+    <li><strong>Augmentation measurably repairs it</strong> under the same paired-seed protocol as
+      §7.4, with the CI-excludes-zero rule. A GAN that helps on average but ties under the protocol
+      is not a contribution.</li>
+    <li><strong>It survives the same audit E4 got.</strong> The layer-1 retraction (§7.5) is the
+      cautionary precedent: a component that is wired and plausible is not the same as a component
+      with a demonstrable end-to-end effect.</li>
+  </ol>
 
   <table>
     <thead><tr><th>Path</th><th>When to Use It</th><th>Benefit</th></tr></thead>
@@ -1000,8 +1030,10 @@
           provenance table</td>
         <td>E1 to a few sentences of motivation (it is a microbenchmark, not a competitive result);
           E2 to the channel-level claim only</td>
-        <td>The GAN direction (§6) — it adds a second algorithmic thread the page budget cannot
-          support and no reviewer asked for it; absolute energy figures until ε_prop is measured</td>
+        <td><strong>Defer</strong> the GAN direction (§6) to the journal/extended version — it adds a
+          second algorithmic thread the page budget cannot support and no reviewer asked for it; the
+          decision gate is kept on file with the criteria that would un-defer it.
+          <strong>Cut</strong> absolute energy figures until ε_prop is measured</td>
       </tr>
     </tbody>
   </table>
@@ -1044,7 +1076,7 @@
       <tr><td>74D — Missing sensitivity/statistics</td><td><span class="priority-low">Done for E4.</span> 12-point dead-zone&times;link surface, 20 paired seeds, paired Wilcoxon + Cliff's &delta; + bootstrap CI, claim only when CI excludes 0. Still to do for E3.</td></tr>
       <tr><td>Professor — Energy/distance/readiness/trust</td><td>Make these explicit scheduling quantities and ablate them.</td></tr>
       <tr><td>Professor — HFL role</td><td>Recast HFL as coordination/data-transport infrastructure.</td></tr>
-      <tr><td>Professor — GAN</td><td>Integrate only if tied to a specific constrained-learning failure mode.</td></tr>
+      <tr><td>Professor — GAN</td><td><span class="priority-med">Deferred</span> to the journal/extended version: integrate only if tied to a specific constrained-learning failure mode. §6 keeps the decision gate and the three criteria that would un-defer it.</td></tr>
       <tr><td>Professor — Experiment 4</td><td><span class="priority-low">Done.</span> E4 is built, run and audited; it is the centerpiece (&sect;7.4).</td></tr>
     </tbody>
   </table>
