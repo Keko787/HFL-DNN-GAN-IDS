@@ -1,0 +1,1051 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CEDA vs HERMES</title>
+<meta name="description" content="Two systems from one lab, solving structurally the same scheduling problem — and making opposite choices about how much the learned policy is allowed to decide. Plus the untracked prototype sitting between them.">
+<style>
+  :root{
+    --bg:#f4f6f8; --surface:#ffffff; --surface-2:#eef1f4;
+    --ink:#141a20; --ink-2:#47525d; --ink-3:#6c7883;
+    --line:#dbe1e7; --line-2:#c8d0d8;
+    --accent:#0c7d8a; --accent-2:#0a5f6a; --accent-soft:#e0f0f2;
+    --ok:#2f8f56; --ok-bg:#e5f3ea; --ok-line:#a9d8bd;
+    --warn:#a8720c; --warn-bg:#f7efdb; --warn-line:#e3c483;
+    --gap:#bf3b4e; --gap-bg:#fbe5e8; --gap-line:#eeaeb7;
+    --font-display:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    --font-body:ui-serif,"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,Cambria,serif;
+    --font-mono:ui-monospace,"Cascadia Code","SF Mono","Segoe UI Mono",Menlo,Consolas,monospace;
+    --maxw:1200px; --prose:800px;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --bg:#0d1116; --surface:#141a21; --surface-2:#1a222b;
+      --ink:#e7ecf1; --ink-2:#a3afba; --ink-3:#74818d;
+      --line:#26303a; --line-2:#333f4b;
+      --accent:#2fc0d0; --accent-2:#5bd4e0; --accent-soft:#10333a;
+      --ok:#4cc47e; --ok-bg:#12301f; --ok-line:#245a3a;
+      --warn:#e0a63a; --warn-bg:#31260f; --warn-line:#5c4820;
+      --gap:#e56b7d; --gap-bg:#331a1f; --gap-line:#5e3038;
+    }
+  }
+  :root[data-theme="light"]{
+    --bg:#f4f6f8; --surface:#ffffff; --surface-2:#eef1f4;
+    --ink:#141a20; --ink-2:#47525d; --ink-3:#6c7883;
+    --line:#dbe1e7; --line-2:#c8d0d8;
+    --accent:#0c7d8a; --accent-2:#0a5f6a; --accent-soft:#e0f0f2;
+    --ok:#2f8f56; --ok-bg:#e5f3ea; --ok-line:#a9d8bd;
+    --warn:#a8720c; --warn-bg:#f7efdb; --warn-line:#e3c483;
+    --gap:#bf3b4e; --gap-bg:#fbe5e8; --gap-line:#eeaeb7;
+  }
+  :root[data-theme="dark"]{
+    --bg:#0d1116; --surface:#141a21; --surface-2:#1a222b;
+    --ink:#e7ecf1; --ink-2:#a3afba; --ink-3:#74818d;
+    --line:#26303a; --line-2:#333f4b;
+    --accent:#2fc0d0; --accent-2:#5bd4e0; --accent-soft:#10333a;
+    --ok:#4cc47e; --ok-bg:#12301f; --ok-line:#245a3a;
+    --warn:#e0a63a; --warn-bg:#31260f; --warn-line:#5c4820;
+    --gap:#e56b7d; --gap-bg:#331a1f; --gap-line:#5e3038;
+  }
+
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:var(--font-body); font-size:17px; line-height:1.62;
+    -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+  }
+  .shell{max-width:var(--maxw); margin:0 auto; padding:0 clamp(18px,4vw,40px)}
+
+  /* ---------- Masthead ---------- */
+  header.mast{padding:clamp(40px,7vw,84px) 0 34px; border-bottom:1px solid var(--line)}
+  .eyebrow{
+    font-family:var(--font-mono); font-size:12px; letter-spacing:.14em;
+    text-transform:uppercase; color:var(--accent); font-weight:600;
+    display:flex; gap:10px; flex-wrap:wrap; align-items:center;
+  }
+  .eyebrow .sep{color:var(--ink-3)}
+  h1.title{
+    font-family:var(--font-display); font-weight:760;
+    font-size:clamp(30px,5.4vw,52px); line-height:1.04; letter-spacing:-.022em;
+    margin:.42em 0 .28em; max-width:16ch; text-wrap:balance;
+  }
+  .deck{
+    font-size:clamp(17px,2.1vw,21px); color:var(--ink-2); max-width:60ch;
+    line-height:1.5; margin:0;
+  }
+  .deck b{color:var(--ink); font-weight:600}
+  .metabar{
+    margin-top:26px; display:flex; flex-wrap:wrap; gap:8px 20px;
+    font-family:var(--font-mono); font-size:12.5px; color:var(--ink-3);
+  }
+  .metabar b{color:var(--ink-2); font-weight:600}
+
+  /* ---------- Layout with TOC rail ---------- */
+  .body-grid{display:block}
+  @media(min-width:1040px){
+    .body-grid{display:grid; grid-template-columns:216px minmax(0,1fr); gap:48px; align-items:start}
+    nav.toc{position:sticky; top:24px; align-self:start}
+  }
+  nav.toc{padding:30px 0 0}
+  nav.toc .toc-h{
+    font-family:var(--font-mono); font-size:11px; letter-spacing:.14em;
+    text-transform:uppercase; color:var(--ink-3); margin:0 0 12px; font-weight:600;
+  }
+  nav.toc ol{list-style:none; margin:0; padding:0; counter-reset:toc}
+  nav.toc li{counter-increment:toc; margin:2px 0}
+  nav.toc a{
+    display:block; text-decoration:none; color:var(--ink-2);
+    font-family:var(--font-display); font-size:14px; line-height:1.35;
+    padding:6px 10px 6px 30px; border-radius:7px; position:relative;
+  }
+  nav.toc a::before{
+    content:counter(toc,decimal-leading-zero); position:absolute; left:8px;
+    font-family:var(--font-mono); font-size:11px; color:var(--accent);
+    top:8px; font-weight:600;
+  }
+  nav.toc a:hover{background:var(--surface-2); color:var(--ink)}
+  @media(max-width:1039px){ nav.toc{display:none} }
+
+  main{padding-top:8px; min-width:0}
+
+  /* ---------- Sections & prose ---------- */
+  section{padding:38px 0; border-bottom:1px solid var(--line); scroll-margin-top:20px}
+  section:last-of-type{border-bottom:0}
+  .sec-eyebrow{
+    font-family:var(--font-mono); font-size:12px; letter-spacing:.13em;
+    text-transform:uppercase; color:var(--accent); font-weight:600; margin-bottom:8px;
+  }
+  h2{
+    font-family:var(--font-display); font-weight:720; letter-spacing:-.016em;
+    font-size:clamp(22px,3.2vw,30px); line-height:1.14; margin:0 0 .55em;
+    max-width:24ch; text-wrap:balance;
+  }
+  h3{
+    font-family:var(--font-display); font-weight:660; letter-spacing:-.008em;
+    font-size:19px; line-height:1.25; margin:1.9em 0 .5em; color:var(--ink);
+  }
+  h4{
+    font-family:var(--font-mono); font-weight:600; font-size:13px; letter-spacing:.04em;
+    text-transform:uppercase; color:var(--ink-2); margin:1.5em 0 .5em;
+  }
+  p{max-width:var(--prose); margin:0 0 1.05em}
+  main ul,main ol{max-width:var(--prose); margin:0 0 1.1em; padding-left:1.25em}
+  main li{margin:.34em 0}
+  strong{font-weight:600; color:var(--ink)}
+  a.ref{color:var(--accent-2); text-decoration:none; border-bottom:1px solid transparent}
+  :root[data-theme="dark"] a.ref{color:var(--accent)}
+  @media(prefers-color-scheme:dark){a.ref{color:var(--accent)}}
+  a.ref:hover{border-bottom-color:currentColor}
+
+  code,.mono{font-family:var(--font-mono); font-size:.86em}
+  p code,li code,td code{
+    background:var(--surface-2); padding:.08em .38em; border-radius:5px;
+    font-size:.82em; color:var(--ink); border:1px solid var(--line);
+    white-space:nowrap;
+  }
+  .path{color:var(--ink-3); font-family:var(--font-mono); font-size:.8em; white-space:nowrap}
+
+  /* ---------- Callouts ---------- */
+  .callout{
+    border:1px solid var(--line); border-left-width:3px; border-radius:10px;
+    background:var(--surface); padding:18px 20px; margin:1.4em 0; max-width:var(--prose);
+  }
+  .callout .k{
+    font-family:var(--font-mono); font-size:11px; letter-spacing:.12em; text-transform:uppercase;
+    font-weight:600; margin-bottom:7px; display:block;
+  }
+  .callout p{margin:.2em 0}
+  .callout.accent{border-left-color:var(--accent); background:var(--accent-soft)}
+  .callout.accent .k{color:var(--accent-2)}
+  :root[data-theme="dark"] .callout.accent .k{color:var(--accent-2)}
+  @media(prefers-color-scheme:dark){.callout.accent .k{color:var(--accent-2)}}
+  .callout.warn{border-left-color:var(--warn); background:var(--warn-bg)}
+  .callout.warn .k{color:var(--warn)}
+  .callout.gap{border-left-color:var(--gap); background:var(--gap-bg)}
+  .callout.gap .k{color:var(--gap)}
+  .callout.accent{background:var(--accent-soft)}
+
+  /* ---------- Formula ---------- */
+  .formula{
+    font-family:var(--font-mono); font-size:14px; line-height:1.55;
+    background:var(--surface-2); border:1px solid var(--line);
+    border-radius:9px; padding:13px 16px; margin:1em 0; max-width:var(--prose);
+    overflow-x:auto; color:var(--ink);
+  }
+  .formula .lbl{color:var(--ink-3)}
+
+  /* ---------- Tables ---------- */
+  .tablewrap{overflow-x:auto; margin:1.2em 0 1.5em; border:1px solid var(--line);
+    border-radius:11px; background:var(--surface)}
+  table{border-collapse:collapse; width:100%; font-size:14px; min-width:640px}
+  table.wide{min-width:820px}
+  thead th{
+    font-family:var(--font-mono); font-weight:600; font-size:11.5px; letter-spacing:.03em;
+    text-transform:uppercase; text-align:left; color:var(--ink-2);
+    background:var(--surface-2); padding:11px 14px; border-bottom:1px solid var(--line-2);
+    position:sticky; top:0; vertical-align:bottom;
+  }
+  tbody td{padding:11px 14px; border-bottom:1px solid var(--line); vertical-align:top;
+    line-height:1.42; color:var(--ink-2)}
+  tbody tr:last-child td{border-bottom:0}
+  tbody td:first-child{color:var(--ink); font-weight:500}
+  tbody td .path,tbody td code{white-space:normal}
+  td .mname{font-family:var(--font-mono); font-size:12.5px; color:var(--ink); font-weight:600; display:block}
+  tbody tr:hover td{background:color-mix(in srgb,var(--accent-soft) 34%, transparent)}
+  .num{font-variant-numeric:tabular-nums}
+
+  /* ---------- Pills / badges ---------- */
+  .pill{
+    display:inline-flex; align-items:center; gap:5px; font-family:var(--font-mono);
+    font-size:11px; font-weight:600; letter-spacing:.02em; padding:2px 8px 2px 6px;
+    border-radius:20px; border:1px solid var(--line-2); white-space:nowrap; line-height:1.5;
+  }
+  .pill .dot{width:7px; height:7px; border-radius:50%; background:currentColor; flex:0 0 auto}
+  .pill.ok{color:var(--ok); background:var(--ok-bg); border-color:var(--ok-line)}
+  .pill.warn{color:var(--warn); background:var(--warn-bg); border-color:var(--warn-line)}
+  .pill.gap{color:var(--gap); background:var(--gap-bg); border-color:var(--gap-line)}
+  .pill.plain{color:var(--ink-3); background:var(--surface-2)}
+
+  .legend{display:flex; flex-wrap:wrap; gap:8px 14px; margin:.3em 0 1.1em; font-size:13px; align-items:center}
+  .legend .lg{display:inline-flex; align-items:center; gap:6px; color:var(--ink-2); font-family:var(--font-mono); font-size:11.5px}
+
+  /* ---------- Verdict cards ---------- */
+  .verdicts{display:grid; gap:14px; margin:1.3em 0; max-width:var(--prose)}
+  .vcard{border:1px solid var(--line); border-radius:12px; background:var(--surface); overflow:hidden}
+  .vcard .vhead{display:flex; align-items:flex-start; gap:12px; padding:15px 18px 12px; border-bottom:1px solid var(--line)}
+  .vbadge{font-family:var(--font-mono); font-size:11px; font-weight:700; letter-spacing:.05em;
+    padding:4px 9px; border-radius:6px; flex:0 0 auto; margin-top:1px}
+  .vbadge.confirmed{color:#fff; background:var(--gap)}
+  .vbadge.partial{color:var(--ink); background:var(--warn)}
+  :root[data-theme="dark"] .vbadge.partial{color:#20160a}
+  @media(prefers-color-scheme:dark){.vbadge.partial{color:#20160a}}
+  .vcard .vclaim{font-family:var(--font-display); font-weight:600; font-size:15.5px; line-height:1.34; color:var(--ink); margin:0}
+  .vcard .vbody{padding:13px 18px 16px; font-size:14px; color:var(--ink-2)}
+  .vcard .vbody p{margin:.1em 0 .7em; max-width:none}
+  .vcard .vbody .imp{margin-top:.4em; padding-top:.7em; border-top:1px dashed var(--line-2)}
+  .vcard .vbody .imp .k{font-family:var(--font-mono); font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--accent); font-weight:600; display:block; margin-bottom:3px}
+  :root[data-theme="dark"] .vcard .vbody .imp .k{color:var(--accent-2)}
+  @media(prefers-color-scheme:dark){.vcard .vbody .imp .k{color:var(--accent-2)}}
+
+  /* ---------- Stage cards ---------- */
+  .stages{display:grid; gap:16px; margin:1.4em 0; max-width:var(--prose)}
+  .stage{border:1px solid var(--line); border-radius:12px; background:var(--surface); padding:0; overflow:hidden}
+  .stage .shead{display:flex; align-items:baseline; gap:12px; padding:16px 20px 12px; background:var(--surface-2); border-bottom:1px solid var(--line)}
+  .stage .snum{font-family:var(--font-mono); font-weight:700; font-size:13px; color:var(--accent); letter-spacing:.02em; flex:0 0 auto}
+  :root[data-theme="dark"] .stage .snum{color:var(--accent-2)}
+  @media(prefers-color-scheme:dark){.stage .snum{color:var(--accent-2)}}
+  .stage .stitle{font-family:var(--font-display); font-weight:660; font-size:16.5px; color:var(--ink); line-height:1.25; margin:0}
+  .stage .schip{margin-left:auto; flex:0 0 auto}
+  .stage .sbody{padding:15px 20px 18px; font-size:14.5px}
+  .stage .sbody ul{max-width:none; margin:.2em 0 .3em}
+  .stage .grid2{display:grid; gap:4px 22px; grid-template-columns:1fr}
+  @media(min-width:620px){.stage .grid2{grid-template-columns:1fr 1fr}}
+  .stage .fld{margin:.6em 0}
+  .stage .fld .k{font-family:var(--font-mono); font-size:10.5px; letter-spacing:.09em; text-transform:uppercase; color:var(--ink-3); font-weight:600; display:block; margin-bottom:3px}
+  .stage .fld p{margin:0; font-size:13.5px; color:var(--ink-2); max-width:none}
+  .stage .dod{margin-top:.7em; padding-top:.8em; border-top:1px dashed var(--line-2)}
+
+  /* ---------- Misc ---------- */
+  .lead{font-size:19px; line-height:1.5; color:var(--ink); max-width:var(--prose)}
+  .lead b{color:var(--ink)}
+  hr.soft{border:0; border-top:1px solid var(--line); margin:1.6em 0; max-width:var(--prose)}
+  .foot{padding:34px 0 70px; color:var(--ink-3); font-size:13px; max-width:var(--prose)}
+  .foot p{max-width:none; margin:.5em 0; font-size:13px; color:var(--ink-3)}
+  .foot .mono{font-size:12px}
+  .kexcerpt{font-family:var(--font-mono); font-size:12.5px; color:var(--ink-2); background:var(--surface-2);
+    border:1px solid var(--line); border-radius:8px; padding:10px 13px; margin:.7em 0; max-width:var(--prose); line-height:1.5}
+  sup.fn{font-family:var(--font-mono); font-size:.62em; color:var(--accent); font-weight:600}
+  :focus-visible{outline:2px solid var(--accent); outline-offset:2px; border-radius:3px}
+  @media(prefers-reduced-motion:no-preference){html{scroll-behavior:smooth}}
+
+  /* ---------- Additions for the generated review docs ---------- */
+  main h2 { max-width: 32ch }
+  main table { min-width: 560px }
+  .tablewrap table thead th { position: static }
+
+  /* finding / item sub-headings */
+  main h3{
+    scroll-margin-top:18px; display:flex; align-items:baseline;
+    gap:9px; flex-wrap:wrap;
+  }
+  main h3 .fid{
+    font-family:var(--font-mono); font-size:12.5px; font-weight:700;
+    color:var(--accent); letter-spacing:.02em; flex:0 0 auto;
+  }
+  :root[data-theme="dark"] main h3 .fid{ color:var(--accent-2) }
+  @media(prefers-color-scheme:dark){ main h3 .fid{ color:var(--accent-2) } }
+  p.pillrow{ display:flex; gap:8px; flex-wrap:wrap; margin:-.35em 0 1.1em }
+  .anchor-alias{ display:block; height:0; scroll-margin-top:18px }
+
+  /* code blocks */
+  .codewrap{ position:relative; margin:1.15em 0 1.4em; max-width:var(--prose) }
+  .codewrap.wide{ max-width:none }
+  pre.code{
+    font-family:var(--font-mono); font-size:12.5px; line-height:1.55;
+    background:var(--surface-2); border:1px solid var(--line); border-radius:10px;
+    padding:15px 17px; margin:0; overflow-x:auto; color:var(--ink);
+    white-space:pre; tab-size:2;
+  }
+  pre.code code{ font-size:inherit; background:none; border:0; padding:0;
+                 white-space:pre; color:inherit }
+  .codewrap .lang{
+    position:absolute; top:0; right:12px; transform:translateY(-50%);
+    font-family:var(--font-mono); font-size:10px; letter-spacing:.1em;
+    text-transform:uppercase; font-weight:600; color:var(--ink-3);
+    background:var(--bg); border:1px solid var(--line); border-radius:20px;
+    padding:2px 9px;
+  }
+
+  /* Pygments tokens, mapped onto the house palette so both themes work */
+  pre.code .c,  pre.code .c1, pre.code .cm, pre.code .cs,
+  pre.code .ch, pre.code .cpf{ color:var(--ink-3); font-style:italic }
+  pre.code .sd{ color:var(--ink-3) }
+  pre.code .k,  pre.code .kn, pre.code .kc, pre.code .kd,
+  pre.code .kp, pre.code .kr, pre.code .kt, pre.code .ow{ color:var(--accent) }
+  :root[data-theme="dark"] pre.code .k,
+  :root[data-theme="dark"] pre.code .kn,
+  :root[data-theme="dark"] pre.code .kc,
+  :root[data-theme="dark"] pre.code .kd,
+  :root[data-theme="dark"] pre.code .ow{ color:var(--accent-2) }
+  @media(prefers-color-scheme:dark){
+    pre.code .k, pre.code .kn, pre.code .kc,
+    pre.code .kd, pre.code .ow{ color:var(--accent-2) }
+  }
+  pre.code .s,  pre.code .s1, pre.code .s2, pre.code .sa,
+  pre.code .sb, pre.code .se, pre.code .si, pre.code .sr,
+  pre.code .ss, pre.code .sx{ color:var(--ok) }
+  pre.code .m,  pre.code .mi, pre.code .mf, pre.code .mh,
+  pre.code .mo, pre.code .il{ color:var(--ok) }
+  pre.code .nf, pre.code .fm{ color:var(--ink); font-weight:600 }
+  pre.code .nc, pre.code .ne{ color:var(--warn); font-weight:600 }
+  pre.code .nd{ color:var(--warn) }
+  pre.code .nb, pre.code .bp{ color:var(--ink-2) }
+  pre.code .nn, pre.code .nv, pre.code .no, pre.code .na{ color:var(--ink) }
+  pre.code .o,  pre.code .p{ color:var(--ink-2) }
+  pre.code .gd{ color:var(--gap) }
+  pre.code .gi{ color:var(--ok) }
+  pre.code .gh, pre.code .gu{ color:var(--ink-3); font-weight:600 }
+  pre.code .err{ color:inherit; border:0 }
+
+  /* blockquote -> callout */
+  blockquote{
+    margin:1.3em 0; padding:15px 18px; max-width:var(--prose);
+    border:1px solid var(--line); border-left:3px solid var(--ink-3);
+    border-radius:10px; background:var(--surface); color:var(--ink-2);
+    font-size:15px;
+  }
+  blockquote p{ margin:.25em 0 }
+  blockquote.warn{ border-left-color:var(--warn); background:var(--warn-bg) }
+
+  /* figures / diagrams */
+  figure.dgfig{ margin:1.6em 0 1.9em; max-width:none }
+  .dgscroll{ overflow-x:auto; border:1px solid var(--line); border-radius:12px;
+             background:var(--surface); padding:18px 16px }
+  svg.dg{ max-width:100%; height:auto; display:block; margin:0 auto }
+  svg.dg text{ font-family:var(--font-mono); fill:var(--ink); font-size:12px }
+  svg.dg .t-sm{ font-size:11px; fill:var(--ink-2) }
+  svg.dg .t-lbl{ font-size:10.5px; fill:var(--ink-3) }
+  svg.dg .t-bad{ font-size:10.5px; fill:var(--gap); font-weight:600 }
+  svg.dg .t-hd{ font-size:10.5px; font-weight:700; fill:var(--accent);
+                letter-spacing:.09em }
+  svg.dg .t-x{ font-size:15px; fill:var(--gap); font-weight:700 }
+  svg.dg .bx{ fill:var(--surface); stroke:var(--line-2); stroke-width:1.2 }
+  svg.dg .badbx{ fill:var(--gap-bg); stroke:var(--gap-line); stroke-width:1.3 }
+  svg.dg .warnbx{ fill:var(--warn-bg); stroke:var(--warn-line); stroke-width:1.3 }
+  svg.dg .hl{ fill:var(--ok-bg); stroke:var(--ok); stroke-width:1.6 }
+  svg.dg .dead{ fill:var(--surface-2); stroke:var(--ink-3); stroke-width:1.2;
+                stroke-dasharray:5 4; opacity:.8 }
+  svg.dg .band{ fill:var(--surface-2); stroke:var(--line); stroke-width:1 }
+  svg.dg .ok-band{ fill:var(--ok-bg); stroke:var(--ok-line) }
+  svg.dg .bad-band{ fill:var(--gap-bg); stroke:var(--gap-line) }
+  svg.dg .loopbx{ fill:none; stroke:var(--line-2); stroke-width:1;
+                  stroke-dasharray:4 3 }
+  svg.dg .life{ stroke:var(--line-2); stroke-width:1; stroke-dasharray:4 4 }
+  svg.dg .ln{ stroke:var(--ink-2); stroke-width:1.4; fill:none }
+  svg.dg .ln-bad{ stroke:var(--gap); stroke-width:1.6; stroke-dasharray:6 4; fill:none }
+  svg.dg .ln-dead{ stroke:var(--ink-3); stroke-width:1.4; stroke-dasharray:5 4; fill:none }
+  svg.dg .ln-soft{ stroke:var(--ink-3); stroke-width:1.2; stroke-dasharray:3 3; fill:none }
+  svg.dg .mk{ fill:var(--ink-2); stroke:none }
+  svg.dg .mk-bad{ fill:var(--gap); stroke:none }
+  svg.dg .mk-dead{ fill:var(--ink-3); stroke:none }
+  svg.dg .mk-soft{ fill:var(--ink-3); stroke:none }
+  figure.dgfig figcaption{
+    font-size:13.5px; color:var(--ink-2); line-height:1.5; margin-top:11px;
+    max-width:var(--prose); padding-left:2px;
+  }
+  figure.dgfig figcaption b{ color:var(--ink) }
+
+  /* severity pills in the findings tables */
+  .g{ font-family:var(--font-mono); font-size:10.5px; font-weight:700;
+      padding:1px 7px; border-radius:20px; border:1px solid; white-space:nowrap }
+  .g.p0{ color:var(--gap); background:var(--gap-bg); border-color:var(--gap-line) }
+  .g.p1{ color:var(--warn); background:var(--warn-bg); border-color:var(--warn-line) }
+  .g.p2{ color:var(--ink-3); background:var(--surface-2); border-color:var(--line-2) }
+
+  /* nested TOC */
+  nav.toc ol ol{ list-style:none; counter-reset:none; margin:2px 0 6px;
+                 padding-left:14px }
+  nav.toc ol ol li{ counter-increment:none }
+  nav.toc ol ol a{ padding:3px 8px 3px 10px; font-size:11.5px;
+                   color:var(--ink-3); border-left:1px solid var(--line) }
+  nav.toc ol ol a::before{ content:none }
+  nav.toc ol ol a:hover{ color:var(--ink-2) }
+
+  @media print{
+    nav.toc{ display:none }
+    section{ break-inside:avoid-page }
+    .dgscroll{ overflow:visible }
+    pre.code{ white-space:pre-wrap; word-break:break-word }
+    body{ background:#fff; font-size:11pt }
+  }
+
+</style>
+
+</head>
+<body>
+<div class="shell">
+  <header class="mast">
+    <div class="eyebrow">
+      <span>Comparative analysis · 2026-08-10</span><span class="sep">/</span>
+      <span>MS thesis defence · 37 slides</span><span class="sep">/</span>
+      <span>Analysis only — nothing modified</span>
+    </div>
+    <h1 class="title">CEDA vs HERMES</h1>
+    <p class="deck">Two systems from one lab, solving structurally the same scheduling problem — and making <b>opposite</b> choices about how much the learned policy is allowed to decide. Plus the untracked prototype sitting between them.</p>
+    <div class="metabar">
+      <span><strong>Source:</strong> <code>Chandra MS Thesis - Slides.pptx</code> — 37 slides, MS thesis defence</span>
+      <span><strong>Author:</strong> Subrahmanya Chandra Bhamidipati</span>
+      <span>Advisor: Dr. Prasad Calyam</span>
+      <span><strong>Compared against:</strong> HERMES as read from source at <code>main</code> @ <code>35e2eeb</code>, and *HERMES: A</span>
+      <span>Layered Coordination Framework for Federated Learning with Drones as Data Mules*</span>
+      <span>(ACM/IEEE SEC 2026 submission)</span>
+      <span><strong>Status:</strong> Analysis only. No project code or thesis material has been modified.</span>
+      <span><strong>See also:</strong> the HERMES <a href="../architecture%20documents/System_Architecture_Overview.html#2-problem-statement">problem statement</a>,</span>
+      <span><a href="../architecture%20documents/System_Architecture_Overview.html#3-solution-statement">solution statement</a>,</span>
+      <span>and <a href="../architecture%20documents/System_Architecture_Overview.html#4-problem--solution-traceability">traceability matrix</a></span>
+    </div>
+  </header>
+
+  <div class="body-grid">
+    <nav class="toc" aria-label="Contents">
+      <p class="toc-h">Contents</p>
+      <ol>
+        <li><a href="#1-why-these-two-are-worth-comparing">Why these two are worth comparing</a></li>
+        <li><a href="#2-breakdown-of-the-deck">Breakdown of the deck</a><ol><li><a href="#21-problem-and-framing-slides-110">2.1 Problem and framing (slides 1–10)</a></li><li><a href="#22-the-ceda-framework-slides-1220">2.2 The CEDA framework (slides 12–20)</a></li><li><a href="#23-evaluation-slides-2233">2.3 Evaluation (slides 22–33)</a></li></ol></li>
+        <li><a href="#3-the-central-architectural-difference">The central architectural difference</a></li>
+        <li><a href="#4-side-by-side">Side-by-side</a></li>
+        <li><a href="#5-the-transferable-result">The transferable result</a></li>
+        <li><a href="#6-what-else-hermes-could-take">What else HERMES could take</a></li>
+        <li><a href="#7-what-ceda-could-take-from-hermes">What CEDA could take from HERMES</a></li>
+        <li><a href="#8-where-both-are-exposed">Where both are exposed</a></li>
+        <li><a href="#9-honest-limits-of-this-comparison">Honest limits of this comparison</a></li>
+        <li><a href="#10-recommended-follow-ups">Recommended follow-ups</a></li>
+      </ol>
+    </nav>
+
+    <main>
+      <section id="1-why-these-two-are-worth-comparing">
+        <div class="sec-eyebrow">§&nbsp;01 · Why these two are worth comparing</div>
+        <h2>Why these two are worth comparing</h2>
+<p>They come from the same lab, share an advisor, and both list Bhamidipati and Kostage on
+their author lines. More importantly they are <strong>structurally the same problem wearing
+different clothes</strong>: a battery-limited aerial vehicle must visit spatially distributed
+endpoints over a time-varying wireless channel, serve deadline-bound tasks of unequal
+importance, and decide <em>where to go next</em> under partial information.</p>
+<p>CEDA calls those endpoints patients and the tasks medical deliveries. HERMES calls them
+edge devices and federated-learning model exchanges. The scheduling core is close enough
+that the design choices transfer directly — and the two projects made <strong>opposite</strong> ones.</p>
+<p>A third artefact makes the comparison sharper. <code>hermes_rl/</code> — an untracked, un-ignored
+nested git repository sitting inside the HiFINS working tree (finding
+<a href="../Codebase%20Review/00_Critical_Problem_Areas.html#g-01">G-01</a>) — is a 2,251-LOC
+single-drone data-relay RL prototype. Its problem statement is almost exactly CEDA's
+minus triage, and its architecture sits precisely between CEDA's and HERMES's. It is the
+missing middle term.</p>
+<hr />
+      </section>
+      <section id="2-breakdown-of-the-deck">
+        <div class="sec-eyebrow">§&nbsp;02 · Breakdown of the deck</div>
+        <h2>Breakdown of the deck</h2>
+<h3 id="21-problem-and-framing-slides-110">2.1 Problem and framing (slides 1–10)</h3>
+<p>Multi-drone medical supply delivery during disaster response. The argument is that three
+layers are <strong>coupled and cannot be optimised in isolation</strong>:</p>
+<div class="tablewrap"><table class="wide">
+<thead>
+<tr>
+<th>Layer</th>
+<th>What varies</th>
+<th>Failure if ignored</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Physical</strong></td>
+<td>wind, obstacles, battery</td>
+<td>drone expires before delivery</td>
+</tr>
+<tr>
+<td><strong>Network</strong></td>
+<td>intermittent connectivity, random command failure</td>
+<td>shortest path silently drops commands in a low-signal zone</td>
+</tr>
+<tr>
+<td><strong>Application</strong></td>
+<td>triage priority, deadlines, fairness</td>
+<td>serving the highest-priority patients first depletes drones before the rest are reached</td>
+</tr>
+</tbody>
+</table></div>
+<p>Three research gaps are claimed: no framework jointly optimises across all three; purely
+deadline-driven scheduling (EDF) misallocates while purely weight-greedy scheduling
+starves low-priority patients; and drones observe only discrete triage weights, not the
+underlying survival dynamics.</p>
+<p>Three research questions follow, with explicit targets: <strong>completion rate &gt; 85 %</strong>,
+<strong>weighted triage efficiency η ≥ 0.80</strong>, clinical priority ordering preserved with
+near-zero W1/W2 mortality, and policy transfer validated on PX4 SITL.</p>
+<p>The related-work table positions CEDA against four systems, including the lab's own
+single-drone predecessor (Calyam 2026), and claims novelty in CTDE multi-agent +
+triage-weighted scheduling + per-patient survival dynamics + SITL validation.</p>
+<h3 id="22-the-ceda-framework-slides-1220">2.2 The CEDA framework (slides 12–20)</h3>
+<p><strong>Paradigm.</strong> CTDE — Centralised Training with Decentralised Execution. Both agents
+share a replay buffer with full joint-state visibility during training; at execution each
+drone acts on its local observation only, with <strong>no inter-agent communication</strong>. The same
+Q-network is queried twice per step with swapped observation ordering.</p>
+<p><strong>Observation.</strong> 140 dimensions per agent, 280 joint:</p>
+<ul>
+<li>9 agent features — normalised position, battery, landed flag, relative position of the
+  other agent, direction to landing zone</li>
+<li>7 × M = 56 patient features — position, unit direction, normalised countdown
+  <code>t_rem / T_max</code>, delivery flag, normalised triage weight <code>w_p / w_max</code></li>
+<li>3 × 5 × 5 = 75 environmental features — local obstacle, wind, and low-signal occupancy</li>
+</ul>
+<p>Inactive patient slots are zero vectors, giving a fixed-length encoding regardless of
+active patient count.</p>
+<p><strong>Actions.</strong> Six discrete: <code>{UP, DOWN, LEFT, RIGHT, LAND, HOVER}</code>. <code>LAND</code> is only
+effective at the designated landing zone. Wind and low-signal zones cause stochastic
+action failure with elevated battery cost, so risk-aware avoidance must be learned
+implicitly through reward.</p>
+<p><strong>Reward — "Priority-Preserving Fair Scheduling."</strong> Rather than one explicit fairness
+constraint, six interacting components:</p>
+<ol>
+<li>Uniform unattended penalty <code>−P_death</code> per expired patient, <strong>weight-agnostic</strong></li>
+<li>Timer-scaled delivery reward <code>R_goal · (t_rem/T_max) · w_i</code></li>
+<li>Potential-based shaping on Manhattan distance to nearest undelivered patient</li>
+<li>Spatial separation penalty <code>−C</code> when agents are within <code>r_close = 4</code></li>
+<li>Dynamic patient spawning every 75 steps, to defeat static greedy routing</li>
+<li>Battery constraints — low-battery and depletion penalties</li>
+</ol>
+<p>Fairness is measured, not enforced: <code>η = Σ_{i∈S} w_i / Σ_{i∈ζ} w_i</code>.</p>
+<h3 id="23-evaluation-slides-2233">2.3 Evaluation (slides 22–33)</h3>
+<p><strong>Setup.</strong> Two drones, 50 × 50 grid, 200 static obstacles, wind and low-signal zones
+refreshed every 30 steps, up to M = 8 patients spawning every 75 steps, <code>T_max = 250</code>,
+weights <code>W = {1, 2, 3}</code>. Trained 12,000 episodes × 800 steps on an RTX 3090.</p>
+<p><strong>Convergence.</strong> Landing rate above 90 % by episode 2,000; deliveries stabilise at 6–7
+per episode; steps per episode fall 800 → 450–500 by episode 6,000; battery remaining
+rises from ~20 to 52–58 symmetrically across both agents.</p>
+<p><strong>Fairness.</strong> Final 1,000 episodes:</p>
+<div class="tablewrap"><table class="wide">
+<thead>
+<tr>
+<th>Class</th>
+<th>Delivered/ep</th>
+<th>Unserved/ep</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>W1 Stable</td>
+<td>2.61</td>
+<td><strong>0.00</strong></td>
+</tr>
+<tr>
+<td>W2 Urgent</td>
+<td>1.10</td>
+<td><strong>0.02</strong></td>
+</tr>
+<tr>
+<td>W3 Critical</td>
+<td>3.31</td>
+<td>0.96</td>
+</tr>
+<tr>
+<td><strong>Total</strong></td>
+<td><strong>7.02 / 8 (87.7 %)</strong></td>
+<td></td>
+</tr>
+</tbody>
+</table></div>
+<p>Kruskal–Wallis returns p &gt; 0.05 for W1 vs W2 — statistically equivalent treatment of the
+two lower-priority classes. The W3 residual is attributed to steep logistic decay rather
+than policy neglect.</p>
+<p><strong>Baselines.</strong> Three, of increasing sophistication, across six scenarios:</p>
+<div class="tablewrap"><table class="wide">
+<thead>
+<tr>
+<th>Metric</th>
+<th>CEDA</th>
+<th>Smart EDF</th>
+<th>Smart NNPW</th>
+<th>Naive NNPW</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Triage efficiency η</td>
+<td><strong>0.74–0.81</strong></td>
+<td>0.47–0.54</td>
+<td>0.47–0.57</td>
+<td>0.12–0.15</td>
+</tr>
+<tr>
+<td>Patients delivered/ep</td>
+<td><strong>6.27–6.59</strong></td>
+<td>4.0–5.0</td>
+<td>4.0–5.0</td>
+<td>1.3–1.6</td>
+</tr>
+<tr>
+<td>Landing rate</td>
+<td><strong>50–64 %</strong></td>
+<td>—</td>
+<td>—</td>
+<td>~0 %</td>
+</tr>
+<tr>
+<td>W3 unserved/ep</td>
+<td><strong>1.11–1.56</strong></td>
+<td>2.0–4.5</td>
+<td>2.0–4.5</td>
+<td>6.3–6.6</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>Cross-layer ablation.</strong> Six conditions, one layer removed at a time — the single most
+transferable result in the deck, discussed in §5.</p>
+<p><strong>3 × 3 stress interaction.</strong> Network disruption (<code>p_fail ∈ {0, 0.3, 0.6}</code>) crossed with
+application difficulty (light/baseline/heavy decay). The dominant gradient is <strong>vertical</strong>
+— application stress drops η from 0.70–0.73 to 0.26–0.33 (&gt; 55 %) while network stress
+barely moves it. The claim: CEDA decouples network disruption from scheduling performance
+under all but the most extreme combinations.</p>
+<p><strong>PX4 SITL.</strong> Two X500 quadrotors, independent autopilot instances, coordinator at 4 Hz
+over an 800-step horizon. Nominal episode: 8/8 delivered, η = 1.00, both landed, minimum
+battery 19.5 %, zero collisions, mean trajectory tracking error 0.03 m (max 1.76 m)
+against a 2 m grid cell. Stress conditions (nominal, 35 % battery, high hazard, 3-step
+action delay) hold delivery rate at 0.75–0.94 and η at 0.70–0.87 with zero collisions.
+Two honest limitations are stated: repeated invalid landing attempts consume budget, and
+<strong>delayed control is the hardest condition</strong> — the primary robustness limit is stale
+actions, not environmental difficulty.</p>
+<hr />
+      </section>
+      <section id="3-the-central-architectural-difference">
+        <div class="sec-eyebrow">§&nbsp;03 · The central architectural difference</div>
+        <h2>The central architectural difference</h2>
+<p>Both systems decompose into three layers, and both use a DQN. What differs is <strong>how much
+of the decision the network is allowed to make</strong>.</p>
+<figure class="dgfig"><div class="dgscroll"><svg class="dg" viewBox="0 0 1018 466" role="img" aria-label="Three systems compared by how much authority is given to the learned policy. CEDA puts routing, assignment, navigation, hazard avoidance, energy and triage ordering inside one DQN with a 140-dimensional observation, with nothing deterministic outside it. hermes_rl splits the problem: a heuristic chooses the next waypoint while a DQN chooses base station and channel, cutting the action space from 45 to 9. HERMES runs four deterministic scheduler stages and gives its DDQN only the ordering within a single bucket, and only when at least two candidates remain." xmlns="http://www.w3.org/2000/svg"><defs><marker id="d7-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" class="mk"/></marker><marker id="d7-bad" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" class="mk-bad"/></marker><marker id="d7-dead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" class="mk-dead"/></marker><marker id="d7-soft" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" class="mk-soft"/></marker></defs><rect x="22" y="54" width="306" height="348" rx="10" class="band bad-band"/><text x="34" y="71" text-anchor="start" class="t-hd"></text><text x="175.0" y="80" text-anchor="middle">CEDA</text><text x="175.0" y="94" text-anchor="middle" class="t-lbl">monolithic CTDE DQN</text><rect x="356" y="54" width="306" height="348" rx="10" class="band band"/><text x="368" y="71" text-anchor="start" class="t-hd"></text><text x="509.0" y="80" text-anchor="middle">hermes_rl</text><text x="509.0" y="94" text-anchor="middle" class="t-lbl">hybrid heuristic + DQN</text><rect x="690" y="54" width="306" height="348" rx="10" class="band ok-band"/><text x="702" y="71" text-anchor="start" class="t-hd"></text><text x="843.0" y="80" text-anchor="middle">HERMES</text><text x="843.0" y="94" text-anchor="middle" class="t-lbl">gated stages + tie-break DQN</text><text x="175.0" y="122" text-anchor="middle" class="t-hd">LEARNED</text><rect x="38" y="132" width="274" height="140" rx="7" class="bx hl"/><text x="175.0" y="164.0" text-anchor="middle">one DQN · 140-dim obs</text><text x="175.0" y="178.0" text-anchor="middle" class="t-sm">routing to patients</text><text x="175.0" y="192.0" text-anchor="middle" class="t-sm">task assignment</text><text x="175.0" y="206.0" text-anchor="middle" class="t-sm">navigation + collision</text><text x="175.0" y="220.0" text-anchor="middle" class="t-sm">hazard avoidance</text><text x="175.0" y="234.0" text-anchor="middle" class="t-sm">energy management</text><text x="175.0" y="248.0" text-anchor="middle" class="t-sm">triage ordering</text><text x="175.0" y="300" text-anchor="middle" class="t-hd">DETERMINISTIC</text><rect x="38" y="310" width="274" height="30" rx="7" class="bx"/><text x="175.0" y="329.0" text-anchor="middle" class="t-sm">— nothing —</text><text x="175.0" y="366.0" text-anchor="middle" class="t-lbl">six reward terms carry every</text><text x="175.0" y="377.5" text-anchor="middle" class="t-lbl">constraint simultaneously</text><text x="509.0" y="122" text-anchor="middle" class="t-hd">LEARNED</text><rect x="372" y="132" width="274" height="66" rx="7" class="bx hl"/><text x="509.0" y="155.0" text-anchor="middle">DQN · 9 actions</text><text x="509.0" y="169.0" text-anchor="middle" class="t-sm">which base station</text><text x="509.0" y="183.0" text-anchor="middle" class="t-sm">which channel</text><text x="509.0" y="226" text-anchor="middle" class="t-hd">DETERMINISTIC</text><rect x="372" y="236" width="274" height="66" rx="7" class="bx"/><text x="509.0" y="259.0" text-anchor="middle">heuristic navigator</text><text x="509.0" y="273.0" text-anchor="middle" class="t-sm">which waypoint next</text><text x="509.0" y="287.0" text-anchor="middle" class="t-sm">collect / transit rules</text><text x="509.0" y="334.0" text-anchor="middle" class="t-lbl">action space cut 45 to 9;</text><text x="509.0" y="345.5" text-anchor="middle" class="t-lbl">replay seeded with expert</text><text x="509.0" y="357.0" text-anchor="middle" class="t-lbl">trajectories from episode 1</text><text x="843.0" y="122" text-anchor="middle" class="t-hd">LEARNED</text><rect x="706" y="132" width="274" height="66" rx="7" class="bx hl"/><text x="843.0" y="155.0" text-anchor="middle">DDQN rank · 11 features</text><text x="843.0" y="169.0" text-anchor="middle" class="t-sm">order within ONE bucket</text><text x="843.0" y="183.0" text-anchor="middle" class="t-sm">only when 2+ candidates</text><text x="843.0" y="226" text-anchor="middle" class="t-hd">DETERMINISTIC</text><rect x="706" y="236" width="274" height="66" rx="7" class="bx"/><text x="843.0" y="259.0" text-anchor="middle">S1 to S2A/S2B to S3 to S3a</text><text x="843.0" y="273.0" text-anchor="middle" class="t-sm">eligibility · readiness</text><text x="843.0" y="287.0" text-anchor="middle" class="t-sm">deadline · bucket · cluster</text><text x="843.0" y="334.0" text-anchor="middle" class="t-lbl">a scope guard raises if the</text><text x="843.0" y="345.5" text-anchor="middle" class="t-lbl">selector ever sees a candidate</text><text x="843.0" y="357.0" text-anchor="middle" class="t-lbl">the gates did not admit</text><polyline points="62,436 956,436" class="ln" marker-end="url(#d7-a)"/><text x="62" y="427" text-anchor="start" class="t-lbl">policy decides everything</text><text x="956" y="427" text-anchor="end" class="t-lbl">policy decides one ranking</text><text x="509.0" y="455" text-anchor="middle" class="t-lbl">less to learn · more to verify · easier to explain a decision</text></svg></div><figcaption><b>The same lab, three answers to one question.</b> All three schedule a UAV against time-varying channels and deadline-bound tasks. They differ almost entirely in how much of the decision is delegated to the network — which is the axis worth arguing about, because it decides what can be verified, ablated, and explained after the fact.</figcaption></figure>
+<p>CEDA's position is that the coupling <em>is</em> the problem, so the policy must see everything
+at once — "the policy internalises hazard structure during training". HERMES's position
+is the opposite and is written into its design as principle 12: deterministic stages
+decide <em>who is eligible</em>, and the learned selector only ranks contact positions the gates
+have already admitted. A <code>SelectorScopeViolation</code> is raised if a gated-out candidate ever
+reaches the selector, and the selector is skipped entirely when a bucket has fewer than
+two candidates.</p>
+<p><code>hermes_rl/</code> is the explicit middle: its trainer docstring says <em>"Heuristic handles
+navigation… DQN handles the complex part: which BS + channel… This reduces the RL action
+space from 45 → 9 and fills the replay buffer with high-quality heuristic trajectories
+from episode 1."</em></p>
+<p>Neither position is simply right. The trade is:</p>
+<div class="tablewrap"><table class="wide">
+<thead>
+<tr>
+<th></th>
+<th>Monolithic (CEDA)</th>
+<th>Gated (HERMES)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Can exploit coupling the designer didn't anticipate</td>
+<td><strong>yes</strong></td>
+<td>no — gates fix the structure</td>
+</tr>
+<tr>
+<td>Sample efficiency</td>
+<td>poor — 12,000 × 800 steps</td>
+<td>high — 11 features, ~200 ops per bucket</td>
+</tr>
+<tr>
+<td>Explaining one decision post-hoc</td>
+<td>hard</td>
+<td>easy — the gate that admitted it is a pure function</td>
+</tr>
+<tr>
+<td>Ablatable by information</td>
+<td><strong>yes, and CEDA did it</strong></td>
+<td>in principle; never run</td>
+</tr>
+<tr>
+<td>Fails safe under distribution shift</td>
+<td>unknown</td>
+<td>gates still hold; only ordering degrades</td>
+</tr>
+<tr>
+<td>Certification / audit story</td>
+<td>weak</td>
+<td>strong</td>
+</tr>
+</tbody>
+</table></div>
+<p>For a disaster-response research prototype, CEDA's choice is defensible and produces the
+headline result. For an intrusion-detection substrate meant to run unattended on a mule
+NUC, HERMES's is the better default — and its own numpy DDQN, at 11 features and 16
+hidden units, only makes sense <em>because</em> the gates carry the constraints.</p>
+<hr />
+      </section>
+      <section id="4-side-by-side">
+        <div class="sec-eyebrow">§&nbsp;04 · Side-by-side</div>
+        <h2>Side-by-side</h2>
+<div class="tablewrap"><table class="wide">
+<thead>
+<tr>
+<th></th>
+<th><strong>CEDA</strong></th>
+<th><strong>HERMES</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Domain</td>
+<td>medical supply delivery, disaster response</td>
+<td>hierarchical FL for network intrusion detection</td>
+</tr>
+<tr>
+<td>Agents</td>
+<td>2 drones, homogeneous</td>
+<td>1 mule per mission; N mules per cluster, coordinated by the edge server</td>
+</tr>
+<tr>
+<td>Tiers</td>
+<td>drones ↔ patients (flat)</td>
+<td>4 — device, mule NUC, edge server, cloud</td>
+</tr>
+<tr>
+<td>Learning</td>
+<td>CTDE DQN, joint replay, local execution</td>
+<td>two independent DDQNs: L1 channel, L2 intra-bucket selector</td>
+</tr>
+<tr>
+<td>Policy scope</td>
+<td>routing + assignment + navigation + energy + triage</td>
+<td>ordering within one bucket, ≥ 2 candidates</td>
+</tr>
+<tr>
+<td>Observation</td>
+<td>140 dims/agent (280 joint)</td>
+<td>11 selector features; 8-dim L1 state</td>
+</tr>
+<tr>
+<td>Action space</td>
+<td>6 discrete moves</td>
+<td>argmax over candidate contacts</td>
+</tr>
+<tr>
+<td>Framework</td>
+<td>PyTorch (RTX 3090)</td>
+<td><strong>numpy, no ML framework in <code>hermes/</code></strong></td>
+</tr>
+<tr>
+<td>Coordination</td>
+<td>emergent via reward (spatial separation penalty)</td>
+<td>explicit — disjoint <code>MissionSlice</code> per mule from the registry</td>
+</tr>
+<tr>
+<td>Task priority</td>
+<td>3 triage weights + logistic survival decay</td>
+<td>3 buckets (NEW / SCHEDULED / BEACON) + adaptive deadline window</td>
+</tr>
+<tr>
+<td>Fairness</td>
+<td>6 reward terms + η + Kruskal–Wallis test</td>
+<td>Jain's index, participation entropy, <code>completion_fairness</code>; deadline widening on miss — <strong>measured, never enforced</strong></td>
+</tr>
+<tr>
+<td>Aggregation</td>
+<td>none — no learning is federated</td>
+<td>two-pass partial + cross-mule FedAvg, exact by construction</td>
+</tr>
+<tr>
+<td>Realism ladder</td>
+<td>grid sim → <strong>PX4 SITL, real autopilot</strong></td>
+<td>loopback → <strong>real processes + TCP sockets</strong> → AERPAW pending</td>
+</tr>
+<tr>
+<td>Statistics</td>
+<td>Kruskal–Wallis; ranges across 6 scenarios</td>
+<td>paired Wilcoxon + Cliff's δ + bootstrap CI + crossover R*</td>
+</tr>
+<tr>
+<td>Reproducibility</td>
+<td>12,000-episode training run</td>
+<td>paired seeds via SHA-256, checkpoint-resume CSV harness</td>
+</tr>
+<tr>
+<td>Ablation</td>
+<td><strong>6-condition information ablation</strong></td>
+<td>4-arm policy ablation (A1–A4)</td>
+</tr>
+<tr>
+<td>Test suite</td>
+<td>not discussed</td>
+<td>512 passing unit + integration tests</td>
+</tr>
+</tbody>
+</table></div>
+<p>The realism claims point in <strong>different directions and are not substitutes</strong>. CEDA is
+further along sim-to-real: a real autopilot, real controller dynamics, measured tracking
+error. HERMES is further along distributed-systems realism: real OS processes, real
+sockets, real framed wire protocol, real FedAvg arithmetic. Neither has flown hardware;
+neither should claim the other's ground.</p>
+<hr />
+      </section>
+      <section id="5-the-transferable-result">
+        <div class="sec-eyebrow">§&nbsp;05 · The transferable result</div>
+        <h2>The transferable result</h2>
+<p>CEDA's cross-layer <strong>information</strong> ablation is the finding HERMES should act on.</p>
+<figure class="dgfig"><div class="dgscroll"><svg class="dg" viewBox="0 0 1000 302" role="img" aria-label="Bar chart of CEDA&#x27;s cross-layer information ablation, measured as W3 critical patients left unserved per episode. Full CEDA scores 1.40. Removing the network layer gives 1.50 and removing the wind or physical layer 1.55, both close to baseline. Removing patient timers gives 3.10 and removing triage weights 3.75. Removing battery state is worst at 4.10. Each row is annotated with its nearest HERMES equivalent." xmlns="http://www.w3.org/2000/svg"><defs><marker id="d8-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" class="mk"/></marker><marker id="d8-bad" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" class="mk-bad"/></marker><marker id="d8-dead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" class="mk-dead"/></marker><marker id="d8-soft" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" class="mk-soft"/></marker></defs><text x="24" y="26" text-anchor="start" class="t-hd">CROSS-LAYER INFORMATION ABLATION</text><text x="24" y="44" text-anchor="start" class="t-lbl">W3 Critical patients unserved per episode — lower is better</text><text x="580" y="44" text-anchor="start" class="t-hd">NEAREST HERMES ANALOGUE</text><text x="24" y="77" text-anchor="start" class="t-sm">Full CEDA</text><rect x="236" y="65" width="87" height="18" rx="4" class="bx hl"/><text x="330.8" y="78" text-anchor="start" class="t-sm">1.40</text><text x="580" y="78" text-anchor="start" class="t-lbl">baseline</text><text x="24" y="107" text-anchor="start" class="t-sm">minus network layer</text><rect x="236" y="95" width="93" height="18" rx="4" class="bx"/><text x="337.0" y="108" text-anchor="start" class="t-sm">1.50</text><text x="580" y="108" text-anchor="start" class="t-lbl">HERMES L1 ChannelDDQN</text><text x="24" y="137" text-anchor="start" class="t-sm">minus wind / physical</text><rect x="236" y="125" width="96" height="18" rx="4" class="bx"/><text x="340.1" y="138" text-anchor="start" class="t-sm">1.55</text><text x="580" y="138" text-anchor="start" class="t-lbl">HERMES S3a + RF range</text><text x="24" y="167" text-anchor="start" class="t-sm">minus patient timers</text><rect x="236" y="155" width="192" height="18" rx="4" class="bx warnbx"/><text x="436.20000000000005" y="168" text-anchor="start" class="t-sm">3.10</text><text x="580" y="168" text-anchor="start" class="t-lbl">HERMES S3 deadline math</text><text x="24" y="197" text-anchor="start" class="t-sm">minus triage weights</text><rect x="236" y="185" width="232" height="18" rx="4" class="bx warnbx"/><text x="476.5" y="198" text-anchor="start" class="t-sm">3.75</text><text x="580" y="198" text-anchor="start" class="t-lbl">HERMES S3 bucket priority</text><text x="24" y="227" text-anchor="start" class="t-sm">minus battery state</text><rect x="236" y="215" width="254" height="18" rx="4" class="bx badbx"/><text x="498.2" y="228" text-anchor="start" class="t-sm">4.10</text><text x="580" y="228" text-anchor="start" class="t-lbl">HERMES mule_energy feature</text><line x1="236" y1="244" x2="508.8" y2="244" class="ln"/><line x1="236.0" y1="244" x2="236.0" y2="249" class="ln"/><text x="236.0" y="261" text-anchor="middle" class="t-lbl">0</text><line x1="298.0" y1="244" x2="298.0" y2="249" class="ln"/><text x="298.0" y="261" text-anchor="middle" class="t-lbl">1</text><line x1="360.0" y1="244" x2="360.0" y2="249" class="ln"/><text x="360.0" y="261" text-anchor="middle" class="t-lbl">2</text><line x1="422.0" y1="244" x2="422.0" y2="249" class="ln"/><text x="422.0" y="261" text-anchor="middle" class="t-lbl">3</text><line x1="484.0" y1="244" x2="484.0" y2="249" class="ln"/><text x="484.0" y="261" text-anchor="middle" class="t-lbl">4</text><text x="24" y="288.0" text-anchor="start" class="t-lbl">Removing the network layer costs about 10 percent triage efficiency. Removing battery state nearly triples critical-patient mortality.</text></svg></div><figcaption><b>The layer everyone builds first matters least.</b> CEDA's ablation ranks the network layer as the <i>least</i> load-bearing of the three and energy state as the most. HERMES has never run the equivalent experiment — its A1–A4 ablation varies the <i>policy</i>, not the <i>information available to it</i>, so it cannot produce this ranking.</figcaption></figure>
+<p>Three things follow for HERMES.</p>
+<p><strong>5.1 Its own ablation answers a different question.</strong> Experiment 3's A1–A4 arms vary the
+<em>policy</em> — centralized FL, round-robin mule, deadline-feasibility mule, HERMES selector.
+That measures whether the scheduler helps. It cannot say which <em>input</em> the scheduler
+actually depends on, because every arm sees the same state. CEDA's design — hold the
+policy fixed, delete one information channel, re-measure — is the cheaper and more
+diagnostic experiment, and HERMES is well positioned to run it: <code>SelectorEnv</code> and
+<code>DeviceSchedulerState</code> are explicit, injected structures, so zeroing <code>mule_energy</code>,
+<code>rf_prior_snr_db</code>, <code>delivery_priority</code>, or the deadline fields is a per-field masking
+change in one place, with no retraining required for the deterministic arms.</p>
+<p><strong>5.2 The empirical ranking is uncomfortable for both projects.</strong> CEDA finds the network
+layer contributes least (~10 % η) and energy state most (W3 unserved 1.4 → 4.1). HERMES's
+L1 is the thinnest of its three layers, its RF prior was a hardcoded <code>20.0</code> constant until
+EX-4.3 wired it, and <code>mule_energy</code> is a selector feature that no experiment has isolated.
+If the same ranking holds, the effort spent on L1 buys less than an equivalent effort on
+energy-aware scheduling would — worth knowing before the next revision cycle.</p>
+<p><strong>5.3 The 3 × 3 stress design is directly reusable.</strong> Experiment 3 already sweeps β ×
+rrf × deadline_het × jittery. Presenting a 3 × 3 slice as a heatmap and reading the
+dominant gradient is a cleaner claim than a set of marginal box plots, and it answers the
+integration question — <em>does the advantage survive when two layers degrade together?</em> —
+that Experiment 4 exists to answer.</p>
+<hr />
+      </section>
+      <section id="6-what-else-hermes-could-take">
+        <div class="sec-eyebrow">§&nbsp;06 · What else HERMES could take</div>
+        <h2>What else HERMES could take</h2>
+<p><strong>Fairness <em>enforcement</em>, not measurement.</strong> Both systems measure fairness, and HERMES's
+instrumentation is if anything the more careful of the two:
+<a href="../../experiments/exp3/metrics.py"><code>experiments/exp3/metrics.py</code></a> implements Jain's index
+<code>J = (Σx)² / (N · Σx²)</code> over per-device service counts, Shannon participation entropy, and
+a separate <code>completion_fairness</code> on per-device <em>completion</em> counts — the last specifically
+because visit-based Jain is trivially 1.0 under the centralized arm's universal sampling
+and therefore not contestable across arms. That distinction is sharper than anything in
+the CEDA deck.</p>
+<p>The asymmetry is in what happens next. CEDA's six reward terms <em>act</em> on fairness during
+training; HERMES's metrics are computed post-hoc in the analysis layer and feed nothing
+back into the scheduler. Bucket priority remains strictly ordered, so a persistently
+low-priority device can still never be visited — the metric will faithfully report the
+starvation it cannot prevent. The gap is a control loop, not an observation.</p>
+<p><strong>A weight-agnostic floor.</strong> CEDA's most effective fairness device is deliberately the
+<em>simplest</em>: reward term 1 penalises an expired patient by <code>−P_death</code> <strong>regardless of
+triage weight</strong>, which is what produces the near-zero W1/W2 mortality. HERMES's bucket
+priority is strictly ordered with no analogous floor, so a permanently-low-priority
+device can in principle never be visited. A weight-agnostic miss penalty in the deadline
+fold is the equivalent mechanism.</p>
+<p><strong>Explicit deterioration dynamics.</strong> CEDA's per-patient logistic survival curve stops the
+policy from exploiting a static priority. HERMES's <code>deadline_fulfilment_s</code> moves ±5/10 s
+per outcome — a linear analogue. Whether device utility should decay non-linearly with
+staleness is at least worth stating as a modelling decision rather than leaving implicit.</p>
+<p><strong>Naming the DDQN honestly.</strong> CEDA's deck is clear that its network is a DQN. HERMES's
+selector is called a DDQN and <em>is</em> one — but the double-Q decoupling is baked in at
+collection time (<code>selector_train.py:129,446</code> pick the bootstrap action with the online
+net and freeze it into the <code>Transition</code>), so the stored action is stale by up to the
+replay-buffer age. Textbook DDQN re-selects at update time. This is a methodology footnote
+worth writing down before a reviewer asks.</p>
+<hr />
+      </section>
+      <section id="7-what-ceda-could-take-from-hermes">
+        <div class="sec-eyebrow">§&nbsp;07 · What CEDA could take from HERMES</div>
+        <h2>What CEDA could take from HERMES</h2>
+<p>Offered in the same spirit; all three are cheap.</p>
+<p><strong>Paired-seed experiment harness.</strong> CEDA reports ranges across six scenarios. HERMES's
+<code>experiments/runner/</code> derives each trial seed as <code>SHA-256(base_seed | cell_id |
+trial_index)</code> <strong>excluding the arm</strong>, so every arm sees an identical environment — which
+is what makes a paired Wilcoxon test valid. CEDA's baseline comparison would be
+substantially stronger with paired seeds and Cliff's δ rather than reported ranges, and
+the harness is domain-agnostic and already written.</p>
+<p><strong>Checkpoint-and-resume trial logging.</strong> <code>CSVTrialLog</code> keys on <code>(cell_id, arm,
+trial_index)</code> and skips completed rows, so a crashed 12,000-episode run resumes exactly
+where it stopped. For a multi-day RTX 3090 sweep this is a direct time saving.</p>
+<p><strong>Structured event logging over scraped stdout.</strong> HERMES emits one versioned JSONL
+record per state transition per process, which is what lets an analysis script compute
+per-round metrics from the actual run rather than from re-derived aggregates.</p>
+<hr />
+      </section>
+      <section id="8-where-both-are-exposed">
+        <div class="sec-eyebrow">§&nbsp;08 · Where both are exposed</div>
+        <h2>Where both are exposed</h2>
+<p>Recorded plainly, because both projects will face these questions from the same
+reviewers.</p>
+<div class="tablewrap"><table class="wide">
+<thead>
+<tr>
+<th>Shared limitation</th>
+<th>CEDA</th>
+<th>HERMES</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Small N, claimed as future work</td>
+<td>2 drones; N &gt; 2 listed under future work</td>
+<td>2 mules × 5 devices validated</td>
+</tr>
+<tr>
+<td>Hand-rolled DQN, no framework baseline</td>
+<td>PyTorch DQN, no PPO/QMIX comparison</td>
+<td>numpy DDQN, no framework comparison</td>
+</tr>
+<tr>
+<td>Headline numbers are simulation</td>
+<td>SITL is a real autopilot, still simulated</td>
+<td>multi-process is real IPC, still one laptop</td>
+</tr>
+<tr>
+<td>A stubbed component in the loop</td>
+<td>discrete grid abstraction over continuous flight</td>
+<td><code>StubGeneratorHost</code> emits zero tensors — the GAN never runs</td>
+</tr>
+<tr>
+<td>Single evaluator</td>
+<td>one thesis codebase</td>
+<td>one review pass</td>
+</tr>
+</tbody>
+</table></div>
+<p>One asymmetry is worth stating: CEDA's stub is an <strong>abstraction</strong> (a 2 m grid cell,
+validated at 0.03 m tracking error). HERMES's is a <strong>gap</strong> — the synthetic-augmentation
+path is inert on both ends, and <code>experiments/exp4/model_task.py:150-152</code> says so
+outright. CEDA's simplification was measured; HERMES's has not been.</p>
+<hr />
+      </section>
+      <section id="9-honest-limits-of-this-comparison">
+        <div class="sec-eyebrow">§&nbsp;09 · Honest limits of this comparison</div>
+        <h2>Honest limits of this comparison</h2>
+<ul>
+<li><strong>η is not comparable across the two.</strong> CEDA's η is weighted patient delivery; HERMES's
+  is a scheduling-efficiency ratio over a different denominator. Same symbol, different
+  quantity. No cross-system number in this document should be read as a benchmark.</li>
+<li><strong>The deck is a defence, not a paper.</strong> Figures were read from slide text and captions;
+  no underlying data, code, or thesis chapters were available. Any number here is as
+  reported on a slide.</li>
+<li><strong>Different objectives.</strong> CEDA optimises patient survival; HERMES optimises model
+  convergence per joule per byte. Architectural lessons transfer; results do not.</li>
+<li><strong><code>hermes_rl/</code> was read as source, not as a claim.</strong> It is untracked, undated, and has
+  no accompanying write-up. It is used here as evidence of a design stance, not as a
+  result.</li>
+</ul>
+<hr />
+      </section>
+      <section id="10-recommended-follow-ups">
+        <div class="sec-eyebrow">§&nbsp;10 · Recommended follow-ups</div>
+        <h2>Recommended follow-ups</h2>
+<div class="tablewrap"><table class="wide">
+<thead>
+<tr>
+<th>#</th>
+<th>Action</th>
+<th>Effort</th>
+<th>Why</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>Run a HERMES information ablation (mask <code>mule_energy</code>, <code>rf_prior_snr_db</code>, <code>delivery_priority</code>, deadline fields one at a time)</td>
+<td>~2 d</td>
+<td>Answers which layer actually carries the result; CEDA's is the strongest single finding in the deck</td>
+</tr>
+<tr>
+<td>2</td>
+<td>Close the fairness loop — feed the existing Jain / entropy signal back into bucket priority</td>
+<td>~2 d</td>
+<td>The metrics already exist and are well designed; nothing acts on them, so starvation is observable but not preventable</td>
+</tr>
+<tr>
+<td>3</td>
+<td>Add a weight-agnostic miss penalty to the deadline fold</td>
+<td>~0.5 d</td>
+<td>CEDA's cheapest and most effective fairness mechanism; closes the starvation hole</td>
+</tr>
+<tr>
+<td>4</td>
+<td>Present the Exp-3 β × jittery slice as a 3 × 3 heatmap</td>
+<td>~0.5 d</td>
+<td>Answers the integration question directly; reuses data already collected</td>
+</tr>
+<tr>
+<td>5</td>
+<td>Record the DDQN bootstrap-staleness footnote in the design docs</td>
+<td>~1 h</td>
+<td>Pre-empts a reviewer question that has a good answer</td>
+</tr>
+<tr>
+<td>6</td>
+<td>Offer <code>experiments/runner/</code> to the CEDA work</td>
+<td>—</td>
+<td>Paired seeds would materially strengthen its baseline comparison</td>
+</tr>
+<tr>
+<td>7</td>
+<td>Resolve <code>hermes_rl/</code>'s status — submodule, tracked, or removed</td>
+<td>~1 h</td>
+<td>Finding <a href="../Codebase%20Review/00_Critical_Problem_Areas.html#g-01">G-01</a>: an untracked nested repo is invisible to a fresh clone</td>
+</tr>
+</tbody>
+</table></div>
+<p>Items 1–4 are the ones that would change what the next paper can claim.</p>
+      </section>
+
+      <div class="foot">
+        <p class="mono">Generated from CEDA_vs_HERMES.md. File:line references are to
+        the repository as read on 2026-08-10 (main @ 35e2eeb); verify against current
+        source before acting. This document is a review artefact — no project code was
+        modified to produce it.</p>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script>
+  // TOC active-state only. No animation; reduced-motion respected via CSS.
+  // getElementById, not querySelector: several ids begin with a digit, which
+  // is legal HTML but an invalid CSS selector.
+  (function(){
+    var links = Array.prototype.slice.call(document.querySelectorAll('nav.toc a'));
+    var secs  = links.map(function(a){
+      return document.getElementById(a.getAttribute('href').slice(1));
+    });
+    if(!('IntersectionObserver' in window)) return;
+    var io = new IntersectionObserver(function(entries){
+      entries.forEach(function(e){
+        if(e.isIntersecting){
+          var i = secs.indexOf(e.target);
+          links.forEach(function(l){ l.style.background=''; l.style.color=''; });
+          if(i>-1){ var l=links[i]; l.style.background='var(--surface-2)'; l.style.color='var(--ink)'; }
+        }
+      });
+    },{rootMargin:'-10% 0px -80% 0px'});
+    secs.forEach(function(s){ if(s) io.observe(s); });
+  })();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,846 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HERMES — Findings and Refactoring Plan</title>
+<meta name="description" content="The reference standard for the rest of the repository. Its defects fall into three clean groups — and none of them needs a rewrite.">
+<style>
+  :root{
+    --bg:#f4f6f8; --surface:#ffffff; --surface-2:#eef1f4;
+    --ink:#141a20; --ink-2:#47525d; --ink-3:#6c7883;
+    --line:#dbe1e7; --line-2:#c8d0d8;
+    --accent:#0c7d8a; --accent-2:#0a5f6a; --accent-soft:#e0f0f2;
+    --ok:#2f8f56; --ok-bg:#e5f3ea; --ok-line:#a9d8bd;
+    --warn:#a8720c; --warn-bg:#f7efdb; --warn-line:#e3c483;
+    --gap:#bf3b4e; --gap-bg:#fbe5e8; --gap-line:#eeaeb7;
+    --font-display:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    --font-body:ui-serif,"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,Cambria,serif;
+    --font-mono:ui-monospace,"Cascadia Code","SF Mono","Segoe UI Mono",Menlo,Consolas,monospace;
+    --maxw:1200px; --prose:800px;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --bg:#0d1116; --surface:#141a21; --surface-2:#1a222b;
+      --ink:#e7ecf1; --ink-2:#a3afba; --ink-3:#74818d;
+      --line:#26303a; --line-2:#333f4b;
+      --accent:#2fc0d0; --accent-2:#5bd4e0; --accent-soft:#10333a;
+      --ok:#4cc47e; --ok-bg:#12301f; --ok-line:#245a3a;
+      --warn:#e0a63a; --warn-bg:#31260f; --warn-line:#5c4820;
+      --gap:#e56b7d; --gap-bg:#331a1f; --gap-line:#5e3038;
+    }
+  }
+  :root[data-theme="light"]{
+    --bg:#f4f6f8; --surface:#ffffff; --surface-2:#eef1f4;
+    --ink:#141a20; --ink-2:#47525d; --ink-3:#6c7883;
+    --line:#dbe1e7; --line-2:#c8d0d8;
+    --accent:#0c7d8a; --accent-2:#0a5f6a; --accent-soft:#e0f0f2;
+    --ok:#2f8f56; --ok-bg:#e5f3ea; --ok-line:#a9d8bd;
+    --warn:#a8720c; --warn-bg:#f7efdb; --warn-line:#e3c483;
+    --gap:#bf3b4e; --gap-bg:#fbe5e8; --gap-line:#eeaeb7;
+  }
+  :root[data-theme="dark"]{
+    --bg:#0d1116; --surface:#141a21; --surface-2:#1a222b;
+    --ink:#e7ecf1; --ink-2:#a3afba; --ink-3:#74818d;
+    --line:#26303a; --line-2:#333f4b;
+    --accent:#2fc0d0; --accent-2:#5bd4e0; --accent-soft:#10333a;
+    --ok:#4cc47e; --ok-bg:#12301f; --ok-line:#245a3a;
+    --warn:#e0a63a; --warn-bg:#31260f; --warn-line:#5c4820;
+    --gap:#e56b7d; --gap-bg:#331a1f; --gap-line:#5e3038;
+  }
+
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:var(--font-body); font-size:17px; line-height:1.62;
+    -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+  }
+  .shell{max-width:var(--maxw); margin:0 auto; padding:0 clamp(18px,4vw,40px)}
+
+  /* ---------- Masthead ---------- */
+  header.mast{padding:clamp(40px,7vw,84px) 0 34px; border-bottom:1px solid var(--line)}
+  .eyebrow{
+    font-family:var(--font-mono); font-size:12px; letter-spacing:.14em;
+    text-transform:uppercase; color:var(--accent); font-weight:600;
+    display:flex; gap:10px; flex-wrap:wrap; align-items:center;
+  }
+  .eyebrow .sep{color:var(--ink-3)}
+  h1.title{
+    font-family:var(--font-display); font-weight:760;
+    font-size:clamp(30px,5.4vw,52px); line-height:1.04; letter-spacing:-.022em;
+    margin:.42em 0 .28em; max-width:16ch; text-wrap:balance;
+  }
+  .deck{
+    font-size:clamp(17px,2.1vw,21px); color:var(--ink-2); max-width:60ch;
+    line-height:1.5; margin:0;
+  }
+  .deck b{color:var(--ink); font-weight:600}
+  .metabar{
+    margin-top:26px; display:flex; flex-wrap:wrap; gap:8px 20px;
+    font-family:var(--font-mono); font-size:12.5px; color:var(--ink-3);
+  }
+  .metabar b{color:var(--ink-2); font-weight:600}
+
+  /* ---------- Layout with TOC rail ---------- */
+  .body-grid{display:block}
+  @media(min-width:1040px){
+    .body-grid{display:grid; grid-template-columns:216px minmax(0,1fr); gap:48px; align-items:start}
+    nav.toc{position:sticky; top:24px; align-self:start}
+  }
+  nav.toc{padding:30px 0 0}
+  nav.toc .toc-h{
+    font-family:var(--font-mono); font-size:11px; letter-spacing:.14em;
+    text-transform:uppercase; color:var(--ink-3); margin:0 0 12px; font-weight:600;
+  }
+  nav.toc ol{list-style:none; margin:0; padding:0; counter-reset:toc}
+  nav.toc li{counter-increment:toc; margin:2px 0}
+  nav.toc a{
+    display:block; text-decoration:none; color:var(--ink-2);
+    font-family:var(--font-display); font-size:14px; line-height:1.35;
+    padding:6px 10px 6px 30px; border-radius:7px; position:relative;
+  }
+  nav.toc a::before{
+    content:counter(toc,decimal-leading-zero); position:absolute; left:8px;
+    font-family:var(--font-mono); font-size:11px; color:var(--accent);
+    top:8px; font-weight:600;
+  }
+  nav.toc a:hover{background:var(--surface-2); color:var(--ink)}
+  @media(max-width:1039px){ nav.toc{display:none} }
+
+  main{padding-top:8px; min-width:0}
+
+  /* ---------- Sections & prose ---------- */
+  section{padding:38px 0; border-bottom:1px solid var(--line); scroll-margin-top:20px}
+  section:last-of-type{border-bottom:0}
+  .sec-eyebrow{
+    font-family:var(--font-mono); font-size:12px; letter-spacing:.13em;
+    text-transform:uppercase; color:var(--accent); font-weight:600; margin-bottom:8px;
+  }
+  h2{
+    font-family:var(--font-display); font-weight:720; letter-spacing:-.016em;
+    font-size:clamp(22px,3.2vw,30px); line-height:1.14; margin:0 0 .55em;
+    max-width:24ch; text-wrap:balance;
+  }
+  h3{
+    font-family:var(--font-display); font-weight:660; letter-spacing:-.008em;
+    font-size:19px; line-height:1.25; margin:1.9em 0 .5em; color:var(--ink);
+  }
+  h4{
+    font-family:var(--font-mono); font-weight:600; font-size:13px; letter-spacing:.04em;
+    text-transform:uppercase; color:var(--ink-2); margin:1.5em 0 .5em;
+  }
+  p{max-width:var(--prose); margin:0 0 1.05em}
+  main ul,main ol{max-width:var(--prose); margin:0 0 1.1em; padding-left:1.25em}
+  main li{margin:.34em 0}
+  strong{font-weight:600; color:var(--ink)}
+  a.ref{color:var(--accent-2); text-decoration:none; border-bottom:1px solid transparent}
+  :root[data-theme="dark"] a.ref{color:var(--accent)}
+  @media(prefers-color-scheme:dark){a.ref{color:var(--accent)}}
+  a.ref:hover{border-bottom-color:currentColor}
+
+  code,.mono{font-family:var(--font-mono); font-size:.86em}
+  p code,li code,td code{
+    background:var(--surface-2); padding:.08em .38em; border-radius:5px;
+    font-size:.82em; color:var(--ink); border:1px solid var(--line);
+    white-space:nowrap;
+  }
+  .path{color:var(--ink-3); font-family:var(--font-mono); font-size:.8em; white-space:nowrap}
+
+  /* ---------- Callouts ---------- */
+  .callout{
+    border:1px solid var(--line); border-left-width:3px; border-radius:10px;
+    background:var(--surface); padding:18px 20px; margin:1.4em 0; max-width:var(--prose);
+  }
+  .callout .k{
+    font-family:var(--font-mono); font-size:11px; letter-spacing:.12em; text-transform:uppercase;
+    font-weight:600; margin-bottom:7px; display:block;
+  }
+  .callout p{margin:.2em 0}
+  .callout.accent{border-left-color:var(--accent); background:var(--accent-soft)}
+  .callout.accent .k{color:var(--accent-2)}
+  :root[data-theme="dark"] .callout.accent .k{color:var(--accent-2)}
+  @media(prefers-color-scheme:dark){.callout.accent .k{color:var(--accent-2)}}
+  .callout.warn{border-left-color:var(--warn); background:var(--warn-bg)}
+  .callout.warn .k{color:var(--warn)}
+  .callout.gap{border-left-color:var(--gap); background:var(--gap-bg)}
+  .callout.gap .k{color:var(--gap)}
+  .callout.accent{background:var(--accent-soft)}
+
+  /* ---------- Formula ---------- */
+  .formula{
+    font-family:var(--font-mono); font-size:14px; line-height:1.55;
+    background:var(--surface-2); border:1px solid var(--line);
+    border-radius:9px; padding:13px 16px; margin:1em 0; max-width:var(--prose);
+    overflow-x:auto; color:var(--ink);
+  }
+  .formula .lbl{color:var(--ink-3)}
+
+  /* ---------- Tables ---------- */
+  .tablewrap{overflow-x:auto; margin:1.2em 0 1.5em; border:1px solid var(--line);
+    border-radius:11px; background:var(--surface)}
+  table{border-collapse:collapse; width:100%; font-size:14px; min-width:640px}
+  table.wide{min-width:820px}
+  thead th{
+    font-family:var(--font-mono); font-weight:600; font-size:11.5px; letter-spacing:.03em;
+    text-transform:uppercase; text-align:left; color:var(--ink-2);
+    background:var(--surface-2); padding:11px 14px; border-bottom:1px solid var(--line-2);
+    position:sticky; top:0; vertical-align:bottom;
+  }
+  tbody td{padding:11px 14px; border-bottom:1px solid var(--line); vertical-align:top;
+    line-height:1.42; color:var(--ink-2)}
+  tbody tr:last-child td{border-bottom:0}
+  tbody td:first-child{color:var(--ink); font-weight:500}
+  tbody td .path,tbody td code{white-space:normal}
+  td .mname{font-family:var(--font-mono); font-size:12.5px; color:var(--ink); font-weight:600; display:block}
+  tbody tr:hover td{background:color-mix(in srgb,var(--accent-soft) 34%, transparent)}
+  .num{font-variant-numeric:tabular-nums}
+
+  /* ---------- Pills / badges ---------- */
+  .pill{
+    display:inline-flex; align-items:center; gap:5px; font-family:var(--font-mono);
+    font-size:11px; font-weight:600; letter-spacing:.02em; padding:2px 8px 2px 6px;
+    border-radius:20px; border:1px solid var(--line-2); white-space:nowrap; line-height:1.5;
+  }
+  .pill .dot{width:7px; height:7px; border-radius:50%; background:currentColor; flex:0 0 auto}
+  .pill.ok{color:var(--ok); background:var(--ok-bg); border-color:var(--ok-line)}
+  .pill.warn{color:var(--warn); background:var(--warn-bg); border-color:var(--warn-line)}
+  .pill.gap{color:var(--gap); background:var(--gap-bg); border-color:var(--gap-line)}
+  .pill.plain{color:var(--ink-3); background:var(--surface-2)}
+
+  .legend{display:flex; flex-wrap:wrap; gap:8px 14px; margin:.3em 0 1.1em; font-size:13px; align-items:center}
+  .legend .lg{display:inline-flex; align-items:center; gap:6px; color:var(--ink-2); font-family:var(--font-mono); font-size:11.5px}
+
+  /* ---------- Verdict cards ---------- */
+  .verdicts{display:grid; gap:14px; margin:1.3em 0; max-width:var(--prose)}
+  .vcard{border:1px solid var(--line); border-radius:12px; background:var(--surface); overflow:hidden}
+  .vcard .vhead{display:flex; align-items:flex-start; gap:12px; padding:15px 18px 12px; border-bottom:1px solid var(--line)}
+  .vbadge{font-family:var(--font-mono); font-size:11px; font-weight:700; letter-spacing:.05em;
+    padding:4px 9px; border-radius:6px; flex:0 0 auto; margin-top:1px}
+  .vbadge.confirmed{color:#fff; background:var(--gap)}
+  .vbadge.partial{color:var(--ink); background:var(--warn)}
+  :root[data-theme="dark"] .vbadge.partial{color:#20160a}
+  @media(prefers-color-scheme:dark){.vbadge.partial{color:#20160a}}
+  .vcard .vclaim{font-family:var(--font-display); font-weight:600; font-size:15.5px; line-height:1.34; color:var(--ink); margin:0}
+  .vcard .vbody{padding:13px 18px 16px; font-size:14px; color:var(--ink-2)}
+  .vcard .vbody p{margin:.1em 0 .7em; max-width:none}
+  .vcard .vbody .imp{margin-top:.4em; padding-top:.7em; border-top:1px dashed var(--line-2)}
+  .vcard .vbody .imp .k{font-family:var(--font-mono); font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--accent); font-weight:600; display:block; margin-bottom:3px}
+  :root[data-theme="dark"] .vcard .vbody .imp .k{color:var(--accent-2)}
+  @media(prefers-color-scheme:dark){.vcard .vbody .imp .k{color:var(--accent-2)}}
+
+  /* ---------- Stage cards ---------- */
+  .stages{display:grid; gap:16px; margin:1.4em 0; max-width:var(--prose)}
+  .stage{border:1px solid var(--line); border-radius:12px; background:var(--surface); padding:0; overflow:hidden}
+  .stage .shead{display:flex; align-items:baseline; gap:12px; padding:16px 20px 12px; background:var(--surface-2); border-bottom:1px solid var(--line)}
+  .stage .snum{font-family:var(--font-mono); font-weight:700; font-size:13px; color:var(--accent); letter-spacing:.02em; flex:0 0 auto}
+  :root[data-theme="dark"] .stage .snum{color:var(--accent-2)}
+  @media(prefers-color-scheme:dark){.stage .snum{color:var(--accent-2)}}
+  .stage .stitle{font-family:var(--font-display); font-weight:660; font-size:16.5px; color:var(--ink); line-height:1.25; margin:0}
+  .stage .schip{margin-left:auto; flex:0 0 auto}
+  .stage .sbody{padding:15px 20px 18px; font-size:14.5px}
+  .stage .sbody ul{max-width:none; margin:.2em 0 .3em}
+  .stage .grid2{display:grid; gap:4px 22px; grid-template-columns:1fr}
+  @media(min-width:620px){.stage .grid2{grid-template-columns:1fr 1fr}}
+  .stage .fld{margin:.6em 0}
+  .stage .fld .k{font-family:var(--font-mono); font-size:10.5px; letter-spacing:.09em; text-transform:uppercase; color:var(--ink-3); font-weight:600; display:block; margin-bottom:3px}
+  .stage .fld p{margin:0; font-size:13.5px; color:var(--ink-2); max-width:none}
+  .stage .dod{margin-top:.7em; padding-top:.8em; border-top:1px dashed var(--line-2)}
+
+  /* ---------- Misc ---------- */
+  .lead{font-size:19px; line-height:1.5; color:var(--ink); max-width:var(--prose)}
+  .lead b{color:var(--ink)}
+  hr.soft{border:0; border-top:1px solid var(--line); margin:1.6em 0; max-width:var(--prose)}
+  .foot{padding:34px 0 70px; color:var(--ink-3); font-size:13px; max-width:var(--prose)}
+  .foot p{max-width:none; margin:.5em 0; font-size:13px; color:var(--ink-3)}
+  .foot .mono{font-size:12px}
+  .kexcerpt{font-family:var(--font-mono); font-size:12.5px; color:var(--ink-2); background:var(--surface-2);
+    border:1px solid var(--line); border-radius:8px; padding:10px 13px; margin:.7em 0; max-width:var(--prose); line-height:1.5}
+  sup.fn{font-family:var(--font-mono); font-size:.62em; color:var(--accent); font-weight:600}
+  :focus-visible{outline:2px solid var(--accent); outline-offset:2px; border-radius:3px}
+  @media(prefers-reduced-motion:no-preference){html{scroll-behavior:smooth}}
+
+  /* ---------- Additions for the generated review docs ---------- */
+  main h2 { max-width: 32ch }
+  main table { min-width: 560px }
+  .tablewrap table thead th { position: static }
+
+  /* finding / item sub-headings */
+  main h3{
+    scroll-margin-top:18px; display:flex; align-items:baseline;
+    gap:9px; flex-wrap:wrap;
+  }
+  main h3 .fid{
+    font-family:var(--font-mono); font-size:12.5px; font-weight:700;
+    color:var(--accent); letter-spacing:.02em; flex:0 0 auto;
+  }
+  :root[data-theme="dark"] main h3 .fid{ color:var(--accent-2) }
+  @media(prefers-color-scheme:dark){ main h3 .fid{ color:var(--accent-2) } }
+  p.pillrow{ display:flex; gap:8px; flex-wrap:wrap; margin:-.35em 0 1.1em }
+  .anchor-alias{ display:block; height:0; scroll-margin-top:18px }
+
+  /* code blocks */
+  .codewrap{ position:relative; margin:1.15em 0 1.4em; max-width:var(--prose) }
+  .codewrap.wide{ max-width:none }
+  pre.code{
+    font-family:var(--font-mono); font-size:12.5px; line-height:1.55;
+    background:var(--surface-2); border:1px solid var(--line); border-radius:10px;
+    padding:15px 17px; margin:0; overflow-x:auto; color:var(--ink);
+    white-space:pre; tab-size:2;
+  }
+  pre.code code{ font-size:inherit; background:none; border:0; padding:0;
+                 white-space:pre; color:inherit }
+  .codewrap .lang{
+    position:absolute; top:0; right:12px; transform:translateY(-50%);
+    font-family:var(--font-mono); font-size:10px; letter-spacing:.1em;
+    text-transform:uppercase; font-weight:600; color:var(--ink-3);
+    background:var(--bg); border:1px solid var(--line); border-radius:20px;
+    padding:2px 9px;
+  }
+
+  /* Pygments tokens, mapped onto the house palette so both themes work */
+  pre.code .c,  pre.code .c1, pre.code .cm, pre.code .cs,
+  pre.code .ch, pre.code .cpf{ color:var(--ink-3); font-style:italic }
+  pre.code .sd{ color:var(--ink-3) }
+  pre.code .k,  pre.code .kn, pre.code .kc, pre.code .kd,
+  pre.code .kp, pre.code .kr, pre.code .kt, pre.code .ow{ color:var(--accent) }
+  :root[data-theme="dark"] pre.code .k,
+  :root[data-theme="dark"] pre.code .kn,
+  :root[data-theme="dark"] pre.code .kc,
+  :root[data-theme="dark"] pre.code .kd,
+  :root[data-theme="dark"] pre.code .ow{ color:var(--accent-2) }
+  @media(prefers-color-scheme:dark){
+    pre.code .k, pre.code .kn, pre.code .kc,
+    pre.code .kd, pre.code .ow{ color:var(--accent-2) }
+  }
+  pre.code .s,  pre.code .s1, pre.code .s2, pre.code .sa,
+  pre.code .sb, pre.code .se, pre.code .si, pre.code .sr,
+  pre.code .ss, pre.code .sx{ color:var(--ok) }
+  pre.code .m,  pre.code .mi, pre.code .mf, pre.code .mh,
+  pre.code .mo, pre.code .il{ color:var(--ok) }
+  pre.code .nf, pre.code .fm{ color:var(--ink); font-weight:600 }
+  pre.code .nc, pre.code .ne{ color:var(--warn); font-weight:600 }
+  pre.code .nd{ color:var(--warn) }
+  pre.code .nb, pre.code .bp{ color:var(--ink-2) }
+  pre.code .nn, pre.code .nv, pre.code .no, pre.code .na{ color:var(--ink) }
+  pre.code .o,  pre.code .p{ color:var(--ink-2) }
+  pre.code .gd{ color:var(--gap) }
+  pre.code .gi{ color:var(--ok) }
+  pre.code .gh, pre.code .gu{ color:var(--ink-3); font-weight:600 }
+  pre.code .err{ color:inherit; border:0 }
+
+  /* blockquote -> callout */
+  blockquote{
+    margin:1.3em 0; padding:15px 18px; max-width:var(--prose);
+    border:1px solid var(--line); border-left:3px solid var(--ink-3);
+    border-radius:10px; background:var(--surface); color:var(--ink-2);
+    font-size:15px;
+  }
+  blockquote p{ margin:.25em 0 }
+  blockquote.warn{ border-left-color:var(--warn); background:var(--warn-bg) }
+
+  /* figures / diagrams */
+  figure.dgfig{ margin:1.6em 0 1.9em; max-width:none }
+  .dgscroll{ overflow-x:auto; border:1px solid var(--line); border-radius:12px;
+             background:var(--surface); padding:18px 16px }
+  svg.dg{ max-width:100%; height:auto; display:block; margin:0 auto }
+  svg.dg text{ font-family:var(--font-mono); fill:var(--ink); font-size:12px }
+  svg.dg .t-sm{ font-size:11px; fill:var(--ink-2) }
+  svg.dg .t-lbl{ font-size:10.5px; fill:var(--ink-3) }
+  svg.dg .t-bad{ font-size:10.5px; fill:var(--gap); font-weight:600 }
+  svg.dg .t-hd{ font-size:10.5px; font-weight:700; fill:var(--accent);
+                letter-spacing:.09em }
+  svg.dg .t-x{ font-size:15px; fill:var(--gap); font-weight:700 }
+  svg.dg .bx{ fill:var(--surface); stroke:var(--line-2); stroke-width:1.2 }
+  svg.dg .badbx{ fill:var(--gap-bg); stroke:var(--gap-line); stroke-width:1.3 }
+  svg.dg .warnbx{ fill:var(--warn-bg); stroke:var(--warn-line); stroke-width:1.3 }
+  svg.dg .hl{ fill:var(--ok-bg); stroke:var(--ok); stroke-width:1.6 }
+  svg.dg .dead{ fill:var(--surface-2); stroke:var(--ink-3); stroke-width:1.2;
+                stroke-dasharray:5 4; opacity:.8 }
+  svg.dg .band{ fill:var(--surface-2); stroke:var(--line); stroke-width:1 }
+  svg.dg .ok-band{ fill:var(--ok-bg); stroke:var(--ok-line) }
+  svg.dg .bad-band{ fill:var(--gap-bg); stroke:var(--gap-line) }
+  svg.dg .loopbx{ fill:none; stroke:var(--line-2); stroke-width:1;
+                  stroke-dasharray:4 3 }
+  svg.dg .life{ stroke:var(--line-2); stroke-width:1; stroke-dasharray:4 4 }
+  svg.dg .ln{ stroke:var(--ink-2); stroke-width:1.4; fill:none }
+  svg.dg .ln-bad{ stroke:var(--gap); stroke-width:1.6; stroke-dasharray:6 4; fill:none }
+  svg.dg .ln-dead{ stroke:var(--ink-3); stroke-width:1.4; stroke-dasharray:5 4; fill:none }
+  svg.dg .ln-soft{ stroke:var(--ink-3); stroke-width:1.2; stroke-dasharray:3 3; fill:none }
+  svg.dg .mk{ fill:var(--ink-2); stroke:none }
+  svg.dg .mk-bad{ fill:var(--gap); stroke:none }
+  svg.dg .mk-dead{ fill:var(--ink-3); stroke:none }
+  svg.dg .mk-soft{ fill:var(--ink-3); stroke:none }
+  figure.dgfig figcaption{
+    font-size:13.5px; color:var(--ink-2); line-height:1.5; margin-top:11px;
+    max-width:var(--prose); padding-left:2px;
+  }
+  figure.dgfig figcaption b{ color:var(--ink) }
+
+  /* severity pills in the findings tables */
+  .g{ font-family:var(--font-mono); font-size:10.5px; font-weight:700;
+      padding:1px 7px; border-radius:20px; border:1px solid; white-space:nowrap }
+  .g.p0{ color:var(--gap); background:var(--gap-bg); border-color:var(--gap-line) }
+  .g.p1{ color:var(--warn); background:var(--warn-bg); border-color:var(--warn-line) }
+  .g.p2{ color:var(--ink-3); background:var(--surface-2); border-color:var(--line-2) }
+
+  /* nested TOC */
+  nav.toc ol ol{ list-style:none; counter-reset:none; margin:2px 0 6px;
+                 padding-left:14px }
+  nav.toc ol ol li{ counter-increment:none }
+  nav.toc ol ol a{ padding:3px 8px 3px 10px; font-size:11.5px;
+                   color:var(--ink-3); border-left:1px solid var(--line) }
+  nav.toc ol ol a::before{ content:none }
+  nav.toc ol ol a:hover{ color:var(--ink-2) }
+
+  @media print{
+    nav.toc{ display:none }
+    section{ break-inside:avoid-page }
+    .dgscroll{ overflow:visible }
+    pre.code{ white-space:pre-wrap; word-break:break-word }
+    body{ background:#fff; font-size:11pt }
+  }
+
+</style>
+
+</head>
+<body>
+<div class="shell">
+  <header class="mast">
+    <div class="eyebrow">
+      <span>Codebase review · subsystem</span><span class="sep">/</span>
+      <span>hermes/ · 10 findings</span><span class="sep">/</span>
+      <span>Review only — no code changed</span>
+    </div>
+    <h1 class="title">HERMES — Findings and Refactoring Plan</h1>
+    <p class="deck">The reference standard for the rest of the repository. Its defects fall into three clean groups — <b>and none of them needs a rewrite</b>.</p>
+    <div class="metabar">
+      <span><strong>Status:</strong> Review only. No project code has been modified.</span>
+      <span><strong>Scope:</strong> <code>hermes/</code> (69 modules, 14,147 LOC)</span>
+      <span><strong>Companions:</strong> <a href="../00_Critical_Problem_Areas.html"><code>../00_Critical_Problem_Areas.html</code></a> ·</span>
+      <span><a href="../01_Refactoring_Strategy.html"><code>../01_Refactoring_Strategy.html</code></a> ·</span>
+      <span><a href="HERMES_Production_Code.html"><code>HERMES_Production_Code.html</code></a> ·</span>
+      <span><a href="../../architecture%20documents/Hermes/HERMES_Architecture.html">architecture</a></span>
+    </div>
+  </header>
+
+  <div class="body-grid">
+    <nav class="toc" aria-label="Contents">
+      <p class="toc-h">Contents</p>
+      <ol>
+        <li><a href="#0-verdict">Verdict</a></li>
+        <li><a href="#1-findings-by-severity">Findings by severity</a><ol><li><a href="#h-01-p0--rf-link-socket-lifetime">H-01 P0 RF link socket lifetime</a></li><li><a href="#h-02-p1--contact-fan-out-is-unbounded-and-joined-per-thread">H-02 P1 Contact fan-out is unbounded and joined per-thread</a></li><li><a href="#h-03-p1--run_contact--deliver_contact-are-90--duplicated">H-03 P1 run_contact / deliver_contact are ~90 % duplicated</a></li><li><a href="#h-04-p0--wait_for_docktimeoutnone-is-uncancellable">H-04 P0 wait_for_dock(timeout=None) is uncancellable</a></li><li><a href="#h-05-p1--cluster-service-loop-is-the-throughput-ceiling">H-05 P1 Cluster service loop is the throughput ceiling</a></li><li><a href="#h-06-p0--no-persistence-anywhere">H-06 P0 No persistence anywhere</a></li><li><a href="#h-07-p1--observability-violates-its-own-stated-contract">H-07 P1 Observability violates its own stated contract</a></li><li><a href="#h-08-p1--hermesprocesses-imports-experimentsexp4">H-08 P1 hermes.processes imports experiments.exp4</a></li><li><a href="#h-09-p2--round-robin-assignment-ignores-position-and-is-unstable">H-09 P2 Round-robin assignment ignores position and is unstable</a></li><li><a href="#h-10-p2--small-hygiene-items">H-10 P2 Small hygiene items</a></li></ol></li>
+        <li><a href="#2-what-not-to-change">What not to change</a></li>
+        <li><a href="#3-ordered-work-plan-for-this-subsystem">Ordered work plan for this subsystem</a></li>
+      </ol>
+    </nav>
+
+    <main>
+      <section id="0-verdict">
+        <div class="sec-eyebrow">§&nbsp;00 · Verdict</div>
+        <h2>Verdict</h2>
+<p><code>hermes/</code> is the strongest code in the repository and should be treated as the reference
+standard for everything else. Its transport abstraction, pure-function scheduler stages,
+dependency injection, and observability-by-construction are all correct choices, and its
+512-test suite runs in 12 seconds because of them.</p>
+<p>Its defects fall into three clean groups:</p>
+<ol>
+<li><strong>The transport layer was hardened asymmetrically.</strong> The dock link got the right
+   socket-lifetime treatment and the RF link did not. This is the only defect in the
+   subsystem that produces silent, total mission failure in the field.</li>
+<li><strong>Concurrency was written for N≈3 and never revisited.</strong> Unbounded thread spawning,
+   per-thread joins, and a single-threaded cluster loop are all fine at the validated
+   1×2×5 topology and all fail at 10×.</li>
+<li><strong>Persistence and layering were deferred with explicit "Phase 6" markers</strong>, and Phase 6
+   never arrived. The markers are still in the code, two sprints past the sprints that
+   were supposed to remove them.</li>
+</ol>
+<p>Nothing here needs a rewrite. Every item below is a bounded, testable change.</p>
+<hr />
+      </section>
+      <section id="1-findings-by-severity">
+        <div class="sec-eyebrow">§&nbsp;01 · Findings by severity</div>
+        <h2>Findings by severity</h2>
+<p>Cross-cutting findings (<a href="../00_Critical_Problem_Areas.html#a-01">A-01</a>,
+<a href="../00_Critical_Problem_Areas.html#a-03">A-03</a>, <a href="../00_Critical_Problem_Areas.html#s-01">S-01</a>)
+are detailed in the main register. This document adds HERMES-specific mechanism and the
+per-item plan.</p>
+<span class="anchor-alias" id="h-01"></span><h3 id="h-01-p0--rf-link-socket-lifetime"><span class="fid">H-01</span> <span class="g p0">P0</span> RF link socket lifetime</h3>
+<p><strong>Mechanism.</strong> <code>tcp_rf_link.py:375</code> sets <code>conn.settimeout(self._send_timeout_s)</code> — a
+single timeout governing <em>both</em> directions on the device socket. The reader
+(<code>_reader_loop</code> → <code>recv_message</code> → <code>recv_exactly</code>) therefore inherits a 30 s read
+deadline. <code>socket.timeout</code> subclasses <code>OSError</code>, so <code>recv_exactly</code>'s handler converts it
+to <code>WireError</code>, the reader breaks, and <code>_drop_device</code> closes the socket.</p>
+<p>The client side is symmetric at 60 s (<code>:497</code>). Once the client's reader breaks it sets
+<code>_closed</code>, and <code>ClientMission.serve_once</code> short-circuits through <code>_raise_if_closed()</code> →
+<code>RFLinkError</code> → <code>return None</code> on every subsequent call. <code>DeviceService.run</code> has no sleep
+on the <code>None</code> path, so the process spins a core indefinitely with no reconnect.</p>
+<p><strong>Why the sibling transport is right.</strong> <code>tcp_dock_link.py:283-299</code>:</p>
+<div class="codewrap"><span class="lang">python</span><pre class="code"><code><span class="c1"># Reader stays blocking-forever — mules can sit idle between</span>
+<span class="c1"># missions on a long-lived dock connection.</span>
+<span class="n">conn</span><span class="o">.</span><span class="n">settimeout</span><span class="p">(</span><span class="kc">None</span><span class="p">)</span>
+<span class="c1"># S2-M3: bound the dock SEND-timeout via SO_SNDTIMEO …</span>
+<span class="n">conn</span><span class="o">.</span><span class="n">setsockopt</span><span class="p">(</span><span class="n">socket</span><span class="o">.</span><span class="n">SOL_SOCKET</span><span class="p">,</span> <span class="n">socket</span><span class="o">.</span><span class="n">SO_SNDTIMEO</span><span class="p">,</span> <span class="n">tv</span><span class="p">)</span></code></pre></div>
+<p>The same reasoning applies verbatim to devices between contacts. The RF link's docstring
+even lists <code>send_timeout_s</code> as <em>"bound on per-message <code>sendall</code>"</em> — the intent was
+send-only; the implementation is both.</p>
+<p><strong>Secondary defect.</strong> The <code>SO_SNDTIMEO</code> value is packed as <code>struct.pack("ll", …)</code>, a
+Linux <code>timeval</code>. Windows expects a 4-byte DWORD of milliseconds, so <code>setsockopt</code> raises
+and is swallowed by <code>except OSError</code> — the dock send timeout is silently absent on
+Windows, the platform this repository is developed on.</p>
+<p><strong>Plan → <a href="../01_Refactoring_Strategy.html#r-10">R-10</a>.</strong> Extract a platform-correct
+<code>_sockopt.py</code>; <code>settimeout(None)</code> on RF reader sockets; heartbeat frame; bounded
+reconnect with backoff on the client; sleep on the device's idle path. Regression test:
+45-second inter-contact gap.</p>
+<hr />
+<span class="anchor-alias" id="h-02"></span><h3 id="h-02-p1--contact-fan-out-is-unbounded-and-joined-per-thread"><span class="fid">H-02</span> <span class="g p1">P1</span> Contact fan-out is unbounded and joined per-thread</h3>
+<p><strong>Mechanism.</strong> <code>host_mission.py:519-527</code> and <code>:696-703</code>:</p>
+<div class="codewrap"><span class="lang">python</span><pre class="code"><code><span class="k">for</span> <span class="n">did</span> <span class="ow">in</span> <span class="n">contact_devices</span><span class="p">:</span>
+    <span class="n">t</span> <span class="o">=</span> <span class="n">threading</span><span class="o">.</span><span class="n">Thread</span><span class="p">(</span><span class="n">target</span><span class="o">=</span><span class="n">_device_worker</span><span class="p">,</span> <span class="n">args</span><span class="o">=</span><span class="p">(</span><span class="n">did</span><span class="p">,</span> <span class="n">adv</span><span class="p">),</span> <span class="n">daemon</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">t</span><span class="o">.</span><span class="n">start</span><span class="p">();</span> <span class="n">threads</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">t</span><span class="p">)</span>
+<span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">threads</span><span class="p">:</span>
+    <span class="n">t</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">timeout</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">session_ttl_s</span> <span class="o">*</span> <span class="mf">2.0</span><span class="p">)</span></code></pre></div>
+<p>Three independent problems:</p>
+<div class="tablewrap"><table class="wide">
+<thead>
+<tr>
+<th></th>
+<th>Problem</th>
+<th>Consequence</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>a</td>
+<td>One OS thread per device, no cap</td>
+<td>S3a contact size is a tunable (<code>rf_range_m=120</code> → "most of a slice in one contact"); thread count follows it</td>
+</tr>
+<tr>
+<td>b</td>
+<td>Per-thread timeout, not a wall-clock deadline</td>
+<td>worst case <code>N × 2 × ttl</code>; at N=20, ttl=30 s → 20 minutes for one contact</td>
+</tr>
+<tr>
+<td>c</td>
+<td>Abandoned <code>daemon=True</code> workers keep references to <code>_report</code> / <code>_accepted</code></td>
+<td>a late worker can append a <code>MissionRoundCloseLine</code> or a <code>GradientSubmission</code> <strong>after</strong> <code>close_round</code> ran <code>partial_fedavg</code> — silently lost, or folded into the next round's ledger</td>
+</tr>
+</tbody>
+</table></div>
+<p>(c) is the subtle one. <code>_record_outcome</code> (<code>:810-848</code>) takes <code>self._lock</code> and appends to
+<code>self._report</code>; <code>close_round</code> (<code>:166-209</code>) sets <code>self._report = None</code> under the same lock.
+A worker arriving between those two moments returns early — its outcome vanishes with no
+log. A worker arriving after the <em>next</em> <code>open_round</code> appends to the <em>new</em> round's report.</p>
+<p><strong>Plan → <a href="../01_Refactoring_Strategy.html#r-11">R-11</a>.</strong> Bounded <code>ThreadPoolExecutor</code>,
+single wall-clock deadline via <code>concurrent.futures.wait</code>, and a monotonic round epoch
+checked inside <code>_record_outcome</code> so a stale worker's write is dropped <strong>with a warning</strong>
+rather than silently.</p>
+<hr />
+<span class="anchor-alias" id="h-03"></span><h3 id="h-03-p1--run_contact--deliver_contact-are-90--duplicated"><span class="fid">H-03</span> <span class="g p1">P1</span> <code>run_contact</code> / <code>deliver_contact</code> are ~90 % duplicated</h3>
+<p>187 lines (complexity 35) and 140 lines (complexity 32) sharing an identical skeleton:
+pass guard → non-empty guard → θ snapshot under lock → broadcast → drain
+<code>_misrouted_advs</code> → gather loop → thread fan-out → join → return. Only the per-device
+worker body differs.</p>
+<p>This is why H-02 has to be fixed twice, and why the H1 "misrouted advertisement" fix
+appears twice with identical comments (<code>:387-404</code> and <code>:611-624</code>).</p>
+<p><strong>Root cause worth naming.</strong> The duplication exists because <code>recv_ready_adv</code> is a
+<em>single unaddressed queue</em> (<code>tcp_rf_link.py:135</code>, <code>self._ready_q: Queue[FLReadyAdv]</code>).
+There is no way to ask for "the advert from device X", so each contact must drain the
+shared queue, keep what it wants, and stash the rest for the next contact. The stash is
+a correct workaround; a per-device advert queue (mirroring the existing per-device
+<code>_gradient_q</code> / <code>_delivery_ack_q</code>) would remove the need for it entirely.</p>
+<p><strong>Plan → <a href="../01_Refactoring_Strategy.html#r-11">R-11</a></strong> for the immediate de-duplication.
+Consider a follow-up adding <code>_ready_q</code> per device so <code>_misrouted_advs</code> can be deleted;
+that is a transport-level change and should be separately scoped.</p>
+<hr />
+<span class="anchor-alias" id="h-04"></span><h3 id="h-04-p0--wait_for_docktimeoutnone-is-uncancellable"><span class="fid">H-04</span> <span class="g p0">P0</span> <code>wait_for_dock(timeout=None)</code> is uncancellable</h3>
+<p><code>client_cluster.py:215-226</code> is a <code>while True</code> polling <code>dock.is_available()</code> with
+<code>time.sleep(self.dock_poll_interval_s)</code> and no exit condition when <code>timeout is None</code>.
+<code>MuleSupervisor</code> calls it that way at <code>mule_main.py:306</code> and <code>:425</code>.</p>
+<p><code>MuleService</code> owns a <code>threading.Event</code> stop flag and checks it between missions
+(<code>mule.py:211</code>), but the supervisor never receives it. SIGTERM during an inter-pass dock
+wait is therefore absorbed until <code>shutdown_all</code>'s 15 s timeout expires and the mule is
+<code>SIGKILL</code>ed — discarding the Pass-1 aggregate and the delivery-report carryover that
+were about to upload.</p>
+<p><strong>Plan → <a href="../01_Refactoring_Strategy.html#r-12">R-12</a>.</strong> Thread the stop event through;
+wait on <code>Event.wait(interval)</code> rather than <code>sleep</code>; replace <code>timeout=None</code> with a
+configured bound so an unreachable cluster produces a logged error.</p>
+<hr />
+<span class="anchor-alias" id="h-05"></span><h3 id="h-05-p1--cluster-service-loop-is-the-throughput-ceiling"><span class="fid">H-05</span> <span class="g p1">P1</span> Cluster service loop is the throughput ceiling</h3>
+<p><code>cluster.py:297-375</code> handles one UP per iteration and performs, inline and serially:
+ingest → cross-mule FedAvg → close round → <strong>TensorFlow evaluation over the held-out
+set</strong> → M × (<code>slice_for</code> O(N) + per-device registry lookups + θ copy + synth batch +
+SHA-256 over the whole model + socket send).</p>
+<p>Everything else in the dock path is already concurrent — <code>TCPDockLinkServer</code> runs one
+reader thread per mule. The serialization is purely the service loop's shape.</p>
+<p>Also at <code>:300</code>: <code>except Exception: up = None</code> swallows every failure from <code>recv_up</code>,
+including programming errors, and continues as though nothing arrived.</p>
+<p><strong>Plan → <a href="../01_Refactoring_Strategy.html#r-24">R-24</a>.</strong> Move DOWN dispatch and model
+evaluation onto a bounded pool; keep aggregation serialized; index the registry by
+<code>assigned_mule</code>; narrow the exception handler to the link's own error types.</p>
+<hr />
+<span class="anchor-alias" id="h-06"></span><h3 id="h-06-p0--no-persistence-anywhere"><span class="fid">H-06</span> <span class="g p0">P0</span> No persistence anywhere</h3>
+<p><code>DeviceRegistry.save()</code> returns <code>None</code>; <code>DeviceRegistry.load()</code> returns an empty
+registry. Both are marked <em>"Phase-6 hook. Intentionally a no-op until then."</em> Phase 6 is
+recorded as closed in the README.</p>
+<p>The blast radius is larger than the registry: a cluster restart yields empty
+<code>MissionSlice</code>s for every mule, empty contact queues, and permanent
+<code>"no submissions to aggregate"</code> failures with no operator-visible cause. All scheduler
+adaptation (<code>on_time_history</code>, <code>missed_history</code>, <code>delivery_priority</code>,
+<code>deadline_fulfilment_s</code>) is lost.</p>
+<p><strong>Plan → <a href="../01_Refactoring_Strategy.html#r-23">R-23</a>.</strong> <code>RegistryStore</code> Protocol,
+<code>InMemoryStore</code> default (today's behaviour), <code>SQLiteStore</code> for deployment, snapshot on
+round close, <code>registry_restored</code> event on load.</p>
+<hr />
+<span class="anchor-alias" id="h-07"></span><h3 id="h-07-p1--observability-violates-its-own-stated-contract"><span class="fid">H-07</span> <span class="g p1">P1</span> Observability violates its own stated contract</h3>
+<p><code>events.py:108</code> calls <code>json.dumps</code> outside the <code>try</code> that the module docstring promises
+guards every emit. <code>_coerce</code> handles <code>tuple</code> and <code>Path</code> but not numpy scalars — the exact
+case its own docstring claims is caught. A single <code>emit(..., auc=np.float64(...))</code>
+anywhere takes down the emitting service loop.</p>
+<p><strong>Plan → <a href="../01_Refactoring_Strategy.html#r-13">R-13</a>.</strong> One-line move plus numpy-aware
+coercion and a <code>default=repr</code> fallback.</p>
+<hr />
+<span class="anchor-alias" id="h-08"></span><h3 id="h-08-p1--hermesprocesses-imports-experimentsexp4"><span class="fid">H-08</span> <span class="g p1">P1</span> <code>hermes.processes</code> imports <code>experiments.exp4</code></h3>
+<p><code>cluster.py:113,140,461</code> and <code>device.py:89</code> reach up into the paper harness for
+<code>load_weights</code>, <code>load_xy</code>, <code>evaluate_theta</code>, <code>make_local_train_fn</code>. The comment at
+<code>device.py:86-88</code> acknowledges the inversion and constrains it to "a spawned device
+subprocess whose CWD is the repo root".</p>
+<p>Consequence: <code>hermes/</code> cannot be packaged, installed, or deployed independently — and the
+<code>GeneratorHost</code> / <code>LocalTrainFn</code> Protocols that exist precisely to avoid this are bypassed
+on the cluster side.</p>
+<p><strong>Plan → <a href="../01_Refactoring_Strategy.html#r-17">R-17</a>.</strong> Resolve the provider from a
+config-supplied entry-point string; move the concrete implementations into
+<code>hermes_adapters/</code>.</p>
+<hr />
+<span class="anchor-alias" id="h-09"></span><h3 id="h-09-p2--round-robin-assignment-ignores-position-and-is-unstable"><span class="fid">H-09</span> <span class="g p2">P2</span> Round-robin assignment ignores position and is unstable</h3>
+<p><code>device_registry.py:157-165</code> sorts by <code>(not is_new, device_id)</code> and assigns
+<code>mule_list[i % len(mule_list)]</code>. <code>DeviceRecord.last_known_position</code> is never consulted.</p>
+<p>The sort key also makes assignment unstable: when one device's <code>is_new</code> flips to <code>False</code>,
+its index changes and every device after it shifts a slot — reassigning roughly half the
+fleet and invalidating each moved device's cached <code>DeviceSchedulerState</code>,
+<code>delivery_priority</code> carryover, and on-time history on the mule.</p>
+<p>Currently masked because <code>ClusterService</code> overrides <code>assigned_mule</code> from config after
+seeding and never calls <code>rebalance</code> again — so <code>HFLHostCluster.rebalance_for</code> is dead in
+production while being the only path that matters at scale.</p>
+<p><strong>Plan → <a href="../01_Refactoring_Strategy.html#r-25">R-25</a>.</strong> Spatial partitioning +
+rendezvous-hash tie-break, behind a strategy flag defaulting to today's behaviour.</p>
+<hr />
+<span class="anchor-alias" id="h-10"></span><h3 id="h-10-p2--small-hygiene-items"><span class="fid">H-10</span> <span class="g p2">P2</span> Small hygiene items</h3>
+<div class="tablewrap"><table class="wide">
+<thead>
+<tr>
+<th>Item</th>
+<th>Location</th>
+<th>Fix</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Sequence</code> used in annotations, never imported</td>
+<td><code>host_mission.py:344,568</code></td>
+<td>add to the <code>typing</code> import</td>
+</tr>
+<tr>
+<td><code>self.cluster._cluster_round</code> bypasses the locked public property</td>
+<td><code>cluster.py:346,350</code></td>
+<td>use <code>cluster.cluster_round</code></td>
+</tr>
+<tr>
+<td><code>TCPRFLinkClient._lock</code> created and never used</td>
+<td><code>tcp_rf_link.py:492</code></td>
+<td>either guard <code>_send_with_emulator</code> with it (correct — concurrent <code>send_ready_adv</code> + <code>send_gradient</code> would interleave frames) or delete it</td>
+</tr>
+<tr>
+<td><code>orchestrator.start_devices</code> ends with <code>time.sleep(0.3)</code></td>
+<td><code>orchestrator.py:336</code></td>
+<td>replace with a device-readiness barrier, as the mule already has via <code>wait_for_devices</code></td>
+</tr>
+<tr>
+<td>4 × <code>except Exception: pass</code> in shutdown paths</td>
+<td><code>cluster.py:492,497,503</code>, <code>device.py:213,219</code>, <code>mule.py:304,308,314</code>, <code>orchestrator.py:368,380,402</code></td>
+<td>narrow to expected types; log the rest at <code>WARNING</code></td>
+</tr>
+<tr>
+<td><code>TrialRunner._status_col</code> is an identity function</td>
+<td><code>experiments/runner/runner.py:182</code></td>
+<td>inline and delete</td>
+</tr>
+</tbody>
+</table></div>
+<p>The <code>_lock</code> one is worth a second look: <code>TCPRFLinkClient</code> defines <code>self._lock =
+threading.RLock()</code> and never acquires it. <code>_send_with_emulator</code> writes a full frame with
+<code>sock.sendall</code> from whatever thread calls it. Today <code>ClientMission</code> is driven from one
+thread, so no interleaving occurs — but nothing enforces that, and an interleaved
+<code>sendall</code> would corrupt the framing irrecoverably (the receiver would read a valid header
+followed by another message's bytes). Adding the lock costs nothing and closes a latent
+class of bug.</p>
+<hr />
+      </section>
+      <section id="2-what-not-to-change">
+        <div class="sec-eyebrow">§&nbsp;02 · What not to change</div>
+        <h2>What not to change</h2>
+<div class="tablewrap"><table class="wide">
+<thead>
+<tr>
+<th>Keep</th>
+<th>Why</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>RFLink</code> / <code>DockLink</code> / <code>CloudLink</code> ABCs</td>
+<td>The reason the subsystem is testable at all.</td>
+</tr>
+<tr>
+<td>Pure-function scheduler stages + injected <code>now_fn</code></td>
+<td>Deterministic, independently testable, already the right shape.</td>
+</tr>
+<tr>
+<td><code>partial_fedavg</code> / <code>cross_mule_fedavg</code> as free functions</td>
+<td>Validate up front, float64 accumulate, cast back. Correct.</td>
+</tr>
+<tr>
+<td>The two-pass mission design</td>
+<td>Structurally eliminates async-FL drift. The best idea in the project.</td>
+</tr>
+<tr>
+<td>numpy DDQN</td>
+<td>~200 ops per bucket; a framework would dominate the cost and add a heavy dep to <code>hermes/</code>.</td>
+</tr>
+<tr>
+<td>Wire framing (magic + version + length cap)</td>
+<td>Correct defensive design; changing it is a compat break for no gain.</td>
+</tr>
+<tr>
+<td>Pickle on the LAN transports</td>
+<td>Justified in-comment, bounded threat model. Fix the <em>cloud</em> link only (<a href="../00_Critical_Problem_Areas.html#s-01">S-01</a>).</td>
+</tr>
+<tr>
+<td>Fix-provenance comments (<code>H1</code>, <code>S2-M3</code>, <code>L-H2</code>, <code>EX-4.2</code>)</td>
+<td>Institutional memory. Carry them through any move.</td>
+</tr>
+</tbody>
+</table></div>
+<hr />
+      </section>
+      <section id="3-ordered-work-plan-for-this-subsystem">
+        <div class="sec-eyebrow">§&nbsp;03 · Ordered work plan for this subsystem</div>
+        <h2>Ordered work plan for this subsystem</h2>
+<div class="tablewrap"><table class="wide">
+<thead>
+<tr>
+<th>#</th>
+<th>Item</th>
+<th>Fixes</th>
+<th>Effort</th>
+<th>Risk</th>
+<th>New test</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>RF socket lifetime + heartbeat + reconnect + device backoff</td>
+<td>H-01</td>
+<td>2 d</td>
+<td>Low</td>
+<td>45 s idle-gap integration test</td>
+</tr>
+<tr>
+<td>2</td>
+<td>Unify contact exchange; bounded pool; deadline; round epoch</td>
+<td>H-02, H-03</td>
+<td>3 d</td>
+<td>Low</td>
+<td>N=32 contact bounded-wall-clock test; stale-worker rejection test</td>
+</tr>
+<tr>
+<td>3</td>
+<td>Cancellable dock wait</td>
+<td>H-04</td>
+<td>0.5 d</td>
+<td>Very low</td>
+<td>SIGTERM-during-dock-wait test</td>
+</tr>
+<tr>
+<td>4</td>
+<td>Observability guard + numpy coercion; encapsulation hygiene</td>
+<td>H-07, H-10</td>
+<td>0.5 d</td>
+<td>Very low</td>
+<td><code>emit(np.float32)</code> does not raise</td>
+</tr>
+<tr>
+<td>5</td>
+<td>Provider entry-point indirection → <code>hermes_adapters/</code></td>
+<td>H-08</td>
+<td>3 d</td>
+<td>Medium</td>
+<td><code>grep -rn "import experiments" hermes/</code> is empty</td>
+</tr>
+<tr>
+<td>6</td>
+<td><code>RegistryStore</code> Protocol + SQLite backend</td>
+<td>H-06</td>
+<td>3 d</td>
+<td>Medium</td>
+<td>kill-and-restart cluster preserves history</td>
+</tr>
+<tr>
+<td>7</td>
+<td>Concurrent cluster loop + registry index</td>
+<td>H-05</td>
+<td>4 d</td>
+<td>Medium</td>
+<td>throughput scales to 8 mules</td>
+</tr>
+<tr>
+<td>8</td>
+<td>Locality-aware stable assignment</td>
+<td>H-09</td>
+<td>3 d</td>
+<td>Medium</td>
+<td>rebalance moves ≤1 device on <code>is_new</code> flip</td>
+</tr>
+</tbody>
+</table></div>
+<p>Items 1–4 (~6 days) remove every P0 in this subsystem and are all behaviour-preserving in
+the currently tested regime.</p>
+<p><strong>Reference implementations:</strong> <a href="HERMES_Production_Code.html"><code>HERMES_Production_Code.html</code></a>.</p>
+      </section>
+
+      <div class="foot">
+        <p class="mono">Generated from HERMES_Findings_and_Refactoring.md. File:line references are to
+        the repository as read on 2026-08-10 (main @ 35e2eeb); verify against current
+        source before acting. This document is a review artefact — no project code was
+        modified to produce it.</p>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script>
+  // TOC active-state only. No animation; reduced-motion respected via CSS.
+  // getElementById, not querySelector: several ids begin with a digit, which
+  // is legal HTML but an invalid CSS selector.
+  (function(){
+    var links = Array.prototype.slice.call(document.querySelectorAll('nav.toc a'));
+    var secs  = links.map(function(a){
+      return document.getElementById(a.getAttribute('href').slice(1));
+    });
+    if(!('IntersectionObserver' in window)) return;
+    var io = new IntersectionObserver(function(entries){
+      entries.forEach(function(e){
+        if(e.isIntersecting){
+          var i = secs.indexOf(e.target);
+          links.forEach(function(l){ l.style.background=''; l.style.color=''; });
+          if(i>-1){ var l=links[i]; l.style.background='var(--surface-2)'; l.style.color='var(--ink)'; }
+        }
+      });
+    },{rootMargin:'-10% 0px -80% 0px'});
+    secs.forEach(function(s){ if(s) io.observe(s); });
+  })();
+</script>
+
+</body>
+</html>

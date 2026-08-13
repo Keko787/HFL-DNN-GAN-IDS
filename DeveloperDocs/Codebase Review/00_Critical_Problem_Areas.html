@@ -1,0 +1,1422 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Critical Problem Areas</title>
+<meta name="description" content="Every finding verified against source, with a file:line citation and the specific mechanism of failure — not a code smell, a consequence. Five of them are P0.">
+<style>
+  :root{
+    --bg:#f4f6f8; --surface:#ffffff; --surface-2:#eef1f4;
+    --ink:#141a20; --ink-2:#47525d; --ink-3:#6c7883;
+    --line:#dbe1e7; --line-2:#c8d0d8;
+    --accent:#0c7d8a; --accent-2:#0a5f6a; --accent-soft:#e0f0f2;
+    --ok:#2f8f56; --ok-bg:#e5f3ea; --ok-line:#a9d8bd;
+    --warn:#a8720c; --warn-bg:#f7efdb; --warn-line:#e3c483;
+    --gap:#bf3b4e; --gap-bg:#fbe5e8; --gap-line:#eeaeb7;
+    --font-display:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    --font-body:ui-serif,"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,Cambria,serif;
+    --font-mono:ui-monospace,"Cascadia Code","SF Mono","Segoe UI Mono",Menlo,Consolas,monospace;
+    --maxw:1200px; --prose:800px;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --bg:#0d1116; --surface:#141a21; --surface-2:#1a222b;
+      --ink:#e7ecf1; --ink-2:#a3afba; --ink-3:#74818d;
+      --line:#26303a; --line-2:#333f4b;
+      --accent:#2fc0d0; --accent-2:#5bd4e0; --accent-soft:#10333a;
+      --ok:#4cc47e; --ok-bg:#12301f; --ok-line:#245a3a;
+      --warn:#e0a63a; --warn-bg:#31260f; --warn-line:#5c4820;
+      --gap:#e56b7d; --gap-bg:#331a1f; --gap-line:#5e3038;
+    }
+  }
+  :root[data-theme="light"]{
+    --bg:#f4f6f8; --surface:#ffffff; --surface-2:#eef1f4;
+    --ink:#141a20; --ink-2:#47525d; --ink-3:#6c7883;
+    --line:#dbe1e7; --line-2:#c8d0d8;
+    --accent:#0c7d8a; --accent-2:#0a5f6a; --accent-soft:#e0f0f2;
+    --ok:#2f8f56; --ok-bg:#e5f3ea; --ok-line:#a9d8bd;
+    --warn:#a8720c; --warn-bg:#f7efdb; --warn-line:#e3c483;
+    --gap:#bf3b4e; --gap-bg:#fbe5e8; --gap-line:#eeaeb7;
+  }
+  :root[data-theme="dark"]{
+    --bg:#0d1116; --surface:#141a21; --surface-2:#1a222b;
+    --ink:#e7ecf1; --ink-2:#a3afba; --ink-3:#74818d;
+    --line:#26303a; --line-2:#333f4b;
+    --accent:#2fc0d0; --accent-2:#5bd4e0; --accent-soft:#10333a;
+    --ok:#4cc47e; --ok-bg:#12301f; --ok-line:#245a3a;
+    --warn:#e0a63a; --warn-bg:#31260f; --warn-line:#5c4820;
+    --gap:#e56b7d; --gap-bg:#331a1f; --gap-line:#5e3038;
+  }
+
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:var(--font-body); font-size:17px; line-height:1.62;
+    -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+  }
+  .shell{max-width:var(--maxw); margin:0 auto; padding:0 clamp(18px,4vw,40px)}
+
+  /* ---------- Masthead ---------- */
+  header.mast{padding:clamp(40px,7vw,84px) 0 34px; border-bottom:1px solid var(--line)}
+  .eyebrow{
+    font-family:var(--font-mono); font-size:12px; letter-spacing:.14em;
+    text-transform:uppercase; color:var(--accent); font-weight:600;
+    display:flex; gap:10px; flex-wrap:wrap; align-items:center;
+  }
+  .eyebrow .sep{color:var(--ink-3)}
+  h1.title{
+    font-family:var(--font-display); font-weight:760;
+    font-size:clamp(30px,5.4vw,52px); line-height:1.04; letter-spacing:-.022em;
+    margin:.42em 0 .28em; max-width:16ch; text-wrap:balance;
+  }
+  .deck{
+    font-size:clamp(17px,2.1vw,21px); color:var(--ink-2); max-width:60ch;
+    line-height:1.5; margin:0;
+  }
+  .deck b{color:var(--ink); font-weight:600}
+  .metabar{
+    margin-top:26px; display:flex; flex-wrap:wrap; gap:8px 20px;
+    font-family:var(--font-mono); font-size:12.5px; color:var(--ink-3);
+  }
+  .metabar b{color:var(--ink-2); font-weight:600}
+
+  /* ---------- Layout with TOC rail ---------- */
+  .body-grid{display:block}
+  @media(min-width:1040px){
+    .body-grid{display:grid; grid-template-columns:216px minmax(0,1fr); gap:48px; align-items:start}
+    nav.toc{position:sticky; top:24px; align-self:start}
+  }
+  nav.toc{padding:30px 0 0}
+  nav.toc .toc-h{
+    font-family:var(--font-mono); font-size:11px; letter-spacing:.14em;
+    text-transform:uppercase; color:var(--ink-3); margin:0 0 12px; font-weight:600;
+  }
+  nav.toc ol{list-style:none; margin:0; padding:0; counter-reset:toc}
+  nav.toc li{counter-increment:toc; margin:2px 0}
+  nav.toc a{
+    display:block; text-decoration:none; color:var(--ink-2);
+    font-family:var(--font-display); font-size:14px; line-height:1.35;
+    padding:6px 10px 6px 30px; border-radius:7px; position:relative;
+  }
+  nav.toc a::before{
+    content:counter(toc,decimal-leading-zero); position:absolute; left:8px;
+    font-family:var(--font-mono); font-size:11px; color:var(--accent);
+    top:8px; font-weight:600;
+  }
+  nav.toc a:hover{background:var(--surface-2); color:var(--ink)}
+  @media(max-width:1039px){ nav.toc{display:none} }
+
+  main{padding-top:8px; min-width:0}
+
+  /* ---------- Sections & prose ---------- */
+  section{padding:38px 0; border-bottom:1px solid var(--line); scroll-margin-top:20px}
+  section:last-of-type{border-bottom:0}
+  .sec-eyebrow{
+    font-family:var(--font-mono); font-size:12px; letter-spacing:.13em;
+    text-transform:uppercase; color:var(--accent); font-weight:600; margin-bottom:8px;
+  }
+  h2{
+    font-family:var(--font-display); font-weight:720; letter-spacing:-.016em;
+    font-size:clamp(22px,3.2vw,30px); line-height:1.14; margin:0 0 .55em;
+    max-width:24ch; text-wrap:balance;
+  }
+  h3{
+    font-family:var(--font-display); font-weight:660; letter-spacing:-.008em;
+    font-size:19px; line-height:1.25; margin:1.9em 0 .5em; color:var(--ink);
+  }
+  h4{
+    font-family:var(--font-mono); font-weight:600; font-size:13px; letter-spacing:.04em;
+    text-transform:uppercase; color:var(--ink-2); margin:1.5em 0 .5em;
+  }
+  p{max-width:var(--prose); margin:0 0 1.05em}
+  main ul,main ol{max-width:var(--prose); margin:0 0 1.1em; padding-left:1.25em}
+  main li{margin:.34em 0}
+  strong{font-weight:600; color:var(--ink)}
+  a.ref{color:var(--accent-2); text-decoration:none; border-bottom:1px solid transparent}
+  :root[data-theme="dark"] a.ref{color:var(--accent)}
+  @media(prefers-color-scheme:dark){a.ref{color:var(--accent)}}
+  a.ref:hover{border-bottom-color:currentColor}
+
+  code,.mono{font-family:var(--font-mono); font-size:.86em}
+  p code,li code,td code{
+    background:var(--surface-2); padding:.08em .38em; border-radius:5px;
+    font-size:.82em; color:var(--ink); border:1px solid var(--line);
+    white-space:nowrap;
+  }
+  .path{color:var(--ink-3); font-family:var(--font-mono); font-size:.8em; white-space:nowrap}
+
+  /* ---------- Callouts ---------- */
+  .callout{
+    border:1px solid var(--line); border-left-width:3px; border-radius:10px;
+    background:var(--surface); padding:18px 20px; margin:1.4em 0; max-width:var(--prose);
+  }
+  .callout .k{
+    font-family:var(--font-mono); font-size:11px; letter-spacing:.12em; text-transform:uppercase;
+    font-weight:600; margin-bottom:7px; display:block;
+  }
+  .callout p{margin:.2em 0}
+  .callout.accent{border-left-color:var(--accent); background:var(--accent-soft)}
+  .callout.accent .k{color:var(--accent-2)}
+  :root[data-theme="dark"] .callout.accent .k{color:var(--accent-2)}
+  @media(prefers-color-scheme:dark){.callout.accent .k{color:var(--accent-2)}}
+  .callout.warn{border-left-color:var(--warn); background:var(--warn-bg)}
+  .callout.warn .k{color:var(--warn)}
+  .callout.gap{border-left-color:var(--gap); background:var(--gap-bg)}
+  .callout.gap .k{color:var(--gap)}
+  .callout.accent{background:var(--accent-soft)}
+
+  /* ---------- Formula ---------- */
+  .formula{
+    font-family:var(--font-mono); font-size:14px; line-height:1.55;
+    background:var(--surface-2); border:1px solid var(--line);
+    border-radius:9px; padding:13px 16px; margin:1em 0; max-width:var(--prose);
+    overflow-x:auto; color:var(--ink);
+  }
+  .formula .lbl{color:var(--ink-3)}
+
+  /* ---------- Tables ---------- */
+  .tablewrap{overflow-x:auto; margin:1.2em 0 1.5em; border:1px solid var(--line);
+    border-radius:11px; background:var(--surface)}
+  table{border-collapse:collapse; width:100%; font-size:14px; min-width:640px}
+  table.wide{min-width:820px}
+  thead th{
+    font-family:var(--font-mono); font-weight:600; font-size:11.5px; letter-spacing:.03em;
+    text-transform:uppercase; text-align:left; color:var(--ink-2);
+    background:var(--surface-2); padding:11px 14px; border-bottom:1px solid var(--line-2);
+    position:sticky; top:0; vertical-align:bottom;
+  }
+  tbody td{padding:11px 14px; border-bottom:1px solid var(--line); vertical-align:top;
+    line-height:1.42; color:var(--ink-2)}
+  tbody tr:last-child td{border-bottom:0}
+  tbody td:first-child{color:var(--ink); font-weight:500}
+  tbody td .path,tbody td code{white-space:normal}
+  td .mname{font-family:var(--font-mono); font-size:12.5px; color:var(--ink); font-weight:600; display:block}
+  tbody tr:hover td{background:color-mix(in srgb,var(--accent-soft) 34%, transparent)}
+  .num{font-variant-numeric:tabular-nums}
+
+  /* ---------- Pills / badges ---------- */
+  .pill{
+    display:inline-flex; align-items:center; gap:5px; font-family:var(--font-mono);
+    font-size:11px; font-weight:600; letter-spacing:.02em; padding:2px 8px 2px 6px;
+    border-radius:20px; border:1px solid var(--line-2); white-space:nowrap; line-height:1.5;
+  }
+  .pill .dot{width:7px; height:7px; border-radius:50%; background:currentColor; flex:0 0 auto}
+  .pill.ok{color:var(--ok); background:var(--ok-bg); border-color:var(--ok-line)}
+  .pill.warn{color:var(--warn); background:var(--warn-bg); border-color:var(--warn-line)}
+  .pill.gap{color:var(--gap); background:var(--gap-bg); border-color:var(--gap-line)}
+  .pill.plain{color:var(--ink-3); background:var(--surface-2)}
+
+  .legend{display:flex; flex-wrap:wrap; gap:8px 14px; margin:.3em 0 1.1em; font-size:13px; align-items:center}
+  .legend .lg{display:inline-flex; align-items:center; gap:6px; color:var(--ink-2); font-family:var(--font-mono); font-size:11.5px}
+
+  /* ---------- Verdict cards ---------- */
+  .verdicts{display:grid; gap:14px; margin:1.3em 0; max-width:var(--prose)}
+  .vcard{border:1px solid var(--line); border-radius:12px; background:var(--surface); overflow:hidden}
+  .vcard .vhead{display:flex; align-items:flex-start; gap:12px; padding:15px 18px 12px; border-bottom:1px solid var(--line)}
+  .vbadge{font-family:var(--font-mono); font-size:11px; font-weight:700; letter-spacing:.05em;
+    padding:4px 9px; border-radius:6px; flex:0 0 auto; margin-top:1px}
+  .vbadge.confirmed{color:#fff; background:var(--gap)}
+  .vbadge.partial{color:var(--ink); background:var(--warn)}
+  :root[data-theme="dark"] .vbadge.partial{color:#20160a}
+  @media(prefers-color-scheme:dark){.vbadge.partial{color:#20160a}}
+  .vcard .vclaim{font-family:var(--font-display); font-weight:600; font-size:15.5px; line-height:1.34; color:var(--ink); margin:0}
+  .vcard .vbody{padding:13px 18px 16px; font-size:14px; color:var(--ink-2)}
+  .vcard .vbody p{margin:.1em 0 .7em; max-width:none}
+  .vcard .vbody .imp{margin-top:.4em; padding-top:.7em; border-top:1px dashed var(--line-2)}
+  .vcard .vbody .imp .k{font-family:var(--font-mono); font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--accent); font-weight:600; display:block; margin-bottom:3px}
+  :root[data-theme="dark"] .vcard .vbody .imp .k{color:var(--accent-2)}
+  @media(prefers-color-scheme:dark){.vcard .vbody .imp .k{color:var(--accent-2)}}
+
+  /* ---------- Stage cards ---------- */
+  .stages{display:grid; gap:16px; margin:1.4em 0; max-width:var(--prose)}
+  .stage{border:1px solid var(--line); border-radius:12px; background:var(--surface); padding:0; overflow:hidden}
+  .stage .shead{display:flex; align-items:baseline; gap:12px; padding:16px 20px 12px; background:var(--surface-2); border-bottom:1px solid var(--line)}
+  .stage .snum{font-family:var(--font-mono); font-weight:700; font-size:13px; color:var(--accent); letter-spacing:.02em; flex:0 0 auto}
+  :root[data-theme="dark"] .stage .snum{color:var(--accent-2)}
+  @media(prefers-color-scheme:dark){.stage .snum{color:var(--accent-2)}}
+  .stage .stitle{font-family:var(--font-display); font-weight:660; font-size:16.5px; color:var(--ink); line-height:1.25; margin:0}
+  .stage .schip{margin-left:auto; flex:0 0 auto}
+  .stage .sbody{padding:15px 20px 18px; font-size:14.5px}
+  .stage .sbody ul{max-width:none; margin:.2em 0 .3em}
+  .stage .grid2{display:grid; gap:4px 22px; grid-template-columns:1fr}
+  @media(min-width:620px){.stage .grid2{grid-template-columns:1fr 1fr}}
+  .stage .fld{margin:.6em 0}
+  .stage .fld .k{font-family:var(--font-mono); font-size:10.5px; letter-spacing:.09em; text-transform:uppercase; color:var(--ink-3); font-weight:600; display:block; margin-bottom:3px}
+  .stage .fld p{margin:0; font-size:13.5px; color:var(--ink-2); max-width:none}
+  .stage .dod{margin-top:.7em; padding-top:.8em; border-top:1px dashed var(--line-2)}
+
+  /* ---------- Misc ---------- */
+  .lead{font-size:19px; line-height:1.5; color:var(--ink); max-width:var(--prose)}
+  .lead b{color:var(--ink)}
+  hr.soft{border:0; border-top:1px solid var(--line); margin:1.6em 0; max-width:var(--prose)}
+  .foot{padding:34px 0 70px; color:var(--ink-3); font-size:13px; max-width:var(--prose)}
+  .foot p{max-width:none; margin:.5em 0; font-size:13px; color:var(--ink-3)}
+  .foot .mono{font-size:12px}
+  .kexcerpt{font-family:var(--font-mono); font-size:12.5px; color:var(--ink-2); background:var(--surface-2);
+    border:1px solid var(--line); border-radius:8px; padding:10px 13px; margin:.7em 0; max-width:var(--prose); line-height:1.5}
+  sup.fn{font-family:var(--font-mono); font-size:.62em; color:var(--accent); font-weight:600}
+  :focus-visible{outline:2px solid var(--accent); outline-offset:2px; border-radius:3px}
+  @media(prefers-reduced-motion:no-preference){html{scroll-behavior:smooth}}
+
+  /* ---------- Additions for the generated review docs ---------- */
+  main h2 { max-width: 32ch }
+  main table { min-width: 560px }
+  .tablewrap table thead th { position: static }
+
+  /* finding / item sub-headings */
+  main h3{
+    scroll-margin-top:18px; display:flex; align-items:baseline;
+    gap:9px; flex-wrap:wrap;
+  }
+  main h3 .fid{
+    font-family:var(--font-mono); font-size:12.5px; font-weight:700;
+    color:var(--accent); letter-spacing:.02em; flex:0 0 auto;
+  }
+  :root[data-theme="dark"] main h3 .fid{ color:var(--accent-2) }
+  @media(prefers-color-scheme:dark){ main h3 .fid{ color:var(--accent-2) } }
+  p.pillrow{ display:flex; gap:8px; flex-wrap:wrap; margin:-.35em 0 1.1em }
+  .anchor-alias{ display:block; height:0; scroll-margin-top:18px }
+
+  /* code blocks */
+  .codewrap{ position:relative; margin:1.15em 0 1.4em; max-width:var(--prose) }
+  .codewrap.wide{ max-width:none }
+  pre.code{
+    font-family:var(--font-mono); font-size:12.5px; line-height:1.55;
+    background:var(--surface-2); border:1px solid var(--line); border-radius:10px;
+    padding:15px 17px; margin:0; overflow-x:auto; color:var(--ink);
+    white-space:pre; tab-size:2;
+  }
+  pre.code code{ font-size:inherit; background:none; border:0; padding:0;
+                 white-space:pre; color:inherit }
+  .codewrap .lang{
+    position:absolute; top:0; right:12px; transform:translateY(-50%);
+    font-family:var(--font-mono); font-size:10px; letter-spacing:.1em;
+    text-transform:uppercase; font-weight:600; color:var(--ink-3);
+    background:var(--bg); border:1px solid var(--line); border-radius:20px;
+    padding:2px 9px;
+  }
+
+  /* Pygments tokens, mapped onto the house palette so both themes work */
+  pre.code .c,  pre.code .c1, pre.code .cm, pre.code .cs,
+  pre.code .ch, pre.code .cpf{ color:var(--ink-3); font-style:italic }
+  pre.code .sd{ color:var(--ink-3) }
+  pre.code .k,  pre.code .kn, pre.code .kc, pre.code .kd,
+  pre.code .kp, pre.code .kr, pre.code .kt, pre.code .ow{ color:var(--accent) }
+  :root[data-theme="dark"] pre.code .k,
+  :root[data-theme="dark"] pre.code .kn,
+  :root[data-theme="dark"] pre.code .kc,
+  :root[data-theme="dark"] pre.code .kd,
+  :root[data-theme="dark"] pre.code .ow{ color:var(--accent-2) }
+  @media(prefers-color-scheme:dark){
+    pre.code .k, pre.code .kn, pre.code .kc,
+    pre.code .kd, pre.code .ow{ color:var(--accent-2) }
+  }
+  pre.code .s,  pre.code .s1, pre.code .s2, pre.code .sa,
+  pre.code .sb, pre.code .se, pre.code .si, pre.code .sr,
+  pre.code .ss, pre.code .sx{ color:var(--ok) }
+  pre.code .m,  pre.code .mi, pre.code .mf, pre.code .mh,
+  pre.code .mo, pre.code .il{ color:var(--ok) }
+  pre.code .nf, pre.code .fm{ color:var(--ink); font-weight:600 }
+  pre.code .nc, pre.code .ne{ color:var(--warn); font-weight:600 }
+  pre.code .nd{ color:var(--warn) }
+  pre.code .nb, pre.code .bp{ color:var(--ink-2) }
+  pre.code .nn, pre.code .nv, pre.code .no, pre.code .na{ color:var(--ink) }
+  pre.code .o,  pre.code .p{ color:var(--ink-2) }
+  pre.code .gd{ color:var(--gap) }
+  pre.code .gi{ color:var(--ok) }
+  pre.code .gh, pre.code .gu{ color:var(--ink-3); font-weight:600 }
+  pre.code .err{ color:inherit; border:0 }
+
+  /* blockquote -> callout */
+  blockquote{
+    margin:1.3em 0; padding:15px 18px; max-width:var(--prose);
+    border:1px solid var(--line); border-left:3px solid var(--ink-3);
+    border-radius:10px; background:var(--surface); color:var(--ink-2);
+    font-size:15px;
+  }
+  blockquote p{ margin:.25em 0 }
+  blockquote.warn{ border-left-color:var(--warn); background:var(--warn-bg) }
+
+  /* figures / diagrams */
+  figure.dgfig{ margin:1.6em 0 1.9em; max-width:none }
+  .dgscroll{ overflow-x:auto; border:1px solid var(--line); border-radius:12px;
+             background:var(--surface); padding:18px 16px }
+  svg.dg{ max-width:100%; height:auto; display:block; margin:0 auto }
+  svg.dg text{ font-family:var(--font-mono); fill:var(--ink); font-size:12px }
+  svg.dg .t-sm{ font-size:11px; fill:var(--ink-2) }
+  svg.dg .t-lbl{ font-size:10.5px; fill:var(--ink-3) }
+  svg.dg .t-bad{ font-size:10.5px; fill:var(--gap); font-weight:600 }
+  svg.dg .t-hd{ font-size:10.5px; font-weight:700; fill:var(--accent);
+                letter-spacing:.09em }
+  svg.dg .t-x{ font-size:15px; fill:var(--gap); font-weight:700 }
+  svg.dg .bx{ fill:var(--surface); stroke:var(--line-2); stroke-width:1.2 }
+  svg.dg .badbx{ fill:var(--gap-bg); stroke:var(--gap-line); stroke-width:1.3 }
+  svg.dg .warnbx{ fill:var(--warn-bg); stroke:var(--warn-line); stroke-width:1.3 }
+  svg.dg .hl{ fill:var(--ok-bg); stroke:var(--ok); stroke-width:1.6 }
+  svg.dg .dead{ fill:var(--surface-2); stroke:var(--ink-3); stroke-width:1.2;
+                stroke-dasharray:5 4; opacity:.8 }
+  svg.dg .band{ fill:var(--surface-2); stroke:var(--line); stroke-width:1 }
+  svg.dg .ok-band{ fill:var(--ok-bg); stroke:var(--ok-line) }
+  svg.dg .bad-band{ fill:var(--gap-bg); stroke:var(--gap-line) }
+  svg.dg .loopbx{ fill:none; stroke:var(--line-2); stroke-width:1;
+                  stroke-dasharray:4 3 }
+  svg.dg .life{ stroke:var(--line-2); stroke-width:1; stroke-dasharray:4 4 }
+  svg.dg .ln{ stroke:var(--ink-2); stroke-width:1.4; fill:none }
+  svg.dg .ln-bad{ stroke:var(--gap); stroke-width:1.6; stroke-dasharray:6 4; fill:none }
+  svg.dg .ln-dead{ stroke:var(--ink-3); stroke-width:1.4; stroke-dasharray:5 4; fill:none }
+  svg.dg .ln-soft{ stroke:var(--ink-3); stroke-width:1.2; stroke-dasharray:3 3; fill:none }
+  svg.dg .mk{ fill:var(--ink-2); stroke:none }
+  svg.dg .mk-bad{ fill:var(--gap); stroke:none }
+  svg.dg .mk-dead{ fill:var(--ink-3); stroke:none }
+  svg.dg .mk-soft{ fill:var(--ink-3); stroke:none }
+  figure.dgfig figcaption{
+    font-size:13.5px; color:var(--ink-2); line-height:1.5; margin-top:11px;
+    max-width:var(--prose); padding-left:2px;
+  }
+  figure.dgfig figcaption b{ color:var(--ink) }
+
+  /* severity pills in the findings tables */
+  .g{ font-family:var(--font-mono); font-size:10.5px; font-weight:700;
+      padding:1px 7px; border-radius:20px; border:1px solid; white-space:nowrap }
+  .g.p0{ color:var(--gap); background:var(--gap-bg); border-color:var(--gap-line) }
+  .g.p1{ color:var(--warn); background:var(--warn-bg); border-color:var(--warn-line) }
+  .g.p2{ color:var(--ink-3); background:var(--surface-2); border-color:var(--line-2) }
+
+  /* nested TOC */
+  nav.toc ol ol{ list-style:none; counter-reset:none; margin:2px 0 6px;
+                 padding-left:14px }
+  nav.toc ol ol li{ counter-increment:none }
+  nav.toc ol ol a{ padding:3px 8px 3px 10px; font-size:11.5px;
+                   color:var(--ink-3); border-left:1px solid var(--line) }
+  nav.toc ol ol a::before{ content:none }
+  nav.toc ol ol a:hover{ color:var(--ink-2) }
+
+  @media print{
+    nav.toc{ display:none }
+    section{ break-inside:avoid-page }
+    .dgscroll{ overflow:visible }
+    pre.code{ white-space:pre-wrap; word-break:break-word }
+    body{ background:#fff; font-size:11pt }
+  }
+
+</style>
+
+</head>
+<body>
+<div class="shell">
+  <header class="mast">
+    <div class="eyebrow">
+      <span>Codebase review · findings register</span><span class="sep">/</span>
+      <span>27 findings · P0 / P1 / P2</span><span class="sep">/</span>
+      <span>Review only — no code changed</span>
+    </div>
+    <h1 class="title">Critical Problem Areas</h1>
+    <p class="deck">Every finding verified against source, with a file:line citation and the specific mechanism of failure — <b>not a code smell, a consequence</b>. Five of them are P0.</p>
+    <div class="metabar">
+      <span><strong>Status:</strong> Review only. No project code has been modified.</span>
+      <span><strong>Date:</strong> 2026-08-10</span>
+      <span><strong>Baseline:</strong> <code>main</code> @ <code>35e2eeb</code></span>
+      <span><strong>Companion:</strong> <a href="01_Refactoring_Strategy.html"><code>01_Refactoring_Strategy.html</code></a> ·</span>
+      <span><a href="../architecture%20documents/System_Architecture_Overview.html">architecture review</a></span>
+    </div>
+  </header>
+
+  <div class="body-grid">
+    <nav class="toc" aria-label="Contents">
+      <p class="toc-h">Contents</p>
+      <ol>
+        <li><a href="#how-to-read-this">How to read this</a></li>
+        <li><a href="#summary">Summary</a></li>
+        <li><a href="#p0--fix-before-the-next-paper-run-or-deployment">P0 — Fix before the next paper run or deployment</a><ol><li><a href="#c-01">C-01 21 AC-GAN CLI hyperparameters are declared and never read</a></li><li><a href="#p-02">P-02 RF link drops any device idle &gt; 30 s, then the device hot-spins</a></li><li><a href="#c-02">C-02 Four advertised --model_type values crash</a></li><li><a href="#a-03">A-03 All authoritative state is in-process memory</a></li><li><a href="#p-03">P-03 wait_for_dock(timeout=None) is an uncancellable busy-poll</a></li></ol></li>
+        <li><a href="#p1--blocks-scale-deployment-or-reproducibility">P1 — Blocks scale, deployment, or reproducibility</a><ol><li><a href="#c-03">C-03 --mode hermes is a stub on both binaries</a></li><li><a href="#a-01">A-01 Two disconnected stacks; the only real bridge is inverted</a></li><li><a href="#e-01">E-01 requirements_core.txt is a workstation pip freeze</a></li><li><a href="#a-06">A-06 No packaging metadata</a></li><li><a href="#s-01">S-01 pickle.loads of an unauthenticated remote HTTP body</a></li><li><a href="#a-09">A-09 Single-threaded cluster service loop</a></li><li><a href="#p-01">P-01 Unbounded thread-per-device fan-out</a></li><li><a href="#a-04">A-04 Config-as-code: 47 trainer classes, 21.3 K LOC</a></li><li><a href="#m-02">M-02 CWD-relative dataset paths contradict the documented invocation</a></li><li><a href="#q-02">Q-02 Observability can crash the process it instruments</a></li></ol></li>
+        <li><a href="#p2--compounding-maintenance-cost">P2 — Compounding maintenance cost</a><ol><li><a href="#d-02">D-02 CANGANCentralTrainingConfig.py is a 1,900-line byte-clone</a></li><li><a href="#d-01">D-01 run_contact / deliver_contact are ~90 % duplicated</a></li><li><a href="#a-05">A-05 41–42 positional-parameter dispatchers</a></li><li><a href="#a-07">A-07 5.8 K LOC of vendored code with zero importers</a></li><li><a href="#a-08">A-08 Round-robin device→mule assignment ignores geography</a></li><li><a href="#m-01">M-01 863-line, complexity-170 function</a></li><li><a href="#e-02">E-02 docker-compose.yml hardcodes another project&#x27;s Windows paths</a></li><li><a href="#e-03">E-03 Hardcoded 192.168.129.x server table, duplicated</a></li><li><a href="#q-01">Q-01 Sequence used in annotations but never imported</a></li><li><a href="#q-03">Q-03 Private-attribute access across objects</a></li><li><a href="#t-01">T-01 Test suite is not green on main</a></li><li><a href="#g-01">G-01 Untracked, un-ignored directories in the working tree</a></li></ol></li>
+        <li><a href="#cross-cutting-statistics">Cross-cutting statistics</a></li>
+      </ol>
+    </nav>
+
+    <main>
+      <section id="how-to-read-this">
+        <div class="sec-eyebrow">&nbsp; · How to read this</div>
+        <h2>How to read this</h2>
+<p>Every finding below was verified against source. Each carries a file:line citation and
+the specific mechanism of failure — not a code smell, a consequence. Findings are graded:</p>
+<div class="tablewrap"><table class="wide">
+<thead>
+<tr>
+<th>Grade</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><span class="g p0">P0</span></td>
+<td>Produces wrong results, data loss, or hangs in normal operation. Fix before the next paper run or deployment.</td>
+</tr>
+<tr>
+<td><span class="g p1">P1</span></td>
+<td>Blocks scale, deployment, or reproducibility. Fix this quarter.</td>
+</tr>
+<tr>
+<td><span class="g p2">P2</span></td>
+<td>Compounding maintenance cost. Fix opportunistically or during related work.</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>Category legend:</strong> <code>ARCH</code> architecture decision · <code>DUP</code> duplicate logic ·
+<code>PERF</code> performance · <code>SCALE</code> scalability · <code>MAINT</code> maintainability · <code>CORR</code> correctness ·
+<code>SEC</code> security · <code>ENV</code> environment/deployment</p>
+<hr />
+      </section>
+      <section id="summary">
+        <div class="sec-eyebrow">&nbsp; · Summary</div>
+        <h2>Summary</h2>
+<div class="tablewrap"><table class="wide">
+<thead>
+<tr>
+<th>ID</th>
+<th>Grade</th>
+<th>Cat</th>
+<th>Finding</th>
+<th>Where</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="#c-01">C-01</a></td>
+<td><span class="g p0">P0</span></td>
+<td>CORR</td>
+<td>21 AC-GAN CLI hyperparameters are declared and never read</td>
+<td><code>ArgumentConfigLoad.py:76-96</code></td>
+</tr>
+<tr>
+<td><a href="#p-02">P-02</a></td>
+<td><span class="g p0">P0</span></td>
+<td>PERF/SCALE</td>
+<td>RF link drops any device idle &gt; 30 s; no keepalive, no reconnect; device then hot-spins</td>
+<td><code>tcp_rf_link.py:375</code></td>
+</tr>
+<tr>
+<td><a href="#c-02">C-02</a></td>
+<td><span class="g p0">P0</span></td>
+<td>CORR</td>
+<td>4 advertised <code>--model_type</code> values crash with <code>AttributeError: 'NoneType'</code></td>
+<td><code>modelCentralTrainingConfigLoad.py:70-77</code></td>
+</tr>
+<tr>
+<td><a href="#a-03">A-03</a></td>
+<td><span class="g p0">P0</span></td>
+<td>SCALE</td>
+<td>All authoritative state is in-process; <code>DeviceRegistry.save()</code> is a no-op</td>
+<td><code>device_registry.py:210-219</code></td>
+</tr>
+<tr>
+<td><a href="#p-03">P-03</a></td>
+<td><span class="g p0">P0</span></td>
+<td>PERF</td>
+<td><code>wait_for_dock(timeout=None)</code> is an uncancellable busy-poll — mule hangs forever on cluster loss</td>
+<td><code>client_cluster.py:215</code></td>
+</tr>
+<tr>
+<td><a href="#c-03">C-03</a></td>
+<td><span class="g p1">P1</span></td>
+<td>CORR/ARCH</td>
+<td><code>--mode hermes</code> is a stub on both binaries; README presents it as the HERMES path</td>
+<td><code>TrainingClient.py:192</code></td>
+</tr>
+<tr>
+<td><a href="#a-01">A-01</a></td>
+<td><span class="g p1">P1</span></td>
+<td>ARCH</td>
+<td>Two disconnected stacks; the only real bridge points the wrong way</td>
+<td><code>cluster.py:113</code>, <code>device.py:89</code></td>
+</tr>
+<tr>
+<td><a href="#e-01">E-01</a></td>
+<td><span class="g p1">P1</span></td>
+<td>ENV</td>
+<td><code>requirements_core.txt</code> is a workstation <code>pip freeze</code>; 4 pins cannot install</td>
+<td><code>AppSetup/requirements_core.txt</code></td>
+</tr>
+<tr>
+<td><a href="#a-06">A-06</a></td>
+<td><span class="g p1">P1</span></td>
+<td>ARCH/ENV</td>
+<td>No packaging metadata; <code>sys.path</code> hacks in 16 modules; CWD-dependent everything</td>
+<td>repository root</td>
+</tr>
+<tr>
+<td><a href="#s-01">S-01</a></td>
+<td><span class="g p1">P1</span></td>
+<td>SEC</td>
+<td><code>pickle.loads</code> of an unauthenticated remote HTTP body</td>
+<td><code>cloud_link.py:171,242</code></td>
+</tr>
+<tr>
+<td><a href="#a-09">A-09</a></td>
+<td><span class="g p1">P1</span></td>
+<td>SCALE</td>
+<td>Single-threaded cluster service loop is the system throughput ceiling</td>
+<td><code>cluster.py:297-375</code></td>
+</tr>
+<tr>
+<td><a href="#p-01">P-01</a></td>
+<td><span class="g p1">P1</span></td>
+<td>PERF/SCALE</td>
+<td>Unbounded thread-per-device fan-out with per-thread joins</td>
+<td><code>host_mission.py:519-527</code></td>
+</tr>
+<tr>
+<td><a href="#a-04">A-04</a></td>
+<td><span class="g p1">P1</span></td>
+<td>ARCH/DUP</td>
+<td>Config-as-code: 47 trainer classes, 21.3 K LOC, one loss function copied 24×</td>
+<td><code>Config/ModelTrainingConfig/</code></td>
+</tr>
+<tr>
+<td><a href="#m-02">M-02</a></td>
+<td><span class="g p1">P1</span></td>
+<td>MAINT</td>
+<td>CWD-relative dataset paths contradict the documented invocation</td>
+<td><code>Config/DatasetConfig/**</code></td>
+</tr>
+<tr>
+<td><a href="#q-02">Q-02</a></td>
+<td><span class="g p1">P1</span></td>
+<td>CORR</td>
+<td>Observability can crash the process it instruments</td>
+<td><code>events.py:108</code></td>
+</tr>
+<tr>
+<td><a href="#d-02">D-02</a></td>
+<td><span class="g p2">P2</span></td>
+<td>DUP</td>
+<td><code>CANGANCentralTrainingConfig.py</code> is a 1,900-line byte-clone</td>
+<td><code>Config/…/FullModel/</code></td>
+</tr>
+<tr>
+<td><a href="#d-01">D-01</a></td>
+<td><span class="g p2">P2</span></td>
+<td>DUP</td>
+<td><code>run_contact</code> / <code>deliver_contact</code> ~90 % duplicated</td>
+<td><code>host_mission.py:342,566</code></td>
+</tr>
+<tr>
+<td><a href="#a-05">A-05</a></td>
+<td><span class="g p2">P2</span></td>
+<td>MAINT</td>
+<td>41–42 positional-parameter dispatchers</td>
+<td><code>modelCentralTrainingConfigLoad.py:49</code></td>
+</tr>
+<tr>
+<td><a href="#a-07">A-07</a></td>
+<td><span class="g p2">P2</span></td>
+<td>ARCH</td>
+<td>5.8 K LOC vendored <code>FlightFramework</code> with zero importers</td>
+<td><code>FlightFramework/</code></td>
+</tr>
+<tr>
+<td><a href="#a-08">A-08</a></td>
+<td><span class="g p2">P2</span></td>
+<td>SCALE</td>
+<td>Round-robin device→mule assignment ignores geography</td>
+<td><code>device_registry.py:159-165</code></td>
+</tr>
+<tr>
+<td><a href="#m-01">M-01</a></td>
+<td><span class="g p2">P2</span></td>
+<td>MAINT</td>
+<td>863-line / complexity-170 function</td>
+<td><code>analysis/exp3.py:342</code></td>
+</tr>
+<tr>
+<td><a href="#e-02">E-02</a></td>
+<td><span class="g p2">P2</span></td>
+<td>ENV</td>
+<td><code>docker-compose.yml</code> hardcodes another project's absolute Windows paths</td>
+<td><code>DockerSetup/docker-compose.yml</code></td>
+</tr>
+<tr>
+<td><a href="#e-03">E-03</a></td>
+<td><span class="g p2">P2</span></td>
+<td>MAINT</td>
+<td>Hardcoded <code>192.168.129.x</code> server table in two places</td>
+<td><code>TrainingClient.py:124-133</code></td>
+</tr>
+<tr>
+<td><a href="#q-01">Q-01</a></td>
+<td><span class="g p2">P2</span></td>
+<td>MAINT</td>
+<td><code>Sequence</code> used in annotations, never imported</td>
+<td><code>host_mission.py:344</code></td>
+</tr>
+<tr>
+<td><a href="#q-03">Q-03</a></td>
+<td><span class="g p2">P2</span></td>
+<td>MAINT</td>
+<td>Private-attribute access across objects despite a public property</td>
+<td><code>cluster.py:346,350</code></td>
+</tr>
+<tr>
+<td><a href="#t-01">T-01</a></td>
+<td><span class="g p2">P2</span></td>
+<td>MAINT</td>
+<td>Test suite is not green on <code>main</code>; one stale assertion</td>
+<td><code>test_experiments_calibration.py:36</code></td>
+</tr>
+<tr>
+<td><a href="#g-01">G-01</a></td>
+<td><span class="g p2">P2</span></td>
+<td>ENV</td>
+<td>Untracked, un-ignored directories a <code>git add -A</code> would commit</td>
+<td><code>.claude/</code>, <code>hermes_rl/</code>, <code>.idea/</code></td>
+</tr>
+</tbody>
+</table></div>
+<hr />
+      </section>
+      <section id="p0--fix-before-the-next-paper-run-or-deployment">
+        <div class="sec-eyebrow">&nbsp; · P0 — Fix before the next paper run or deployment</div>
+        <h2>P0 — Fix before the next paper run or deployment</h2>
+<h3 id="c-01"><span class="fid">C-01</span> 21 AC-GAN CLI hyperparameters are declared and never read</h3>
+<p class="pillrow"><span class="pill plain"><span class="dot"></span>CORR</span><span class="pill gap"><span class="dot"></span>P0</span></p>
+<p><code>Config/SessionConfig/ArgumentConfigLoad.py:76-96</code> declares 21 AC-GAN training flags:</p>
+<div class="codewrap"><span class="lang">python</span><pre class="code"><code><span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">&quot;--AC_disc_learning_rate&quot;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">float</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mf">0.00001</span><span class="p">,</span> <span class="err">…</span><span class="p">)</span>
+<span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">&quot;--AC_gen_learning_rate&quot;</span><span class="p">,</span>  <span class="nb">type</span><span class="o">=</span><span class="nb">float</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mf">0.00003</span><span class="p">,</span> <span class="err">…</span><span class="p">)</span>
+<span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">&quot;--AC_d_to_g_ratio&quot;</span><span class="p">,</span>       <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span>   <span class="n">default</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>       <span class="err">…</span><span class="p">)</span>
+<span class="c1"># …18 more: decay_steps, decay_rate, staircase, beta_1, beta_2,</span>
+<span class="c1">#   valid/fake smoothing factors, attack/benign/validity/class weights</span></code></pre></div>
+<p>Repository-wide search for any of these names returns <strong>exactly one hit each — the
+declaration itself.</strong> Nothing downstream reads <code>args.AC_*</code>.</p>
+<p>The values that actually train the model are literals inside the trainer:</p>
+<div class="codewrap wide"><span class="lang">python</span><pre class="code"><code><span class="c1"># ACGANCentralTrainingConfig.py:109-118</span>
+<span class="n">lr_schedule_gen</span>  <span class="o">=</span> <span class="n">ExponentialDecay</span><span class="p">(</span><span class="n">initial_learning_rate</span><span class="o">=</span><span class="mf">0.00012</span><span class="p">,</span> <span class="n">decay_steps</span><span class="o">=</span><span class="mi">10000</span><span class="p">,</span>
+                                    <span class="n">decay_rate</span><span class="o">=</span><span class="mf">0.98</span><span class="p">,</span> <span class="n">staircase</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+<span class="n">lr_schedule_disc</span> <span class="o">=</span> <span class="n">ExponentialDecay</span><span class="p">(</span><span class="n">initial_learning_rate</span><span class="o">=</span><span class="mf">0.00007</span><span class="p">,</span> <span class="n">decay_steps</span><span class="o">=</span><span class="mi">10000</span><span class="p">,</span>
+                                    <span class="n">decay_rate</span><span class="o">=</span><span class="mf">0.98</span><span class="p">,</span> <span class="n">staircase</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+<span class="bp">self</span><span class="o">.</span><span class="n">gen_optimizer</span>  <span class="o">=</span> <span class="n">Adam</span><span class="p">(</span><span class="n">learning_rate</span><span class="o">=</span><span class="n">lr_schedule_gen</span><span class="p">,</span>  <span class="n">beta_1</span><span class="o">=</span><span class="mf">0.5</span><span class="p">,</span> <span class="n">beta_2</span><span class="o">=</span><span class="mf">0.999</span><span class="p">,</span> <span class="n">clipnorm</span><span class="o">=</span><span class="mf">1.0</span><span class="p">)</span>
+<span class="bp">self</span><span class="o">.</span><span class="n">disc_optimizer</span> <span class="o">=</span> <span class="n">Adam</span><span class="p">(</span><span class="n">learning_rate</span><span class="o">=</span><span class="n">lr_schedule_disc</span><span class="p">,</span> <span class="n">beta_1</span><span class="o">=</span><span class="mf">0.5</span><span class="p">,</span> <span class="n">beta_2</span><span class="o">=</span><span class="mf">0.999</span><span class="p">,</span> <span class="n">clipnorm</span><span class="o">=</span><span class="mf">1.0</span><span class="p">)</span></code></pre></div>
+<p>The D:G ratio is worse: it is a <strong>default argument of <code>fit</code></strong>
+(<code>ACGANCentralTrainingConfig.py:816</code>, <code>def fit(self, X_train=None, y_train=None, d_to_g_ratio=3)</code>)
+and <code>TrainingClient.main</code> calls <code>client.fit()</code> with no arguments — so the effective
+ratio is always 3:1 while <code>--AC_d_to_g_ratio</code> advertises a default of 1.</p>
+<p><strong>Failure scenario.</strong> A researcher runs
+<code>TrainingClient.py --model_type AC-GAN --AC_gen_learning_rate 0.001 --save_name lr_high</code>
+and then <code>--AC_gen_learning_rate 0.00001 --save_name lr_low</code>. Both runs train with
+<code>0.00012</code>. The two checkpoints differ only by dataset-sampling noise, and any
+lab-notebook or paper table recording "generator LR = 0.001 / 0.00001" is wrong. There
+is no warning, no log line, and no test that would catch it.</p>
+<p><strong>Why this is P0.</strong> It silently invalidates hyperparameter results. Nothing else in this
+register can produce a wrong number that looks right.</p>
+<hr />
+<h3 id="p-02"><span class="fid">P-02</span> RF link drops any device idle &gt; 30 s, then the device hot-spins</h3>
+<p class="pillrow"><span class="pill plain"><span class="dot"></span>PERF / SCALE</span><span class="pill gap"><span class="dot"></span>P0</span></p>
+<p><code>hermes/transport/tcp_rf_link.py:375</code> sets <strong>one</strong> timeout for both directions on every
+registered device socket:</p>
+<div class="codewrap"><span class="lang">python</span><pre class="code"><code><span class="n">conn</span><span class="o">.</span><span class="n">settimeout</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_send_timeout_s</span><span class="p">)</span>      <span class="c1"># default 30.0</span></code></pre></div>
+<p><code>_reader_loop</code> then calls <code>recv_message(conn)</code> with no explicit timeout, so the socket's
+30 s applies to the <strong>read</strong>. After 30 s of silence:</p>
+<p><code>socket.timeout</code> → <code>OSError</code> → caught by <code>recv_exactly</code>'s <code>except OSError</code> → <code>WireError</code>
+→ <code>break</code> in <code>_reader_loop</code> → <code>_drop_device(device_id)</code>.</p>
+<p>The device side is the same with a 60 s timeout (<code>tcp_rf_link.py:497</code>). When its reader
+breaks it sets <code>self._closed</code>, after which:</p>
+<div class="codewrap wide"><span class="lang">python</span><pre class="code"><code><span class="c1"># ClientMission.serve_once →</span>
+<span class="bp">self</span><span class="o">.</span><span class="n">rf</span><span class="o">.</span><span class="n">recv_open_solicit</span><span class="p">(</span><span class="o">...</span><span class="p">)</span>  <span class="c1"># → _raise_if_closed() → RFLinkError, immediately</span>
+<span class="k">except</span> <span class="n">RFLinkError</span><span class="p">:</span> <span class="k">return</span> <span class="kc">None</span></code></pre></div>
+<p>and <code>DeviceService.run</code> (<code>hermes/processes/device.py:184-206</code>) loops on that <code>None</code> with
+<strong>no sleep, no backoff, and no reconnect</strong> — a 100 % CPU spin on the edge device until
+the process is killed.</p>
+<p><strong>Failure scenario.</strong> A mule flies a 90-second leg between two contact clusters. Every
+device in the <em>next</em> cluster has been silent for 90 s, so the mule dropped their sockets
+at t+30 s. The Pass-1 broadcast reaches nobody; <code>run_contact</code> records <code>TIMEOUT</code> for
+every device; <code>close_round</code> raises <code>PartialFedAvgError("no submissions to aggregate")</code>;
+the supervisor logs an empty round and carries θ forward. The mission produces zero
+federated learning, and every device is now spinning a core.</p>
+<p><strong>Why the tests do not catch it.</strong> Every integration test completes in well under 30
+seconds.</p>
+<p><strong>The fix already exists in the sibling transport.</strong> <code>tcp_dock_link.py:283-299</code> handles
+exactly this case correctly and says so:</p>
+<div class="codewrap"><span class="lang">python</span><pre class="code"><code><span class="c1"># Reader stays blocking-forever — mules can sit idle between</span>
+<span class="c1"># missions on a long-lived dock connection.</span>
+<span class="n">conn</span><span class="o">.</span><span class="n">settimeout</span><span class="p">(</span><span class="kc">None</span><span class="p">)</span>
+<span class="c1"># S2-M3: bound the dock SEND-timeout via SO_SNDTIMEO …</span>
+<span class="n">conn</span><span class="o">.</span><span class="n">setsockopt</span><span class="p">(</span><span class="n">socket</span><span class="o">.</span><span class="n">SOL_SOCKET</span><span class="p">,</span> <span class="n">socket</span><span class="o">.</span><span class="n">SO_SNDTIMEO</span><span class="p">,</span> <span class="n">tv</span><span class="p">)</span></code></pre></div>
+<p>The RF link was never updated to match.</p>
+<p><em>Secondary:</em> the <code>SO_SNDTIMEO</code> value is packed as <code>struct.pack("ll", …)</code> (a Linux
+<code>timeval</code>). Windows expects a 4-byte DWORD of milliseconds, so the call raises and is
+swallowed by <code>except OSError</code> — the dock send timeout is silently absent on Windows.</p>
+<hr />
+<h3 id="c-02"><span class="fid">C-02</span> Four advertised <code>--model_type</code> values crash</h3>
+<p class="pillrow"><span class="pill plain"><span class="dot"></span>CORR</span><span class="pill gap"><span class="dot"></span>P0</span></p>
+<p><code>ArgumentConfigLoad.py:62-65</code> advertises eight model types. Four of them cannot run:</p>
+<div class="codewrap"><span class="lang">python</span><pre class="code"><code><span class="c1"># modelCentralTrainingConfigLoad.py:70-77</span>
+<span class="k">elif</span> <span class="n">model_type</span> <span class="o">==</span> <span class="s2">&quot;NIDS-IOT-Binary&quot;</span><span class="p">:</span>            <span class="n">client</span> <span class="o">=</span> <span class="kc">None</span>
+<span class="k">elif</span> <span class="n">model_type</span> <span class="o">==</span> <span class="s2">&quot;NIDS-IOT-Multiclass&quot;</span><span class="p">:</span>        <span class="n">client</span> <span class="o">=</span> <span class="kc">None</span>
+<span class="k">elif</span> <span class="n">model_type</span> <span class="o">==</span> <span class="s2">&quot;NIDS-IOT-Multiclass-Dynamic&quot;</span><span class="p">:</span> <span class="n">client</span> <span class="o">=</span> <span class="kc">None</span>
+<span class="c1"># …and CANGAN has no branch at all — lines 158-166 are entirely commented out</span></code></pre></div>
+<p><code>client</code> stays <code>None</code>, is returned, and <code>TrainingClient.main</code> calls <code>client.fit()</code> →
+<code>AttributeError: 'NoneType' object has no attribute 'fit'</code> after the full dataset load
+and model construction have already run.</p>
+<p><strong>Failure scenario.</strong> A user follows <code>--help</code>, selects <code>--model_type CANGAN</code>, waits
+several minutes for 400 K rows to load and preprocess, and gets an unhandled
+<code>AttributeError</code> with no indication that the mode was never implemented. The <code>CANGAN</code>
+choice is also offered for <code>--dataset</code> and <code>--dataset_processing</code>, and
+<code>datasetLoadProcess.py:77</code> has a matching commented-out branch — so the failure is
+consistent across three flags.</p>
+<hr />
+<h3 id="a-03"><span class="fid">A-03</span> All authoritative state is in-process memory</h3>
+<p class="pillrow"><span class="pill plain"><span class="dot"></span>SCALE</span><span class="pill gap"><span class="dot"></span>P0</span></p>
+<p><code>DeviceRegistry</code> is described in its own module docstring as "single source of truth for
+cluster-scope devices". Its persistence is:</p>
+<div class="codewrap wide"><span class="lang">python</span><pre class="code"><code><span class="c1"># hermes/cluster/device_registry.py:210-219</span>
+<span class="k">def</span> <span class="nf">save</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">path</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Phase-6 hook. Intentionally a no-op until then.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="kc">None</span>
+
+<span class="nd">@classmethod</span>
+<span class="k">def</span> <span class="nf">load</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">path</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;DeviceRegistry&quot;</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Phase-6 hook. Returns an empty registry until real persistence lands.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="bp">cls</span><span class="p">()</span></code></pre></div>
+<p>Nothing else persists either — see the state-ownership table in the
+<a href="../architecture%20documents/System_Architecture_Overview.html#71-hermes-mission-flow-the-real-path">architecture overview §7.1</a>.
+<code>_pending</code> cluster rounds, <code>DeviceSchedulerState</code>, <code>_prepared_delta</code> on devices, and the
+mule's <code>_pending_delivery_report</code> are all in-process only.</p>
+<p><strong>Failure scenario.</strong> The cluster process is restarted mid-experiment (OOM, node
+maintenance, a deploy). On restart the registry is empty, so <code>slice_for</code> returns an
+empty tuple for every mule, every <code>MissionSlice</code> is empty, every mule's contact queue is
+empty, and every mission fails with <code>"no submissions to aggregate"</code> — permanently, with
+no error indicating why. The only recovery is restarting the whole topology from the
+orchestrator, which discards all accumulated <code>on_time_history</code> / <code>missed_history</code> /
+<code>delivery_priority</code> and therefore all scheduler adaptation.</p>
+<p>There is no HA story, no warm restart, and no operator-visible signal that the registry
+is empty rather than idle.</p>
+<hr />
+<h3 id="p-03"><span class="fid">P-03</span> <code>wait_for_dock(timeout=None)</code> is an uncancellable busy-poll</h3>
+<p class="pillrow"><span class="pill plain"><span class="dot"></span>PERF</span><span class="pill gap"><span class="dot"></span>P0</span></p>
+<div class="codewrap"><span class="lang">python</span><pre class="code"><code><span class="c1"># hermes/mule/client_cluster.py:215-226</span>
+<span class="k">def</span> <span class="nf">wait_for_dock</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">timeout</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+    <span class="n">deadline</span> <span class="o">=</span> <span class="kc">None</span> <span class="k">if</span> <span class="n">timeout</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">+</span> <span class="n">timeout</span>
+    <span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">dock</span><span class="o">.</span><span class="n">is_available</span><span class="p">():</span>
+            <span class="k">return</span> <span class="kc">True</span>
+        <span class="k">if</span> <span class="n">deadline</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">&gt;=</span> <span class="n">deadline</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">False</span>
+        <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dock_poll_interval_s</span><span class="p">)</span></code></pre></div>
+<p><code>MuleSupervisor</code> calls it with <code>timeout=None</code> twice — <code>mule_main.py:306</code> (single-pass)
+and <code>mule_main.py:425</code> (inter-pass dock). With <code>timeout=None</code> the loop has <strong>no exit
+condition</strong> other than the dock becoming available. It does not consult
+<code>MuleService._stop_event</code>.</p>
+<p><strong>Failure scenario.</strong> The cluster process dies during a mule's Pass 1. The mule finishes
+Pass 1, calls <code>wait_for_dock(timeout=None)</code>, and polls forever. SIGTERM sets the
+service's stop event, but the supervisor only checks it <em>between</em> missions, so
+<code>shutdown_all</code> waits its full 15 s timeout and then <code>SIGKILL</code>s the mule — losing the
+Pass-1 aggregate and the delivery-report carryover that were about to be uploaded. In a
+long-running deployment (not orchestrated by the test harness) the mule simply hangs
+indefinitely.</p>
+<hr />
+      </section>
+      <section id="p1--blocks-scale-deployment-or-reproducibility">
+        <div class="sec-eyebrow">&nbsp; · P1 — Blocks scale, deployment, or reproducibility</div>
+        <h2>P1 — Blocks scale, deployment, or reproducibility</h2>
+<h3 id="c-03"><span class="fid">C-03</span> <code>--mode hermes</code> is a stub on both binaries</h3>
+<p class="pillrow"><span class="pill plain"><span class="dot"></span>CORR / ARCH</span><span class="pill warn"><span class="dot"></span>P1</span></p>
+<p>README, §"Legacy training pipeline":</p>
+<blockquote>
+<p><code>python3 App/TrainingApp/Client/TrainingClient.py &lt;usual-args&gt; --mode hermes  # HERMES path</code></p>
+</blockquote>
+<p>What the flag actually does:</p>
+<div class="codewrap"><span class="lang">python</span><pre class="code"><code><span class="c1"># App/TrainingApp/Client/TrainingClient.py:192-197</span>
+<span class="k">def</span> <span class="nf">_stub_train</span><span class="p">(</span><span class="n">theta</span><span class="p">,</span> <span class="n">synth</span><span class="p">):</span>
+    <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span>
+        <span class="s2">&quot;hermes-mode local_train not wired yet — Sprint 1.5 deliverable&quot;</span><span class="p">)</span></code></pre></div>
+<div class="codewrap wide"><span class="lang">python</span><pre class="code"><code><span class="c1"># App/TrainingApp/HFLHost/HFLHost.py:155-189  (_run_hermes_main)</span>
+<span class="n">cluster</span> <span class="o">=</span> <span class="n">HFLHostCluster</span><span class="p">(</span><span class="n">registry</span><span class="o">=</span><span class="err">…</span><span class="p">,</span> <span class="n">generator</span><span class="o">=</span><span class="n">StubGeneratorHost</span><span class="p">(</span><span class="n">disc_weights</span><span class="o">=</span><span class="p">[]),</span>
+                         <span class="n">dock</span><span class="o">=</span><span class="n">LoopbackDockLink</span><span class="p">(),</span> <span class="n">synth_batch_size</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+<span class="c1"># No serve_forever yet …</span>
+<span class="nb">print</span><span class="p">(</span><span class="s2">&quot;MODE=hermes; … awaiting Sprint 1.5 + Sprint 2 wiring.&quot;</span><span class="p">)</span></code></pre></div>
+<p>The client constructs a <code>ClientMission</code> whose training callback raises on first use; the
+host constructs a cluster over a loopback link and returns. Neither serves. Both print a
+success-shaped banner. <code>tests/unit/test_mode_switch.py</code> asserts that the <em>banner</em> is
+printed, which is why the gap is invisible to CI.</p>
+<p>Sprint 1.5 and Sprint 2 are both marked closed in the README's status section. The
+"awaiting" comments are stale by two sprints.</p>
+<hr />
+<h3 id="a-01"><span class="fid">A-01</span> Two disconnected stacks; the only real bridge is inverted</h3>
+<p class="pillrow"><span class="pill plain"><span class="dot"></span>ARCH</span><span class="pill warn"><span class="dot"></span>P1</span></p>
+<p>With <code>--mode hermes</code> inert (<a href="#c-03">C-03</a>), the only executed link between the two
+stacks runs the wrong way — the core library imports the experiment harness:</p>
+<div class="codewrap"><span class="lang">python</span><pre class="code"><code><span class="c1"># hermes/processes/cluster.py:113</span>
+<span class="kn">from</span> <span class="nn">experiments.exp4.model_task</span> <span class="kn">import</span> <span class="n">load_weights</span>
+<span class="c1"># hermes/processes/cluster.py:140, 461</span>
+<span class="kn">from</span> <span class="nn">experiments.exp4.model_task</span> <span class="kn">import</span> <span class="n">load_xy</span><span class="p">,</span> <span class="n">evaluate_theta</span>
+<span class="c1"># hermes/processes/device.py:89</span>
+<span class="kn">from</span> <span class="nn">experiments.exp4.model_task</span> <span class="kn">import</span> <span class="n">load_xy</span><span class="p">,</span> <span class="n">make_local_train_fn</span></code></pre></div>
+<p><code>device.py:86-88</code> acknowledges it:</p>
+<blockquote>
+<p><em>"Layer note: hermes is the core library; this reaches up into the experiments package
+only on the opt-in real-model path, and only in a spawned device subprocess whose CWD
+is the repo root."</em></p>
+</blockquote>
+<p><strong>Consequences.</strong> <code>hermes/</code> cannot be packaged or deployed without <code>experiments/</code>. The
+real-model path only works when CWD is the repository root. And the two Protocols
+designed precisely for this (<code>GeneratorHost</code>, <code>LocalTrainFn</code>) are bypassed on the
+cluster side — <code>StubGeneratorHost</code> still emits zero tensors as "synthetic samples" in
+every live path, meaning the GAN half of "GAN-based NIDS" has never run inside HERMES.</p>
+<hr />
+<h3 id="e-01"><span class="fid">E-01</span> <code>requirements_core.txt</code> is a workstation <code>pip freeze</code></h3>
+<p class="pillrow"><span class="pill plain"><span class="dot"></span>ENV</span><span class="pill warn"><span class="dot"></span>P1</span></p>
+<p>README: <em>"Core HERMES + test deps (always required)"</em> and <em>"If you only intend to run the
+multi-process HERMES path, <code>requirements_core.txt</code> + pytest is enough — <code>flwr</code> is only
+needed for the legacy path."</em></p>
+<p>The file contains <strong>273 pinned packages</strong> including <code>flwr==1.9.0</code>, <code>tensorflow==2.15.0</code>,
+<code>torch==2.3.1</code>, <code>torchvision</code>, <code>transformers</code>, <code>PyQt5</code>, <code>ansible</code>, <code>boto3</code>,
+<code>azure-storage-blob</code>, <code>pymavlink</code>, <code>hagrid</code>, <code>syft-proto</code>, <code>opendp</code>, <code>Sphinx</code>, and
+<code>gps==3.19</code>. It differs from <code>requirements_edge.txt</code> by 45 lines out of ~300 — the
+"lightweight core" is not lightweight and not different.</p>
+<p>Four classes of pin cannot install:</p>
+<div class="tablewrap"><table class="wide">
+<thead>
+<tr>
+<th>Pin</th>
+<th>Problem</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>uuid==1.30</code></td>
+<td>abandoned 2006 backport that <strong>shadows the stdlib <code>uuid</code> module</strong></td>
+</tr>
+<tr>
+<td><code>zmq==0.0.0</code></td>
+<td>placeholder package; the real one (<code>pyzmq==25.1.0</code>) is also pinned</td>
+</tr>
+<tr>
+<td><code>serial==0.0.97</code></td>
+<td>unrelated package; the intended one (<code>pyserial==3.5</code>) is also pinned</td>
+</tr>
+<tr>
+<td><code>gps</code>, <code>distro-info</code>, <code>launchpadlib</code>, <code>wadllib</code>, <code>ssh-import-id</code>, <code>python-apt</code></td>
+<td>Debian/Ubuntu system packages, not PyPI distributions</td>
+</tr>
+</tbody>
+</table></div>
+<p><code>hermes/</code> imports exactly two third-party names: <code>numpy</code> and (in tests) <code>pytest</code>.</p>
+<p><strong>Failure scenario.</strong> A collaborator or a fresh AERPAW node runs
+<code>pip install -r AppSetup/requirements_core.txt</code>. It fails on <code>gps==3.19</code>. If they
+<code>--no-deps</code> past it, <code>uuid==1.30</code> shadows the stdlib module and breaks imports in
+unrelated libraries. The documented install path does not work.</p>
+<hr />
+<h3 id="a-06"><span class="fid">A-06</span> No packaging metadata</h3>
+<p class="pillrow"><span class="pill plain"><span class="dot"></span>ARCH / ENV</span><span class="pill warn"><span class="dot"></span>P1</span></p>
+<p>Missing from the repository root: <code>pyproject.toml</code>, <code>setup.py</code>, <code>pytest.ini</code>,
+<code>conftest.py</code>, <code>LICENSE</code>. The README's repository-layout block lists <code>pytest.ini</code>; the
+README's footer declares an MIT licence and links <code>LICENSE</code>. Neither file exists.</p>
+<p>Consequences visible in the code:</p>
+<ul>
+<li>16 modules carry <code>sys.path.append(os.path.abspath('../../..'))</code> — a fragile
+  CWD-relative substitute for an installed package.</li>
+<li><code>python -m hermes.processes.cluster</code> only resolves when CWD is the repository root,
+  which is why <code>device.py</code>'s layer-note has to state that as a precondition.</li>
+<li><code>@pytest.mark.slow</code> is used in <code>test_mode_switch.py</code> and <code>test_exp4_model_task.py</code> and
+  registered nowhere, emitting <code>PytestUnknownMarkWarning</code> on every run. The README's
+  documented <code>pytest tests/ -m slow</code> works only by accident and would fail under
+  <code>--strict-markers</code>.</li>
+<li>There is no way to pin what <code>hermes/</code> needs separately from what the TensorFlow stack
+  needs — which is the root cause of <a href="#e-01">E-01</a>.</li>
+</ul>
+<hr />
+<h3 id="s-01"><span class="fid">S-01</span> <code>pickle.loads</code> of an unauthenticated remote HTTP body</h3>
+<p class="pillrow"><span class="pill plain"><span class="dot"></span>SEC</span><span class="pill warn"><span class="dot"></span>P1</span></p>
+<div class="codewrap wide"><span class="lang">python</span><pre class="code"><code><span class="c1"># hermes/transport/cloud_link.py:159-171</span>
+<span class="k">with</span> <span class="n">urllib</span><span class="o">.</span><span class="n">request</span><span class="o">.</span><span class="n">urlopen</span><span class="p">(</span><span class="n">req</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="n">timeout_s</span><span class="p">)</span> <span class="k">as</span> <span class="n">resp</span><span class="p">:</span>
+    <span class="err">…</span>
+    <span class="n">body</span> <span class="o">=</span> <span class="n">resp</span><span class="o">.</span><span class="n">read</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">pickle</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">body</span><span class="p">)</span>          <span class="c1"># ← arbitrary code execution on malicious body</span></code></pre></div>
+<p><code>base_url</code> comes from <code>ClusterConfig.tier3_url</code> and is fetched over <strong>plain HTTP</strong> with
+no TLS requirement, no authentication header, and no signature check on the returned
+<code>GeneratorRefinement</code>. Unpickling untrusted bytes is arbitrary code execution in the
+cluster process.</p>
+<p><code>hermes/transport/wire.py:12-17</code> explicitly reasons about this for the LAN transports
+and concludes pickle is acceptable <em>because</em> "the only senders are co-deployed mule /
+cluster / device processes". That reasoning does not extend to an arbitrary remote URL,
+and the cloud link inherited the codec without inheriting the caveat.</p>
+<p>Note the asymmetry: dock bundles carry a SHA-256 <code>bundle_sig</code> verified on receipt
+(<code>hermes/types/signatures.py</code>); cloud refinements carry no integrity field at all.</p>
+<p><strong>Threat model note.</strong> The exposure is real only when <code>tier3_url</code> is set (Chameleon /
+AERPAW deployment), and the current deployment is a research testbed. That bounds the
+urgency, not the severity.</p>
+<hr />
+<h3 id="a-09"><span class="fid">A-09</span> Single-threaded cluster service loop</h3>
+<p class="pillrow"><span class="pill plain"><span class="dot"></span>SCALE</span><span class="pill warn"><span class="dot"></span>P1</span></p>
+<p><code>ClusterService.run</code> (<code>hermes/processes/cluster.py:297-375</code>) processes <strong>one</strong> UP bundle
+per iteration, and does everything inline:</p>
+<div class="codewrap wide"><span class="lang">text</span><pre class="code"><code>recv_up(timeout=1.0) → ingest_up_bundle → aggregate_pending (cross-mule FedAvg)
+  → close_cluster_round → _emit_model_evaluation (a full TensorFlow forward pass
+    over the held-out set) → for mid in registered_mules(): send_down(dispatch_down_bundle(mid))</code></pre></div>
+<p><code>dispatch_down_bundle</code> per mule performs <code>slice_for</code> (O(N) over all devices), a
+<code>registry.get</code> per slice member, a <code>get_global_disc_weights</code> copy, a <code>make_synth_batch</code>,
+and a SHA-256 signature over the whole θ. With M mules that is M full model
+serializations, serialized behind one thread, while every other mule's UP waits in the
+socket queue.</p>
+<p>Meanwhile <code>_emit_model_evaluation</code> runs TensorFlow <strong>inside the same loop</strong> on the
+real-model path, adding hundreds of milliseconds to seconds per round during which no
+dock traffic is processed.</p>
+<p><strong>Scale ceiling:</strong> ~5–10 mules before dock latency dominates mission time. The dock
+transport itself is already multi-threaded (one reader per mule), so the bottleneck is
+purely the service loop's structure.</p>
+<p>Also here: <code>except Exception: up = None</code> at line 300 swallows every error from
+<code>recv_up</code>, including programming errors, and the loop continues as if nothing arrived.</p>
+<hr />
+<h3 id="p-01"><span class="fid">P-01</span> Unbounded thread-per-device fan-out</h3>
+<p class="pillrow"><span class="pill plain"><span class="dot"></span>PERF / SCALE</span><span class="pill warn"><span class="dot"></span>P1</span></p>
+<div class="codewrap"><span class="lang">python</span><pre class="code"><code><span class="c1"># hermes/mission/host_mission.py:519-527  (and 696-703 in deliver_contact)</span>
+<span class="n">threads</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">threading</span><span class="o">.</span><span class="n">Thread</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="k">for</span> <span class="n">did</span> <span class="ow">in</span> <span class="n">contact_devices</span><span class="p">:</span>
+    <span class="n">t</span> <span class="o">=</span> <span class="n">threading</span><span class="o">.</span><span class="n">Thread</span><span class="p">(</span><span class="n">target</span><span class="o">=</span><span class="n">_device_worker</span><span class="p">,</span> <span class="n">args</span><span class="o">=</span><span class="p">(</span><span class="n">did</span><span class="p">,</span> <span class="n">adv</span><span class="p">),</span> <span class="n">daemon</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">t</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+    <span class="n">threads</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">t</span><span class="p">)</span>
+<span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">threads</span><span class="p">:</span>
+    <span class="n">t</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">timeout</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">session_ttl_s</span> <span class="o">*</span> <span class="mf">2.0</span><span class="p">)</span></code></pre></div>
+<p>Three problems in nine lines:</p>
+<ol>
+<li><strong>No bound.</strong> One OS thread per device in the contact. S3a is documented to produce
+   2–3 devices per contact at <code>rf_range_m=60</code> but "most of a slice falls into one or two
+   large contacts" at <code>rf_range_m=120</code> — so contact size is a tunable, and thread count
+   follows it unbounded.</li>
+<li><strong>Per-thread joins, not a deadline.</strong> N threads each joined with
+   <code>timeout=2 × session_ttl_s</code> gives a worst case of <code>N × 2 × ttl</code>, not <code>2 × ttl</code>. At
+   N=20 and the default 30 s TTL that is 20 minutes for one contact.</li>
+<li><strong>Abandoned threads keep writing.</strong> A worker that outlives its join is <code>daemon=True</code>
+   and still holds a reference to <code>self._report</code> / <code>self._accepted</code>. It can append a
+   <code>MissionRoundCloseLine</code> or a <code>GradientSubmission</code> <em>after</em> <code>close_round</code> has run
+   <code>partial_fedavg</code> — silently contributing to nothing, or to the next round's ledger.</li>
+</ol>
+<hr />
+<h3 id="a-04"><span class="fid">A-04</span> Config-as-code: 47 trainer classes, 21.3 K LOC</h3>
+<p class="pillrow"><span class="pill plain"><span class="dot"></span>ARCH / DUP</span><span class="pill warn"><span class="dot"></span>P1</span></p>
+<p><code>Config/ModelTrainingConfig/</code> holds 47 classes across 45 files, 21,278 LOC. Each
+(model type × sub-model × training area) combination is a separate class carrying its
+own full copy of the training loop.</p>
+<p>Helper duplication across the stack:</p>
+<div class="tablewrap"><table class="wide">
+<thead>
+<tr>
+<th>Helper</th>
+<th>Copies</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>discriminator_loss</code></td>
+<td>24</td>
+</tr>
+<tr>
+<td><code>generator_loss</code></td>
+<td>17</td>
+</tr>
+<tr>
+<td><code>evaluate_validation_disc</code></td>
+<td>17</td>
+</tr>
+<tr>
+<td><code>evaluate_validation_NIDS</code></td>
+<td>14</td>
+</tr>
+<tr>
+<td><code>setup_logger</code></td>
+<td>12</td>
+</tr>
+<tr>
+<td><code>probabilistic_fusion</code></td>
+<td>10</td>
+</tr>
+<tr>
+<td><code>log_epoch_metrics</code></td>
+<td>10</td>
+</tr>
+<tr>
+<td><code>gradient_penalty</code></td>
+<td>7</td>
+</tr>
+</tbody>
+</table></div>
+<p>Function sizes inside them: <code>ACGANCentralTrainingConfig.fit</code> 499 lines (complexity 34),
+<code>.evaluate</code> 307 lines, <code>ServerACDiscBothFitOnEndConfig.aggregate_fit</code> 311 lines.</p>
+<p><strong>Failure scenario — the one that already happened.</strong> The September-2025 mode-collapse
+work (3:1 D:G ratio, label-smoothing rebalance, generator-LR slowdown, discriminator
+health monitoring) had to be applied by hand to each affected copy. <code>git log</code> shows
+<code>ACGANCentralTrainingConfig.py</code> as the single most-churned file in the current tree (40
+commits). Any copy that was missed still contains the pre-fix loop, and there is no test
+anywhere in <code>Config/</code> that would reveal which.</p>
+<p><strong>Test coverage of this subsystem: zero.</strong></p>
+<hr />
+<h3 id="m-02"><span class="fid">M-02</span> CWD-relative dataset paths contradict the documented invocation</h3>
+<p class="pillrow"><span class="pill plain"><span class="dot"></span>MAINT</span><span class="pill warn"><span class="dot"></span>P1</span></p>
+<p>Six loaders hardcode <code>'../../../../datasets/&lt;NAME&gt;'</code>
+(<code>ciciot2023DatasetLoad.py:73</code>, <code>ciciot2023DatasetLoadV2.py:255</code>,
+<code>iotbotnet2020DatasetLoad.py:68</code>, <code>loadLiveData.py:104</code>,
+<code>datasetLoadProcess.py:73</code>, plus a <code>/root/datasets/...</code> variant in the vendored
+framework). Four levels up resolves correctly only from <code>App/TrainingApp/Client/</code>.</p>
+<p>The README instructs:</p>
+<div class="codewrap wide"><span class="lang">bash</span><pre class="code"><code>python3<span class="w"> </span>App/TrainingApp/Client/TrainingClient.py<span class="w"> </span>&lt;usual-args&gt;<span class="w">   </span><span class="c1"># from repo root</span>
+unzip<span class="w"> </span><span class="nv">$HOME</span>/datasets/CICIoT2023.zip<span class="w"> </span>-d<span class="w"> </span><span class="nv">$HOME</span>/datasets/CICIOT2023</code></pre></div>
+<p>From the repository root, <code>'../../../../datasets/CICIOT2023'</code> resolves three levels
+<em>above</em> the repository's parent — not <code>$HOME/datasets/</code>. The documented setup and the
+documented invocation are mutually incompatible; the code only works from an undocumented
+working directory.</p>
+<hr />
+<h3 id="q-02"><span class="fid">Q-02</span> Observability can crash the process it instruments</h3>
+<p class="pillrow"><span class="pill plain"><span class="dot"></span>CORR</span><span class="pill warn"><span class="dot"></span>P1</span></p>
+<p><code>hermes/observability/events.py</code> states its contract in the module docstring:</p>
+<blockquote>
+<p><em>"</em><em>Best-effort emit</em><em>. A write that fails (disk full, file closed) logs at <code>DEBUG</code> and
+drops the event. Observability must never crash the process it's instrumenting."</em></p>
+</blockquote>
+<p>The implementation:</p>
+<div class="codewrap wide"><span class="lang">python</span><pre class="code"><code><span class="n">line</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">record</span><span class="p">,</span> <span class="n">separators</span><span class="o">=</span><span class="p">(</span><span class="s2">&quot;,&quot;</span><span class="p">,</span> <span class="s2">&quot;:&quot;</span><span class="p">))</span>   <span class="c1"># ← line 108, OUTSIDE the guard</span>
+<span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">_lock</span><span class="p">:</span>
+    <span class="n">fp</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_fp</span>
+    <span class="k">if</span> <span class="n">fp</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span> <span class="k">return</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">fp</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">line</span> <span class="o">+</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+        <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;event emit failed (event=</span><span class="si">%s</span><span class="s2">)&quot;</span><span class="p">,</span> <span class="n">event</span><span class="p">,</span> <span class="n">exc_info</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span></code></pre></div>
+<p>Only the <code>write</code> is guarded. Serialization is not. <code>_coerce</code>'s own docstring says:</p>
+<blockquote>
+<p><em>"If a caller hands us a numpy scalar, <code>json.dumps</code> will raise and the emit drops via
+the exception handler"</em></p>
+</blockquote>
+<p>It does not. <code>TypeError: Object of type float32 is not JSON serializable</code> propagates
+into the caller.</p>
+<p><strong>Failure scenario.</strong> <code>cluster.py:476</code> does <code>self.metrics.observe("model_auc", float(m["auc"]))</code>
+— correctly cast today. Any future <code>emit(..., some_metric=np_array.mean())</code> (which
+returns <code>np.float64</code>) takes down the cluster service loop from inside the logging call.
+The guard is one line away from where it belongs.</p>
+<hr />
+      </section>
+      <section id="p2--compounding-maintenance-cost">
+        <div class="sec-eyebrow">&nbsp; · P2 — Compounding maintenance cost</div>
+        <h2>P2 — Compounding maintenance cost</h2>
+<h3 id="d-02"><span class="fid">D-02</span> <code>CANGANCentralTrainingConfig.py</code> is a 1,900-line byte-clone</h3>
+<p class="pillrow"><span class="pill plain"><span class="dot"></span>DUP</span><span class="pill plain"><span class="dot"></span>P2</span></p>
+<div class="codewrap"><span class="lang">text</span><pre class="code"><code>$ diff ACGANCentralTrainingConfig.py CANGANCentralTrainingConfig.py
+53c53
+&lt; class CentralACGan:
+---
+&gt; class CANGan:</code></pre></div>
+<p>Four lines of <code>diff</code> output across 3,800 lines of file. The clone has no importer — its
+only reference is a commented-out import at <code>modelCentralTrainingConfigLoad.py:43</code>. Both
+files contain the same 499-line <code>fit</code>, the same 307-line <code>evaluate</code>, and the same
+hardcoded learning rates from <a href="#c-01">C-01</a> — so every AC-GAN fix must be applied twice
+or the clone silently diverges. It already has: 40 commits touch the AC-GAN file, and
+the clone's history is shorter.</p>
+<p>Adjacent, same category: <code>Config/…/CentralTrainingConfig/misc/Copy of ACGANCentralTrainingConfig.py</code>
+— a third copy, with a filename containing a space.</p>
+<hr />
+<h3 id="d-01"><span class="fid">D-01</span> <code>run_contact</code> / <code>deliver_contact</code> are ~90 % duplicated</h3>
+<p class="pillrow"><span class="pill plain"><span class="dot"></span>DUP</span><span class="pill plain"><span class="dot"></span>P2</span></p>
+<p><code>hermes/mission/host_mission.py:342-528</code> (187 lines, complexity 35) and <code>:566-705</code>
+(140 lines, complexity 32) share an identical skeleton:</p>
+<div class="codewrap"><span class="lang">text</span><pre class="code"><code>guard pass mode → guard non-empty devices → snapshot θ under lock
+→ broadcast FLOpenSolicit → drain _misrouted_advs into `expected`
+→ while expected_set - expected.keys(): recv_ready_adv / re-stash
+→ def _device_worker(did, adv): …               ← the ONLY real difference
+→ spawn thread per device → join each with 2×ttl → return outcomes</code></pre></div>
+<p>The 47 lines of solicit-and-gather logic are byte-equivalent apart from the <code>pass_kind</code>
+enum. Both carry the same three thread-management defects from <a href="#p-01">P-01</a>, so every
+fix must land twice.</p>
+<hr />
+<h3 id="a-05"><span class="fid">A-05</span> 41–42 positional-parameter dispatchers</h3>
+<p class="pillrow"><span class="pill plain"><span class="dot"></span>MAINT</span><span class="pill plain"><span class="dot"></span>P2</span></p>
+<div class="tablewrap"><table class="wide">
+<thead>
+<tr>
+<th>Function</th>
+<th>Parameters</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>_run_fit_on_end_strategies</code> (<code>HFLStrategyTrainingConfigLoad.py:69</code>)</td>
+<td>42</td>
+</tr>
+<tr>
+<td><code>modelCentralTrainingConfigLoad</code> (<code>modelCentralTrainingConfigLoad.py:49</code>)</td>
+<td>41</td>
+</tr>
+<tr>
+<td><code>modelFederatedTrainingConfigLoad</code> (<code>modelFederatedTrainingConfigLoad.py:45</code>)</td>
+<td>41</td>
+</tr>
+<tr>
+<td><code>ServerNIDSFitOnEndConfig.__init__</code></td>
+<td>37</td>
+</tr>
+<tr>
+<td><code>nidsAdversarialModelCentralTrainingConfig.__init__</code></td>
+<td>34</td>
+</tr>
+<tr>
+<td>…51 more functions with ≥12 parameters</td>
+<td></td>
+</tr>
+</tbody>
+</table></div>
+<p><code>hyperparameterLoading</code> returns a <strong>20-element positional tuple</strong>, unpacked into 20 local
+names at each of two call sites, then threaded through the 41-parameter calls positionally.
+A single transposition anywhere in that chain is a silent wrong-value bug that no type
+checker or test can catch.</p>
+<hr />
+<h3 id="a-07"><span class="fid">A-07</span> 5.8 K LOC of vendored code with zero importers</h3>
+<p class="pillrow"><span class="pill plain"><span class="dot"></span>ARCH</span><span class="pill plain"><span class="dot"></span>P2</span></p>
+<p><code>FlightFramework/</code> is a copy of the third-party <strong>flight / FLoX</strong> project (Hudson &amp;
+Hayot-Sasson, University of Chicago) — 82 files, 5,853 LOC, with its own
+<code>pyproject.toml</code>, <code>LICENSE</code>, <code>tox.ini</code>, and a <code>torch</code> dependency.</p>
+<p><code>grep -rn "from flight\|import flight"</code> outside <code>FlightFramework/</code>: <strong>zero hits.</strong></p>
+<p>Documentation says otherwise in four places, including
+<code>HERMES_FL_Scheduler_Implementation_Plan.md:30</code> and <code>README.md:157</code>. The plan changed —
+<code>partial_fedavg.py</code> is 105 lines of standalone numpy — but neither the vendored copy nor
+the claims were removed.</p>
+<p>Two distinct costs: 5.8 K LOC of unreviewed third-party code in the search/lint/CI
+surface, and an unresolved licence-provenance question in a repository that has no
+<code>LICENSE</code> of its own.</p>
+<hr />
+<h3 id="a-08"><span class="fid">A-08</span> Round-robin device→mule assignment ignores geography</h3>
+<p class="pillrow"><span class="pill plain"><span class="dot"></span>SCALE</span><span class="pill plain"><span class="dot"></span>P2</span></p>
+<div class="codewrap wide"><span class="lang">python</span><pre class="code"><code><span class="c1"># hermes/cluster/device_registry.py:157-165</span>
+<span class="n">ordered</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_records</span><span class="o">.</span><span class="n">values</span><span class="p">(),</span> <span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">r</span><span class="p">:</span> <span class="p">(</span><span class="ow">not</span> <span class="n">r</span><span class="o">.</span><span class="n">is_new</span><span class="p">,</span> <span class="n">r</span><span class="o">.</span><span class="n">device_id</span><span class="p">))</span>
+<span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">rec</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">ordered</span><span class="p">):</span>
+    <span class="n">target</span> <span class="o">=</span> <span class="n">mule_list</span><span class="p">[</span><span class="n">i</span> <span class="o">%</span> <span class="nb">len</span><span class="p">(</span><span class="n">mule_list</span><span class="p">)]</span></code></pre></div>
+<p>Devices are assigned to mules <strong>round-robin by device ID</strong>. <code>DeviceRecord</code> carries
+<code>last_known_position</code> — <code>rebalance</code> never reads it. Two devices 500 m apart with adjacent
+IDs go to different mules; two devices at the same location go to different mules.</p>
+<p>The ordering key also makes assignment unstable: when a device's <code>is_new</code> flips to
+<code>False</code> after its first round, its position in <code>ordered</code> changes and <strong>every subsequent
+device shifts one slot</strong>, reassigning a large fraction of the fleet. <code>delivery_priority</code>
+carryover, <code>on_time_history</code>, and the mule's cached <code>DeviceSchedulerState</code> all become
+stale for the reassigned devices.</p>
+<p>Currently masked: <code>ClusterService._seed_registry_from_config</code> overrides <code>assigned_mule</code>
+from the config immediately after seeding, and the live service loop never calls
+<code>rebalance</code> again. So <code>HFLHostCluster.rebalance_for</code> is dead in production while being
+the only path that would be used at real scale.</p>
+<hr />
+<h3 id="m-01"><span class="fid">M-01</span> 863-line, complexity-170 function</h3>
+<p class="pillrow"><span class="pill plain"><span class="dot"></span>MAINT</span><span class="pill plain"><span class="dot"></span>P2</span></p>
+<p><code>experiments/analysis/exp3.py:342</code> — <code>write_figures</code>, 863 lines, cyclomatic complexity
+170. The largest and most complex function in the repository by a factor of ~2.</p>
+<p>Runners-up: <code>ACGANCentralTrainingConfig.fit</code> (499 lines), <code>ACGANClientTrainingConfig.fit</code>
+(427), <code>AC_DiscModelClientConfig.fit</code> (400), <code>modelCreateLoad</code> (375 lines, complexity 89),
+<code>ACGANClientTrainingConfig.evaluate</code> (338), <code>ServerACDiscBothFitOnEndConfig.aggregate_fit</code>
+(311). 122 functions exceed 80 lines; 34 exceed complexity 20.</p>
+<p><code>test_exp3_analysis.py::test_write_figures_smoke</code> can only assert that output files
+appear — no branch inside a complexity-170 function is independently testable.</p>
+<hr />
+<h3 id="e-02"><span class="fid">E-02</span> <code>docker-compose.yml</code> hardcodes another project's Windows paths</h3>
+<p class="pillrow"><span class="pill plain"><span class="dot"></span>ENV</span><span class="pill plain"><span class="dot"></span>P2</span></p>
+<div class="codewrap wide"><span class="lang">yaml</span><pre class="code"><code><span class="nt">volumes</span><span class="p">:</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">C:/Users/kskos/PycharmProjects/FLVision/ciciot2023_archive:/app/CICIOTDataset</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">C:/Users/kskos/PycharmProjects/FLVision/iotbotnet2020_archive:/app/iotbotnet2020_archive</span></code></pre></div>
+<p>Absolute paths on one developer's Windows machine, pointing at a <strong>different project
+directory</strong> (<code>FLVision</code>) than this repository. The file also references <code>flwr-server</code> and
+<code>flwr-client</code> images that no <code>Dockerfile</code> in <code>AppSetup/DockerSetup/</code> builds under those
+tags. The README presents this as the containerized deployment path.</p>
+<hr />
+<h3 id="e-03"><span class="fid">E-03</span> Hardcoded <code>192.168.129.x</code> server table, duplicated</h3>
+<p class="pillrow"><span class="pill plain"><span class="dot"></span>MAINT</span><span class="pill plain"><span class="dot"></span>P2</span></p>
+<p>The same four-way if/elif mapping <code>--host 1..4</code> to <code>192.168.129.{3,6,7,8}:8080</code> appears
+in <code>TrainingClient.py:124-133</code> (which is used) and <code>ArgumentConfigLoad.py:211-220</code>
+(inside a banner-printing function, which only displays it). Two copies of the same lab
+subnet, guaranteed to drift, both requiring a code edit for any topology change. Port
+8080 is hardcoded in both.</p>
+<hr />
+<h3 id="q-01"><span class="fid">Q-01</span> <code>Sequence</code> used in annotations but never imported</h3>
+<p class="pillrow"><span class="pill plain"><span class="dot"></span>MAINT</span><span class="pill plain"><span class="dot"></span>P2</span></p>
+<p><code>hermes/mission/host_mission.py:24</code> imports <code>Callable, Dict, List, Optional, Tuple</code>.
+<code>Sequence</code> is used at line 344 (<code>contact_devices: Sequence[DeviceID]</code>) and line 568.</p>
+<p>No runtime error, because <code>from __future__ import annotations</code> makes annotations strings.
+But <code>typing.get_type_hints()</code> on <code>HFLHostMission</code> raises <code>NameError</code>, IDE resolution
+fails, and any future runtime-annotation consumer (pydantic, <code>dataclasses</code> with
+<code>eval_str</code>, a schema generator) breaks. This was the only unresolved-name finding in the
+entire first-party codebase outside the optional-<code>scapy</code> guard in <code>LiveDataExtraction.py</code>
+— which is a good sign for the rest, and worth fixing so it stays true.</p>
+<hr />
+<h3 id="q-03"><span class="fid">Q-03</span> Private-attribute access across objects</h3>
+<p class="pillrow"><span class="pill plain"><span class="dot"></span>MAINT</span><span class="pill plain"><span class="dot"></span>P2</span></p>
+<div class="codewrap wide"><span class="lang">python</span><pre class="code"><code><span class="c1"># hermes/processes/cluster.py:346, 350</span>
+<span class="bp">self</span><span class="o">.</span><span class="n">events</span><span class="o">.</span><span class="n">emit</span><span class="p">(</span><span class="s2">&quot;cluster_round_closed&quot;</span><span class="p">,</span> <span class="n">cluster_round</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">cluster</span><span class="o">.</span><span class="n">_cluster_round</span><span class="p">)</span>
+<span class="bp">self</span><span class="o">.</span><span class="n">_emit_model_evaluation</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">cluster</span><span class="o">.</span><span class="n">_cluster_round</span><span class="p">)</span></code></pre></div>
+<p><code>HFLHostCluster</code> exposes a <code>cluster_round</code> property (<code>host_cluster.py:405-408</code>) that
+reads the same field <strong>under the lock</strong>. The private access bypasses the lock, so the
+value can be torn against a concurrent <code>close_cluster_round</code>. Low practical risk today
+(the service loop is single-threaded — see <a href="#a-09">A-09</a>), but it is exactly the kind of
+access that becomes a race the moment A-09 is fixed.</p>
+<p>69 cross-object private accesses exist repo-wide; most are in tests reaching into
+internals, which is its own coupling problem — <code>test_l1_rf_prior.py</code> touches <code>._record</code>
+8 times, <code>test_exp3_sim_env.py</code> touches <code>._upload_rate_at</code> 4 times.</p>
+<hr />
+<h3 id="t-01"><span class="fid">T-01</span> Test suite is not green on <code>main</code></h3>
+<p class="pillrow"><span class="pill plain"><span class="dot"></span>MAINT</span><span class="pill plain"><span class="dot"></span>P2</span></p>
+<p>Local run: <strong>512 passed, 8 failed, 1 skipped</strong>. README claims "410 passed, 22 deselected".</p>
+<p>Seven failures are environmental (TensorFlow-dependent <code>test_exp4_model_task</code>;
+<code>flwr</code>-dependent <code>test_mode_switch</code> subprocess tests) — which is itself a finding, since
+there is no marker or skip condition distinguishing "needs TF" from "broken", and no
+<code>pytest.ini</code> to register one.</p>
+<p>One is a genuine stale assertion:</p>
+<div class="codewrap wide"><span class="lang">python</span><pre class="code"><code><span class="c1"># tests/unit/test_experiments_calibration.py:36</span>
+<span class="k">def</span> <span class="nf">test_default_calibration_is_placeholder</span><span class="p">():</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The shipped TOML must declare itself placeholder until paper run.&quot;&quot;&quot;</span>
+    <span class="n">cal</span> <span class="o">=</span> <span class="n">load_calibration</span><span class="p">()</span>
+    <span class="k">assert</span> <span class="n">cal</span><span class="o">.</span><span class="n">status</span> <span class="o">==</span> <span class="s2">&quot;placeholder&quot;</span>      <span class="c1"># AssertionError: &#39;verified&#39; == &#39;placeholder&#39;</span></code></pre></div>
+<p>The calibration TOML was promoted to <code>verified</code>; the test guarding that transition was
+never updated. A red suite trains people to ignore red suites.</p>
+<hr />
+<h3 id="g-01"><span class="fid">G-01</span> Untracked, un-ignored directories in the working tree</h3>
+<p class="pillrow"><span class="pill plain"><span class="dot"></span>ENV</span><span class="pill plain"><span class="dot"></span>P2</span></p>
+<p><code>git status</code> shows three untracked directories that <code>.gitignore</code> does not cover:</p>
+<div class="tablewrap"><table class="wide">
+<thead>
+<tr>
+<th>Path</th>
+<th>Size</th>
+<th>What it is</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>.claude/</code></td>
+<td>7.8 MB</td>
+<td>tooling worktrees — contains a <strong>complete duplicate copy of the repository</strong> (330 <code>.py</code> files, ~34 K LOC)</td>
+</tr>
+<tr>
+<td><code>hermes_rl/</code></td>
+<td>578 KB</td>
+<td>a <strong>nested git repository</strong> (<code>hermes_rl/.git/</code>), 4 files, 2,251 LOC of drone-RL prototype</td>
+</tr>
+<tr>
+<td><code>.idea/</code></td>
+<td>—</td>
+<td>IDE settings</td>
+</tr>
+</tbody>
+</table></div>
+<p><code>git add -A</code> from the repository root would stage all three, committing a duplicate of
+the entire source tree plus a foreign repository's contents. <code>hermes_rl/</code> being a nested
+<code>.git</code> also means it is neither a submodule nor tracked — its history is invisible to
+this repository and it will be silently lost on a fresh clone.</p>
+<p><code>.gitignore</code> is 7 lines and covers <code>__pycache__/</code>, <code>*.feather</code>, <code>*.pt</code>, <code>*.log</code>, <code>*.zip</code>,
+<code>tmp/</code>, <code>datasets/</code>.</p>
+<hr />
+      </section>
+      <section id="cross-cutting-statistics">
+        <div class="sec-eyebrow">&nbsp; · Cross-cutting statistics</div>
+        <h2>Cross-cutting statistics</h2>
+<p>Measured across 357 first-party Python files (excluding <code>.claude/worktrees</code>, <code>__pycache__</code>):</p>
+<div class="tablewrap"><table class="wide">
+<thead>
+<tr>
+<th>Metric</th>
+<th>Count</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Functions ≥ 80 lines</td>
+<td>122</td>
+</tr>
+<tr>
+<td>Functions with cyclomatic complexity ≥ 20</td>
+<td>34</td>
+</tr>
+<tr>
+<td>Functions with ≥ 12 parameters</td>
+<td>56</td>
+</tr>
+<tr>
+<td>Broad <code>except Exception</code> handlers</td>
+<td>90 (14 of them silent <code>pass</code>)</td>
+</tr>
+<tr>
+<td>Bare <code>except:</code></td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>threading.Thread</code> spawn sites</td>
+<td>46 (15 in <code>hermes/</code>, 31 in tests)</td>
+</tr>
+<tr>
+<td><code>time.sleep</code> call sites</td>
+<td>18</td>
+</tr>
+<tr>
+<td>TODO / FIXME / HACK markers</td>
+<td>37 (20 of them in vendored <code>FlightFramework/</code>)</td>
+</tr>
+<tr>
+<td>Cross-object private-attribute accesses</td>
+<td>69</td>
+</tr>
+<tr>
+<td>Unresolved name references</td>
+<td>5 (4 are guarded optional <code>scapy</code> imports)</td>
+</tr>
+<tr>
+<td>Star imports</td>
+<td>1</td>
+</tr>
+<tr>
+<td>Mutable default arguments</td>
+<td>0 ✅</td>
+</tr>
+<tr>
+<td><code>global</code> statements</td>
+<td>0 ✅</td>
+</tr>
+<tr>
+<td>Syntax errors</td>
+<td>0 ✅</td>
+</tr>
+</tbody>
+</table></div>
+<p>The last three lines matter: the codebase has none of the classic Python footguns. Its
+problems are structural, not idiomatic.</p>
+<hr />
+<p><strong>Next:</strong> <a href="01_Refactoring_Strategy.html"><code>01_Refactoring_Strategy.html</code></a> sequences these into
+a phased plan with effort, risk, and definitions of done.</p>
+      </section>
+
+      <div class="foot">
+        <p class="mono">Generated from 00_Critical_Problem_Areas.md. File:line references are to
+        the repository as read on 2026-08-10 (main @ 35e2eeb); verify against current
+        source before acting. This document is a review artefact — no project code was
+        modified to produce it.</p>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script>
+  // TOC active-state only. No animation; reduced-motion respected via CSS.
+  // getElementById, not querySelector: several ids begin with a digit, which
+  // is legal HTML but an invalid CSS selector.
+  (function(){
+    var links = Array.prototype.slice.call(document.querySelectorAll('nav.toc a'));
+    var secs  = links.map(function(a){
+      return document.getElementById(a.getAttribute('href').slice(1));
+    });
+    if(!('IntersectionObserver' in window)) return;
+    var io = new IntersectionObserver(function(entries){
+      entries.forEach(function(e){
+        if(e.isIntersecting){
+          var i = secs.indexOf(e.target);
+          links.forEach(function(l){ l.style.background=''; l.style.color=''; });
+          if(i>-1){ var l=links[i]; l.style.background='var(--surface-2)'; l.style.color='var(--ink)'; }
+        }
+      });
+    },{rootMargin:'-10% 0px -80% 0px'});
+    secs.forEach(function(s){ if(s) io.observe(s); });
+  })();
+</script>
+
+</body>
+</html>

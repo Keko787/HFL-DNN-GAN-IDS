@@ -1,0 +1,1692 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HIFINS — Production-Grade Code</title>
+<meta name="description" content="Packaging, typed configuration, registry factories, and the adapter package that finally joins the two stacks — with the two behaviour-changing items flagged in place.">
+<style>
+  :root{
+    --bg:#f4f6f8; --surface:#ffffff; --surface-2:#eef1f4;
+    --ink:#141a20; --ink-2:#47525d; --ink-3:#6c7883;
+    --line:#dbe1e7; --line-2:#c8d0d8;
+    --accent:#0c7d8a; --accent-2:#0a5f6a; --accent-soft:#e0f0f2;
+    --ok:#2f8f56; --ok-bg:#e5f3ea; --ok-line:#a9d8bd;
+    --warn:#a8720c; --warn-bg:#f7efdb; --warn-line:#e3c483;
+    --gap:#bf3b4e; --gap-bg:#fbe5e8; --gap-line:#eeaeb7;
+    --font-display:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    --font-body:ui-serif,"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,Cambria,serif;
+    --font-mono:ui-monospace,"Cascadia Code","SF Mono","Segoe UI Mono",Menlo,Consolas,monospace;
+    --maxw:1200px; --prose:800px;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --bg:#0d1116; --surface:#141a21; --surface-2:#1a222b;
+      --ink:#e7ecf1; --ink-2:#a3afba; --ink-3:#74818d;
+      --line:#26303a; --line-2:#333f4b;
+      --accent:#2fc0d0; --accent-2:#5bd4e0; --accent-soft:#10333a;
+      --ok:#4cc47e; --ok-bg:#12301f; --ok-line:#245a3a;
+      --warn:#e0a63a; --warn-bg:#31260f; --warn-line:#5c4820;
+      --gap:#e56b7d; --gap-bg:#331a1f; --gap-line:#5e3038;
+    }
+  }
+  :root[data-theme="light"]{
+    --bg:#f4f6f8; --surface:#ffffff; --surface-2:#eef1f4;
+    --ink:#141a20; --ink-2:#47525d; --ink-3:#6c7883;
+    --line:#dbe1e7; --line-2:#c8d0d8;
+    --accent:#0c7d8a; --accent-2:#0a5f6a; --accent-soft:#e0f0f2;
+    --ok:#2f8f56; --ok-bg:#e5f3ea; --ok-line:#a9d8bd;
+    --warn:#a8720c; --warn-bg:#f7efdb; --warn-line:#e3c483;
+    --gap:#bf3b4e; --gap-bg:#fbe5e8; --gap-line:#eeaeb7;
+  }
+  :root[data-theme="dark"]{
+    --bg:#0d1116; --surface:#141a21; --surface-2:#1a222b;
+    --ink:#e7ecf1; --ink-2:#a3afba; --ink-3:#74818d;
+    --line:#26303a; --line-2:#333f4b;
+    --accent:#2fc0d0; --accent-2:#5bd4e0; --accent-soft:#10333a;
+    --ok:#4cc47e; --ok-bg:#12301f; --ok-line:#245a3a;
+    --warn:#e0a63a; --warn-bg:#31260f; --warn-line:#5c4820;
+    --gap:#e56b7d; --gap-bg:#331a1f; --gap-line:#5e3038;
+  }
+
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:var(--font-body); font-size:17px; line-height:1.62;
+    -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+  }
+  .shell{max-width:var(--maxw); margin:0 auto; padding:0 clamp(18px,4vw,40px)}
+
+  /* ---------- Masthead ---------- */
+  header.mast{padding:clamp(40px,7vw,84px) 0 34px; border-bottom:1px solid var(--line)}
+  .eyebrow{
+    font-family:var(--font-mono); font-size:12px; letter-spacing:.14em;
+    text-transform:uppercase; color:var(--accent); font-weight:600;
+    display:flex; gap:10px; flex-wrap:wrap; align-items:center;
+  }
+  .eyebrow .sep{color:var(--ink-3)}
+  h1.title{
+    font-family:var(--font-display); font-weight:760;
+    font-size:clamp(30px,5.4vw,52px); line-height:1.04; letter-spacing:-.022em;
+    margin:.42em 0 .28em; max-width:16ch; text-wrap:balance;
+  }
+  .deck{
+    font-size:clamp(17px,2.1vw,21px); color:var(--ink-2); max-width:60ch;
+    line-height:1.5; margin:0;
+  }
+  .deck b{color:var(--ink); font-weight:600}
+  .metabar{
+    margin-top:26px; display:flex; flex-wrap:wrap; gap:8px 20px;
+    font-family:var(--font-mono); font-size:12.5px; color:var(--ink-3);
+  }
+  .metabar b{color:var(--ink-2); font-weight:600}
+
+  /* ---------- Layout with TOC rail ---------- */
+  .body-grid{display:block}
+  @media(min-width:1040px){
+    .body-grid{display:grid; grid-template-columns:216px minmax(0,1fr); gap:48px; align-items:start}
+    nav.toc{position:sticky; top:24px; align-self:start}
+  }
+  nav.toc{padding:30px 0 0}
+  nav.toc .toc-h{
+    font-family:var(--font-mono); font-size:11px; letter-spacing:.14em;
+    text-transform:uppercase; color:var(--ink-3); margin:0 0 12px; font-weight:600;
+  }
+  nav.toc ol{list-style:none; margin:0; padding:0; counter-reset:toc}
+  nav.toc li{counter-increment:toc; margin:2px 0}
+  nav.toc a{
+    display:block; text-decoration:none; color:var(--ink-2);
+    font-family:var(--font-display); font-size:14px; line-height:1.35;
+    padding:6px 10px 6px 30px; border-radius:7px; position:relative;
+  }
+  nav.toc a::before{
+    content:counter(toc,decimal-leading-zero); position:absolute; left:8px;
+    font-family:var(--font-mono); font-size:11px; color:var(--accent);
+    top:8px; font-weight:600;
+  }
+  nav.toc a:hover{background:var(--surface-2); color:var(--ink)}
+  @media(max-width:1039px){ nav.toc{display:none} }
+
+  main{padding-top:8px; min-width:0}
+
+  /* ---------- Sections & prose ---------- */
+  section{padding:38px 0; border-bottom:1px solid var(--line); scroll-margin-top:20px}
+  section:last-of-type{border-bottom:0}
+  .sec-eyebrow{
+    font-family:var(--font-mono); font-size:12px; letter-spacing:.13em;
+    text-transform:uppercase; color:var(--accent); font-weight:600; margin-bottom:8px;
+  }
+  h2{
+    font-family:var(--font-display); font-weight:720; letter-spacing:-.016em;
+    font-size:clamp(22px,3.2vw,30px); line-height:1.14; margin:0 0 .55em;
+    max-width:24ch; text-wrap:balance;
+  }
+  h3{
+    font-family:var(--font-display); font-weight:660; letter-spacing:-.008em;
+    font-size:19px; line-height:1.25; margin:1.9em 0 .5em; color:var(--ink);
+  }
+  h4{
+    font-family:var(--font-mono); font-weight:600; font-size:13px; letter-spacing:.04em;
+    text-transform:uppercase; color:var(--ink-2); margin:1.5em 0 .5em;
+  }
+  p{max-width:var(--prose); margin:0 0 1.05em}
+  main ul,main ol{max-width:var(--prose); margin:0 0 1.1em; padding-left:1.25em}
+  main li{margin:.34em 0}
+  strong{font-weight:600; color:var(--ink)}
+  a.ref{color:var(--accent-2); text-decoration:none; border-bottom:1px solid transparent}
+  :root[data-theme="dark"] a.ref{color:var(--accent)}
+  @media(prefers-color-scheme:dark){a.ref{color:var(--accent)}}
+  a.ref:hover{border-bottom-color:currentColor}
+
+  code,.mono{font-family:var(--font-mono); font-size:.86em}
+  p code,li code,td code{
+    background:var(--surface-2); padding:.08em .38em; border-radius:5px;
+    font-size:.82em; color:var(--ink); border:1px solid var(--line);
+    white-space:nowrap;
+  }
+  .path{color:var(--ink-3); font-family:var(--font-mono); font-size:.8em; white-space:nowrap}
+
+  /* ---------- Callouts ---------- */
+  .callout{
+    border:1px solid var(--line); border-left-width:3px; border-radius:10px;
+    background:var(--surface); padding:18px 20px; margin:1.4em 0; max-width:var(--prose);
+  }
+  .callout .k{
+    font-family:var(--font-mono); font-size:11px; letter-spacing:.12em; text-transform:uppercase;
+    font-weight:600; margin-bottom:7px; display:block;
+  }
+  .callout p{margin:.2em 0}
+  .callout.accent{border-left-color:var(--accent); background:var(--accent-soft)}
+  .callout.accent .k{color:var(--accent-2)}
+  :root[data-theme="dark"] .callout.accent .k{color:var(--accent-2)}
+  @media(prefers-color-scheme:dark){.callout.accent .k{color:var(--accent-2)}}
+  .callout.warn{border-left-color:var(--warn); background:var(--warn-bg)}
+  .callout.warn .k{color:var(--warn)}
+  .callout.gap{border-left-color:var(--gap); background:var(--gap-bg)}
+  .callout.gap .k{color:var(--gap)}
+  .callout.accent{background:var(--accent-soft)}
+
+  /* ---------- Formula ---------- */
+  .formula{
+    font-family:var(--font-mono); font-size:14px; line-height:1.55;
+    background:var(--surface-2); border:1px solid var(--line);
+    border-radius:9px; padding:13px 16px; margin:1em 0; max-width:var(--prose);
+    overflow-x:auto; color:var(--ink);
+  }
+  .formula .lbl{color:var(--ink-3)}
+
+  /* ---------- Tables ---------- */
+  .tablewrap{overflow-x:auto; margin:1.2em 0 1.5em; border:1px solid var(--line);
+    border-radius:11px; background:var(--surface)}
+  table{border-collapse:collapse; width:100%; font-size:14px; min-width:640px}
+  table.wide{min-width:820px}
+  thead th{
+    font-family:var(--font-mono); font-weight:600; font-size:11.5px; letter-spacing:.03em;
+    text-transform:uppercase; text-align:left; color:var(--ink-2);
+    background:var(--surface-2); padding:11px 14px; border-bottom:1px solid var(--line-2);
+    position:sticky; top:0; vertical-align:bottom;
+  }
+  tbody td{padding:11px 14px; border-bottom:1px solid var(--line); vertical-align:top;
+    line-height:1.42; color:var(--ink-2)}
+  tbody tr:last-child td{border-bottom:0}
+  tbody td:first-child{color:var(--ink); font-weight:500}
+  tbody td .path,tbody td code{white-space:normal}
+  td .mname{font-family:var(--font-mono); font-size:12.5px; color:var(--ink); font-weight:600; display:block}
+  tbody tr:hover td{background:color-mix(in srgb,var(--accent-soft) 34%, transparent)}
+  .num{font-variant-numeric:tabular-nums}
+
+  /* ---------- Pills / badges ---------- */
+  .pill{
+    display:inline-flex; align-items:center; gap:5px; font-family:var(--font-mono);
+    font-size:11px; font-weight:600; letter-spacing:.02em; padding:2px 8px 2px 6px;
+    border-radius:20px; border:1px solid var(--line-2); white-space:nowrap; line-height:1.5;
+  }
+  .pill .dot{width:7px; height:7px; border-radius:50%; background:currentColor; flex:0 0 auto}
+  .pill.ok{color:var(--ok); background:var(--ok-bg); border-color:var(--ok-line)}
+  .pill.warn{color:var(--warn); background:var(--warn-bg); border-color:var(--warn-line)}
+  .pill.gap{color:var(--gap); background:var(--gap-bg); border-color:var(--gap-line)}
+  .pill.plain{color:var(--ink-3); background:var(--surface-2)}
+
+  .legend{display:flex; flex-wrap:wrap; gap:8px 14px; margin:.3em 0 1.1em; font-size:13px; align-items:center}
+  .legend .lg{display:inline-flex; align-items:center; gap:6px; color:var(--ink-2); font-family:var(--font-mono); font-size:11.5px}
+
+  /* ---------- Verdict cards ---------- */
+  .verdicts{display:grid; gap:14px; margin:1.3em 0; max-width:var(--prose)}
+  .vcard{border:1px solid var(--line); border-radius:12px; background:var(--surface); overflow:hidden}
+  .vcard .vhead{display:flex; align-items:flex-start; gap:12px; padding:15px 18px 12px; border-bottom:1px solid var(--line)}
+  .vbadge{font-family:var(--font-mono); font-size:11px; font-weight:700; letter-spacing:.05em;
+    padding:4px 9px; border-radius:6px; flex:0 0 auto; margin-top:1px}
+  .vbadge.confirmed{color:#fff; background:var(--gap)}
+  .vbadge.partial{color:var(--ink); background:var(--warn)}
+  :root[data-theme="dark"] .vbadge.partial{color:#20160a}
+  @media(prefers-color-scheme:dark){.vbadge.partial{color:#20160a}}
+  .vcard .vclaim{font-family:var(--font-display); font-weight:600; font-size:15.5px; line-height:1.34; color:var(--ink); margin:0}
+  .vcard .vbody{padding:13px 18px 16px; font-size:14px; color:var(--ink-2)}
+  .vcard .vbody p{margin:.1em 0 .7em; max-width:none}
+  .vcard .vbody .imp{margin-top:.4em; padding-top:.7em; border-top:1px dashed var(--line-2)}
+  .vcard .vbody .imp .k{font-family:var(--font-mono); font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--accent); font-weight:600; display:block; margin-bottom:3px}
+  :root[data-theme="dark"] .vcard .vbody .imp .k{color:var(--accent-2)}
+  @media(prefers-color-scheme:dark){.vcard .vbody .imp .k{color:var(--accent-2)}}
+
+  /* ---------- Stage cards ---------- */
+  .stages{display:grid; gap:16px; margin:1.4em 0; max-width:var(--prose)}
+  .stage{border:1px solid var(--line); border-radius:12px; background:var(--surface); padding:0; overflow:hidden}
+  .stage .shead{display:flex; align-items:baseline; gap:12px; padding:16px 20px 12px; background:var(--surface-2); border-bottom:1px solid var(--line)}
+  .stage .snum{font-family:var(--font-mono); font-weight:700; font-size:13px; color:var(--accent); letter-spacing:.02em; flex:0 0 auto}
+  :root[data-theme="dark"] .stage .snum{color:var(--accent-2)}
+  @media(prefers-color-scheme:dark){.stage .snum{color:var(--accent-2)}}
+  .stage .stitle{font-family:var(--font-display); font-weight:660; font-size:16.5px; color:var(--ink); line-height:1.25; margin:0}
+  .stage .schip{margin-left:auto; flex:0 0 auto}
+  .stage .sbody{padding:15px 20px 18px; font-size:14.5px}
+  .stage .sbody ul{max-width:none; margin:.2em 0 .3em}
+  .stage .grid2{display:grid; gap:4px 22px; grid-template-columns:1fr}
+  @media(min-width:620px){.stage .grid2{grid-template-columns:1fr 1fr}}
+  .stage .fld{margin:.6em 0}
+  .stage .fld .k{font-family:var(--font-mono); font-size:10.5px; letter-spacing:.09em; text-transform:uppercase; color:var(--ink-3); font-weight:600; display:block; margin-bottom:3px}
+  .stage .fld p{margin:0; font-size:13.5px; color:var(--ink-2); max-width:none}
+  .stage .dod{margin-top:.7em; padding-top:.8em; border-top:1px dashed var(--line-2)}
+
+  /* ---------- Misc ---------- */
+  .lead{font-size:19px; line-height:1.5; color:var(--ink); max-width:var(--prose)}
+  .lead b{color:var(--ink)}
+  hr.soft{border:0; border-top:1px solid var(--line); margin:1.6em 0; max-width:var(--prose)}
+  .foot{padding:34px 0 70px; color:var(--ink-3); font-size:13px; max-width:var(--prose)}
+  .foot p{max-width:none; margin:.5em 0; font-size:13px; color:var(--ink-3)}
+  .foot .mono{font-size:12px}
+  .kexcerpt{font-family:var(--font-mono); font-size:12.5px; color:var(--ink-2); background:var(--surface-2);
+    border:1px solid var(--line); border-radius:8px; padding:10px 13px; margin:.7em 0; max-width:var(--prose); line-height:1.5}
+  sup.fn{font-family:var(--font-mono); font-size:.62em; color:var(--accent); font-weight:600}
+  :focus-visible{outline:2px solid var(--accent); outline-offset:2px; border-radius:3px}
+  @media(prefers-reduced-motion:no-preference){html{scroll-behavior:smooth}}
+
+  /* ---------- Additions for the generated review docs ---------- */
+  main h2 { max-width: 32ch }
+  main table { min-width: 560px }
+  .tablewrap table thead th { position: static }
+
+  /* finding / item sub-headings */
+  main h3{
+    scroll-margin-top:18px; display:flex; align-items:baseline;
+    gap:9px; flex-wrap:wrap;
+  }
+  main h3 .fid{
+    font-family:var(--font-mono); font-size:12.5px; font-weight:700;
+    color:var(--accent); letter-spacing:.02em; flex:0 0 auto;
+  }
+  :root[data-theme="dark"] main h3 .fid{ color:var(--accent-2) }
+  @media(prefers-color-scheme:dark){ main h3 .fid{ color:var(--accent-2) } }
+  p.pillrow{ display:flex; gap:8px; flex-wrap:wrap; margin:-.35em 0 1.1em }
+  .anchor-alias{ display:block; height:0; scroll-margin-top:18px }
+
+  /* code blocks */
+  .codewrap{ position:relative; margin:1.15em 0 1.4em; max-width:var(--prose) }
+  .codewrap.wide{ max-width:none }
+  pre.code{
+    font-family:var(--font-mono); font-size:12.5px; line-height:1.55;
+    background:var(--surface-2); border:1px solid var(--line); border-radius:10px;
+    padding:15px 17px; margin:0; overflow-x:auto; color:var(--ink);
+    white-space:pre; tab-size:2;
+  }
+  pre.code code{ font-size:inherit; background:none; border:0; padding:0;
+                 white-space:pre; color:inherit }
+  .codewrap .lang{
+    position:absolute; top:0; right:12px; transform:translateY(-50%);
+    font-family:var(--font-mono); font-size:10px; letter-spacing:.1em;
+    text-transform:uppercase; font-weight:600; color:var(--ink-3);
+    background:var(--bg); border:1px solid var(--line); border-radius:20px;
+    padding:2px 9px;
+  }
+
+  /* Pygments tokens, mapped onto the house palette so both themes work */
+  pre.code .c,  pre.code .c1, pre.code .cm, pre.code .cs,
+  pre.code .ch, pre.code .cpf{ color:var(--ink-3); font-style:italic }
+  pre.code .sd{ color:var(--ink-3) }
+  pre.code .k,  pre.code .kn, pre.code .kc, pre.code .kd,
+  pre.code .kp, pre.code .kr, pre.code .kt, pre.code .ow{ color:var(--accent) }
+  :root[data-theme="dark"] pre.code .k,
+  :root[data-theme="dark"] pre.code .kn,
+  :root[data-theme="dark"] pre.code .kc,
+  :root[data-theme="dark"] pre.code .kd,
+  :root[data-theme="dark"] pre.code .ow{ color:var(--accent-2) }
+  @media(prefers-color-scheme:dark){
+    pre.code .k, pre.code .kn, pre.code .kc,
+    pre.code .kd, pre.code .ow{ color:var(--accent-2) }
+  }
+  pre.code .s,  pre.code .s1, pre.code .s2, pre.code .sa,
+  pre.code .sb, pre.code .se, pre.code .si, pre.code .sr,
+  pre.code .ss, pre.code .sx{ color:var(--ok) }
+  pre.code .m,  pre.code .mi, pre.code .mf, pre.code .mh,
+  pre.code .mo, pre.code .il{ color:var(--ok) }
+  pre.code .nf, pre.code .fm{ color:var(--ink); font-weight:600 }
+  pre.code .nc, pre.code .ne{ color:var(--warn); font-weight:600 }
+  pre.code .nd{ color:var(--warn) }
+  pre.code .nb, pre.code .bp{ color:var(--ink-2) }
+  pre.code .nn, pre.code .nv, pre.code .no, pre.code .na{ color:var(--ink) }
+  pre.code .o,  pre.code .p{ color:var(--ink-2) }
+  pre.code .gd{ color:var(--gap) }
+  pre.code .gi{ color:var(--ok) }
+  pre.code .gh, pre.code .gu{ color:var(--ink-3); font-weight:600 }
+  pre.code .err{ color:inherit; border:0 }
+
+  /* blockquote -> callout */
+  blockquote{
+    margin:1.3em 0; padding:15px 18px; max-width:var(--prose);
+    border:1px solid var(--line); border-left:3px solid var(--ink-3);
+    border-radius:10px; background:var(--surface); color:var(--ink-2);
+    font-size:15px;
+  }
+  blockquote p{ margin:.25em 0 }
+  blockquote.warn{ border-left-color:var(--warn); background:var(--warn-bg) }
+
+  /* figures / diagrams */
+  figure.dgfig{ margin:1.6em 0 1.9em; max-width:none }
+  .dgscroll{ overflow-x:auto; border:1px solid var(--line); border-radius:12px;
+             background:var(--surface); padding:18px 16px }
+  svg.dg{ max-width:100%; height:auto; display:block; margin:0 auto }
+  svg.dg text{ font-family:var(--font-mono); fill:var(--ink); font-size:12px }
+  svg.dg .t-sm{ font-size:11px; fill:var(--ink-2) }
+  svg.dg .t-lbl{ font-size:10.5px; fill:var(--ink-3) }
+  svg.dg .t-bad{ font-size:10.5px; fill:var(--gap); font-weight:600 }
+  svg.dg .t-hd{ font-size:10.5px; font-weight:700; fill:var(--accent);
+                letter-spacing:.09em }
+  svg.dg .t-x{ font-size:15px; fill:var(--gap); font-weight:700 }
+  svg.dg .bx{ fill:var(--surface); stroke:var(--line-2); stroke-width:1.2 }
+  svg.dg .badbx{ fill:var(--gap-bg); stroke:var(--gap-line); stroke-width:1.3 }
+  svg.dg .warnbx{ fill:var(--warn-bg); stroke:var(--warn-line); stroke-width:1.3 }
+  svg.dg .hl{ fill:var(--ok-bg); stroke:var(--ok); stroke-width:1.6 }
+  svg.dg .dead{ fill:var(--surface-2); stroke:var(--ink-3); stroke-width:1.2;
+                stroke-dasharray:5 4; opacity:.8 }
+  svg.dg .band{ fill:var(--surface-2); stroke:var(--line); stroke-width:1 }
+  svg.dg .ok-band{ fill:var(--ok-bg); stroke:var(--ok-line) }
+  svg.dg .bad-band{ fill:var(--gap-bg); stroke:var(--gap-line) }
+  svg.dg .loopbx{ fill:none; stroke:var(--line-2); stroke-width:1;
+                  stroke-dasharray:4 3 }
+  svg.dg .life{ stroke:var(--line-2); stroke-width:1; stroke-dasharray:4 4 }
+  svg.dg .ln{ stroke:var(--ink-2); stroke-width:1.4; fill:none }
+  svg.dg .ln-bad{ stroke:var(--gap); stroke-width:1.6; stroke-dasharray:6 4; fill:none }
+  svg.dg .ln-dead{ stroke:var(--ink-3); stroke-width:1.4; stroke-dasharray:5 4; fill:none }
+  svg.dg .ln-soft{ stroke:var(--ink-3); stroke-width:1.2; stroke-dasharray:3 3; fill:none }
+  svg.dg .mk{ fill:var(--ink-2); stroke:none }
+  svg.dg .mk-bad{ fill:var(--gap); stroke:none }
+  svg.dg .mk-dead{ fill:var(--ink-3); stroke:none }
+  svg.dg .mk-soft{ fill:var(--ink-3); stroke:none }
+  figure.dgfig figcaption{
+    font-size:13.5px; color:var(--ink-2); line-height:1.5; margin-top:11px;
+    max-width:var(--prose); padding-left:2px;
+  }
+  figure.dgfig figcaption b{ color:var(--ink) }
+
+  /* severity pills in the findings tables */
+  .g{ font-family:var(--font-mono); font-size:10.5px; font-weight:700;
+      padding:1px 7px; border-radius:20px; border:1px solid; white-space:nowrap }
+  .g.p0{ color:var(--gap); background:var(--gap-bg); border-color:var(--gap-line) }
+  .g.p1{ color:var(--warn); background:var(--warn-bg); border-color:var(--warn-line) }
+  .g.p2{ color:var(--ink-3); background:var(--surface-2); border-color:var(--line-2) }
+
+  /* nested TOC */
+  nav.toc ol ol{ list-style:none; counter-reset:none; margin:2px 0 6px;
+                 padding-left:14px }
+  nav.toc ol ol li{ counter-increment:none }
+  nav.toc ol ol a{ padding:3px 8px 3px 10px; font-size:11.5px;
+                   color:var(--ink-3); border-left:1px solid var(--line) }
+  nav.toc ol ol a::before{ content:none }
+  nav.toc ol ol a:hover{ color:var(--ink-2) }
+
+  @media print{
+    nav.toc{ display:none }
+    section{ break-inside:avoid-page }
+    .dgscroll{ overflow:visible }
+    pre.code{ white-space:pre-wrap; word-break:break-word }
+    body{ background:#fff; font-size:11pt }
+  }
+
+</style>
+
+</head>
+<body>
+<div class="shell">
+  <header class="mast">
+    <div class="eyebrow">
+      <span>Codebase review · reference implementation</span><span class="sep">/</span>
+      <span>App · Config · net −24,700 LOC</span><span class="sep">/</span>
+      <span>Proposal — not applied</span>
+    </div>
+    <h1 class="title">HIFINS — Production-Grade Code</h1>
+    <p class="deck">Packaging, typed configuration, registry factories, and the <b>adapter package that finally joins the two stacks</b> — with the two behaviour-changing items flagged in place.</p>
+    <div class="metabar">
+      <span><strong>Status:</strong> Proposal. <strong>Not applied.</strong> Requires approval per</span>
+      <span><a href="../01_Refactoring_Strategy.html#5-approval-checklist"><code>../01_Refactoring_Strategy.html</code> §5</a>.</span>
+      <span><strong>Constraint:</strong> every change below is behaviour-preserving unless a section is marked</span>
+      <span><strong>⚠ BEHAVIOUR CHANGE</strong>, in which case the change is stated explicitly and a</span>
+      <span>behaviour-preserving variant is given.</span>
+    </div>
+  </header>
+
+  <div class="body-grid">
+    <nav class="toc" aria-label="Contents">
+      <p class="toc-h">Contents</p>
+      <ol>
+        <li><a href="#contents">Contents</a></li>
+        <li><a href="#1-packaging">Packaging</a></li>
+        <li><a href="#2-path-resolution">Path resolution</a></li>
+        <li><a href="#3-typed-configuration">Typed configuration</a></li>
+        <li><a href="#4-registry-factories">Registry factories</a></li>
+        <li><a href="#5-hermes_adapters">`hermes_adapters/`</a></li>
+        <li><a href="#6-ac-gan-hyperparameter-wiring">AC-GAN hyperparameter wiring</a></li>
+        <li><a href="#7-one-trainer-family">One trainer family</a></li>
+        <li><a href="#8-characterization-harness">Characterization harness</a></li>
+        <li><a href="#9-summary-of-expected-impact">Summary of expected impact</a></li>
+      </ol>
+    </nav>
+
+    <main>
+      <section id="contents">
+        <div class="sec-eyebrow">&nbsp; · Contents</div>
+        <h2>Contents</h2>
+<ol>
+<li><a href="#1-packaging">Packaging</a> — F-05</li>
+<li><a href="#2-path-resolution">Path resolution</a> — F-05</li>
+<li><a href="#3-typed-configuration">Typed configuration</a> — F-04</li>
+<li><a href="#4-registry-factories">Registry factories</a> — F-02, F-04</li>
+<li><a href="#5-hermes_adapters"><code>hermes_adapters/</code></a> — F-03</li>
+<li><a href="#6-ac-gan-hyperparameter-wiring">AC-GAN hyperparameter wiring ⚠</a> — F-01</li>
+<li><a href="#7-one-trainer-family">One trainer family</a> — F-04</li>
+<li><a href="#8-characterization-harness">Characterization harness</a> — F-04, F-09</li>
+</ol>
+<hr />
+      </section>
+      <section id="1-packaging">
+        <div class="sec-eyebrow">§&nbsp;01 · Packaging</div>
+        <h2>Packaging</h2>
+<p><strong>Defect (F-05).</strong> No <code>pyproject.toml</code>, no <code>pytest.ini</code>, no <code>LICENSE</code>; 16 modules carry
+<code>sys.path.append(os.path.abspath('../../..'))</code>; <code>@pytest.mark.slow</code> is unregistered.</p>
+<p><strong>New file — <code>pyproject.toml</code>:</strong></p>
+<div class="codewrap wide"><span class="lang">toml</span><pre class="code"><code><span class="k">[build-system]</span>
+<span class="n">requires</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;setuptools&gt;=64&quot;</span><span class="p">]</span>
+<span class="n">build-backend</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;setuptools.build_meta&quot;</span>
+
+<span class="k">[project]</span>
+<span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;hifins&quot;</span>
+<span class="n">version</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;0.9.0&quot;</span>
+<span class="n">description</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;Hierarchical FL + GAN-based NIDS over a mule-assisted four-tier topology (HERMES)&quot;</span>
+<span class="n">readme</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;README.md&quot;</span>
+<span class="n">requires-python</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;=3.10&quot;</span>
+<span class="n">license</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">file</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;LICENSE&quot;</span><span class="w"> </span><span class="p">}</span>
+
+<span class="c1"># Deliberately minimal. `hermes/` imports exactly one third-party name.</span>
+<span class="c1"># Everything heavier is an extra, so an edge node can install the</span>
+<span class="c1"># scheduling substrate without pulling TensorFlow.</span>
+<span class="n">dependencies</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;numpy&gt;=1.24,&lt;3&quot;</span><span class="p">]</span>
+
+<span class="k">[project.optional-dependencies]</span>
+<span class="n">test</span><span class="w">    </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;pytest&gt;=7.0&quot;</span><span class="p">]</span>
+<span class="n">ml</span><span class="w">      </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;tensorflow==2.15.*&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;scikit-learn&gt;=1.3&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;pandas&gt;=2.0&quot;</span><span class="p">,</span>
+<span class="w">           </span><span class="s2">&quot;matplotlib&gt;=3.7&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;scipy&gt;=1.10&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;h5py&gt;=3.9&quot;</span><span class="p">]</span>
+<span class="n">legacy</span><span class="w">  </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;hifins[ml]&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;flwr==1.9.0&quot;</span><span class="p">]</span>
+<span class="n">dev</span><span class="w">     </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;hifins[test,ml,legacy]&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;ruff&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;mypy&quot;</span><span class="p">]</span>
+
+<span class="k">[project.scripts]</span>
+<span class="n">hermes-cluster</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;hermes.processes.cluster:main&quot;</span>
+<span class="n">hermes-mule</span><span class="w">    </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;hermes.processes.mule:main&quot;</span>
+<span class="n">hermes-device</span><span class="w">  </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;hermes.processes.device:main&quot;</span>
+
+<span class="k">[tool.setuptools.packages.find]</span>
+<span class="n">include</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;hermes*&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;experiments*&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;Config*&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;App*&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;hermes_adapters*&quot;</span><span class="p">]</span>
+
+<span class="k">[tool.pytest.ini_options]</span>
+<span class="n">testpaths</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;tests&quot;</span><span class="p">]</span>
+<span class="n">addopts</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;-q --strict-markers&quot;</span>
+<span class="n">markers</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
+<span class="w">    </span><span class="s2">&quot;slow: real subprocesses or long-running; deselect with -m &#39;not slow&#39;&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="s2">&quot;requires_tf: needs TensorFlow (skipped when unavailable)&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="s2">&quot;requires_flwr: needs Flower (skipped when unavailable)&quot;</span><span class="p">,</span>
+<span class="p">]</span>
+
+<span class="k">[tool.ruff]</span>
+<span class="n">line-length</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">100</span>
+<span class="n">target-version</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;py310&quot;</span></code></pre></div>
+<p><strong>New file — <code>conftest.py</code> (repository root):</strong></p>
+<div class="codewrap wide"><span class="lang">python</span><pre class="code"><code><span class="sd">&quot;&quot;&quot;Repo-root pytest configuration.</span>
+
+<span class="sd">Provides the skip guards that let the suite be green in a core-only venv.</span>
+<span class="sd">Today seven of the eight local failures are &quot;TensorFlow/Flower absent&quot;</span>
+<span class="sd">reported as failures, which trains people to ignore a red suite — see</span>
+<span class="sd">finding T-01.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">from</span> <span class="nn">__future__</span> <span class="kn">import</span> <span class="n">annotations</span>
+
+<span class="kn">import</span> <span class="nn">importlib.util</span>
+
+<span class="kn">import</span> <span class="nn">pytest</span>
+
+
+<span class="k">def</span> <span class="nf">_missing</span><span class="p">(</span><span class="n">module</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+    <span class="k">return</span> <span class="n">importlib</span><span class="o">.</span><span class="n">util</span><span class="o">.</span><span class="n">find_spec</span><span class="p">(</span><span class="n">module</span><span class="p">)</span> <span class="ow">is</span> <span class="kc">None</span>
+
+
+<span class="k">def</span> <span class="nf">pytest_collection_modifyitems</span><span class="p">(</span><span class="n">config</span><span class="p">,</span> <span class="n">items</span><span class="p">):</span>
+    <span class="n">skip_tf</span> <span class="o">=</span> <span class="n">pytest</span><span class="o">.</span><span class="n">mark</span><span class="o">.</span><span class="n">skip</span><span class="p">(</span><span class="n">reason</span><span class="o">=</span><span class="s2">&quot;TensorFlow not installed (pip install &#39;hifins[ml]&#39;)&quot;</span><span class="p">)</span>
+    <span class="n">skip_flwr</span> <span class="o">=</span> <span class="n">pytest</span><span class="o">.</span><span class="n">mark</span><span class="o">.</span><span class="n">skip</span><span class="p">(</span><span class="n">reason</span><span class="o">=</span><span class="s2">&quot;Flower not installed (pip install &#39;hifins[legacy]&#39;)&quot;</span><span class="p">)</span>
+    <span class="n">tf_absent</span><span class="p">,</span> <span class="n">flwr_absent</span> <span class="o">=</span> <span class="n">_missing</span><span class="p">(</span><span class="s2">&quot;tensorflow&quot;</span><span class="p">),</span> <span class="n">_missing</span><span class="p">(</span><span class="s2">&quot;flwr&quot;</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">items</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">tf_absent</span> <span class="ow">and</span> <span class="s2">&quot;requires_tf&quot;</span> <span class="ow">in</span> <span class="n">item</span><span class="o">.</span><span class="n">keywords</span><span class="p">:</span>
+            <span class="n">item</span><span class="o">.</span><span class="n">add_marker</span><span class="p">(</span><span class="n">skip_tf</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">flwr_absent</span> <span class="ow">and</span> <span class="s2">&quot;requires_flwr&quot;</span> <span class="ow">in</span> <span class="n">item</span><span class="o">.</span><span class="n">keywords</span><span class="p">:</span>
+            <span class="n">item</span><span class="o">.</span><span class="n">add_marker</span><span class="p">(</span><span class="n">skip_flwr</span><span class="p">)</span></code></pre></div>
+<p><strong>Then:</strong> <code>pip install -e .</code> and delete all 16 <code>sys.path.append</code> lines. Verify with
+<code>python -c "import hermes, experiments, Config"</code> from an unrelated directory.</p>
+<hr />
+      </section>
+      <section id="2-path-resolution">
+        <div class="sec-eyebrow">§&nbsp;02 · Path resolution</div>
+        <h2>Path resolution</h2>
+<p><strong>Defect (F-05).</strong> <code>'../../../../datasets/CICIOT2023'</code> in six loaders resolves only from
+<code>App/TrainingApp/Client/</code>, while the README documents running from the repository root
+and unzipping to <code>$HOME/datasets/</code>.</p>
+<p><strong>New file — <code>hifins/paths.py</code>:</strong></p>
+<div class="codewrap wide"><span class="lang">python</span><pre class="code"><code><span class="sd">&quot;&quot;&quot;Dataset and artefact path resolution.</span>
+
+<span class="sd">Replaces six copies of ``&#39;../../../../datasets/&lt;NAME&gt;&#39;``. That literal</span>
+<span class="sd">resolves correctly only when the process CWD is ``App/TrainingApp/Client/``</span>
+<span class="sd">— four levels up from there is the datasets root. The README instructs</span>
+<span class="sd">running from the repository root and unzipping to ``$HOME/datasets``, under</span>
+<span class="sd">which the literal points three levels *above* the repository&#39;s parent. The</span>
+<span class="sd">documented setup and the documented invocation could never both work.</span>
+
+<span class="sd">Resolution order (first hit wins):</span>
+
+<span class="sd">  1. an explicit ``root`` argument                       — tests, CI</span>
+<span class="sd">  2. ``$HIFINS_DATASET_ROOT``                            — deployment</span>
+<span class="sd">  3. ``$HOME/datasets``                                  — the documented setup</span>
+<span class="sd">  4. ``&lt;repo-root&gt;/../datasets``                         — common dev layout</span>
+<span class="sd">  5. ``../../../../datasets`` relative to CWD            — legacy, kept last</span>
+
+<span class="sd">Step 5 is retained deliberately: an existing run launched from</span>
+<span class="sd">``App/TrainingApp/Client/`` finds exactly the directory it always found, so</span>
+<span class="sd">this change is behaviour-preserving for current users while making every</span>
+<span class="sd">other invocation work too.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">from</span> <span class="nn">__future__</span> <span class="kn">import</span> <span class="n">annotations</span>
+
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">from</span> <span class="nn">pathlib</span> <span class="kn">import</span> <span class="n">Path</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">List</span><span class="p">,</span> <span class="n">Optional</span>
+
+<span class="c1"># hifins/paths.py -&gt; hifins/ -&gt; &lt;repo root&gt;</span>
+<span class="n">REPO_ROOT</span><span class="p">:</span> <span class="n">Path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="vm">__file__</span><span class="p">)</span><span class="o">.</span><span class="n">resolve</span><span class="p">()</span><span class="o">.</span><span class="n">parents</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+
+
+<span class="k">class</span> <span class="nc">DatasetNotFoundError</span><span class="p">(</span><span class="ne">FileNotFoundError</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Raised when a dataset directory cannot be located.</span>
+
+<span class="sd">    Carries every candidate that was tried, because the failure this</span>
+<span class="sd">    replaces was a bare FileNotFoundError on a mangled relative path with</span>
+<span class="sd">    no indication of what the resolver was looking for.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+
+<span class="k">def</span> <span class="nf">dataset_root</span><span class="p">(</span><span class="n">root</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">os</span><span class="o">.</span><span class="n">PathLike</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Path</span><span class="p">:</span>
+    <span class="k">for</span> <span class="n">candidate</span> <span class="ow">in</span> <span class="n">_candidate_roots</span><span class="p">(</span><span class="n">root</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">candidate</span><span class="o">.</span><span class="n">is_dir</span><span class="p">():</span>
+            <span class="k">return</span> <span class="n">candidate</span>
+    <span class="k">raise</span> <span class="n">DatasetNotFoundError</span><span class="p">(</span>
+        <span class="s2">&quot;no dataset root found. Set HIFINS_DATASET_ROOT, or place datasets &quot;</span>
+        <span class="s2">&quot;under $HOME/datasets. Tried:</span><span class="se">\n</span><span class="s2">  &quot;</span>
+        <span class="o">+</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">  &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">c</span><span class="p">)</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">_candidate_roots</span><span class="p">(</span><span class="n">root</span><span class="p">))</span>
+    <span class="p">)</span>
+
+
+<span class="k">def</span> <span class="nf">dataset_dir</span><span class="p">(</span><span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">root</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">os</span><span class="o">.</span><span class="n">PathLike</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Path</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Resolve one named dataset directory, e.g. ``dataset_dir(&quot;CICIOT2023&quot;)``.&quot;&quot;&quot;</span>
+    <span class="n">base</span> <span class="o">=</span> <span class="n">dataset_root</span><span class="p">(</span><span class="n">root</span><span class="p">)</span>
+    <span class="n">path</span> <span class="o">=</span> <span class="n">base</span> <span class="o">/</span> <span class="n">name</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">path</span><span class="o">.</span><span class="n">is_dir</span><span class="p">():</span>
+        <span class="k">raise</span> <span class="n">DatasetNotFoundError</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;dataset </span><span class="si">{</span><span class="n">name</span><span class="si">!r}</span><span class="s2"> not found under </span><span class="si">{</span><span class="n">base</span><span class="si">}</span><span class="s2">. &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;Available: </span><span class="si">{</span><span class="nb">sorted</span><span class="p">(</span><span class="n">p</span><span class="o">.</span><span class="n">name</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="n">p</span><span class="w"> </span><span class="ow">in</span><span class="w"> </span><span class="n">base</span><span class="o">.</span><span class="n">iterdir</span><span class="p">()</span><span class="w"> </span><span class="k">if</span><span class="w"> </span><span class="n">p</span><span class="o">.</span><span class="n">is_dir</span><span class="p">())</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="p">)</span>
+    <span class="k">return</span> <span class="n">path</span>
+
+
+<span class="k">def</span> <span class="nf">_candidate_roots</span><span class="p">(</span><span class="n">root</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">os</span><span class="o">.</span><span class="n">PathLike</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Path</span><span class="p">]:</span>
+    <span class="n">out</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Path</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">if</span> <span class="n">root</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">out</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="n">root</span><span class="p">)</span><span class="o">.</span><span class="n">expanduser</span><span class="p">()</span><span class="o">.</span><span class="n">resolve</span><span class="p">())</span>
+    <span class="n">env</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;HIFINS_DATASET_ROOT&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">env</span><span class="p">:</span>
+        <span class="n">out</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="n">env</span><span class="p">)</span><span class="o">.</span><span class="n">expanduser</span><span class="p">()</span><span class="o">.</span><span class="n">resolve</span><span class="p">())</span>
+    <span class="n">out</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">Path</span><span class="o">.</span><span class="n">home</span><span class="p">()</span> <span class="o">/</span> <span class="s2">&quot;datasets&quot;</span><span class="p">)</span>
+    <span class="n">out</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">REPO_ROOT</span><span class="o">.</span><span class="n">parent</span> <span class="o">/</span> <span class="s2">&quot;datasets&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">resolve</span><span class="p">())</span>
+    <span class="n">out</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="s2">&quot;../../../../datasets&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">resolve</span><span class="p">())</span>   <span class="c1"># legacy, last</span>
+    <span class="k">return</span> <span class="n">out</span></code></pre></div>
+<p><strong>Call-site change</strong> (<code>ciciot2023DatasetLoadV2.py:255</code>):</p>
+<div class="codewrap wide"><span class="lang">python</span><pre class="code"><code><span class="o">-</span>    <span class="n">DATASET_DIRECTORY</span> <span class="o">=</span> <span class="sa">f</span><span class="s1">&#39;../../../../datasets/CICIOT2023_POISONED</span><span class="si">{</span><span class="n">poisonedDataType</span><span class="si">}</span><span class="s1">&#39;</span> \
+<span class="o">-</span>        <span class="k">if</span> <span class="n">poisonedDataType</span> <span class="k">else</span> <span class="s1">&#39;../../../../datasets/CICIOT2023&#39;</span>
+<span class="o">+</span>    <span class="n">name</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;CICIOT2023_POISONED</span><span class="si">{</span><span class="n">poisonedDataType</span><span class="si">}</span><span class="s2">&quot;</span> <span class="k">if</span> <span class="n">poisonedDataType</span> <span class="k">else</span> <span class="s2">&quot;CICIOT2023&quot;</span>
+<span class="o">+</span>    <span class="n">DATASET_DIRECTORY</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">dataset_dir</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">root</span><span class="o">=</span><span class="n">dataset_root_override</span><span class="p">))</span></code></pre></div>
+<hr />
+      </section>
+      <section id="3-typed-configuration">
+        <div class="sec-eyebrow">§&nbsp;03 · Typed configuration</div>
+        <h2>Typed configuration</h2>
+<p><strong>Defect (F-04).</strong> <code>hyperparameterLoading</code> returns a 20-element positional tuple; three
+dispatchers take 41–42 positional parameters; 51 further functions take ≥12.</p>
+<p><strong>New file — <code>hifins/config/session.py</code>:</strong></p>
+<div class="codewrap wide"><span class="lang">python</span><pre class="code"><code><span class="sd">&quot;&quot;&quot;Frozen configuration objects replacing the positional-tuple plumbing.</span>
+
+<span class="sd">Before: ``hyperparameterLoading`` returned a 20-element tuple, unpacked into</span>
+<span class="sd">20 locals at each call site and threaded positionally through 41-parameter</span>
+<span class="sd">dispatchers. A single transposition anywhere in that chain is a silent</span>
+<span class="sd">wrong-value bug no type checker or test can catch — and the cost of adding</span>
+<span class="sd">one parameter (six edits across five files) is the direct reason the 21</span>
+<span class="sd">AC-GAN CLI flags were declared and never wired (finding F-01).</span>
+
+<span class="sd">Frozen dataclasses because these are read-only after construction; a trainer</span>
+<span class="sd">that mutates its own config is a bug we would rather not be able to write.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">from</span> <span class="nn">__future__</span> <span class="kn">import</span> <span class="n">annotations</span>
+
+<span class="kn">from</span> <span class="nn">dataclasses</span> <span class="kn">import</span> <span class="n">dataclass</span><span class="p">,</span> <span class="n">field</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Literal</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Sequence</span><span class="p">,</span> <span class="n">Tuple</span>
+
+<span class="n">ModelType</span> <span class="o">=</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;NIDS&quot;</span><span class="p">,</span> <span class="s2">&quot;NIDS-IOT-Binary&quot;</span><span class="p">,</span> <span class="s2">&quot;NIDS-IOT-Multiclass&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;NIDS-IOT-Multiclass-Dynamic&quot;</span><span class="p">,</span> <span class="s2">&quot;GAN&quot;</span><span class="p">,</span> <span class="s2">&quot;WGAN-GP&quot;</span><span class="p">,</span> <span class="s2">&quot;AC-GAN&quot;</span><span class="p">]</span>
+<span class="n">SubModel</span> <span class="o">=</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;NIDS&quot;</span><span class="p">,</span> <span class="s2">&quot;Generator&quot;</span><span class="p">,</span> <span class="s2">&quot;Discriminator&quot;</span><span class="p">,</span> <span class="s2">&quot;Both&quot;</span><span class="p">]</span>
+<span class="n">TrainingArea</span> <span class="o">=</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;Central&quot;</span><span class="p">,</span> <span class="s2">&quot;Federated&quot;</span><span class="p">]</span>
+
+
+<span class="nd">@dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">DatasetConfig</span><span class="p">:</span>
+    <span class="n">name</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;CICIOT&quot;</span><span class="p">,</span> <span class="s2">&quot;IOTBOTNET&quot;</span><span class="p">,</span> <span class="s2">&quot;IOT&quot;</span><span class="p">,</span> <span class="s2">&quot;LIVEDATA&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;CICIOT&quot;</span>
+    <span class="n">processing</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;Default&quot;</span>
+    <span class="n">train_sample_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">50</span>
+    <span class="n">test_sample_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">15</span>
+    <span class="n">training_dataset_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">400_000</span>
+    <span class="n">testing_dataset_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">80_000</span>
+    <span class="n">attack_eval_samples_ratio</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span>
+    <span class="n">random_seed</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">110</span>
+    <span class="n">root</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>          <span class="c1"># None -&gt; hifins.paths resolution</span>
+
+
+<span class="nd">@dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">ModelShape</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Shapes derived from the loaded data. Not user-supplied.&quot;&quot;&quot;</span>
+    <span class="n">input_dim</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">num_classes</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="n">latent_dim</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="n">noise_dim</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+
+
+<span class="nd">@dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">OptimizerConfig</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;One optimizer&#39;s full specification.</span>
+
+<span class="sd">    Every field previously lived as a literal inside a trainer&#39;s __init__</span>
+<span class="sd">    (ACGANCentralTrainingConfig.py:109-118) while the CLI advertised flags</span>
+<span class="sd">    that were never read. Defaults here are those literals verbatim, so</span>
+<span class="sd">    Variant A of R-14 is byte-identical to today. See §6.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">learning_rate</span><span class="p">:</span> <span class="nb">float</span>
+    <span class="n">decay_steps</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">10_000</span>
+    <span class="n">decay_rate</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.98</span>
+    <span class="n">staircase</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
+    <span class="n">beta_1</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.5</span>
+    <span class="n">beta_2</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.999</span>
+    <span class="n">clipnorm</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="mf">1.0</span>
+
+
+<span class="nd">@dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">ACGANHyperParams</span><span class="p">:</span>
+    <span class="c1"># Defaults are ACGANCentralTrainingConfig.py&#39;s hardcoded literals.</span>
+    <span class="n">generator</span><span class="p">:</span> <span class="n">OptimizerConfig</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span>
+        <span class="n">default_factory</span><span class="o">=</span><span class="k">lambda</span><span class="p">:</span> <span class="n">OptimizerConfig</span><span class="p">(</span><span class="n">learning_rate</span><span class="o">=</span><span class="mf">0.00012</span><span class="p">))</span>
+    <span class="n">discriminator</span><span class="p">:</span> <span class="n">OptimizerConfig</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span>
+        <span class="n">default_factory</span><span class="o">=</span><span class="k">lambda</span><span class="p">:</span> <span class="n">OptimizerConfig</span><span class="p">(</span><span class="n">learning_rate</span><span class="o">=</span><span class="mf">0.00007</span><span class="p">))</span>
+    <span class="n">d_to_g_ratio</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">3</span>                  <span class="c1"># fit()&#39;s default argument, not the CLI&#39;s 1</span>
+    <span class="n">valid_smoothing_factor</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.08</span>
+    <span class="n">fake_smoothing_factor</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.05</span>
+    <span class="n">gen_smoothing_factor</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.08</span>
+    <span class="n">attack_weight</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.5</span>
+    <span class="n">benign_weight</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.5</span>
+    <span class="n">validity_weight</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.5</span>
+    <span class="n">class_weight</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.5</span>
+
+    <span class="k">def</span> <span class="nf">__post_init__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">d_to_g_ratio</span> <span class="o">&lt;</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;d_to_g_ratio must be &gt;= 1, got </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">d_to_g_ratio</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;valid_smoothing_factor&quot;</span><span class="p">,</span> <span class="s2">&quot;fake_smoothing_factor&quot;</span><span class="p">,</span>
+                     <span class="s2">&quot;gen_smoothing_factor&quot;</span><span class="p">):</span>
+            <span class="n">v</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="mf">0.0</span> <span class="o">&lt;=</span> <span class="n">v</span> <span class="o">&lt;</span> <span class="mf">1.0</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2"> must be in [0, 1), got </span><span class="si">{</span><span class="n">v</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+
+<span class="nd">@dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">RegularizationConfig</span><span class="p">:</span>
+    <span class="n">enabled</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
+    <span class="n">l2_alpha</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1e-4</span>
+    <span class="n">dp_enabled</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
+    <span class="n">l2_norm_clip</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="n">noise_multiplier</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="n">num_microbatches</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span>
+
+
+<span class="nd">@dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">CallbackConfig</span><span class="p">:</span>
+    <span class="n">early_stopping</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
+    <span class="n">es_metric</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;val_loss&quot;</span>
+    <span class="n">es_patience</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">3</span>
+    <span class="n">restore_best_weights</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
+    <span class="n">lr_schedule_reduction</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
+    <span class="n">lr_metric</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;val_loss&quot;</span>
+    <span class="n">lr_patience</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">2</span>
+    <span class="n">checkpointing</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
+    <span class="n">checkpoint_metric</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;val_loss&quot;</span>
+    <span class="n">checkpoint_mode</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;min&quot;</span>
+    <span class="n">save_best_only</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
+
+
+<span class="nd">@dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">TrainingConfig</span><span class="p">:</span>
+    <span class="n">epochs</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">5</span>
+    <span class="n">batch_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">64</span>
+    <span class="n">steps_per_epoch</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>      <span class="c1"># None -&gt; len(X) // batch_size</span>
+    <span class="n">learning_rate</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1e-4</span>
+    <span class="n">betas</span><span class="p">:</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="mf">0.9</span><span class="p">,</span> <span class="mf">0.999</span><span class="p">)</span>
+    <span class="n">regularization</span><span class="p">:</span> <span class="n">RegularizationConfig</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="n">RegularizationConfig</span><span class="p">)</span>
+    <span class="n">callbacks</span><span class="p">:</span> <span class="n">CallbackConfig</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="n">CallbackConfig</span><span class="p">)</span>
+
+
+<span class="nd">@dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">FederationConfig</span><span class="p">:</span>
+    <span class="n">area</span><span class="p">:</span> <span class="n">TrainingArea</span> <span class="o">=</span> <span class="s2">&quot;Central&quot;</span>
+    <span class="n">server_address</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>       <span class="c1"># None -&gt; resolved from --host</span>
+    <span class="n">rounds</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span>
+    <span class="n">min_clients</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">2</span>
+    <span class="n">synth_portion</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span>
+    <span class="n">node_id</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span>
+
+
+<span class="nd">@dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">RunConfig</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Everything one training run needs. Replaces the 41-parameter calls.&quot;&quot;&quot;</span>
+    <span class="n">model_type</span><span class="p">:</span> <span class="n">ModelType</span>
+    <span class="n">sub_model</span><span class="p">:</span> <span class="n">SubModel</span>
+    <span class="n">dataset</span><span class="p">:</span> <span class="n">DatasetConfig</span>
+    <span class="n">training</span><span class="p">:</span> <span class="n">TrainingConfig</span>
+    <span class="n">federation</span><span class="p">:</span> <span class="n">FederationConfig</span>
+    <span class="n">shape</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">ModelShape</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>                  <span class="c1"># filled after data load</span>
+    <span class="n">acgan</span><span class="p">:</span> <span class="n">ACGANHyperParams</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="n">ACGANHyperParams</span><span class="p">)</span>
+    <span class="n">pretrained</span><span class="p">:</span> <span class="s2">&quot;PretrainedPaths&quot;</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="k">lambda</span><span class="p">:</span> <span class="n">PretrainedPaths</span><span class="p">())</span>
+    <span class="n">save_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+    <span class="n">timestamp</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+
+
+<span class="nd">@dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">PretrainedPaths</span><span class="p">:</span>
+    <span class="n">gan</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="n">generator</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="n">discriminator</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="n">nids</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span></code></pre></div>
+<p><strong>Adapter for incremental migration</strong> — build the config from today's <code>args</code>, so call
+sites migrate one at a time:</p>
+<div class="codewrap wide"><span class="lang">python</span><pre class="code"><code><span class="c1"># hifins/config/from_args.py</span>
+<span class="k">def</span> <span class="nf">run_config_from_args</span><span class="p">(</span><span class="n">args</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">RunConfig</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Bridge argparse Namespace -&gt; RunConfig.</span>
+
+<span class="sd">    Exists so the migration is incremental: a call site can take the</span>
+<span class="sd">    RunConfig while its neighbours still take the 41-tuple. Delete once</span>
+<span class="sd">    every dispatcher is migrated.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">RunConfig</span><span class="p">(</span>
+        <span class="n">model_type</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">model_type</span><span class="p">,</span>
+        <span class="n">sub_model</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">model_training</span><span class="p">,</span>
+        <span class="n">dataset</span><span class="o">=</span><span class="n">DatasetConfig</span><span class="p">(</span>
+            <span class="n">name</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">dataset</span><span class="p">,</span>
+            <span class="n">processing</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">dataset_processing</span><span class="p">,</span>
+            <span class="n">train_sample_size</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">ciciot_train_sample_size</span><span class="p">,</span>
+            <span class="n">test_sample_size</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">ciciot_test_sample_size</span><span class="p">,</span>
+            <span class="n">training_dataset_size</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">ciciot_training_dataset_size</span><span class="p">,</span>
+            <span class="n">testing_dataset_size</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">ciciot_testing_dataset_size</span><span class="p">,</span>
+            <span class="n">attack_eval_samples_ratio</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">ciciot_attack_eval_samples_ratio</span><span class="p">,</span>
+            <span class="n">random_seed</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">ciciot_random_seed</span><span class="p">,</span>
+        <span class="p">),</span>
+        <span class="n">training</span><span class="o">=</span><span class="n">TrainingConfig</span><span class="p">(</span><span class="n">epochs</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">epochs</span><span class="p">),</span>
+        <span class="n">federation</span><span class="o">=</span><span class="n">FederationConfig</span><span class="p">(</span>
+            <span class="n">area</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">trainingArea</span><span class="p">,</span>
+            <span class="n">server_address</span><span class="o">=</span><span class="n">resolve_server_address</span><span class="p">(</span><span class="n">args</span><span class="p">),</span>
+            <span class="n">rounds</span><span class="o">=</span><span class="nb">getattr</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="s2">&quot;rounds&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>
+            <span class="n">min_clients</span><span class="o">=</span><span class="nb">getattr</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="s2">&quot;min_clients&quot;</span><span class="p">,</span> <span class="mi">2</span><span class="p">),</span>
+            <span class="n">synth_portion</span><span class="o">=</span><span class="nb">getattr</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="s2">&quot;synth_portion&quot;</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">),</span>
+        <span class="p">),</span>
+        <span class="n">acgan</span><span class="o">=</span><span class="n">acgan_params_from_args</span><span class="p">(</span><span class="n">args</span><span class="p">),</span>          <span class="c1"># §6</span>
+        <span class="n">pretrained</span><span class="o">=</span><span class="n">PretrainedPaths</span><span class="p">(</span>
+            <span class="n">gan</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">pretrained_GAN</span><span class="p">,</span> <span class="n">generator</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">pretrained_generator</span><span class="p">,</span>
+            <span class="n">discriminator</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">pretrained_discriminator</span><span class="p">,</span> <span class="n">nids</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">pretrained_nids</span><span class="p">,</span>
+        <span class="p">),</span>
+        <span class="n">save_name</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">save_name</span><span class="p">,</span>
+        <span class="n">timestamp</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">timestamp</span><span class="p">,</span>
+    <span class="p">)</span></code></pre></div>
+<p><strong>Also fixes E-03</strong> (the duplicated <code>192.168.129.x</code> table):</p>
+<div class="codewrap"><span class="lang">python</span><pre class="code"><code><span class="c1"># hifins/config/hosts.py</span>
+<span class="sd">&quot;&quot;&quot;Server-address resolution for the legacy Flower path.</span>
+
+<span class="sd">The four-way host table was duplicated in TrainingClient.py:124-133 (used)</span>
+<span class="sd">and ArgumentConfigLoad.py:211-220 (displayed). Two copies of one lab subnet,</span>
+<span class="sd">guaranteed to drift, both needing a code edit for any topology change.</span>
+<span class="sd">One table, overridable by environment so a redeploy is not a commit.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">from</span> <span class="nn">__future__</span> <span class="kn">import</span> <span class="n">annotations</span>
+
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Dict</span>
+
+<span class="n">DEFAULT_PORT</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;HIFINS_FL_PORT&quot;</span><span class="p">,</span> <span class="s2">&quot;8080&quot;</span><span class="p">))</span>
+
+<span class="n">_PRESET_HOSTS</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s2">&quot;1&quot;</span><span class="p">:</span> <span class="s2">&quot;192.168.129.3&quot;</span><span class="p">,</span> <span class="s2">&quot;2&quot;</span><span class="p">:</span> <span class="s2">&quot;192.168.129.6&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;3&quot;</span><span class="p">:</span> <span class="s2">&quot;192.168.129.7&quot;</span><span class="p">,</span> <span class="s2">&quot;4&quot;</span><span class="p">:</span> <span class="s2">&quot;192.168.129.8&quot;</span><span class="p">,</span>
+<span class="p">}</span>
+
+
+<span class="k">def</span> <span class="nf">resolve_server_address</span><span class="p">(</span><span class="n">args</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Custom host wins; then $HIFINS_FL_SERVER; then the preset table;</span>
+<span class="sd">    then treat --host as a literal address (the existing failsafe).&quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="s2">&quot;custom_host&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">):</span>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">args</span><span class="o">.</span><span class="n">custom_host</span><span class="si">}</span><span class="s2">:</span><span class="si">{</span><span class="n">DEFAULT_PORT</span><span class="si">}</span><span class="s2">&quot;</span>
+    <span class="n">env</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;HIFINS_FL_SERVER&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">env</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">env</span> <span class="k">if</span> <span class="s2">&quot;:&quot;</span> <span class="ow">in</span> <span class="n">env</span> <span class="k">else</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">env</span><span class="si">}</span><span class="s2">:</span><span class="si">{</span><span class="n">DEFAULT_PORT</span><span class="si">}</span><span class="s2">&quot;</span>
+    <span class="n">host</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="s2">&quot;host&quot;</span><span class="p">,</span> <span class="s2">&quot;1&quot;</span><span class="p">))</span>
+    <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">_PRESET_HOSTS</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">host</span><span class="p">,</span><span class="w"> </span><span class="n">host</span><span class="p">)</span><span class="si">}</span><span class="s2">:</span><span class="si">{</span><span class="n">DEFAULT_PORT</span><span class="si">}</span><span class="s2">&quot;</span></code></pre></div>
+<hr />
+      </section>
+      <section id="4-registry-factories">
+        <div class="sec-eyebrow">§&nbsp;04 · Registry factories</div>
+        <h2>Registry factories</h2>
+<p><strong>Defect (F-02, F-04).</strong> <code>modelCreateLoad</code> is 375 lines / complexity 89; the two
+dispatchers are 41-parameter if/elif chains with <code>client = None</code> fall-throughs.</p>
+<div class="codewrap wide"><span class="lang">python</span><pre class="code"><code><span class="c1"># hifins/factories.py</span>
+<span class="sd">&quot;&quot;&quot;Decorator-registered factories replacing the branch trees.</span>
+
+<span class="sd">Two problems disappear at once:</span>
+
+<span class="sd">* ``modelCreateLoad``&#39;s 375-line, complexity-89 if/elif tree and the two</span>
+<span class="sd">  41-parameter dispatchers become table lookups.</span>
+<span class="sd">* The ``client = None`` fall-through becomes unrepresentable. Today four</span>
+<span class="sd">  advertised --model_type values return None and crash with</span>
+<span class="sd">  ``AttributeError: &#39;NoneType&#39; object has no attribute &#39;fit&#39;`` *after* the</span>
+<span class="sd">  dataset load and model construction (finding F-02). A registry either has</span>
+<span class="sd">  the key or raises at lookup, naming the valid keys.</span>
+
+<span class="sd">Adding a model type is one decorator in one new file. No existing file is</span>
+<span class="sd">edited, which is what makes the registry worth the indirection.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">from</span> <span class="nn">__future__</span> <span class="kn">import</span> <span class="n">annotations</span>
+
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Callable</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">Iterable</span><span class="p">,</span> <span class="n">Protocol</span><span class="p">,</span> <span class="n">Tuple</span>
+
+<span class="kn">from</span> <span class="nn">.config.session</span> <span class="kn">import</span> <span class="n">ModelShape</span><span class="p">,</span> <span class="n">RunConfig</span>
+
+<span class="n">TrainerKey</span> <span class="o">=</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span>           <span class="c1"># (model_type, sub_model, training_area)</span>
+
+
+<span class="k">class</span> <span class="nc">Trainer</span><span class="p">(</span><span class="n">Protocol</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">fit</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span> <span class="o">...</span>
+    <span class="k">def</span> <span class="nf">evaluate</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span> <span class="o">...</span>
+    <span class="k">def</span> <span class="nf">save</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span> <span class="o">...</span>
+
+
+<span class="k">class</span> <span class="nc">UnsupportedTrainerError</span><span class="p">(</span><span class="ne">NotImplementedError</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Raised for a (model_type, sub_model, training_area) with no factory.&quot;&quot;&quot;</span>
+
+
+<span class="n">_TRAINERS</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="n">TrainerKey</span><span class="p">,</span> <span class="n">Callable</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="n">Trainer</span><span class="p">]]</span> <span class="o">=</span> <span class="p">{}</span>
+
+
+<span class="k">def</span> <span class="nf">register_trainer</span><span class="p">(</span><span class="n">model_type</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">sub_model</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">training_area</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">_decorate</span><span class="p">(</span><span class="n">fn</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="n">Trainer</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">Callable</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="n">Trainer</span><span class="p">]:</span>
+        <span class="n">key</span> <span class="o">=</span> <span class="p">(</span><span class="n">model_type</span><span class="p">,</span> <span class="n">sub_model</span><span class="p">,</span> <span class="n">training_area</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">_TRAINERS</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;duplicate trainer registration for </span><span class="si">{</span><span class="n">key</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="n">_TRAINERS</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">fn</span>
+        <span class="k">return</span> <span class="n">fn</span>
+    <span class="k">return</span> <span class="n">_decorate</span>
+
+
+<span class="k">def</span> <span class="nf">supported_keys</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n">Iterable</span><span class="p">[</span><span class="n">TrainerKey</span><span class="p">]:</span>
+    <span class="k">return</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">_TRAINERS</span><span class="p">)</span>
+
+
+<span class="k">def</span> <span class="nf">is_supported</span><span class="p">(</span><span class="n">model_type</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">sub_model</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">training_area</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+    <span class="k">return</span> <span class="p">(</span><span class="n">model_type</span><span class="p">,</span> <span class="n">sub_model</span><span class="p">,</span> <span class="n">training_area</span><span class="p">)</span> <span class="ow">in</span> <span class="n">_TRAINERS</span>
+
+
+<span class="k">def</span> <span class="nf">build_trainer</span><span class="p">(</span><span class="n">cfg</span><span class="p">:</span> <span class="n">RunConfig</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">models</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Trainer</span><span class="p">:</span>
+    <span class="n">key</span> <span class="o">=</span> <span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">model_type</span><span class="p">,</span> <span class="n">cfg</span><span class="o">.</span><span class="n">sub_model</span><span class="p">,</span> <span class="n">cfg</span><span class="o">.</span><span class="n">federation</span><span class="o">.</span><span class="n">area</span><span class="p">)</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">factory</span> <span class="o">=</span> <span class="n">_TRAINERS</span><span class="p">[</span><span class="n">key</span><span class="p">]</span>
+    <span class="k">except</span> <span class="ne">KeyError</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">UnsupportedTrainerError</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;no trainer registered for model_type=</span><span class="si">{</span><span class="n">cfg</span><span class="o">.</span><span class="n">model_type</span><span class="si">!r}</span><span class="s2"> &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;sub_model=</span><span class="si">{</span><span class="n">cfg</span><span class="o">.</span><span class="n">sub_model</span><span class="si">!r}</span><span class="s2"> area=</span><span class="si">{</span><span class="n">cfg</span><span class="o">.</span><span class="n">federation</span><span class="o">.</span><span class="n">area</span><span class="si">!r}</span><span class="s2">.</span><span class="se">\n</span><span class="s2">&quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;Supported combinations:</span><span class="se">\n</span><span class="s2">  &quot;</span>
+            <span class="o">+</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">  &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">m</span><span class="si">}</span><span class="s2"> / </span><span class="si">{</span><span class="n">s</span><span class="si">}</span><span class="s2"> / </span><span class="si">{</span><span class="n">a</span><span class="si">}</span><span class="s2">&quot;</span> <span class="k">for</span> <span class="n">m</span><span class="p">,</span> <span class="n">s</span><span class="p">,</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">supported_keys</span><span class="p">())</span>
+        <span class="p">)</span> <span class="kn">from</span> <span class="kc">None</span>
+    <span class="k">return</span> <span class="n">factory</span><span class="p">(</span><span class="n">cfg</span><span class="o">=</span><span class="n">cfg</span><span class="p">,</span> <span class="n">models</span><span class="o">=</span><span class="n">models</span><span class="p">,</span> <span class="n">data</span><span class="o">=</span><span class="n">data</span><span class="p">)</span></code></pre></div>
+<p><strong>⚠ BEHAVIOUR CHANGE (R-15), and the whole point of it</strong> — validate at parse time, before
+the dataset load:</p>
+<div class="codewrap wide"><span class="lang">python</span><pre class="code"><code><span class="c1"># in parse_training_client_args, after args = parser.parse_args()</span>
+<span class="k">if</span> <span class="ow">not</span> <span class="n">is_supported</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">model_type</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">model_training</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">trainingArea</span><span class="p">):</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">error</span><span class="p">(</span>
+        <span class="sa">f</span><span class="s2">&quot;--model_type </span><span class="si">{</span><span class="n">args</span><span class="o">.</span><span class="n">model_type</span><span class="si">}</span><span class="s2"> with --model_training &quot;</span>
+        <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">args</span><span class="o">.</span><span class="n">model_training</span><span class="si">}</span><span class="s2"> and --trainingArea </span><span class="si">{</span><span class="n">args</span><span class="o">.</span><span class="n">trainingArea</span><span class="si">}</span><span class="s2"> is not &quot;</span>
+        <span class="sa">f</span><span class="s2">&quot;implemented.</span><span class="se">\n</span><span class="s2">Supported:</span><span class="se">\n</span><span class="s2">  &quot;</span>
+        <span class="o">+</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">  &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">m</span><span class="si">}</span><span class="s2"> / </span><span class="si">{</span><span class="n">s</span><span class="si">}</span><span class="s2"> / </span><span class="si">{</span><span class="n">a</span><span class="si">}</span><span class="s2">&quot;</span> <span class="k">for</span> <span class="n">m</span><span class="p">,</span> <span class="n">s</span><span class="p">,</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">supported_keys</span><span class="p">())</span>
+    <span class="p">)</span></code></pre></div>
+<p>What changes: an <code>AttributeError</code> after minutes of data loading becomes an immediate
+<code>argparse</code> error naming what is supported. Nothing that previously worked stops working —
+the four affected values (<code>CANGAN</code>, <code>NIDS-IOT-Binary</code>, <code>NIDS-IOT-Multiclass</code>,
+<code>NIDS-IOT-Multiclass-Dynamic</code>) could never run.</p>
+<hr />
+      </section>
+      <section id="5-hermes_adapters">
+        <div class="sec-eyebrow">§&nbsp;05 · `hermes_adapters/`</div>
+        <h2>`hermes_adapters/`</h2>
+<p><strong>Defect (F-03, and H-08 from the HERMES side).</strong> The <code>--mode hermes</code> bridge is a stub;
+<code>hermes/processes/*</code> reaches into <code>experiments.exp4.model_task</code> instead of going through
+the Protocols. Two consequences that matter scientifically:</p>
+<ul>
+<li><code>StubGeneratorHost.make_synth_batch</code> returns <strong>zero tensors</strong> in every live HERMES
+  run, so the GAN in "GAN-based NIDS" has never run inside HERMES.</li>
+<li><code>experiments/exp4/model_task.py:150-152</code> states the device-side callback <em>accepts and
+  ignores</em> the synth batch: <em>"accepted for signature compatibility … but ignored in
+  EX-4.1 (the GAN is separate, revision-scope work)."</em></li>
+</ul>
+<p>So the synthetic-augmentation path is inert on both ends. The adapters below are what
+close it — and they need <strong>zero changes to <code>hermes/</code></strong>, because the Protocols are already
+the right shape.</p>
+<div class="codewrap wide"><span class="lang">python</span><pre class="code"><code><span class="c1"># hermes_adapters/keras_generator_host.py</span>
+<span class="sd">&quot;&quot;&quot;Real GeneratorHost backed by the AC-GAN generator + DNN-IDS discriminator.</span>
+
+<span class="sd">Satisfies hermes.cluster.host_cluster.GeneratorHost structurally — no</span>
+<span class="sd">inheritance, no import of hermes internals beyond the Weights alias, so this</span>
+<span class="sd">package depends on hermes and hermes depends on nothing here.</span>
+
+<span class="sd">Replaces StubGeneratorHost, whose make_synth_batch returns zero tensors. The</span>
+<span class="sd">GAN half of &quot;GAN-based NIDS&quot; has therefore never executed inside a HERMES</span>
+<span class="sd">run; this is the change that makes it real.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">from</span> <span class="nn">__future__</span> <span class="kn">import</span> <span class="n">annotations</span>
+
+<span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">from</span> <span class="nn">pathlib</span> <span class="kn">import</span> <span class="n">Path</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">List</span><span class="p">,</span> <span class="n">Optional</span>
+
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+
+<span class="n">log</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
+<span class="n">Weights</span> <span class="o">=</span> <span class="n">List</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]</span>
+
+
+<span class="k">class</span> <span class="nc">KerasGeneratorHost</span><span class="p">:</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">generator_path</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">discriminator_path</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">input_dim</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+        <span class="n">latent_dim</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">100</span><span class="p">,</span>
+        <span class="n">num_classes</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">2</span><span class="p">,</span>
+        <span class="n">seed</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="c1"># Lazy import: the cluster process pays the TensorFlow import cost</span>
+        <span class="c1"># only when a real provider is configured. The stub path stays</span>
+        <span class="c1"># numpy-only, which is what keeps `hermes` installable on an edge</span>
+        <span class="c1"># node without an ML stack.</span>
+        <span class="kn">import</span> <span class="nn">tensorflow</span> <span class="k">as</span> <span class="nn">tf</span>
+
+        <span class="kn">from</span> <span class="nn">Config.modelStructures.GAN.generatorStruct</span> <span class="kn">import</span> <span class="n">build_AC_generator</span>
+        <span class="kn">from</span> <span class="nn">Config.modelStructures.NIDS.NIDS_Struct</span> <span class="kn">import</span> <span class="n">create_CICIOT_Model</span>
+
+        <span class="n">tf</span><span class="o">.</span><span class="n">keras</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">set_random_seed</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">seed</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_latent_dim</span> <span class="o">=</span> <span class="n">latent_dim</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_num_classes</span> <span class="o">=</span> <span class="n">num_classes</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_rng</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">default_rng</span><span class="p">(</span><span class="n">seed</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_generator</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="n">tf</span><span class="o">.</span><span class="n">keras</span><span class="o">.</span><span class="n">models</span><span class="o">.</span><span class="n">load_model</span><span class="p">(</span><span class="n">generator_path</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">generator_path</span> <span class="ow">and</span> <span class="n">Path</span><span class="p">(</span><span class="n">generator_path</span><span class="p">)</span><span class="o">.</span><span class="n">exists</span><span class="p">()</span>
+            <span class="k">else</span> <span class="n">build_AC_generator</span><span class="p">(</span><span class="n">latent_dim</span><span class="p">,</span> <span class="n">num_classes</span><span class="p">,</span> <span class="n">input_dim</span><span class="p">)</span>
+        <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_discriminator</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="n">tf</span><span class="o">.</span><span class="n">keras</span><span class="o">.</span><span class="n">models</span><span class="o">.</span><span class="n">load_model</span><span class="p">(</span><span class="n">discriminator_path</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">discriminator_path</span> <span class="ow">and</span> <span class="n">Path</span><span class="p">(</span><span class="n">discriminator_path</span><span class="p">)</span><span class="o">.</span><span class="n">exists</span><span class="p">()</span>
+            <span class="k">else</span> <span class="n">create_CICIOT_Model</span><span class="p">(</span>
+                <span class="n">input_dim</span><span class="o">=</span><span class="n">input_dim</span><span class="p">,</span> <span class="n">regularizationEnabled</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+                <span class="n">DP_enabled</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">l2_alpha</span><span class="o">=</span><span class="mf">1e-4</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_last_refinement_round</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span>
+        <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+            <span class="s2">&quot;KerasGeneratorHost ready: input_dim=</span><span class="si">%d</span><span class="s2"> latent_dim=</span><span class="si">%d</span><span class="s2"> classes=</span><span class="si">%d</span><span class="s2"> &quot;</span>
+            <span class="s2">&quot;generator=</span><span class="si">%s</span><span class="s2"> discriminator=</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+            <span class="n">input_dim</span><span class="p">,</span> <span class="n">latent_dim</span><span class="p">,</span> <span class="n">num_classes</span><span class="p">,</span>
+            <span class="n">generator_path</span> <span class="ow">or</span> <span class="s2">&quot;&lt;fresh&gt;&quot;</span><span class="p">,</span> <span class="n">discriminator_path</span> <span class="ow">or</span> <span class="s2">&quot;&lt;fresh&gt;&quot;</span><span class="p">,</span>
+        <span class="p">)</span>
+
+    <span class="c1"># ---- GeneratorHost Protocol ----</span>
+
+    <span class="k">def</span> <span class="nf">make_synth_batch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">n</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Draw ``n`` synthetic samples from θ_gen.</span>
+
+<span class="sd">        Class labels are drawn uniformly so the batch is balanced regardless</span>
+<span class="sd">        of the real data&#39;s skew — the synth batch exists to *augment* the</span>
+<span class="sd">        device&#39;s minority class, so mirroring the real imbalance would</span>
+<span class="sd">        defeat its purpose.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">n</span> <span class="o">&lt;=</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">[]</span>
+        <span class="n">noise</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_rng</span><span class="o">.</span><span class="n">normal</span><span class="p">(</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="p">(</span><span class="n">n</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_latent_dim</span><span class="p">))</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
+        <span class="n">labels</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_rng</span><span class="o">.</span><span class="n">integers</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_num_classes</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="p">(</span><span class="n">n</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">int32</span><span class="p">)</span>
+        <span class="n">samples</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_generator</span><span class="o">.</span><span class="n">predict</span><span class="p">([</span><span class="n">noise</span><span class="p">,</span> <span class="n">labels</span><span class="p">],</span> <span class="n">verbose</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+        <span class="k">return</span> <span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">row</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span> <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">samples</span><span class="p">]</span>
+
+    <span class="k">def</span> <span class="nf">get_global_disc_weights</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Weights</span><span class="p">:</span>
+        <span class="k">return</span> <span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">w</span><span class="p">)</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span> <span class="k">for</span> <span class="n">w</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_discriminator</span><span class="o">.</span><span class="n">get_weights</span><span class="p">()]</span>
+
+    <span class="k">def</span> <span class="nf">update_disc_from_cluster_avg</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">weights</span><span class="p">:</span> <span class="n">Weights</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">current</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_discriminator</span><span class="o">.</span><span class="n">get_weights</span><span class="p">()</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">weights</span><span class="p">)</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="n">current</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;cluster average has </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">weights</span><span class="p">)</span><span class="si">}</span><span class="s2"> layers; discriminator &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;has </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">current</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="p">)</span>
+        <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="p">(</span><span class="n">new</span><span class="p">,</span> <span class="n">old</span><span class="p">)</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="nb">zip</span><span class="p">(</span><span class="n">weights</span><span class="p">,</span> <span class="n">current</span><span class="p">)):</span>
+            <span class="k">if</span> <span class="n">new</span><span class="o">.</span><span class="n">shape</span> <span class="o">!=</span> <span class="n">old</span><span class="o">.</span><span class="n">shape</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;layer </span><span class="si">{</span><span class="n">i</span><span class="si">}</span><span class="s2"> shape mismatch: aggregate </span><span class="si">{</span><span class="n">new</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2"> vs &quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot;model </span><span class="si">{</span><span class="n">old</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span>
+                <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_discriminator</span><span class="o">.</span><span class="n">set_weights</span><span class="p">([</span><span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">w</span><span class="p">)</span> <span class="k">for</span> <span class="n">w</span> <span class="ow">in</span> <span class="n">weights</span><span class="p">])</span>
+
+    <span class="k">def</span> <span class="nf">apply_tier3_gen_refinement</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">weights</span><span class="p">:</span> <span class="n">Weights</span><span class="p">,</span> <span class="n">refinement_round</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="c1"># Tier-3 is best-effort polled; an older packet can arrive after a</span>
+        <span class="c1"># newer one. Same ordering rule as StubGeneratorHost.</span>
+        <span class="k">if</span> <span class="n">refinement_round</span> <span class="o">&lt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">_last_refinement_round</span><span class="p">:</span>
+            <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                <span class="s2">&quot;ignoring stale tier-3 refinement round=</span><span class="si">%d</span><span class="s2"> (have </span><span class="si">%d</span><span class="s2">)&quot;</span><span class="p">,</span>
+                <span class="n">refinement_round</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_last_refinement_round</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="k">return</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_generator</span><span class="o">.</span><span class="n">set_weights</span><span class="p">([</span><span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">w</span><span class="p">)</span> <span class="k">for</span> <span class="n">w</span> <span class="ow">in</span> <span class="n">weights</span><span class="p">])</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_last_refinement_round</span> <span class="o">=</span> <span class="n">refinement_round</span>
+
+
+<span class="k">def</span> <span class="nf">make_generator_host</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">KerasGeneratorHost</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Entry point for hermes.processes.providers.load_provider.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">KerasGeneratorHost</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></code></pre></div>
+<div class="codewrap wide"><span class="lang">python</span><pre class="code"><code><span class="c1"># hermes_adapters/keras_local_train.py</span>
+<span class="sd">&quot;&quot;&quot;Real LocalTrainFn: fits the canonical DNN-IDS on one device shard.</span>
+
+<span class="sd">Differs from experiments.exp4.model_task.make_local_train_fn in one respect</span>
+<span class="sd">that matters: it *uses* the synth batch. The exp4 implementation accepts and</span>
+<span class="sd">discards it (&quot;the GAN is separate, revision-scope work&quot;), so the synthetic</span>
+<span class="sd">augmentation the whole AC-GAN pipeline exists to produce has never reached a</span>
+<span class="sd">device&#39;s training step.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">from</span> <span class="nn">__future__</span> <span class="kn">import</span> <span class="n">annotations</span>
+
+<span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">List</span><span class="p">,</span> <span class="n">Optional</span>
+
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+
+<span class="n">log</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
+
+
+<span class="k">class</span> <span class="nc">KerasLocalTrain</span><span class="p">:</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">X</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+        <span class="n">y</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">input_dim</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">epochs</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
+        <span class="n">batch_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">64</span><span class="p">,</span>
+        <span class="n">l2_alpha</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1e-3</span><span class="p">,</span>
+        <span class="n">learning_rate</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1e-3</span><span class="p">,</span>
+        <span class="n">synth_label</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span>
+        <span class="n">max_synth_fraction</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.25</span><span class="p">,</span>
+        <span class="n">seed</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="kn">import</span> <span class="nn">tensorflow</span> <span class="k">as</span> <span class="nn">tf</span>
+        <span class="kn">from</span> <span class="nn">Config.modelStructures.NIDS.NIDS_Struct</span> <span class="kn">import</span> <span class="n">create_CICIOT_Model</span>
+
+        <span class="n">tf</span><span class="o">.</span><span class="n">keras</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">set_random_seed</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">seed</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_dim</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">input_dim</span> <span class="k">if</span> <span class="n">input_dim</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">X</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_X</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_y</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">y</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_epochs</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_batch_size</span> <span class="o">=</span> <span class="n">epochs</span><span class="p">,</span> <span class="n">batch_size</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_synth_label</span> <span class="o">=</span> <span class="n">synth_label</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_max_synth_fraction</span> <span class="o">=</span> <span class="n">max_synth_fraction</span>
+        <span class="c1"># Built once and re-fitted from the pushed θ each round. Rebuilding a</span>
+        <span class="c1"># Keras model per round would dominate the device&#39;s runtime.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_model</span> <span class="o">=</span> <span class="n">create_CICIOT_Model</span><span class="p">(</span>
+            <span class="n">input_dim</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_dim</span><span class="p">,</span> <span class="n">regularizationEnabled</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+            <span class="n">DP_enabled</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">l2_alpha</span><span class="o">=</span><span class="n">l2_alpha</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_model</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span>
+            <span class="n">optimizer</span><span class="o">=</span><span class="n">tf</span><span class="o">.</span><span class="n">keras</span><span class="o">.</span><span class="n">optimizers</span><span class="o">.</span><span class="n">Adam</span><span class="p">(</span><span class="n">learning_rate</span><span class="o">=</span><span class="n">learning_rate</span><span class="p">),</span>
+            <span class="n">loss</span><span class="o">=</span><span class="s2">&quot;binary_crossentropy&quot;</span><span class="p">,</span>
+            <span class="n">metrics</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;accuracy&quot;</span><span class="p">,</span> <span class="n">tf</span><span class="o">.</span><span class="n">keras</span><span class="o">.</span><span class="n">metrics</span><span class="o">.</span><span class="n">AUC</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;auc&quot;</span><span class="p">)],</span>
+        <span class="p">)</span>
+
+    <span class="k">def</span> <span class="fm">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">theta_disc</span><span class="p">,</span> <span class="n">synth_batch</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]):</span>
+        <span class="kn">from</span> <span class="nn">hermes.mission</span> <span class="kn">import</span> <span class="n">LocalTrainResult</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_model</span><span class="o">.</span><span class="n">set_weights</span><span class="p">([</span><span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">w</span><span class="p">)</span> <span class="k">for</span> <span class="n">w</span> <span class="ow">in</span> <span class="n">theta_disc</span><span class="p">])</span>
+        <span class="n">X</span><span class="p">,</span> <span class="n">y</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_augment</span><span class="p">(</span><span class="n">synth_batch</span><span class="p">)</span>
+        <span class="n">history</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_model</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span>
+            <span class="n">X</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">epochs</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_epochs</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_batch_size</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="n">after</span> <span class="o">=</span> <span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">w</span><span class="p">)</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span> <span class="k">for</span> <span class="n">w</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_model</span><span class="o">.</span><span class="n">get_weights</span><span class="p">()]</span>
+        <span class="k">return</span> <span class="n">LocalTrainResult</span><span class="p">(</span>
+            <span class="n">delta_theta</span><span class="o">=</span><span class="n">after</span><span class="p">,</span>
+            <span class="n">num_examples</span><span class="o">=</span><span class="nb">int</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">y</span><span class="p">)),</span>
+            <span class="n">accuracy</span><span class="o">=</span><span class="nb">float</span><span class="p">(</span><span class="n">history</span><span class="o">.</span><span class="n">history</span><span class="p">[</span><span class="s2">&quot;accuracy&quot;</span><span class="p">][</span><span class="o">-</span><span class="mi">1</span><span class="p">]),</span>
+            <span class="n">auc</span><span class="o">=</span><span class="nb">float</span><span class="p">(</span><span class="n">history</span><span class="o">.</span><span class="n">history</span><span class="p">[</span><span class="s2">&quot;auc&quot;</span><span class="p">][</span><span class="o">-</span><span class="mi">1</span><span class="p">]),</span>
+            <span class="n">loss</span><span class="o">=</span><span class="nb">float</span><span class="p">(</span><span class="n">history</span><span class="o">.</span><span class="n">history</span><span class="p">[</span><span class="s2">&quot;loss&quot;</span><span class="p">][</span><span class="o">-</span><span class="mi">1</span><span class="p">]),</span>
+            <span class="n">theta_after</span><span class="o">=</span><span class="n">after</span><span class="p">,</span>
+        <span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_augment</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">synth_batch</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Append synthetic rows, capped as a fraction of the real shard.</span>
+
+<span class="sd">        The cap matters: an unbounded synth batch would let the cluster&#39;s</span>
+<span class="sd">        generator dominate a small device&#39;s local distribution, which is the</span>
+<span class="sd">        opposite of the diversity term the utility score rewards.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">synth_batch</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_X</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_y</span>
+        <span class="n">synth</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span>
+            <span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">s</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">synth_batch</span><span class="p">]</span>
+        <span class="p">)</span>
+        <span class="k">if</span> <span class="n">synth</span><span class="o">.</span><span class="n">ndim</span> <span class="o">!=</span> <span class="mi">2</span> <span class="ow">or</span> <span class="n">synth</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">!=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_dim</span><span class="p">:</span>
+            <span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                <span class="s2">&quot;ignoring synth batch with shape </span><span class="si">%s</span><span class="s2"> (expected (*, </span><span class="si">%d</span><span class="s2">))&quot;</span><span class="p">,</span>
+                <span class="n">synth</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_dim</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_X</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_y</span>
+        <span class="n">cap</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_y</span><span class="p">)</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">_max_synth_fraction</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">cap</span> <span class="o">&lt;=</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_X</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_y</span>
+        <span class="n">synth</span> <span class="o">=</span> <span class="n">synth</span><span class="p">[:</span><span class="n">cap</span><span class="p">]</span>
+        <span class="n">labels</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">full</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">synth</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">_synth_label</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
+        <span class="k">return</span> <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">([</span><span class="bp">self</span><span class="o">.</span><span class="n">_X</span><span class="p">,</span> <span class="n">synth</span><span class="p">],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">),</span>
+                <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">([</span><span class="bp">self</span><span class="o">.</span><span class="n">_y</span><span class="p">,</span> <span class="n">labels</span><span class="p">],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">))</span>
+
+
+<span class="k">def</span> <span class="nf">make_local_train_provider</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">shard_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">KerasLocalTrain</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Entry point for hermes.processes.providers.load_provider.&quot;&quot;&quot;</span>
+    <span class="kn">from</span> <span class="nn">experiments.exp4.model_task</span> <span class="kn">import</span> <span class="n">load_xy</span>
+    <span class="n">X</span><span class="p">,</span> <span class="n">y</span> <span class="o">=</span> <span class="n">load_xy</span><span class="p">(</span><span class="n">shard_path</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">KerasLocalTrain</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></code></pre></div>
+<p>Wire them in via config, not import
+(<a href="../Hermes/HERMES_Production_Code.html#6-inverting-the-experiments-dependency"><code>../Hermes/HERMES_Production_Code.html</code> §6</a>):</p>
+<div class="codewrap wide"><span class="lang">jsonc</span><pre class="code"><code><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;generator_provider&quot;</span><span class="p">:</span><span class="w">   </span><span class="s2">&quot;hermes_adapters.keras_generator_host:make_generator_host&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;local_train_provider&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;hermes_adapters.keras_local_train:make_local_train_provider&quot;</span>
+<span class="p">}</span></code></pre></div>
+<p><strong>⚠ Note.</strong> Enabling a <em>real</em> synth batch changes device-side training inputs relative to
+today's zero-tensor stub. That is the intended fix, but it invalidates comparison against
+Exp-4 results collected under the stub. Treat the switch-on as a new experimental
+condition, not a bug fix, and record it in the methodology docs.</p>
+<hr />
+      </section>
+      <section id="6-ac-gan-hyperparameter-wiring">
+        <div class="sec-eyebrow">§&nbsp;06 · AC-GAN hyperparameter wiring</div>
+        <h2>AC-GAN hyperparameter wiring</h2>
+<p><strong>⚠ BEHAVIOUR CHANGE — approval-gated (<a href="../01_Refactoring_Strategy.html#r-14">R-14</a>).</strong></p>
+<p><strong>Variant A (recommended, behaviour-preserving):</strong></p>
+<div class="codewrap"><span class="lang">python</span><pre class="code"><code><span class="c1"># hifins/config/from_args.py</span>
+<span class="k">def</span> <span class="nf">acgan_params_from_args</span><span class="p">(</span><span class="n">args</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ACGANHyperParams</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Build ACGANHyperParams from the CLI.</span>
+
+<span class="sd">    Variant A: argparse defaults are changed to match the values the trainer</span>
+<span class="sd">    currently hardcodes, so a run with no flags is byte-identical to today.</span>
+<span class="sd">    A run *with* flags now actually honours them — which it never did: all</span>
+<span class="sd">    21 --AC_* flags appear exactly once in the repository, at their own</span>
+<span class="sd">    declaration (finding C-01).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">ACGANHyperParams</span><span class="p">(</span>
+        <span class="n">generator</span><span class="o">=</span><span class="n">OptimizerConfig</span><span class="p">(</span>
+            <span class="n">learning_rate</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">AC_gen_learning_rate</span><span class="p">,</span>
+            <span class="n">decay_steps</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">AC_gen_decay_steps</span><span class="p">,</span>
+            <span class="n">decay_rate</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">AC_gen_decay_rate</span><span class="p">,</span>
+            <span class="n">staircase</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">AC_gen_staircase</span><span class="p">,</span>
+            <span class="n">beta_1</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">AC_gen_beta_1</span><span class="p">,</span>
+            <span class="n">beta_2</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">AC_gen_beta_2</span><span class="p">,</span>
+        <span class="p">),</span>
+        <span class="n">discriminator</span><span class="o">=</span><span class="n">OptimizerConfig</span><span class="p">(</span>
+            <span class="n">learning_rate</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">AC_disc_learning_rate</span><span class="p">,</span>
+            <span class="n">decay_steps</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">AC_disc_decay_steps</span><span class="p">,</span>
+            <span class="n">decay_rate</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">AC_disc_decay_rate</span><span class="p">,</span>
+            <span class="n">staircase</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">AC_disc_staircase</span><span class="p">,</span>
+            <span class="n">beta_1</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">AC_disc_beta_1</span><span class="p">,</span>
+            <span class="n">beta_2</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">AC_disc_beta_2</span><span class="p">,</span>
+        <span class="p">),</span>
+        <span class="n">d_to_g_ratio</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">AC_d_to_g_ratio</span><span class="p">,</span>
+        <span class="n">valid_smoothing_factor</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">AC_disc_valid_smoothing_factor</span><span class="p">,</span>
+        <span class="n">fake_smoothing_factor</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">AC_disc_fake_smoothing_factor</span><span class="p">,</span>
+        <span class="n">gen_smoothing_factor</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">AC_gen_smoothing_factor</span><span class="p">,</span>
+        <span class="n">attack_weight</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">AC_disc_attack_weight</span><span class="p">,</span>
+        <span class="n">benign_weight</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">AC_disc_benign_weight</span><span class="p">,</span>
+        <span class="n">validity_weight</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">AC_disc_validity_weight</span><span class="p">,</span>
+        <span class="n">class_weight</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">AC_disc_class_weight</span><span class="p">,</span>
+    <span class="p">)</span></code></pre></div>
+<p>Argparse defaults change to the current effective values:</p>
+<div class="codewrap wide"><span class="lang">diff</span><pre class="code"><code><span class="gd">-parser.add_argument(&quot;--AC_disc_learning_rate&quot;, type=float, default=0.00001, …)</span>
+<span class="gi">+# Default = the value the trainer hardcodes today (ACGANCentralTrainingConfig.py:114).</span>
+<span class="gi">+# Changing the default rather than the trainer keeps every existing</span>
+<span class="gi">+# invocation byte-identical while making the flag live for the first time.</span>
+<span class="gi">+parser.add_argument(&quot;--AC_disc_learning_rate&quot;, type=float, default=0.00007, …)</span>
+
+<span class="gd">-parser.add_argument(&quot;--AC_gen_learning_rate&quot;, type=float, default=0.00003, …)</span>
+<span class="gi">+parser.add_argument(&quot;--AC_gen_learning_rate&quot;, type=float, default=0.00012, …)</span>
+
+<span class="gd">-parser.add_argument(&quot;--AC_d_to_g_ratio&quot;, type=int, default=1, …)</span>
+<span class="gi">+# fit()&#39;s own default is 3 and TrainingClient calls fit() with no arguments,</span>
+<span class="gi">+# so 3 — not 1 — is what every run has actually used.</span>
+<span class="gi">+parser.add_argument(&quot;--AC_d_to_g_ratio&quot;, type=int, default=3, …)</span></code></pre></div>
+<p>Trainer construction becomes:</p>
+<div class="codewrap"><span class="lang">python</span><pre class="code"><code><span class="k">class</span> <span class="nc">ACGANTrainer</span><span class="p">(</span><span class="n">BaseTrainer</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">_build_optimizers</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="kn">import</span> <span class="nn">tensorflow</span> <span class="k">as</span> <span class="nn">tf</span>
+        <span class="n">hp</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">acgan</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">gen_optimizer</span> <span class="o">=</span> <span class="n">_adam</span><span class="p">(</span><span class="n">hp</span><span class="o">.</span><span class="n">generator</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">disc_optimizer</span> <span class="o">=</span> <span class="n">_adam</span><span class="p">(</span><span class="n">hp</span><span class="o">.</span><span class="n">discriminator</span><span class="p">)</span>
+        <span class="c1"># Effective values in the log, so a lab notebook can be checked</span>
+        <span class="c1"># against what actually ran. Their absence is why C-01 went</span>
+        <span class="c1"># unnoticed for a full experiment cycle.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;AC-GAN effective hyperparameters: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">hp</span><span class="p">)</span>
+
+
+<span class="k">def</span> <span class="nf">_adam</span><span class="p">(</span><span class="n">cfg</span><span class="p">:</span> <span class="n">OptimizerConfig</span><span class="p">):</span>
+    <span class="kn">import</span> <span class="nn">tensorflow</span> <span class="k">as</span> <span class="nn">tf</span>
+    <span class="n">schedule</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">keras</span><span class="o">.</span><span class="n">optimizers</span><span class="o">.</span><span class="n">schedules</span><span class="o">.</span><span class="n">ExponentialDecay</span><span class="p">(</span>
+        <span class="n">initial_learning_rate</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">learning_rate</span><span class="p">,</span>
+        <span class="n">decay_steps</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">decay_steps</span><span class="p">,</span>
+        <span class="n">decay_rate</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">decay_rate</span><span class="p">,</span>
+        <span class="n">staircase</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">staircase</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="k">return</span> <span class="n">tf</span><span class="o">.</span><span class="n">keras</span><span class="o">.</span><span class="n">optimizers</span><span class="o">.</span><span class="n">Adam</span><span class="p">(</span>
+        <span class="n">learning_rate</span><span class="o">=</span><span class="n">schedule</span><span class="p">,</span> <span class="n">beta_1</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">beta_1</span><span class="p">,</span>
+        <span class="n">beta_2</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">beta_2</span><span class="p">,</span> <span class="n">clipnorm</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">clipnorm</span><span class="p">,</span>
+    <span class="p">)</span></code></pre></div>
+<p><strong>Regression guard so this cannot recur:</strong></p>
+<div class="codewrap wide"><span class="lang">python</span><pre class="code"><code><span class="c1"># tests/unit/test_cli_flags_are_wired.py</span>
+<span class="sd">&quot;&quot;&quot;Every --AC_* flag must be read by something.</span>
+
+<span class="sd">Finding C-01: 21 AC-GAN hyperparameter flags were declared and referenced</span>
+<span class="sd">nowhere else in the repository, so every sweep run through the documented</span>
+<span class="sd">CLI trained identical models under different recorded settings.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">import</span> <span class="nn">argparse</span>
+<span class="kn">from</span> <span class="nn">pathlib</span> <span class="kn">import</span> <span class="n">Path</span>
+
+<span class="kn">from</span> <span class="nn">Config.SessionConfig.ArgumentConfigLoad</span> <span class="kn">import</span> <span class="n">parse_training_client_args</span>
+
+<span class="n">REPO</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="vm">__file__</span><span class="p">)</span><span class="o">.</span><span class="n">resolve</span><span class="p">()</span><span class="o">.</span><span class="n">parents</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span>
+<span class="n">EXCLUDE</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;ArgumentConfigLoad.py&quot;</span><span class="p">}</span>
+
+
+<span class="k">def</span> <span class="nf">_declared_flags</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+    <span class="n">parser</span> <span class="o">=</span> <span class="n">_build_parser_without_parsing</span><span class="p">()</span>      <span class="c1"># refactor extracted from the module</span>
+    <span class="k">return</span> <span class="p">{</span>
+        <span class="n">a</span><span class="o">.</span><span class="n">dest</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">parser</span><span class="o">.</span><span class="n">_actions</span>
+        <span class="k">if</span> <span class="n">a</span><span class="o">.</span><span class="n">dest</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;AC_&quot;</span><span class="p">)</span>
+    <span class="p">}</span>
+
+
+<span class="k">def</span> <span class="nf">test_every_acgan_flag_is_consumed</span><span class="p">():</span>
+    <span class="n">sources</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="n">p</span><span class="o">.</span><span class="n">read_text</span><span class="p">(</span><span class="n">encoding</span><span class="o">=</span><span class="s2">&quot;utf-8&quot;</span><span class="p">,</span> <span class="n">errors</span><span class="o">=</span><span class="s2">&quot;replace&quot;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">REPO</span><span class="o">.</span><span class="n">rglob</span><span class="p">(</span><span class="s2">&quot;*.py&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">p</span><span class="o">.</span><span class="n">name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">EXCLUDE</span> <span class="ow">and</span> <span class="s2">&quot;.claude&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">p</span><span class="o">.</span><span class="n">parts</span>
+    <span class="p">]</span>
+    <span class="n">orphans</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="n">dest</span> <span class="k">for</span> <span class="n">dest</span> <span class="ow">in</span> <span class="n">_declared_flags</span><span class="p">()</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">any</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;args.</span><span class="si">{</span><span class="n">dest</span><span class="si">}</span><span class="s2">&quot;</span> <span class="ow">in</span> <span class="n">s</span> <span class="ow">or</span> <span class="sa">f</span><span class="s1">&#39;&quot;</span><span class="si">{</span><span class="n">dest</span><span class="si">}</span><span class="s1">&quot;&#39;</span> <span class="ow">in</span> <span class="n">s</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">sources</span><span class="p">)</span>
+    <span class="p">]</span>
+    <span class="k">assert</span> <span class="ow">not</span> <span class="n">orphans</span><span class="p">,</span> <span class="p">(</span>
+        <span class="sa">f</span><span class="s2">&quot;CLI flags declared but never read: </span><span class="si">{</span><span class="nb">sorted</span><span class="p">(</span><span class="n">orphans</span><span class="p">)</span><span class="si">}</span><span class="s2">. &quot;</span>
+        <span class="sa">f</span><span class="s2">&quot;A flag that does nothing silently invalidates any sweep that sets it.&quot;</span>
+    <span class="p">)</span></code></pre></div>
+<p><strong>Variant B (honour the published defaults)</strong> keeps <code>0.00003</code> / <code>0.00001</code> / <code>1</code> and
+changes what every existing invocation does. Only choose it if the published defaults are
+believed correct and the September-2025 mode-collapse tuning is to be re-run.</p>
+<hr />
+      </section>
+      <section id="7-one-trainer-family">
+        <div class="sec-eyebrow">§&nbsp;07 · One trainer family</div>
+        <h2>One trainer family</h2>
+<p><strong>Defect (F-04).</strong> 47 classes, 21,278 LOC, <code>discriminator_loss</code> copied 24 times, <code>fit</code>
+methods up to 499 lines.</p>
+<p>Target shape — the step functions are the <em>only</em> thing that differs between variants:</p>
+<div class="codewrap wide"><span class="lang">text</span><pre class="code"><code>hifins/training/
+├── base.py          BaseTrainer          fit / evaluate / save lifecycle
+├── mixins.py        MetricsLoggingMixin, ValidationMixin, CheckpointMixin
+├── losses.py        discriminator_loss, generator_loss, gradient_penalty, nids_loss
+│                    ← ONE copy each, replacing 24 / 17 / 7 / 13
+├── variants/
+│   ├── gan.py       GANTrainer        train_step
+│   ├── wgan_gp.py   WGANGPTrainer     train_step + gradient penalty
+│   └── acgan.py     ACGANTrainer      train_step + d_to_g_ratio loop
+└── adapters/
+    ├── central.py         CentralAdapter        plain fit/evaluate/save
+    ├── flower_client.py   FlowerClientAdapter   NumPyClient get/set/fit/evaluate
+    └── flower_strategy.py FlowerStrategyAdapter Strategy aggregate_fit hook</code></pre></div>
+<div class="codewrap wide"><span class="lang">python</span><pre class="code"><code><span class="c1"># hifins/training/base.py</span>
+<span class="sd">&quot;&quot;&quot;Lifecycle shared by every trainer.</span>
+
+<span class="sd">Replaces 47 classes that each re-implemented the same fit/evaluate/save</span>
+<span class="sd">skeleton around a different train_step. The 500-line `fit` methods are</span>
+<span class="sd">almost entirely this skeleton; the genuinely variant-specific part is under</span>
+<span class="sd">80 lines in each case.</span>
+
+<span class="sd">Subclasses implement exactly three hooks. Everything else — epoch loop,</span>
+<span class="sd">metric accumulation, early stopping, checkpointing, logging — lives here,</span>
+<span class="sd">once, and is therefore fixed once.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">from</span> <span class="nn">__future__</span> <span class="kn">import</span> <span class="n">annotations</span>
+
+<span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">from</span> <span class="nn">abc</span> <span class="kn">import</span> <span class="n">ABC</span><span class="p">,</span> <span class="n">abstractmethod</span>
+<span class="kn">from</span> <span class="nn">dataclasses</span> <span class="kn">import</span> <span class="n">dataclass</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">Optional</span>
+
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+
+<span class="kn">from</span> <span class="nn">..config.session</span> <span class="kn">import</span> <span class="n">RunConfig</span>
+
+
+<span class="nd">@dataclass</span>
+<span class="k">class</span> <span class="nc">TrainingData</span><span class="p">:</span>
+    <span class="n">X_train</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span>
+    <span class="n">y_train</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span>
+    <span class="n">X_val</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span>
+    <span class="n">y_val</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span>
+    <span class="n">X_test</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span>
+    <span class="n">y_test</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span>
+
+
+<span class="k">class</span> <span class="nc">BaseTrainer</span><span class="p">(</span><span class="n">ABC</span><span class="p">):</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">cfg</span><span class="p">:</span> <span class="n">RunConfig</span><span class="p">,</span> <span class="n">models</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span> <span class="n">data</span><span class="p">:</span> <span class="n">TrainingData</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span> <span class="o">=</span> <span class="n">cfg</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">models</span> <span class="o">=</span> <span class="n">models</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">data</span> <span class="o">=</span> <span class="n">data</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;hifins.training.</span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_build_optimizers</span><span class="p">()</span>
+
+    <span class="c1"># ---- hooks a variant must implement ----</span>
+
+    <span class="nd">@abstractmethod</span>
+    <span class="k">def</span> <span class="nf">_build_optimizers</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span> <span class="o">...</span>
+
+    <span class="nd">@abstractmethod</span>
+    <span class="k">def</span> <span class="nf">train_step</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">batch</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">float</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;One optimizer step. Returns the scalar metrics for this step.&quot;&quot;&quot;</span>
+
+    <span class="nd">@abstractmethod</span>
+    <span class="k">def</span> <span class="nf">evaluate_step</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">X</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">y</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">float</span><span class="p">]:</span> <span class="o">...</span>
+
+    <span class="c1"># ---- shared lifecycle ----</span>
+
+    <span class="k">def</span> <span class="nf">fit</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">list</span><span class="p">]:</span>
+        <span class="n">history</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">list</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="n">steps</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">training</span><span class="o">.</span><span class="n">steps_per_epoch</span> <span class="ow">or</span> <span class="p">(</span>
+            <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">y_train</span><span class="p">)</span> <span class="o">//</span> <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">training</span><span class="o">.</span><span class="n">batch_size</span>
+        <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_log_configuration</span><span class="p">(</span><span class="n">steps</span><span class="p">)</span>
+        <span class="n">stopper</span> <span class="o">=</span> <span class="n">_EarlyStopper</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">training</span><span class="o">.</span><span class="n">callbacks</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">epoch</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">training</span><span class="o">.</span><span class="n">epochs</span><span class="p">):</span>
+            <span class="n">epoch_metrics</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">list</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+            <span class="k">for</span> <span class="n">step</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">steps</span><span class="p">):</span>
+                <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">train_step</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_next_batch</span><span class="p">(</span><span class="n">step</span><span class="p">))</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                    <span class="n">epoch_metrics</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="n">k</span><span class="p">,</span> <span class="p">[])</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">v</span><span class="p">)</span>
+
+            <span class="n">means</span> <span class="o">=</span> <span class="p">{</span><span class="n">k</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">v</span><span class="p">))</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">epoch_metrics</span><span class="o">.</span><span class="n">items</span><span class="p">()}</span>
+            <span class="n">val</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">evaluate_step</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">X_val</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">y_val</span><span class="p">)</span>
+            <span class="n">means</span><span class="o">.</span><span class="n">update</span><span class="p">({</span><span class="sa">f</span><span class="s2">&quot;val_</span><span class="si">{</span><span class="n">k</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">:</span> <span class="n">v</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">val</span><span class="o">.</span><span class="n">items</span><span class="p">()})</span>
+            <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">means</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                <span class="n">history</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="n">k</span><span class="p">,</span> <span class="p">[])</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">v</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_log_epoch</span><span class="p">(</span><span class="n">epoch</span><span class="p">,</span> <span class="n">means</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="n">stopper</span><span class="o">.</span><span class="n">should_stop</span><span class="p">(</span><span class="n">means</span><span class="p">):</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;early stopping at epoch </span><span class="si">%d</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">epoch</span><span class="p">)</span>
+                <span class="k">break</span>
+        <span class="k">return</span> <span class="n">history</span>
+
+    <span class="k">def</span> <span class="nf">evaluate</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">float</span><span class="p">]:</span>
+        <span class="n">metrics</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">evaluate_step</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">X_test</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">y_test</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;test metrics: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">metrics</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">metrics</span>
+
+    <span class="k">def</span> <span class="nf">save</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">label</span><span class="p">,</span> <span class="n">model</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">models</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">model</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="n">path</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">_</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">.h5&quot;</span>
+            <span class="n">model</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;saved </span><span class="si">%s</span><span class="s2"> -&gt; </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">label</span><span class="p">,</span> <span class="n">path</span><span class="p">)</span></code></pre></div>
+<p>Each concrete variant is then small. <code>ACGANTrainer.train_step</code>, for instance, is the
+existing inner loop from <code>ACGANCentralTrainingConfig.fit</code> lines ~931–1050, lifted
+<strong>verbatim</strong> with <code>d_to_g_ratio</code> read from <code>self.cfg.acgan</code> instead of a default argument.
+The <code>hifins/training/losses.py</code> bodies are the existing <code>discriminator_loss</code> /
+<code>generator_loss</code> implementations, one copy, chosen as the canonical version and pinned by
+the golden snapshots.</p>
+<p><strong>Migration rule (from the plan): one trainer per commit, one trainer per PR, and never
+delete a class before its golden passes against the new path.</strong></p>
+<hr />
+      </section>
+      <section id="8-characterization-harness">
+        <div class="sec-eyebrow">§&nbsp;08 · Characterization harness</div>
+        <h2>Characterization harness</h2>
+<p><strong>This gates §7.</strong> <code>Config/ModelTrainingConfig/</code> has zero tests; nothing may be
+consolidated until its current behaviour is captured.</p>
+<div class="codewrap wide"><span class="lang">python</span><pre class="code"><code><span class="c1"># tests/characterization/conftest.py</span>
+<span class="sd">&quot;&quot;&quot;Golden-snapshot fixtures for the legacy trainers.</span>
+
+<span class="sd">These are CHARACTERIZATION tests, not correctness tests: they assert only</span>
+<span class="sd">that a refactor did not change what the code does. They make no claim that</span>
+<span class="sd">the current behaviour is right — several of these trainers carry the</span>
+<span class="sd">September-2025 mode-collapse fixes and several may not, which is exactly</span>
+<span class="sd">what nobody can currently determine (finding F-04).</span>
+
+<span class="sd">Everything is seeded and tiny (200 rows, 1 epoch) so the suite runs in</span>
+<span class="sd">under two minutes on CPU and can gate every PR.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">from</span> <span class="nn">__future__</span> <span class="kn">import</span> <span class="n">annotations</span>
+
+<span class="kn">import</span> <span class="nn">hashlib</span>
+<span class="kn">import</span> <span class="nn">json</span>
+<span class="kn">from</span> <span class="nn">pathlib</span> <span class="kn">import</span> <span class="n">Path</span>
+
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">pytest</span>
+
+<span class="n">GOLDEN_DIR</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="vm">__file__</span><span class="p">)</span><span class="o">.</span><span class="n">parent</span> <span class="o">/</span> <span class="s2">&quot;goldens&quot;</span>
+<span class="n">N_ROWS</span><span class="p">,</span> <span class="n">N_FEATURES</span><span class="p">,</span> <span class="n">SEED</span> <span class="o">=</span> <span class="mi">200</span><span class="p">,</span> <span class="mi">21</span><span class="p">,</span> <span class="mi">20260810</span>
+
+
+<span class="nd">@pytest</span><span class="o">.</span><span class="n">fixture</span><span class="p">(</span><span class="n">scope</span><span class="o">=</span><span class="s2">&quot;session&quot;</span><span class="p">)</span>
+<span class="k">def</span> <span class="nf">tiny_dataset</span><span class="p">():</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Deterministic stand-in with CIC-IoT-2023&#39;s shape (21 features, binary).&quot;&quot;&quot;</span>
+    <span class="n">rng</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">default_rng</span><span class="p">(</span><span class="n">SEED</span><span class="p">)</span>
+    <span class="n">X</span> <span class="o">=</span> <span class="n">rng</span><span class="o">.</span><span class="n">normal</span><span class="p">(</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="p">(</span><span class="n">N_ROWS</span><span class="p">,</span> <span class="n">N_FEATURES</span><span class="p">))</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
+    <span class="n">y</span> <span class="o">=</span> <span class="p">(</span><span class="n">rng</span><span class="o">.</span><span class="n">random</span><span class="p">(</span><span class="n">N_ROWS</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mf">0.5</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
+    <span class="n">split</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">N_ROWS</span> <span class="o">*</span> <span class="mf">0.6</span><span class="p">),</span> <span class="nb">int</span><span class="p">(</span><span class="n">N_ROWS</span> <span class="o">*</span> <span class="mf">0.8</span><span class="p">)</span>
+    <span class="k">return</span> <span class="p">{</span>
+        <span class="s2">&quot;X_train&quot;</span><span class="p">:</span> <span class="n">X</span><span class="p">[:</span> <span class="n">split</span><span class="p">[</span><span class="mi">0</span><span class="p">]],</span> <span class="s2">&quot;y_train&quot;</span><span class="p">:</span> <span class="n">y</span><span class="p">[:</span> <span class="n">split</span><span class="p">[</span><span class="mi">0</span><span class="p">]],</span>
+        <span class="s2">&quot;X_val&quot;</span><span class="p">:</span>   <span class="n">X</span><span class="p">[</span><span class="n">split</span><span class="p">[</span><span class="mi">0</span><span class="p">]:</span><span class="n">split</span><span class="p">[</span><span class="mi">1</span><span class="p">]],</span> <span class="s2">&quot;y_val&quot;</span><span class="p">:</span> <span class="n">y</span><span class="p">[</span><span class="n">split</span><span class="p">[</span><span class="mi">0</span><span class="p">]:</span><span class="n">split</span><span class="p">[</span><span class="mi">1</span><span class="p">]],</span>
+        <span class="s2">&quot;X_test&quot;</span><span class="p">:</span>  <span class="n">X</span><span class="p">[</span><span class="n">split</span><span class="p">[</span><span class="mi">1</span><span class="p">]:],</span> <span class="s2">&quot;y_test&quot;</span><span class="p">:</span> <span class="n">y</span><span class="p">[</span><span class="n">split</span><span class="p">[</span><span class="mi">1</span><span class="p">]:],</span>
+    <span class="p">}</span>
+
+
+<span class="k">def</span> <span class="nf">weights_digest</span><span class="p">(</span><span class="n">model</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Order- and dtype-sensitive digest of a Keras model&#39;s weights.</span>
+
+<span class="sd">    Weight hashes rather than full arrays because the goldens live in git</span>
+<span class="sd">    and must stay diffable; any change to any weight changes the digest.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">h</span> <span class="o">=</span> <span class="n">hashlib</span><span class="o">.</span><span class="n">sha256</span><span class="p">()</span>
+    <span class="k">for</span> <span class="n">w</span> <span class="ow">in</span> <span class="n">model</span><span class="o">.</span><span class="n">get_weights</span><span class="p">():</span>
+        <span class="n">arr</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ascontiguousarray</span><span class="p">(</span><span class="n">w</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+        <span class="n">h</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">arr</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span><span class="o">.</span><span class="n">encode</span><span class="p">())</span>
+        <span class="n">h</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">arr</span><span class="o">.</span><span class="n">tobytes</span><span class="p">())</span>
+    <span class="k">return</span> <span class="n">h</span><span class="o">.</span><span class="n">hexdigest</span><span class="p">()</span>
+
+
+<span class="k">def</span> <span class="nf">assert_matches_golden</span><span class="p">(</span><span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">snapshot</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">update</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="n">path</span> <span class="o">=</span> <span class="n">GOLDEN_DIR</span> <span class="o">/</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">.json&quot;</span>
+    <span class="k">if</span> <span class="n">update</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+        <span class="n">path</span><span class="o">.</span><span class="n">parent</span><span class="o">.</span><span class="n">mkdir</span><span class="p">(</span><span class="n">parents</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="n">path</span><span class="o">.</span><span class="n">write_text</span><span class="p">(</span><span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">snapshot</span><span class="p">,</span> <span class="n">indent</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">sort_keys</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span> <span class="n">encoding</span><span class="o">=</span><span class="s2">&quot;utf-8&quot;</span><span class="p">)</span>
+        <span class="n">pytest</span><span class="o">.</span><span class="n">skip</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;golden written: </span><span class="si">{</span><span class="n">path</span><span class="si">}</span><span class="s2"> — re-run to assert against it&quot;</span><span class="p">)</span>
+    <span class="n">expected</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">path</span><span class="o">.</span><span class="n">read_text</span><span class="p">(</span><span class="n">encoding</span><span class="o">=</span><span class="s2">&quot;utf-8&quot;</span><span class="p">))</span>
+    <span class="k">assert</span> <span class="n">snapshot</span> <span class="o">==</span> <span class="n">expected</span><span class="p">,</span> <span class="p">(</span>
+        <span class="sa">f</span><span class="s2">&quot;behaviour changed for </span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">.</span><span class="se">\n</span><span class="s2">&quot;</span>
+        <span class="sa">f</span><span class="s2">&quot;If intentional, re-run with --update-goldens and justify the diff &quot;</span>
+        <span class="sa">f</span><span class="s2">&quot;in the PR description.&quot;</span>
+    <span class="p">)</span></code></pre></div>
+<div class="codewrap wide"><span class="lang">python</span><pre class="code"><code><span class="c1"># tests/characterization/test_acgan_central.py</span>
+<span class="kn">import</span> <span class="nn">pytest</span>
+
+<span class="n">pytestmark</span> <span class="o">=</span> <span class="p">[</span><span class="n">pytest</span><span class="o">.</span><span class="n">mark</span><span class="o">.</span><span class="n">requires_tf</span><span class="p">,</span> <span class="n">pytest</span><span class="o">.</span><span class="n">mark</span><span class="o">.</span><span class="n">slow</span><span class="p">]</span>
+
+
+<span class="k">def</span> <span class="nf">test_acgan_central_one_epoch_is_stable</span><span class="p">(</span><span class="n">tiny_dataset</span><span class="p">,</span> <span class="n">acgan_models</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Pin ACGANCentralTrainingConfig&#39;s observable behaviour before R-21.</span>
+
+<span class="sd">    Captured: post-fit weight digests for both sub-models, the per-epoch</span>
+<span class="sd">    loss trace, and the effective hyperparameters. If R-21&#39;s parameterised</span>
+<span class="sd">    ACGANTrainer reproduces this snapshot exactly, the consolidation is</span>
+<span class="sd">    provably behaviour-preserving for this trainer.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="kn">from</span> <span class="nn">Config.ModelTrainingConfig.ClientModelTrainingConfig.CentralTrainingConfig</span> \
+        <span class="o">.</span><span class="n">GAN</span><span class="o">.</span><span class="n">FullModel</span><span class="o">.</span><span class="n">ACGANCentralTrainingConfig</span> <span class="kn">import</span> <span class="nn">CentralACGan</span>
+
+    <span class="n">trainer</span> <span class="o">=</span> <span class="n">CentralACGan</span><span class="p">(</span>
+        <span class="n">discriminator</span><span class="o">=</span><span class="n">acgan_models</span><span class="p">[</span><span class="s2">&quot;discriminator&quot;</span><span class="p">],</span>
+        <span class="n">generator</span><span class="o">=</span><span class="n">acgan_models</span><span class="p">[</span><span class="s2">&quot;generator&quot;</span><span class="p">],</span>
+        <span class="n">nids</span><span class="o">=</span><span class="n">acgan_models</span><span class="p">[</span><span class="s2">&quot;nids&quot;</span><span class="p">],</span>
+        <span class="n">x_train</span><span class="o">=</span><span class="n">tiny_dataset</span><span class="p">[</span><span class="s2">&quot;X_train&quot;</span><span class="p">],</span> <span class="n">y_train</span><span class="o">=</span><span class="n">tiny_dataset</span><span class="p">[</span><span class="s2">&quot;y_train&quot;</span><span class="p">],</span>
+        <span class="n">x_val</span><span class="o">=</span><span class="n">tiny_dataset</span><span class="p">[</span><span class="s2">&quot;X_val&quot;</span><span class="p">],</span>     <span class="n">y_val</span><span class="o">=</span><span class="n">tiny_dataset</span><span class="p">[</span><span class="s2">&quot;y_val&quot;</span><span class="p">],</span>
+        <span class="n">x_test</span><span class="o">=</span><span class="n">tiny_dataset</span><span class="p">[</span><span class="s2">&quot;X_test&quot;</span><span class="p">],</span>   <span class="n">y_test</span><span class="o">=</span><span class="n">tiny_dataset</span><span class="p">[</span><span class="s2">&quot;y_test&quot;</span><span class="p">],</span>
+        <span class="n">BATCH_SIZE</span><span class="o">=</span><span class="mi">16</span><span class="p">,</span> <span class="n">noise_dim</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span> <span class="n">latent_dim</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span> <span class="n">num_classes</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+        <span class="n">input_dim</span><span class="o">=</span><span class="mi">21</span><span class="p">,</span> <span class="n">epochs</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">steps_per_epoch</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span> <span class="n">learning_rate</span><span class="o">=</span><span class="mf">1e-4</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">trainer</span><span class="o">.</span><span class="n">fit</span><span class="p">()</span>
+
+    <span class="n">assert_matches_golden</span><span class="p">(</span><span class="s2">&quot;acgan_central_1epoch&quot;</span><span class="p">,</span> <span class="p">{</span>
+        <span class="s2">&quot;generator_digest&quot;</span><span class="p">:</span>     <span class="n">weights_digest</span><span class="p">(</span><span class="n">trainer</span><span class="o">.</span><span class="n">generator</span><span class="p">),</span>
+        <span class="s2">&quot;discriminator_digest&quot;</span><span class="p">:</span> <span class="n">weights_digest</span><span class="p">(</span><span class="n">trainer</span><span class="o">.</span><span class="n">discriminator</span><span class="p">),</span>
+        <span class="c1"># Records the C-01 state: what the optimizer ACTUALLY used, which</span>
+        <span class="c1"># is not what the CLI advertised. Under R-14 Variant A this value</span>
+        <span class="c1"># must not move.</span>
+        <span class="s2">&quot;effective_gen_lr&quot;</span><span class="p">:</span>  <span class="nb">float</span><span class="p">(</span><span class="n">trainer</span><span class="o">.</span><span class="n">gen_optimizer</span><span class="o">.</span><span class="n">learning_rate</span><span class="p">(</span><span class="mi">0</span><span class="p">)),</span>
+        <span class="s2">&quot;effective_disc_lr&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="n">trainer</span><span class="o">.</span><span class="n">disc_optimizer</span><span class="o">.</span><span class="n">learning_rate</span><span class="p">(</span><span class="mi">0</span><span class="p">)),</span>
+    <span class="p">})</span></code></pre></div>
+<p><strong>Coverage target for the harness:</strong> every trainer reachable from
+<code>modelCentralTrainingConfigLoad</code> or <code>modelFederatedTrainingConfigLoad</code> — approximately 14
+live classes out of the 47 on disk. The other 33 are unreachable and should be confirmed
+dead, then deleted under <a href="../01_Refactoring_Strategy.html#r-05">R-05</a> rather than
+characterized.</p>
+<hr />
+      </section>
+      <section id="9-summary-of-expected-impact">
+        <div class="sec-eyebrow">§&nbsp;09 · Summary of expected impact</div>
+        <h2>Summary of expected impact</h2>
+<div class="tablewrap"><table class="wide">
+<thead>
+<tr>
+<th>Change</th>
+<th>LOC delta</th>
+<th>Behaviour</th>
+<th>Fixes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Packaging (<code>pyproject</code>, <code>pytest.ini</code>, <code>conftest</code>, <code>LICENSE</code>)</td>
+<td>+90, −16 <code>sys.path</code> lines</td>
+<td>identical</td>
+<td>F-05</td>
+</tr>
+<tr>
+<td><code>hifins/paths.py</code> + call sites</td>
+<td>+85</td>
+<td>identical (legacy path kept last)</td>
+<td>F-05</td>
+</tr>
+<tr>
+<td>Typed config dataclasses</td>
+<td>+260</td>
+<td>identical</td>
+<td>F-04</td>
+</tr>
+<tr>
+<td>Registry factories</td>
+<td>+90, <strong>−600</strong> of branch tree</td>
+<td>⚠ fails earlier and more clearly</td>
+<td>F-02, F-04</td>
+</tr>
+<tr>
+<td><code>hermes_adapters/</code></td>
+<td>+300</td>
+<td>⚠ new capability (synth batch becomes real)</td>
+<td>F-03</td>
+</tr>
+<tr>
+<td>AC-GAN hyperparameter wiring (Variant A)</td>
+<td>+60</td>
+<td>identical with no flags; <strong>flags now work</strong></td>
+<td>F-01</td>
+</tr>
+<tr>
+<td>One trainer family</td>
+<td><strong>−17,000</strong></td>
+<td>identical (golden-gated)</td>
+<td>F-04</td>
+</tr>
+<tr>
+<td>Characterization harness</td>
+<td>+900 (tests)</td>
+<td>none</td>
+<td>F-04, F-09</td>
+</tr>
+<tr>
+<td>Dead-tree deletion</td>
+<td><strong>−8,900</strong></td>
+<td>identical</td>
+<td>F-06</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>Net: ≈ −24,700 LOC.</strong> The training stack goes from 21,278 LOC of untested, duplicated
+training loops to roughly 4,000 LOC of tested, parameterised ones — and the two halves of
+the system become able to run together for the first time.</p>
+      </section>
+
+      <div class="foot">
+        <p class="mono">Generated from HIFINS_Production_Code.md. File:line references are to
+        the repository as read on 2026-08-10 (main @ 35e2eeb); verify against current
+        source before acting. This document is a review artefact — no project code was
+        modified to produce it.</p>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script>
+  // TOC active-state only. No animation; reduced-motion respected via CSS.
+  // getElementById, not querySelector: several ids begin with a digit, which
+  // is legal HTML but an invalid CSS selector.
+  (function(){
+    var links = Array.prototype.slice.call(document.querySelectorAll('nav.toc a'));
+    var secs  = links.map(function(a){
+      return document.getElementById(a.getAttribute('href').slice(1));
+    });
+    if(!('IntersectionObserver' in window)) return;
+    var io = new IntersectionObserver(function(entries){
+      entries.forEach(function(e){
+        if(e.isIntersecting){
+          var i = secs.indexOf(e.target);
+          links.forEach(function(l){ l.style.background=''; l.style.color=''; });
+          if(i>-1){ var l=links[i]; l.style.background='var(--surface-2)'; l.style.color='var(--ink)'; }
+        }
+      });
+    },{rootMargin:'-10% 0px -80% 0px'});
+    secs.forEach(function(s){ if(s) io.observe(s); });
+  })();
+</script>
+
+</body>
+</html>

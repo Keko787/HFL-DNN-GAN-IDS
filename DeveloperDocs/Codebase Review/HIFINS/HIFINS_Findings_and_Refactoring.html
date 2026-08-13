@@ -1,0 +1,918 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HIFINS — Findings and Refactoring Plan</title>
+<meta name="description" content="21,278 LOC of training loops with zero test coverage, and 21 CLI hyperparameters that nothing reads. One pattern choice causes almost all of it.">
+<style>
+  :root{
+    --bg:#f4f6f8; --surface:#ffffff; --surface-2:#eef1f4;
+    --ink:#141a20; --ink-2:#47525d; --ink-3:#6c7883;
+    --line:#dbe1e7; --line-2:#c8d0d8;
+    --accent:#0c7d8a; --accent-2:#0a5f6a; --accent-soft:#e0f0f2;
+    --ok:#2f8f56; --ok-bg:#e5f3ea; --ok-line:#a9d8bd;
+    --warn:#a8720c; --warn-bg:#f7efdb; --warn-line:#e3c483;
+    --gap:#bf3b4e; --gap-bg:#fbe5e8; --gap-line:#eeaeb7;
+    --font-display:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    --font-body:ui-serif,"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,Cambria,serif;
+    --font-mono:ui-monospace,"Cascadia Code","SF Mono","Segoe UI Mono",Menlo,Consolas,monospace;
+    --maxw:1200px; --prose:800px;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --bg:#0d1116; --surface:#141a21; --surface-2:#1a222b;
+      --ink:#e7ecf1; --ink-2:#a3afba; --ink-3:#74818d;
+      --line:#26303a; --line-2:#333f4b;
+      --accent:#2fc0d0; --accent-2:#5bd4e0; --accent-soft:#10333a;
+      --ok:#4cc47e; --ok-bg:#12301f; --ok-line:#245a3a;
+      --warn:#e0a63a; --warn-bg:#31260f; --warn-line:#5c4820;
+      --gap:#e56b7d; --gap-bg:#331a1f; --gap-line:#5e3038;
+    }
+  }
+  :root[data-theme="light"]{
+    --bg:#f4f6f8; --surface:#ffffff; --surface-2:#eef1f4;
+    --ink:#141a20; --ink-2:#47525d; --ink-3:#6c7883;
+    --line:#dbe1e7; --line-2:#c8d0d8;
+    --accent:#0c7d8a; --accent-2:#0a5f6a; --accent-soft:#e0f0f2;
+    --ok:#2f8f56; --ok-bg:#e5f3ea; --ok-line:#a9d8bd;
+    --warn:#a8720c; --warn-bg:#f7efdb; --warn-line:#e3c483;
+    --gap:#bf3b4e; --gap-bg:#fbe5e8; --gap-line:#eeaeb7;
+  }
+  :root[data-theme="dark"]{
+    --bg:#0d1116; --surface:#141a21; --surface-2:#1a222b;
+    --ink:#e7ecf1; --ink-2:#a3afba; --ink-3:#74818d;
+    --line:#26303a; --line-2:#333f4b;
+    --accent:#2fc0d0; --accent-2:#5bd4e0; --accent-soft:#10333a;
+    --ok:#4cc47e; --ok-bg:#12301f; --ok-line:#245a3a;
+    --warn:#e0a63a; --warn-bg:#31260f; --warn-line:#5c4820;
+    --gap:#e56b7d; --gap-bg:#331a1f; --gap-line:#5e3038;
+  }
+
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:var(--font-body); font-size:17px; line-height:1.62;
+    -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+  }
+  .shell{max-width:var(--maxw); margin:0 auto; padding:0 clamp(18px,4vw,40px)}
+
+  /* ---------- Masthead ---------- */
+  header.mast{padding:clamp(40px,7vw,84px) 0 34px; border-bottom:1px solid var(--line)}
+  .eyebrow{
+    font-family:var(--font-mono); font-size:12px; letter-spacing:.14em;
+    text-transform:uppercase; color:var(--accent); font-weight:600;
+    display:flex; gap:10px; flex-wrap:wrap; align-items:center;
+  }
+  .eyebrow .sep{color:var(--ink-3)}
+  h1.title{
+    font-family:var(--font-display); font-weight:760;
+    font-size:clamp(30px,5.4vw,52px); line-height:1.04; letter-spacing:-.022em;
+    margin:.42em 0 .28em; max-width:16ch; text-wrap:balance;
+  }
+  .deck{
+    font-size:clamp(17px,2.1vw,21px); color:var(--ink-2); max-width:60ch;
+    line-height:1.5; margin:0;
+  }
+  .deck b{color:var(--ink); font-weight:600}
+  .metabar{
+    margin-top:26px; display:flex; flex-wrap:wrap; gap:8px 20px;
+    font-family:var(--font-mono); font-size:12.5px; color:var(--ink-3);
+  }
+  .metabar b{color:var(--ink-2); font-weight:600}
+
+  /* ---------- Layout with TOC rail ---------- */
+  .body-grid{display:block}
+  @media(min-width:1040px){
+    .body-grid{display:grid; grid-template-columns:216px minmax(0,1fr); gap:48px; align-items:start}
+    nav.toc{position:sticky; top:24px; align-self:start}
+  }
+  nav.toc{padding:30px 0 0}
+  nav.toc .toc-h{
+    font-family:var(--font-mono); font-size:11px; letter-spacing:.14em;
+    text-transform:uppercase; color:var(--ink-3); margin:0 0 12px; font-weight:600;
+  }
+  nav.toc ol{list-style:none; margin:0; padding:0; counter-reset:toc}
+  nav.toc li{counter-increment:toc; margin:2px 0}
+  nav.toc a{
+    display:block; text-decoration:none; color:var(--ink-2);
+    font-family:var(--font-display); font-size:14px; line-height:1.35;
+    padding:6px 10px 6px 30px; border-radius:7px; position:relative;
+  }
+  nav.toc a::before{
+    content:counter(toc,decimal-leading-zero); position:absolute; left:8px;
+    font-family:var(--font-mono); font-size:11px; color:var(--accent);
+    top:8px; font-weight:600;
+  }
+  nav.toc a:hover{background:var(--surface-2); color:var(--ink)}
+  @media(max-width:1039px){ nav.toc{display:none} }
+
+  main{padding-top:8px; min-width:0}
+
+  /* ---------- Sections & prose ---------- */
+  section{padding:38px 0; border-bottom:1px solid var(--line); scroll-margin-top:20px}
+  section:last-of-type{border-bottom:0}
+  .sec-eyebrow{
+    font-family:var(--font-mono); font-size:12px; letter-spacing:.13em;
+    text-transform:uppercase; color:var(--accent); font-weight:600; margin-bottom:8px;
+  }
+  h2{
+    font-family:var(--font-display); font-weight:720; letter-spacing:-.016em;
+    font-size:clamp(22px,3.2vw,30px); line-height:1.14; margin:0 0 .55em;
+    max-width:24ch; text-wrap:balance;
+  }
+  h3{
+    font-family:var(--font-display); font-weight:660; letter-spacing:-.008em;
+    font-size:19px; line-height:1.25; margin:1.9em 0 .5em; color:var(--ink);
+  }
+  h4{
+    font-family:var(--font-mono); font-weight:600; font-size:13px; letter-spacing:.04em;
+    text-transform:uppercase; color:var(--ink-2); margin:1.5em 0 .5em;
+  }
+  p{max-width:var(--prose); margin:0 0 1.05em}
+  main ul,main ol{max-width:var(--prose); margin:0 0 1.1em; padding-left:1.25em}
+  main li{margin:.34em 0}
+  strong{font-weight:600; color:var(--ink)}
+  a.ref{color:var(--accent-2); text-decoration:none; border-bottom:1px solid transparent}
+  :root[data-theme="dark"] a.ref{color:var(--accent)}
+  @media(prefers-color-scheme:dark){a.ref{color:var(--accent)}}
+  a.ref:hover{border-bottom-color:currentColor}
+
+  code,.mono{font-family:var(--font-mono); font-size:.86em}
+  p code,li code,td code{
+    background:var(--surface-2); padding:.08em .38em; border-radius:5px;
+    font-size:.82em; color:var(--ink); border:1px solid var(--line);
+    white-space:nowrap;
+  }
+  .path{color:var(--ink-3); font-family:var(--font-mono); font-size:.8em; white-space:nowrap}
+
+  /* ---------- Callouts ---------- */
+  .callout{
+    border:1px solid var(--line); border-left-width:3px; border-radius:10px;
+    background:var(--surface); padding:18px 20px; margin:1.4em 0; max-width:var(--prose);
+  }
+  .callout .k{
+    font-family:var(--font-mono); font-size:11px; letter-spacing:.12em; text-transform:uppercase;
+    font-weight:600; margin-bottom:7px; display:block;
+  }
+  .callout p{margin:.2em 0}
+  .callout.accent{border-left-color:var(--accent); background:var(--accent-soft)}
+  .callout.accent .k{color:var(--accent-2)}
+  :root[data-theme="dark"] .callout.accent .k{color:var(--accent-2)}
+  @media(prefers-color-scheme:dark){.callout.accent .k{color:var(--accent-2)}}
+  .callout.warn{border-left-color:var(--warn); background:var(--warn-bg)}
+  .callout.warn .k{color:var(--warn)}
+  .callout.gap{border-left-color:var(--gap); background:var(--gap-bg)}
+  .callout.gap .k{color:var(--gap)}
+  .callout.accent{background:var(--accent-soft)}
+
+  /* ---------- Formula ---------- */
+  .formula{
+    font-family:var(--font-mono); font-size:14px; line-height:1.55;
+    background:var(--surface-2); border:1px solid var(--line);
+    border-radius:9px; padding:13px 16px; margin:1em 0; max-width:var(--prose);
+    overflow-x:auto; color:var(--ink);
+  }
+  .formula .lbl{color:var(--ink-3)}
+
+  /* ---------- Tables ---------- */
+  .tablewrap{overflow-x:auto; margin:1.2em 0 1.5em; border:1px solid var(--line);
+    border-radius:11px; background:var(--surface)}
+  table{border-collapse:collapse; width:100%; font-size:14px; min-width:640px}
+  table.wide{min-width:820px}
+  thead th{
+    font-family:var(--font-mono); font-weight:600; font-size:11.5px; letter-spacing:.03em;
+    text-transform:uppercase; text-align:left; color:var(--ink-2);
+    background:var(--surface-2); padding:11px 14px; border-bottom:1px solid var(--line-2);
+    position:sticky; top:0; vertical-align:bottom;
+  }
+  tbody td{padding:11px 14px; border-bottom:1px solid var(--line); vertical-align:top;
+    line-height:1.42; color:var(--ink-2)}
+  tbody tr:last-child td{border-bottom:0}
+  tbody td:first-child{color:var(--ink); font-weight:500}
+  tbody td .path,tbody td code{white-space:normal}
+  td .mname{font-family:var(--font-mono); font-size:12.5px; color:var(--ink); font-weight:600; display:block}
+  tbody tr:hover td{background:color-mix(in srgb,var(--accent-soft) 34%, transparent)}
+  .num{font-variant-numeric:tabular-nums}
+
+  /* ---------- Pills / badges ---------- */
+  .pill{
+    display:inline-flex; align-items:center; gap:5px; font-family:var(--font-mono);
+    font-size:11px; font-weight:600; letter-spacing:.02em; padding:2px 8px 2px 6px;
+    border-radius:20px; border:1px solid var(--line-2); white-space:nowrap; line-height:1.5;
+  }
+  .pill .dot{width:7px; height:7px; border-radius:50%; background:currentColor; flex:0 0 auto}
+  .pill.ok{color:var(--ok); background:var(--ok-bg); border-color:var(--ok-line)}
+  .pill.warn{color:var(--warn); background:var(--warn-bg); border-color:var(--warn-line)}
+  .pill.gap{color:var(--gap); background:var(--gap-bg); border-color:var(--gap-line)}
+  .pill.plain{color:var(--ink-3); background:var(--surface-2)}
+
+  .legend{display:flex; flex-wrap:wrap; gap:8px 14px; margin:.3em 0 1.1em; font-size:13px; align-items:center}
+  .legend .lg{display:inline-flex; align-items:center; gap:6px; color:var(--ink-2); font-family:var(--font-mono); font-size:11.5px}
+
+  /* ---------- Verdict cards ---------- */
+  .verdicts{display:grid; gap:14px; margin:1.3em 0; max-width:var(--prose)}
+  .vcard{border:1px solid var(--line); border-radius:12px; background:var(--surface); overflow:hidden}
+  .vcard .vhead{display:flex; align-items:flex-start; gap:12px; padding:15px 18px 12px; border-bottom:1px solid var(--line)}
+  .vbadge{font-family:var(--font-mono); font-size:11px; font-weight:700; letter-spacing:.05em;
+    padding:4px 9px; border-radius:6px; flex:0 0 auto; margin-top:1px}
+  .vbadge.confirmed{color:#fff; background:var(--gap)}
+  .vbadge.partial{color:var(--ink); background:var(--warn)}
+  :root[data-theme="dark"] .vbadge.partial{color:#20160a}
+  @media(prefers-color-scheme:dark){.vbadge.partial{color:#20160a}}
+  .vcard .vclaim{font-family:var(--font-display); font-weight:600; font-size:15.5px; line-height:1.34; color:var(--ink); margin:0}
+  .vcard .vbody{padding:13px 18px 16px; font-size:14px; color:var(--ink-2)}
+  .vcard .vbody p{margin:.1em 0 .7em; max-width:none}
+  .vcard .vbody .imp{margin-top:.4em; padding-top:.7em; border-top:1px dashed var(--line-2)}
+  .vcard .vbody .imp .k{font-family:var(--font-mono); font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--accent); font-weight:600; display:block; margin-bottom:3px}
+  :root[data-theme="dark"] .vcard .vbody .imp .k{color:var(--accent-2)}
+  @media(prefers-color-scheme:dark){.vcard .vbody .imp .k{color:var(--accent-2)}}
+
+  /* ---------- Stage cards ---------- */
+  .stages{display:grid; gap:16px; margin:1.4em 0; max-width:var(--prose)}
+  .stage{border:1px solid var(--line); border-radius:12px; background:var(--surface); padding:0; overflow:hidden}
+  .stage .shead{display:flex; align-items:baseline; gap:12px; padding:16px 20px 12px; background:var(--surface-2); border-bottom:1px solid var(--line)}
+  .stage .snum{font-family:var(--font-mono); font-weight:700; font-size:13px; color:var(--accent); letter-spacing:.02em; flex:0 0 auto}
+  :root[data-theme="dark"] .stage .snum{color:var(--accent-2)}
+  @media(prefers-color-scheme:dark){.stage .snum{color:var(--accent-2)}}
+  .stage .stitle{font-family:var(--font-display); font-weight:660; font-size:16.5px; color:var(--ink); line-height:1.25; margin:0}
+  .stage .schip{margin-left:auto; flex:0 0 auto}
+  .stage .sbody{padding:15px 20px 18px; font-size:14.5px}
+  .stage .sbody ul{max-width:none; margin:.2em 0 .3em}
+  .stage .grid2{display:grid; gap:4px 22px; grid-template-columns:1fr}
+  @media(min-width:620px){.stage .grid2{grid-template-columns:1fr 1fr}}
+  .stage .fld{margin:.6em 0}
+  .stage .fld .k{font-family:var(--font-mono); font-size:10.5px; letter-spacing:.09em; text-transform:uppercase; color:var(--ink-3); font-weight:600; display:block; margin-bottom:3px}
+  .stage .fld p{margin:0; font-size:13.5px; color:var(--ink-2); max-width:none}
+  .stage .dod{margin-top:.7em; padding-top:.8em; border-top:1px dashed var(--line-2)}
+
+  /* ---------- Misc ---------- */
+  .lead{font-size:19px; line-height:1.5; color:var(--ink); max-width:var(--prose)}
+  .lead b{color:var(--ink)}
+  hr.soft{border:0; border-top:1px solid var(--line); margin:1.6em 0; max-width:var(--prose)}
+  .foot{padding:34px 0 70px; color:var(--ink-3); font-size:13px; max-width:var(--prose)}
+  .foot p{max-width:none; margin:.5em 0; font-size:13px; color:var(--ink-3)}
+  .foot .mono{font-size:12px}
+  .kexcerpt{font-family:var(--font-mono); font-size:12.5px; color:var(--ink-2); background:var(--surface-2);
+    border:1px solid var(--line); border-radius:8px; padding:10px 13px; margin:.7em 0; max-width:var(--prose); line-height:1.5}
+  sup.fn{font-family:var(--font-mono); font-size:.62em; color:var(--accent); font-weight:600}
+  :focus-visible{outline:2px solid var(--accent); outline-offset:2px; border-radius:3px}
+  @media(prefers-reduced-motion:no-preference){html{scroll-behavior:smooth}}
+
+  /* ---------- Additions for the generated review docs ---------- */
+  main h2 { max-width: 32ch }
+  main table { min-width: 560px }
+  .tablewrap table thead th { position: static }
+
+  /* finding / item sub-headings */
+  main h3{
+    scroll-margin-top:18px; display:flex; align-items:baseline;
+    gap:9px; flex-wrap:wrap;
+  }
+  main h3 .fid{
+    font-family:var(--font-mono); font-size:12.5px; font-weight:700;
+    color:var(--accent); letter-spacing:.02em; flex:0 0 auto;
+  }
+  :root[data-theme="dark"] main h3 .fid{ color:var(--accent-2) }
+  @media(prefers-color-scheme:dark){ main h3 .fid{ color:var(--accent-2) } }
+  p.pillrow{ display:flex; gap:8px; flex-wrap:wrap; margin:-.35em 0 1.1em }
+  .anchor-alias{ display:block; height:0; scroll-margin-top:18px }
+
+  /* code blocks */
+  .codewrap{ position:relative; margin:1.15em 0 1.4em; max-width:var(--prose) }
+  .codewrap.wide{ max-width:none }
+  pre.code{
+    font-family:var(--font-mono); font-size:12.5px; line-height:1.55;
+    background:var(--surface-2); border:1px solid var(--line); border-radius:10px;
+    padding:15px 17px; margin:0; overflow-x:auto; color:var(--ink);
+    white-space:pre; tab-size:2;
+  }
+  pre.code code{ font-size:inherit; background:none; border:0; padding:0;
+                 white-space:pre; color:inherit }
+  .codewrap .lang{
+    position:absolute; top:0; right:12px; transform:translateY(-50%);
+    font-family:var(--font-mono); font-size:10px; letter-spacing:.1em;
+    text-transform:uppercase; font-weight:600; color:var(--ink-3);
+    background:var(--bg); border:1px solid var(--line); border-radius:20px;
+    padding:2px 9px;
+  }
+
+  /* Pygments tokens, mapped onto the house palette so both themes work */
+  pre.code .c,  pre.code .c1, pre.code .cm, pre.code .cs,
+  pre.code .ch, pre.code .cpf{ color:var(--ink-3); font-style:italic }
+  pre.code .sd{ color:var(--ink-3) }
+  pre.code .k,  pre.code .kn, pre.code .kc, pre.code .kd,
+  pre.code .kp, pre.code .kr, pre.code .kt, pre.code .ow{ color:var(--accent) }
+  :root[data-theme="dark"] pre.code .k,
+  :root[data-theme="dark"] pre.code .kn,
+  :root[data-theme="dark"] pre.code .kc,
+  :root[data-theme="dark"] pre.code .kd,
+  :root[data-theme="dark"] pre.code .ow{ color:var(--accent-2) }
+  @media(prefers-color-scheme:dark){
+    pre.code .k, pre.code .kn, pre.code .kc,
+    pre.code .kd, pre.code .ow{ color:var(--accent-2) }
+  }
+  pre.code .s,  pre.code .s1, pre.code .s2, pre.code .sa,
+  pre.code .sb, pre.code .se, pre.code .si, pre.code .sr,
+  pre.code .ss, pre.code .sx{ color:var(--ok) }
+  pre.code .m,  pre.code .mi, pre.code .mf, pre.code .mh,
+  pre.code .mo, pre.code .il{ color:var(--ok) }
+  pre.code .nf, pre.code .fm{ color:var(--ink); font-weight:600 }
+  pre.code .nc, pre.code .ne{ color:var(--warn); font-weight:600 }
+  pre.code .nd{ color:var(--warn) }
+  pre.code .nb, pre.code .bp{ color:var(--ink-2) }
+  pre.code .nn, pre.code .nv, pre.code .no, pre.code .na{ color:var(--ink) }
+  pre.code .o,  pre.code .p{ color:var(--ink-2) }
+  pre.code .gd{ color:var(--gap) }
+  pre.code .gi{ color:var(--ok) }
+  pre.code .gh, pre.code .gu{ color:var(--ink-3); font-weight:600 }
+  pre.code .err{ color:inherit; border:0 }
+
+  /* blockquote -> callout */
+  blockquote{
+    margin:1.3em 0; padding:15px 18px; max-width:var(--prose);
+    border:1px solid var(--line); border-left:3px solid var(--ink-3);
+    border-radius:10px; background:var(--surface); color:var(--ink-2);
+    font-size:15px;
+  }
+  blockquote p{ margin:.25em 0 }
+  blockquote.warn{ border-left-color:var(--warn); background:var(--warn-bg) }
+
+  /* figures / diagrams */
+  figure.dgfig{ margin:1.6em 0 1.9em; max-width:none }
+  .dgscroll{ overflow-x:auto; border:1px solid var(--line); border-radius:12px;
+             background:var(--surface); padding:18px 16px }
+  svg.dg{ max-width:100%; height:auto; display:block; margin:0 auto }
+  svg.dg text{ font-family:var(--font-mono); fill:var(--ink); font-size:12px }
+  svg.dg .t-sm{ font-size:11px; fill:var(--ink-2) }
+  svg.dg .t-lbl{ font-size:10.5px; fill:var(--ink-3) }
+  svg.dg .t-bad{ font-size:10.5px; fill:var(--gap); font-weight:600 }
+  svg.dg .t-hd{ font-size:10.5px; font-weight:700; fill:var(--accent);
+                letter-spacing:.09em }
+  svg.dg .t-x{ font-size:15px; fill:var(--gap); font-weight:700 }
+  svg.dg .bx{ fill:var(--surface); stroke:var(--line-2); stroke-width:1.2 }
+  svg.dg .badbx{ fill:var(--gap-bg); stroke:var(--gap-line); stroke-width:1.3 }
+  svg.dg .warnbx{ fill:var(--warn-bg); stroke:var(--warn-line); stroke-width:1.3 }
+  svg.dg .hl{ fill:var(--ok-bg); stroke:var(--ok); stroke-width:1.6 }
+  svg.dg .dead{ fill:var(--surface-2); stroke:var(--ink-3); stroke-width:1.2;
+                stroke-dasharray:5 4; opacity:.8 }
+  svg.dg .band{ fill:var(--surface-2); stroke:var(--line); stroke-width:1 }
+  svg.dg .ok-band{ fill:var(--ok-bg); stroke:var(--ok-line) }
+  svg.dg .bad-band{ fill:var(--gap-bg); stroke:var(--gap-line) }
+  svg.dg .loopbx{ fill:none; stroke:var(--line-2); stroke-width:1;
+                  stroke-dasharray:4 3 }
+  svg.dg .life{ stroke:var(--line-2); stroke-width:1; stroke-dasharray:4 4 }
+  svg.dg .ln{ stroke:var(--ink-2); stroke-width:1.4; fill:none }
+  svg.dg .ln-bad{ stroke:var(--gap); stroke-width:1.6; stroke-dasharray:6 4; fill:none }
+  svg.dg .ln-dead{ stroke:var(--ink-3); stroke-width:1.4; stroke-dasharray:5 4; fill:none }
+  svg.dg .ln-soft{ stroke:var(--ink-3); stroke-width:1.2; stroke-dasharray:3 3; fill:none }
+  svg.dg .mk{ fill:var(--ink-2); stroke:none }
+  svg.dg .mk-bad{ fill:var(--gap); stroke:none }
+  svg.dg .mk-dead{ fill:var(--ink-3); stroke:none }
+  svg.dg .mk-soft{ fill:var(--ink-3); stroke:none }
+  figure.dgfig figcaption{
+    font-size:13.5px; color:var(--ink-2); line-height:1.5; margin-top:11px;
+    max-width:var(--prose); padding-left:2px;
+  }
+  figure.dgfig figcaption b{ color:var(--ink) }
+
+  /* severity pills in the findings tables */
+  .g{ font-family:var(--font-mono); font-size:10.5px; font-weight:700;
+      padding:1px 7px; border-radius:20px; border:1px solid; white-space:nowrap }
+  .g.p0{ color:var(--gap); background:var(--gap-bg); border-color:var(--gap-line) }
+  .g.p1{ color:var(--warn); background:var(--warn-bg); border-color:var(--warn-line) }
+  .g.p2{ color:var(--ink-3); background:var(--surface-2); border-color:var(--line-2) }
+
+  /* nested TOC */
+  nav.toc ol ol{ list-style:none; counter-reset:none; margin:2px 0 6px;
+                 padding-left:14px }
+  nav.toc ol ol li{ counter-increment:none }
+  nav.toc ol ol a{ padding:3px 8px 3px 10px; font-size:11.5px;
+                   color:var(--ink-3); border-left:1px solid var(--line) }
+  nav.toc ol ol a::before{ content:none }
+  nav.toc ol ol a:hover{ color:var(--ink-2) }
+
+  @media print{
+    nav.toc{ display:none }
+    section{ break-inside:avoid-page }
+    .dgscroll{ overflow:visible }
+    pre.code{ white-space:pre-wrap; word-break:break-word }
+    body{ background:#fff; font-size:11pt }
+  }
+
+</style>
+
+</head>
+<body>
+<div class="shell">
+  <header class="mast">
+    <div class="eyebrow">
+      <span>Codebase review · subsystem</span><span class="sep">/</span>
+      <span>App · Config · 9 findings</span><span class="sep">/</span>
+      <span>Review only — no code changed</span>
+    </div>
+    <h1 class="title">HIFINS — Findings and Refactoring Plan</h1>
+    <p class="deck">21,278 LOC of training loops with <b>zero test coverage</b>, and 21 CLI hyperparameters that nothing reads. One pattern choice causes almost all of it.</p>
+    <div class="metabar">
+      <span><strong>Status:</strong> Review only. No project code has been modified.</span>
+      <span><strong>Scope:</strong> <code>App/</code>, <code>Config/</code>, <code>Analysis/</code>, <code>AppSetup/</code>, <code>experiments/</code>, <code>FlightFramework/</code></span>
+      <span>— 46.8 K LOC</span>
+      <span><strong>Companions:</strong> <a href="../00_Critical_Problem_Areas.html"><code>../00_Critical_Problem_Areas.html</code></a> ·</span>
+      <span><a href="../01_Refactoring_Strategy.html"><code>../01_Refactoring_Strategy.html</code></a> ·</span>
+      <span><a href="HIFINS_Production_Code.html"><code>HIFINS_Production_Code.html</code></a> ·</span>
+      <span><a href="../../architecture%20documents/HIFins/HIFINS_Architecture.html">architecture</a></span>
+    </div>
+  </header>
+
+  <div class="body-grid">
+    <nav class="toc" aria-label="Contents">
+      <p class="toc-h">Contents</p>
+      <ol>
+        <li><a href="#0-verdict">Verdict</a></li>
+        <li><a href="#1-findings">Findings</a><ol><li><a href="#f-01-p0--21-ac-gan-cli-hyperparameters-are-never-read">F-01 P0 21 AC-GAN CLI hyperparameters are never read</a></li><li><a href="#f-02-p0--four-advertised-model-types-crash-after-minutes-of-work">F-02 P0 Four advertised model types crash after minutes of work</a></li><li><a href="#f-03-p1----mode-hermes-is-a-stub-the-tests-certify-as-working">F-03 P1 --mode hermes is a stub the tests certify as working</a></li><li><a href="#f-04">F-04 P1 Config-as-code, and the plumbing that enforces it</a></li><li><a href="#f-05-p1--environment-and-deployment-are-not-reproducible">F-05 P1 Environment and deployment are not reproducible</a></li><li><a href="#f-06-p2--dead-code-and-vendored-trees">F-06 P2 Dead code and vendored trees</a></li><li><a href="#f-07-p2--model-builder-version-sprawl">F-07 P2 Model-builder version sprawl</a></li><li><a href="#f-08-p2--analysis-monolith">F-08 P2 Analysis monolith</a></li><li><a href="#f-09-p2--test-posture">F-09 P2 Test posture</a></li></ol></li>
+        <li><a href="#2-ordered-work-plan-for-this-stack">Ordered work plan for this stack</a></li>
+        <li><a href="#3-what-not-to-change">What not to change</a></li>
+        <li><a href="#4-migration-pattern-for-the-trainer-consolidation">Migration pattern for the trainer consolidation</a></li>
+      </ol>
+    </nav>
+
+    <main>
+      <section id="0-verdict">
+        <div class="sec-eyebrow">§&nbsp;00 · Verdict</div>
+        <h2>Verdict</h2>
+<p>This is the half of the repository that can actually train a model, and it is the half
+nobody can safely change.</p>
+<p><code>Config/ModelTrainingConfig/</code> is 21,278 LOC across 47 classes with <strong>zero test
+coverage</strong>. The 500-line <code>fit</code> methods carry the September-2025 mode-collapse fixes in
+some copies and not others, and no mechanism exists to tell which. Meanwhile 21 CLI
+hyperparameters that the code advertises are read by nothing, so any sweep run through
+the documented interface produced identical models under different recorded settings.</p>
+<p>The root cause is a single pattern choice — <strong>configuration-as-code</strong>: each combination
+of (model type × sub-model × training area) is a separate class with its own copy of the
+training loop, rather than one parameterised trainer driven by a config object. Every
+other finding here is downstream of that.</p>
+<p>The good news is that the target shape is unambiguous, the seams to build against
+already exist in <code>hermes/</code>, and roughly 9 K LOC can be deleted in phase 0 before any
+risky work starts.</p>
+<hr />
+      </section>
+      <section id="1-findings">
+        <div class="sec-eyebrow">§&nbsp;01 · Findings</div>
+        <h2>Findings</h2>
+<p>Cross-cutting entries are detailed in the main register; this document adds mechanism
+and the plan.</p>
+<span class="anchor-alias" id="f-01"></span><h3 id="f-01-p0--21-ac-gan-cli-hyperparameters-are-never-read"><span class="fid">F-01</span> <span class="g p0">P0</span> 21 AC-GAN CLI hyperparameters are never read</h3>
+<p><strong>Mechanism.</strong> <code>ArgumentConfigLoad.py:76-96</code> declares 21 <code>--AC_*</code> flags. Repository-wide
+search finds each exactly once — at its own declaration. The trainer's optimizers are
+built from literals at <code>ACGANCentralTrainingConfig.py:109-118</code>:</p>
+<div class="codewrap wide"><span class="lang">python</span><pre class="code"><code><span class="n">lr_schedule_gen</span>  <span class="o">=</span> <span class="n">ExponentialDecay</span><span class="p">(</span><span class="n">initial_learning_rate</span><span class="o">=</span><span class="mf">0.00012</span><span class="p">,</span> <span class="n">decay_steps</span><span class="o">=</span><span class="mi">10000</span><span class="p">,</span>
+                                    <span class="n">decay_rate</span><span class="o">=</span><span class="mf">0.98</span><span class="p">,</span> <span class="n">staircase</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+<span class="n">lr_schedule_disc</span> <span class="o">=</span> <span class="n">ExponentialDecay</span><span class="p">(</span><span class="n">initial_learning_rate</span><span class="o">=</span><span class="mf">0.00007</span><span class="p">,</span> <span class="n">decay_steps</span><span class="o">=</span><span class="mi">10000</span><span class="p">,</span>
+                                    <span class="n">decay_rate</span><span class="o">=</span><span class="mf">0.98</span><span class="p">,</span> <span class="n">staircase</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></code></pre></div>
+<p>The D:G ratio is a <strong>default argument of <code>fit</code></strong>:</p>
+<div class="codewrap"><span class="lang">python</span><pre class="code"><code><span class="c1"># ACGANCentralTrainingConfig.py:816</span>
+<span class="k">def</span> <span class="nf">fit</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">X_train</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">y_train</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">d_to_g_ratio</span><span class="o">=</span><span class="mi">3</span><span class="p">):</span></code></pre></div>
+<p>and <code>TrainingClient.main</code> calls <code>client.fit()</code> with no arguments — so the effective ratio
+is permanently 3, while <code>--AC_d_to_g_ratio</code> advertises a default of 1.</p>
+<p><strong>Why it survived.</strong> The plumbing cost. Threading one new value from argparse to the
+trainer requires touching the parser, <code>hyperparameterLoading</code>'s 20-tuple, both
+41-parameter dispatcher signatures, and the trainer's <code>__init__</code>. Nobody paid it 21
+times. That is <a href="#f-04">F-04</a> causing <a href="#f-01">F-01</a> — fixing the plumbing is what makes
+the hyperparameters cheap to wire.</p>
+<p><strong>Plan → <a href="../01_Refactoring_Strategy.html#r-14">R-14</a>.</strong> Variant A (defaults pinned to the
+current literals) preserves behaviour exactly while making the flags live. Plus a
+regression guard asserting every <code>--AC_*</code> flag is read somewhere, so this cannot recur.</p>
+<hr />
+<span class="anchor-alias" id="f-02"></span><h3 id="f-02-p0--four-advertised-model-types-crash-after-minutes-of-work"><span class="fid">F-02</span> <span class="g p0">P0</span> Four advertised model types crash after minutes of work</h3>
+<div class="codewrap"><span class="lang">python</span><pre class="code"><code><span class="c1"># modelCentralTrainingConfigLoad.py:70-77</span>
+<span class="k">elif</span> <span class="n">model_type</span> <span class="o">==</span> <span class="s2">&quot;NIDS-IOT-Binary&quot;</span><span class="p">:</span>             <span class="n">client</span> <span class="o">=</span> <span class="kc">None</span>
+<span class="k">elif</span> <span class="n">model_type</span> <span class="o">==</span> <span class="s2">&quot;NIDS-IOT-Multiclass&quot;</span><span class="p">:</span>         <span class="n">client</span> <span class="o">=</span> <span class="kc">None</span>
+<span class="k">elif</span> <span class="n">model_type</span> <span class="o">==</span> <span class="s2">&quot;NIDS-IOT-Multiclass-Dynamic&quot;</span><span class="p">:</span> <span class="n">client</span> <span class="o">=</span> <span class="kc">None</span>
+<span class="c1"># CANGAN: no branch at all — lines 158-166 are commented out</span></code></pre></div>
+<p><code>client</code> is returned as <code>None</code> and <code>TrainingClient.main</code> calls <code>client.fit()</code> →
+<code>AttributeError</code> — after <code>datasetLoadProcess</code> has already loaded and preprocessed
+400 K rows and <code>modelCreateLoad</code> has built the Keras models.</p>
+<p>The <code>CANGAN</code> value is offered on three flags (<code>--model_type</code>, <code>--dataset</code>,
+<code>--dataset_processing</code>), each with a matching commented-out branch
+(<code>datasetLoadProcess.py:77</code>, <code>:120</code>) — so the incompleteness is consistent, deliberate,
+and undocumented.</p>
+<p><strong>Plan → <a href="../01_Refactoring_Strategy.html#r-15">R-15</a>.</strong> Validate
+<code>(model_type, model_training, training_area)</code> against a factory registry at parse time.
+<a href="../01_Refactoring_Strategy.html#r-20">R-20</a> then makes <code>client = None</code> unrepresentable.</p>
+<hr />
+<span class="anchor-alias" id="f-03"></span><h3 id="f-03-p1----mode-hermes-is-a-stub-the-tests-certify-as-working"><span class="fid">F-03</span> <span class="g p1">P1</span> <code>--mode hermes</code> is a stub the tests certify as working</h3>
+<p>The client's hermes branch installs a training callback that raises
+(<code>TrainingClient.py:192-197</code>); the host's constructs a cluster over a loopback link and
+returns without serving (<code>HFLHost.py:155-189</code>). Both print success-shaped banners.</p>
+<p><code>tests/unit/test_mode_switch.py</code> asserts the <strong>banner text</strong>, which is why CI has never
+noticed. The in-code comments say "awaiting Sprint 1.5 + Sprint 2 wiring"; both sprints
+are recorded as closed in the README.</p>
+<p><strong>Plan → <a href="../01_Refactoring_Strategy.html#r-16">R-16</a></strong> (fail loudly now), then
+<a href="../01_Refactoring_Strategy.html#r-17">R-17</a> (make it real via <code>hermes_adapters/</code>).</p>
+<hr />
+<h3 id="f-04"><span class="fid">F-04</span> <span class="g p1">P1</span> Config-as-code, and the plumbing that enforces it</h3>
+<p><strong>Scale.</strong> 47 classes / 45 files / 21,278 LOC in <code>Config/ModelTrainingConfig/</code>.</p>
+<p><strong>Duplication census</strong> (whole stack): <code>discriminator_loss</code> ×24, <code>generator_loss</code> ×17,
+<code>evaluate_validation_disc</code> ×17, <code>evaluate_validation_NIDS</code> ×14, <code>setup_logger</code> ×12,
+<code>probabilistic_fusion</code> ×10, <code>log_epoch_metrics</code> ×10, <code>gradient_penalty</code> ×7.</p>
+<p><strong>Exact clone.</strong> <code>CANGANCentralTrainingConfig.py</code> differs from
+<code>ACGANCentralTrainingConfig.py</code> by four lines of <code>diff</code> output across 3,800 lines — a
+class rename. It has no importer.</p>
+<p><strong>Function sizes.</strong> <code>ACGANCentralTrainingConfig.fit</code> 499 lines (complexity 34),
+<code>.evaluate</code> 307, <code>.validation_disc</code> 133; <code>ACGANClientTrainingConfig.fit</code> 427;
+<code>AC_DiscModelClientConfig.fit</code> 400; <code>ServerACDiscBothFitOnEndConfig.aggregate_fit</code> 311.</p>
+<p><strong>Parameter plumbing.</strong> <code>hyperparameterLoading</code> returns a 20-element positional tuple;
+<code>modelCentralTrainingConfigLoad</code> and <code>modelFederatedTrainingConfigLoad</code> take 41
+positional parameters each; <code>_run_fit_on_end_strategies</code> takes 42; 51 further functions
+take ≥12. A single transposition anywhere in that chain is a silent wrong-value bug that
+nothing can catch.</p>
+<p><strong>The failure this already caused.</strong> The September-2025 mode-collapse fixes (3:1 D:G
+ratio, label-smoothing rebalance, generator-LR slowdown, discriminator health monitoring)
+had to be hand-applied per copy. <code>ACGANCentralTrainingConfig.py</code> is the most-churned file
+in the current tree (40 commits). Whether any copy was missed is currently
+undeterminable, because <strong>there are no tests</strong>.</p>
+<p><strong>Plan → <a href="../01_Refactoring_Strategy.html#r-08">R-08</a> (characterization first),
+<a href="../01_Refactoring_Strategy.html#r-19">R-19</a> (typed configs),
+<a href="../01_Refactoring_Strategy.html#r-20">R-20</a> (registry factories),
+<a href="../01_Refactoring_Strategy.html#r-21">R-21</a> (one trainer family).</strong>
+Projected 21,278 → ~4,000 LOC.</p>
+<hr />
+<span class="anchor-alias" id="f-05"></span><h3 id="f-05-p1--environment-and-deployment-are-not-reproducible"><span class="fid">F-05</span> <span class="g p1">P1</span> Environment and deployment are not reproducible</h3>
+<div class="tablewrap"><table class="wide">
+<thead>
+<tr>
+<th>Artefact</th>
+<th>Problem</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>requirements_core.txt</code></td>
+<td>273-package workstation <code>pip freeze</code>. <code>uuid==1.30</code> shadows the stdlib; <code>zmq==0.0.0</code> and <code>serial==0.0.97</code> are placeholder/wrong packages whose real counterparts are <em>also</em> pinned; <code>gps</code>, <code>distro-info</code>, <code>launchpadlib</code>, <code>wadllib</code>, <code>ssh-import-id</code> are apt packages. Differs from <code>requirements_edge.txt</code> by 45 of ~300 lines.</td>
+</tr>
+<tr>
+<td><code>docker-compose.yml</code></td>
+<td>Bind-mounts <code>C:/Users/kskos/PycharmProjects/FLVision/...</code> — one developer's machine, a <em>different project</em>. References <code>flwr-server</code> / <code>flwr-client</code> images no Dockerfile builds under those tags.</td>
+</tr>
+<tr>
+<td>Missing root files</td>
+<td>No <code>pyproject.toml</code>, <code>setup.py</code>, <code>pytest.ini</code>, <code>conftest.py</code>, <code>LICENSE</code>. README's layout block lists <code>pytest.ini</code>; README's footer links <code>LICENSE</code>.</td>
+</tr>
+<tr>
+<td><code>sys.path</code> hacks</td>
+<td>16 modules carry <code>sys.path.append(os.path.abspath('../../..'))</code>.</td>
+</tr>
+<tr>
+<td>Dataset paths</td>
+<td><code>'../../../../datasets/CICIOT2023'</code> in six loaders; resolves only from <code>App/TrainingApp/Client/</code>, while the README documents running from the repository root and unzipping to <code>$HOME/datasets/</code>.</td>
+</tr>
+<tr>
+<td>Server addresses</td>
+<td><code>192.168.129.{3,6,7,8}:8080</code> hardcoded in two places (<code>TrainingClient.py:124-133</code>, <code>ArgumentConfigLoad.py:211-220</code>).</td>
+</tr>
+</tbody>
+</table></div>
+<p><code>hermes/</code> actually needs numpy. The published "lightweight core" pulls TensorFlow,
+PyTorch, PyQt5, and Ansible.</p>
+<p><strong>Plan → <a href="../01_Refactoring_Strategy.html#r-04">R-04</a>,
+<a href="../01_Refactoring_Strategy.html#r-06">R-06</a>, <a href="../01_Refactoring_Strategy.html#r-07">R-07</a>.</strong></p>
+<hr />
+<span class="anchor-alias" id="f-06"></span><h3 id="f-06-p2--dead-code-and-vendored-trees"><span class="fid">F-06</span> <span class="g p2">P2</span> Dead code and vendored trees</h3>
+<div class="tablewrap"><table class="wide">
+<thead>
+<tr>
+<th>Path</th>
+<th>LOC</th>
+<th>Evidence it is dead</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>FlightFramework/</code></td>
+<td>5,853</td>
+<td>zero <code>import flight</code> outside itself, despite four documentation claims of reuse</td>
+</tr>
+<tr>
+<td><code>CANGANCentralTrainingConfig.py</code></td>
+<td>1,900</td>
+<td>only reference is a commented-out import</td>
+</tr>
+<tr>
+<td><code>misc/Copy of ACGANCentralTrainingConfig.py</code></td>
+<td>~600</td>
+<td>filename; also has a space in it</td>
+</tr>
+<tr>
+<td><code>ciciot2023DatasetLoad.py</code></td>
+<td>271</td>
+<td>superseded by <code>…LoadV2</code>; hardcodes its own arguments</td>
+</tr>
+<tr>
+<td><code>iotbotnet2020DatasetLoad.py</code></td>
+<td>315</td>
+<td>superseded by <code>…LoadV2</code></td>
+</tr>
+<tr>
+<td><strong>Total</strong></td>
+<td><strong>~8,900</strong></td>
+<td></td>
+</tr>
+</tbody>
+</table></div>
+<p><code>FlightFramework/quickstart/iotbotnetDatasetLoad.py</code> is additionally a verbatim copy of
+the project's own 267-line <code>loadIOTBOTNET</code> with <code>/root/datasets/...</code> baked in — the same
+function existing in three places.</p>
+<p>Beyond dead weight, this is a licence-provenance question: a copied MIT third-party
+project sits inside a repository with no <code>LICENSE</code> of its own.</p>
+<p><strong>Plan → <a href="../01_Refactoring_Strategy.html#r-05">R-05</a>,
+<a href="../01_Refactoring_Strategy.html#r-02">R-02</a>.</strong></p>
+<hr />
+<span class="anchor-alias" id="f-07"></span><h3 id="f-07-p2--model-builder-version-sprawl"><span class="fid">F-07</span> <span class="g p2">P2</span> Model-builder version sprawl</h3>
+<p><code>discriminatorStruct.py</code> contains eight AC-GAN discriminator builders:
+<code>build_AC_discriminator_V0</code>, <code>_ver_2</code>, <code>build_AC_discriminator</code>,
+<code>build_CAN_AC_discriminator</code>, <code>_ver_last</code>, <code>_ver_3b</code>, <code>_ver_4</code>, <code>_v5</code>. <code>NIDS_Struct.py</code>
+contains 13 NIDS builders. None carries a deprecation marker or a docstring naming the
+current one; identifying the live builder requires tracing <code>modelCreateLoad</code>'s 375-line,
+complexity-89 branch tree.</p>
+<p><code>_ver_last</code> followed by <code>_ver_3b</code>, <code>_ver_4</code> and <code>_v5</code> is a good summary of the problem.</p>
+<p><strong>Plan → <a href="../01_Refactoring_Strategy.html#r-22">R-22</a>.</strong></p>
+<hr />
+<span class="anchor-alias" id="f-08"></span><h3 id="f-08-p2--analysis-monolith"><span class="fid">F-08</span> <span class="g p2">P2</span> Analysis monolith</h3>
+<p><code>experiments/analysis/exp3.py:342</code> — <code>write_figures</code>, <strong>863 lines, cyclomatic complexity
+170</strong>. The largest function in the repository by roughly 2×. <code>exp1.py</code>'s namesake is 215
+lines / complexity 76.</p>
+<p>Consequences: regenerating one figure re-runs all six; no branch is independently
+testable (<code>test_write_figures_smoke</code> can only assert files appear); a change to the
+β-sweep panel risks the ρ_contact bar chart.</p>
+<p>Note the contrast with <code>experiments/runner/</code> in the same package — 567 LOC, small pure
+functions, correct paired-seed derivation, honest resume semantics, well tested. The
+harness is exemplary; only the figure layer is not.</p>
+<p><strong>Plan → <a href="../01_Refactoring_Strategy.html#r-26">R-26</a>.</strong></p>
+<hr />
+<span class="anchor-alias" id="f-09"></span><h3 id="f-09-p2--test-posture"><span class="fid">F-09</span> <span class="g p2">P2</span> Test posture</h3>
+<div class="tablewrap"><table class="wide">
+<thead>
+<tr>
+<th>Area</th>
+<th>LOC</th>
+<th>Tests</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Config/ModelTrainingConfig/</code></td>
+<td>21,278</td>
+<td><strong>0</strong></td>
+</tr>
+<tr>
+<td><code>Config/SessionConfig/</code></td>
+<td>1,659</td>
+<td>0 (beyond a subprocess banner smoke)</td>
+</tr>
+<tr>
+<td><code>App/</code></td>
+<td>1,938</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>Analysis/</code></td>
+<td>2,185</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>experiments/</code></td>
+<td>12,053</td>
+<td>10 unit modules — good</td>
+</tr>
+<tr>
+<td><code>hermes/</code></td>
+<td>14,147</td>
+<td>72 modules — strong</td>
+</tr>
+</tbody>
+</table></div>
+<p>Local run: 512 passed, 8 failed, 1 skipped, against a README claim of "410 passed". Seven
+failures are environmental with no skip guard; one is a genuine stale assertion
+(<code>test_experiments_calibration.py:36</code> still asserts <code>status == "placeholder"</code> after the
+shipped TOML was promoted to <code>"verified"</code>).</p>
+<p><strong>Plan → <a href="../01_Refactoring_Strategy.html#r-08">R-08</a>,
+<a href="../01_Refactoring_Strategy.html#r-09">R-09</a>.</strong></p>
+<hr />
+      </section>
+      <section id="2-ordered-work-plan-for-this-stack">
+        <div class="sec-eyebrow">§&nbsp;02 · Ordered work plan for this stack</div>
+        <h2>Ordered work plan for this stack</h2>
+<div class="tablewrap"><table class="wide">
+<thead>
+<tr>
+<th>#</th>
+<th>Item</th>
+<th>Fixes</th>
+<th>Effort</th>
+<th>Risk</th>
+<th>Gate</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>Delete ~8.9 K LOC of dead trees</td>
+<td>F-06</td>
+<td>0.5 d</td>
+<td>Very low</td>
+<td>tag before deletion</td>
+</tr>
+<tr>
+<td>2</td>
+<td>Repair + split requirements; add <code>LICENSE</code></td>
+<td>F-05</td>
+<td>1 d</td>
+<td>Very low</td>
+<td>clean-venv install test</td>
+</tr>
+<tr>
+<td>3</td>
+<td><code>pyproject.toml</code> + <code>pytest.ini</code>; drop 16 <code>sys.path</code> hacks</td>
+<td>F-05</td>
+<td>2 d</td>
+<td>Low</td>
+<td><code>pip install -e .</code></td>
+</tr>
+<tr>
+<td>4</td>
+<td><code>hifins/paths.py</code> repo-anchored dataset resolution</td>
+<td>F-05</td>
+<td>1 d</td>
+<td>Low</td>
+<td>runs identically from both CWDs</td>
+</tr>
+<tr>
+<td>5</td>
+<td><strong>Characterization harness for every live trainer</strong></td>
+<td>F-04, F-09</td>
+<td>4 d</td>
+<td>Low</td>
+<td><strong>gates items 7–9</strong></td>
+</tr>
+<tr>
+<td>6</td>
+<td>Fail fast on unimplemented model types</td>
+<td>F-02</td>
+<td>0.5 d</td>
+<td>⚠ behaviour</td>
+<td>approval</td>
+</tr>
+<tr>
+<td>7</td>
+<td>Typed config dataclasses replace the 20-tuple and 41-arg calls</td>
+<td>F-04</td>
+<td>5 d</td>
+<td>Medium</td>
+<td>goldens green</td>
+</tr>
+<tr>
+<td>8</td>
+<td>Registry factories replace the branch trees</td>
+<td>F-04, F-02</td>
+<td>3 d</td>
+<td>Medium</td>
+<td>goldens green</td>
+</tr>
+<tr>
+<td>9</td>
+<td>One parameterised trainer family</td>
+<td>F-04</td>
+<td>15 d</td>
+<td><strong>High</strong></td>
+<td>goldens green, per-trainer</td>
+</tr>
+<tr>
+<td>10</td>
+<td>Wire the AC-GAN hyperparameters (Variant A)</td>
+<td>F-01</td>
+<td>1 d</td>
+<td>⚠ behaviour</td>
+<td>approval + goldens</td>
+</tr>
+<tr>
+<td>11</td>
+<td><code>hermes_adapters/</code> — real <code>GeneratorHost</code> + <code>LocalTrainFn</code></td>
+<td>F-03</td>
+<td>8 d</td>
+<td>Medium</td>
+<td>e2e real-model run</td>
+</tr>
+<tr>
+<td>12</td>
+<td>Consolidate model builders; archive superseded versions</td>
+<td>F-07</td>
+<td>2 d</td>
+<td>Low</td>
+<td>goldens green</td>
+</tr>
+<tr>
+<td>13</td>
+<td>Split <code>write_figures</code></td>
+<td>F-08</td>
+<td>3 d</td>
+<td>Low</td>
+<td>figures byte-identical</td>
+</tr>
+</tbody>
+</table></div>
+<p>Item 5 is the gate. Items 1–4 are pure cleanup and can ship immediately.</p>
+<hr />
+      </section>
+      <section id="3-what-not-to-change">
+        <div class="sec-eyebrow">§&nbsp;03 · What not to change</div>
+        <h2>What not to change</h2>
+<div class="tablewrap"><table class="wide">
+<thead>
+<tr>
+<th>Keep</th>
+<th>Why</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>experiments/runner/</code></td>
+<td>Correct paired-seed derivation, honest resume, small pure functions. Reference-quality.</td>
+</tr>
+<tr>
+<td><code>Config/modelStructures/</code> builder signatures</td>
+<td>Pure Keras factories with no side effects. Prune versions (<a href="../01_Refactoring_Strategy.html#r-22">R-22</a>); don't restructure.</td>
+</tr>
+<tr>
+<td>The <code>preprocess_*</code> split by dataset-processing mode</td>
+<td>The dispatch is verbose but the boundary is right.</td>
+</tr>
+<tr>
+<td>v2 dataset loaders' argument handling</td>
+<td>They genuinely honour their parameters. Only the v1 copies are broken.</td>
+</tr>
+<tr>
+<td>Published figure <em>output</em></td>
+<td>Validated by published results. Decompose the code (<a href="../01_Refactoring_Strategy.html#r-26">R-26</a>); never re-derive the numbers.</td>
+</tr>
+<tr>
+<td>The AC-GAN training <em>algorithm</em></td>
+<td>Mode-collapse tuning is a research result. Consolidation must preserve it byte-for-byte, which is what the goldens are for.</td>
+</tr>
+</tbody>
+</table></div>
+<hr />
+      </section>
+      <section id="4-migration-pattern-for-the-trainer-consolidation">
+        <div class="sec-eyebrow">§&nbsp;04 · Migration pattern for the trainer consolidation</div>
+        <h2>Migration pattern for the trainer consolidation</h2>
+<p>Item 9 is the risky one. Run it strictly per-trainer, never in bulk:</p>
+<div class="codewrap wide"><span class="lang">text</span><pre class="code"><code>for each live trainer class T:
+  1. Golden-snapshot T on the synthetic fixture (weights hash, loss trace, log lines).
+  2. Express T as a config instance of the new parameterised family.
+  3. Run both. Assert byte-equality of the snapshot.
+  4. Point T&#x27;s factory entry at the new path. Suite green.
+  5. Delete T&#x27;s file. Suite green.
+  6. Commit. One trainer per commit, one trainer per PR.</code></pre></div>
+<p>If step 3 fails, the difference is either a real behavioural divergence (fix the new
+path) or an intentional difference that was never documented (document it, then decide).
+Either way the answer is knowable before anything is deleted — which is the entire point
+of doing item 5 first.</p>
+<p><strong>Reference implementations:</strong> <a href="HIFINS_Production_Code.html"><code>HIFINS_Production_Code.html</code></a>.</p>
+      </section>
+
+      <div class="foot">
+        <p class="mono">Generated from HIFINS_Findings_and_Refactoring.md. File:line references are to
+        the repository as read on 2026-08-10 (main @ 35e2eeb); verify against current
+        source before acting. This document is a review artefact — no project code was
+        modified to produce it.</p>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script>
+  // TOC active-state only. No animation; reduced-motion respected via CSS.
+  // getElementById, not querySelector: several ids begin with a digit, which
+  // is legal HTML but an invalid CSS selector.
+  (function(){
+    var links = Array.prototype.slice.call(document.querySelectorAll('nav.toc a'));
+    var secs  = links.map(function(a){
+      return document.getElementById(a.getAttribute('href').slice(1));
+    });
+    if(!('IntersectionObserver' in window)) return;
+    var io = new IntersectionObserver(function(entries){
+      entries.forEach(function(e){
+        if(e.isIntersecting){
+          var i = secs.indexOf(e.target);
+          links.forEach(function(l){ l.style.background=''; l.style.color=''; });
+          if(i>-1){ var l=links[i]; l.style.background='var(--surface-2)'; l.style.color='var(--ink)'; }
+        }
+      });
+    },{rootMargin:'-10% 0px -80% 0px'});
+    secs.forEach(function(s){ if(s) io.observe(s); });
+  })();
+</script>
+
+</body>
+</html>

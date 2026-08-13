@@ -1,0 +1,899 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HERMES — Subsystem Architecture</title>
+<meta name="description" content="The scheduling and transport substrate: seven cooperating programs across four tiers, framework-free by design. The strongest code in the repository — and the three places that discipline stopped.">
+<style>
+  :root{
+    --bg:#f4f6f8; --surface:#ffffff; --surface-2:#eef1f4;
+    --ink:#141a20; --ink-2:#47525d; --ink-3:#6c7883;
+    --line:#dbe1e7; --line-2:#c8d0d8;
+    --accent:#0c7d8a; --accent-2:#0a5f6a; --accent-soft:#e0f0f2;
+    --ok:#2f8f56; --ok-bg:#e5f3ea; --ok-line:#a9d8bd;
+    --warn:#a8720c; --warn-bg:#f7efdb; --warn-line:#e3c483;
+    --gap:#bf3b4e; --gap-bg:#fbe5e8; --gap-line:#eeaeb7;
+    --font-display:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    --font-body:ui-serif,"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,Cambria,serif;
+    --font-mono:ui-monospace,"Cascadia Code","SF Mono","Segoe UI Mono",Menlo,Consolas,monospace;
+    --maxw:1200px; --prose:800px;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --bg:#0d1116; --surface:#141a21; --surface-2:#1a222b;
+      --ink:#e7ecf1; --ink-2:#a3afba; --ink-3:#74818d;
+      --line:#26303a; --line-2:#333f4b;
+      --accent:#2fc0d0; --accent-2:#5bd4e0; --accent-soft:#10333a;
+      --ok:#4cc47e; --ok-bg:#12301f; --ok-line:#245a3a;
+      --warn:#e0a63a; --warn-bg:#31260f; --warn-line:#5c4820;
+      --gap:#e56b7d; --gap-bg:#331a1f; --gap-line:#5e3038;
+    }
+  }
+  :root[data-theme="light"]{
+    --bg:#f4f6f8; --surface:#ffffff; --surface-2:#eef1f4;
+    --ink:#141a20; --ink-2:#47525d; --ink-3:#6c7883;
+    --line:#dbe1e7; --line-2:#c8d0d8;
+    --accent:#0c7d8a; --accent-2:#0a5f6a; --accent-soft:#e0f0f2;
+    --ok:#2f8f56; --ok-bg:#e5f3ea; --ok-line:#a9d8bd;
+    --warn:#a8720c; --warn-bg:#f7efdb; --warn-line:#e3c483;
+    --gap:#bf3b4e; --gap-bg:#fbe5e8; --gap-line:#eeaeb7;
+  }
+  :root[data-theme="dark"]{
+    --bg:#0d1116; --surface:#141a21; --surface-2:#1a222b;
+    --ink:#e7ecf1; --ink-2:#a3afba; --ink-3:#74818d;
+    --line:#26303a; --line-2:#333f4b;
+    --accent:#2fc0d0; --accent-2:#5bd4e0; --accent-soft:#10333a;
+    --ok:#4cc47e; --ok-bg:#12301f; --ok-line:#245a3a;
+    --warn:#e0a63a; --warn-bg:#31260f; --warn-line:#5c4820;
+    --gap:#e56b7d; --gap-bg:#331a1f; --gap-line:#5e3038;
+  }
+
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:var(--font-body); font-size:17px; line-height:1.62;
+    -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+  }
+  .shell{max-width:var(--maxw); margin:0 auto; padding:0 clamp(18px,4vw,40px)}
+
+  /* ---------- Masthead ---------- */
+  header.mast{padding:clamp(40px,7vw,84px) 0 34px; border-bottom:1px solid var(--line)}
+  .eyebrow{
+    font-family:var(--font-mono); font-size:12px; letter-spacing:.14em;
+    text-transform:uppercase; color:var(--accent); font-weight:600;
+    display:flex; gap:10px; flex-wrap:wrap; align-items:center;
+  }
+  .eyebrow .sep{color:var(--ink-3)}
+  h1.title{
+    font-family:var(--font-display); font-weight:760;
+    font-size:clamp(30px,5.4vw,52px); line-height:1.04; letter-spacing:-.022em;
+    margin:.42em 0 .28em; max-width:16ch; text-wrap:balance;
+  }
+  .deck{
+    font-size:clamp(17px,2.1vw,21px); color:var(--ink-2); max-width:60ch;
+    line-height:1.5; margin:0;
+  }
+  .deck b{color:var(--ink); font-weight:600}
+  .metabar{
+    margin-top:26px; display:flex; flex-wrap:wrap; gap:8px 20px;
+    font-family:var(--font-mono); font-size:12.5px; color:var(--ink-3);
+  }
+  .metabar b{color:var(--ink-2); font-weight:600}
+
+  /* ---------- Layout with TOC rail ---------- */
+  .body-grid{display:block}
+  @media(min-width:1040px){
+    .body-grid{display:grid; grid-template-columns:216px minmax(0,1fr); gap:48px; align-items:start}
+    nav.toc{position:sticky; top:24px; align-self:start}
+  }
+  nav.toc{padding:30px 0 0}
+  nav.toc .toc-h{
+    font-family:var(--font-mono); font-size:11px; letter-spacing:.14em;
+    text-transform:uppercase; color:var(--ink-3); margin:0 0 12px; font-weight:600;
+  }
+  nav.toc ol{list-style:none; margin:0; padding:0; counter-reset:toc}
+  nav.toc li{counter-increment:toc; margin:2px 0}
+  nav.toc a{
+    display:block; text-decoration:none; color:var(--ink-2);
+    font-family:var(--font-display); font-size:14px; line-height:1.35;
+    padding:6px 10px 6px 30px; border-radius:7px; position:relative;
+  }
+  nav.toc a::before{
+    content:counter(toc,decimal-leading-zero); position:absolute; left:8px;
+    font-family:var(--font-mono); font-size:11px; color:var(--accent);
+    top:8px; font-weight:600;
+  }
+  nav.toc a:hover{background:var(--surface-2); color:var(--ink)}
+  @media(max-width:1039px){ nav.toc{display:none} }
+
+  main{padding-top:8px; min-width:0}
+
+  /* ---------- Sections & prose ---------- */
+  section{padding:38px 0; border-bottom:1px solid var(--line); scroll-margin-top:20px}
+  section:last-of-type{border-bottom:0}
+  .sec-eyebrow{
+    font-family:var(--font-mono); font-size:12px; letter-spacing:.13em;
+    text-transform:uppercase; color:var(--accent); font-weight:600; margin-bottom:8px;
+  }
+  h2{
+    font-family:var(--font-display); font-weight:720; letter-spacing:-.016em;
+    font-size:clamp(22px,3.2vw,30px); line-height:1.14; margin:0 0 .55em;
+    max-width:24ch; text-wrap:balance;
+  }
+  h3{
+    font-family:var(--font-display); font-weight:660; letter-spacing:-.008em;
+    font-size:19px; line-height:1.25; margin:1.9em 0 .5em; color:var(--ink);
+  }
+  h4{
+    font-family:var(--font-mono); font-weight:600; font-size:13px; letter-spacing:.04em;
+    text-transform:uppercase; color:var(--ink-2); margin:1.5em 0 .5em;
+  }
+  p{max-width:var(--prose); margin:0 0 1.05em}
+  main ul,main ol{max-width:var(--prose); margin:0 0 1.1em; padding-left:1.25em}
+  main li{margin:.34em 0}
+  strong{font-weight:600; color:var(--ink)}
+  a.ref{color:var(--accent-2); text-decoration:none; border-bottom:1px solid transparent}
+  :root[data-theme="dark"] a.ref{color:var(--accent)}
+  @media(prefers-color-scheme:dark){a.ref{color:var(--accent)}}
+  a.ref:hover{border-bottom-color:currentColor}
+
+  code,.mono{font-family:var(--font-mono); font-size:.86em}
+  p code,li code,td code{
+    background:var(--surface-2); padding:.08em .38em; border-radius:5px;
+    font-size:.82em; color:var(--ink); border:1px solid var(--line);
+    white-space:nowrap;
+  }
+  .path{color:var(--ink-3); font-family:var(--font-mono); font-size:.8em; white-space:nowrap}
+
+  /* ---------- Callouts ---------- */
+  .callout{
+    border:1px solid var(--line); border-left-width:3px; border-radius:10px;
+    background:var(--surface); padding:18px 20px; margin:1.4em 0; max-width:var(--prose);
+  }
+  .callout .k{
+    font-family:var(--font-mono); font-size:11px; letter-spacing:.12em; text-transform:uppercase;
+    font-weight:600; margin-bottom:7px; display:block;
+  }
+  .callout p{margin:.2em 0}
+  .callout.accent{border-left-color:var(--accent); background:var(--accent-soft)}
+  .callout.accent .k{color:var(--accent-2)}
+  :root[data-theme="dark"] .callout.accent .k{color:var(--accent-2)}
+  @media(prefers-color-scheme:dark){.callout.accent .k{color:var(--accent-2)}}
+  .callout.warn{border-left-color:var(--warn); background:var(--warn-bg)}
+  .callout.warn .k{color:var(--warn)}
+  .callout.gap{border-left-color:var(--gap); background:var(--gap-bg)}
+  .callout.gap .k{color:var(--gap)}
+  .callout.accent{background:var(--accent-soft)}
+
+  /* ---------- Formula ---------- */
+  .formula{
+    font-family:var(--font-mono); font-size:14px; line-height:1.55;
+    background:var(--surface-2); border:1px solid var(--line);
+    border-radius:9px; padding:13px 16px; margin:1em 0; max-width:var(--prose);
+    overflow-x:auto; color:var(--ink);
+  }
+  .formula .lbl{color:var(--ink-3)}
+
+  /* ---------- Tables ---------- */
+  .tablewrap{overflow-x:auto; margin:1.2em 0 1.5em; border:1px solid var(--line);
+    border-radius:11px; background:var(--surface)}
+  table{border-collapse:collapse; width:100%; font-size:14px; min-width:640px}
+  table.wide{min-width:820px}
+  thead th{
+    font-family:var(--font-mono); font-weight:600; font-size:11.5px; letter-spacing:.03em;
+    text-transform:uppercase; text-align:left; color:var(--ink-2);
+    background:var(--surface-2); padding:11px 14px; border-bottom:1px solid var(--line-2);
+    position:sticky; top:0; vertical-align:bottom;
+  }
+  tbody td{padding:11px 14px; border-bottom:1px solid var(--line); vertical-align:top;
+    line-height:1.42; color:var(--ink-2)}
+  tbody tr:last-child td{border-bottom:0}
+  tbody td:first-child{color:var(--ink); font-weight:500}
+  tbody td .path,tbody td code{white-space:normal}
+  td .mname{font-family:var(--font-mono); font-size:12.5px; color:var(--ink); font-weight:600; display:block}
+  tbody tr:hover td{background:color-mix(in srgb,var(--accent-soft) 34%, transparent)}
+  .num{font-variant-numeric:tabular-nums}
+
+  /* ---------- Pills / badges ---------- */
+  .pill{
+    display:inline-flex; align-items:center; gap:5px; font-family:var(--font-mono);
+    font-size:11px; font-weight:600; letter-spacing:.02em; padding:2px 8px 2px 6px;
+    border-radius:20px; border:1px solid var(--line-2); white-space:nowrap; line-height:1.5;
+  }
+  .pill .dot{width:7px; height:7px; border-radius:50%; background:currentColor; flex:0 0 auto}
+  .pill.ok{color:var(--ok); background:var(--ok-bg); border-color:var(--ok-line)}
+  .pill.warn{color:var(--warn); background:var(--warn-bg); border-color:var(--warn-line)}
+  .pill.gap{color:var(--gap); background:var(--gap-bg); border-color:var(--gap-line)}
+  .pill.plain{color:var(--ink-3); background:var(--surface-2)}
+
+  .legend{display:flex; flex-wrap:wrap; gap:8px 14px; margin:.3em 0 1.1em; font-size:13px; align-items:center}
+  .legend .lg{display:inline-flex; align-items:center; gap:6px; color:var(--ink-2); font-family:var(--font-mono); font-size:11.5px}
+
+  /* ---------- Verdict cards ---------- */
+  .verdicts{display:grid; gap:14px; margin:1.3em 0; max-width:var(--prose)}
+  .vcard{border:1px solid var(--line); border-radius:12px; background:var(--surface); overflow:hidden}
+  .vcard .vhead{display:flex; align-items:flex-start; gap:12px; padding:15px 18px 12px; border-bottom:1px solid var(--line)}
+  .vbadge{font-family:var(--font-mono); font-size:11px; font-weight:700; letter-spacing:.05em;
+    padding:4px 9px; border-radius:6px; flex:0 0 auto; margin-top:1px}
+  .vbadge.confirmed{color:#fff; background:var(--gap)}
+  .vbadge.partial{color:var(--ink); background:var(--warn)}
+  :root[data-theme="dark"] .vbadge.partial{color:#20160a}
+  @media(prefers-color-scheme:dark){.vbadge.partial{color:#20160a}}
+  .vcard .vclaim{font-family:var(--font-display); font-weight:600; font-size:15.5px; line-height:1.34; color:var(--ink); margin:0}
+  .vcard .vbody{padding:13px 18px 16px; font-size:14px; color:var(--ink-2)}
+  .vcard .vbody p{margin:.1em 0 .7em; max-width:none}
+  .vcard .vbody .imp{margin-top:.4em; padding-top:.7em; border-top:1px dashed var(--line-2)}
+  .vcard .vbody .imp .k{font-family:var(--font-mono); font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--accent); font-weight:600; display:block; margin-bottom:3px}
+  :root[data-theme="dark"] .vcard .vbody .imp .k{color:var(--accent-2)}
+  @media(prefers-color-scheme:dark){.vcard .vbody .imp .k{color:var(--accent-2)}}
+
+  /* ---------- Stage cards ---------- */
+  .stages{display:grid; gap:16px; margin:1.4em 0; max-width:var(--prose)}
+  .stage{border:1px solid var(--line); border-radius:12px; background:var(--surface); padding:0; overflow:hidden}
+  .stage .shead{display:flex; align-items:baseline; gap:12px; padding:16px 20px 12px; background:var(--surface-2); border-bottom:1px solid var(--line)}
+  .stage .snum{font-family:var(--font-mono); font-weight:700; font-size:13px; color:var(--accent); letter-spacing:.02em; flex:0 0 auto}
+  :root[data-theme="dark"] .stage .snum{color:var(--accent-2)}
+  @media(prefers-color-scheme:dark){.stage .snum{color:var(--accent-2)}}
+  .stage .stitle{font-family:var(--font-display); font-weight:660; font-size:16.5px; color:var(--ink); line-height:1.25; margin:0}
+  .stage .schip{margin-left:auto; flex:0 0 auto}
+  .stage .sbody{padding:15px 20px 18px; font-size:14.5px}
+  .stage .sbody ul{max-width:none; margin:.2em 0 .3em}
+  .stage .grid2{display:grid; gap:4px 22px; grid-template-columns:1fr}
+  @media(min-width:620px){.stage .grid2{grid-template-columns:1fr 1fr}}
+  .stage .fld{margin:.6em 0}
+  .stage .fld .k{font-family:var(--font-mono); font-size:10.5px; letter-spacing:.09em; text-transform:uppercase; color:var(--ink-3); font-weight:600; display:block; margin-bottom:3px}
+  .stage .fld p{margin:0; font-size:13.5px; color:var(--ink-2); max-width:none}
+  .stage .dod{margin-top:.7em; padding-top:.8em; border-top:1px dashed var(--line-2)}
+
+  /* ---------- Misc ---------- */
+  .lead{font-size:19px; line-height:1.5; color:var(--ink); max-width:var(--prose)}
+  .lead b{color:var(--ink)}
+  hr.soft{border:0; border-top:1px solid var(--line); margin:1.6em 0; max-width:var(--prose)}
+  .foot{padding:34px 0 70px; color:var(--ink-3); font-size:13px; max-width:var(--prose)}
+  .foot p{max-width:none; margin:.5em 0; font-size:13px; color:var(--ink-3)}
+  .foot .mono{font-size:12px}
+  .kexcerpt{font-family:var(--font-mono); font-size:12.5px; color:var(--ink-2); background:var(--surface-2);
+    border:1px solid var(--line); border-radius:8px; padding:10px 13px; margin:.7em 0; max-width:var(--prose); line-height:1.5}
+  sup.fn{font-family:var(--font-mono); font-size:.62em; color:var(--accent); font-weight:600}
+  :focus-visible{outline:2px solid var(--accent); outline-offset:2px; border-radius:3px}
+  @media(prefers-reduced-motion:no-preference){html{scroll-behavior:smooth}}
+
+  /* ---------- Additions for the generated review docs ---------- */
+  main h2 { max-width: 32ch }
+  main table { min-width: 560px }
+  .tablewrap table thead th { position: static }
+
+  /* finding / item sub-headings */
+  main h3{
+    scroll-margin-top:18px; display:flex; align-items:baseline;
+    gap:9px; flex-wrap:wrap;
+  }
+  main h3 .fid{
+    font-family:var(--font-mono); font-size:12.5px; font-weight:700;
+    color:var(--accent); letter-spacing:.02em; flex:0 0 auto;
+  }
+  :root[data-theme="dark"] main h3 .fid{ color:var(--accent-2) }
+  @media(prefers-color-scheme:dark){ main h3 .fid{ color:var(--accent-2) } }
+  p.pillrow{ display:flex; gap:8px; flex-wrap:wrap; margin:-.35em 0 1.1em }
+  .anchor-alias{ display:block; height:0; scroll-margin-top:18px }
+
+  /* code blocks */
+  .codewrap{ position:relative; margin:1.15em 0 1.4em; max-width:var(--prose) }
+  .codewrap.wide{ max-width:none }
+  pre.code{
+    font-family:var(--font-mono); font-size:12.5px; line-height:1.55;
+    background:var(--surface-2); border:1px solid var(--line); border-radius:10px;
+    padding:15px 17px; margin:0; overflow-x:auto; color:var(--ink);
+    white-space:pre; tab-size:2;
+  }
+  pre.code code{ font-size:inherit; background:none; border:0; padding:0;
+                 white-space:pre; color:inherit }
+  .codewrap .lang{
+    position:absolute; top:0; right:12px; transform:translateY(-50%);
+    font-family:var(--font-mono); font-size:10px; letter-spacing:.1em;
+    text-transform:uppercase; font-weight:600; color:var(--ink-3);
+    background:var(--bg); border:1px solid var(--line); border-radius:20px;
+    padding:2px 9px;
+  }
+
+  /* Pygments tokens, mapped onto the house palette so both themes work */
+  pre.code .c,  pre.code .c1, pre.code .cm, pre.code .cs,
+  pre.code .ch, pre.code .cpf{ color:var(--ink-3); font-style:italic }
+  pre.code .sd{ color:var(--ink-3) }
+  pre.code .k,  pre.code .kn, pre.code .kc, pre.code .kd,
+  pre.code .kp, pre.code .kr, pre.code .kt, pre.code .ow{ color:var(--accent) }
+  :root[data-theme="dark"] pre.code .k,
+  :root[data-theme="dark"] pre.code .kn,
+  :root[data-theme="dark"] pre.code .kc,
+  :root[data-theme="dark"] pre.code .kd,
+  :root[data-theme="dark"] pre.code .ow{ color:var(--accent-2) }
+  @media(prefers-color-scheme:dark){
+    pre.code .k, pre.code .kn, pre.code .kc,
+    pre.code .kd, pre.code .ow{ color:var(--accent-2) }
+  }
+  pre.code .s,  pre.code .s1, pre.code .s2, pre.code .sa,
+  pre.code .sb, pre.code .se, pre.code .si, pre.code .sr,
+  pre.code .ss, pre.code .sx{ color:var(--ok) }
+  pre.code .m,  pre.code .mi, pre.code .mf, pre.code .mh,
+  pre.code .mo, pre.code .il{ color:var(--ok) }
+  pre.code .nf, pre.code .fm{ color:var(--ink); font-weight:600 }
+  pre.code .nc, pre.code .ne{ color:var(--warn); font-weight:600 }
+  pre.code .nd{ color:var(--warn) }
+  pre.code .nb, pre.code .bp{ color:var(--ink-2) }
+  pre.code .nn, pre.code .nv, pre.code .no, pre.code .na{ color:var(--ink) }
+  pre.code .o,  pre.code .p{ color:var(--ink-2) }
+  pre.code .gd{ color:var(--gap) }
+  pre.code .gi{ color:var(--ok) }
+  pre.code .gh, pre.code .gu{ color:var(--ink-3); font-weight:600 }
+  pre.code .err{ color:inherit; border:0 }
+
+  /* blockquote -> callout */
+  blockquote{
+    margin:1.3em 0; padding:15px 18px; max-width:var(--prose);
+    border:1px solid var(--line); border-left:3px solid var(--ink-3);
+    border-radius:10px; background:var(--surface); color:var(--ink-2);
+    font-size:15px;
+  }
+  blockquote p{ margin:.25em 0 }
+  blockquote.warn{ border-left-color:var(--warn); background:var(--warn-bg) }
+
+  /* figures / diagrams */
+  figure.dgfig{ margin:1.6em 0 1.9em; max-width:none }
+  .dgscroll{ overflow-x:auto; border:1px solid var(--line); border-radius:12px;
+             background:var(--surface); padding:18px 16px }
+  svg.dg{ max-width:100%; height:auto; display:block; margin:0 auto }
+  svg.dg text{ font-family:var(--font-mono); fill:var(--ink); font-size:12px }
+  svg.dg .t-sm{ font-size:11px; fill:var(--ink-2) }
+  svg.dg .t-lbl{ font-size:10.5px; fill:var(--ink-3) }
+  svg.dg .t-bad{ font-size:10.5px; fill:var(--gap); font-weight:600 }
+  svg.dg .t-hd{ font-size:10.5px; font-weight:700; fill:var(--accent);
+                letter-spacing:.09em }
+  svg.dg .t-x{ font-size:15px; fill:var(--gap); font-weight:700 }
+  svg.dg .bx{ fill:var(--surface); stroke:var(--line-2); stroke-width:1.2 }
+  svg.dg .badbx{ fill:var(--gap-bg); stroke:var(--gap-line); stroke-width:1.3 }
+  svg.dg .warnbx{ fill:var(--warn-bg); stroke:var(--warn-line); stroke-width:1.3 }
+  svg.dg .hl{ fill:var(--ok-bg); stroke:var(--ok); stroke-width:1.6 }
+  svg.dg .dead{ fill:var(--surface-2); stroke:var(--ink-3); stroke-width:1.2;
+                stroke-dasharray:5 4; opacity:.8 }
+  svg.dg .band{ fill:var(--surface-2); stroke:var(--line); stroke-width:1 }
+  svg.dg .ok-band{ fill:var(--ok-bg); stroke:var(--ok-line) }
+  svg.dg .bad-band{ fill:var(--gap-bg); stroke:var(--gap-line) }
+  svg.dg .loopbx{ fill:none; stroke:var(--line-2); stroke-width:1;
+                  stroke-dasharray:4 3 }
+  svg.dg .life{ stroke:var(--line-2); stroke-width:1; stroke-dasharray:4 4 }
+  svg.dg .ln{ stroke:var(--ink-2); stroke-width:1.4; fill:none }
+  svg.dg .ln-bad{ stroke:var(--gap); stroke-width:1.6; stroke-dasharray:6 4; fill:none }
+  svg.dg .ln-dead{ stroke:var(--ink-3); stroke-width:1.4; stroke-dasharray:5 4; fill:none }
+  svg.dg .ln-soft{ stroke:var(--ink-3); stroke-width:1.2; stroke-dasharray:3 3; fill:none }
+  svg.dg .mk{ fill:var(--ink-2); stroke:none }
+  svg.dg .mk-bad{ fill:var(--gap); stroke:none }
+  svg.dg .mk-dead{ fill:var(--ink-3); stroke:none }
+  svg.dg .mk-soft{ fill:var(--ink-3); stroke:none }
+  figure.dgfig figcaption{
+    font-size:13.5px; color:var(--ink-2); line-height:1.5; margin-top:11px;
+    max-width:var(--prose); padding-left:2px;
+  }
+  figure.dgfig figcaption b{ color:var(--ink) }
+
+  /* severity pills in the findings tables */
+  .g{ font-family:var(--font-mono); font-size:10.5px; font-weight:700;
+      padding:1px 7px; border-radius:20px; border:1px solid; white-space:nowrap }
+  .g.p0{ color:var(--gap); background:var(--gap-bg); border-color:var(--gap-line) }
+  .g.p1{ color:var(--warn); background:var(--warn-bg); border-color:var(--warn-line) }
+  .g.p2{ color:var(--ink-3); background:var(--surface-2); border-color:var(--line-2) }
+
+  /* nested TOC */
+  nav.toc ol ol{ list-style:none; counter-reset:none; margin:2px 0 6px;
+                 padding-left:14px }
+  nav.toc ol ol li{ counter-increment:none }
+  nav.toc ol ol a{ padding:3px 8px 3px 10px; font-size:11.5px;
+                   color:var(--ink-3); border-left:1px solid var(--line) }
+  nav.toc ol ol a::before{ content:none }
+  nav.toc ol ol a:hover{ color:var(--ink-2) }
+
+  @media print{
+    nav.toc{ display:none }
+    section{ break-inside:avoid-page }
+    .dgscroll{ overflow:visible }
+    pre.code{ white-space:pre-wrap; word-break:break-word }
+    body{ background:#fff; font-size:11pt }
+  }
+
+</style>
+
+</head>
+<body>
+<div class="shell">
+  <header class="mast">
+    <div class="eyebrow">
+      <span>Architecture review · subsystem deep dive</span><span class="sep">/</span>
+      <span>hermes/ · 69 modules · 14,147 LOC</span><span class="sep">/</span>
+      <span>Review only — no code changed</span>
+    </div>
+    <h1 class="title">HERMES — Subsystem Architecture</h1>
+    <p class="deck">The scheduling and transport substrate: seven cooperating programs across four tiers, framework-free by design. <b>The strongest code in the repository</b> — and the three places that discipline stopped.</p>
+    <div class="metabar">
+      <span><strong>Status:</strong> Review only. No project code has been modified.</span>
+      <span><strong>Scope:</strong> <code>hermes/</code> (69 modules, 14,147 LOC) + its process entry points and tests</span>
+      <span><strong>Parent document:</strong> <a href="../System_Architecture_Overview.html"><code>../System_Architecture_Overview.html</code></a></span>
+    </div>
+  </header>
+
+  <div class="body-grid">
+    <nav class="toc" aria-label="Contents">
+      <p class="toc-h">Contents</p>
+      <ol>
+        <li><a href="#1-what-hermes-is">What HERMES is</a></li>
+        <li><a href="#2-package-structure-and-responsibility">Package structure and responsibility</a></li>
+        <li><a href="#3-the-seven-programs-and-where-they-run">The seven programs and where they run</a></li>
+        <li><a href="#4-the-scheduler-pipeline">The scheduler pipeline</a></li>
+        <li><a href="#5-mission-state-machine">Mission state machine</a></li>
+        <li><a href="#6-transport-layer">Transport layer</a></li>
+        <li><a href="#7-observability">Observability</a></li>
+        <li><a href="#8-process-lifecycle-and-orchestration">Process lifecycle and orchestration</a></li>
+        <li><a href="#9-known-architectural-defects-in-this-subsystem">Known architectural defects in this subsystem</a></li>
+        <li><a href="#10-extension-points-that-are-already-the-right-shape">Extension points that are already the right shape</a></li>
+      </ol>
+    </nav>
+
+    <main>
+      <section id="1-what-hermes-is">
+        <div class="sec-eyebrow">§&nbsp;01 · What HERMES is</div>
+        <h2>What HERMES is</h2>
+<p>HERMES is the scheduling and transport substrate for mule-assisted hierarchical
+federated learning. It replaces the original monolithic Flower server/client pair with
+seven cooperating programs distributed across four tiers, and it is deliberately
+<strong>framework-free</strong>: no Flower, no TensorFlow, no asyncio, no Docker anywhere in
+<code>hermes/</code>. Its only third-party runtime dependency is numpy.</p>
+<p>That constraint is the single most important architectural decision in the package. It
+is why the whole subsystem runs in-process under <code>Loopback*</code> transports for testing,
+why 512 unit tests execute in 12 seconds, and why the mule NUC does not need a GPU
+runtime to schedule.</p>
+<hr />
+      </section>
+      <section id="2-package-structure-and-responsibility">
+        <div class="sec-eyebrow">§&nbsp;02 · Package structure and responsibility</div>
+        <h2>Package structure and responsibility</h2>
+<div class="tablewrap"><table class="wide">
+<thead>
+<tr>
+<th>Package</th>
+<th>LOC</th>
+<th>Responsibility</th>
+<th>Depends on</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>hermes/types/</code></td>
+<td>973</td>
+<td>Value types: bundles, FL messages, scheduler state, IDs, signatures</td>
+<td>numpy only</td>
+</tr>
+<tr>
+<td><code>hermes/transport/</code></td>
+<td>2,098</td>
+<td><code>RFLink</code> / <code>DockLink</code> / <code>CloudLink</code> ABCs, TCP implementations, wire framing, channel emulator</td>
+<td><code>types</code></td>
+</tr>
+<tr>
+<td><code>hermes/scheduler/</code></td>
+<td>3,290</td>
+<td><code>FLScheduler</code> + S1/S2A/S2B/S3/S3a/S3.5 stages, <code>TargetSelectorRL</code>, DDQN, replay, sim env</td>
+<td><code>types</code></td>
+</tr>
+<tr>
+<td><code>hermes/mission/</code></td>
+<td>1,552</td>
+<td><code>HFLHostMission</code> (mule-side FL server), <code>ClientMission</code> (device), <code>partial_fedavg</code>, utility</td>
+<td><code>types</code>, <code>transport</code></td>
+</tr>
+<tr>
+<td><code>hermes/cluster/</code></td>
+<td>756</td>
+<td><code>HFLHostCluster</code>, <code>DeviceRegistry</code>, <code>cross_mule_fedavg</code></td>
+<td><code>types</code>, <code>transport</code></td>
+</tr>
+<tr>
+<td><code>hermes/mule/</code></td>
+<td>1,335</td>
+<td><code>MuleSupervisor</code>, <code>ClientCluster</code>, <code>BundleDistributor</code></td>
+<td>all of the above</td>
+</tr>
+<tr>
+<td><code>hermes/l1/</code></td>
+<td>363</td>
+<td><code>ChannelDDQN</code> RF band selector, RF prior</td>
+<td><code>types</code></td>
+</tr>
+<tr>
+<td><code>hermes/processes/</code></td>
+<td>1,552</td>
+<td>Per-role CLI entry points + <code>MultiProcessOrchestrator</code></td>
+<td>all + <code>experiments</code> ⚠</td>
+</tr>
+<tr>
+<td><code>hermes/observability/</code></td>
+<td>382</td>
+<td>JSONL event emitter, <code>MetricsRegistry</code></td>
+<td>stdlib only</td>
+</tr>
+</tbody>
+</table></div>
+<p>Dependency direction is clean and acyclic <strong>except</strong> <code>hermes/processes/{cluster,device}.py</code>,
+which import <code>experiments.exp4.model_task</code>. See §9.</p>
+<hr />
+      </section>
+      <section id="3-the-seven-programs-and-where-they-run">
+        <div class="sec-eyebrow">§&nbsp;03 · The seven programs and where they run</div>
+        <h2>The seven programs and where they run</h2>
+<figure class="dgfig"><div class="dgscroll"><svg class="dg" viewBox="0 0 1020 412" role="img" aria-label="Four-tier topology. The edge device runs ClientMission. The mule NUC runs MuleSupervisor over ChannelDDQN, FLScheduler, HFLHostMission and ClientCluster, connected to devices by the RF link and to the edge server by the dock link. The edge server runs HFLHostCluster holding the authoritative device registry, and reaches the Tier 3 cloud coordinator over an HTTP link." xmlns="http://www.w3.org/2000/svg"><defs><marker id="d4-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" class="mk"/></marker><marker id="d4-bad" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" class="mk-bad"/></marker><marker id="d4-dead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" class="mk-dead"/></marker><marker id="d4-soft" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" class="mk-soft"/></marker></defs><rect x="20" y="150" width="180" height="154" rx="10" class="band"/><text x="32" y="167" text-anchor="start" class="t-hd">TIER 1 · DEVICE</text><rect x="34" y="182" width="152" height="106" rx="7" class="bx"/><text x="110.0" y="216.5" text-anchor="middle">ClientMission</text><text x="110.0" y="231.5" text-anchor="middle" class="t-sm">· flagger</text><text x="110.0" y="246.5" text-anchor="middle" class="t-sm">· offline trainer</text><text x="110.0" y="261.5" text-anchor="middle" class="t-sm">· FL client</text><rect x="280" y="46" width="310" height="314" rx="10" class="band ok-band"/><text x="292" y="63" text-anchor="start" class="t-hd">TIER 2-MOBILE · MULE NUC</text><rect x="296" y="78" width="278" height="30" rx="7" class="bx"/><text x="435.0" y="97.0" text-anchor="middle">MuleSupervisor</text><rect x="296" y="124" width="132" height="52" rx="7" class="bx"/><text x="362.0" y="147.5" text-anchor="middle">ChannelDDQN</text><text x="362.0" y="160.5" text-anchor="middle" class="t-sm">L1 · band choice</text><rect x="442" y="124" width="132" height="52" rx="7" class="bx"/><text x="508.0" y="147.5" text-anchor="middle">FLScheduler</text><text x="508.0" y="160.5" text-anchor="middle" class="t-sm">S1→S3a→S3.5</text><rect x="296" y="200" width="132" height="52" rx="7" class="bx"/><text x="362.0" y="223.5" text-anchor="middle">HFLHostMission</text><text x="362.0" y="236.5" text-anchor="middle" class="t-sm">FL server</text><rect x="442" y="200" width="132" height="52" rx="7" class="bx"/><text x="508.0" y="223.5" text-anchor="middle">ClientCluster</text><text x="508.0" y="236.5" text-anchor="middle" class="t-sm">dock client</text><text x="435" y="292.0" text-anchor="middle" class="t-lbl">the only host holding a server role</text><text x="435" y="303.5" text-anchor="middle" class="t-lbl">and a client role in one process</text><rect x="670" y="150" width="230" height="190" rx="10" class="band"/><text x="682" y="167" text-anchor="start" class="t-hd">TIER 2 · EDGE SERVER</text><rect x="686" y="182" width="198" height="146" rx="7" class="bx"/><text x="785.0" y="227.0" text-anchor="middle">HFLHostCluster</text><text x="785.0" y="243.0" text-anchor="middle" class="t-sm">· DeviceRegistry</text><text x="785.0" y="259.0" text-anchor="middle" class="t-sm">· cross-mule FedAvg</text><text x="785.0" y="275.0" text-anchor="middle" class="t-sm">· θ_gen + synth</text><text x="785.0" y="291.0" text-anchor="middle" class="t-sm">· slice dispatch</text><rect x="670" y="30" width="230" height="82" rx="10" class="band"/><text x="682" y="47" text-anchor="start" class="t-hd">TIER 3 · CLOUD</text><rect x="686" y="58" width="198" height="40" rx="7" class="bx"/><text x="785.0" y="75.5" text-anchor="middle">Tier3Coordinator</text><text x="785.0" y="88.5" text-anchor="middle" class="t-sm">θ_gen refinement</text><polyline points="190,218 276,218" class="ln" marker-end="url(#d4-a)"/><polyline points="276,234 190,234" class="ln" marker-end="url(#d4-a)"/><text x="233" y="202.0" text-anchor="middle" class="t-hd">RFLink</text><text x="233" y="254.0" text-anchor="middle" class="t-lbl">Solicit/Adv</text><text x="233" y="265.5" text-anchor="middle" class="t-lbl">Push/Δθ/Ack</text><polyline points="594,218 666,218" class="ln" marker-end="url(#d4-a)"/><polyline points="666,234 594,234" class="ln" marker-end="url(#d4-a)"/><text x="630" y="202.0" text-anchor="middle" class="t-hd">DockLink</text><text x="630" y="254.0" text-anchor="middle" class="t-lbl">UpBundle</text><text x="630" y="265.5" text-anchor="middle" class="t-lbl">DownBundle</text><polyline points="770,146 770,116" class="ln" marker-end="url(#d4-a)"/><polyline points="786,116 786,146" class="ln" marker-end="url(#d4-a)"/><text x="908" y="126.0" text-anchor="start" class="t-hd">CloudLink</text><text x="908" y="140.0" text-anchor="start" class="t-bad">pickle over</text><text x="908" y="151.5" text-anchor="start" class="t-bad">plain HTTP</text><polyline points="362,200 362,182" class="ln-soft" marker-end="url(#d4-soft)"/><polyline points="508,200 508,182" class="ln-soft" marker-end="url(#d4-soft)"/><text x="348" y="194.0" text-anchor="middle" class="t-lbl">RoundCloseDelta</text><text x="516" y="194.0" text-anchor="middle" class="t-lbl">slice + amendment</text><polyline points="362,124 362,112" class="ln-soft" marker-end="url(#d4-soft)"/><polyline points="508,124 508,112" class="ln-soft" marker-end="url(#d4-soft)"/><line x1="20" y1="392" x2="54" y2="392" class="ln"/><text x="62" y="396" text-anchor="start" class="t-lbl">inter-tier link (transport ABC)</text><line x1="300" y1="392" x2="334" y2="392" class="ln-soft"/><text x="342" y="396" text-anchor="start" class="t-lbl">intra-NUC bus (in-process callable)</text></svg></div><figcaption><b>Every tier boundary is a transport ABC.</b> Programs never see a socket, which is why the whole topology runs in-process under loopback links in tests. The mule NUC is the only host holding a server role and a client role at once.</figcaption></figure>
+<p>The mule NUC is the only host running a <strong>server role and a client role
+simultaneously</strong>: <code>HFLHostMission</code> serves devices in-field while <code>ClientCluster</code> is a
+client to the cluster at dock. The two never run concurrently — <code>MuleSupervisor</code>
+serializes them into the two-pass mission cycle — but they share the process and the
+supervisor's state.</p>
+<hr />
+      </section>
+      <section id="4-the-scheduler-pipeline">
+        <div class="sec-eyebrow">§&nbsp;04 · The scheduler pipeline</div>
+        <h2>The scheduler pipeline</h2>
+<p><code>FLScheduler</code> (<a href="../../../hermes/scheduler/fl_scheduler.py"><code>fl_scheduler.py</code></a>) is an
+I/O-free object that composes six pure stage functions. This is the best-factored code
+in the repository and should be treated as the model for the rest of it.</p>
+<div class="codewrap"><span class="lang">text</span><pre class="code"><code>                        ┌──────────── slow phase (at dock) ────────────┐
+                        │  ingest_slice(MissionSlice, ClusterAmendment) │
+                        │    → creates/refreshes DeviceSchedulerState   │
+                        │    → fold_cluster_amendment (deadline, pos,   │
+                        │       delivery_priority)                      │
+                        └───────────────────────────────────────────────┘
+                                            │
+                        ┌──────────── fast phase (in field) ───────────┐
+                        │  ingest_round_close_delta(RoundCloseDelta)    │
+                        │    → fold_round_close_delta: on-time shrinks  │
+                        │      the window −5 s, missed widens it +10 s  │
+                        │  ingest_beacon(BeaconObservation)             │
+                        └───────────────────────────────────────────────┘
+                                            │
+  build_contact_queue(rf_range_m)           ▼
+   ├─ S1  filter_eligible          has_active_deadline ∨ beacon_heard(window)
+   ├─ S3  classify_bucket          NEW | SCHEDULED_THIS_ROUND | BEACON_ACTIVE
+   │      compute_deadline         Time + Deadline_Fulfilment − Idle_Time
+   │                               (floor MIN_DEADLINE_FULFILMENT_S = 5 s)
+   ├─ S3a cluster_by_rf_range      greedy: anchor = max(delivery_priority,
+   │                               then earliest deadline); members within
+   │                               rf_range_m; stop = centroid if it covers
+   │                               everyone, else the anchor&#x27;s position.
+   │                               Contact inherits the worst bucket and the
+   │                               tightest deadline of its members.
+   └─ S3.5 rank_contacts           DDQN argmax over per-contact features,
+                                   ONLY when a bucket has ≥2 candidates;
+                                   otherwise distance-sorted fallback.
+        → List[ContactWaypoint] in BUCKET_PRIORITY order (NEW first)
+
+  build_pass_2_queue(rf_range_m)
+   └─ entire slice (S1 bypassed — every device needs θ&#x27;), S3a clustered,
+      ordered by order_pass_2_greedy nearest-first from the current pose.
+      Selector deliberately bypassed (SelectorScopeViolation if called).</code></pre></div>
+<p><strong>S2A/S2B</strong> do not appear in the queue builder — they are <em>on-contact</em> gates, applied
+by <code>HFLHostMission</code> when an <code>FLReadyAdv</code> arrives (<code>is_on_contact_ready</code>,
+<code>passes_fl_threshold</code>), and re-checked there rather than trusted from the scheduler's
+cached view. That "never trust remote state blind" discipline is deliberate and
+correct.</p>
+<h3 id="notable-invariants-the-code-enforces">Notable invariants the code enforces</h3>
+<div class="tablewrap"><table class="wide">
+<thead>
+<tr>
+<th>Invariant</th>
+<th>Where</th>
+<th>Enforcement</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Selector runs in Pass 1 only</td>
+<td><code>target_selector_rl.py:_enforce_collect_pass</code></td>
+<td>raises <code>SelectorScopeViolation</code></td>
+</tr>
+<tr>
+<td>Selector only ranks upstream-admitted candidates</td>
+<td><code>scope_guard.assert_candidates_admitted</code></td>
+<td>raises on leak (design principle 12)</td>
+</tr>
+<tr>
+<td>Pass-2 ordering must not mutate scheduler state</td>
+<td><code>fl_scheduler.py:469-503</code></td>
+<td>builds a shadow state map (fix "M3")</td>
+</tr>
+<tr>
+<td>Untracked <code>RoundCloseDelta</code> is a bug, not a miss</td>
+<td><code>fl_scheduler.py:183</code></td>
+<td>raises <code>FLSchedulerError</code></td>
+</tr>
+<tr>
+<td>Aggregation weights are <code>num_examples</code></td>
+<td><code>partial_fedavg</code>, <code>cross_mule_fedavg</code></td>
+<td>float64 accumulate, cast back</td>
+</tr>
+</tbody>
+</table></div>
+<hr />
+      </section>
+      <section id="5-mission-state-machine">
+        <div class="sec-eyebrow">§&nbsp;05 · Mission state machine</div>
+        <h2>Mission state machine</h2>
+<p><code>HFLHostMission</code> holds two overlapping state machines in one object, distinguished by
+<code>_current_pass</code>:</p>
+<div class="codewrap wide"><span class="lang">text</span><pre class="code"><code>open_round(θ)          →  COLLECT   _current_theta, _accepted=[], _report, _contacts
+  run_contact(devs, synth)          broadcast → gather advs → N threads → verify → accept
+  …
+close_round()          →            partial_fedavg(_accepted) → (aggregate, report, contacts)
+                                    clears _current_theta/_report/_contacts, keeps _mission_round
+
+open_pass_2(θ&#x27;)        →  DELIVER   _current_theta=θ&#x27;, _delivery_report
+  deliver_contact(devs, synth&#x27;)     broadcast → gather advs → N threads → push → ack
+  …
+close_pass_2()         →            MissionDeliveryReport</code></pre></div>
+<p>Two structural observations:</p>
+<ol>
+<li><strong><code>run_contact</code> and <code>deliver_contact</code> are 90 % the same function.</strong> 187 and 140
+   lines respectively, identical broadcast → misrouted-stash drain → gather → thread
+   fan-out → per-device worker skeleton, differing only in the per-device body and the
+   outcome enum. Cyclomatic complexity 35 and 32. This is the largest duplicate-logic
+   site in <code>hermes/</code>.</li>
+<li><strong>The "misrouted advertisement stash"</strong> (<code>_misrouted_advs</code>) is a workaround for the
+   fact that <code>recv_ready_adv</code> is a single shared queue with no addressing: a reply from
+   a device outside the current contact set has to be caught and re-held for the next
+   contact. The comment at <code>host_mission.py:118-125</code> documents that the previous
+   re-queue approach crashed on TCP because the mule-side server does not implement the
+   device→mule direction. The stash works, but it is a symptom of the queue design, not
+   a fix for it. See the refactoring plan's <code>R-H03</code>.</li>
+</ol>
+<hr />
+      </section>
+      <section id="6-transport-layer">
+        <div class="sec-eyebrow">§&nbsp;06 · Transport layer</div>
+        <h2>Transport layer</h2>
+<p>Two sibling TCP transports with the same shape, one of which is correct.</p>
+<div class="tablewrap"><table class="wide">
+<thead>
+<tr>
+<th></th>
+<th><code>TCPDockLink</code> (mule ↔ cluster)</th>
+<th><code>TCPRFLink</code> (mule ↔ device)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Registration frame</td>
+<td><code>_MuleRegistrationMessage</code></td>
+<td><code>_DeviceRegistrationMessage</code></td>
+</tr>
+<tr>
+<td>Reader socket timeout</td>
+<td><code>conn.settimeout(None)</code> — blocks forever</td>
+<td><code>conn.settimeout(send_timeout_s)</code> — <strong>30 s</strong></td>
+</tr>
+<tr>
+<td>Send timeout</td>
+<td><code>SO_SNDTIMEO</code> socket option</td>
+<td>none (inherits the read timeout)</td>
+</tr>
+<tr>
+<td>Idle tolerance</td>
+<td>unlimited</td>
+<td><strong>30 s server-side / 60 s client-side</strong></td>
+</tr>
+<tr>
+<td>Rationale in comments</td>
+<td>"mules can sit idle between missions"</td>
+<td>—</td>
+</tr>
+</tbody>
+</table></div>
+<p><code>tcp_dock_link.py:283-299</code> gets this exactly right and explains why. <code>tcp_rf_link.py:375</code>
+does the opposite: it sets one timeout for both directions, so a device that says
+nothing for 30 seconds trips <code>socket.timeout</code> → <code>OSError</code> → <code>WireError</code> → <code>break</code> →
+<code>_drop_device</code>. On the client side the reader breaks and sets <code>_closed</code>, after which
+<code>ClientMission.serve_once</code> returns <code>None</code> immediately on every call and
+<code>DeviceService.run</code> spins the CPU with no sleep and no reconnect
+(<a href="../../../hermes/processes/device.py#L184"><code>device.py:184-206</code></a>).</p>
+<p>This never fires in the test suite because every integration test completes in under
+30 seconds. It fires on the first real mission with a flight leg longer than half a
+minute. Detailed as finding <strong>P-02</strong>.</p>
+<h3 id="wire-format">Wire format</h3>
+<div class="codewrap"><span class="lang">text</span><pre class="code"><code>offset  size  field
+  0      4    magic  b&#x27;HRMS&#x27;
+  4      1    version (currently 1)
+  5      4    length  (big-endian uint32, ≤ 256 MiB)
+  9      N    pickle.HIGHEST_PROTOCOL payload</code></pre></div>
+<p>Magic catches cross-protocol misconnects, version enables clean rejection of old
+senders, and the length cap refuses pathological allocations before <code>recv</code>. All three
+are correct defensive choices, and <code>recv_message</code> saves/restores the socket timeout so
+it does not leak across calls (fix "S2-H1"). The pickle codec is justified in a comment
+for the co-deployed LAN case; it is <strong>not</strong> justified for <code>HTTPCloudLink</code>, which
+<code>pickle.loads</code> a body fetched from an arbitrary remote URL over plain HTTP with no
+authentication and no signature check (<a href="../../../hermes/transport/cloud_link.py#L168"><code>cloud_link.py:168-171</code></a>).
+Note that dock bundles <em>do</em> carry a SHA-256 <code>bundle_sig</code> (<code>hermes/types/signatures.py</code>)
+— cloud refinements carry nothing equivalent.</p>
+<hr />
+      </section>
+      <section id="7-observability">
+        <div class="sec-eyebrow">§&nbsp;07 · Observability</div>
+        <h2>Observability</h2>
+<p><code>JsonEventEmitter</code> writes one line-buffered JSONL record per event with a versioned
+envelope (<code>ts</code>, <code>schema_version</code>, <code>role</code>, <code>id</code>, <code>event</code>) and re-stamps the reserved keys
+so a caller cannot corrupt them. <code>MetricsRegistry</code> accumulates counters/gauges/timers
+and is dumped as a <code>metrics_snapshot</code> event at shutdown. <code>NullEventEmitter</code> is a proper
+null object, so no call site branches on <code>emitter is not None</code>.</p>
+<p>The documented contract is <em>"Observability must never crash the process it is
+instrumenting"</em>. The implementation does not meet it: <code>json.dumps</code> is called at
+<code>events.py:108</code>, <strong>outside</strong> the <code>try</code> that guards the write. A non-JSON-serializable
+field — a numpy scalar, exactly the case <code>_coerce</code>'s docstring says is handled — raises
+<code>TypeError</code> straight into the instrumented code path. Finding <strong>Q-02</strong>.</p>
+<p>Canonical event sequence for one mission (from <code>test_observability_jsonl.py</code> and the
+README):</p>
+<div class="codewrap wide"><span class="lang">text</span><pre class="code"><code>cluster_ready → mule_ready → device_ready → mule_bootstrapped → dock_bootstrapped
+→ mission_started → device_served×N → up_bundle_ingested → cluster_round_closed
+→ device_served×N → mission_completed → metrics_snapshot → service_stopped</code></pre></div>
+<hr />
+      </section>
+      <section id="8-process-lifecycle-and-orchestration">
+        <div class="sec-eyebrow">§&nbsp;08 · Process lifecycle and orchestration</div>
+        <h2>Process lifecycle and orchestration</h2>
+<p><code>MultiProcessOrchestrator</code> launches <code>python -m hermes.processes.&lt;role&gt; --config &lt;json&gt;
+--run-dir &lt;tmp&gt; [--port-out &lt;file&gt;]</code> per role in dependency order (cluster → mules →
+devices), discovering ephemeral ports through the <code>--port-out</code> files.</p>
+<p>Things it gets right:
+- Background <code>_StderrDrainer</code> per child with a 200-line ring buffer, so a chatty child
+  cannot deadlock on a full pipe and <code>OrchestratorError</code> can quote what the child said.
+- <code>topology.validate()</code> populates <code>device_to_mule</code> once, so later steps read assignment
+  from one source of truth instead of mutating <code>MuleConfig</code> mid-flight.
+- SIGTERM-then-SIGKILL shutdown in reverse startup order, with a documented note that
+  Windows <code>terminate()</code> is really <code>TerminateProcess</code>.</p>
+<p>Things it does not:
+- <code>start_devices</code> ends with a bare <code>time.sleep(0.3)</code> "to let TCP connections settle"
+  (<a href="../../../hermes/processes/orchestrator.py#L336"><code>orchestrator.py:336</code></a>) — a race,
+  not a barrier. The mule already has <code>wait_for_devices</code> built on a <code>Condition</code>; the
+  orchestrator has no equivalent readiness signal from devices.
+- Four <code>except Exception: pass</code> blocks in shutdown paths swallow every failure
+  including programming errors.</p>
+<hr />
+      </section>
+      <section id="9-known-architectural-defects-in-this-subsystem">
+        <div class="sec-eyebrow">§&nbsp;09 · Known architectural defects in this subsystem</div>
+        <h2>Known architectural defects in this subsystem</h2>
+<p>Full evidence in <a href="../../Codebase%20Review/Hermes/HERMES_Findings_and_Refactoring.html"><code>../../Codebase Review/Hermes/HERMES_Findings_and_Refactoring.html</code></a>.</p>
+<div class="tablewrap"><table class="wide">
+<thead>
+<tr>
+<th>ID</th>
+<th>Defect</th>
+<th>Location</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>A-02</strong></td>
+<td><code>hermes.processes</code> imports <code>experiments.exp4.model_task</code> — inverted layering</td>
+<td><code>cluster.py:113,140,461</code>, <code>device.py:89</code></td>
+</tr>
+<tr>
+<td><strong>A-03</strong></td>
+<td><code>DeviceRegistry.save()</code> is a no-op; <code>load()</code> returns an empty registry</td>
+<td><code>device_registry.py:210-219</code></td>
+</tr>
+<tr>
+<td><strong>A-08</strong></td>
+<td><code>rebalance</code> is round-robin over device IDs; ignores position entirely</td>
+<td><code>device_registry.py:159-165</code></td>
+</tr>
+<tr>
+<td><strong>A-09</strong></td>
+<td><code>ClusterService.run</code> handles one UP at a time, then dispatches DOWN to all mules inline</td>
+<td><code>cluster.py:297-375</code></td>
+</tr>
+<tr>
+<td><strong>P-01</strong></td>
+<td>Unbounded thread-per-device fan-out, per-thread joins</td>
+<td><code>host_mission.py:519-527, 696-703</code></td>
+</tr>
+<tr>
+<td><strong>P-02</strong></td>
+<td>RF link 30 s idle read timeout; no keepalive, no reconnect; device hot-spins after drop</td>
+<td><code>tcp_rf_link.py:375,497</code>; <code>device.py:184</code></td>
+</tr>
+<tr>
+<td><strong>P-03</strong></td>
+<td><code>wait_for_dock(timeout=None)</code> is an uncancellable busy-poll</td>
+<td><code>client_cluster.py:215-226</code>, called at <code>mule_main.py:306,425</code></td>
+</tr>
+<tr>
+<td><strong>Q-01</strong></td>
+<td><code>Sequence</code> used in annotations but never imported</td>
+<td><code>host_mission.py:344,568</code></td>
+</tr>
+<tr>
+<td><strong>Q-02</strong></td>
+<td><code>json.dumps</code> outside the guarded region defeats "never crash the caller"</td>
+<td><code>events.py:108</code></td>
+</tr>
+<tr>
+<td><strong>Q-03</strong></td>
+<td><code>self.cluster._cluster_round</code> — private access despite a public property</td>
+<td><code>cluster.py:346,350</code></td>
+</tr>
+<tr>
+<td><strong>D-01</strong></td>
+<td><code>run_contact</code> / <code>deliver_contact</code> ~90 % duplicated</td>
+<td><code>host_mission.py:342-528, 566-705</code></td>
+</tr>
+<tr>
+<td><strong>S-01</strong></td>
+<td><code>pickle.loads</code> of a remote HTTP body, unauthenticated, unsigned</td>
+<td><code>cloud_link.py:171,242</code></td>
+</tr>
+</tbody>
+</table></div>
+<hr />
+      </section>
+      <section id="10-extension-points-that-are-already-the-right-shape">
+        <div class="sec-eyebrow">§&nbsp;10 · Extension points that are already the right shape</div>
+        <h2>Extension points that are already the right shape</h2>
+<p>Any future work should go <strong>through</strong> these rather than around them:</p>
+<div class="codewrap wide"><span class="lang">python</span><pre class="code"><code><span class="c1"># hermes/cluster/host_cluster.py:49</span>
+<span class="k">class</span> <span class="nc">GeneratorHost</span><span class="p">(</span><span class="n">Protocol</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">make_synth_batch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">n</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]:</span> <span class="o">...</span>
+    <span class="k">def</span> <span class="nf">get_global_disc_weights</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Weights</span><span class="p">:</span> <span class="o">...</span>
+    <span class="k">def</span> <span class="nf">update_disc_from_cluster_avg</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">weights</span><span class="p">:</span> <span class="n">Weights</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span> <span class="o">...</span>
+    <span class="k">def</span> <span class="nf">apply_tier3_gen_refinement</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">weights</span><span class="p">,</span> <span class="n">refinement_round</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span> <span class="o">...</span>
+
+<span class="c1"># hermes/mission/client_mission.py:71</span>
+<span class="k">class</span> <span class="nc">LocalTrainFn</span><span class="p">(</span><span class="n">Protocol</span><span class="p">):</span>
+    <span class="k">def</span> <span class="fm">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">theta_disc</span><span class="p">:</span> <span class="n">Weights</span><span class="p">,</span>
+                 <span class="n">synth_batch</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">LocalTrainResult</span><span class="p">:</span> <span class="o">...</span></code></pre></div>
+<p>Today the only production implementations are <code>StubGeneratorHost</code> (emits zero tensors
+as "synthetic samples") and a Gaussian-noise <code>_stub_train_factory</code>. Implementing these
+two Protocols against the real Keras AC-GAN and DNN-IDS models — in a new
+<code>hermes_adapters/</code> package that depends on both sides — joins the two stacks <strong>without
+touching a single line of <code>hermes/</code></strong>. That is the highest-leverage change available in
+this repository and it is already designed for; it just was never built.</p>
+      </section>
+
+      <div class="foot">
+        <p class="mono">Generated from HERMES_Architecture.md. File:line references are to
+        the repository as read on 2026-08-10 (main @ 35e2eeb); verify against current
+        source before acting. This document is a review artefact — no project code was
+        modified to produce it.</p>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script>
+  // TOC active-state only. No animation; reduced-motion respected via CSS.
+  // getElementById, not querySelector: several ids begin with a digit, which
+  // is legal HTML but an invalid CSS selector.
+  (function(){
+    var links = Array.prototype.slice.call(document.querySelectorAll('nav.toc a'));
+    var secs  = links.map(function(a){
+      return document.getElementById(a.getAttribute('href').slice(1));
+    });
+    if(!('IntersectionObserver' in window)) return;
+    var io = new IntersectionObserver(function(entries){
+      entries.forEach(function(e){
+        if(e.isIntersecting){
+          var i = secs.indexOf(e.target);
+          links.forEach(function(l){ l.style.background=''; l.style.color=''; });
+          if(i>-1){ var l=links[i]; l.style.background='var(--surface-2)'; l.style.color='var(--ink)'; }
+        }
+      });
+    },{rootMargin:'-10% 0px -80% 0px'});
+    secs.forEach(function(s){ if(s) io.observe(s); });
+  })();
+</script>
+
+</body>
+</html>

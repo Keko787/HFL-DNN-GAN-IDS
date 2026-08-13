@@ -1,0 +1,1572 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HiFINS — System Architecture, As Built</title>
+<meta name="description" content="What the code is, not what the design docs say it should be. Two independent systems in one repository, joined by a bridge that does not carry traffic — and everything that follows from that.">
+<style>
+  :root{
+    --bg:#f4f6f8; --surface:#ffffff; --surface-2:#eef1f4;
+    --ink:#141a20; --ink-2:#47525d; --ink-3:#6c7883;
+    --line:#dbe1e7; --line-2:#c8d0d8;
+    --accent:#0c7d8a; --accent-2:#0a5f6a; --accent-soft:#e0f0f2;
+    --ok:#2f8f56; --ok-bg:#e5f3ea; --ok-line:#a9d8bd;
+    --warn:#a8720c; --warn-bg:#f7efdb; --warn-line:#e3c483;
+    --gap:#bf3b4e; --gap-bg:#fbe5e8; --gap-line:#eeaeb7;
+    --font-display:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    --font-body:ui-serif,"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,Cambria,serif;
+    --font-mono:ui-monospace,"Cascadia Code","SF Mono","Segoe UI Mono",Menlo,Consolas,monospace;
+    --maxw:1200px; --prose:800px;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --bg:#0d1116; --surface:#141a21; --surface-2:#1a222b;
+      --ink:#e7ecf1; --ink-2:#a3afba; --ink-3:#74818d;
+      --line:#26303a; --line-2:#333f4b;
+      --accent:#2fc0d0; --accent-2:#5bd4e0; --accent-soft:#10333a;
+      --ok:#4cc47e; --ok-bg:#12301f; --ok-line:#245a3a;
+      --warn:#e0a63a; --warn-bg:#31260f; --warn-line:#5c4820;
+      --gap:#e56b7d; --gap-bg:#331a1f; --gap-line:#5e3038;
+    }
+  }
+  :root[data-theme="light"]{
+    --bg:#f4f6f8; --surface:#ffffff; --surface-2:#eef1f4;
+    --ink:#141a20; --ink-2:#47525d; --ink-3:#6c7883;
+    --line:#dbe1e7; --line-2:#c8d0d8;
+    --accent:#0c7d8a; --accent-2:#0a5f6a; --accent-soft:#e0f0f2;
+    --ok:#2f8f56; --ok-bg:#e5f3ea; --ok-line:#a9d8bd;
+    --warn:#a8720c; --warn-bg:#f7efdb; --warn-line:#e3c483;
+    --gap:#bf3b4e; --gap-bg:#fbe5e8; --gap-line:#eeaeb7;
+  }
+  :root[data-theme="dark"]{
+    --bg:#0d1116; --surface:#141a21; --surface-2:#1a222b;
+    --ink:#e7ecf1; --ink-2:#a3afba; --ink-3:#74818d;
+    --line:#26303a; --line-2:#333f4b;
+    --accent:#2fc0d0; --accent-2:#5bd4e0; --accent-soft:#10333a;
+    --ok:#4cc47e; --ok-bg:#12301f; --ok-line:#245a3a;
+    --warn:#e0a63a; --warn-bg:#31260f; --warn-line:#5c4820;
+    --gap:#e56b7d; --gap-bg:#331a1f; --gap-line:#5e3038;
+  }
+
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:var(--font-body); font-size:17px; line-height:1.62;
+    -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+  }
+  .shell{max-width:var(--maxw); margin:0 auto; padding:0 clamp(18px,4vw,40px)}
+
+  /* ---------- Masthead ---------- */
+  header.mast{padding:clamp(40px,7vw,84px) 0 34px; border-bottom:1px solid var(--line)}
+  .eyebrow{
+    font-family:var(--font-mono); font-size:12px; letter-spacing:.14em;
+    text-transform:uppercase; color:var(--accent); font-weight:600;
+    display:flex; gap:10px; flex-wrap:wrap; align-items:center;
+  }
+  .eyebrow .sep{color:var(--ink-3)}
+  h1.title{
+    font-family:var(--font-display); font-weight:760;
+    font-size:clamp(30px,5.4vw,52px); line-height:1.04; letter-spacing:-.022em;
+    margin:.42em 0 .28em; max-width:16ch; text-wrap:balance;
+  }
+  .deck{
+    font-size:clamp(17px,2.1vw,21px); color:var(--ink-2); max-width:60ch;
+    line-height:1.5; margin:0;
+  }
+  .deck b{color:var(--ink); font-weight:600}
+  .metabar{
+    margin-top:26px; display:flex; flex-wrap:wrap; gap:8px 20px;
+    font-family:var(--font-mono); font-size:12.5px; color:var(--ink-3);
+  }
+  .metabar b{color:var(--ink-2); font-weight:600}
+
+  /* ---------- Layout with TOC rail ---------- */
+  .body-grid{display:block}
+  @media(min-width:1040px){
+    .body-grid{display:grid; grid-template-columns:216px minmax(0,1fr); gap:48px; align-items:start}
+    nav.toc{position:sticky; top:24px; align-self:start}
+  }
+  nav.toc{padding:30px 0 0}
+  nav.toc .toc-h{
+    font-family:var(--font-mono); font-size:11px; letter-spacing:.14em;
+    text-transform:uppercase; color:var(--ink-3); margin:0 0 12px; font-weight:600;
+  }
+  nav.toc ol{list-style:none; margin:0; padding:0; counter-reset:toc}
+  nav.toc li{counter-increment:toc; margin:2px 0}
+  nav.toc a{
+    display:block; text-decoration:none; color:var(--ink-2);
+    font-family:var(--font-display); font-size:14px; line-height:1.35;
+    padding:6px 10px 6px 30px; border-radius:7px; position:relative;
+  }
+  nav.toc a::before{
+    content:counter(toc,decimal-leading-zero); position:absolute; left:8px;
+    font-family:var(--font-mono); font-size:11px; color:var(--accent);
+    top:8px; font-weight:600;
+  }
+  nav.toc a:hover{background:var(--surface-2); color:var(--ink)}
+  @media(max-width:1039px){ nav.toc{display:none} }
+
+  main{padding-top:8px; min-width:0}
+
+  /* ---------- Sections & prose ---------- */
+  section{padding:38px 0; border-bottom:1px solid var(--line); scroll-margin-top:20px}
+  section:last-of-type{border-bottom:0}
+  .sec-eyebrow{
+    font-family:var(--font-mono); font-size:12px; letter-spacing:.13em;
+    text-transform:uppercase; color:var(--accent); font-weight:600; margin-bottom:8px;
+  }
+  h2{
+    font-family:var(--font-display); font-weight:720; letter-spacing:-.016em;
+    font-size:clamp(22px,3.2vw,30px); line-height:1.14; margin:0 0 .55em;
+    max-width:24ch; text-wrap:balance;
+  }
+  h3{
+    font-family:var(--font-display); font-weight:660; letter-spacing:-.008em;
+    font-size:19px; line-height:1.25; margin:1.9em 0 .5em; color:var(--ink);
+  }
+  h4{
+    font-family:var(--font-mono); font-weight:600; font-size:13px; letter-spacing:.04em;
+    text-transform:uppercase; color:var(--ink-2); margin:1.5em 0 .5em;
+  }
+  p{max-width:var(--prose); margin:0 0 1.05em}
+  main ul,main ol{max-width:var(--prose); margin:0 0 1.1em; padding-left:1.25em}
+  main li{margin:.34em 0}
+  strong{font-weight:600; color:var(--ink)}
+  a.ref{color:var(--accent-2); text-decoration:none; border-bottom:1px solid transparent}
+  :root[data-theme="dark"] a.ref{color:var(--accent)}
+  @media(prefers-color-scheme:dark){a.ref{color:var(--accent)}}
+  a.ref:hover{border-bottom-color:currentColor}
+
+  code,.mono{font-family:var(--font-mono); font-size:.86em}
+  p code,li code,td code{
+    background:var(--surface-2); padding:.08em .38em; border-radius:5px;
+    font-size:.82em; color:var(--ink); border:1px solid var(--line);
+    white-space:nowrap;
+  }
+  .path{color:var(--ink-3); font-family:var(--font-mono); font-size:.8em; white-space:nowrap}
+
+  /* ---------- Callouts ---------- */
+  .callout{
+    border:1px solid var(--line); border-left-width:3px; border-radius:10px;
+    background:var(--surface); padding:18px 20px; margin:1.4em 0; max-width:var(--prose);
+  }
+  .callout .k{
+    font-family:var(--font-mono); font-size:11px; letter-spacing:.12em; text-transform:uppercase;
+    font-weight:600; margin-bottom:7px; display:block;
+  }
+  .callout p{margin:.2em 0}
+  .callout.accent{border-left-color:var(--accent); background:var(--accent-soft)}
+  .callout.accent .k{color:var(--accent-2)}
+  :root[data-theme="dark"] .callout.accent .k{color:var(--accent-2)}
+  @media(prefers-color-scheme:dark){.callout.accent .k{color:var(--accent-2)}}
+  .callout.warn{border-left-color:var(--warn); background:var(--warn-bg)}
+  .callout.warn .k{color:var(--warn)}
+  .callout.gap{border-left-color:var(--gap); background:var(--gap-bg)}
+  .callout.gap .k{color:var(--gap)}
+  .callout.accent{background:var(--accent-soft)}
+
+  /* ---------- Formula ---------- */
+  .formula{
+    font-family:var(--font-mono); font-size:14px; line-height:1.55;
+    background:var(--surface-2); border:1px solid var(--line);
+    border-radius:9px; padding:13px 16px; margin:1em 0; max-width:var(--prose);
+    overflow-x:auto; color:var(--ink);
+  }
+  .formula .lbl{color:var(--ink-3)}
+
+  /* ---------- Tables ---------- */
+  .tablewrap{overflow-x:auto; margin:1.2em 0 1.5em; border:1px solid var(--line);
+    border-radius:11px; background:var(--surface)}
+  table{border-collapse:collapse; width:100%; font-size:14px; min-width:640px}
+  table.wide{min-width:820px}
+  thead th{
+    font-family:var(--font-mono); font-weight:600; font-size:11.5px; letter-spacing:.03em;
+    text-transform:uppercase; text-align:left; color:var(--ink-2);
+    background:var(--surface-2); padding:11px 14px; border-bottom:1px solid var(--line-2);
+    position:sticky; top:0; vertical-align:bottom;
+  }
+  tbody td{padding:11px 14px; border-bottom:1px solid var(--line); vertical-align:top;
+    line-height:1.42; color:var(--ink-2)}
+  tbody tr:last-child td{border-bottom:0}
+  tbody td:first-child{color:var(--ink); font-weight:500}
+  tbody td .path,tbody td code{white-space:normal}
+  td .mname{font-family:var(--font-mono); font-size:12.5px; color:var(--ink); font-weight:600; display:block}
+  tbody tr:hover td{background:color-mix(in srgb,var(--accent-soft) 34%, transparent)}
+  .num{font-variant-numeric:tabular-nums}
+
+  /* ---------- Pills / badges ---------- */
+  .pill{
+    display:inline-flex; align-items:center; gap:5px; font-family:var(--font-mono);
+    font-size:11px; font-weight:600; letter-spacing:.02em; padding:2px 8px 2px 6px;
+    border-radius:20px; border:1px solid var(--line-2); white-space:nowrap; line-height:1.5;
+  }
+  .pill .dot{width:7px; height:7px; border-radius:50%; background:currentColor; flex:0 0 auto}
+  .pill.ok{color:var(--ok); background:var(--ok-bg); border-color:var(--ok-line)}
+  .pill.warn{color:var(--warn); background:var(--warn-bg); border-color:var(--warn-line)}
+  .pill.gap{color:var(--gap); background:var(--gap-bg); border-color:var(--gap-line)}
+  .pill.plain{color:var(--ink-3); background:var(--surface-2)}
+
+  .legend{display:flex; flex-wrap:wrap; gap:8px 14px; margin:.3em 0 1.1em; font-size:13px; align-items:center}
+  .legend .lg{display:inline-flex; align-items:center; gap:6px; color:var(--ink-2); font-family:var(--font-mono); font-size:11.5px}
+
+  /* ---------- Verdict cards ---------- */
+  .verdicts{display:grid; gap:14px; margin:1.3em 0; max-width:var(--prose)}
+  .vcard{border:1px solid var(--line); border-radius:12px; background:var(--surface); overflow:hidden}
+  .vcard .vhead{display:flex; align-items:flex-start; gap:12px; padding:15px 18px 12px; border-bottom:1px solid var(--line)}
+  .vbadge{font-family:var(--font-mono); font-size:11px; font-weight:700; letter-spacing:.05em;
+    padding:4px 9px; border-radius:6px; flex:0 0 auto; margin-top:1px}
+  .vbadge.confirmed{color:#fff; background:var(--gap)}
+  .vbadge.partial{color:var(--ink); background:var(--warn)}
+  :root[data-theme="dark"] .vbadge.partial{color:#20160a}
+  @media(prefers-color-scheme:dark){.vbadge.partial{color:#20160a}}
+  .vcard .vclaim{font-family:var(--font-display); font-weight:600; font-size:15.5px; line-height:1.34; color:var(--ink); margin:0}
+  .vcard .vbody{padding:13px 18px 16px; font-size:14px; color:var(--ink-2)}
+  .vcard .vbody p{margin:.1em 0 .7em; max-width:none}
+  .vcard .vbody .imp{margin-top:.4em; padding-top:.7em; border-top:1px dashed var(--line-2)}
+  .vcard .vbody .imp .k{font-family:var(--font-mono); font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--accent); font-weight:600; display:block; margin-bottom:3px}
+  :root[data-theme="dark"] .vcard .vbody .imp .k{color:var(--accent-2)}
+  @media(prefers-color-scheme:dark){.vcard .vbody .imp .k{color:var(--accent-2)}}
+
+  /* ---------- Stage cards ---------- */
+  .stages{display:grid; gap:16px; margin:1.4em 0; max-width:var(--prose)}
+  .stage{border:1px solid var(--line); border-radius:12px; background:var(--surface); padding:0; overflow:hidden}
+  .stage .shead{display:flex; align-items:baseline; gap:12px; padding:16px 20px 12px; background:var(--surface-2); border-bottom:1px solid var(--line)}
+  .stage .snum{font-family:var(--font-mono); font-weight:700; font-size:13px; color:var(--accent); letter-spacing:.02em; flex:0 0 auto}
+  :root[data-theme="dark"] .stage .snum{color:var(--accent-2)}
+  @media(prefers-color-scheme:dark){.stage .snum{color:var(--accent-2)}}
+  .stage .stitle{font-family:var(--font-display); font-weight:660; font-size:16.5px; color:var(--ink); line-height:1.25; margin:0}
+  .stage .schip{margin-left:auto; flex:0 0 auto}
+  .stage .sbody{padding:15px 20px 18px; font-size:14.5px}
+  .stage .sbody ul{max-width:none; margin:.2em 0 .3em}
+  .stage .grid2{display:grid; gap:4px 22px; grid-template-columns:1fr}
+  @media(min-width:620px){.stage .grid2{grid-template-columns:1fr 1fr}}
+  .stage .fld{margin:.6em 0}
+  .stage .fld .k{font-family:var(--font-mono); font-size:10.5px; letter-spacing:.09em; text-transform:uppercase; color:var(--ink-3); font-weight:600; display:block; margin-bottom:3px}
+  .stage .fld p{margin:0; font-size:13.5px; color:var(--ink-2); max-width:none}
+  .stage .dod{margin-top:.7em; padding-top:.8em; border-top:1px dashed var(--line-2)}
+
+  /* ---------- Misc ---------- */
+  .lead{font-size:19px; line-height:1.5; color:var(--ink); max-width:var(--prose)}
+  .lead b{color:var(--ink)}
+  hr.soft{border:0; border-top:1px solid var(--line); margin:1.6em 0; max-width:var(--prose)}
+  .foot{padding:34px 0 70px; color:var(--ink-3); font-size:13px; max-width:var(--prose)}
+  .foot p{max-width:none; margin:.5em 0; font-size:13px; color:var(--ink-3)}
+  .foot .mono{font-size:12px}
+  .kexcerpt{font-family:var(--font-mono); font-size:12.5px; color:var(--ink-2); background:var(--surface-2);
+    border:1px solid var(--line); border-radius:8px; padding:10px 13px; margin:.7em 0; max-width:var(--prose); line-height:1.5}
+  sup.fn{font-family:var(--font-mono); font-size:.62em; color:var(--accent); font-weight:600}
+  :focus-visible{outline:2px solid var(--accent); outline-offset:2px; border-radius:3px}
+  @media(prefers-reduced-motion:no-preference){html{scroll-behavior:smooth}}
+
+  /* ---------- Additions for the generated review docs ---------- */
+  main h2 { max-width: 32ch }
+  main table { min-width: 560px }
+  .tablewrap table thead th { position: static }
+
+  /* finding / item sub-headings */
+  main h3{
+    scroll-margin-top:18px; display:flex; align-items:baseline;
+    gap:9px; flex-wrap:wrap;
+  }
+  main h3 .fid{
+    font-family:var(--font-mono); font-size:12.5px; font-weight:700;
+    color:var(--accent); letter-spacing:.02em; flex:0 0 auto;
+  }
+  :root[data-theme="dark"] main h3 .fid{ color:var(--accent-2) }
+  @media(prefers-color-scheme:dark){ main h3 .fid{ color:var(--accent-2) } }
+  p.pillrow{ display:flex; gap:8px; flex-wrap:wrap; margin:-.35em 0 1.1em }
+  .anchor-alias{ display:block; height:0; scroll-margin-top:18px }
+
+  /* code blocks */
+  .codewrap{ position:relative; margin:1.15em 0 1.4em; max-width:var(--prose) }
+  .codewrap.wide{ max-width:none }
+  pre.code{
+    font-family:var(--font-mono); font-size:12.5px; line-height:1.55;
+    background:var(--surface-2); border:1px solid var(--line); border-radius:10px;
+    padding:15px 17px; margin:0; overflow-x:auto; color:var(--ink);
+    white-space:pre; tab-size:2;
+  }
+  pre.code code{ font-size:inherit; background:none; border:0; padding:0;
+                 white-space:pre; color:inherit }
+  .codewrap .lang{
+    position:absolute; top:0; right:12px; transform:translateY(-50%);
+    font-family:var(--font-mono); font-size:10px; letter-spacing:.1em;
+    text-transform:uppercase; font-weight:600; color:var(--ink-3);
+    background:var(--bg); border:1px solid var(--line); border-radius:20px;
+    padding:2px 9px;
+  }
+
+  /* Pygments tokens, mapped onto the house palette so both themes work */
+  pre.code .c,  pre.code .c1, pre.code .cm, pre.code .cs,
+  pre.code .ch, pre.code .cpf{ color:var(--ink-3); font-style:italic }
+  pre.code .sd{ color:var(--ink-3) }
+  pre.code .k,  pre.code .kn, pre.code .kc, pre.code .kd,
+  pre.code .kp, pre.code .kr, pre.code .kt, pre.code .ow{ color:var(--accent) }
+  :root[data-theme="dark"] pre.code .k,
+  :root[data-theme="dark"] pre.code .kn,
+  :root[data-theme="dark"] pre.code .kc,
+  :root[data-theme="dark"] pre.code .kd,
+  :root[data-theme="dark"] pre.code .ow{ color:var(--accent-2) }
+  @media(prefers-color-scheme:dark){
+    pre.code .k, pre.code .kn, pre.code .kc,
+    pre.code .kd, pre.code .ow{ color:var(--accent-2) }
+  }
+  pre.code .s,  pre.code .s1, pre.code .s2, pre.code .sa,
+  pre.code .sb, pre.code .se, pre.code .si, pre.code .sr,
+  pre.code .ss, pre.code .sx{ color:var(--ok) }
+  pre.code .m,  pre.code .mi, pre.code .mf, pre.code .mh,
+  pre.code .mo, pre.code .il{ color:var(--ok) }
+  pre.code .nf, pre.code .fm{ color:var(--ink); font-weight:600 }
+  pre.code .nc, pre.code .ne{ color:var(--warn); font-weight:600 }
+  pre.code .nd{ color:var(--warn) }
+  pre.code .nb, pre.code .bp{ color:var(--ink-2) }
+  pre.code .nn, pre.code .nv, pre.code .no, pre.code .na{ color:var(--ink) }
+  pre.code .o,  pre.code .p{ color:var(--ink-2) }
+  pre.code .gd{ color:var(--gap) }
+  pre.code .gi{ color:var(--ok) }
+  pre.code .gh, pre.code .gu{ color:var(--ink-3); font-weight:600 }
+  pre.code .err{ color:inherit; border:0 }
+
+  /* blockquote -> callout */
+  blockquote{
+    margin:1.3em 0; padding:15px 18px; max-width:var(--prose);
+    border:1px solid var(--line); border-left:3px solid var(--ink-3);
+    border-radius:10px; background:var(--surface); color:var(--ink-2);
+    font-size:15px;
+  }
+  blockquote p{ margin:.25em 0 }
+  blockquote.warn{ border-left-color:var(--warn); background:var(--warn-bg) }
+
+  /* figures / diagrams */
+  figure.dgfig{ margin:1.6em 0 1.9em; max-width:none }
+  .dgscroll{ overflow-x:auto; border:1px solid var(--line); border-radius:12px;
+             background:var(--surface); padding:18px 16px }
+  svg.dg{ max-width:100%; height:auto; display:block; margin:0 auto }
+  svg.dg text{ font-family:var(--font-mono); fill:var(--ink); font-size:12px }
+  svg.dg .t-sm{ font-size:11px; fill:var(--ink-2) }
+  svg.dg .t-lbl{ font-size:10.5px; fill:var(--ink-3) }
+  svg.dg .t-bad{ font-size:10.5px; fill:var(--gap); font-weight:600 }
+  svg.dg .t-hd{ font-size:10.5px; font-weight:700; fill:var(--accent);
+                letter-spacing:.09em }
+  svg.dg .t-x{ font-size:15px; fill:var(--gap); font-weight:700 }
+  svg.dg .bx{ fill:var(--surface); stroke:var(--line-2); stroke-width:1.2 }
+  svg.dg .badbx{ fill:var(--gap-bg); stroke:var(--gap-line); stroke-width:1.3 }
+  svg.dg .warnbx{ fill:var(--warn-bg); stroke:var(--warn-line); stroke-width:1.3 }
+  svg.dg .hl{ fill:var(--ok-bg); stroke:var(--ok); stroke-width:1.6 }
+  svg.dg .dead{ fill:var(--surface-2); stroke:var(--ink-3); stroke-width:1.2;
+                stroke-dasharray:5 4; opacity:.8 }
+  svg.dg .band{ fill:var(--surface-2); stroke:var(--line); stroke-width:1 }
+  svg.dg .ok-band{ fill:var(--ok-bg); stroke:var(--ok-line) }
+  svg.dg .bad-band{ fill:var(--gap-bg); stroke:var(--gap-line) }
+  svg.dg .loopbx{ fill:none; stroke:var(--line-2); stroke-width:1;
+                  stroke-dasharray:4 3 }
+  svg.dg .life{ stroke:var(--line-2); stroke-width:1; stroke-dasharray:4 4 }
+  svg.dg .ln{ stroke:var(--ink-2); stroke-width:1.4; fill:none }
+  svg.dg .ln-bad{ stroke:var(--gap); stroke-width:1.6; stroke-dasharray:6 4; fill:none }
+  svg.dg .ln-dead{ stroke:var(--ink-3); stroke-width:1.4; stroke-dasharray:5 4; fill:none }
+  svg.dg .ln-soft{ stroke:var(--ink-3); stroke-width:1.2; stroke-dasharray:3 3; fill:none }
+  svg.dg .mk{ fill:var(--ink-2); stroke:none }
+  svg.dg .mk-bad{ fill:var(--gap); stroke:none }
+  svg.dg .mk-dead{ fill:var(--ink-3); stroke:none }
+  svg.dg .mk-soft{ fill:var(--ink-3); stroke:none }
+  figure.dgfig figcaption{
+    font-size:13.5px; color:var(--ink-2); line-height:1.5; margin-top:11px;
+    max-width:var(--prose); padding-left:2px;
+  }
+  figure.dgfig figcaption b{ color:var(--ink) }
+
+  /* severity pills in the findings tables */
+  .g{ font-family:var(--font-mono); font-size:10.5px; font-weight:700;
+      padding:1px 7px; border-radius:20px; border:1px solid; white-space:nowrap }
+  .g.p0{ color:var(--gap); background:var(--gap-bg); border-color:var(--gap-line) }
+  .g.p1{ color:var(--warn); background:var(--warn-bg); border-color:var(--warn-line) }
+  .g.p2{ color:var(--ink-3); background:var(--surface-2); border-color:var(--line-2) }
+
+  /* nested TOC */
+  nav.toc ol ol{ list-style:none; counter-reset:none; margin:2px 0 6px;
+                 padding-left:14px }
+  nav.toc ol ol li{ counter-increment:none }
+  nav.toc ol ol a{ padding:3px 8px 3px 10px; font-size:11.5px;
+                   color:var(--ink-3); border-left:1px solid var(--line) }
+  nav.toc ol ol a::before{ content:none }
+  nav.toc ol ol a:hover{ color:var(--ink-2) }
+
+  @media print{
+    nav.toc{ display:none }
+    section{ break-inside:avoid-page }
+    .dgscroll{ overflow:visible }
+    pre.code{ white-space:pre-wrap; word-break:break-word }
+    body{ background:#fff; font-size:11pt }
+  }
+
+</style>
+
+</head>
+<body>
+<div class="shell">
+  <header class="mast">
+    <div class="eyebrow">
+      <span>Architecture review · 2026-08-10 · main @ 35e2eeb</span><span class="sep">/</span>
+      <span>Whole repository</span><span class="sep">/</span>
+      <span>Review only — no code changed</span>
+    </div>
+    <h1 class="title">HiFINS — System Architecture, As&nbsp;Built</h1>
+    <p class="deck">What the code <b>is</b>, not what the design docs say it should be. Two independent systems in one repository, joined by a bridge that does not carry traffic — and everything that follows from that.</p>
+    <div class="metabar">
+      <span><strong>Status:</strong> Review only. No project code has been modified.</span>
+      <span><strong>Date:</strong> 2026-08-10</span>
+      <span><strong>Scope:</strong> Whole repository at <code>main</code> @ <code>35e2eeb</code></span>
+      <span><strong>Author:</strong> Architecture review pass (reverse-engineered from source, not from design docs)</span>
+      <span><strong>Grounded in:</strong> *HERMES: A Layered Coordination Framework for Federated Learning with</span>
+      <span>Drones as Data Mules* (ACM/IEEE SEC 2026 submission)</span>
+      <span>the DeveloperDocs design set ·</span>
+      <span>the code as read</span>
+      <span><strong>Companions:</strong> <a href="#2-problem-statement">Problem statement §2</a> ·</span>
+      <span><a href="#3-solution-statement">Solution statement §3</a> ·</span>
+      <span><a href="#4-problem--solution-traceability">Traceability §4</a> ·</span>
+      <span><a href="../Comparative%20Analysis/CEDA_vs_HERMES.html">CEDA comparison</a> ·</span>
+      <span><a href="../Codebase%20Review/00_Critical_Problem_Areas.html">findings register</a></span>
+    </div>
+  </header>
+
+  <div class="body-grid">
+    <nav class="toc" aria-label="Contents">
+      <p class="toc-h">Contents</p>
+      <ol>
+        <li><a href="#0-how-this-review-was-produced">How this review was produced</a></li>
+        <li><a href="#1-executive-summary">Executive summary</a></li>
+        <li><a href="#2-problem-statement">Problem statement</a><ol><li><a href="#21-what-cannot-be-assumed">2.1 What cannot be assumed</a></li><li><a href="#22-communication-layer-problems">2.2 Communication-layer problems</a></li><li><a href="#23-scheduling-layer-problems">2.3 Scheduling-layer problems</a></li><li><a href="#24-learning-layer-problems">2.4 Learning-layer problems</a></li><li><a href="#25-the-cross-layer-problem">2.5 The cross-layer problem</a></li></ol></li>
+        <li><a href="#3-solution-statement">Solution statement</a><ol><li><a href="#31-design-commitments">3.1 Design commitments</a></li><li><a href="#32-layer-1--rf-adaptive-communication">3.2 Layer 1 — RF-adaptive communication</a></li><li><a href="#33-layer-2--mobility-aware-federated-scheduling">3.3 Layer 2 — Mobility-aware federated scheduling</a></li><li><a href="#34-layer-3--hierarchical-federated-intelligence">3.4 Layer 3 — Hierarchical federated intelligence</a></li><li><a href="#35-cross-layer-interfaces">3.5 Cross-layer interfaces</a></li><li><a href="#36-measurement-as-part-of-the-solution">3.6 Measurement as part of the solution</a></li><li><a href="#37-what-the-solution-deliberately-does-not-do">3.7 What the solution deliberately does not do</a></li></ol></li>
+        <li><a href="#4-problem--solution-traceability">Problem → solution traceability</a><ol><li><a href="#41-mapping">4.1 Mapping</a></li><li><a href="#42-reverse-coverage--is-every-problem-answered">4.2 Reverse coverage — is every problem answered?</a></li><li><a href="#43-paper--implementation-correspondence">4.3 Paper ↔ implementation correspondence</a></li><li><a href="#44-where-this-sits-relative-to-ceda">4.4 Where this sits relative to CEDA</a></li></ol></li>
+        <li><a href="#5-repository-map">Repository map</a></li>
+        <li><a href="#6-layer-model-and-dependency-direction">Layer model and dependency direction</a></li>
+        <li><a href="#7-complete-data-flow">Complete data flow</a><ol><li><a href="#71-hermes-mission-flow-the-real-path">7.1 HERMES mission flow (the real path)</a></li><li><a href="#72-hifins-legacy-training-flow">7.2 HIFINS legacy training flow</a></li><li><a href="#73-experiment-harness-flow">7.3 Experiment harness flow</a></li></ol></li>
+        <li><a href="#8-runtime-and-process-model">Runtime and process model</a></li>
+        <li><a href="#9-contracts-and-extension-points">Contracts and extension points</a></li>
+        <li><a href="#10-what-is-architecturally-sound">What is architecturally sound</a></li>
+        <li><a href="#11-architectural-fault-lines">Architectural fault lines</a></li>
+        <li><a href="#12-scale-ceiling--where-this-breaks">Scale ceiling — where this breaks</a></li>
+        <li><a href="#13-recommended-target-architecture-summary">Recommended target architecture (summary)</a></li>
+        <li><a href="#14-approval-gate">Approval gate</a></li>
+      </ol>
+    </nav>
+
+    <main>
+      <section id="0-how-this-review-was-produced">
+        <div class="sec-eyebrow">§&nbsp;00 · How this review was produced</div>
+        <h2>How this review was produced</h2>
+<p>This document describes the system <strong>as the code actually is</strong>, not as the design
+documents say it should be. Where the two disagree, the disagreement is called out
+explicitly — those gaps are findings in their own right.</p>
+<p>Method:</p>
+<ol>
+<li>Read every entry point, every transport, every scheduler stage, and the full
+   mission/cluster/device lifecycle in <code>hermes/</code>.</li>
+<li>Read the legacy training and inference binaries in <code>App/</code>, the loader chain in
+   <code>Config/SessionConfig/</code>, and a representative sample of <code>Config/ModelTrainingConfig/</code>.</li>
+<li>Read the experiment harness (<code>experiments/runner</code>, <code>exp1</code>, <code>exp3</code>, <code>exp4</code>).</li>
+<li>Ran a static AST audit across all 357 first-party Python files measuring function
+   length, cyclomatic complexity, parameter counts, exception-handling shape,
+   thread/sleep call sites, and cross-object private access.</li>
+<li>Ran an unresolved-name pass (names referenced but never bound in a module).</li>
+<li>Ran the unit suite locally: <strong>512 passed, 8 failed, 1 skipped</strong>.</li>
+<li>Diffed suspected duplicate modules byte-for-byte.</li>
+</ol>
+<p>Companion documents:</p>
+<ul>
+<li><a href="Hermes/HERMES_Architecture.html"><code>Hermes/HERMES_Architecture.html</code></a> — deep dive on the distributed subsystem</li>
+<li><a href="HIFins/HIFINS_Architecture.html"><code>HIFins/HIFINS_Architecture.html</code></a> — deep dive on the ML/training stack</li>
+<li><a href="../Codebase%20Review/00_Critical_Problem_Areas.html"><code>../Codebase Review/00_Critical_Problem_Areas.html</code></a> — severity-ranked findings</li>
+<li><a href="../Codebase%20Review/01_Refactoring_Strategy.html"><code>../Codebase Review/01_Refactoring_Strategy.html</code></a> — phased plan</li>
+</ul>
+<hr />
+      </section>
+      <section id="1-executive-summary">
+        <div class="sec-eyebrow">§&nbsp;01 · Executive summary</div>
+        <h2>Executive summary</h2>
+<p>HiFINS is <strong>two independent systems in one repository</strong>, joined by a bridge that does
+not carry traffic.</p>
+<div class="tablewrap"><table class="wide">
+<thead>
+<tr>
+<th></th>
+<th><strong>HIFINS stack</strong> (2024–2025)</th>
+<th><strong>HERMES stack</strong> (2025–2026)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Purpose</td>
+<td>Centralized / Flower-federated AC-GAN + DNN-IDS training and inference</td>
+<td>Mule-assisted hierarchical FL scheduling, transport, and orchestration</td>
+</tr>
+<tr>
+<td>Entry points</td>
+<td><code>App/TrainingApp/*</code>, <code>App/InferenceApp/*</code></td>
+<td><code>python -m hermes.processes.{cluster,mule,device}</code></td>
+</tr>
+<tr>
+<td>Style</td>
+<td>Procedural, TensorFlow-coupled, config-as-code</td>
+<td>Layered, framework-free, protocol-driven, dependency-injected</td>
+</tr>
+<tr>
+<td>Size</td>
+<td>~30.9 K LOC (<code>App</code> + <code>Config</code> + <code>Analysis</code>)</td>
+<td>~14.1 K LOC (<code>hermes/</code>)</td>
+</tr>
+<tr>
+<td>Test coverage</td>
+<td>Effectively none</td>
+<td>~14.3 K LOC of tests, 512 passing</td>
+</tr>
+<tr>
+<td>Quality</td>
+<td>Low — heavy duplication, dead knobs, 40+ parameter functions</td>
+<td>High — the strongest code in the repository</td>
+</tr>
+</tbody>
+</table></div>
+<p>The declared bridge between them is <code>--mode hermes</code> on both legacy binaries. <strong>It is a
+stub.</strong> On the client it raises <code>RuntimeError</code> the moment training is attempted
+(<a href="../../App/TrainingApp/Client/TrainingClient.py#L192"><code>TrainingClient.py:192-197</code></a>); on
+the host it constructs a cluster object, prints a banner, and returns without serving
+(<a href="../../App/TrainingApp/HFLHost/HFLHost.py#L176"><code>HFLHost.py:176-189</code></a>). The README
+presents this as "the HERMES path". It is not.</p>
+<p>The <strong>real</strong> integration point is much narrower and points the wrong way:
+<code>hermes/processes/cluster.py</code> and <code>hermes/processes/device.py</code> import
+<code>experiments.exp4.model_task</code> to load real weights and run real training
+(<a href="../../hermes/processes/cluster.py#L113"><code>cluster.py:113</code></a>,
+<a href="../../hermes/processes/device.py#L89"><code>device.py:89</code></a>). The core library depends on the
+experiment harness — an inverted layer dependency, acknowledged in a code comment but
+not resolved.</p>
+<p><strong>Bottom line:</strong> the HERMES subsystem is production-shaped and well-tested. The HIFINS
+stack it was supposed to replace is still the only thing that can actually train a
+model, and it is the least maintainable code in the repository. The seam between them
+is fictional. Everything else in this review follows from that.</p>
+<hr />
+      </section>
+      <section id="2-problem-statement">
+        <div class="sec-eyebrow">§&nbsp;02 · Problem statement</div>
+        <h2>Problem statement</h2>
+<p>The system exists to make federated learning work <strong>where the network does not</strong>. This
+section itemizes the problem so that every mechanism in §3 can be traced back to a
+specific pressure it relieves; §4 is that trace.</p>
+<p>Sources: the SEC 2026 paper (<em>HERMES: A Layered Coordination Framework for Federated
+Learning with Drones as Data Mules</em>), the design documents, and the code as read at
+<code>main</code> @ <code>35e2eeb</code>. Where the paper and the code disagree, §4.3 records the divergence.</p>
+<h3 id="21-what-cannot-be-assumed">2.1 What cannot be assumed</h3>
+<p>The deployment premise is a <strong>DDIL</strong> environment — disconnected, disrupted, intermittent,
+low-bandwidth — of the kind found in disaster response, tactical edge, and remote
+infrastructure monitoring. Four assumptions that conventional FL depends on are all
+withdrawn at once:</p>
+<div class="tablewrap"><table class="wide">
+<thead>
+<tr>
+<th>Conventional FL assumes</th>
+<th>DDIL reality</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>A path exists from every client to the aggregator</td>
+<td>The federation graph is <em>fragmented</em>; some devices have no backhaul at all</td>
+</tr>
+<tr>
+<td>Rounds are synchronized and bounded</td>
+<td>Round time is governed by physical vehicle travel, not by network RTT</td>
+</tr>
+<tr>
+<td>Clients are reachable when the server calls them</td>
+<td>Contact is opportunistic, brief, and discovered on arrival</td>
+</tr>
+<tr>
+<td>Bandwidth is stable enough to size a round</td>
+<td>Effective SNR varies with mobility, terrain blockage, and interference</td>
+</tr>
+</tbody>
+</table></div>
+<p>The consequence is that the aggregator cannot <em>pull</em>. Something must physically carry
+model state across the disconnection — which is the premise the rest of the design
+follows from.</p>
+<h3 id="22-communication-layer-problems">2.2 Communication-layer problems</h3>
+<p><strong>P-1 — There is no end-to-end path.</strong> FedAvg relies on synchronized rounds and is
+vulnerable to timeouts and stalled convergence when clients drop out. Hierarchical and
+semi-decentralized FL relax this only partially: they still assume the federation graph
+stays connected and that intermediate aggregators are reachable. Under persistent
+fragmentation no link-relaying scheme closes the round at all.</p>
+<p><strong>P-2 — Moving raw data over the shaped link is infeasible.</strong> Centralized training
+requires transporting datasets. Under a bandwidth cap with jitter and loss, bulk transfer
+is exposed to repeated retransmission and congestion-window collapse, while a
+model-update exchange is not. The paper measures this directly: under the jittery link,
+centralized wall-time inflates <strong>9.9×</strong> against FL's <strong>3.1×</strong> (Observation 1) — the same
+impairment produces fundamentally different system behaviour depending on what is being
+moved.</p>
+<p><strong>P-3 — A fixed radio channel is either wasteful or trapped.</strong> UAV mobility, terrain
+blockage and channel fluctuation cause large variation in effective SNR. A static
+assignment made at deployment time cannot know the SNR landscape ahead of time, so it
+either underutilizes available capacity or remains stuck in a poor link for the mission.
+The cost of guessing wrong is severe and asymmetric: the worst fixed channel delivers
+<strong>−60.2 %</strong> against the expected-fixed baseline, and no deployer can know in advance which
+channel that is (Table II).</p>
+<h3 id="23-scheduling-layer-problems">2.3 Scheduling-layer problems</h3>
+<p><strong>P-4 — Mission budget is finite and contested.</strong> Flight time, propulsion energy, and
+contact opportunities are bounded. Visiting every device every round is not an option, so
+<em>who to visit</em> is a resource-allocation decision, not a traversal-optimization one. The
+metric that matters is energy <strong>per completed update</strong> (J/Δθ), not energy per mission —
+a mission that finishes early by collecting nothing is not efficient.</p>
+<p><strong>P-5 — Device readiness is unobservable before contact.</strong> A device may be busy,
+powered down, out of range, or simply have nothing worth federating. The scheduler must
+commit to a destination using stale state and then re-verify on arrival, because remote
+state is never trustworthy at planning time.</p>
+<p><strong>P-6 — Deadline pressure is heterogeneous and non-stationary.</strong> Devices differ in
+participation history and in how long they have been idle, and both change <em>within</em> a
+mission as contacts succeed or fail. A single global deadline misallocates in both
+directions: too slack and the mission wastes budget, too tight and reachable devices are
+abandoned.</p>
+<p><strong>P-7 — Greedy deadline-first scheduling burns budget on infeasible work.</strong> Earliest-
+deadline-first is optimal for feasible deadline-constrained scheduling, but it commits to
+an early-deadline job even when the current mission state makes completion unlikely.
+Under a constrained budget this is actively harmful: the paper's overloaded scenario has
+EDF completing 2.00 jobs and failing 3.00, against HERMES completing 3.00 and failing
+2.00 — a 50 % improvement obtained <em>by abandoning lost causes early</em>, not by attempting
+more transmissions (Observation 2).</p>
+<p><strong>P-8 — Sequential servicing wastes the radio's reach.</strong> If the scheduler treats each
+device as an isolated destination, it makes one stop per device even when several sit
+inside a single RF radius. The opportunity is real and grows with range: at small <code>r_rf</code>
+most contacts contain one device, but as <code>r_rf</code> increases multiple devices become
+serviceable per stop.</p>
+<h3 id="24-learning-layer-problems">2.4 Learning-layer problems</h3>
+<p><strong>P-9 — Asynchronous aggregation drifts.</strong> If the updates collected in one round were
+trained against <em>different</em> global models, the average is not a well-defined federated
+step. A mule that collects opportunistically will, by default, gather exactly such a
+mixture.</p>
+<p><strong>P-10 — Stalling on absent participants defeats the purpose.</strong> Waiting for a delayed
+mule reintroduces the synchronization dependency the architecture exists to remove. But
+simply dropping absentees loses their contribution permanently.</p>
+<p><strong>P-11 — Priority ordering starves the tail.</strong> Any strictly ordered scheduler will
+systematically under-serve the devices at the bottom of the order. Under a constrained
+budget this is not hypothetical: the question is whether service is <em>distributed</em> across
+the device population or concentrated on a feasible subset, and that must be measured
+rather than assumed.</p>
+<h3 id="25-the-cross-layer-problem">2.5 The cross-layer problem</h3>
+<p><strong>P-12 — The three layers are coupled and cannot be solved in isolation.</strong> Each imposes
+binding constraints on the others:</p>
+<ul>
+<li>The shortest path to a high-value device may cross a low-signal zone, so a routing
+  decision made without radio state silently loses the update it flew for.</li>
+<li>Conserving propulsion energy by skipping distant devices changes which updates are
+  available to aggregate, so an energy decision is also a learning decision.</li>
+<li>Serving the highest-priority devices first depletes the budget before the remainder are
+  reached, so a priority decision is also a coverage decision.</li>
+</ul>
+<p>This is the thesis the architecture is organized around, and it is shared with the
+lab's CEDA work on multi-drone medical delivery — see
+<a href="../Comparative%20Analysis/CEDA_vs_HERMES.html"><code>../Comparative Analysis/CEDA_vs_HERMES.html</code></a>,
+which reaches the same conclusion from a different domain and makes the <em>opposite</em> choice
+about how to act on it.</p>
+<hr />
+      </section>
+      <section id="3-solution-statement">
+        <div class="sec-eyebrow">§&nbsp;03 · Solution statement</div>
+        <h2>Solution statement</h2>
+<p>HERMES — <strong>H</strong>ierarchical <strong>E</strong>dge <strong>R</strong>F-adaptive <strong>M</strong>obility-aware <strong>E</strong>nabled
+<strong>S</strong>ynthesis — answers §2 with three layers and four design commitments. This section
+states each mechanism concretely enough to be checked against the code.</p>
+<h3 id="31-design-commitments">3.1 Design commitments</h3>
+<p>These constrain every mechanism below, and they are the reason the architecture looks the
+way it does.</p>
+<p><strong>C-1 — Move models, not data.</strong> The only thing that crosses a link is a model update or
+a global model, never a dataset. This is what makes the bandwidth budget survivable.</p>
+<p><strong>C-2 — Carry state physically; never assume a path.</strong> The mule <em>is</em> the transport. A
+disconnection is a scheduling input, not a failure.</p>
+<p><strong>C-3 — Learn narrowly; decide deterministically.</strong> Deterministic gates decide who is
+eligible; a learned policy only breaks ties among candidates the gates already admitted.
+This bounds inference cost, keeps decisions explainable, and is enforced structurally
+rather than by convention.</p>
+<p><strong>C-4 — Decouple the layers behind interfaces.</strong> Each layer publishes a small, typed
+signal to the next rather than sharing state. Mobility, radio, and FL scheduling are
+independently replaceable.</p>
+<h3 id="32-layer-1--rf-adaptive-communication">3.2 Layer 1 — RF-adaptive communication</h3>
+<p><strong>S-1 — Cost-aware adaptive channel selection.</strong> A utility-driven controller scores each
+candidate channel and switches only when the expected benefit exceeds the cost of
+switching:</p>
+<div class="codewrap"><span class="lang">text</span><pre class="code"><code>U(c, t) = R(γ₁(t) + g(c)) − κ(c) − λ(c, t)</code></pre></div>
+<p>where <code>R(·)</code> maps to a rate tier, <code>γ₁(t)</code> is the baseline SNR observation, <code>g(c)</code> the
+channel-dependent effective-SNR gain, <code>κ(c)</code> a channel-use cost, and <code>λ(c, t)</code> a switching
+cost. The channel-use term discourages unconditional selection of the highest-gain
+channel; the switching term prevents oscillation under short-term SNR fluctuation.
+Implementation: <a href="../../hermes/l1/channel_utility.py"><code>hermes/l1/channel_utility.py</code></a>,
+<a href="../../hermes/l1/rf_prior.py"><code>hermes/l1/rf_prior.py</code></a>.</p>
+<p><strong>S-2 — RF priors published upward, not consumed laterally.</strong> Layer 1's role in the
+architecture is to <em>expose</em> link quality to the scheduler, not to own routing. The
+selector receives <code>rf_prior_snr_db</code> as one feature among eleven. This is what lets the
+radio policy be replaced — heuristic today, learned later — without touching Layer 2.</p>
+<h3 id="33-layer-2--mobility-aware-federated-scheduling">3.3 Layer 2 — Mobility-aware federated scheduling</h3>
+<p><strong>S-3 — Four-stage deterministic gate.</strong> Candidates pass through
+S1 eligibility → S2A on-contact readiness → S2B FL-readiness flag → S3 deadline and
+bucket ranking. Each stage is a pure function over explicit state
+(<a href="../../hermes/scheduler/stages/"><code>hermes/scheduler/stages/</code></a>), and <code>FLScheduler</code> itself
+is I/O-free with an injected clock
+(<a href="../../hermes/scheduler/fl_scheduler.py"><code>fl_scheduler.py</code></a>).</p>
+<p><strong>S-4 — Per-device adaptive deadline.</strong></p>
+<div class="codewrap"><span class="lang">text</span><pre class="code"><code>Deadline(j) = t_base + Φ(j) − ι(j)</code></pre></div>
+<p><code>Φ(j)</code> is the device's historical participation reliability, <code>ι(j)</code> its idle duration.
+A device that participates reliably earns slack; one that has been idle a long time is
+pulled forward. Floored at <code>MIN_DEADLINE_FULFILMENT_S</code> so the formula cannot drive the
+window to zero (<a href="../../hermes/scheduler/stages/s3_deadline.py"><code>s3_deadline.py</code></a>).</p>
+<p><strong>S-5 — Two-phase deadline adaptation.</strong> The <em>fast</em> phase folds a <code>RoundCloseDelta</code> in
+flight the moment a contact resolves — a clean outcome shrinks the window by 5 s, a miss
+widens it by 10 s. The <em>slow</em> phase folds cluster amendments at dock. The system stays
+globally consistent while responding to in-mission reality.</p>
+<p><strong>S-6 — RF-range contact clustering (S3a).</strong> Devices within <code>r_rf</code> of an anchor are
+grouped into one <code>ContactWaypoint</code>, served by a single stop with one broadcast
+solicitation and parallel per-device exchange. The stop position is the cluster centroid
+when it covers every member, else the anchor's own position — geometrically guaranteed
+coverage, no hidden cleverness
+(<a href="../../hermes/scheduler/stages/s3a_cluster.py"><code>s3a_cluster.py</code></a>). The efficiency of this
+is measured directly as <code>ρ_contact</code>, devices served per contact event.</p>
+<p><strong>S-7 — Bounded RL tie-break (S3.5).</strong> Within the highest-priority non-empty bucket, and
+<strong>only when that bucket holds two or more candidates</strong>, a DDQN ranks the contacts. Its
+reward is</p>
+<div class="codewrap"><span class="lang">text</span><pre class="code"><code>r_contact = Σ_{i ∈ contact} b_completed(i) − τ_contact − w_e · ε_contact</code></pre></div>
+<p>— aggregation reward, minus contact duration, minus weighted energy. The action space is
+restricted to one bucket, which is what keeps inference overhead bounded rather than
+combinatorial (<a href="../../hermes/scheduler/selector/target_selector_rl.py"><code>target_selector_rl.py</code></a>,
+gate at <a href="../../hermes/scheduler/fl_scheduler.py#L412"><code>fl_scheduler.py:412-416</code></a>).</p>
+<p><strong>S-8 — Scope guard.</strong> If a candidate the gates did not admit ever reaches the selector,
+<code>assert_candidates_admitted</code> raises <code>SelectorScopeViolation</code>
+(<a href="../../hermes/scheduler/selector/scope_guard.py"><code>scope_guard.py</code></a>). Commitment C-3 is
+enforced by the type system and a runtime check, not by discipline. The selector is
+likewise barred from Pass 2 entirely.</p>
+<p><strong>S-9 — Feasibility-aware selection.</strong> The selector's features include remaining mission
+budget and estimated transit cost, so it can decline a contact it cannot complete and
+preserve budget for achievable ones — the mechanism behind Observation 2.</p>
+<h3 id="34-layer-3--hierarchical-federated-intelligence">3.4 Layer 3 — Hierarchical federated intelligence</h3>
+<p><strong>S-10 — Offline local training, exchange-only contact.</strong> Devices train between visits
+against the last delivered global model and stage a prepared <code>Δθ</code>. A contact is reduced
+to push-receive synchronization, so contact time is spent on transfer, not computation
+(<a href="../../hermes/mission/client_mission.py"><code>client_mission.py</code></a>, <code>train_offline</code>).</p>
+<p><strong>S-11 — Two-pass mission: COLLECT then DELIVER.</strong> Pass 1 collects <code>Δθ</code> from in-range
+devices; the mule docks and the cluster aggregates; Pass 2 redistributes the refreshed
+global model to every slice member. Every update collected in Pass 1 was trained against
+the model delivered by the <em>previous</em> mission's Pass 2, so cross-mule averaging is exact
+by construction. This is the structural answer to drift, and it costs a deliberate
+increase in propulsion overhead
+(<a href="../../hermes/mule/mule_main.py#L325"><code>mule_main.py:325</code></a>).</p>
+<p><strong>S-12 — Two-scope aggregation.</strong> Mission-scope partial FedAvg merges in-range updates
+during flight (<a href="../../hermes/mission/partial_fedavg.py"><code>partial_fedavg.py</code></a>); cluster-scope
+cross-mule FedAvg merges mission aggregates at dock
+(<a href="../../hermes/cluster/cross_mule_fedavg.py"><code>cross_mule_fedavg.py</code></a>). Both are pure
+functions that validate shapes and rounds up front and accumulate in float64. Cross-mule
+aggregation happens once per docking cycle, which is what bounds synchronization overhead.</p>
+<p><strong>S-13 — Never stall; reconcile later.</strong> <code>min_participation</code> defaults to 1, so the
+cluster closes a round as soon as any mule reports rather than waiting for the slowest.
+Unfinished contributions are reconciled in a future round through the <code>ClusterAmendment</code>
+mechanism instead of being dropped.</p>
+<p><strong>S-14 — Authoritative registry with disjoint slicing.</strong> The edge server owns the
+<code>DeviceRegistry</code> and issues each mule a disjoint <code>MissionSlice</code> per dock, so two mules
+cannot both claim a device in one round
+(<a href="../../hermes/cluster/device_registry.py"><code>device_registry.py</code></a>).</p>
+<h3 id="35-cross-layer-interfaces">3.5 Cross-layer interfaces</h3>
+<p>Three typed signals, and nothing else, cross a layer boundary:</p>
+<div class="tablewrap"><table class="wide">
+<thead>
+<tr>
+<th>Signal</th>
+<th>Direction</th>
+<th>Carries</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Target waypoint</td>
+<td>L2 → L1</td>
+<td>where the mule is going, so the radio can pre-adapt</td>
+</tr>
+<tr>
+<td><code>RoundCloseDelta</code></td>
+<td>L3 → L2</td>
+<td>per-contact outcome, driving fast-phase deadline adaptation</td>
+</tr>
+<tr>
+<td>Dock bundle (<code>UpBundle</code> / <code>DownBundle</code>)</td>
+<td>mule → edge server</td>
+<td>mission aggregate up, refreshed global model + slice + amendments down</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="36-measurement-as-part-of-the-solution">3.6 Measurement as part of the solution</h3>
+<p>Fairness and coverage are not enforced by a constraint — they are <strong>measured</strong>, and the
+measurement is part of the design:</p>
+<ul>
+<li><strong>Jain's fairness index</strong> <code>J = (Σx)² / (N · Σx²)</code> over per-device service counts.</li>
+<li><strong>Participation entropy</strong> — Shannon entropy of the service-share distribution.</li>
+<li><strong><code>completion_fairness</code></strong> — Jain over per-device <em>completion</em> counts. This is the
+  contestable one: visit-based Jain is trivially 1.0 for the centralized arm's universal
+  sampling, whereas completion-based fairness exposes contribution inequality.</li>
+<li><strong><code>ρ_contact</code></strong>, <strong>Pass-2 delivery coverage</strong>, <strong>update yield</strong>, <strong>round close rate</strong> at
+  four quorum thresholds.</li>
+</ul>
+<p>All in <a href="../../experiments/exp3/metrics.py"><code>experiments/exp3/metrics.py</code></a>.</p>
+<h3 id="37-what-the-solution-deliberately-does-not-do">3.7 What the solution deliberately does not do</h3>
+<p>Stated so the omissions read as decisions rather than gaps:</p>
+<ul>
+<li><strong>No inter-mule coordination in flight.</strong> Disjoint slicing removes the need for it.</li>
+<li><strong>No multi-hop relay.</strong> The mule is the only transport; relay chains are future work.</li>
+<li><strong>No learned routing.</strong> Navigation between known positions is mechanical; the RL budget
+  is spent on selection, not trajectory.</li>
+<li><strong>No fairness <em>enforcement</em>.</strong> Only measurement — see the gap noted in §4.2.</li>
+</ul>
+<hr />
+      </section>
+      <section id="4-problem--solution-traceability">
+        <div class="sec-eyebrow">§&nbsp;04 · Problem → solution traceability</div>
+        <h2>Problem → solution traceability</h2>
+<h3 id="41-mapping">4.1 Mapping</h3>
+<p>Each row is one solution-method detail, the problem item it addresses, the mechanism that
+does the work, where it lives, and the evidence that it works.</p>
+<div class="tablewrap"><table class="wide">
+<thead>
+<tr>
+<th>Solution detail</th>
+<th>Addresses</th>
+<th>Mechanism</th>
+<th>Implemented in</th>
+<th>Evidence</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>S-1</strong> Cost-aware channel utility <code>U(c,t)</code></td>
+<td>P-3</td>
+<td>Switch only when expected gain exceeds use + switching cost</td>
+<td><code>l1/channel_utility.py</code></td>
+<td>Table II: <strong>+17.3 %</strong> offload vs expected-fixed, 6 switches</td>
+</tr>
+<tr>
+<td><strong>S-2</strong> RF priors published to L2</td>
+<td>P-3, P-12</td>
+<td><code>rf_prior_snr_db</code> as a selector feature, not a routing input</td>
+<td><code>selector/features.py</code></td>
+<td>Layer-1 policy replaceable without touching L2</td>
+</tr>
+<tr>
+<td><strong>S-3</strong> Four-stage deterministic gate</td>
+<td>P-5, P-6, P-12</td>
+<td>Pure-function stages over explicit state; re-verify on arrival</td>
+<td><code>scheduler/stages/</code></td>
+<td>S2A/S2B re-checked at contact, never trusted from cache</td>
+</tr>
+<tr>
+<td><strong>S-4</strong> Adaptive deadline <code>t_base + Φ(j) − ι(j)</code></td>
+<td>P-6</td>
+<td>Reliability earns slack; idleness pulls forward</td>
+<td><code>stages/s3_deadline.py</code></td>
+<td>Fig. 9: update yield rises with β across all mule arms</td>
+</tr>
+<tr>
+<td><strong>S-5</strong> Two-phase deadline adaptation</td>
+<td>P-6, P-5</td>
+<td>Fast fold in flight (−5 s / +10 s), slow fold at dock</td>
+<td><code>stages/s3_deadline.py</code>, <code>fl_scheduler.py</code></td>
+<td>Keeps global consistency under in-mission change</td>
+</tr>
+<tr>
+<td><strong>S-6</strong> S3a RF-range contact clustering</td>
+<td>P-4, P-8</td>
+<td>One stop serves every device within <code>r_rf</code>; centroid-or-anchor</td>
+<td><code>stages/s3a_cluster.py</code></td>
+<td><code>ρ_contact</code> rises with <code>r_rf</code>; sequential baselines stay ≈1</td>
+</tr>
+<tr>
+<td><strong>S-7</strong> Bounded DDQN tie-break</td>
+<td>P-4, P-7, P-12</td>
+<td>Rank inside top bucket only; reward trades yield vs time vs energy</td>
+<td><code>selector/target_selector_rl.py</code></td>
+<td><strong>A4 lowest propulsion energy</strong>: 2754 J/Δθ clean, 2641 jittery (Table VII)</td>
+</tr>
+<tr>
+<td><strong>S-8</strong> Scope guard + Pass-2 bar</td>
+<td>P-7</td>
+<td><code>SelectorScopeViolation</code> on any un-admitted candidate</td>
+<td><code>selector/scope_guard.py</code></td>
+<td>Commitment C-3 enforced at runtime, not by convention</td>
+</tr>
+<tr>
+<td><strong>S-9</strong> Feasibility-aware selection</td>
+<td>P-7, P-4</td>
+<td>Budget and transit cost in the state; decline the unachievable</td>
+<td><code>selector/features.py</code></td>
+<td>Obs. 2: <strong>3.00 done / 2.00 failed</strong> vs EDF 2.00 / 3.00</td>
+</tr>
+<tr>
+<td><strong>S-10</strong> Offline training, exchange-only contact</td>
+<td>P-4, P-5</td>
+<td><code>train_offline()</code> stages <code>Δθ</code> between visits</td>
+<td><code>mission/client_mission.py</code></td>
+<td>Contact cost is transfer-bound, not compute-bound</td>
+</tr>
+<tr>
+<td><strong>S-11</strong> Two-pass COLLECT → DELIVER</td>
+<td><strong>P-9</strong></td>
+<td>Every collected <code>Δθ</code> trained against the previously delivered θ</td>
+<td><code>mule/mule_main.py:325</code></td>
+<td>Drift structurally impossible, not merely bounded</td>
+</tr>
+<tr>
+<td><strong>S-12</strong> Mission + cluster scope FedAvg</td>
+<td>P-1, P-2</td>
+<td>Partial merge in flight; cross-mule merge once per dock</td>
+<td><code>partial_fedavg.py</code>, <code>cross_mule_fedavg.py</code></td>
+<td>Aggregation overhead bounded per docking cycle</td>
+</tr>
+<tr>
+<td><strong>S-13</strong> <code>min_participation = 1</code>, amendments</td>
+<td><strong>P-10</strong></td>
+<td>Close on first report; reconcile absentees in a later round</td>
+<td><code>cluster/host_cluster.py</code></td>
+<td>No stall on a delayed mule; contribution not lost</td>
+</tr>
+<tr>
+<td><strong>S-14</strong> Registry + disjoint slicing</td>
+<td>P-5, P-12</td>
+<td>One mule owns a device per round; slice reissued each dock</td>
+<td><code>cluster/device_registry.py</code></td>
+<td>Cross-mule double-claim impossible by construction</td>
+</tr>
+<tr>
+<td><strong>C-1</strong> Model updates, never datasets</td>
+<td><strong>P-2</strong></td>
+<td>Only <code>Δθ</code> / θ cross a link</td>
+<td>whole L3</td>
+<td>Obs. 1: FL <strong>3.1×</strong> vs centralized <strong>9.9×</strong> jittery inflation</td>
+</tr>
+<tr>
+<td><strong>C-2</strong> Physical transport by mule</td>
+<td><strong>P-1</strong></td>
+<td>Mule carries state across the disconnection</td>
+<td>whole architecture</td>
+<td>Obs. 3: A1 participation collapses <strong>0.37 → 0.03</strong> under jitter; mule arms degrade gracefully</td>
+</tr>
+<tr>
+<td><strong>S-6+S-7</strong> Contact-aware + learned selection</td>
+<td>P-4</td>
+<td>Spatial clustering plus feasibility ranking</td>
+<td>L2</td>
+<td>Obs. 4: benefit comes from <em>allocating</em> mission time, not only from mobility</td>
+</tr>
+<tr>
+<td><strong>§3.6</strong> Fairness + coverage metrics</td>
+<td>P-11</td>
+<td>Jain, participation entropy, completion fairness</td>
+<td><code>experiments/exp3/metrics.py</code></td>
+<td>Makes starvation observable across 8,640 paired trials</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="42-reverse-coverage--is-every-problem-answered">4.2 Reverse coverage — is every problem answered?</h3>
+<div class="tablewrap"><table class="wide">
+<thead>
+<tr>
+<th>Problem</th>
+<th>Answered by</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>P-1 no end-to-end path</td>
+<td>C-2, S-12</td>
+<td><strong>Solved</strong> — the premise of the architecture</td>
+</tr>
+<tr>
+<td>P-2 raw data infeasible</td>
+<td>C-1</td>
+<td><strong>Solved</strong> — measured, Obs. 1</td>
+</tr>
+<tr>
+<td>P-3 fixed channel</td>
+<td>S-1, S-2</td>
+<td><strong>Partial</strong> — the deployed controller is the deterministic heuristic; the learned channel policy is future work in the paper, and <code>hermes/l1/channel_ddqn.py</code> exists in code but is not the evaluated policy</td>
+</tr>
+<tr>
+<td>P-4 finite budget</td>
+<td>S-6, S-7, S-9, S-10</td>
+<td><strong>Solved</strong> — measured as J/Δθ, Obs. 4</td>
+</tr>
+<tr>
+<td>P-5 unobservable readiness</td>
+<td>S-3, S-10, S-14</td>
+<td><strong>Solved</strong> — re-verify on arrival</td>
+</tr>
+<tr>
+<td>P-6 heterogeneous deadlines</td>
+<td>S-4, S-5</td>
+<td><strong>Solved</strong></td>
+</tr>
+<tr>
+<td>P-7 infeasible-work waste</td>
+<td>S-9, S-7, S-8</td>
+<td><strong>Solved</strong> — measured, Obs. 2</td>
+</tr>
+<tr>
+<td>P-8 sequential servicing</td>
+<td>S-6</td>
+<td><strong>Solved</strong> — measured as <code>ρ_contact</code></td>
+</tr>
+<tr>
+<td>P-9 async drift</td>
+<td>S-11</td>
+<td><strong>Solved structurally</strong> — the strongest claim in the design</td>
+</tr>
+<tr>
+<td>P-10 stalling</td>
+<td>S-13</td>
+<td><strong>Solved</strong></td>
+</tr>
+<tr>
+<td><strong>P-11 starvation</strong></td>
+<td>§3.6 metrics only</td>
+<td><strong>⚠ Measured, not enforced.</strong> No mechanism prevents a persistently low-priority device from never being visited. Bucket priority is strictly ordered with no weight-agnostic floor. See <a href="../Comparative%20Analysis/CEDA_vs_HERMES.html"><code>../Comparative Analysis/CEDA_vs_HERMES.html</code></a> §6 — CEDA's cheapest and most effective fairness device is a <strong>weight-agnostic</strong> miss penalty, which HERMES has no analogue for</td>
+</tr>
+<tr>
+<td>P-12 cross-layer coupling</td>
+<td>S-2, S-3, S-7, §3.5</td>
+<td><strong>Partial</strong> — the interfaces exist and are typed, but no experiment has isolated which layer's <em>information</em> actually carries the result. See §4.3</td>
+</tr>
+</tbody>
+</table></div>
+<p>Two open items, both actionable: the fairness floor (P-11) and a cross-layer information
+ablation (P-12).</p>
+<h3 id="43-paper--implementation-correspondence">4.3 Paper ↔ implementation correspondence</h3>
+<p>Reading the paper against the code surfaces three divergences. None invalidates a
+published number; all three matter for the next revision.</p>
+<p><strong>D-1 — Layer 1's policy class.</strong> The paper's §III-A states the learned DDQN/CTDE
+controller "is left as future work" and that the evaluated policy is the deterministic
+utility heuristic; Figure 2's Layer-1 box nonetheless annotates the RF Channel Selector
+with "Training: CTDE on AERPAW digital twin". The repository contains
+<a href="../../hermes/l1/channel_ddqn.py"><code>hermes/l1/channel_ddqn.py</code></a> — a real DDQN — but it is
+not the policy behind Table II. <strong>The figure and the text disagree; the text is correct.</strong>
+Worth reconciling before submission, because a reviewer comparing the two will read the
+figure as an overclaim.</p>
+<p><strong>D-2 — The GAN half is inert in the HERMES path.</strong> The paper's Layer 3 shows an
+Intrusion Detection Model fed by hierarchical aggregation. In the code, the cluster's
+generator is <code>StubGeneratorHost</code>, whose <code>make_synth_batch</code> returns <strong>zero tensors</strong>, and
+the device-side training callback in <code>experiments/exp4/model_task.py:150-152</code> accepts and
+explicitly discards the synth batch. Real DNN-IDS weights <em>are</em> aggregated on the EX-4.1
+path, so the FL results stand — but the <em>GAN</em> contribution to "GAN-based NIDS" has never
+executed inside HERMES. See finding
+<a href="../Codebase%20Review/00_Critical_Problem_Areas.html#a-01">A-01</a>.</p>
+<p><strong>D-3 — Two evaluation substrates, one name.</strong> The scheduling results (Tables VI–VII,
+Figs. 7–10) come from the abstracted mobile-relay simulation in
+<a href="../../experiments/exp3/sim_env.py"><code>experiments/exp3/sim_env.py</code></a>, not from the
+multi-process TCP topology in <a href="../../hermes/processes/"><code>hermes/processes/</code></a>. Both are
+legitimate and the paper says so, but the architecture documents should be read with the
+distinction in mind: §7 describes the process topology; the paper's scheduling numbers
+describe the simulator.</p>
+<h3 id="44-where-this-sits-relative-to-ceda">4.4 Where this sits relative to CEDA</h3>
+<p>The lab's CEDA work reaches the same cross-layer conclusion (P-12) in a different domain
+and answers it the opposite way — one monolithic CTDE DQN that internalizes all three
+layers, against HERMES's deterministic gates plus a narrow tie-break. The full comparison,
+including CEDA's cross-layer <em>information</em> ablation and what it implies for P-12 here, is
+in <a href="../Comparative%20Analysis/CEDA_vs_HERMES.html"><code>../Comparative Analysis/CEDA_vs_HERMES.html</code></a>.</p>
+<hr />
+      </section>
+      <section id="5-repository-map">
+        <div class="sec-eyebrow">§&nbsp;05 · Repository map</div>
+        <h2>Repository map</h2>
+<div class="codewrap wide"><span class="lang">text</span><pre class="code"><code>HiFINS/                              LOC     Files   Role
+├── hermes/                        14,147      69    HERMES distributed system  ← core
+├── Config/                        26,772      65    Model/dataset/training configuration
+│   ├── ModelTrainingConfig/       21,278      45      Per-model training loops (config-as-code)
+│   ├── DatasetConfig/              2,113       9      CICIoT2023 / IoTBotNet loaders + preprocessing
+│   ├── modelStructures/            1,722       4      Keras model definitions (NIDS, GAN, AC-GAN, WGAN)
+│   └── SessionConfig/              1,659       7      argparse + loader dispatch chain
+├── tests/                         14,310      73    Unit (51) + integration (21)
+├── experiments/                   12,053      40    Paper-experiment harness (Exp 1/3/4)
+├── FlightFramework/                5,853      82    Vendored third-party &quot;flight&quot; (FLoX) — UNUSED
+├── hermes_rl/                      2,251       4    Untracked nested git repo — drone RL prototype
+├── Analysis/                       2,185      12    Ad-hoc plotting / feature-selection scripts
+├── App/                            1,938       7    Legacy Flower binaries + inference apps
+├── AppSetup/                         187       2    Testbed bootstrap + Docker + requirements
+├── DeveloperDocs/                    338       3    Design docs + loose analysis scripts
+├── ModelArchive/                       —      —     Trained .h5 checkpoints
+└── results/                            —      —     Experiment trial CSVs</code></pre></div>
+<p><strong>Absent from the root and material to the architecture:</strong> <code>pyproject.toml</code>,
+<code>setup.py</code>, <code>pytest.ini</code>, <code>LICENSE</code>, <code>conftest.py</code>. The README's repository-layout
+section lists <code>pytest.ini</code>; it does not exist. The README declares an MIT license and
+links <code>LICENSE</code>; the file does not exist. There is no installable package metadata of
+any kind, which is why 16 modules carry <code>sys.path.append(os.path.abspath('../../..'))</code>.</p>
+<hr />
+      </section>
+      <section id="6-layer-model-and-dependency-direction">
+        <div class="sec-eyebrow">§&nbsp;06 · Layer model and dependency direction</div>
+        <h2>Layer model and dependency direction</h2>
+<figure class="dgfig"><div class="dgscroll"><svg class="dg" viewBox="0 0 1010 600" role="img" aria-label="Layer diagram. Dependencies flow downward from the experiment layer through process orchestration, the seven HERMES programs, and the transport and types layer. Two edges break the rule: hermes.processes imports the experiments package, and the legacy App stack&#x27;s --mode hermes branch points at the program layer but never executes. FlightFramework sits unconnected with zero importers." xmlns="http://www.w3.org/2000/svg"><defs><marker id="d1-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" class="mk"/></marker><marker id="d1-bad" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" class="mk-bad"/></marker><marker id="d1-dead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" class="mk-dead"/></marker><marker id="d1-soft" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" class="mk-soft"/></marker></defs><rect x="46" y="60" width="518" height="74" rx="10" class="band"/><text x="58" y="77" text-anchor="start" class="t-hd">L4 · EXPERIMENT / ANALYSIS</text><rect x="60" y="86" width="152" height="38" rx="7" class="bx"/><text x="136.0" y="103.0" text-anchor="middle">experiments/</text><text x="136.0" y="115.0" text-anchor="middle" class="t-sm">exp1 · exp3 · exp4</text><rect x="226" y="86" width="152" height="38" rx="7" class="bx"/><text x="302.0" y="103.0" text-anchor="middle">experiments/runner</text><text x="302.0" y="115.0" text-anchor="middle" class="t-sm">grid · csv_log</text><rect x="392" y="86" width="158" height="38" rx="7" class="bx"/><text x="471.0" y="103.0" text-anchor="middle">experiments/analysis</text><text x="471.0" y="115.0" text-anchor="middle" class="t-sm">figures · stats</text><rect x="46" y="166" width="518" height="74" rx="10" class="band"/><text x="58" y="183" text-anchor="start" class="t-hd">L3 · PROCESS / ORCHESTRATION</text><rect x="60" y="192" width="152" height="38" rx="7" class="bx"/><text x="136.0" y="209.0" text-anchor="middle">MultiProcess</text><text x="136.0" y="221.0" text-anchor="middle" class="t-sm">Orchestrator</text><rect x="226" y="192" width="152" height="38" rx="7" class="bx"/><text x="302.0" y="209.0" text-anchor="middle">processes.cluster</text><text x="302.0" y="221.0" text-anchor="middle" class="t-sm">processes.mule</text><rect x="392" y="192" width="158" height="38" rx="7" class="bx"/><text x="471.0" y="215.0" text-anchor="middle">processes.device</text><rect x="46" y="272" width="518" height="96" rx="10" class="band ok-band"/><text x="58" y="289" text-anchor="start" class="t-hd">L2 · PROGRAM LAYER — 7 HERMES PROGRAMS</text><rect x="60" y="298" width="114" height="26" rx="7" class="bx"/><text x="117.0" y="315.0" text-anchor="middle" class="t-sm">HFLHostCluster</text><rect x="184" y="298" width="114" height="26" rx="7" class="bx"/><text x="241.0" y="315.0" text-anchor="middle" class="t-sm">MuleSupervisor</text><rect x="308" y="298" width="114" height="26" rx="7" class="bx"/><text x="365.0" y="315.0" text-anchor="middle" class="t-sm">FLScheduler</text><rect x="432" y="298" width="114" height="26" rx="7" class="bx"/><text x="489.0" y="315.0" text-anchor="middle" class="t-sm">HFLHostMission</text><rect x="60" y="330" width="114" height="26" rx="7" class="bx"/><text x="117.0" y="347.0" text-anchor="middle" class="t-sm">ClientCluster</text><rect x="184" y="330" width="114" height="26" rx="7" class="bx"/><text x="241.0" y="347.0" text-anchor="middle" class="t-sm">ClientMission</text><rect x="308" y="330" width="114" height="26" rx="7" class="bx"/><text x="365.0" y="347.0" text-anchor="middle" class="t-sm">ChannelDDQN</text><rect x="46" y="400" width="518" height="78" rx="10" class="band ok-band"/><text x="58" y="417" text-anchor="start" class="t-hd">L1 · TRANSPORT + TYPES + OBSERVABILITY</text><rect x="60" y="426" width="186" height="40" rx="7" class="bx"/><text x="153.0" y="444.0" text-anchor="middle">hermes.transport</text><text x="153.0" y="456.0" text-anchor="middle" class="t-sm">RFLink / DockLink ABCs</text><rect x="260" y="426" width="146" height="40" rx="7" class="bx"/><text x="333.0" y="444.0" text-anchor="middle">hermes.types</text><text x="333.0" y="456.0" text-anchor="middle" class="t-sm">bundles · messages</text><rect x="420" y="426" width="130" height="40" rx="7" class="bx"/><text x="485.0" y="444.0" text-anchor="middle">hermes.</text><text x="485.0" y="456.0" text-anchor="middle" class="t-sm">observability</text><rect x="660" y="60" width="336" height="418" rx="10" class="band bad-band"/><text x="672" y="77" text-anchor="start" class="t-hd">HIFINS LEGACY STACK</text><rect x="678" y="90" width="300" height="38" rx="7" class="bx"/><text x="828.0" y="113.0" text-anchor="middle" class="t-sm">App/TrainingApp · App/InferenceApp</text><rect x="678" y="162" width="300" height="44" rx="7" class="bx"/><text x="828.0" y="182.0" text-anchor="middle">Config/SessionConfig</text><text x="828.0" y="194.0" text-anchor="middle" class="t-sm">argparse → 41-arg dispatch</text><rect x="678" y="246" width="300" height="46" rx="7" class="bx"/><text x="828.0" y="267.0" text-anchor="middle">Config/ModelTrainingConfig</text><text x="828.0" y="279.0" text-anchor="middle" class="t-sm">47 classes / 45 files · 21.3K LOC</text><rect x="678" y="328" width="142" height="40" rx="7" class="bx"/><text x="749.0" y="346.0" text-anchor="middle">Config/</text><text x="749.0" y="358.0" text-anchor="middle" class="t-sm">DatasetConfig</text><rect x="836" y="328" width="142" height="40" rx="7" class="bx"/><text x="907.0" y="346.0" text-anchor="middle">Config/</text><text x="907.0" y="358.0" text-anchor="middle" class="t-sm">modelStructures</text><rect x="678" y="404" width="300" height="38" rx="7" class="bx"/><text x="828.0" y="427.0" text-anchor="middle" class="t-sm">ModelArchive/ · Analysis/</text><polyline points="828,128 828,158" class="ln" marker-end="url(#d1-a)"/><polyline points="828,206 828,242" class="ln" marker-end="url(#d1-a)"/><polyline points="760,292 760,324" class="ln" marker-end="url(#d1-a)"/><polyline points="910,292 910,324" class="ln" marker-end="url(#d1-a)"/><polyline points="206,134 206,162" class="ln" marker-end="url(#d1-a)"/><polyline points="206,240 206,268" class="ln" marker-end="url(#d1-a)"/><polyline points="206,368 206,396" class="ln" marker-end="url(#d1-a)"/><text x="216" y="388.0" text-anchor="start" class="t-lbl">depends on ABCs only</text><polyline points="54,100 26,100 26,322 54,322" class="ln" marker-end="url(#d1-a)"/><text x="26" y="208.0" text-anchor="middle" class="t-lbl">drives</text><polyline points="594,196 594,112" class="ln-bad" marker-end="url(#d1-bad)"/><text x="610" y="146.0" text-anchor="start" class="t-bad">INVERTED</text><text x="610" y="157.5" text-anchor="start" class="t-bad">IMPORT</text><text x="376" y="152.0" text-anchor="middle" class="t-lbl">hermes.processes imports experiments.exp4 — cluster.py:113</text><polyline points="674,109 636,109 636,520 446,520 446,372" class="ln-dead" marker-end="url(#d1-dead)"/><text x="346" y="512.0" text-anchor="middle" class="t-lbl">--mode hermes · STUB, never executes</text><text x="346" y="536" text-anchor="middle" class="t-x">✕</text><rect x="660" y="508" width="300" height="46" rx="7" class="bx dead"/><text x="810.0" y="528.5" text-anchor="middle">FlightFramework/ — 5,853 LOC</text><text x="810.0" y="541.5" text-anchor="middle" class="t-sm">0 importers · documented as reused</text><line x1="46" y1="578" x2="80" y2="578" class="ln"/><text x="88" y="582" text-anchor="start" class="t-lbl">import / depends on</text><line x1="236" y1="578" x2="270" y2="578" class="ln-bad"/><text x="278" y="582" text-anchor="start" class="t-lbl">inverted dependency</text><line x1="426" y1="578" x2="460" y2="578" class="ln-dead"/><text x="468" y="582" text-anchor="start" class="t-lbl">declared but dead</text></svg></div><figcaption><b>Dependencies flow downward — except twice.</b> The HERMES column (green) is acyclic and leaf-clean. The red edge is <code>hermes.processes</code> importing <code>experiments.exp4</code>; the grey edge is the <code>--mode hermes</code> bridge that never executes. <code>FlightFramework/</code> has no edges at all.</figcaption></figure>
+<p><strong>Dependency rules the code actually obeys:</strong></p>
+<ul>
+<li>✅ <code>hermes.types</code> depends on nothing but stdlib + numpy. Clean leaf.</li>
+<li>✅ <code>hermes.transport</code> depends only on <code>hermes.types</code>. Clean.</li>
+<li>✅ Program layer depends on transport <strong>ABCs</strong>, never concrete TCP classes. This is
+  the single best decision in the codebase — it is why <code>hermes/</code> is testable.</li>
+<li>✅ <code>hermes.observability</code> is a leaf with a null-object default, so the program layer
+  never branches on <code>emitter is not None</code>.</li>
+<li>❌ <code>hermes.processes.{cluster,device}</code> import <code>experiments.exp4.model_task</code>. Layer
+  inversion: the reusable library depends on the throwaway harness.</li>
+<li>❌ <code>App/TrainingApp</code> "depends" on <code>hermes</code> through a dead branch.</li>
+<li>❌ <code>FlightFramework/</code> has zero importers anywhere in the repository, yet the design
+  documents and README describe it as reused for partial FedAvg.</li>
+</ul>
+<hr />
+      </section>
+      <section id="7-complete-data-flow">
+        <div class="sec-eyebrow">§&nbsp;07 · Complete data flow</div>
+        <h2>Complete data flow</h2>
+<h3 id="71-hermes-mission-flow-the-real-path">7.1 HERMES mission flow (the real path)</h3>
+<p>This is the flow exercised by <code>tests/integration/test_e2e_topology.py</code> and by
+Experiment 4. Each numbered step names the concrete call site.</p>
+<figure class="dgfig"><div class="dgscroll"><svg class="dg" viewBox="0 0 976 986" role="img" aria-label="Sequence diagram of one HERMES mission. The orchestrator spawns cluster, mule and device processes and they register over TCP. In Pass 1 the mule broadcasts a collect solicitation per contact, receives readiness adverts, pushes the discriminator weights, and collects gradient submissions which it verifies and aggregates with partial FedAvg. At the inter-pass dock it uploads the aggregate and receives freshly cross-mule-averaged weights. In Pass 2 it delivers those weights to every device in the slice, each acknowledging and immediately starting offline training for the next mission." xmlns="http://www.w3.org/2000/svg"><defs><marker id="d2-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" class="mk"/></marker><marker id="d2-bad" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" class="mk-bad"/></marker><marker id="d2-dead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" class="mk-dead"/></marker><marker id="d2-soft" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" class="mk-soft"/></marker></defs><rect x="20" y="62" width="936" height="172" rx="10" class="band"/><text x="32" y="79" text-anchor="start" class="t-hd">BOOTSTRAP</text><rect x="20" y="246" width="936" height="274" rx="10" class="band ok-band"/><text x="32" y="263" text-anchor="start" class="t-hd">PASS 1 · COLLECT</text><rect x="20" y="532" width="936" height="148" rx="10" class="band"/><text x="32" y="549" text-anchor="start" class="t-hd">INTER-PASS DOCK</text><rect x="20" y="692" width="936" height="250" rx="10" class="band ok-band"/><text x="32" y="709" text-anchor="start" class="t-hd">PASS 2 · DELIVER</text><rect x="30" y="10" width="148" height="34" rx="7" class="bx"/><text x="104" y="25" text-anchor="middle">Orchestrator</text><text x="104" y="37" text-anchor="middle" class="t-lbl">host</text><line x1="104" y1="46" x2="104" y2="964" class="life"/><rect x="256" y="10" width="148" height="34" rx="7" class="bx"/><text x="330" y="25" text-anchor="middle">ClusterService</text><text x="330" y="37" text-anchor="middle" class="t-lbl">Tier 2</text><line x1="330" y1="46" x2="330" y2="964" class="life"/><rect x="526" y="10" width="148" height="34" rx="7" class="bx"/><text x="600" y="25" text-anchor="middle">MuleSupervisor</text><text x="600" y="37" text-anchor="middle" class="t-lbl">Tier 2-mobile</text><line x1="600" y1="46" x2="600" y2="964" class="life"/><rect x="764" y="10" width="148" height="34" rx="7" class="bx"/><text x="838" y="25" text-anchor="middle">DeviceService</text><text x="838" y="37" text-anchor="middle" class="t-lbl">Tier 1</text><line x1="838" y1="46" x2="838" y2="964" class="life"/><polyline points="110,92 324,92" class="ln" marker-end="url(#d2-a)"/><text x="217.0" y="85" text-anchor="middle" class="t-sm">spawn --config --port-out</text><text x="217.0" y="104" text-anchor="middle" class="t-lbl">parent reads back the bound dock port</text><polyline points="110,128 594,128" class="ln" marker-end="url(#d2-a)"/><text x="352.0" y="121" text-anchor="middle" class="t-sm">spawn (dock_port)</text><polyline points="110,154 832,154" class="ln" marker-end="url(#d2-a)"/><text x="471.0" y="147" text-anchor="middle" class="t-sm">spawn (mule rf_port)</text><polyline points="832,186 606,186" class="ln" marker-end="url(#d2-a)"/><text x="719.0" y="179" text-anchor="middle" class="t-sm">TCP connect + registration</text><polyline points="594,210 336,210" class="ln" marker-end="url(#d2-a)"/><text x="465.0" y="203" text-anchor="middle" class="t-sm">TCP connect + registration</text><polyline points="336,230 594,230" class="ln" marker-end="url(#d2-a)"/><text x="465.0" y="223" text-anchor="middle" class="t-sm">DownBundle #0 — slice, θ_disc, synth</text><polyline points="606,268 646,268 646,284 610,284" class="ln-soft" marker-end="url(#d2-soft)"/><text x="654" y="267.0" text-anchor="start" class="t-lbl">BundleDistributor fans out: slice + amendment</text><text x="654" y="278.5" text-anchor="start" class="t-lbl">→ FLScheduler · θ + synth → staged</text><polyline points="606,312 646,312 646,328 610,328" class="ln-soft" marker-end="url(#d2-soft)"/><text x="654" y="311.0" text-anchor="start" class="t-lbl">build_contact_queue(rf_range_m)</text><text x="654" y="322.5" text-anchor="start" class="t-lbl">S1 eligibility → S3 bucket + deadline →</text><text x="654" y="334.0" text-anchor="start" class="t-lbl">S3a cluster → S3.5 DDQN rank</text><rect x="392" y="352" width="540" height="122" rx="8" class="loopbx"/><text x="404" y="366" text-anchor="start" class="t-hd">loop  per contact waypoint</text><polyline points="606,392 832,392" class="ln" marker-end="url(#d2-a)"/><text x="719.0" y="385" text-anchor="middle" class="t-sm">FLOpenSolicit(COLLECT) — broadcast</text><polyline points="832,416 606,416" class="ln" marker-end="url(#d2-a)"/><text x="719.0" y="409" text-anchor="middle" class="t-sm">FLReadyAdv(state, utility)</text><polyline points="606,440 832,440" class="ln" marker-end="url(#d2-a)"/><text x="719.0" y="433" text-anchor="middle" class="t-sm">DiscPush(θ_disc, synth)</text><polyline points="832,464 606,464" class="ln" marker-end="url(#d2-a)"/><text x="719.0" y="457" text-anchor="middle" class="t-sm">GradientSubmission(Δθ, n, checksum)</text><polyline points="606,488 646,488 646,504 610,504" class="ln-soft" marker-end="url(#d2-soft)"/><text x="654" y="487.0" text-anchor="start" class="t-lbl">verify: round · byte_count · checksum · TTL</text><text x="654" y="498.5" text-anchor="start" class="t-lbl">→ RoundCloseDelta onto the scheduler bus</text><polyline points="606,548 646,548 646,564 610,564" class="ln-soft" marker-end="url(#d2-soft)"/><text x="654" y="552.0" text-anchor="start" class="t-lbl">close_round() → partial_fedavg(Σ wᵢ Δθᵢ)</text><polyline points="594,588 336,588" class="ln" marker-end="url(#d2-a)"/><text x="465.0" y="581" text-anchor="middle" class="t-sm">UpBundle(aggregate, round-close + delivery reports)</text><polyline points="336,608 376,608 376,624 340,624" class="ln-soft" marker-end="url(#d2-soft)"/><text x="384" y="612.0" text-anchor="start" class="t-lbl">ingest → cross_mule_fedavg → close_cluster_round</text><polyline points="336,654 594,654" class="ln" marker-end="url(#d2-a)"/><text x="465.0" y="647" text-anchor="middle" class="t-sm">DownBundle(θ_disc′, synth′, enriched amendment)</text><polyline points="606,710 646,710 646,726 610,726" class="ln-soft" marker-end="url(#d2-soft)"/><text x="654" y="709.0" text-anchor="start" class="t-lbl">build_pass_2_queue — entire slice,</text><text x="654" y="720.5" text-anchor="start" class="t-lbl">nearest-first, selector bypassed</text><rect x="392" y="756" width="540" height="80" rx="8" class="loopbx"/><text x="404" y="770" text-anchor="start" class="t-hd">loop  per contact waypoint</text><polyline points="606,796 832,796" class="ln" marker-end="url(#d2-a)"/><text x="719.0" y="789" text-anchor="middle" class="t-sm">FLOpenSolicit(DELIVER) + DiscPush(θ′)</text><polyline points="832,820 606,820" class="ln" marker-end="url(#d2-a)"/><text x="719.0" y="813" text-anchor="middle" class="t-sm">DeliveryAck</text><polyline points="832,854 792,854 792,870 828,870" class="ln-soft" marker-end="url(#d2-soft)"/><text x="784" y="853.0" text-anchor="end" class="t-lbl">set θ basis → train_offline() →</text><text x="784" y="864.5" text-anchor="end" class="t-lbl">Δθ prepared for the NEXT Pass 1</text><polyline points="606,904 646,904 646,920 610,920" class="ln-soft" marker-end="url(#d2-soft)"/><text x="654" y="903.0" text-anchor="start" class="t-lbl">close_pass_2() → MissionDeliveryReport,</text><text x="654" y="914.5" text-anchor="start" class="t-lbl">stashed for the NEXT mission&#x27;s UP bundle</text></svg></div><figcaption><b>One mission, end to end.</b> The two-pass structure is the point: every Δθ collected in Pass 1 was trained against the θ delivered by the <i>previous</i> mission's Pass 2, which makes cross-mule FedAvg exact rather than approximate — async-FL drift becomes structurally impossible.</figcaption></figure>
+<p><strong>Why two passes.</strong> Every Δθ collected in Pass 1 was trained against the θ delivered by
+the previous mission's Pass 2. That makes cross-mule FedAvg exact rather than
+approximate — async-FL drift becomes structurally impossible rather than bounded. This
+is a genuinely good architectural idea and the code implements it faithfully.</p>
+<p><strong>Key state transitions:</strong></p>
+<div class="tablewrap"><table class="wide">
+<thead>
+<tr>
+<th>State</th>
+<th>Owner</th>
+<th>Lifetime</th>
+<th>Persisted?</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>DeviceRecord</code> (registry)</td>
+<td><code>DeviceRegistry</code></td>
+<td>cluster process</td>
+<td><strong>No</strong> — <code>save()</code> is a no-op</td>
+</tr>
+<tr>
+<td><code>DeviceSchedulerState</code></td>
+<td><code>FLScheduler._device_states</code></td>
+<td>mule process</td>
+<td>No</td>
+</tr>
+<tr>
+<td><code>_current_theta</code>, <code>_accepted</code></td>
+<td><code>HFLHostMission</code></td>
+<td>one mission round</td>
+<td>No</td>
+</tr>
+<tr>
+<td><code>_prepared_delta</code>, <code>_theta_basis</code></td>
+<td><code>ClientMission</code></td>
+<td>device process</td>
+<td>No</td>
+</tr>
+<tr>
+<td><code>_pending</code> (<code>_PendingRound</code>)</td>
+<td><code>HFLHostCluster</code></td>
+<td>one cluster round</td>
+<td>No</td>
+</tr>
+<tr>
+<td><code>_pending_delivery_report</code></td>
+<td><code>MuleSupervisor</code></td>
+<td>one mission</td>
+<td>No</td>
+</tr>
+<tr>
+<td>JSONL events</td>
+<td><code>JsonEventEmitter</code></td>
+<td>run dir</td>
+<td>Yes (append-only)</td>
+</tr>
+</tbody>
+</table></div>
+<p>Every piece of authoritative state is in-process memory with no persistence. A cluster
+restart loses the whole registry; a mule restart loses the delivery-report carryover.
+See finding <strong>A-03</strong>.</p>
+<h3 id="72-hifins-legacy-training-flow">7.2 HIFINS legacy training flow</h3>
+<div class="codewrap wide"><span class="lang">text</span><pre class="code"><code>argv
+ └─&gt; parse_training_client_args()            Config/SessionConfig/ArgumentConfigLoad.py:8
+      │  · 21 AC-GAN hyperparameter flags declared here
+      │  · args.regularizationEnabled / DP_enabled / earlyStopEnabled … hardcoded post-parse
+      ▼
+     datasetLoadProcess(args)                Config/SessionConfig/datasetLoadProcess.py:10
+      │  └─&gt; loadCICIOT(...)                 DatasetConfig/CICIOT2023_Sampling/…LoadV2.py:250
+      │        · DATASET_DIRECTORY = &#x27;../../../../datasets/CICIOT2023&#x27;   ← CWD-relative
+      │  └─&gt; preprocess_dataset | preprocess_AC_dataset
+      ▼
+     hyperparameterLoading(args, X_train)    Config/SessionConfig/hyperparameterLoading.py:1
+      │  · returns a 20-element positional tuple
+      ▼
+     modelCreateLoad(13 positional args)     Config/SessionConfig/modelCreateLoad.py:40
+      │  · 375-line function, cyclomatic complexity 89
+      │  · returns (nids, discriminator, generator, GAN)
+      ▼
+     modelCentralTrainingConfigLoad(41 args) │ modelFederatedTrainingConfigLoad(41 args)
+      │  · if/elif over model_type × train_type → one of ~14 trainer classes
+      │  · several branches assign `client = None` and fall through
+      ▼
+     client.fit() → client.evaluate() → client.save(name)
+        │  (Federated arm instead: fl.client.start_client(server_address, client))
+        │  server_address resolved from a hardcoded 192.168.129.x table</code></pre></div>
+<p>The corresponding host flow is the same up to <code>modelCreateLoad</code>, then branches into
+<code>_run_standard_federation_strategies</code> or <code>_run_fit_on_end_strategies</code> (42 positional
+parameters).</p>
+<p><strong>The 21 AC-GAN hyperparameter flags are read by nothing.</strong> <code>--AC_disc_learning_rate</code>,
+<code>--AC_gen_learning_rate</code>, <code>--AC_d_to_g_ratio</code> and the other 18 appear exactly once in
+the repository — in <code>ArgumentConfigLoad.py</code>. The values that actually train the model
+are literals inside the trainer class
+(<a href="../../Config/ModelTrainingConfig/ClientModelTrainingConfig/CentralTrainingConfig/GAN/FullModel/ACGANCentralTrainingConfig.py#L107"><code>ACGANCentralTrainingConfig.py:107-113</code></a>).
+See finding <strong>C-01</strong> — this is the highest-impact correctness problem in the repository
+because it silently invalidates any hyperparameter sweep.</p>
+<h3 id="73-experiment-harness-flow">7.3 Experiment harness flow</h3>
+<div class="codewrap wide"><span class="lang">text</span><pre class="code"><code>TrialGrid (cartesian product × arms × trials, paired seeds via SHA-256)
+   └─&gt; TrialRunner.run(driver)
+         ├─ CSVTrialLog.already_done(cell)     ← resume: (cell_id, arm, trial_index)
+         ├─ driver(cell) → metric dict
+         ├─ stamp status / duration_s / error
+         └─ CSVTrialLog.append(cell, row)      ← flush per row
+   drivers:  exp1.server (real subprocesses + TCP)
+             exp3.driver (Exp3Sim, no subprocesses)
+             exp4.driver (real MultiProcessOrchestrator topology)
+   analysis: experiments/analysis/{exp1,exp3,exp4}.py → PNG figures + LaTeX tables</code></pre></div>
+<p><code>experiments/runner/</code> is the second-best-engineered package in the repository: small,
+pure, well-documented, correct paired-seed semantics, honest resume behaviour. The
+analysis layer that consumes it is the opposite — <code>experiments/analysis/exp3.py</code>
+contains a single 863-line function with cyclomatic complexity 170.</p>
+<hr />
+      </section>
+      <section id="8-runtime-and-process-model">
+        <div class="sec-eyebrow">§&nbsp;08 · Runtime and process model</div>
+        <h2>Runtime and process model</h2>
+<p><strong>Process topology (HERMES).</strong> One OS process per role, launched by
+<code>MultiProcessOrchestrator</code> via <code>subprocess.Popen([python, -m, module, --config, …])</code>.
+Port discovery is file-based: each child writes its ephemeral bound port to a
+<code>--port-out</code> path that the parent polls at 50 ms.</p>
+<p><strong>Threading, per process:</strong></p>
+<div class="tablewrap"><table class="wide">
+<thead>
+<tr>
+<th>Process</th>
+<th>Threads</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Cluster</td>
+<td>main service loop + 1 dock accept + 1 reader per mule</td>
+</tr>
+<tr>
+<td>Mule</td>
+<td>main mission loop + 1 RF accept + 1 reader per device + N transient workers per contact</td>
+</tr>
+<tr>
+<td>Device</td>
+<td>main serve loop + 1 socket reader</td>
+</tr>
+<tr>
+<td>Orchestrator</td>
+<td>main + 1 stderr drainer per child</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>Concurrency primitives:</strong> <code>threading.RLock</code> for object state, <code>queue.Queue</code> for
+inbound message fan-out, <code>threading.Condition</code> for registration barriers,
+<code>threading.Event</code> for shutdown. No asyncio, no multiprocessing shared memory, no locks
+held across I/O. The discipline here is consistently good.</p>
+<p><strong>The one structural exception:</strong> <code>HFLHostMission.run_contact</code> and <code>deliver_contact</code>
+spawn one unbounded <code>threading.Thread</code> per device in the contact and join each with
+<code>timeout=session_ttl_s * 2</code>
+(<a href="../../hermes/mission/host_mission.py#L519"><code>host_mission.py:519-527</code></a>). Thread count
+scales with contact size, joins are per-thread rather than deadline-based (worst case
+<code>N × 2 × ttl</code>), and threads that outlive the join keep mutating shared report state.
+See finding <strong>P-01</strong>.</p>
+<p><strong>Wire format.</strong> <code>[4-byte magic 'HRMS'][u8 version][u32 length][pickled payload]</code>,
+big-endian, 256 MiB frame cap. Same primitives for RF and dock. The magic/version/cap
+design is correct and defensive. The payload codec is <code>pickle</code>, which is defensible on
+a co-deployed LAN and explicitly justified in a comment — but the same codec is used
+over plain HTTP to an arbitrary remote Tier-3 URL, where it is not defensible. See
+finding <strong>S-01</strong>.</p>
+<hr />
+      </section>
+      <section id="9-contracts-and-extension-points">
+        <div class="sec-eyebrow">§&nbsp;09 · Contracts and extension points</div>
+        <h2>Contracts and extension points</h2>
+<p>The HERMES subsystem defines five clean seams. These are the load-bearing abstractions
+and any refactor must preserve them:</p>
+<div class="tablewrap"><table class="wide">
+<thead>
+<tr>
+<th>Seam</th>
+<th>Definition</th>
+<th>Implementations</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>RFLink</code> (ABC)</td>
+<td><code>hermes/transport/rf_link.py</code></td>
+<td><code>LoopbackRFLink</code>, <code>TCPRFLinkServer</code>, <code>TCPRFLinkClient</code></td>
+<td>mule ↔ device</td>
+</tr>
+<tr>
+<td><code>DockLink</code> (ABC)</td>
+<td><code>hermes/transport/dock_link.py</code></td>
+<td><code>LoopbackDockLink</code>, <code>TCPDockLinkServer/Client</code></td>
+<td>mule ↔ cluster</td>
+</tr>
+<tr>
+<td><code>CloudLink</code></td>
+<td><code>hermes/transport/cloud_link.py</code></td>
+<td><code>HTTPCloudLink</code>, in-memory stub</td>
+<td>cluster ↔ Tier 3</td>
+</tr>
+<tr>
+<td><code>GeneratorHost</code> (Protocol)</td>
+<td><code>hermes/cluster/host_cluster.py:49</code></td>
+<td><code>StubGeneratorHost</code></td>
+<td>θ_gen + synth batch</td>
+</tr>
+<tr>
+<td><code>LocalTrainFn</code> (Protocol)</td>
+<td><code>hermes/mission/client_mission.py:71</code></td>
+<td>noise stub, <code>exp4.model_task</code></td>
+<td>device-side training</td>
+</tr>
+</tbody>
+</table></div>
+<p>Two of the five have <strong>only stub production implementations</strong>. <code>GeneratorHost</code> is
+satisfied in every live path by <code>StubGeneratorHost</code>, which emits zero tensors as
+"synthetic samples" — the AC-GAN generator has never been plugged in. <code>LocalTrainFn</code> is
+satisfied by a Gaussian-noise stub unless <code>train_shard_path</code> is set. The seams are well
+designed; the far side of them is empty. This is the concrete form of "the two stacks
+were never joined".</p>
+<hr />
+      </section>
+      <section id="10-what-is-architecturally-sound">
+        <div class="sec-eyebrow">§&nbsp;10 · What is architecturally sound</div>
+        <h2>What is architecturally sound</h2>
+<p>Stating this plainly, because the problem register that follows is long:</p>
+<ol>
+<li><strong>Transport abstraction.</strong> Programs never see a socket. Every test in
+   <code>tests/unit/</code> runs against <code>Loopback*</code> links with zero mocking framework. This is
+   why 512 tests run in 12 seconds.</li>
+<li><strong>Pure-function scheduler stages.</strong> <code>s1_eligibility</code>, <code>s2a_readiness</code>, <code>s2b_flag</code>,
+   <code>s3_deadline</code>, <code>s3a_cluster</code>, <code>s35_selector</code> are side-effect-free functions over
+   explicit state. <code>FLScheduler</code> is I/O-free by construction and injects <code>now_fn</code> for
+   deterministic time. Exemplary.</li>
+<li><strong>Aggregation as pure functions.</strong> <code>partial_fedavg</code> and <code>cross_mule_fedavg</code> are
+   standalone, validate shapes/rounds up front, accumulate in float64 and cast back.
+   Unit-testable against hand-computed references, and they are so tested.</li>
+<li><strong>Two-pass mission design.</strong> Structurally eliminates async-FL drift rather than
+   bounding it. The strongest idea in the project.</li>
+<li><strong>Observability by construction.</strong> Structured JSONL with a versioned envelope, a
+   null-object emitter, and a metrics registry — designed in, not bolted on.</li>
+<li><strong>Experiment reproducibility.</strong> Paired seeds derived by SHA-256 from
+   <code>(base_seed, cell_id, trial_index)</code>, deterministic cell IDs, idempotent CSV resume,
+   and process-stable device seeds (explicitly avoiding <code>PYTHONHASHSEED</code> randomization
+   at <code>device.py:133</code>). Someone thought carefully about this.</li>
+<li><strong>Fix provenance in comments.</strong> Findings are tagged (<code>H1</code>, <code>S2-M3</code>, <code>L-H2</code>,
+   <code>EX-4.2</code>) and cross-referenced to the design docs. Unusual and valuable.</li>
+</ol>
+<hr />
+      </section>
+      <section id="11-architectural-fault-lines">
+        <div class="sec-eyebrow">§&nbsp;11 · Architectural fault lines</div>
+        <h2>Architectural fault lines</h2>
+<p>Summarized here; each is detailed with evidence in
+<a href="../Codebase%20Review/00_Critical_Problem_Areas.html"><code>../Codebase Review/00_Critical_Problem_Areas.html</code></a>.</p>
+<div class="tablewrap"><table class="wide">
+<thead>
+<tr>
+<th>#</th>
+<th>Fault line</th>
+<th>Consequence</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>A-01</strong></td>
+<td>Two disconnected stacks with a stub bridge</td>
+<td>The system that trains models and the system that schedules training cannot run together</td>
+</tr>
+<tr>
+<td><strong>A-02</strong></td>
+<td>Inverted dependency: <code>hermes.processes</code> → <code>experiments.exp4</code></td>
+<td>Core library cannot ship without the paper harness</td>
+</tr>
+<tr>
+<td><strong>A-03</strong></td>
+<td>All authoritative state in-process, <code>save()</code>/<code>load()</code> are no-ops</td>
+<td>Any restart is total state loss; no HA story</td>
+</tr>
+<tr>
+<td><strong>A-04</strong></td>
+<td>Config-as-code: 21.3 K LOC of near-identical training classes</td>
+<td>A one-line policy change requires editing 14 files</td>
+</tr>
+<tr>
+<td><strong>A-05</strong></td>
+<td>41-positional-parameter loader functions</td>
+<td>Adding one hyperparameter touches 6 call sites</td>
+</tr>
+<tr>
+<td><strong>A-06</strong></td>
+<td>No packaging metadata; <code>sys.path</code> hacks in 16 modules</td>
+<td>Not installable, not deployable, CWD-dependent</td>
+</tr>
+<tr>
+<td><strong>A-07</strong></td>
+<td>5.8 K LOC vendored <code>FlightFramework</code> with zero importers</td>
+<td>Dead weight + unreviewed third-party license surface</td>
+</tr>
+<tr>
+<td><strong>A-08</strong></td>
+<td>Round-robin device→mule assignment ignores geography</td>
+<td>Slices are spatially incoherent at scale</td>
+</tr>
+<tr>
+<td><strong>A-09</strong></td>
+<td>Single-threaded cluster service loop</td>
+<td>One dock at a time; the cluster is the throughput ceiling</td>
+</tr>
+<tr>
+<td><strong>A-10</strong></td>
+<td>RF link has a 30 s idle read timeout, no keepalive, no reconnect</td>
+<td>Any inter-contact gap &gt; 30 s silently tears down the link</td>
+</tr>
+</tbody>
+</table></div>
+<hr />
+      </section>
+      <section id="12-scale-ceiling--where-this-breaks">
+        <div class="sec-eyebrow">§&nbsp;12 · Scale ceiling — where this breaks</div>
+        <h2>Scale ceiling — where this breaks</h2>
+<p>Current validated scale is 1 cluster × 2 mules × 5 devices. Projecting from the code:</p>
+<div class="tablewrap"><table class="wide">
+<thead>
+<tr>
+<th>Dimension</th>
+<th>Ceiling</th>
+<th>Binding constraint</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Devices per mule</td>
+<td>~20–30</td>
+<td>one thread per device per contact; unbounded spawn in <code>run_contact</code></td>
+</tr>
+<tr>
+<td>Mules per cluster</td>
+<td>~5–10</td>
+<td>single-threaded <code>ClusterService.run</code> serializes ingest + aggregate + N dispatches</td>
+</tr>
+<tr>
+<td>Mission duration</td>
+<td><strong>&lt; 30 s between contacts</strong></td>
+<td>RF socket read timeout drops idle devices (<code>tcp_rf_link.py:375</code>)</td>
+</tr>
+<tr>
+<td>Devices per cluster</td>
+<td>~1 K</td>
+<td><code>DeviceRegistry.slice_for</code> is O(N) per call, per mule, per dock</td>
+</tr>
+<tr>
+<td>Model size</td>
+<td>~256 MiB</td>
+<td><code>MAX_FRAME_BYTES</code>; whole θ is pickled into one frame, no streaming</td>
+</tr>
+<tr>
+<td>Cluster restarts</td>
+<td><strong>0</strong></td>
+<td>registry is in-memory only</td>
+</tr>
+<tr>
+<td>Concurrent trials</td>
+<td>1</td>
+<td><code>CSVTrialLog</code> has no file locking</td>
+</tr>
+</tbody>
+</table></div>
+<p>The 30-second one is the sharpest: it is invisible in the 30-second smoke test and
+fatal in any realistic flight. See finding <strong>P-02</strong>.</p>
+<hr />
+      </section>
+      <section id="13-recommended-target-architecture-summary">
+        <div class="sec-eyebrow">§&nbsp;13 · Recommended target architecture (summary)</div>
+        <h2>Recommended target architecture (summary)</h2>
+<p>Detailed in <a href="../Codebase%20Review/01_Refactoring_Strategy.html"><code>../Codebase Review/01_Refactoring_Strategy.html</code></a>.
+The shape to move toward:</p>
+<figure class="dgfig"><div class="dgscroll"><svg class="dg" viewBox="0 0 748 372" role="img" aria-label="Target architecture. One installable distribution holds hermes unchanged, a consolidated model and data layer, a frozen-dataclass config layer, and a new hermes_adapters package that implements the two existing HERMES protocols against the real Keras models. The experiments package depends on the distribution and nothing depends on the experiments package." xmlns="http://www.w3.org/2000/svg"><defs><marker id="d3-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" class="mk"/></marker><marker id="d3-bad" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" class="mk-bad"/></marker><marker id="d3-dead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" class="mk-dead"/></marker><marker id="d3-soft" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" class="mk-soft"/></marker></defs><rect x="24" y="48" width="700" height="300" rx="10" class="band"/><text x="36" y="65" text-anchor="start" class="t-hd">hifins/ — ONE INSTALLABLE DISTRIBUTION (pyproject.toml)</text><rect x="48" y="84" width="274" height="66" rx="7" class="bx"/><text x="185.0" y="108.5" text-anchor="middle">hermes/</text><text x="185.0" y="121.0" text-anchor="middle" class="t-sm">unchanged public API</text><text x="185.0" y="133.5" text-anchor="middle" class="t-sm">+ transport &amp; persistence hardening</text><rect x="48" y="178" width="274" height="66" rx="7" class="bx"/><text x="185.0" y="202.5" text-anchor="middle">hifins_models/</text><text x="185.0" y="215.0" text-anchor="middle" class="t-sm">Keras structures + ONE</text><text x="185.0" y="227.5" text-anchor="middle" class="t-sm">parameterised trainer family</text><rect x="48" y="272" width="274" height="60" rx="7" class="bx"/><text x="185.0" y="293.5" text-anchor="middle">hifins_data/</text><text x="185.0" y="306.0" text-anchor="middle" class="t-sm">loaders · preprocessing</text><text x="185.0" y="318.5" text-anchor="middle" class="t-sm">· repo-anchored paths</text><rect x="422" y="84" width="278" height="66" rx="7" class="hl"/><text x="561.0" y="108.5" text-anchor="middle">hermes_adapters/</text><text x="561.0" y="121.0" text-anchor="middle" class="t-sm">KerasGeneratorHost : GeneratorHost</text><text x="561.0" y="133.5" text-anchor="middle" class="t-sm">KerasLocalTrain : LocalTrainFn</text><rect x="422" y="178" width="278" height="66" rx="7" class="bx"/><text x="561.0" y="202.5" text-anchor="middle">hifins_config/</text><text x="561.0" y="215.0" text-anchor="middle" class="t-sm">frozen dataclasses,</text><text x="561.0" y="227.5" text-anchor="middle" class="t-sm">not 41-arg positional tuples</text><rect x="422" y="272" width="278" height="60" rx="7" class="bx"/><text x="561.0" y="293.5" text-anchor="middle">experiments/</text><text x="561.0" y="306.0" text-anchor="middle" class="t-sm">depends on the package —</text><text x="561.0" y="318.5" text-anchor="middle" class="t-sm">nothing depends on it</text><polyline points="418,117 326,117" class="ln" marker-end="url(#d3-a)"/><text x="372" y="110.0" text-anchor="middle" class="t-lbl">implements</text><polyline points="561,174 561,154" class="ln" marker-end="url(#d3-a)"/><polyline points="418,205 326,205" class="ln" marker-end="url(#d3-a)"/><text x="372" y="198.0" text-anchor="middle" class="t-lbl">configures</text><polyline points="561,268 561,248" class="ln" marker-end="url(#d3-a)"/><polyline points="326,300 418,300" class="ln" marker-end="url(#d3-a)"/><polyline points="185,154 185,174" class="ln" marker-end="url(#d3-a)"/><polyline points="185,248 185,268" class="ln" marker-end="url(#d3-a)"/></svg></div><figcaption><b>One new package does the load-bearing work.</b> <code>hermes_adapters/</code> (highlighted) implements the two Protocols <code>hermes</code> already defines, so the stacks join with <i>zero</i> changes to <code>hermes/</code> — and the <code>experiments</code> arrow finally points only inward.</figcaption></figure>
+<p>The single highest-leverage change is <code>hermes_adapters/</code>: implementing the two existing
+Protocols (<code>GeneratorHost</code>, <code>LocalTrainFn</code>) against the real Keras models. That turns
+the stub bridge into a real one <strong>without modifying <code>hermes/</code> at all</strong>, because the
+seams already exist and are already the right shape. Everything else — the config
+consolidation, the packaging, the transport hardening — is cheaper once that adapter
+proves the seams hold.</p>
+<hr />
+      </section>
+      <section id="14-approval-gate">
+        <div class="sec-eyebrow">§&nbsp;14 · Approval gate</div>
+        <h2>Approval gate</h2>
+<p>Per the review brief, <strong>no project files have been modified</strong>. The proposed changes are
+documented as reference implementations in
+<a href="../Codebase%20Review/"><code>../Codebase Review/</code></a> and require sign-off before any of them
+is applied. Two items in the refactoring plan are flagged as <strong>behaviour-changing</strong> and
+need explicit, separate approval:</p>
+<ol>
+<li><strong>R-C01</strong> — wiring the 21 dead AC-GAN CLI flags to the trainer. Today they are
+   ignored; honouring them changes training behaviour for anyone who has been passing
+   them. A functionality-preserving variant (defaults pinned to today's literals) is
+   provided.</li>
+<li><strong>R-C02</strong> — making <code>--model_type CANGAN</code> and the three <code>NIDS-IOT-*</code> types either
+   work or fail loudly. Today they return <code>client = None</code> and crash with
+   <code>AttributeError: 'NoneType' object has no attribute 'fit'</code>.</li>
+</ol>
+<p>Everything else in the plan is behaviour-preserving by construction.</p>
+      </section>
+
+      <div class="foot">
+        <p class="mono">Generated from System_Architecture_Overview.md. File:line references are to
+        the repository as read on 2026-08-10 (main @ 35e2eeb); verify against current
+        source before acting. This document is a review artefact — no project code was
+        modified to produce it.</p>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script>
+  // TOC active-state only. No animation; reduced-motion respected via CSS.
+  // getElementById, not querySelector: several ids begin with a digit, which
+  // is legal HTML but an invalid CSS selector.
+  (function(){
+    var links = Array.prototype.slice.call(document.querySelectorAll('nav.toc a'));
+    var secs  = links.map(function(a){
+      return document.getElementById(a.getAttribute('href').slice(1));
+    });
+    if(!('IntersectionObserver' in window)) return;
+    var io = new IntersectionObserver(function(entries){
+      entries.forEach(function(e){
+        if(e.isIntersecting){
+          var i = secs.indexOf(e.target);
+          links.forEach(function(l){ l.style.background=''; l.style.color=''; });
+          if(i>-1){ var l=links[i]; l.style.background='var(--surface-2)'; l.style.color='var(--ink)'; }
+        }
+      });
+    },{rootMargin:'-10% 0px -80% 0px'});
+    secs.forEach(function(s){ if(s) io.observe(s); });
+  })();
+</script>
+
+</body>
+</html>

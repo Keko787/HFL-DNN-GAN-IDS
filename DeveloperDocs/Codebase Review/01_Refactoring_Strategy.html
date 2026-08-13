@@ -1,0 +1,1047 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Refactoring Strategy</title>
+<meta name="description" content="Sequenced by what each step unblocks, not by severity. Behaviour-preserving by construction except for three items quarantined into their own approval-gated phase.">
+<style>
+  :root{
+    --bg:#f4f6f8; --surface:#ffffff; --surface-2:#eef1f4;
+    --ink:#141a20; --ink-2:#47525d; --ink-3:#6c7883;
+    --line:#dbe1e7; --line-2:#c8d0d8;
+    --accent:#0c7d8a; --accent-2:#0a5f6a; --accent-soft:#e0f0f2;
+    --ok:#2f8f56; --ok-bg:#e5f3ea; --ok-line:#a9d8bd;
+    --warn:#a8720c; --warn-bg:#f7efdb; --warn-line:#e3c483;
+    --gap:#bf3b4e; --gap-bg:#fbe5e8; --gap-line:#eeaeb7;
+    --font-display:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    --font-body:ui-serif,"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,Cambria,serif;
+    --font-mono:ui-monospace,"Cascadia Code","SF Mono","Segoe UI Mono",Menlo,Consolas,monospace;
+    --maxw:1200px; --prose:800px;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --bg:#0d1116; --surface:#141a21; --surface-2:#1a222b;
+      --ink:#e7ecf1; --ink-2:#a3afba; --ink-3:#74818d;
+      --line:#26303a; --line-2:#333f4b;
+      --accent:#2fc0d0; --accent-2:#5bd4e0; --accent-soft:#10333a;
+      --ok:#4cc47e; --ok-bg:#12301f; --ok-line:#245a3a;
+      --warn:#e0a63a; --warn-bg:#31260f; --warn-line:#5c4820;
+      --gap:#e56b7d; --gap-bg:#331a1f; --gap-line:#5e3038;
+    }
+  }
+  :root[data-theme="light"]{
+    --bg:#f4f6f8; --surface:#ffffff; --surface-2:#eef1f4;
+    --ink:#141a20; --ink-2:#47525d; --ink-3:#6c7883;
+    --line:#dbe1e7; --line-2:#c8d0d8;
+    --accent:#0c7d8a; --accent-2:#0a5f6a; --accent-soft:#e0f0f2;
+    --ok:#2f8f56; --ok-bg:#e5f3ea; --ok-line:#a9d8bd;
+    --warn:#a8720c; --warn-bg:#f7efdb; --warn-line:#e3c483;
+    --gap:#bf3b4e; --gap-bg:#fbe5e8; --gap-line:#eeaeb7;
+  }
+  :root[data-theme="dark"]{
+    --bg:#0d1116; --surface:#141a21; --surface-2:#1a222b;
+    --ink:#e7ecf1; --ink-2:#a3afba; --ink-3:#74818d;
+    --line:#26303a; --line-2:#333f4b;
+    --accent:#2fc0d0; --accent-2:#5bd4e0; --accent-soft:#10333a;
+    --ok:#4cc47e; --ok-bg:#12301f; --ok-line:#245a3a;
+    --warn:#e0a63a; --warn-bg:#31260f; --warn-line:#5c4820;
+    --gap:#e56b7d; --gap-bg:#331a1f; --gap-line:#5e3038;
+  }
+
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:var(--font-body); font-size:17px; line-height:1.62;
+    -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+  }
+  .shell{max-width:var(--maxw); margin:0 auto; padding:0 clamp(18px,4vw,40px)}
+
+  /* ---------- Masthead ---------- */
+  header.mast{padding:clamp(40px,7vw,84px) 0 34px; border-bottom:1px solid var(--line)}
+  .eyebrow{
+    font-family:var(--font-mono); font-size:12px; letter-spacing:.14em;
+    text-transform:uppercase; color:var(--accent); font-weight:600;
+    display:flex; gap:10px; flex-wrap:wrap; align-items:center;
+  }
+  .eyebrow .sep{color:var(--ink-3)}
+  h1.title{
+    font-family:var(--font-display); font-weight:760;
+    font-size:clamp(30px,5.4vw,52px); line-height:1.04; letter-spacing:-.022em;
+    margin:.42em 0 .28em; max-width:16ch; text-wrap:balance;
+  }
+  .deck{
+    font-size:clamp(17px,2.1vw,21px); color:var(--ink-2); max-width:60ch;
+    line-height:1.5; margin:0;
+  }
+  .deck b{color:var(--ink); font-weight:600}
+  .metabar{
+    margin-top:26px; display:flex; flex-wrap:wrap; gap:8px 20px;
+    font-family:var(--font-mono); font-size:12.5px; color:var(--ink-3);
+  }
+  .metabar b{color:var(--ink-2); font-weight:600}
+
+  /* ---------- Layout with TOC rail ---------- */
+  .body-grid{display:block}
+  @media(min-width:1040px){
+    .body-grid{display:grid; grid-template-columns:216px minmax(0,1fr); gap:48px; align-items:start}
+    nav.toc{position:sticky; top:24px; align-self:start}
+  }
+  nav.toc{padding:30px 0 0}
+  nav.toc .toc-h{
+    font-family:var(--font-mono); font-size:11px; letter-spacing:.14em;
+    text-transform:uppercase; color:var(--ink-3); margin:0 0 12px; font-weight:600;
+  }
+  nav.toc ol{list-style:none; margin:0; padding:0; counter-reset:toc}
+  nav.toc li{counter-increment:toc; margin:2px 0}
+  nav.toc a{
+    display:block; text-decoration:none; color:var(--ink-2);
+    font-family:var(--font-display); font-size:14px; line-height:1.35;
+    padding:6px 10px 6px 30px; border-radius:7px; position:relative;
+  }
+  nav.toc a::before{
+    content:counter(toc,decimal-leading-zero); position:absolute; left:8px;
+    font-family:var(--font-mono); font-size:11px; color:var(--accent);
+    top:8px; font-weight:600;
+  }
+  nav.toc a:hover{background:var(--surface-2); color:var(--ink)}
+  @media(max-width:1039px){ nav.toc{display:none} }
+
+  main{padding-top:8px; min-width:0}
+
+  /* ---------- Sections & prose ---------- */
+  section{padding:38px 0; border-bottom:1px solid var(--line); scroll-margin-top:20px}
+  section:last-of-type{border-bottom:0}
+  .sec-eyebrow{
+    font-family:var(--font-mono); font-size:12px; letter-spacing:.13em;
+    text-transform:uppercase; color:var(--accent); font-weight:600; margin-bottom:8px;
+  }
+  h2{
+    font-family:var(--font-display); font-weight:720; letter-spacing:-.016em;
+    font-size:clamp(22px,3.2vw,30px); line-height:1.14; margin:0 0 .55em;
+    max-width:24ch; text-wrap:balance;
+  }
+  h3{
+    font-family:var(--font-display); font-weight:660; letter-spacing:-.008em;
+    font-size:19px; line-height:1.25; margin:1.9em 0 .5em; color:var(--ink);
+  }
+  h4{
+    font-family:var(--font-mono); font-weight:600; font-size:13px; letter-spacing:.04em;
+    text-transform:uppercase; color:var(--ink-2); margin:1.5em 0 .5em;
+  }
+  p{max-width:var(--prose); margin:0 0 1.05em}
+  main ul,main ol{max-width:var(--prose); margin:0 0 1.1em; padding-left:1.25em}
+  main li{margin:.34em 0}
+  strong{font-weight:600; color:var(--ink)}
+  a.ref{color:var(--accent-2); text-decoration:none; border-bottom:1px solid transparent}
+  :root[data-theme="dark"] a.ref{color:var(--accent)}
+  @media(prefers-color-scheme:dark){a.ref{color:var(--accent)}}
+  a.ref:hover{border-bottom-color:currentColor}
+
+  code,.mono{font-family:var(--font-mono); font-size:.86em}
+  p code,li code,td code{
+    background:var(--surface-2); padding:.08em .38em; border-radius:5px;
+    font-size:.82em; color:var(--ink); border:1px solid var(--line);
+    white-space:nowrap;
+  }
+  .path{color:var(--ink-3); font-family:var(--font-mono); font-size:.8em; white-space:nowrap}
+
+  /* ---------- Callouts ---------- */
+  .callout{
+    border:1px solid var(--line); border-left-width:3px; border-radius:10px;
+    background:var(--surface); padding:18px 20px; margin:1.4em 0; max-width:var(--prose);
+  }
+  .callout .k{
+    font-family:var(--font-mono); font-size:11px; letter-spacing:.12em; text-transform:uppercase;
+    font-weight:600; margin-bottom:7px; display:block;
+  }
+  .callout p{margin:.2em 0}
+  .callout.accent{border-left-color:var(--accent); background:var(--accent-soft)}
+  .callout.accent .k{color:var(--accent-2)}
+  :root[data-theme="dark"] .callout.accent .k{color:var(--accent-2)}
+  @media(prefers-color-scheme:dark){.callout.accent .k{color:var(--accent-2)}}
+  .callout.warn{border-left-color:var(--warn); background:var(--warn-bg)}
+  .callout.warn .k{color:var(--warn)}
+  .callout.gap{border-left-color:var(--gap); background:var(--gap-bg)}
+  .callout.gap .k{color:var(--gap)}
+  .callout.accent{background:var(--accent-soft)}
+
+  /* ---------- Formula ---------- */
+  .formula{
+    font-family:var(--font-mono); font-size:14px; line-height:1.55;
+    background:var(--surface-2); border:1px solid var(--line);
+    border-radius:9px; padding:13px 16px; margin:1em 0; max-width:var(--prose);
+    overflow-x:auto; color:var(--ink);
+  }
+  .formula .lbl{color:var(--ink-3)}
+
+  /* ---------- Tables ---------- */
+  .tablewrap{overflow-x:auto; margin:1.2em 0 1.5em; border:1px solid var(--line);
+    border-radius:11px; background:var(--surface)}
+  table{border-collapse:collapse; width:100%; font-size:14px; min-width:640px}
+  table.wide{min-width:820px}
+  thead th{
+    font-family:var(--font-mono); font-weight:600; font-size:11.5px; letter-spacing:.03em;
+    text-transform:uppercase; text-align:left; color:var(--ink-2);
+    background:var(--surface-2); padding:11px 14px; border-bottom:1px solid var(--line-2);
+    position:sticky; top:0; vertical-align:bottom;
+  }
+  tbody td{padding:11px 14px; border-bottom:1px solid var(--line); vertical-align:top;
+    line-height:1.42; color:var(--ink-2)}
+  tbody tr:last-child td{border-bottom:0}
+  tbody td:first-child{color:var(--ink); font-weight:500}
+  tbody td .path,tbody td code{white-space:normal}
+  td .mname{font-family:var(--font-mono); font-size:12.5px; color:var(--ink); font-weight:600; display:block}
+  tbody tr:hover td{background:color-mix(in srgb,var(--accent-soft) 34%, transparent)}
+  .num{font-variant-numeric:tabular-nums}
+
+  /* ---------- Pills / badges ---------- */
+  .pill{
+    display:inline-flex; align-items:center; gap:5px; font-family:var(--font-mono);
+    font-size:11px; font-weight:600; letter-spacing:.02em; padding:2px 8px 2px 6px;
+    border-radius:20px; border:1px solid var(--line-2); white-space:nowrap; line-height:1.5;
+  }
+  .pill .dot{width:7px; height:7px; border-radius:50%; background:currentColor; flex:0 0 auto}
+  .pill.ok{color:var(--ok); background:var(--ok-bg); border-color:var(--ok-line)}
+  .pill.warn{color:var(--warn); background:var(--warn-bg); border-color:var(--warn-line)}
+  .pill.gap{color:var(--gap); background:var(--gap-bg); border-color:var(--gap-line)}
+  .pill.plain{color:var(--ink-3); background:var(--surface-2)}
+
+  .legend{display:flex; flex-wrap:wrap; gap:8px 14px; margin:.3em 0 1.1em; font-size:13px; align-items:center}
+  .legend .lg{display:inline-flex; align-items:center; gap:6px; color:var(--ink-2); font-family:var(--font-mono); font-size:11.5px}
+
+  /* ---------- Verdict cards ---------- */
+  .verdicts{display:grid; gap:14px; margin:1.3em 0; max-width:var(--prose)}
+  .vcard{border:1px solid var(--line); border-radius:12px; background:var(--surface); overflow:hidden}
+  .vcard .vhead{display:flex; align-items:flex-start; gap:12px; padding:15px 18px 12px; border-bottom:1px solid var(--line)}
+  .vbadge{font-family:var(--font-mono); font-size:11px; font-weight:700; letter-spacing:.05em;
+    padding:4px 9px; border-radius:6px; flex:0 0 auto; margin-top:1px}
+  .vbadge.confirmed{color:#fff; background:var(--gap)}
+  .vbadge.partial{color:var(--ink); background:var(--warn)}
+  :root[data-theme="dark"] .vbadge.partial{color:#20160a}
+  @media(prefers-color-scheme:dark){.vbadge.partial{color:#20160a}}
+  .vcard .vclaim{font-family:var(--font-display); font-weight:600; font-size:15.5px; line-height:1.34; color:var(--ink); margin:0}
+  .vcard .vbody{padding:13px 18px 16px; font-size:14px; color:var(--ink-2)}
+  .vcard .vbody p{margin:.1em 0 .7em; max-width:none}
+  .vcard .vbody .imp{margin-top:.4em; padding-top:.7em; border-top:1px dashed var(--line-2)}
+  .vcard .vbody .imp .k{font-family:var(--font-mono); font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--accent); font-weight:600; display:block; margin-bottom:3px}
+  :root[data-theme="dark"] .vcard .vbody .imp .k{color:var(--accent-2)}
+  @media(prefers-color-scheme:dark){.vcard .vbody .imp .k{color:var(--accent-2)}}
+
+  /* ---------- Stage cards ---------- */
+  .stages{display:grid; gap:16px; margin:1.4em 0; max-width:var(--prose)}
+  .stage{border:1px solid var(--line); border-radius:12px; background:var(--surface); padding:0; overflow:hidden}
+  .stage .shead{display:flex; align-items:baseline; gap:12px; padding:16px 20px 12px; background:var(--surface-2); border-bottom:1px solid var(--line)}
+  .stage .snum{font-family:var(--font-mono); font-weight:700; font-size:13px; color:var(--accent); letter-spacing:.02em; flex:0 0 auto}
+  :root[data-theme="dark"] .stage .snum{color:var(--accent-2)}
+  @media(prefers-color-scheme:dark){.stage .snum{color:var(--accent-2)}}
+  .stage .stitle{font-family:var(--font-display); font-weight:660; font-size:16.5px; color:var(--ink); line-height:1.25; margin:0}
+  .stage .schip{margin-left:auto; flex:0 0 auto}
+  .stage .sbody{padding:15px 20px 18px; font-size:14.5px}
+  .stage .sbody ul{max-width:none; margin:.2em 0 .3em}
+  .stage .grid2{display:grid; gap:4px 22px; grid-template-columns:1fr}
+  @media(min-width:620px){.stage .grid2{grid-template-columns:1fr 1fr}}
+  .stage .fld{margin:.6em 0}
+  .stage .fld .k{font-family:var(--font-mono); font-size:10.5px; letter-spacing:.09em; text-transform:uppercase; color:var(--ink-3); font-weight:600; display:block; margin-bottom:3px}
+  .stage .fld p{margin:0; font-size:13.5px; color:var(--ink-2); max-width:none}
+  .stage .dod{margin-top:.7em; padding-top:.8em; border-top:1px dashed var(--line-2)}
+
+  /* ---------- Misc ---------- */
+  .lead{font-size:19px; line-height:1.5; color:var(--ink); max-width:var(--prose)}
+  .lead b{color:var(--ink)}
+  hr.soft{border:0; border-top:1px solid var(--line); margin:1.6em 0; max-width:var(--prose)}
+  .foot{padding:34px 0 70px; color:var(--ink-3); font-size:13px; max-width:var(--prose)}
+  .foot p{max-width:none; margin:.5em 0; font-size:13px; color:var(--ink-3)}
+  .foot .mono{font-size:12px}
+  .kexcerpt{font-family:var(--font-mono); font-size:12.5px; color:var(--ink-2); background:var(--surface-2);
+    border:1px solid var(--line); border-radius:8px; padding:10px 13px; margin:.7em 0; max-width:var(--prose); line-height:1.5}
+  sup.fn{font-family:var(--font-mono); font-size:.62em; color:var(--accent); font-weight:600}
+  :focus-visible{outline:2px solid var(--accent); outline-offset:2px; border-radius:3px}
+  @media(prefers-reduced-motion:no-preference){html{scroll-behavior:smooth}}
+
+  /* ---------- Additions for the generated review docs ---------- */
+  main h2 { max-width: 32ch }
+  main table { min-width: 560px }
+  .tablewrap table thead th { position: static }
+
+  /* finding / item sub-headings */
+  main h3{
+    scroll-margin-top:18px; display:flex; align-items:baseline;
+    gap:9px; flex-wrap:wrap;
+  }
+  main h3 .fid{
+    font-family:var(--font-mono); font-size:12.5px; font-weight:700;
+    color:var(--accent); letter-spacing:.02em; flex:0 0 auto;
+  }
+  :root[data-theme="dark"] main h3 .fid{ color:var(--accent-2) }
+  @media(prefers-color-scheme:dark){ main h3 .fid{ color:var(--accent-2) } }
+  p.pillrow{ display:flex; gap:8px; flex-wrap:wrap; margin:-.35em 0 1.1em }
+  .anchor-alias{ display:block; height:0; scroll-margin-top:18px }
+
+  /* code blocks */
+  .codewrap{ position:relative; margin:1.15em 0 1.4em; max-width:var(--prose) }
+  .codewrap.wide{ max-width:none }
+  pre.code{
+    font-family:var(--font-mono); font-size:12.5px; line-height:1.55;
+    background:var(--surface-2); border:1px solid var(--line); border-radius:10px;
+    padding:15px 17px; margin:0; overflow-x:auto; color:var(--ink);
+    white-space:pre; tab-size:2;
+  }
+  pre.code code{ font-size:inherit; background:none; border:0; padding:0;
+                 white-space:pre; color:inherit }
+  .codewrap .lang{
+    position:absolute; top:0; right:12px; transform:translateY(-50%);
+    font-family:var(--font-mono); font-size:10px; letter-spacing:.1em;
+    text-transform:uppercase; font-weight:600; color:var(--ink-3);
+    background:var(--bg); border:1px solid var(--line); border-radius:20px;
+    padding:2px 9px;
+  }
+
+  /* Pygments tokens, mapped onto the house palette so both themes work */
+  pre.code .c,  pre.code .c1, pre.code .cm, pre.code .cs,
+  pre.code .ch, pre.code .cpf{ color:var(--ink-3); font-style:italic }
+  pre.code .sd{ color:var(--ink-3) }
+  pre.code .k,  pre.code .kn, pre.code .kc, pre.code .kd,
+  pre.code .kp, pre.code .kr, pre.code .kt, pre.code .ow{ color:var(--accent) }
+  :root[data-theme="dark"] pre.code .k,
+  :root[data-theme="dark"] pre.code .kn,
+  :root[data-theme="dark"] pre.code .kc,
+  :root[data-theme="dark"] pre.code .kd,
+  :root[data-theme="dark"] pre.code .ow{ color:var(--accent-2) }
+  @media(prefers-color-scheme:dark){
+    pre.code .k, pre.code .kn, pre.code .kc,
+    pre.code .kd, pre.code .ow{ color:var(--accent-2) }
+  }
+  pre.code .s,  pre.code .s1, pre.code .s2, pre.code .sa,
+  pre.code .sb, pre.code .se, pre.code .si, pre.code .sr,
+  pre.code .ss, pre.code .sx{ color:var(--ok) }
+  pre.code .m,  pre.code .mi, pre.code .mf, pre.code .mh,
+  pre.code .mo, pre.code .il{ color:var(--ok) }
+  pre.code .nf, pre.code .fm{ color:var(--ink); font-weight:600 }
+  pre.code .nc, pre.code .ne{ color:var(--warn); font-weight:600 }
+  pre.code .nd{ color:var(--warn) }
+  pre.code .nb, pre.code .bp{ color:var(--ink-2) }
+  pre.code .nn, pre.code .nv, pre.code .no, pre.code .na{ color:var(--ink) }
+  pre.code .o,  pre.code .p{ color:var(--ink-2) }
+  pre.code .gd{ color:var(--gap) }
+  pre.code .gi{ color:var(--ok) }
+  pre.code .gh, pre.code .gu{ color:var(--ink-3); font-weight:600 }
+  pre.code .err{ color:inherit; border:0 }
+
+  /* blockquote -> callout */
+  blockquote{
+    margin:1.3em 0; padding:15px 18px; max-width:var(--prose);
+    border:1px solid var(--line); border-left:3px solid var(--ink-3);
+    border-radius:10px; background:var(--surface); color:var(--ink-2);
+    font-size:15px;
+  }
+  blockquote p{ margin:.25em 0 }
+  blockquote.warn{ border-left-color:var(--warn); background:var(--warn-bg) }
+
+  /* figures / diagrams */
+  figure.dgfig{ margin:1.6em 0 1.9em; max-width:none }
+  .dgscroll{ overflow-x:auto; border:1px solid var(--line); border-radius:12px;
+             background:var(--surface); padding:18px 16px }
+  svg.dg{ max-width:100%; height:auto; display:block; margin:0 auto }
+  svg.dg text{ font-family:var(--font-mono); fill:var(--ink); font-size:12px }
+  svg.dg .t-sm{ font-size:11px; fill:var(--ink-2) }
+  svg.dg .t-lbl{ font-size:10.5px; fill:var(--ink-3) }
+  svg.dg .t-bad{ font-size:10.5px; fill:var(--gap); font-weight:600 }
+  svg.dg .t-hd{ font-size:10.5px; font-weight:700; fill:var(--accent);
+                letter-spacing:.09em }
+  svg.dg .t-x{ font-size:15px; fill:var(--gap); font-weight:700 }
+  svg.dg .bx{ fill:var(--surface); stroke:var(--line-2); stroke-width:1.2 }
+  svg.dg .badbx{ fill:var(--gap-bg); stroke:var(--gap-line); stroke-width:1.3 }
+  svg.dg .warnbx{ fill:var(--warn-bg); stroke:var(--warn-line); stroke-width:1.3 }
+  svg.dg .hl{ fill:var(--ok-bg); stroke:var(--ok); stroke-width:1.6 }
+  svg.dg .dead{ fill:var(--surface-2); stroke:var(--ink-3); stroke-width:1.2;
+                stroke-dasharray:5 4; opacity:.8 }
+  svg.dg .band{ fill:var(--surface-2); stroke:var(--line); stroke-width:1 }
+  svg.dg .ok-band{ fill:var(--ok-bg); stroke:var(--ok-line) }
+  svg.dg .bad-band{ fill:var(--gap-bg); stroke:var(--gap-line) }
+  svg.dg .loopbx{ fill:none; stroke:var(--line-2); stroke-width:1;
+                  stroke-dasharray:4 3 }
+  svg.dg .life{ stroke:var(--line-2); stroke-width:1; stroke-dasharray:4 4 }
+  svg.dg .ln{ stroke:var(--ink-2); stroke-width:1.4; fill:none }
+  svg.dg .ln-bad{ stroke:var(--gap); stroke-width:1.6; stroke-dasharray:6 4; fill:none }
+  svg.dg .ln-dead{ stroke:var(--ink-3); stroke-width:1.4; stroke-dasharray:5 4; fill:none }
+  svg.dg .ln-soft{ stroke:var(--ink-3); stroke-width:1.2; stroke-dasharray:3 3; fill:none }
+  svg.dg .mk{ fill:var(--ink-2); stroke:none }
+  svg.dg .mk-bad{ fill:var(--gap); stroke:none }
+  svg.dg .mk-dead{ fill:var(--ink-3); stroke:none }
+  svg.dg .mk-soft{ fill:var(--ink-3); stroke:none }
+  figure.dgfig figcaption{
+    font-size:13.5px; color:var(--ink-2); line-height:1.5; margin-top:11px;
+    max-width:var(--prose); padding-left:2px;
+  }
+  figure.dgfig figcaption b{ color:var(--ink) }
+
+  /* severity pills in the findings tables */
+  .g{ font-family:var(--font-mono); font-size:10.5px; font-weight:700;
+      padding:1px 7px; border-radius:20px; border:1px solid; white-space:nowrap }
+  .g.p0{ color:var(--gap); background:var(--gap-bg); border-color:var(--gap-line) }
+  .g.p1{ color:var(--warn); background:var(--warn-bg); border-color:var(--warn-line) }
+  .g.p2{ color:var(--ink-3); background:var(--surface-2); border-color:var(--line-2) }
+
+  /* nested TOC */
+  nav.toc ol ol{ list-style:none; counter-reset:none; margin:2px 0 6px;
+                 padding-left:14px }
+  nav.toc ol ol li{ counter-increment:none }
+  nav.toc ol ol a{ padding:3px 8px 3px 10px; font-size:11.5px;
+                   color:var(--ink-3); border-left:1px solid var(--line) }
+  nav.toc ol ol a::before{ content:none }
+  nav.toc ol ol a:hover{ color:var(--ink-2) }
+
+  @media print{
+    nav.toc{ display:none }
+    section{ break-inside:avoid-page }
+    .dgscroll{ overflow:visible }
+    pre.code{ white-space:pre-wrap; word-break:break-word }
+    body{ background:#fff; font-size:11pt }
+  }
+
+</style>
+
+</head>
+<body>
+<div class="shell">
+  <header class="mast">
+    <div class="eyebrow">
+      <span>Codebase review · proposal</span><span class="sep">/</span>
+      <span>26 items · 7 phases · ~13 weeks</span><span class="sep">/</span>
+      <span>Requires approval before any code change</span>
+    </div>
+    <h1 class="title">Refactoring Strategy</h1>
+    <p class="deck">Sequenced by what each step unblocks, not by severity. Behaviour-preserving by construction except for <b>three items quarantined into their own approval-gated phase</b>.</p>
+    <div class="metabar">
+      <span><strong>Status:</strong> Proposal. Requires approval before any code change.</span>
+      <span><strong>Date:</strong> 2026-08-10</span>
+      <span><strong>Baseline:</strong> <code>main</code> @ <code>35e2eeb</code></span>
+      <span><strong>Inputs:</strong> <a href="00_Critical_Problem_Areas.html"><code>00_Critical_Problem_Areas.html</code></a> ·</span>
+      <span><a href="../architecture%20documents/System_Architecture_Overview.html">architecture review</a></span>
+    </div>
+  </header>
+
+  <div class="body-grid">
+    <nav class="toc" aria-label="Contents">
+      <p class="toc-h">Contents</p>
+      <ol>
+        <li><a href="#1-principles-for-this-refactor">Principles for this refactor</a></li>
+        <li><a href="#2-phase-plan">Phase plan</a></li>
+        <li><a href="#phase-0--stop-the-bleeding-3-days-very-low-risk">Phase 0 — Stop the bleeding (~3 days, very low risk)</a><ol><li><a href="#r-01">R-01 Make the README truthful</a></li><li><a href="#r-02">R-02 Add LICENSE</a></li><li><a href="#r-03">R-03 Extend .gitignore</a></li><li><a href="#r-04">R-04 Split and repair requirements</a></li><li><a href="#r-05">R-05 Delete dead trees</a></li></ol></li>
+        <li><a href="#phase-1--foundations-1-week-low-risk">Phase 1 — Foundations (~1 week, low risk)</a><ol><li><a href="#r-06">R-06 Add packaging metadata</a></li><li><a href="#r-07">R-07 Repo-anchored path resolution</a></li><li><a href="#r-08">R-08 Characterization harness for the training stack</a></li><li><a href="#r-09">R-09 Fix the stale test and quarantine environment-dependent tests</a></li></ol></li>
+        <li><a href="#phase-2--hermes-hardening-15-weeks-lowmedium-risk">Phase 2 — HERMES hardening (~1.5 weeks, low–medium risk)</a><ol><li><a href="#r-10">R-10 Fix RF-link socket lifetime</a></li><li><a href="#r-11">R-11 Bound and deadline the contact fan-out; de-duplicate the two contact methods</a></li><li><a href="#r-12">R-12 Make blocking waits cancellable</a></li><li><a href="#r-13">R-13 Observability and encapsulation hygiene</a></li></ol></li>
+        <li><a href="#phase-3--correctness-approval-gated-3-days">Phase 3 — Correctness (approval-gated, ~3 days)</a><ol><li><a href="#r-14">R-14 Wire the AC-GAN hyperparameters</a></li><li><a href="#r-15">R-15 Make unimplemented model types fail loudly</a></li><li><a href="#r-16">R-16 Retire the --mode hermes stub</a></li></ol></li>
+        <li><a href="#phase-4--bridge-the-stacks-2-weeks-medium-risk">Phase 4 — Bridge the stacks (~2 weeks, medium risk)</a><ol><li><a href="#r-17">R-17 Build hermes_adapters/</a></li><li><a href="#r-18">R-18 Retire StubGeneratorHost from production paths</a></li></ol></li>
+        <li><a href="#phase-5--training-stack-consolidation-4-weeks-high-risk">Phase 5 — Training-stack consolidation (~4 weeks, high risk)</a><ol><li><a href="#r-19">R-19 Typed configuration objects</a></li><li><a href="#r-20">R-20 Registry-based factories</a></li><li><a href="#r-21">R-21 One parameterised GAN trainer family</a></li><li><a href="#r-22">R-22 Consolidate model builders</a></li></ol></li>
+        <li><a href="#phase-6--scale-out-3-weeks-medium-risk">Phase 6 — Scale-out (~3 weeks, medium risk)</a><ol><li><a href="#r-23">R-23 Pluggable registry persistence</a></li><li><a href="#r-24">R-24 Concurrent cluster service loop</a></li><li><a href="#r-25">R-25 Locality-aware, stable device assignment</a></li><li><a href="#r-26">R-26 Split the analysis monolith</a></li></ol></li>
+        <li><a href="#3-sequencing-rationale">Sequencing rationale</a></li>
+        <li><a href="#4-explicitly-out-of-scope">Explicitly out of scope</a></li>
+        <li><a href="#5-approval-checklist">Approval checklist</a></li>
+      </ol>
+    </nav>
+
+    <main>
+      <section id="1-principles-for-this-refactor">
+        <div class="sec-eyebrow">§&nbsp;01 · Principles for this refactor</div>
+        <h2>Principles for this refactor</h2>
+<p>These constrain every item below. If a proposed change violates one, it is out of scope.</p>
+<ol>
+<li><strong>No functional change without explicit approval.</strong> Two items (<a href="#r-14">R-14</a>,
+   <a href="#r-15">R-15</a>) alter observable behaviour. Both are isolated, flagged, and have a
+   behaviour-preserving variant. Everything else must produce byte-identical results.</li>
+<li><strong>Do not rewrite <code>hermes/</code>.</strong> It is the best code here, it has 512 passing tests, and
+   its abstractions are the right ones. Harden it in place; extend it through the
+   Protocols it already defines.</li>
+<li><strong>Tests before structure.</strong> <code>Config/ModelTrainingConfig/</code> has zero test coverage and
+   21.3 K LOC. Consolidating it without a characterization harness first is not a
+   refactor, it is a rewrite with extra steps.</li>
+<li><strong>Sequence by unblocking, not by severity.</strong> Packaging is P1 but comes first, because
+   it is the precondition for splitting requirements, registering pytest markers, and
+   removing <code>sys.path</code> hacks.</li>
+<li><strong>Every step ships independently.</strong> No phase depends on a later phase. Stopping after
+   any phase leaves the repository better than it started.</li>
+<li><strong>Preserve the fix-provenance comments.</strong> The <code>H1</code> / <code>S2-M3</code> / <code>L-H2</code> / <code>EX-4.2</code> tags
+   are load-bearing institutional memory. Carry them through any move.</li>
+</ol>
+<hr />
+      </section>
+      <section id="2-phase-plan">
+        <div class="sec-eyebrow">§&nbsp;02 · Phase plan</div>
+        <h2>Phase plan</h2>
+<div class="tablewrap"><table class="wide">
+<thead>
+<tr>
+<th>Phase</th>
+<th>Theme</th>
+<th>Items</th>
+<th>Effort</th>
+<th>Risk</th>
+<th>Unblocks</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>0</strong></td>
+<td>Stop the bleeding</td>
+<td>R-01 … R-05</td>
+<td>~3 days</td>
+<td>Very low</td>
+<td>Deployment, honest docs</td>
+</tr>
+<tr>
+<td><strong>1</strong></td>
+<td>Foundations</td>
+<td>R-06 … R-09</td>
+<td>~1 week</td>
+<td>Low</td>
+<td>Everything downstream</td>
+</tr>
+<tr>
+<td><strong>2</strong></td>
+<td>HERMES hardening</td>
+<td>R-10 … R-13</td>
+<td>~1.5 weeks</td>
+<td>Low–Medium</td>
+<td>Real missions, scale</td>
+</tr>
+<tr>
+<td><strong>3</strong></td>
+<td>Correctness (approval-gated)</td>
+<td>R-14 … R-16</td>
+<td>~3 days</td>
+<td><strong>Behaviour-changing</strong></td>
+<td>Valid hyperparameter sweeps</td>
+</tr>
+<tr>
+<td><strong>4</strong></td>
+<td>Bridge the stacks</td>
+<td>R-17 … R-18</td>
+<td>~2 weeks</td>
+<td>Medium</td>
+<td>Actual GAN-in-HERMES</td>
+</tr>
+<tr>
+<td><strong>5</strong></td>
+<td>Training-stack consolidation</td>
+<td>R-19 … R-22</td>
+<td>~4 weeks</td>
+<td><strong>High</strong></td>
+<td>21.3 K → ~4 K LOC</td>
+</tr>
+<tr>
+<td><strong>6</strong></td>
+<td>Scale-out</td>
+<td>R-23 … R-26</td>
+<td>~3 weeks</td>
+<td>Medium</td>
+<td>10× topology</td>
+</tr>
+</tbody>
+</table></div>
+<p>Total ≈ 13 weeks of focused effort. Phases 0–2 (≈3 weeks) capture most of the risk
+reduction; phase 5 is the largest and should not start until phase 1's characterization
+harness exists.</p>
+<hr />
+      </section>
+      <section id="phase-0--stop-the-bleeding-3-days-very-low-risk">
+        <div class="sec-eyebrow">&nbsp; · Phase 0 — Stop the bleeding (~3 days, very low risk)</div>
+        <h2>Phase 0 — Stop the bleeding (~3 days, very low risk)</h2>
+<p>Documentation and configuration only. No source file changes. Ship as one PR.</p>
+<h3 id="r-01"><span class="fid">R-01</span> Make the README truthful</h3>
+<p>Fixes the documentation half of <a href="00_Critical_Problem_Areas.html#c-03">C-03</a>,
+<a href="00_Critical_Problem_Areas.html#a-07">A-07</a>, <a href="00_Critical_Problem_Areas.html#e-01">E-01</a>,
+<a href="00_Critical_Problem_Areas.html#a-06">A-06</a>.</p>
+<ul>
+<li>Mark <code>--mode hermes</code> as <strong>not implemented</strong>; point at <code>python -m hermes.processes.*</code>
+  as the real entry point.</li>
+<li>Remove <code>pytest.ini</code> from the repository-layout block (or add the file — see
+  <a href="#r-06">R-06</a>).</li>
+<li>Correct the <code>FlightFramework/</code> line: "vendored third-party FLoX; currently unused".</li>
+<li>Correct the test-count claim ("410 passed") to the measured figure, with the
+  environment caveat.</li>
+<li>State the working-directory requirement explicitly for every documented command.</li>
+</ul>
+<p><strong>DoD:</strong> every command in the README executes as written from the stated directory, or
+is marked as not-yet-working.</p>
+<h3 id="r-02"><span class="fid">R-02</span> Add <code>LICENSE</code></h3>
+<p>The README declares MIT and links a file that does not exist, while the repository
+vendors a third-party MIT project. Add the MIT text with the correct copyright line, and
+record <code>FlightFramework/</code>'s provenance in a <code>THIRD_PARTY_NOTICES.md</code> — or delete it per
+<a href="#r-05">R-05</a>.</p>
+<p><strong>DoD:</strong> <code>LICENSE</code> exists; every vendored tree's origin and licence is recorded.</p>
+<h3 id="r-03"><span class="fid">R-03</span> Extend <code>.gitignore</code></h3>
+<p>Fixes <a href="00_Critical_Problem_Areas.html#g-01">G-01</a>.</p>
+<div class="codewrap"><span class="lang">gitignore</span><pre class="code"><code>.claude/
+.idea/
+.pytest_cache/
+.venv*/
+*.egg-info/</code></pre></div>
+<p>Decide <code>hermes_rl/</code>'s fate explicitly: promote to a git submodule, move into the tree as
+tracked source, or move out of the repository. Leaving a nested <code>.git</code> untracked loses it
+on the next clone.</p>
+<p><strong>DoD:</strong> <code>git status</code> is clean on a fresh checkout after a full test run; <code>git add -A</code>
+stages nothing unintended.</p>
+<h3 id="r-04"><span class="fid">R-04</span> Split and repair requirements</h3>
+<p>Fixes <a href="00_Critical_Problem_Areas.html#e-01">E-01</a>. Replace the 273-line freeze with three
+files derived from actual imports:</p>
+<div class="codewrap wide"><span class="lang">text</span><pre class="code"><code>requirements/core.txt      numpy&gt;=1.24,&lt;3        # everything hermes/ needs
+requirements/test.txt      -r core.txt + pytest
+requirements/ml.txt        -r core.txt + tensorflow==2.15.*, scikit-learn, pandas,
+                                          matplotlib, scipy, h5py
+requirements/legacy.txt    -r ml.txt   + flwr==1.9.0</code></pre></div>
+<p>Remove <code>uuid</code>, <code>zmq</code>, <code>serial</code>, <code>gps</code>, <code>distro-info</code>, <code>launchpadlib</code>, <code>wadllib</code>,
+<code>ssh-import-id</code>, <code>python-apt</code>, <code>PyQt5</code>, <code>ansible</code>, <code>torch</code>, <code>transformers</code>, <code>hagrid</code>,
+<code>syft-proto</code>, <code>boto3</code>, <code>azure-*</code> unless a concrete import is found.</p>
+<p><strong>Verification:</strong> <code>pip install -r requirements/test.txt &amp;&amp; pytest tests/unit -q</code> in a
+clean venv must pass without TensorFlow present.</p>
+<p><strong>DoD:</strong> a clean venv installs each tier without error; <code>tests/unit</code> passes on
+<code>test.txt</code> alone.</p>
+<h3 id="r-05"><span class="fid">R-05</span> Delete dead trees</h3>
+<p>Fixes <a href="00_Critical_Problem_Areas.html#a-07">A-07</a>, <a href="00_Critical_Problem_Areas.html#d-02">D-02</a>.
+Each of these has zero importers — verified by repo-wide grep:</p>
+<div class="tablewrap"><table class="wide">
+<thead>
+<tr>
+<th>Path</th>
+<th>LOC</th>
+<th>Evidence</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>FlightFramework/</code></td>
+<td>5,853</td>
+<td>zero <code>import flight</code> outside itself</td>
+</tr>
+<tr>
+<td><code>Config/…/GAN/FullModel/CANGANCentralTrainingConfig.py</code></td>
+<td>1,900</td>
+<td>only reference is a commented-out import</td>
+</tr>
+<tr>
+<td><code>Config/…/CentralTrainingConfig/misc/Copy of ACGANCentralTrainingConfig.py</code></td>
+<td>~600</td>
+<td>filename says it</td>
+</tr>
+<tr>
+<td><code>Config/DatasetConfig/CICIOT2023_Sampling/ciciot2023DatasetLoad.py</code></td>
+<td>271</td>
+<td>superseded by <code>…LoadV2</code>; hardcodes its arguments</td>
+</tr>
+<tr>
+<td><code>Config/DatasetConfig/IOTBotNet2020_Sampling/iotbotnet2020DatasetLoad.py</code></td>
+<td>315</td>
+<td>superseded by <code>…LoadV2</code></td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>~9 K LOC removed, zero behaviour change.</strong> Git history preserves them; tag the commit
+before deletion (<code>pre-deadcode-removal</code>) so recovery is one command.</p>
+<p><strong>DoD:</strong> full suite green after deletion; a scripted import of every remaining module
+succeeds.</p>
+<hr />
+      </section>
+      <section id="phase-1--foundations-1-week-low-risk">
+        <div class="sec-eyebrow">&nbsp; · Phase 1 — Foundations (~1 week, low risk)</div>
+        <h2>Phase 1 — Foundations (~1 week, low risk)</h2>
+<h3 id="r-06"><span class="fid">R-06</span> Add packaging metadata</h3>
+<p>Fixes <a href="00_Critical_Problem_Areas.html#a-06">A-06</a>. Add <code>pyproject.toml</code> declaring
+<code>hermes</code>, <code>experiments</code>, and <code>Config</code> as packages, plus <code>pytest.ini</code> (or <code>[tool.pytest]</code>)
+registering the <code>slow</code> marker and setting <code>testpaths</code>. Reference implementation in
+<a href="HIFINS/HIFINS_Production_Code.html#1-packaging"><code>HIFINS/HIFINS_Production_Code.html</code> §1</a>.</p>
+<p>Then remove all 16 <code>sys.path.append(os.path.abspath('../../..'))</code> lines, since
+<code>pip install -e .</code> makes them unnecessary.</p>
+<p><strong>DoD:</strong> <code>pip install -e .</code> succeeds; <code>pytest</code> runs from any directory; no
+<code>PytestUnknownMarkWarning</code>; <code>--strict-markers</code> passes.</p>
+<h3 id="r-07"><span class="fid">R-07</span> Repo-anchored path resolution</h3>
+<p>Fixes <a href="00_Critical_Problem_Areas.html#m-02">M-02</a>. One <code>hifins/paths.py</code> resolving the
+dataset root from, in order: an explicit argument, <code>$HIFINS_DATASET_ROOT</code>,
+<code>$HOME/datasets</code>, then the legacy <code>../../../../datasets</code> for backward compatibility.
+Replace the six hardcoded literals with calls to it.</p>
+<p>Reference implementation in
+<a href="HIFINS/HIFINS_Production_Code.html#2-path-resolution"><code>HIFINS/HIFINS_Production_Code.html</code> §2</a>.</p>
+<p><strong>Behaviour preservation:</strong> the legacy relative path stays last in the resolution order,
+so an existing run from <code>App/TrainingApp/Client/</code> finds exactly the same directory.</p>
+<p><strong>DoD:</strong> training runs identically from the repository root and from
+<code>App/TrainingApp/Client/</code>; a missing dataset raises a clear error naming every path
+tried, instead of <code>FileNotFoundError</code> on a mangled relative path.</p>
+<h3 id="r-08"><span class="fid">R-08</span> Characterization harness for the training stack</h3>
+<p><strong>This is the precondition for phase 5 and the highest-value item in phase 1.</strong></p>
+<p><code>Config/ModelTrainingConfig/</code> has zero tests. Before consolidating 47 classes, capture
+what they currently do:</p>
+<ol>
+<li>A tiny synthetic dataset fixture (200 rows, correct schema, fixed seed).</li>
+<li>For each live trainer class: construct → <code>fit</code> for 1 epoch with a fixed seed →
+   snapshot the resulting weight hashes, loss trajectory, and log lines to a golden file.</li>
+<li>Assert byte-equality against the golden on every run.</li>
+</ol>
+<p>This is a <strong>characterization</strong> suite, not a correctness suite: it does not claim the
+current behaviour is right, only that a refactor did not change it. That is exactly what
+is needed to make phase 5 safe.</p>
+<p><strong>DoD:</strong> every trainer reachable from <code>modelCentralTrainingConfigLoad</code> /
+<code>modelFederatedTrainingConfigLoad</code> has a golden snapshot; the suite runs in under 2
+minutes on CPU.</p>
+<h3 id="r-09"><span class="fid">R-09</span> Fix the stale test and quarantine environment-dependent tests</h3>
+<p>Fixes <a href="00_Critical_Problem_Areas.html#t-01">T-01</a>. Update
+<code>test_experiments_calibration.py:36</code> to assert the intended invariant (the TOML declares
+<em>a</em> valid status and matches the shipped file) rather than a specific transient value.
+Mark the TensorFlow- and <code>flwr</code>-dependent tests with <code>@pytest.mark.requires_tf</code> /
+<code>requires_flwr</code> and skip them when the import is unavailable.</p>
+<p><strong>DoD:</strong> <code>pytest tests/ -q</code> is green in a core-only venv and in a full venv.</p>
+<hr />
+      </section>
+      <section id="phase-2--hermes-hardening-15-weeks-lowmedium-risk">
+        <div class="sec-eyebrow">&nbsp; · Phase 2 — HERMES hardening (~1.5 weeks, low–medium risk)</div>
+        <h2>Phase 2 — HERMES hardening (~1.5 weeks, low–medium risk)</h2>
+<p>All items are behaviour-preserving in the tested regime and behaviour-<em>restoring</em> in the
+untested one. Reference implementations in
+<a href="Hermes/HERMES_Production_Code.html"><code>Hermes/HERMES_Production_Code.html</code></a>.</p>
+<h3 id="r-10"><span class="fid">R-10</span> Fix RF-link socket lifetime</h3>
+<p>Fixes <a href="00_Critical_Problem_Areas.html#p-02">P-02</a>. <strong>Highest-value single change in the
+subsystem.</strong> Mirror <code>tcp_dock_link.py</code>'s approach exactly:</p>
+<ul>
+<li><code>conn.settimeout(None)</code> on registered device sockets; bound sends via <code>SO_SNDTIMEO</code>.</li>
+<li>Extract the platform-correct socket-option helper into <code>hermes/transport/_sockopt.py</code>
+  and use it from both transports (Windows takes a DWORD of milliseconds, not a
+  <code>timeval</code>).</li>
+<li>Add an application-level heartbeat frame on the RF link, or <code>SO_KEEPALIVE</code>, so a
+  genuinely dead peer is still detected.</li>
+<li>Add bounded reconnect-with-backoff to <code>TCPRFLinkClient</code>, and a sleep to
+  <code>DeviceService.run</code>'s <code>outcome is None</code> path so a closed link cannot hot-spin.</li>
+</ul>
+<p><strong>Regression test:</strong> an integration test with a 45-second idle gap between two contacts
+that asserts the second contact still succeeds. This test fails today.</p>
+<p><strong>DoD:</strong> device survives an arbitrary inter-contact gap; a killed mule produces bounded
+device CPU; existing tests unchanged.</p>
+<h3 id="r-11"><span class="fid">R-11</span> Bound and deadline the contact fan-out; de-duplicate the two contact methods</h3>
+<p>Fixes <a href="00_Critical_Problem_Areas.html#p-01">P-01</a> and <a href="00_Critical_Problem_Areas.html#d-01">D-01</a>
+together, because the duplication is what doubles the defect.</p>
+<ul>
+<li>Extract one <code>_run_contact_exchange(devices, pass_kind, worker)</code> carrying the shared
+  broadcast → stash-drain → gather → fan-out → collect skeleton.</li>
+<li>Replace unbounded <code>threading.Thread</code> spawning with a module-level
+  <code>ThreadPoolExecutor(max_workers=min(len(devices), MAX_CONTACT_WORKERS))</code>.</li>
+<li>Replace per-thread joins with a single wall-clock deadline
+  (<code>concurrent.futures.wait(fs, timeout=deadline - now())</code>), so worst case is
+  <code>2 × ttl</code> total rather than <code>N × 2 × ttl</code>.</li>
+<li>Guard <code>_record_outcome</code> / <code>_accepted</code> against post-<code>close_round</code> writes with a round
+  epoch, so an abandoned worker cannot pollute the next round's ledger.</li>
+<li>Add the missing <code>Sequence</code> import (<a href="00_Critical_Problem_Areas.html#q-01">Q-01</a>).</li>
+</ul>
+<p><strong>DoD:</strong> <code>host_mission.py</code> loses ~150 duplicated lines; contact wall-clock is bounded
+independent of N; all <code>test_host_mission</code> / <code>test_two_pass_contact</code> tests unchanged.</p>
+<h3 id="r-12"><span class="fid">R-12</span> Make blocking waits cancellable</h3>
+<p>Fixes <a href="00_Critical_Problem_Areas.html#p-03">P-03</a>. Give <code>ClientCluster.wait_for_dock</code> an
+optional <code>stop_event: threading.Event</code>, wait on <code>event.wait(poll_interval)</code> instead of
+<code>time.sleep</code>, and thread the <code>MuleService._stop_event</code> through the supervisor. Replace
+the two <code>timeout=None</code> call sites with a configured <code>dock_wait_timeout_s</code> (default
+generous, e.g. 300 s) so an unreachable cluster surfaces as an error rather than a hang.</p>
+<p><strong>DoD:</strong> SIGTERM during an inter-pass dock wait exits within one poll interval; a dead
+cluster produces a logged <code>MuleSupervisorError</code> rather than an infinite loop.</p>
+<h3 id="r-13"><span class="fid">R-13</span> Observability and encapsulation hygiene</h3>
+<p>Fixes <a href="00_Critical_Problem_Areas.html#q-02">Q-02</a> and <a href="00_Critical_Problem_Areas.html#q-03">Q-03</a>.</p>
+<ul>
+<li>Move <code>json.dumps</code> inside the guarded region in <code>events.py</code>; extend <code>_coerce</code> to handle
+  numpy scalars and arrays (<code>.item()</code> / <code>.tolist()</code>) and add a <code>default=repr</code> fallback.</li>
+<li>Replace <code>self.cluster._cluster_round</code> with the public <code>cluster_round</code> property.</li>
+<li>Narrow the four <code>except Exception: pass</code> blocks in <code>hermes/processes/*</code> shutdown paths
+  to the specific expected exceptions, logging anything else at <code>WARNING</code>.</li>
+</ul>
+<p><strong>DoD:</strong> a test emitting <code>np.float32</code> does not raise; no cross-object private access
+remains in <code>hermes/</code> production code.</p>
+<hr />
+      </section>
+      <section id="phase-3--correctness-approval-gated-3-days">
+        <div class="sec-eyebrow">&nbsp; · Phase 3 — Correctness (approval-gated, ~3 days)</div>
+        <h2>Phase 3 — Correctness (approval-gated, ~3 days)</h2>
+<blockquote class="warn">
+<p>⚠ <strong>These change observable behaviour.</strong> They are separated into their own phase so
+they can be approved, scheduled, and communicated independently. Do not bundle them
+into a "cleanup" PR.</p>
+</blockquote>
+<h3 id="r-14"><span class="fid">R-14</span> Wire the AC-GAN hyperparameters</h3>
+<p>Fixes <a href="00_Critical_Problem_Areas.html#c-01">C-01</a>. Two variants; <strong>pick one explicitly</strong>:</p>
+<p><strong>Variant A — behaviour-preserving (recommended default).</strong> Introduce a frozen
+<code>ACGANHyperParams</code> dataclass whose defaults are the <em>current hardcoded literals</em>
+(<code>gen_lr=0.00012</code>, <code>disc_lr=0.00007</code>, <code>d_to_g_ratio=3</code>, <code>beta_1=0.5</code>, <code>beta_2=0.999</code>,
+<code>clipnorm=1.0</code>, <code>decay_steps=10000</code>, <code>decay_rate=0.98</code>). Change the argparse defaults to
+match. Thread the object into the trainer. A run with no flags produces <strong>byte-identical
+results</strong>; a run with flags now honours them. Log the effective values at startup.</p>
+<p><strong>Variant B — honour the advertised defaults.</strong> Keep the argparse defaults as published
+(<code>gen_lr=0.00003</code>, <code>disc_lr=0.00001</code>, <code>d_to_g_ratio=1</code>). Every existing invocation
+changes behaviour, and previously-trained checkpoints become non-reproducible from the
+CLI.</p>
+<p>Variant A is recommended: it makes the knobs work without invalidating the September-2025
+mode-collapse tuning, which was done against the hardcoded values.</p>
+<p><strong>Either way, add a regression guard:</strong> a test asserting that every <code>--AC_*</code> flag is read
+somewhere, so a future flag cannot be added and forgotten.</p>
+<p><strong>DoD:</strong> all 21 flags reach the optimizer; effective hyperparameters appear in the
+training log; under Variant A, golden snapshots from <a href="#r-08">R-08</a> are unchanged.</p>
+<h3 id="r-15"><span class="fid">R-15</span> Make unimplemented model types fail loudly</h3>
+<p>Fixes <a href="00_Critical_Problem_Areas.html#c-02">C-02</a>. Replace the <code>client = None</code> fall-through
+with an explicit <code>NotImplementedError</code> raised <strong>before</strong> the dataset load, i.e. validate
+<code>(model_type, model_training)</code> at argument-parse time against a registry of implemented
+combinations. Remove <code>CANGAN</code> and the three <code>NIDS-IOT-*</code> values from the <code>choices</code> lists
+until they are implemented, or keep them and fail in the parser with a clear message.</p>
+<p>Behaviour change: an <code>AttributeError</code> after several minutes becomes an immediate,
+readable error. Nothing that previously worked stops working.</p>
+<p><strong>DoD:</strong> every value in every <code>choices</code> list either runs or fails in under a second with
+a message naming what is missing.</p>
+<h3 id="r-16"><span class="fid">R-16</span> Retire the <code>--mode hermes</code> stub</h3>
+<p>Fixes <a href="00_Critical_Problem_Areas.html#c-03">C-03</a>. Until <a href="#r-17">R-17</a> lands, make the flag
+<code>raise SystemExit</code> with a message pointing at <code>python -m hermes.processes.*</code>. Update
+<code>test_mode_switch.py</code> to assert the honest behaviour instead of a misleading banner.
+After R-17, re-point the flag at the real adapter.</p>
+<p><strong>DoD:</strong> <code>--mode hermes</code> either works or says clearly that it does not; no test asserts a
+banner that misrepresents state.</p>
+<hr />
+      </section>
+      <section id="phase-4--bridge-the-stacks-2-weeks-medium-risk">
+        <div class="sec-eyebrow">&nbsp; · Phase 4 — Bridge the stacks (~2 weeks, medium risk)</div>
+        <h2>Phase 4 — Bridge the stacks (~2 weeks, medium risk)</h2>
+<h3 id="r-17"><span class="fid">R-17</span> Build <code>hermes_adapters/</code></h3>
+<p>Fixes <a href="00_Critical_Problem_Areas.html#a-01">A-01</a>; the inverted <code>experiments</code>
+dependency it depends on is detailed as
+<a href="Hermes/HERMES_Findings_and_Refactoring.html#h-08">H-08</a>.
+<strong>The single highest-leverage change in the repository</strong>, and it requires <strong>zero changes
+to <code>hermes/</code></strong> because the seams already exist:</p>
+<div class="codewrap wide"><span class="lang">python</span><pre class="code"><code><span class="c1"># hermes_adapters/keras_generator_host.py</span>
+<span class="k">class</span> <span class="nc">KerasGeneratorHost</span><span class="p">:</span>                     <span class="c1"># satisfies hermes GeneratorHost Protocol</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Real θ_gen + synth batch from the AC-GAN generator.&quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="nf">make_synth_batch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">n</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]:</span> <span class="o">...</span>
+    <span class="k">def</span> <span class="nf">get_global_disc_weights</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Weights</span><span class="p">:</span> <span class="o">...</span>
+    <span class="k">def</span> <span class="nf">update_disc_from_cluster_avg</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">weights</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span> <span class="o">...</span>
+    <span class="k">def</span> <span class="nf">apply_tier3_gen_refinement</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">weights</span><span class="p">,</span> <span class="n">refinement_round</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span> <span class="o">...</span>
+
+<span class="c1"># hermes_adapters/keras_local_train.py</span>
+<span class="k">class</span> <span class="nc">KerasLocalTrain</span><span class="p">:</span>                        <span class="c1"># satisfies hermes LocalTrainFn Protocol</span>
+    <span class="k">def</span> <span class="fm">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">theta_disc</span><span class="p">,</span> <span class="n">synth_batch</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">LocalTrainResult</span><span class="p">:</span> <span class="o">...</span></code></pre></div>
+<p>Then invert the dependency: <code>hermes/processes/{cluster,device}.py</code> currently import
+<code>experiments.exp4.model_task</code> directly. Replace with an entry-point / factory string in
+the config (<code>"model_provider": "hermes_adapters:KerasLocalTrain"</code>) resolved at runtime,
+so <code>hermes/</code> names no concrete provider.</p>
+<p>Skeletons in
+<a href="Hermes/HERMES_Production_Code.html#6-inverting-the-experiments-dependency"><code>Hermes/HERMES_Production_Code.html</code> §6</a>
+and
+<a href="HIFINS/HIFINS_Production_Code.html#5-hermes_adapters"><code>HIFINS/HIFINS_Production_Code.html</code> §5</a>.</p>
+<p><strong>DoD:</strong> an end-to-end HERMES topology trains the real DNN-IDS with real AC-GAN synth
+samples; <code>grep -rn "import experiments" hermes/</code> returns nothing; <code>hermes/</code> installs and
+tests standalone.</p>
+<h3 id="r-18"><span class="fid">R-18</span> Retire <code>StubGeneratorHost</code> from production paths</h3>
+<p>Once R-17 lands, <code>ClusterService</code> should select the real generator host when configured
+and fall back to the stub only in tests. Today the stub is unconditional — meaning the
+"GAN" in "GAN-based NIDS" emits zero tensors in every HERMES run.</p>
+<p><strong>DoD:</strong> the synth batch in a configured run contains generator output; the stub is
+constructed only from test code.</p>
+<hr />
+      </section>
+      <section id="phase-5--training-stack-consolidation-4-weeks-high-risk">
+        <div class="sec-eyebrow">&nbsp; · Phase 5 — Training-stack consolidation (~4 weeks, high risk)</div>
+        <h2>Phase 5 — Training-stack consolidation (~4 weeks, high risk)</h2>
+<blockquote>
+<p>Do not start before <a href="#r-08">R-08</a>'s characterization harness is green. This phase
+touches 21.3 K LOC with no existing test coverage.</p>
+</blockquote>
+<h3 id="r-19"><span class="fid">R-19</span> Typed configuration objects</h3>
+<p>Fixes <a href="00_Critical_Problem_Areas.html#a-05">A-05</a>. Replace the 20-element tuple and the
+41/42-parameter signatures with frozen dataclasses:</p>
+<div class="codewrap wide"><span class="lang">text</span><pre class="code"><code>DatasetConfig | ModelConfig | TrainingConfig | GANHyperParams | CallbackConfig | RunConfig</code></pre></div>
+<p>Mechanical, incremental, behaviour-preserving: build the dataclass from the existing
+tuple, pass it alongside, migrate call sites one at a time, delete the tuple last.</p>
+<p><strong>DoD:</strong> no function in <code>Config/SessionConfig/</code> has more than 6 parameters; golden
+snapshots unchanged.</p>
+<h3 id="r-20"><span class="fid">R-20</span> Registry-based factories</h3>
+<p>Replace <code>modelCreateLoad</code>'s 375-line / complexity-89 branch tree and the dispatchers'
+if/elif chains with decorator-registered factories keyed on
+<code>(model_type, model_training, training_area)</code>. An unregistered key raises at lookup with
+the list of valid keys — which makes <a href="00_Critical_Problem_Areas.html#c-02">C-02</a>'s
+<code>client = None</code> state unrepresentable.</p>
+<p><strong>DoD:</strong> <code>modelCreateLoad</code> is under 60 lines; adding a model type is one decorator, no
+edits to existing files.</p>
+<h3 id="r-21"><span class="fid">R-21</span> One parameterised GAN trainer family</h3>
+<p>Fixes <a href="00_Critical_Problem_Areas.html#a-04">A-04</a>. The 47 classes differ along four axes:
+GAN variant (GAN / WGAN-GP / AC-GAN), sub-model (Generator / Discriminator / Both / NIDS),
+training area (Central / Flower-client / Flower-strategy), and label mode (binary /
+multiclass). Collapse to:</p>
+<div class="codewrap wide"><span class="lang">text</span><pre class="code"><code>BaseTrainer                       lifecycle: fit / evaluate / save
+ ├── mixins: MetricsLoggingMixin, ValidationMixin, CheckpointMixin
+ ├── losses/  discriminator_loss, generator_loss, gradient_penalty, nids_loss   (one copy each)
+ └── variants: GANTrainer, WGANGPTrainer, ACGANTrainer                          (step functions only)
+adapters: CentralAdapter | FlowerClientAdapter | FlowerStrategyAdapter</code></pre></div>
+<p><strong>Projected: 21,278 LOC → ~4,000 LOC.</strong> Migrate one trainer at a time, each behind its
+golden snapshot; delete the old class only when its snapshot passes against the new path.</p>
+<p><strong>DoD:</strong> every golden from <a href="#r-08">R-08</a> passes; <code>discriminator_loss</code> exists once; no
+training function exceeds 80 lines.</p>
+<h3 id="r-22"><span class="fid">R-22</span> Consolidate model builders</h3>
+<p>Mark the 8 AC-GAN discriminator versions and 13 NIDS builders: one canonical, the rest
+either deleted or moved to <code>modelStructures/archive/</code> with a docstring stating what
+superseded them and when.</p>
+<p><strong>DoD:</strong> <code>modelCreateLoad</code> references exactly one builder per model type; every retained
+alternative has a stated reason.</p>
+<hr />
+      </section>
+      <section id="phase-6--scale-out-3-weeks-medium-risk">
+        <div class="sec-eyebrow">&nbsp; · Phase 6 — Scale-out (~3 weeks, medium risk)</div>
+        <h2>Phase 6 — Scale-out (~3 weeks, medium risk)</h2>
+<h3 id="r-23"><span class="fid">R-23</span> Pluggable registry persistence</h3>
+<p>Fixes <a href="00_Critical_Problem_Areas.html#a-03">A-03</a>. Define a <code>RegistryStore</code> Protocol with
+<code>InMemoryStore</code> (today's behaviour, the default) and <code>SQLiteStore</code> implementations.
+Snapshot on every <code>close_cluster_round</code>; load on startup. Emit a <code>registry_restored</code>
+event with the row count so an operator can tell a warm restart from a cold one.</p>
+<p><strong>DoD:</strong> killing and restarting the cluster mid-experiment resumes with intact
+<code>on_time_history</code> / <code>missed_history</code> / <code>delivery_priority</code>; existing tests pass unchanged
+against the in-memory default.</p>
+<h3 id="r-24"><span class="fid">R-24</span> Concurrent cluster service loop</h3>
+<p>Fixes <a href="00_Critical_Problem_Areas.html#a-09">A-09</a>. Move DOWN dispatch and
+<code>_emit_model_evaluation</code> off the ingest path onto a bounded worker pool; keep aggregation
+serialized under the existing lock. Index the registry by <code>assigned_mule</code> so <code>slice_for</code>
+is O(slice) rather than O(all devices). Narrow the <code>except Exception: up = None</code> at
+<code>cluster.py:300</code> to the specific link exceptions.</p>
+<p><strong>DoD:</strong> dock throughput scales with mule count up to the pool size; a slow TensorFlow
+evaluation no longer blocks dock traffic.</p>
+<h3 id="r-25"><span class="fid">R-25</span> Locality-aware, stable device assignment</h3>
+<p>Fixes <a href="00_Critical_Problem_Areas.html#a-08">A-08</a>. Replace round-robin with spatial
+partitioning over <code>last_known_position</code> (k-means or grid buckets, mule count = k), plus
+stable assignment (rendezvous hashing over <code>(device_id, mule_id)</code> as the tie-break) so a
+rebalance moves the minimum number of devices. Preserve today's behaviour behind a
+<code>strategy="round_robin"</code> default until the spatial strategy is validated.</p>
+<p><strong>DoD:</strong> a rebalance after one device's <code>is_new</code> flips moves ≤1 device instead of ~N/2;
+mean intra-slice distance drops measurably on the Exp-3 topologies.</p>
+<h3 id="r-26"><span class="fid">R-26</span> Split the analysis monolith</h3>
+<p>Fixes <a href="00_Critical_Problem_Areas.html#m-01">M-01</a>. Decompose
+<code>experiments/analysis/exp3.py:write_figures</code> (863 lines, complexity 170) into one
+function per figure with a shared <code>FigureContext</code>. Each becomes independently testable
+and independently re-runnable — today, regenerating one figure re-runs all six.</p>
+<p><strong>DoD:</strong> no function in <code>experiments/analysis/</code> exceeds 80 lines; each figure has its own
+test.</p>
+<hr />
+      </section>
+      <section id="3-sequencing-rationale">
+        <div class="sec-eyebrow">§&nbsp;03 · Sequencing rationale</div>
+        <h2>Sequencing rationale</h2>
+<figure class="dgfig"><div class="dgscroll"><svg class="dg" viewBox="0 0 1090 356" role="img" aria-label="Phase dependency graph for the refactor. Phase 0 precedes phase 1. Phase 1 unblocks phases 2 and 3, which both feed phase 4, which feeds phase 5. Phase 2 also feeds phase 6, as does phase 5. A separate gating edge runs from phase 1 to phase 5: the R-08 characterization harness must be green before the training-stack consolidation starts. Phase 3 is behaviour-changing and approval-gated; phase 5 is high risk." xmlns="http://www.w3.org/2000/svg"><defs><marker id="d6-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" class="mk"/></marker><marker id="d6-bad" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" class="mk-bad"/></marker><marker id="d6-dead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" class="mk-dead"/></marker><marker id="d6-soft" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" class="mk-soft"/></marker></defs><rect x="20" y="112" width="148" height="64" rx="7" class="bx"/><text x="94.0" y="134.0" text-anchor="middle">Phase 0</text><text x="94.0" y="148.0" text-anchor="middle" class="t-sm">Stop the bleeding</text><text x="94.0" y="162.0" text-anchor="middle" class="t-sm">3 d · very low risk</text><rect x="200" y="112" width="148" height="64" rx="7" class="bx"/><text x="274.0" y="134.0" text-anchor="middle">Phase 1</text><text x="274.0" y="148.0" text-anchor="middle" class="t-sm">Foundations</text><text x="274.0" y="162.0" text-anchor="middle" class="t-sm">1 w · low risk</text><rect x="380" y="30" width="148" height="64" rx="7" class="bx"/><text x="454.0" y="52.0" text-anchor="middle">Phase 2</text><text x="454.0" y="66.0" text-anchor="middle" class="t-sm">HERMES hardening</text><text x="454.0" y="80.0" text-anchor="middle" class="t-sm">1.5 w · low–med</text><rect x="380" y="194" width="148" height="64" rx="7" class="bx badbx"/><text x="454.0" y="216.0" text-anchor="middle">Phase 3 ⚠</text><text x="454.0" y="230.0" text-anchor="middle" class="t-sm">Correctness</text><text x="454.0" y="244.0" text-anchor="middle" class="t-sm">3 d · approval-gated</text><rect x="560" y="112" width="148" height="64" rx="7" class="bx"/><text x="634.0" y="134.0" text-anchor="middle">Phase 4</text><text x="634.0" y="148.0" text-anchor="middle" class="t-sm">Bridge the stacks</text><text x="634.0" y="162.0" text-anchor="middle" class="t-sm">2 w · medium</text><rect x="740" y="112" width="148" height="64" rx="7" class="bx warnbx"/><text x="814.0" y="134.0" text-anchor="middle">Phase 5</text><text x="814.0" y="148.0" text-anchor="middle" class="t-sm">Training consolidation</text><text x="814.0" y="162.0" text-anchor="middle" class="t-sm">4 w · HIGH RISK</text><rect x="920" y="112" width="148" height="64" rx="7" class="bx"/><text x="994.0" y="134.0" text-anchor="middle">Phase 6</text><text x="994.0" y="148.0" text-anchor="middle" class="t-sm">Scale-out</text><text x="994.0" y="162.0" text-anchor="middle" class="t-sm">3 w · medium</text><polyline points="168,144.0 196,144.0" class="ln" marker-end="url(#d6-a)"/><polyline points="708,144.0 736,144.0" class="ln" marker-end="url(#d6-a)"/><polyline points="888,144.0 916,144.0" class="ln" marker-end="url(#d6-a)"/><polyline points="348,134.0 364,134.0 364,62.0 376,62.0" class="ln" marker-end="url(#d6-a)"/><polyline points="348,154.0 364,154.0 364,226.0 376,226.0" class="ln" marker-end="url(#d6-a)"/><polyline points="528,62.0 540,62.0 540,134.0 556,134.0" class="ln" marker-end="url(#d6-a)"/><polyline points="528,226.0 540,226.0 540,154.0 556,154.0" class="ln" marker-end="url(#d6-a)"/><polyline points="274.0,176 274.0,306 814.0,306 814.0,180" class="ln-bad" marker-end="url(#d6-bad)"/><text x="580" y="300.0" text-anchor="middle" class="t-bad">R-08 characterization harness is the gate — phase 5 cannot start before it is green</text><polyline points="454.0,30 454.0,14 994.0,14 994.0,108" class="ln" marker-end="url(#d6-a)"/><rect x="20" y="328" width="14" height="11" rx="3" class="bx badbx"/><text x="42" y="336" text-anchor="start" class="t-lbl">behaviour-changing — approve separately</text><rect x="320" y="328" width="14" height="11" rx="3" class="bx warnbx"/><text x="342" y="336" text-anchor="start" class="t-lbl">high risk — gated on a characterization suite</text></svg></div><figcaption><b>Two constraints drive the ordering.</b> Phase 3 is isolated so its approval conversation covers three specific behaviour changes rather than a large PR. Phase 5 is gated on the phase-1 characterization harness — consolidating 21.3 K LOC of untested training code without it is a rewrite, not a refactor.</figcaption></figure>
+<ul>
+<li><strong>Phase 0 before everything</strong> — it is free, reversible, and removes ~9 K LOC from
+  every subsequent search and review.</li>
+<li><strong>R-06 (packaging) gates R-04's verification</strong> — you cannot prove a core-only install
+  works without an installable package.</li>
+<li><strong>R-08 gates all of phase 5</strong> — non-negotiable. Consolidating untested code is a
+  rewrite.</li>
+<li><strong>Phase 3 is deliberately small and isolated</strong> so its approval conversation is about
+  three specific behaviour changes, not a large PR.</li>
+<li><strong>Phase 4 before phase 5</strong> — the adapters define what the consolidated trainer family
+  in phase 5 actually has to expose. Building them first prevents designing the wrong
+  interface.</li>
+<li><strong>Phase 6 last</strong> — scale work on a stack that cannot yet run a real model end-to-end is
+  premature.</li>
+</ul>
+<hr />
+      </section>
+      <section id="4-explicitly-out-of-scope">
+        <div class="sec-eyebrow">§&nbsp;04 · Explicitly out of scope</div>
+        <h2>Explicitly out of scope</h2>
+<p>Recording these so they are decisions, not oversights:</p>
+<div class="tablewrap"><table class="wide">
+<thead>
+<tr>
+<th>Not doing</th>
+<th>Why</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Rewriting <code>hermes/</code></td>
+<td>It is the best code here and has 512 passing tests. Harden, don't replace.</td>
+</tr>
+<tr>
+<td>Replacing pickle on the LAN transports</td>
+<td>Justified in a comment, bounded threat model, and swapping the codec is a wire-compat break. Fix the <em>cloud</em> link (<a href="00_Critical_Problem_Areas.html#s-01">S-01</a>) only.</td>
+</tr>
+<tr>
+<td>Migrating to asyncio</td>
+<td>The threading model is disciplined and correct. Churn without benefit at this scale.</td>
+</tr>
+<tr>
+<td>Porting the DDQN to Keras/PyTorch</td>
+<td>The numpy actor is ~200 ops per bucket and correct for the problem size. Adding a framework dependency to <code>hermes/</code> would undo its best property.</td>
+</tr>
+<tr>
+<td>Rewriting the experiment analysis figures</td>
+<td>Their <em>output</em> is validated by published results. Only decompose (<a href="#r-26">R-26</a>), never re-derive.</td>
+</tr>
+<tr>
+<td>Changing FL / scheduling algorithms</td>
+<td>This is a code-quality review. Algorithm changes are research decisions and belong to the design docs.</td>
+</tr>
+</tbody>
+</table></div>
+<p>One deliberate near-miss worth recording: the DDQN's Double-Q decoupling is baked in at
+<em>collection</em> time (<code>selector_train.py:129,446</code> pick the bootstrap action with the online
+net and freeze it into the <code>Transition</code>), while textbook DDQN re-selects at <em>update</em>
+time. The stored bootstrap action is therefore stale by up to the replay-buffer age.
+This is a <strong>methodology</strong> question for the paper, not a code defect, and is out of scope
+for this refactor — but it should be recorded in the design docs so a reviewer's question
+does not come as a surprise.</p>
+<hr />
+      </section>
+      <section id="5-approval-checklist">
+        <div class="sec-eyebrow">§&nbsp;05 · Approval checklist</div>
+        <h2>Approval checklist</h2>
+<p>Sign-off required before any code change. Recommended granularity:</p>
+<ul>
+<li>[ ] <strong>Phase 0</strong> (R-01…R-05) — docs, gitignore, requirements, ~9 K LOC deletion</li>
+<li>[ ] Confirm <code>FlightFramework/</code> may be deleted (or specify: keep + <code>THIRD_PARTY_NOTICES.md</code>)</li>
+<li>[ ] Confirm <code>hermes_rl/</code>'s disposition: submodule / track / remove</li>
+<li>[ ] <strong>Phase 1</strong> (R-06…R-09) — packaging, paths, characterization harness, test hygiene</li>
+<li>[ ] <strong>Phase 2</strong> (R-10…R-13) — HERMES transport + concurrency hardening</li>
+<li>[ ] <strong>Phase 3</strong> ⚠ <strong>behaviour-changing</strong> — approve each separately:</li>
+<li>[ ] R-14 <strong>Variant A</strong> (defaults pinned to current literals — recommended) <em>or</em>
+        <strong>Variant B</strong> (honour published defaults)</li>
+<li>[ ] R-15 — fail fast on unimplemented <code>--model_type</code> values</li>
+<li>[ ] R-16 — <code>--mode hermes</code> exits with a pointer instead of a false-success banner</li>
+<li>[ ] <strong>Phase 4</strong> (R-17, R-18) — <code>hermes_adapters/</code>, dependency inversion</li>
+<li>[ ] <strong>Phase 5</strong> (R-19…R-22) — training-stack consolidation <em>(gated on R-08 green)</em></li>
+<li>[ ] <strong>Phase 6</strong> (R-23…R-26) — persistence, concurrency, locality, analysis split</li>
+</ul>
+<p>Reference implementations for the code-bearing items:
+<a href="Hermes/HERMES_Production_Code.html"><code>Hermes/HERMES_Production_Code.html</code></a> ·
+<a href="HIFINS/HIFINS_Production_Code.html"><code>HIFINS/HIFINS_Production_Code.html</code></a></p>
+      </section>
+
+      <div class="foot">
+        <p class="mono">Generated from 01_Refactoring_Strategy.md. File:line references are to
+        the repository as read on 2026-08-10 (main @ 35e2eeb); verify against current
+        source before acting. This document is a review artefact — no project code was
+        modified to produce it.</p>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script>
+  // TOC active-state only. No animation; reduced-motion respected via CSS.
+  // getElementById, not querySelector: several ids begin with a digit, which
+  // is legal HTML but an invalid CSS selector.
+  (function(){
+    var links = Array.prototype.slice.call(document.querySelectorAll('nav.toc a'));
+    var secs  = links.map(function(a){
+      return document.getElementById(a.getAttribute('href').slice(1));
+    });
+    if(!('IntersectionObserver' in window)) return;
+    var io = new IntersectionObserver(function(entries){
+      entries.forEach(function(e){
+        if(e.isIntersecting){
+          var i = secs.indexOf(e.target);
+          links.forEach(function(l){ l.style.background=''; l.style.color=''; });
+          if(i>-1){ var l=links[i]; l.style.background='var(--surface-2)'; l.style.color='var(--ink)'; }
+        }
+      });
+    },{rootMargin:'-10% 0px -80% 0px'});
+    secs.forEach(function(s){ if(s) io.observe(s); });
+  })();
+</script>
+
+</body>
+</html>

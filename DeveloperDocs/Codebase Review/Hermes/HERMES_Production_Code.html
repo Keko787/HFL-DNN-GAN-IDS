@@ -1,0 +1,1634 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HERMES — Production-Grade Code</title>
+<meta name="description" content="Every change below is behaviour-preserving in the currently tested regime. Where one alters behaviour outside it — the &gt;30 s idle case, which is broken today — that is stated explicitly.">
+<style>
+  :root{
+    --bg:#f4f6f8; --surface:#ffffff; --surface-2:#eef1f4;
+    --ink:#141a20; --ink-2:#47525d; --ink-3:#6c7883;
+    --line:#dbe1e7; --line-2:#c8d0d8;
+    --accent:#0c7d8a; --accent-2:#0a5f6a; --accent-soft:#e0f0f2;
+    --ok:#2f8f56; --ok-bg:#e5f3ea; --ok-line:#a9d8bd;
+    --warn:#a8720c; --warn-bg:#f7efdb; --warn-line:#e3c483;
+    --gap:#bf3b4e; --gap-bg:#fbe5e8; --gap-line:#eeaeb7;
+    --font-display:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    --font-body:ui-serif,"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,Cambria,serif;
+    --font-mono:ui-monospace,"Cascadia Code","SF Mono","Segoe UI Mono",Menlo,Consolas,monospace;
+    --maxw:1200px; --prose:800px;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --bg:#0d1116; --surface:#141a21; --surface-2:#1a222b;
+      --ink:#e7ecf1; --ink-2:#a3afba; --ink-3:#74818d;
+      --line:#26303a; --line-2:#333f4b;
+      --accent:#2fc0d0; --accent-2:#5bd4e0; --accent-soft:#10333a;
+      --ok:#4cc47e; --ok-bg:#12301f; --ok-line:#245a3a;
+      --warn:#e0a63a; --warn-bg:#31260f; --warn-line:#5c4820;
+      --gap:#e56b7d; --gap-bg:#331a1f; --gap-line:#5e3038;
+    }
+  }
+  :root[data-theme="light"]{
+    --bg:#f4f6f8; --surface:#ffffff; --surface-2:#eef1f4;
+    --ink:#141a20; --ink-2:#47525d; --ink-3:#6c7883;
+    --line:#dbe1e7; --line-2:#c8d0d8;
+    --accent:#0c7d8a; --accent-2:#0a5f6a; --accent-soft:#e0f0f2;
+    --ok:#2f8f56; --ok-bg:#e5f3ea; --ok-line:#a9d8bd;
+    --warn:#a8720c; --warn-bg:#f7efdb; --warn-line:#e3c483;
+    --gap:#bf3b4e; --gap-bg:#fbe5e8; --gap-line:#eeaeb7;
+  }
+  :root[data-theme="dark"]{
+    --bg:#0d1116; --surface:#141a21; --surface-2:#1a222b;
+    --ink:#e7ecf1; --ink-2:#a3afba; --ink-3:#74818d;
+    --line:#26303a; --line-2:#333f4b;
+    --accent:#2fc0d0; --accent-2:#5bd4e0; --accent-soft:#10333a;
+    --ok:#4cc47e; --ok-bg:#12301f; --ok-line:#245a3a;
+    --warn:#e0a63a; --warn-bg:#31260f; --warn-line:#5c4820;
+    --gap:#e56b7d; --gap-bg:#331a1f; --gap-line:#5e3038;
+  }
+
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:var(--font-body); font-size:17px; line-height:1.62;
+    -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+  }
+  .shell{max-width:var(--maxw); margin:0 auto; padding:0 clamp(18px,4vw,40px)}
+
+  /* ---------- Masthead ---------- */
+  header.mast{padding:clamp(40px,7vw,84px) 0 34px; border-bottom:1px solid var(--line)}
+  .eyebrow{
+    font-family:var(--font-mono); font-size:12px; letter-spacing:.14em;
+    text-transform:uppercase; color:var(--accent); font-weight:600;
+    display:flex; gap:10px; flex-wrap:wrap; align-items:center;
+  }
+  .eyebrow .sep{color:var(--ink-3)}
+  h1.title{
+    font-family:var(--font-display); font-weight:760;
+    font-size:clamp(30px,5.4vw,52px); line-height:1.04; letter-spacing:-.022em;
+    margin:.42em 0 .28em; max-width:16ch; text-wrap:balance;
+  }
+  .deck{
+    font-size:clamp(17px,2.1vw,21px); color:var(--ink-2); max-width:60ch;
+    line-height:1.5; margin:0;
+  }
+  .deck b{color:var(--ink); font-weight:600}
+  .metabar{
+    margin-top:26px; display:flex; flex-wrap:wrap; gap:8px 20px;
+    font-family:var(--font-mono); font-size:12.5px; color:var(--ink-3);
+  }
+  .metabar b{color:var(--ink-2); font-weight:600}
+
+  /* ---------- Layout with TOC rail ---------- */
+  .body-grid{display:block}
+  @media(min-width:1040px){
+    .body-grid{display:grid; grid-template-columns:216px minmax(0,1fr); gap:48px; align-items:start}
+    nav.toc{position:sticky; top:24px; align-self:start}
+  }
+  nav.toc{padding:30px 0 0}
+  nav.toc .toc-h{
+    font-family:var(--font-mono); font-size:11px; letter-spacing:.14em;
+    text-transform:uppercase; color:var(--ink-3); margin:0 0 12px; font-weight:600;
+  }
+  nav.toc ol{list-style:none; margin:0; padding:0; counter-reset:toc}
+  nav.toc li{counter-increment:toc; margin:2px 0}
+  nav.toc a{
+    display:block; text-decoration:none; color:var(--ink-2);
+    font-family:var(--font-display); font-size:14px; line-height:1.35;
+    padding:6px 10px 6px 30px; border-radius:7px; position:relative;
+  }
+  nav.toc a::before{
+    content:counter(toc,decimal-leading-zero); position:absolute; left:8px;
+    font-family:var(--font-mono); font-size:11px; color:var(--accent);
+    top:8px; font-weight:600;
+  }
+  nav.toc a:hover{background:var(--surface-2); color:var(--ink)}
+  @media(max-width:1039px){ nav.toc{display:none} }
+
+  main{padding-top:8px; min-width:0}
+
+  /* ---------- Sections & prose ---------- */
+  section{padding:38px 0; border-bottom:1px solid var(--line); scroll-margin-top:20px}
+  section:last-of-type{border-bottom:0}
+  .sec-eyebrow{
+    font-family:var(--font-mono); font-size:12px; letter-spacing:.13em;
+    text-transform:uppercase; color:var(--accent); font-weight:600; margin-bottom:8px;
+  }
+  h2{
+    font-family:var(--font-display); font-weight:720; letter-spacing:-.016em;
+    font-size:clamp(22px,3.2vw,30px); line-height:1.14; margin:0 0 .55em;
+    max-width:24ch; text-wrap:balance;
+  }
+  h3{
+    font-family:var(--font-display); font-weight:660; letter-spacing:-.008em;
+    font-size:19px; line-height:1.25; margin:1.9em 0 .5em; color:var(--ink);
+  }
+  h4{
+    font-family:var(--font-mono); font-weight:600; font-size:13px; letter-spacing:.04em;
+    text-transform:uppercase; color:var(--ink-2); margin:1.5em 0 .5em;
+  }
+  p{max-width:var(--prose); margin:0 0 1.05em}
+  main ul,main ol{max-width:var(--prose); margin:0 0 1.1em; padding-left:1.25em}
+  main li{margin:.34em 0}
+  strong{font-weight:600; color:var(--ink)}
+  a.ref{color:var(--accent-2); text-decoration:none; border-bottom:1px solid transparent}
+  :root[data-theme="dark"] a.ref{color:var(--accent)}
+  @media(prefers-color-scheme:dark){a.ref{color:var(--accent)}}
+  a.ref:hover{border-bottom-color:currentColor}
+
+  code,.mono{font-family:var(--font-mono); font-size:.86em}
+  p code,li code,td code{
+    background:var(--surface-2); padding:.08em .38em; border-radius:5px;
+    font-size:.82em; color:var(--ink); border:1px solid var(--line);
+    white-space:nowrap;
+  }
+  .path{color:var(--ink-3); font-family:var(--font-mono); font-size:.8em; white-space:nowrap}
+
+  /* ---------- Callouts ---------- */
+  .callout{
+    border:1px solid var(--line); border-left-width:3px; border-radius:10px;
+    background:var(--surface); padding:18px 20px; margin:1.4em 0; max-width:var(--prose);
+  }
+  .callout .k{
+    font-family:var(--font-mono); font-size:11px; letter-spacing:.12em; text-transform:uppercase;
+    font-weight:600; margin-bottom:7px; display:block;
+  }
+  .callout p{margin:.2em 0}
+  .callout.accent{border-left-color:var(--accent); background:var(--accent-soft)}
+  .callout.accent .k{color:var(--accent-2)}
+  :root[data-theme="dark"] .callout.accent .k{color:var(--accent-2)}
+  @media(prefers-color-scheme:dark){.callout.accent .k{color:var(--accent-2)}}
+  .callout.warn{border-left-color:var(--warn); background:var(--warn-bg)}
+  .callout.warn .k{color:var(--warn)}
+  .callout.gap{border-left-color:var(--gap); background:var(--gap-bg)}
+  .callout.gap .k{color:var(--gap)}
+  .callout.accent{background:var(--accent-soft)}
+
+  /* ---------- Formula ---------- */
+  .formula{
+    font-family:var(--font-mono); font-size:14px; line-height:1.55;
+    background:var(--surface-2); border:1px solid var(--line);
+    border-radius:9px; padding:13px 16px; margin:1em 0; max-width:var(--prose);
+    overflow-x:auto; color:var(--ink);
+  }
+  .formula .lbl{color:var(--ink-3)}
+
+  /* ---------- Tables ---------- */
+  .tablewrap{overflow-x:auto; margin:1.2em 0 1.5em; border:1px solid var(--line);
+    border-radius:11px; background:var(--surface)}
+  table{border-collapse:collapse; width:100%; font-size:14px; min-width:640px}
+  table.wide{min-width:820px}
+  thead th{
+    font-family:var(--font-mono); font-weight:600; font-size:11.5px; letter-spacing:.03em;
+    text-transform:uppercase; text-align:left; color:var(--ink-2);
+    background:var(--surface-2); padding:11px 14px; border-bottom:1px solid var(--line-2);
+    position:sticky; top:0; vertical-align:bottom;
+  }
+  tbody td{padding:11px 14px; border-bottom:1px solid var(--line); vertical-align:top;
+    line-height:1.42; color:var(--ink-2)}
+  tbody tr:last-child td{border-bottom:0}
+  tbody td:first-child{color:var(--ink); font-weight:500}
+  tbody td .path,tbody td code{white-space:normal}
+  td .mname{font-family:var(--font-mono); font-size:12.5px; color:var(--ink); font-weight:600; display:block}
+  tbody tr:hover td{background:color-mix(in srgb,var(--accent-soft) 34%, transparent)}
+  .num{font-variant-numeric:tabular-nums}
+
+  /* ---------- Pills / badges ---------- */
+  .pill{
+    display:inline-flex; align-items:center; gap:5px; font-family:var(--font-mono);
+    font-size:11px; font-weight:600; letter-spacing:.02em; padding:2px 8px 2px 6px;
+    border-radius:20px; border:1px solid var(--line-2); white-space:nowrap; line-height:1.5;
+  }
+  .pill .dot{width:7px; height:7px; border-radius:50%; background:currentColor; flex:0 0 auto}
+  .pill.ok{color:var(--ok); background:var(--ok-bg); border-color:var(--ok-line)}
+  .pill.warn{color:var(--warn); background:var(--warn-bg); border-color:var(--warn-line)}
+  .pill.gap{color:var(--gap); background:var(--gap-bg); border-color:var(--gap-line)}
+  .pill.plain{color:var(--ink-3); background:var(--surface-2)}
+
+  .legend{display:flex; flex-wrap:wrap; gap:8px 14px; margin:.3em 0 1.1em; font-size:13px; align-items:center}
+  .legend .lg{display:inline-flex; align-items:center; gap:6px; color:var(--ink-2); font-family:var(--font-mono); font-size:11.5px}
+
+  /* ---------- Verdict cards ---------- */
+  .verdicts{display:grid; gap:14px; margin:1.3em 0; max-width:var(--prose)}
+  .vcard{border:1px solid var(--line); border-radius:12px; background:var(--surface); overflow:hidden}
+  .vcard .vhead{display:flex; align-items:flex-start; gap:12px; padding:15px 18px 12px; border-bottom:1px solid var(--line)}
+  .vbadge{font-family:var(--font-mono); font-size:11px; font-weight:700; letter-spacing:.05em;
+    padding:4px 9px; border-radius:6px; flex:0 0 auto; margin-top:1px}
+  .vbadge.confirmed{color:#fff; background:var(--gap)}
+  .vbadge.partial{color:var(--ink); background:var(--warn)}
+  :root[data-theme="dark"] .vbadge.partial{color:#20160a}
+  @media(prefers-color-scheme:dark){.vbadge.partial{color:#20160a}}
+  .vcard .vclaim{font-family:var(--font-display); font-weight:600; font-size:15.5px; line-height:1.34; color:var(--ink); margin:0}
+  .vcard .vbody{padding:13px 18px 16px; font-size:14px; color:var(--ink-2)}
+  .vcard .vbody p{margin:.1em 0 .7em; max-width:none}
+  .vcard .vbody .imp{margin-top:.4em; padding-top:.7em; border-top:1px dashed var(--line-2)}
+  .vcard .vbody .imp .k{font-family:var(--font-mono); font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--accent); font-weight:600; display:block; margin-bottom:3px}
+  :root[data-theme="dark"] .vcard .vbody .imp .k{color:var(--accent-2)}
+  @media(prefers-color-scheme:dark){.vcard .vbody .imp .k{color:var(--accent-2)}}
+
+  /* ---------- Stage cards ---------- */
+  .stages{display:grid; gap:16px; margin:1.4em 0; max-width:var(--prose)}
+  .stage{border:1px solid var(--line); border-radius:12px; background:var(--surface); padding:0; overflow:hidden}
+  .stage .shead{display:flex; align-items:baseline; gap:12px; padding:16px 20px 12px; background:var(--surface-2); border-bottom:1px solid var(--line)}
+  .stage .snum{font-family:var(--font-mono); font-weight:700; font-size:13px; color:var(--accent); letter-spacing:.02em; flex:0 0 auto}
+  :root[data-theme="dark"] .stage .snum{color:var(--accent-2)}
+  @media(prefers-color-scheme:dark){.stage .snum{color:var(--accent-2)}}
+  .stage .stitle{font-family:var(--font-display); font-weight:660; font-size:16.5px; color:var(--ink); line-height:1.25; margin:0}
+  .stage .schip{margin-left:auto; flex:0 0 auto}
+  .stage .sbody{padding:15px 20px 18px; font-size:14.5px}
+  .stage .sbody ul{max-width:none; margin:.2em 0 .3em}
+  .stage .grid2{display:grid; gap:4px 22px; grid-template-columns:1fr}
+  @media(min-width:620px){.stage .grid2{grid-template-columns:1fr 1fr}}
+  .stage .fld{margin:.6em 0}
+  .stage .fld .k{font-family:var(--font-mono); font-size:10.5px; letter-spacing:.09em; text-transform:uppercase; color:var(--ink-3); font-weight:600; display:block; margin-bottom:3px}
+  .stage .fld p{margin:0; font-size:13.5px; color:var(--ink-2); max-width:none}
+  .stage .dod{margin-top:.7em; padding-top:.8em; border-top:1px dashed var(--line-2)}
+
+  /* ---------- Misc ---------- */
+  .lead{font-size:19px; line-height:1.5; color:var(--ink); max-width:var(--prose)}
+  .lead b{color:var(--ink)}
+  hr.soft{border:0; border-top:1px solid var(--line); margin:1.6em 0; max-width:var(--prose)}
+  .foot{padding:34px 0 70px; color:var(--ink-3); font-size:13px; max-width:var(--prose)}
+  .foot p{max-width:none; margin:.5em 0; font-size:13px; color:var(--ink-3)}
+  .foot .mono{font-size:12px}
+  .kexcerpt{font-family:var(--font-mono); font-size:12.5px; color:var(--ink-2); background:var(--surface-2);
+    border:1px solid var(--line); border-radius:8px; padding:10px 13px; margin:.7em 0; max-width:var(--prose); line-height:1.5}
+  sup.fn{font-family:var(--font-mono); font-size:.62em; color:var(--accent); font-weight:600}
+  :focus-visible{outline:2px solid var(--accent); outline-offset:2px; border-radius:3px}
+  @media(prefers-reduced-motion:no-preference){html{scroll-behavior:smooth}}
+
+  /* ---------- Additions for the generated review docs ---------- */
+  main h2 { max-width: 32ch }
+  main table { min-width: 560px }
+  .tablewrap table thead th { position: static }
+
+  /* finding / item sub-headings */
+  main h3{
+    scroll-margin-top:18px; display:flex; align-items:baseline;
+    gap:9px; flex-wrap:wrap;
+  }
+  main h3 .fid{
+    font-family:var(--font-mono); font-size:12.5px; font-weight:700;
+    color:var(--accent); letter-spacing:.02em; flex:0 0 auto;
+  }
+  :root[data-theme="dark"] main h3 .fid{ color:var(--accent-2) }
+  @media(prefers-color-scheme:dark){ main h3 .fid{ color:var(--accent-2) } }
+  p.pillrow{ display:flex; gap:8px; flex-wrap:wrap; margin:-.35em 0 1.1em }
+  .anchor-alias{ display:block; height:0; scroll-margin-top:18px }
+
+  /* code blocks */
+  .codewrap{ position:relative; margin:1.15em 0 1.4em; max-width:var(--prose) }
+  .codewrap.wide{ max-width:none }
+  pre.code{
+    font-family:var(--font-mono); font-size:12.5px; line-height:1.55;
+    background:var(--surface-2); border:1px solid var(--line); border-radius:10px;
+    padding:15px 17px; margin:0; overflow-x:auto; color:var(--ink);
+    white-space:pre; tab-size:2;
+  }
+  pre.code code{ font-size:inherit; background:none; border:0; padding:0;
+                 white-space:pre; color:inherit }
+  .codewrap .lang{
+    position:absolute; top:0; right:12px; transform:translateY(-50%);
+    font-family:var(--font-mono); font-size:10px; letter-spacing:.1em;
+    text-transform:uppercase; font-weight:600; color:var(--ink-3);
+    background:var(--bg); border:1px solid var(--line); border-radius:20px;
+    padding:2px 9px;
+  }
+
+  /* Pygments tokens, mapped onto the house palette so both themes work */
+  pre.code .c,  pre.code .c1, pre.code .cm, pre.code .cs,
+  pre.code .ch, pre.code .cpf{ color:var(--ink-3); font-style:italic }
+  pre.code .sd{ color:var(--ink-3) }
+  pre.code .k,  pre.code .kn, pre.code .kc, pre.code .kd,
+  pre.code .kp, pre.code .kr, pre.code .kt, pre.code .ow{ color:var(--accent) }
+  :root[data-theme="dark"] pre.code .k,
+  :root[data-theme="dark"] pre.code .kn,
+  :root[data-theme="dark"] pre.code .kc,
+  :root[data-theme="dark"] pre.code .kd,
+  :root[data-theme="dark"] pre.code .ow{ color:var(--accent-2) }
+  @media(prefers-color-scheme:dark){
+    pre.code .k, pre.code .kn, pre.code .kc,
+    pre.code .kd, pre.code .ow{ color:var(--accent-2) }
+  }
+  pre.code .s,  pre.code .s1, pre.code .s2, pre.code .sa,
+  pre.code .sb, pre.code .se, pre.code .si, pre.code .sr,
+  pre.code .ss, pre.code .sx{ color:var(--ok) }
+  pre.code .m,  pre.code .mi, pre.code .mf, pre.code .mh,
+  pre.code .mo, pre.code .il{ color:var(--ok) }
+  pre.code .nf, pre.code .fm{ color:var(--ink); font-weight:600 }
+  pre.code .nc, pre.code .ne{ color:var(--warn); font-weight:600 }
+  pre.code .nd{ color:var(--warn) }
+  pre.code .nb, pre.code .bp{ color:var(--ink-2) }
+  pre.code .nn, pre.code .nv, pre.code .no, pre.code .na{ color:var(--ink) }
+  pre.code .o,  pre.code .p{ color:var(--ink-2) }
+  pre.code .gd{ color:var(--gap) }
+  pre.code .gi{ color:var(--ok) }
+  pre.code .gh, pre.code .gu{ color:var(--ink-3); font-weight:600 }
+  pre.code .err{ color:inherit; border:0 }
+
+  /* blockquote -> callout */
+  blockquote{
+    margin:1.3em 0; padding:15px 18px; max-width:var(--prose);
+    border:1px solid var(--line); border-left:3px solid var(--ink-3);
+    border-radius:10px; background:var(--surface); color:var(--ink-2);
+    font-size:15px;
+  }
+  blockquote p{ margin:.25em 0 }
+  blockquote.warn{ border-left-color:var(--warn); background:var(--warn-bg) }
+
+  /* figures / diagrams */
+  figure.dgfig{ margin:1.6em 0 1.9em; max-width:none }
+  .dgscroll{ overflow-x:auto; border:1px solid var(--line); border-radius:12px;
+             background:var(--surface); padding:18px 16px }
+  svg.dg{ max-width:100%; height:auto; display:block; margin:0 auto }
+  svg.dg text{ font-family:var(--font-mono); fill:var(--ink); font-size:12px }
+  svg.dg .t-sm{ font-size:11px; fill:var(--ink-2) }
+  svg.dg .t-lbl{ font-size:10.5px; fill:var(--ink-3) }
+  svg.dg .t-bad{ font-size:10.5px; fill:var(--gap); font-weight:600 }
+  svg.dg .t-hd{ font-size:10.5px; font-weight:700; fill:var(--accent);
+                letter-spacing:.09em }
+  svg.dg .t-x{ font-size:15px; fill:var(--gap); font-weight:700 }
+  svg.dg .bx{ fill:var(--surface); stroke:var(--line-2); stroke-width:1.2 }
+  svg.dg .badbx{ fill:var(--gap-bg); stroke:var(--gap-line); stroke-width:1.3 }
+  svg.dg .warnbx{ fill:var(--warn-bg); stroke:var(--warn-line); stroke-width:1.3 }
+  svg.dg .hl{ fill:var(--ok-bg); stroke:var(--ok); stroke-width:1.6 }
+  svg.dg .dead{ fill:var(--surface-2); stroke:var(--ink-3); stroke-width:1.2;
+                stroke-dasharray:5 4; opacity:.8 }
+  svg.dg .band{ fill:var(--surface-2); stroke:var(--line); stroke-width:1 }
+  svg.dg .ok-band{ fill:var(--ok-bg); stroke:var(--ok-line) }
+  svg.dg .bad-band{ fill:var(--gap-bg); stroke:var(--gap-line) }
+  svg.dg .loopbx{ fill:none; stroke:var(--line-2); stroke-width:1;
+                  stroke-dasharray:4 3 }
+  svg.dg .life{ stroke:var(--line-2); stroke-width:1; stroke-dasharray:4 4 }
+  svg.dg .ln{ stroke:var(--ink-2); stroke-width:1.4; fill:none }
+  svg.dg .ln-bad{ stroke:var(--gap); stroke-width:1.6; stroke-dasharray:6 4; fill:none }
+  svg.dg .ln-dead{ stroke:var(--ink-3); stroke-width:1.4; stroke-dasharray:5 4; fill:none }
+  svg.dg .ln-soft{ stroke:var(--ink-3); stroke-width:1.2; stroke-dasharray:3 3; fill:none }
+  svg.dg .mk{ fill:var(--ink-2); stroke:none }
+  svg.dg .mk-bad{ fill:var(--gap); stroke:none }
+  svg.dg .mk-dead{ fill:var(--ink-3); stroke:none }
+  svg.dg .mk-soft{ fill:var(--ink-3); stroke:none }
+  figure.dgfig figcaption{
+    font-size:13.5px; color:var(--ink-2); line-height:1.5; margin-top:11px;
+    max-width:var(--prose); padding-left:2px;
+  }
+  figure.dgfig figcaption b{ color:var(--ink) }
+
+  /* severity pills in the findings tables */
+  .g{ font-family:var(--font-mono); font-size:10.5px; font-weight:700;
+      padding:1px 7px; border-radius:20px; border:1px solid; white-space:nowrap }
+  .g.p0{ color:var(--gap); background:var(--gap-bg); border-color:var(--gap-line) }
+  .g.p1{ color:var(--warn); background:var(--warn-bg); border-color:var(--warn-line) }
+  .g.p2{ color:var(--ink-3); background:var(--surface-2); border-color:var(--line-2) }
+
+  /* nested TOC */
+  nav.toc ol ol{ list-style:none; counter-reset:none; margin:2px 0 6px;
+                 padding-left:14px }
+  nav.toc ol ol li{ counter-increment:none }
+  nav.toc ol ol a{ padding:3px 8px 3px 10px; font-size:11.5px;
+                   color:var(--ink-3); border-left:1px solid var(--line) }
+  nav.toc ol ol a::before{ content:none }
+  nav.toc ol ol a:hover{ color:var(--ink-2) }
+
+  @media print{
+    nav.toc{ display:none }
+    section{ break-inside:avoid-page }
+    .dgscroll{ overflow:visible }
+    pre.code{ white-space:pre-wrap; word-break:break-word }
+    body{ background:#fff; font-size:11pt }
+  }
+
+</style>
+
+</head>
+<body>
+<div class="shell">
+  <header class="mast">
+    <div class="eyebrow">
+      <span>Codebase review · reference implementation</span><span class="sep">/</span>
+      <span>hermes/ · 7 defect classes</span><span class="sep">/</span>
+      <span>Proposal — not applied</span>
+    </div>
+    <h1 class="title">HERMES — Production-Grade Code</h1>
+    <p class="deck">Every change below is <b>behaviour-preserving in the currently tested regime</b>. Where one alters behaviour outside it — the >30 s idle case, which is broken today — that is stated explicitly.</p>
+    <div class="metabar">
+      <span><strong>Status:</strong> Proposal. <strong>Not applied.</strong> Requires approval per</span>
+      <span><a href="../01_Refactoring_Strategy.html#5-approval-checklist"><code>../01_Refactoring_Strategy.html</code> §5</a>.</span>
+      <span><strong>Constraint:</strong> every change below is <strong>behaviour-preserving</strong> in the currently-tested</span>
+      <span>regime. Where a change alters behaviour outside that regime (the &gt;30 s idle case, which</span>
+      <span>is broken today), that is stated explicitly.</span>
+      <span>Each section states the defect, the current code, the replacement, and how to verify the</span>
+      <span>replacement did not change anything.</span>
+    </div>
+  </header>
+
+  <div class="body-grid">
+    <nav class="toc" aria-label="Contents">
+      <p class="toc-h">Contents</p>
+      <ol>
+        <li><a href="#contents">Contents</a></li>
+        <li><a href="#1-platform-correct-socket-options">Platform-correct socket options</a></li>
+        <li><a href="#2-rf-link-socket-lifetime">RF link socket lifetime</a><ol><li><a href="#2a-server-side">2a. Server side</a></li><li><a href="#2b-client-side--bounded-reconnect">2b. Client side — bounded reconnect</a></li><li><a href="#2c-device-service--no-hot-spin">2c. Device service — no hot spin</a></li></ol></li>
+        <li><a href="#3-unified-contact-exchange">Unified contact exchange</a><ol><li><a href="#3a-round-epoch--stop-stale-workers-writing">3a. Round epoch — stop stale workers writing</a></li><li><a href="#3b-the-shared-exchange-engine">3b. The shared exchange engine</a></li><li><a href="#3c-the-two-public-methods-become-thin">3c. The two public methods become thin</a></li></ol></li>
+        <li><a href="#4-cancellable-dock-wait">Cancellable dock wait</a></li>
+        <li><a href="#5-observability-that-cannot-crash-its-caller">Observability that cannot crash its caller</a></li>
+        <li><a href="#6-inverting-the-experiments-dependency">Inverting the `experiments` dependency</a></li>
+        <li><a href="#7-registry-persistence-and-indexing">Registry persistence and indexing</a></li>
+        <li><a href="#8-summary-of-expected-impact">Summary of expected impact</a></li>
+      </ol>
+    </nav>
+
+    <main>
+      <section id="contents">
+        <div class="sec-eyebrow">&nbsp; · Contents</div>
+        <h2>Contents</h2>
+<ol>
+<li><a href="#1-platform-correct-socket-options">Platform-correct socket options</a> — H-01</li>
+<li><a href="#2-rf-link-socket-lifetime">RF link socket lifetime, heartbeat, reconnect</a> — H-01</li>
+<li><a href="#3-unified-contact-exchange">Unified contact exchange</a> — H-02, H-03, Q-01</li>
+<li><a href="#4-cancellable-dock-wait">Cancellable dock wait</a> — H-04</li>
+<li><a href="#5-observability-that-cannot-crash-its-caller">Observability that cannot crash its caller</a> — H-07</li>
+<li><a href="#6-inverting-the-experiments-dependency">Inverting the <code>experiments</code> dependency</a> — H-08</li>
+<li><a href="#7-registry-persistence-and-indexing">Registry persistence and indexing</a> — H-06, H-05, H-09</li>
+</ol>
+<hr />
+      </section>
+      <section id="1-platform-correct-socket-options">
+        <div class="sec-eyebrow">§&nbsp;01 · Platform-correct socket options</div>
+        <h2>Platform-correct socket options</h2>
+<p><strong>Defect (H-01, secondary).</strong> <code>tcp_dock_link.py:290-299</code> packs <code>SO_SNDTIMEO</code> as a Linux
+<code>struct timeval</code> and claims cross-platform compatibility. Windows expects a 4-byte DWORD
+of milliseconds, so <code>setsockopt</code> raises <code>OSError</code>, the bare handler swallows it, and the
+dock send timeout is silently absent on the development platform.</p>
+<p><strong>New file — <code>hermes/transport/_sockopt.py</code>:</strong></p>
+<div class="codewrap wide"><span class="lang">python</span><pre class="code"><code><span class="sd">&quot;&quot;&quot;Platform-correct socket-option helpers shared by the TCP transports.</span>
+
+<span class="sd">``SO_SNDTIMEO`` / ``SO_RCVTIMEO`` take different value shapes per platform:</span>
+
+<span class="sd">* POSIX  — ``struct timeval`` (two native longs: seconds, microseconds)</span>
+<span class="sd">* Windows — a single ``DWORD`` of milliseconds</span>
+
+<span class="sd">The previous inline implementation in ``tcp_dock_link.py`` packed a</span>
+<span class="sd">``timeval`` unconditionally, so on Windows ``setsockopt`` raised ``OSError``</span>
+<span class="sd">and the timeout was silently not applied. This module gets it right on both</span>
+<span class="sd">and reports whether the option actually took effect, so callers can log a</span>
+<span class="sd">degraded transport instead of assuming a bound that isn&#39;t there.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">from</span> <span class="nn">__future__</span> <span class="kn">import</span> <span class="n">annotations</span>
+
+<span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">import</span> <span class="nn">socket</span>
+<span class="kn">import</span> <span class="nn">struct</span>
+<span class="kn">import</span> <span class="nn">sys</span>
+
+<span class="n">log</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
+
+<span class="n">_IS_WINDOWS</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">platform</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;win&quot;</span><span class="p">)</span>
+
+
+<span class="k">def</span> <span class="nf">_encode_timeout</span><span class="p">(</span><span class="n">seconds</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bytes</span><span class="p">:</span>
+    <span class="k">if</span> <span class="n">_IS_WINDOWS</span><span class="p">:</span>
+        <span class="c1"># DWORD milliseconds, little-endian native.</span>
+        <span class="k">return</span> <span class="n">struct</span><span class="o">.</span><span class="n">pack</span><span class="p">(</span><span class="s2">&quot;@I&quot;</span><span class="p">,</span> <span class="nb">max</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="nb">int</span><span class="p">(</span><span class="n">seconds</span> <span class="o">*</span> <span class="mi">1000</span><span class="p">)))</span>
+    <span class="n">whole</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">seconds</span><span class="p">)</span>
+    <span class="n">micros</span> <span class="o">=</span> <span class="nb">int</span><span class="p">((</span><span class="n">seconds</span> <span class="o">-</span> <span class="n">whole</span><span class="p">)</span> <span class="o">*</span> <span class="mi">1_000_000</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">struct</span><span class="o">.</span><span class="n">pack</span><span class="p">(</span><span class="s2">&quot;@ll&quot;</span><span class="p">,</span> <span class="n">whole</span><span class="p">,</span> <span class="n">micros</span><span class="p">)</span>
+
+
+<span class="k">def</span> <span class="nf">set_send_timeout</span><span class="p">(</span><span class="n">sock</span><span class="p">:</span> <span class="n">socket</span><span class="o">.</span><span class="n">socket</span><span class="p">,</span> <span class="n">seconds</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Bound blocking ``send``/``sendall`` without touching the read timeout.</span>
+
+<span class="sd">    Returns True iff the option was accepted. A False return is not fatal —</span>
+<span class="sd">    the caller falls back to relying on the peer to drain — but it should be</span>
+<span class="sd">    logged, because it means a stuck peer can block a sender for as long as</span>
+<span class="sd">    the OS allows.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">_set</span><span class="p">(</span><span class="n">sock</span><span class="p">,</span> <span class="n">socket</span><span class="o">.</span><span class="n">SO_SNDTIMEO</span><span class="p">,</span> <span class="n">seconds</span><span class="p">,</span> <span class="s2">&quot;SO_SNDTIMEO&quot;</span><span class="p">)</span>
+
+
+<span class="k">def</span> <span class="nf">set_recv_timeout</span><span class="p">(</span><span class="n">sock</span><span class="p">:</span> <span class="n">socket</span><span class="o">.</span><span class="n">socket</span><span class="p">,</span> <span class="n">seconds</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Bound blocking ``recv`` without touching the send timeout.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">_set</span><span class="p">(</span><span class="n">sock</span><span class="p">,</span> <span class="n">socket</span><span class="o">.</span><span class="n">SO_RCVTIMEO</span><span class="p">,</span> <span class="n">seconds</span><span class="p">,</span> <span class="s2">&quot;SO_RCVTIMEO&quot;</span><span class="p">)</span>
+
+
+<span class="k">def</span> <span class="nf">_set</span><span class="p">(</span><span class="n">sock</span><span class="p">:</span> <span class="n">socket</span><span class="o">.</span><span class="n">socket</span><span class="p">,</span> <span class="n">option</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">seconds</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">label</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+    <span class="k">if</span> <span class="n">seconds</span> <span class="o">&lt;=</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2"> requires a positive timeout, got </span><span class="si">{</span><span class="n">seconds</span><span class="si">!r}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">sock</span><span class="o">.</span><span class="n">setsockopt</span><span class="p">(</span><span class="n">socket</span><span class="o">.</span><span class="n">SOL_SOCKET</span><span class="p">,</span> <span class="n">option</span><span class="p">,</span> <span class="n">_encode_timeout</span><span class="p">(</span><span class="n">seconds</span><span class="p">))</span>
+        <span class="k">return</span> <span class="kc">True</span>
+    <span class="k">except</span> <span class="ne">OSError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+        <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">%s</span><span class="s2"> not honoured on this platform: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">label</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+        <span class="k">return</span> <span class="kc">False</span>
+
+
+<span class="k">def</span> <span class="nf">enable_keepalive</span><span class="p">(</span>
+    <span class="n">sock</span><span class="p">:</span> <span class="n">socket</span><span class="o">.</span><span class="n">socket</span><span class="p">,</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">idle_s</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">30</span><span class="p">,</span>
+    <span class="n">interval_s</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">10</span><span class="p">,</span>
+    <span class="n">probes</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">3</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Turn on TCP keepalive so a vanished peer is detected without traffic.</span>
+
+<span class="sd">    The per-connection tuning knobs are optional and platform-dependent:</span>
+<span class="sd">    Linux exposes TCP_KEEPIDLE/INTVL/CNT, macOS uses TCP_KEEPALIVE, and</span>
+<span class="sd">    Windows needs ``SIO_KEEPALIVE_VALS`` via ioctl. We set what is available</span>
+<span class="sd">    and fall back to the OS defaults for the rest — the important part is</span>
+<span class="sd">    that ``SO_KEEPALIVE`` itself is on.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">sock</span><span class="o">.</span><span class="n">setsockopt</span><span class="p">(</span><span class="n">socket</span><span class="o">.</span><span class="n">SOL_SOCKET</span><span class="p">,</span> <span class="n">socket</span><span class="o">.</span><span class="n">SO_KEEPALIVE</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+    <span class="k">except</span> <span class="ne">OSError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+        <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;SO_KEEPALIVE unavailable: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+        <span class="k">return</span> <span class="kc">False</span>
+
+    <span class="k">if</span> <span class="n">_IS_WINDOWS</span><span class="p">:</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">sock</span><span class="o">.</span><span class="n">ioctl</span><span class="p">(</span><span class="n">socket</span><span class="o">.</span><span class="n">SIO_KEEPALIVE_VALS</span><span class="p">,</span>
+                       <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">idle_s</span> <span class="o">*</span> <span class="mi">1000</span><span class="p">,</span> <span class="n">interval_s</span> <span class="o">*</span> <span class="mi">1000</span><span class="p">))</span>
+        <span class="k">except</span> <span class="p">(</span><span class="ne">AttributeError</span><span class="p">,</span> <span class="ne">OSError</span><span class="p">)</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;SIO_KEEPALIVE_VALS unavailable: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+        <span class="k">return</span> <span class="kc">True</span>
+
+    <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="p">(</span>
+        <span class="p">(</span><span class="s2">&quot;TCP_KEEPIDLE&quot;</span><span class="p">,</span> <span class="n">idle_s</span><span class="p">),</span>
+        <span class="p">(</span><span class="s2">&quot;TCP_KEEPINTVL&quot;</span><span class="p">,</span> <span class="n">interval_s</span><span class="p">),</span>
+        <span class="p">(</span><span class="s2">&quot;TCP_KEEPCNT&quot;</span><span class="p">,</span> <span class="n">probes</span><span class="p">),</span>
+        <span class="p">(</span><span class="s2">&quot;TCP_KEEPALIVE&quot;</span><span class="p">,</span> <span class="n">idle_s</span><span class="p">),</span>   <span class="c1"># macOS spelling</span>
+    <span class="p">):</span>
+        <span class="n">option</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">socket</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">option</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">continue</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">sock</span><span class="o">.</span><span class="n">setsockopt</span><span class="p">(</span><span class="n">socket</span><span class="o">.</span><span class="n">IPPROTO_TCP</span><span class="p">,</span> <span class="n">option</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">OSError</span><span class="p">:</span>
+            <span class="k">pass</span>
+    <span class="k">return</span> <span class="kc">True</span></code></pre></div>
+<p><strong>Then in <code>tcp_dock_link.py</code>,</strong> replace the inline <code>struct.pack("ll", …)</code> block with:</p>
+<div class="codewrap"><span class="lang">python</span><pre class="code"><code><span class="kn">from</span> <span class="nn">._sockopt</span> <span class="kn">import</span> <span class="n">enable_keepalive</span><span class="p">,</span> <span class="n">set_send_timeout</span>
+
+<span class="n">conn</span><span class="o">.</span><span class="n">settimeout</span><span class="p">(</span><span class="kc">None</span><span class="p">)</span>                     <span class="c1"># reader blocks forever — unchanged</span>
+<span class="k">if</span> <span class="ow">not</span> <span class="n">set_send_timeout</span><span class="p">(</span><span class="n">conn</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_send_timeout_s</span><span class="p">):</span>
+    <span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+        <span class="s2">&quot;dock: send timeout not enforced for mule </span><span class="si">%s</span><span class="s2"> on this platform; &quot;</span>
+        <span class="s2">&quot;a stuck peer can block send_down&quot;</span><span class="p">,</span> <span class="n">mid</span><span class="p">,</span>
+    <span class="p">)</span>
+<span class="n">enable_keepalive</span><span class="p">(</span><span class="n">conn</span><span class="p">)</span></code></pre></div>
+<p><strong>Verification.</strong> Behaviour on Linux is identical (same option, same value shape). On
+Windows the option now actually applies, which is a strict improvement over silently not
+applying. <code>tests/integration/test_tcp_dock_link.py</code> unchanged.</p>
+<hr />
+      </section>
+      <section id="2-rf-link-socket-lifetime">
+        <div class="sec-eyebrow">§&nbsp;02 · RF link socket lifetime</div>
+        <h2>RF link socket lifetime</h2>
+<p><strong>Defect (H-01, primary).</strong> <code>tcp_rf_link.py:375</code> — <code>conn.settimeout(self._send_timeout_s)</code>
+governs reads as well as writes, so a device silent for 30 s is disconnected.</p>
+<h3 id="2a-server-side">2a. Server side</h3>
+<div class="codewrap"><span class="lang">python</span><pre class="code"><code><span class="c1"># hermes/transport/tcp_rf_link.py  —  _spawn_reader, replacing line 375</span>
+
+        <span class="n">did</span> <span class="o">=</span> <span class="n">reg</span><span class="o">.</span><span class="n">device_id</span>
+
+        <span class="c1"># H-01 FIX (mirrors tcp_dock_link.py:283-299).</span>
+        <span class="c1">#</span>
+        <span class="c1"># A device is legitimately silent for the entire flight leg between</span>
+        <span class="c1"># two contact events — minutes, not seconds. The previous</span>
+        <span class="c1"># ``conn.settimeout(self._send_timeout_s)`` applied that 30 s bound</span>
+        <span class="c1"># to *reads* as well as writes, so ``_reader_loop``&#39;s next</span>
+        <span class="c1"># ``recv_message`` raised socket.timeout -&gt; OSError -&gt; WireError and</span>
+        <span class="c1"># the device was silently dropped mid-mission. No test caught it</span>
+        <span class="c1"># because every integration test finishes inside 30 s.</span>
+        <span class="c1">#</span>
+        <span class="c1"># Correct shape: block forever on read (peer-vanish surfaces via</span>
+        <span class="c1"># WireError on the next frame, or via TCP keepalive), and bound the</span>
+        <span class="c1"># SEND side only, so a stuck recipient still cannot pin the mule.</span>
+        <span class="n">conn</span><span class="o">.</span><span class="n">settimeout</span><span class="p">(</span><span class="kc">None</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">set_send_timeout</span><span class="p">(</span><span class="n">conn</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_send_timeout_s</span><span class="p">):</span>
+            <span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                <span class="s2">&quot;rf: send timeout not enforced for device </span><span class="si">%s</span><span class="s2"> on this &quot;</span>
+                <span class="s2">&quot;platform; a stuck peer can block push_disc&quot;</span><span class="p">,</span> <span class="n">did</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="n">enable_keepalive</span><span class="p">(</span><span class="n">conn</span><span class="p">,</span> <span class="n">idle_s</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_keepalive_idle_s</span><span class="p">)</span></code></pre></div>
+<p>Add to <code>__init__</code>:</p>
+<div class="codewrap"><span class="lang">python</span><pre class="code"><code>        <span class="n">keepalive_idle_s</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">30</span><span class="p">,</span>
+        <span class="o">...</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_keepalive_idle_s</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">keepalive_idle_s</span><span class="p">)</span></code></pre></div>
+<h3 id="2b-client-side--bounded-reconnect">2b. Client side — bounded reconnect</h3>
+<p>Replace the fixed <code>self._sock.settimeout(60.0)</code> at <code>:497</code> with the same
+<code>settimeout(None)</code> + <code>set_send_timeout</code> + <code>enable_keepalive</code> treatment, and give the
+client a reconnect path so a transient mule restart is survivable:</p>
+<div class="codewrap wide"><span class="lang">python</span><pre class="code"><code><span class="k">class</span> <span class="nc">TCPRFLinkClient</span><span class="p">(</span><span class="n">RFLink</span><span class="p">):</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">device_id</span><span class="p">:</span> <span class="n">DeviceID</span><span class="p">,</span>
+        <span class="n">host</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">port</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">emulator</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">ChannelEmulator</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">connect_timeout_s</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">5.0</span><span class="p">,</span>
+        <span class="n">send_timeout_s</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">30.0</span><span class="p">,</span>
+        <span class="n">reconnect_backoff_s</span><span class="p">:</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="mf">0.5</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mf">5.0</span><span class="p">,</span> <span class="mf">10.0</span><span class="p">),</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_device_id</span> <span class="o">=</span> <span class="n">device_id</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_host</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_port</span> <span class="o">=</span> <span class="n">host</span><span class="p">,</span> <span class="n">port</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_emulator</span> <span class="o">=</span> <span class="n">emulator</span> <span class="ow">or</span> <span class="n">no_op_emulator</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_connect_timeout_s</span> <span class="o">=</span> <span class="n">connect_timeout_s</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_send_timeout_s</span> <span class="o">=</span> <span class="n">send_timeout_s</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_backoff</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">reconnect_backoff_s</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_closed</span> <span class="o">=</span> <span class="n">threading</span><span class="o">.</span><span class="n">Event</span><span class="p">()</span>      <span class="c1"># set only by close(), not by a drop</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_link_up</span> <span class="o">=</span> <span class="n">threading</span><span class="o">.</span><span class="n">Event</span><span class="p">()</span>
+        <span class="c1"># H-10: this lock existed but was never acquired. Two threads calling</span>
+        <span class="c1"># send_ready_adv / send_gradient concurrently would interleave halves</span>
+        <span class="c1"># of two frames on one socket and corrupt the stream irrecoverably.</span>
+        <span class="c1"># Every sendall now happens under it.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_send_lock</span> <span class="o">=</span> <span class="n">threading</span><span class="o">.</span><span class="n">Lock</span><span class="p">()</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_solicit_q</span><span class="p">:</span> <span class="s2">&quot;queue.Queue[FLOpenSolicit]&quot;</span> <span class="o">=</span> <span class="n">queue</span><span class="o">.</span><span class="n">Queue</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_disc_q</span><span class="p">:</span> <span class="s2">&quot;queue.Queue[DiscPush]&quot;</span> <span class="o">=</span> <span class="n">queue</span><span class="o">.</span><span class="n">Queue</span><span class="p">()</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_sock</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">socket</span><span class="o">.</span><span class="n">socket</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_connect_locked</span><span class="p">()</span>                <span class="c1"># raises if the first connect fails</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_reader</span> <span class="o">=</span> <span class="n">threading</span><span class="o">.</span><span class="n">Thread</span><span class="p">(</span>
+            <span class="n">target</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_reader_supervisor</span><span class="p">,</span>
+            <span class="n">name</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;TCPRFLinkClient-</span><span class="si">{</span><span class="n">device_id</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+            <span class="n">daemon</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_reader</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+
+    <span class="c1"># ------------------------------------------------------------------ #</span>
+
+    <span class="k">def</span> <span class="nf">_connect_locked</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Open a socket, register, and mark the link up. Raises on failure.&quot;&quot;&quot;</span>
+        <span class="n">sock</span> <span class="o">=</span> <span class="n">socket</span><span class="o">.</span><span class="n">socket</span><span class="p">(</span><span class="n">socket</span><span class="o">.</span><span class="n">AF_INET</span><span class="p">,</span> <span class="n">socket</span><span class="o">.</span><span class="n">SOCK_STREAM</span><span class="p">)</span>
+        <span class="n">sock</span><span class="o">.</span><span class="n">settimeout</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_connect_timeout_s</span><span class="p">)</span>
+        <span class="n">sock</span><span class="o">.</span><span class="n">connect</span><span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">_host</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_port</span><span class="p">))</span>
+        <span class="n">sock</span><span class="o">.</span><span class="n">settimeout</span><span class="p">(</span><span class="kc">None</span><span class="p">)</span>                              <span class="c1"># H-01: reads block</span>
+        <span class="n">set_send_timeout</span><span class="p">(</span><span class="n">sock</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_send_timeout_s</span><span class="p">)</span>       <span class="c1"># writes bounded</span>
+        <span class="n">enable_keepalive</span><span class="p">(</span><span class="n">sock</span><span class="p">)</span>
+        <span class="n">send_message</span><span class="p">(</span><span class="n">sock</span><span class="p">,</span> <span class="n">_DeviceRegistrationMessage</span><span class="p">(</span><span class="n">device_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_device_id</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_sock</span> <span class="o">=</span> <span class="n">sock</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_link_up</span><span class="o">.</span><span class="n">set</span><span class="p">()</span>
+
+    <span class="k">def</span> <span class="nf">_reader_supervisor</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Pump frames; on peer loss, reconnect with bounded backoff.</span>
+
+<span class="sd">        The device has no way to make progress without the mule, so an</span>
+<span class="sd">        indefinite retry with a capped interval is the right policy — but it</span>
+<span class="sd">        must be a *sleep*, not a spin. Previously a dropped link left</span>
+<span class="sd">        ``ClientMission.serve_once`` returning None immediately forever and</span>
+<span class="sd">        ``DeviceService.run`` burning a core.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">attempt</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">while</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_closed</span><span class="o">.</span><span class="n">is_set</span><span class="p">():</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_reader_loop</span><span class="p">()</span>            <span class="c1"># returns on peer close</span>
+            <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>                  <span class="c1"># pragma: no cover — defensive</span>
+                <span class="n">log</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s2">&quot;rf client </span><span class="si">%s</span><span class="s2"> reader loop raised&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_device_id</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_closed</span><span class="o">.</span><span class="n">is_set</span><span class="p">():</span>
+                <span class="k">break</span>
+
+            <span class="bp">self</span><span class="o">.</span><span class="n">_link_up</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_teardown_socket</span><span class="p">()</span>
+            <span class="n">delay</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_backoff</span><span class="p">[</span><span class="nb">min</span><span class="p">(</span><span class="n">attempt</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_backoff</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)]</span>
+            <span class="n">attempt</span> <span class="o">+=</span> <span class="mi">1</span>
+            <span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                <span class="s2">&quot;rf client </span><span class="si">%s</span><span class="s2">: link down, reconnecting in </span><span class="si">%.1f</span><span class="s2">s (attempt </span><span class="si">%d</span><span class="s2">)&quot;</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_device_id</span><span class="p">,</span> <span class="n">delay</span><span class="p">,</span> <span class="n">attempt</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_closed</span><span class="o">.</span><span class="n">wait</span><span class="p">(</span><span class="n">delay</span><span class="p">):</span>
+                <span class="k">break</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_connect_locked</span><span class="p">()</span>
+                <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;rf client </span><span class="si">%s</span><span class="s2">: link restored&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_device_id</span><span class="p">)</span>
+                <span class="n">attempt</span> <span class="o">=</span> <span class="mi">0</span>
+            <span class="k">except</span> <span class="ne">OSError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;rf client </span><span class="si">%s</span><span class="s2">: reconnect failed: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_device_id</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_send_with_emulator</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">msg</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">label</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">drop</span><span class="p">,</span> <span class="n">delay</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_emulator</span><span class="o">.</span><span class="n">apply</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">drop</span><span class="p">:</span>
+            <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;TCPRFLinkClient </span><span class="si">%s</span><span class="s2">: dropped outbound </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_device_id</span><span class="p">,</span> <span class="n">label</span><span class="p">)</span>
+            <span class="k">return</span>
+        <span class="k">if</span> <span class="n">delay</span> <span class="o">&gt;</span> <span class="mf">0.0</span><span class="p">:</span>
+            <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="n">delay</span><span class="p">)</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">_send_lock</span><span class="p">:</span>                  <span class="c1"># H-10: framing integrity</span>
+            <span class="n">sock</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_sock</span>
+            <span class="k">if</span> <span class="n">sock</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_link_up</span><span class="o">.</span><span class="n">is_set</span><span class="p">():</span>
+                <span class="k">raise</span> <span class="n">RFLinkError</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;send </span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2"> from </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_device_id</span><span class="si">!r}</span><span class="s2">: link is down&quot;</span>
+                <span class="p">)</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">send_message</span><span class="p">(</span><span class="n">sock</span><span class="p">,</span> <span class="n">msg</span><span class="p">)</span>
+            <span class="k">except</span> <span class="n">WireError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_link_up</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>          <span class="c1"># NOT _closed — supervisor retries</span>
+                <span class="k">raise</span> <span class="n">RFLinkError</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;send </span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2"> from </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_device_id</span><span class="si">!r}</span><span class="s2"> failed: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span>
+                <span class="p">)</span> <span class="kn">from</span> <span class="nn">e</span></code></pre></div>
+<p><strong>Note the <code>_closed</code> / <code>_link_up</code> split.</strong> Previously a single <code>_closed</code> event meant both
+"the user called <code>close()</code>" and "the peer went away", which is why a transient drop was
+terminal. Separating them is what makes reconnect expressible.</p>
+<h3 id="2c-device-service--no-hot-spin">2c. Device service — no hot spin</h3>
+<div class="codewrap wide"><span class="lang">python</span><pre class="code"><code><span class="c1"># hermes/processes/device.py  —  DeviceService.run</span>
+
+    <span class="c1"># Back-off applied when serve_once returns None. A None means &quot;no solicit</span>
+    <span class="c1"># arrived&quot; (normal, the mule is in transit) or &quot;the link is down&quot;</span>
+    <span class="c1"># (transient, the client is reconnecting). Previously neither case slept,</span>
+    <span class="c1"># so a dropped link spun a core on the edge device indefinitely.</span>
+    <span class="n">_IDLE_BACKOFF_S</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.25</span>
+
+    <span class="k">def</span> <span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+            <span class="s2">&quot;device </span><span class="si">%s</span><span class="s2"> ready: RF client to </span><span class="si">%s</span><span class="s2">:</span><span class="si">%d</span><span class="s2">&quot;</span><span class="p">,</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">device_id</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">mule_rf_host</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">mule_rf_port</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="n">n_serves</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">n_serves</span>
+        <span class="n">served</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">while</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_stop_event</span><span class="o">.</span><span class="n">is_set</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">n_serves</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">served</span> <span class="o">&gt;=</span> <span class="n">n_serves</span><span class="p">:</span>
+                <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;device </span><span class="si">%s</span><span class="s2">: served </span><span class="si">%d</span><span class="s2"> times, exiting&quot;</span><span class="p">,</span>
+                         <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">device_id</span><span class="p">,</span> <span class="n">served</span><span class="p">)</span>
+                <span class="k">break</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">outcome</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">client</span><span class="o">.</span><span class="n">serve_once</span><span class="p">()</span>
+            <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="n">log</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s2">&quot;device </span><span class="si">%s</span><span class="s2">: serve_once raised&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">device_id</span><span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">events</span><span class="o">.</span><span class="n">emit</span><span class="p">(</span><span class="s2">&quot;device_serve_failed&quot;</span><span class="p">,</span> <span class="n">reason</span><span class="o">=</span><span class="nb">repr</span><span class="p">(</span><span class="n">e</span><span class="p">))</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">metrics</span><span class="o">.</span><span class="n">increment</span><span class="p">(</span><span class="s2">&quot;serves_failed&quot;</span><span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_stop_event</span><span class="o">.</span><span class="n">wait</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_IDLE_BACKOFF_S</span><span class="p">)</span>
+                <span class="k">continue</span>
+
+            <span class="k">if</span> <span class="n">outcome</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="c1"># Interruptible sleep — SIGTERM still exits within one tick.</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_stop_event</span><span class="o">.</span><span class="n">wait</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_IDLE_BACKOFF_S</span><span class="p">)</span>
+                <span class="k">continue</span>
+
+            <span class="n">served</span> <span class="o">+=</span> <span class="mi">1</span>
+            <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;device </span><span class="si">%s</span><span class="s2">: served, outcome=</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+                     <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">device_id</span><span class="p">,</span> <span class="n">outcome</span><span class="o">.</span><span class="n">value</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">events</span><span class="o">.</span><span class="n">emit</span><span class="p">(</span><span class="s2">&quot;device_served&quot;</span><span class="p">,</span> <span class="n">outcome</span><span class="o">=</span><span class="n">outcome</span><span class="o">.</span><span class="n">value</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">metrics</span><span class="o">.</span><span class="n">increment</span><span class="p">(</span><span class="s2">&quot;serves_completed&quot;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">metrics</span><span class="o">.</span><span class="n">increment</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;serves_outcome_</span><span class="si">{</span><span class="n">outcome</span><span class="o">.</span><span class="n">value</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+        <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;device </span><span class="si">%s</span><span class="s2"> service loop exiting&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">device_id</span><span class="p">)</span></code></pre></div>
+<p><strong>Behaviour change, stated plainly.</strong> Inside 30 s of continuous activity — every case the
+current test suite covers — behaviour is identical. Beyond 30 s of idle, the link now
+survives where it previously died. That is a fix, not a regression, but it <em>is</em> a change
+and should be validated by the new test below.</p>
+<p><strong>New regression test:</strong></p>
+<div class="codewrap"><span class="lang">python</span><pre class="code"><code><span class="c1"># tests/integration/test_rf_link_idle_survival.py</span>
+<span class="nd">@pytest</span><span class="o">.</span><span class="n">mark</span><span class="o">.</span><span class="n">slow</span>
+<span class="k">def</span> <span class="nf">test_device_survives_long_inter_contact_gap</span><span class="p">(</span><span class="n">rf_server</span><span class="p">,</span> <span class="n">rf_client</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;H-01: a device idle far longer than send_timeout_s stays registered.</span>
+
+<span class="sd">    Reproduces the field failure: the mule flies a leg longer than the</span>
+<span class="sd">    socket timeout, and every device in the next cluster has been dropped</span>
+<span class="sd">    by the time it broadcasts. Fails on the pre-fix implementation.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">assert</span> <span class="n">rf_server</span><span class="o">.</span><span class="n">wait_for_devices</span><span class="p">([</span><span class="n">DEVICE_ID</span><span class="p">],</span> <span class="n">timeout</span><span class="o">=</span><span class="mf">5.0</span><span class="p">)</span>
+
+    <span class="n">idle</span> <span class="o">=</span> <span class="n">rf_server</span><span class="o">.</span><span class="n">_send_timeout_s</span> <span class="o">*</span> <span class="mf">1.5</span>          <span class="c1"># 45 s at the default</span>
+    <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="n">idle</span><span class="p">)</span>
+
+    <span class="n">rf_server</span><span class="o">.</span><span class="n">broadcast_open_solicit</span><span class="p">(</span><span class="n">_solicit</span><span class="p">())</span>
+    <span class="n">adv</span> <span class="o">=</span> <span class="n">rf_server</span><span class="o">.</span><span class="n">recv_ready_adv</span><span class="p">(</span><span class="n">timeout</span><span class="o">=</span><span class="mf">5.0</span><span class="p">)</span>     <span class="c1"># pre-fix: RFLinkError</span>
+    <span class="k">assert</span> <span class="n">adv</span><span class="o">.</span><span class="n">device_id</span> <span class="o">==</span> <span class="n">DEVICE_ID</span></code></pre></div>
+<hr />
+      </section>
+      <section id="3-unified-contact-exchange">
+        <div class="sec-eyebrow">§&nbsp;03 · Unified contact exchange</div>
+        <h2>Unified contact exchange</h2>
+<p><strong>Defect (H-02, H-03, Q-01).</strong> <code>run_contact</code> (187 lines) and <code>deliver_contact</code> (140
+lines) share ~90 % of their body; both spawn unbounded threads and join per-thread; both
+can have abandoned workers write into a closed round's ledger.</p>
+<h3 id="3a-round-epoch--stop-stale-workers-writing">3a. Round epoch — stop stale workers writing</h3>
+<div class="codewrap"><span class="lang">python</span><pre class="code"><code><span class="c1"># hermes/mission/host_mission.py</span>
+
+<span class="k">class</span> <span class="nc">HFLHostMission</span><span class="p">:</span>
+
+    <span class="c1"># Bound on concurrent per-device workers inside one contact event. A</span>
+    <span class="c1"># contact is I/O-bound (one push + one recv per device), so a modest</span>
+    <span class="c1"># pool saturates the link; the cap exists so a large S3a cluster at</span>
+    <span class="c1"># rf_range_m=120 cannot spawn an unbounded number of OS threads.</span>
+    <span class="n">MAX_CONTACT_WORKERS</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">16</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">...</span><span class="p">):</span>
+        <span class="o">...</span>
+        <span class="c1"># H-02(c): monotonic epoch bumped by open_round / open_pass_2.</span>
+        <span class="c1"># Every worker captures the epoch it was launched under; late</span>
+        <span class="c1"># writes from an abandoned worker are dropped *loudly* instead of</span>
+        <span class="c1"># silently landing in the next round&#39;s ledger.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_epoch</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span></code></pre></div>
+<p><code>open_round</code> and <code>open_pass_2</code> each do <code>self._epoch += 1</code> inside the existing <code>with
+self._lock</code> block. <code>_record_outcome</code>, <code>_record_contact</code> and <code>_record_delivery_line</code> gain
+an <code>epoch</code> parameter:</p>
+<div class="codewrap wide"><span class="lang">python</span><pre class="code"><code>    <span class="k">def</span> <span class="nf">_record_outcome</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">epoch</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+        <span class="n">device_id</span><span class="p">:</span> <span class="n">DeviceID</span><span class="p">,</span>
+        <span class="n">outcome</span><span class="p">:</span> <span class="n">MissionOutcome</span><span class="p">,</span>
+        <span class="n">contact_ts</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+        <span class="n">utility</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+        <span class="n">bytes_received</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+        <span class="n">bytes_sent</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">_lock</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">epoch</span> <span class="o">!=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_epoch</span><span class="p">:</span>
+                <span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                    <span class="s2">&quot;dropping late outcome from epoch=</span><span class="si">%d</span><span class="s2"> (current=</span><span class="si">%d</span><span class="s2">) &quot;</span>
+                    <span class="s2">&quot;device=</span><span class="si">%s</span><span class="s2"> outcome=</span><span class="si">%s</span><span class="s2"> — worker outlived its round&quot;</span><span class="p">,</span>
+                    <span class="n">epoch</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_epoch</span><span class="p">,</span> <span class="n">device_id</span><span class="p">,</span> <span class="n">outcome</span><span class="o">.</span><span class="n">value</span><span class="p">,</span>
+                <span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">metrics_late_outcomes</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s2">&quot;metrics_late_outcomes&quot;</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span>
+                <span class="k">return</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_report</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="k">return</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_report</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">MissionRoundCloseLine</span><span class="p">(</span><span class="o">...</span><span class="p">))</span>
+            <span class="n">mission_round</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_mission_round</span>
+        <span class="o">...</span></code></pre></div>
+<p>and the accept path in the collect worker becomes epoch-checked too:</p>
+<div class="codewrap"><span class="lang">python</span><pre class="code"><code>            <span class="k">if</span> <span class="n">outcome</span> <span class="ow">is</span> <span class="n">MissionOutcome</span><span class="o">.</span><span class="n">CLEAN</span><span class="p">:</span>
+                <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">_lock</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="n">epoch</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">_epoch</span><span class="p">:</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">_accepted</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">grad</span><span class="p">)</span>
+                    <span class="k">else</span><span class="p">:</span>
+                        <span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                            <span class="s2">&quot;dropping late gradient from epoch=</span><span class="si">%d</span><span class="s2"> device=</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+                            <span class="n">epoch</span><span class="p">,</span> <span class="n">adv</span><span class="o">.</span><span class="n">device_id</span><span class="p">,</span>
+                        <span class="p">)</span></code></pre></div>
+<h3 id="3b-the-shared-exchange-engine">3b. The shared exchange engine</h3>
+<div class="codewrap wide"><span class="lang">python</span><pre class="code"><code><span class="kn">from</span> <span class="nn">concurrent.futures</span> <span class="kn">import</span> <span class="n">FIRST_COMPLETED</span><span class="p">,</span> <span class="n">Future</span><span class="p">,</span> <span class="n">ThreadPoolExecutor</span><span class="p">,</span> <span class="n">wait</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Callable</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Sequence</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">,</span> <span class="n">TypeVar</span>
+<span class="c1">#                                          ^^^^^^^^ Q-01: was used, never imported</span>
+
+<span class="n">_R</span> <span class="o">=</span> <span class="n">TypeVar</span><span class="p">(</span><span class="s2">&quot;_R&quot;</span><span class="p">)</span>
+
+
+    <span class="k">def</span> <span class="nf">_exchange_contact</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">devices</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">DeviceID</span><span class="p">],</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">pass_kind</span><span class="p">:</span> <span class="n">MissionPass</span><span class="p">,</span>
+        <span class="n">mission_round</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+        <span class="n">epoch</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+        <span class="n">on_present</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[[</span><span class="n">DeviceID</span><span class="p">,</span> <span class="n">FLReadyAdv</span><span class="p">,</span> <span class="nb">int</span><span class="p">],</span> <span class="n">_R</span><span class="p">],</span>
+        <span class="n">on_absent</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[[</span><span class="n">DeviceID</span><span class="p">,</span> <span class="nb">int</span><span class="p">],</span> <span class="n">_R</span><span class="p">],</span>
+        <span class="n">on_broadcast_failure</span><span class="p">:</span> <span class="n">_R</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="n">DeviceID</span><span class="p">,</span> <span class="n">_R</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;One contact event: broadcast, gather adverts, serve in parallel.</span>
+
+<span class="sd">        Shared by Pass-1 ``run_contact`` and Pass-2 ``deliver_contact``.</span>
+<span class="sd">        Everything except the per-device body is identical between the two —</span>
+<span class="sd">        keeping one copy means the H-02 thread-management fixes and the H1</span>
+<span class="sd">        misrouted-advert discipline exist exactly once.</span>
+
+<span class="sd">        Timing contract: the whole call is bounded by ``2 * session_ttl_s``</span>
+<span class="sd">        wall-clock — one TTL to gather adverts, one to serve them. The</span>
+<span class="sd">        previous per-thread ``join(timeout=2*ttl)`` gave a worst case of</span>
+<span class="sd">        ``N * 2 * ttl``, which at N=20 / ttl=30 s was twenty minutes.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">devices</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">devices</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">devices</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">pass_kind</span><span class="o">.</span><span class="n">value</span><span class="si">}</span><span class="s2"> contact requires at least one device&quot;</span>
+            <span class="p">)</span>
+
+        <span class="n">solicit</span> <span class="o">=</span> <span class="n">FLOpenSolicit</span><span class="p">(</span>
+            <span class="n">mule_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">mule_id</span><span class="p">,</span>
+            <span class="n">mission_round</span><span class="o">=</span><span class="n">mission_round</span><span class="p">,</span>
+            <span class="n">issued_at</span><span class="o">=</span><span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">(),</span>
+            <span class="n">pass_kind</span><span class="o">=</span><span class="n">pass_kind</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">rf</span><span class="o">.</span><span class="n">broadcast_open_solicit</span><span class="p">(</span><span class="n">solicit</span><span class="p">)</span>
+        <span class="k">except</span> <span class="n">RFLinkError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">%s</span><span class="s2"> contact: broadcast failed: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">pass_kind</span><span class="o">.</span><span class="n">value</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+            <span class="k">return</span> <span class="p">{</span><span class="n">did</span><span class="p">:</span> <span class="n">on_broadcast_failure</span> <span class="k">for</span> <span class="n">did</span> <span class="ow">in</span> <span class="n">devices</span><span class="p">}</span>
+
+        <span class="n">advs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_gather_ready_advs</span><span class="p">(</span><span class="n">devices</span><span class="p">,</span> <span class="n">deadline</span><span class="o">=</span><span class="n">time</span><span class="o">.</span><span class="n">monotonic</span><span class="p">()</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">session_ttl_s</span><span class="p">)</span>
+
+        <span class="n">outcomes</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="n">DeviceID</span><span class="p">,</span> <span class="n">_R</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="n">outcomes_lock</span> <span class="o">=</span> <span class="n">threading</span><span class="o">.</span><span class="n">Lock</span><span class="p">()</span>
+
+        <span class="k">def</span> <span class="nf">_serve</span><span class="p">(</span><span class="n">did</span><span class="p">:</span> <span class="n">DeviceID</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">adv</span> <span class="o">=</span> <span class="n">advs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">did</span><span class="p">)</span>
+            <span class="n">result</span> <span class="o">=</span> <span class="p">(</span>
+                <span class="n">on_absent</span><span class="p">(</span><span class="n">did</span><span class="p">,</span> <span class="n">epoch</span><span class="p">)</span> <span class="k">if</span> <span class="n">adv</span> <span class="ow">is</span> <span class="kc">None</span>
+                <span class="k">else</span> <span class="n">on_present</span><span class="p">(</span><span class="n">did</span><span class="p">,</span> <span class="n">adv</span><span class="p">,</span> <span class="n">epoch</span><span class="p">)</span>
+            <span class="p">)</span>
+            <span class="k">with</span> <span class="n">outcomes_lock</span><span class="p">:</span>
+                <span class="n">outcomes</span><span class="p">[</span><span class="n">did</span><span class="p">]</span> <span class="o">=</span> <span class="n">result</span>
+
+        <span class="n">pool</span> <span class="o">=</span> <span class="n">ThreadPoolExecutor</span><span class="p">(</span>
+            <span class="n">max_workers</span><span class="o">=</span><span class="nb">min</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">devices</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">MAX_CONTACT_WORKERS</span><span class="p">),</span>
+            <span class="n">thread_name_prefix</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;contact-</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">mule_id</span><span class="si">}</span><span class="s2">-r</span><span class="si">{</span><span class="n">mission_round</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">futures</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="n">Future</span><span class="p">,</span> <span class="n">DeviceID</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
+                <span class="n">pool</span><span class="o">.</span><span class="n">submit</span><span class="p">(</span><span class="n">_serve</span><span class="p">,</span> <span class="n">did</span><span class="p">):</span> <span class="n">did</span> <span class="k">for</span> <span class="n">did</span> <span class="ow">in</span> <span class="n">devices</span>
+            <span class="p">}</span>
+            <span class="n">serve_deadline</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">monotonic</span><span class="p">()</span> <span class="o">+</span> <span class="mf">2.0</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">session_ttl_s</span>
+            <span class="n">_done</span><span class="p">,</span> <span class="n">pending</span> <span class="o">=</span> <span class="n">wait</span><span class="p">(</span>
+                <span class="n">futures</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="nb">max</span><span class="p">(</span><span class="mf">0.0</span><span class="p">,</span> <span class="n">serve_deadline</span> <span class="o">-</span> <span class="n">time</span><span class="o">.</span><span class="n">monotonic</span><span class="p">()),</span>
+            <span class="p">)</span>
+            <span class="k">for</span> <span class="n">fut</span> <span class="ow">in</span> <span class="n">pending</span><span class="p">:</span>
+                <span class="n">did</span> <span class="o">=</span> <span class="n">futures</span><span class="p">[</span><span class="n">fut</span><span class="p">]</span>
+                <span class="n">fut</span><span class="o">.</span><span class="n">cancel</span><span class="p">()</span>
+                <span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                    <span class="s2">&quot;</span><span class="si">%s</span><span class="s2"> contact: device </span><span class="si">%s</span><span class="s2"> did not finish within the &quot;</span>
+                    <span class="s2">&quot;contact deadline; recording </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+                    <span class="n">pass_kind</span><span class="o">.</span><span class="n">value</span><span class="p">,</span> <span class="n">did</span><span class="p">,</span> <span class="n">on_broadcast_failure</span><span class="p">,</span>
+                <span class="p">)</span>
+                <span class="k">with</span> <span class="n">outcomes_lock</span><span class="p">:</span>
+                    <span class="n">outcomes</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="n">did</span><span class="p">,</span> <span class="n">on_broadcast_failure</span><span class="p">)</span>
+            <span class="c1"># Surface a worker exception rather than losing it in the future.</span>
+            <span class="k">for</span> <span class="n">fut</span> <span class="ow">in</span> <span class="n">_done</span><span class="p">:</span>
+                <span class="n">exc</span> <span class="o">=</span> <span class="n">fut</span><span class="o">.</span><span class="n">exception</span><span class="p">()</span>
+                <span class="k">if</span> <span class="n">exc</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                    <span class="n">log</span><span class="o">.</span><span class="n">error</span><span class="p">(</span>
+                        <span class="s2">&quot;</span><span class="si">%s</span><span class="s2"> contact: worker for </span><span class="si">%s</span><span class="s2"> raised: </span><span class="si">%r</span><span class="s2">&quot;</span><span class="p">,</span>
+                        <span class="n">pass_kind</span><span class="o">.</span><span class="n">value</span><span class="p">,</span> <span class="n">futures</span><span class="p">[</span><span class="n">fut</span><span class="p">],</span> <span class="n">exc</span><span class="p">,</span>
+                    <span class="p">)</span>
+                    <span class="k">with</span> <span class="n">outcomes_lock</span><span class="p">:</span>
+                        <span class="n">outcomes</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="n">futures</span><span class="p">[</span><span class="n">fut</span><span class="p">],</span> <span class="n">on_broadcast_failure</span><span class="p">)</span>
+        <span class="k">finally</span><span class="p">:</span>
+            <span class="c1"># Do NOT wait — that would restore the unbounded-latency</span>
+            <span class="c1"># behaviour the deadline above exists to remove. Cancelled</span>
+            <span class="c1"># futures that never started are dropped; ones already running</span>
+            <span class="c1"># are epoch-guarded (§3a) so their late writes are rejected.</span>
+            <span class="n">pool</span><span class="o">.</span><span class="n">shutdown</span><span class="p">(</span><span class="n">wait</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">cancel_futures</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">outcomes</span>
+
+    <span class="k">def</span> <span class="nf">_gather_ready_advs</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">devices</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">DeviceID</span><span class="p">],</span> <span class="o">*</span><span class="p">,</span> <span class="n">deadline</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="n">DeviceID</span><span class="p">,</span> <span class="n">FLReadyAdv</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Collect one FLReadyAdv per expected device before ``deadline``.</span>
+
+<span class="sd">        H1 discipline preserved verbatim: adverts that arrive from devices</span>
+<span class="sd">        outside this contact&#39;s expected set go into ``_misrouted_advs`` for</span>
+<span class="sd">        the next contact&#39;s drain, rather than being re-sent on the link (the</span>
+<span class="sd">        mule-side TCP server does not implement the device-&gt;mule direction).</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">expected</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="n">DeviceID</span><span class="p">,</span> <span class="n">FLReadyAdv</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="n">expected_set</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">devices</span><span class="p">)</span>
+
+        <span class="n">leftover</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">FLReadyAdv</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">_lock</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">adv</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_misrouted_advs</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">adv</span><span class="o">.</span><span class="n">device_id</span> <span class="ow">in</span> <span class="n">expected_set</span> <span class="ow">and</span> <span class="n">adv</span><span class="o">.</span><span class="n">device_id</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">expected</span><span class="p">:</span>
+                    <span class="n">expected</span><span class="p">[</span><span class="n">adv</span><span class="o">.</span><span class="n">device_id</span><span class="p">]</span> <span class="o">=</span> <span class="n">adv</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">leftover</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">adv</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_misrouted_advs</span> <span class="o">=</span> <span class="n">leftover</span>
+
+        <span class="k">while</span> <span class="n">expected_set</span> <span class="o">-</span> <span class="n">expected</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
+            <span class="n">remaining</span> <span class="o">=</span> <span class="n">deadline</span> <span class="o">-</span> <span class="n">time</span><span class="o">.</span><span class="n">monotonic</span><span class="p">()</span>
+            <span class="k">if</span> <span class="n">remaining</span> <span class="o">&lt;=</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="k">break</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">adv</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">rf</span><span class="o">.</span><span class="n">recv_ready_adv</span><span class="p">(</span><span class="n">timeout</span><span class="o">=</span><span class="n">remaining</span><span class="p">)</span>
+            <span class="k">except</span> <span class="n">RFLinkError</span><span class="p">:</span>
+                <span class="k">break</span>
+            <span class="k">if</span> <span class="n">adv</span><span class="o">.</span><span class="n">device_id</span> <span class="ow">in</span> <span class="n">expected_set</span> <span class="ow">and</span> <span class="n">adv</span><span class="o">.</span><span class="n">device_id</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">expected</span><span class="p">:</span>
+                <span class="n">expected</span><span class="p">[</span><span class="n">adv</span><span class="o">.</span><span class="n">device_id</span><span class="p">]</span> <span class="o">=</span> <span class="n">adv</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">_lock</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">_misrouted_advs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">adv</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">expected</span></code></pre></div>
+<h3 id="3c-the-two-public-methods-become-thin">3c. The two public methods become thin</h3>
+<div class="codewrap wide"><span class="lang">python</span><pre class="code"><code>    <span class="k">def</span> <span class="nf">run_contact</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">contact_devices</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">DeviceID</span><span class="p">],</span>
+        <span class="n">synth_batch</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">min_utility</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="n">DeviceID</span><span class="p">,</span> <span class="n">MissionOutcome</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Pass-1 parallel exchange-only sessions for one contact event.</span>
+
+<span class="sd">        Unchanged contract: per-device outcome map; individual failures</span>
+<span class="sd">        (TTL, bad receipt, FL_READY=False) never affect the other devices in</span>
+<span class="sd">        the same contact.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_require_pass</span><span class="p">(</span><span class="n">MissionPass</span><span class="o">.</span><span class="n">COLLECT</span><span class="p">,</span> <span class="s2">&quot;run_contact&quot;</span><span class="p">)</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">_lock</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_require_open_round</span><span class="p">()</span>
+            <span class="n">theta</span> <span class="o">=</span> <span class="p">[</span><span class="n">w</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span> <span class="k">for</span> <span class="n">w</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_current_theta</span><span class="p">]</span>   <span class="c1"># type: ignore[arg-type]</span>
+            <span class="n">mission_round</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_mission_round</span>
+            <span class="n">epoch</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_epoch</span>
+
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_exchange_contact</span><span class="p">(</span>
+            <span class="n">contact_devices</span><span class="p">,</span>
+            <span class="n">pass_kind</span><span class="o">=</span><span class="n">MissionPass</span><span class="o">.</span><span class="n">COLLECT</span><span class="p">,</span>
+            <span class="n">mission_round</span><span class="o">=</span><span class="n">mission_round</span><span class="p">,</span>
+            <span class="n">epoch</span><span class="o">=</span><span class="n">epoch</span><span class="p">,</span>
+            <span class="n">on_present</span><span class="o">=</span><span class="k">lambda</span> <span class="n">did</span><span class="p">,</span> <span class="n">adv</span><span class="p">,</span> <span class="n">ep</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_collect_from_device</span><span class="p">(</span>
+                <span class="n">did</span><span class="p">,</span> <span class="n">adv</span><span class="p">,</span> <span class="n">theta</span><span class="o">=</span><span class="n">theta</span><span class="p">,</span> <span class="n">mission_round</span><span class="o">=</span><span class="n">mission_round</span><span class="p">,</span>
+                <span class="n">synth_batch</span><span class="o">=</span><span class="n">synth_batch</span><span class="p">,</span> <span class="n">min_utility</span><span class="o">=</span><span class="n">min_utility</span><span class="p">,</span> <span class="n">epoch</span><span class="o">=</span><span class="n">ep</span><span class="p">,</span>
+            <span class="p">),</span>
+            <span class="n">on_absent</span><span class="o">=</span><span class="k">lambda</span> <span class="n">did</span><span class="p">,</span> <span class="n">ep</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_record_absent_collect</span><span class="p">(</span><span class="n">did</span><span class="p">,</span> <span class="n">epoch</span><span class="o">=</span><span class="n">ep</span><span class="p">),</span>
+            <span class="n">on_broadcast_failure</span><span class="o">=</span><span class="n">MissionOutcome</span><span class="o">.</span><span class="n">TIMEOUT</span><span class="p">,</span>
+        <span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">deliver_contact</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">contact_devices</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">DeviceID</span><span class="p">],</span>
+        <span class="n">synth_batch</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="n">DeviceID</span><span class="p">,</span> <span class="n">DeliveryOutcome</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Pass-2 push-only delivery for one contact event.&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_require_pass</span><span class="p">(</span><span class="n">MissionPass</span><span class="o">.</span><span class="n">DELIVER</span><span class="p">,</span> <span class="s2">&quot;deliver_contact&quot;</span><span class="p">)</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">_lock</span><span class="p">:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_current_theta</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">_mission_round</span> <span class="o">&lt;=</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="n">MissionSessionError</span><span class="p">(</span>
+                    <span class="s2">&quot;deliver_contact called without open_pass_2 staging θ&#39;&quot;</span>
+                <span class="p">)</span>
+            <span class="n">theta</span> <span class="o">=</span> <span class="p">[</span><span class="n">w</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span> <span class="k">for</span> <span class="n">w</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_current_theta</span><span class="p">]</span>
+            <span class="n">mission_round</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_mission_round</span>
+            <span class="n">epoch</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_epoch</span>
+
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_exchange_contact</span><span class="p">(</span>
+            <span class="n">contact_devices</span><span class="p">,</span>
+            <span class="n">pass_kind</span><span class="o">=</span><span class="n">MissionPass</span><span class="o">.</span><span class="n">DELIVER</span><span class="p">,</span>
+            <span class="n">mission_round</span><span class="o">=</span><span class="n">mission_round</span><span class="p">,</span>
+            <span class="n">epoch</span><span class="o">=</span><span class="n">epoch</span><span class="p">,</span>
+            <span class="n">on_present</span><span class="o">=</span><span class="k">lambda</span> <span class="n">did</span><span class="p">,</span> <span class="n">adv</span><span class="p">,</span> <span class="n">ep</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_deliver_to_device</span><span class="p">(</span>
+                <span class="n">did</span><span class="p">,</span> <span class="n">adv</span><span class="p">,</span> <span class="n">theta</span><span class="o">=</span><span class="n">theta</span><span class="p">,</span> <span class="n">mission_round</span><span class="o">=</span><span class="n">mission_round</span><span class="p">,</span>
+                <span class="n">synth_batch</span><span class="o">=</span><span class="n">synth_batch</span><span class="p">,</span> <span class="n">epoch</span><span class="o">=</span><span class="n">ep</span><span class="p">,</span>
+            <span class="p">),</span>
+            <span class="n">on_absent</span><span class="o">=</span><span class="k">lambda</span> <span class="n">did</span><span class="p">,</span> <span class="n">ep</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_record_absent_delivery</span><span class="p">(</span><span class="n">did</span><span class="p">,</span> <span class="n">epoch</span><span class="o">=</span><span class="n">ep</span><span class="p">),</span>
+            <span class="n">on_broadcast_failure</span><span class="o">=</span><span class="n">DeliveryOutcome</span><span class="o">.</span><span class="n">UNDELIVERED</span><span class="p">,</span>
+        <span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_require_pass</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">expected</span><span class="p">:</span> <span class="n">MissionPass</span><span class="p">,</span> <span class="n">fn_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">current</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_pass</span>
+        <span class="k">if</span> <span class="n">current</span> <span class="ow">is</span> <span class="ow">not</span> <span class="n">expected</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">MissionSessionError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">fn_name</span><span class="si">}</span><span class="s2"> called in pass=</span><span class="si">{</span><span class="n">current</span><span class="o">.</span><span class="n">value</span><span class="si">}</span><span class="s2">; &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;expected </span><span class="si">{</span><span class="n">expected</span><span class="o">.</span><span class="n">value</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="p">)</span></code></pre></div>
+<p>The two <code>_collect_from_device</code> / <code>_deliver_to_device</code> helpers are the existing
+<code>_device_worker</code> bodies lifted out verbatim, with <code>epoch</code> threaded into their <code>_record_*</code>
+calls. No logic inside them changes.</p>
+<p><strong>Net effect:</strong> <code>host_mission.py</code> drops roughly 150 duplicated lines; <code>run_contact</code>'s
+complexity falls from 35 to under 10; contact wall-clock is bounded at <code>2 × ttl</code>
+regardless of N; thread count is capped at 16; late writes are rejected loudly.</p>
+<p><strong>Verification.</strong> <code>tests/unit/test_host_mission.py</code>,
+<code>tests/integration/test_two_pass_contact.py</code>, <code>test_sprint_1_5_fixes.py</code>,
+<code>test_e2e_faults.py</code> all pass unchanged — they assert on the returned outcome maps and
+the report contents, both of which are preserved. Add:</p>
+<div class="codewrap wide"><span class="lang">python</span><pre class="code"><code><span class="k">def</span> <span class="nf">test_contact_wall_clock_is_bounded_independent_of_device_count</span><span class="p">(</span><span class="o">...</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;H-02(b): 32 unresponsive devices must not cost 32 x 2 x ttl.&quot;&quot;&quot;</span>
+    <span class="n">mission</span> <span class="o">=</span> <span class="n">HFLHostMission</span><span class="p">(</span><span class="n">mule_id</span><span class="o">=</span><span class="s2">&quot;m&quot;</span><span class="p">,</span> <span class="n">rf</span><span class="o">=</span><span class="n">SilentRFLink</span><span class="p">(),</span> <span class="n">session_ttl_s</span><span class="o">=</span><span class="mf">0.2</span><span class="p">)</span>
+    <span class="n">mission</span><span class="o">.</span><span class="n">open_round</span><span class="p">(</span><span class="n">theta</span><span class="p">)</span>
+    <span class="n">t0</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">monotonic</span><span class="p">()</span>
+    <span class="n">outcomes</span> <span class="o">=</span> <span class="n">mission</span><span class="o">.</span><span class="n">run_contact</span><span class="p">([</span><span class="sa">f</span><span class="s2">&quot;d</span><span class="si">{</span><span class="n">i</span><span class="si">}</span><span class="s2">&quot;</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">32</span><span class="p">)],</span> <span class="n">synth</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="n">time</span><span class="o">.</span><span class="n">monotonic</span><span class="p">()</span> <span class="o">-</span> <span class="n">t0</span> <span class="o">&lt;</span> <span class="mf">2.0</span>          <span class="c1"># ~2*ttl, not 32*2*ttl</span>
+    <span class="k">assert</span> <span class="nb">all</span><span class="p">(</span><span class="n">o</span> <span class="ow">is</span> <span class="n">MissionOutcome</span><span class="o">.</span><span class="n">TIMEOUT</span> <span class="k">for</span> <span class="n">o</span> <span class="ow">in</span> <span class="n">outcomes</span><span class="o">.</span><span class="n">values</span><span class="p">())</span>
+
+<span class="k">def</span> <span class="nf">test_late_worker_cannot_write_into_the_next_round</span><span class="p">(</span><span class="o">...</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;H-02(c): a worker that outlives close_round is rejected, not folded in.&quot;&quot;&quot;</span></code></pre></div>
+<hr />
+      </section>
+      <section id="4-cancellable-dock-wait">
+        <div class="sec-eyebrow">§&nbsp;04 · Cancellable dock wait</div>
+        <h2>Cancellable dock wait</h2>
+<p><strong>Defect (H-04).</strong> <code>wait_for_dock(timeout=None)</code> is an uncancellable <code>while True</code> with a
+<code>time.sleep</code>, called from the supervisor at <code>mule_main.py:306</code> and <code>:425</code>.</p>
+<div class="codewrap wide"><span class="lang">python</span><pre class="code"><code><span class="c1"># hermes/mule/client_cluster.py</span>
+
+    <span class="k">def</span> <span class="nf">wait_for_dock</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">timeout</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">stop_event</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">threading</span><span class="o">.</span><span class="n">Event</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Poll ``dock.is_available()`` until True, timeout, or stop.</span>
+
+<span class="sd">        ``stop_event`` makes the wait cancellable: SIGTERM during an</span>
+<span class="sd">        inter-pass dock wait now exits within one poll interval instead of</span>
+<span class="sd">        being absorbed until the orchestrator&#39;s SIGKILL — which previously</span>
+<span class="sd">        discarded the Pass-1 aggregate and the delivery-report carryover</span>
+<span class="sd">        that were about to be uploaded.</span>
+
+<span class="sd">        Sleeping on ``Event.wait`` rather than ``time.sleep`` is what makes</span>
+<span class="sd">        the cancellation prompt; a plain sleep would still hold the thread</span>
+<span class="sd">        for a full interval after the flag is set.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">_lock</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_set_state</span><span class="p">(</span><span class="n">ClientClusterState</span><span class="o">.</span><span class="n">AWAIT_DOCK</span><span class="p">)</span>
+
+        <span class="n">deadline</span> <span class="o">=</span> <span class="kc">None</span> <span class="k">if</span> <span class="n">timeout</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">time</span><span class="o">.</span><span class="n">monotonic</span><span class="p">()</span> <span class="o">+</span> <span class="n">timeout</span>
+        <span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">stop_event</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">stop_event</span><span class="o">.</span><span class="n">is_set</span><span class="p">():</span>
+                <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;wait_for_dock: cancelled by stop event&quot;</span><span class="p">)</span>
+                <span class="k">return</span> <span class="kc">False</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">dock</span><span class="o">.</span><span class="n">is_available</span><span class="p">():</span>
+                <span class="k">return</span> <span class="kc">True</span>
+            <span class="k">if</span> <span class="n">deadline</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">time</span><span class="o">.</span><span class="n">monotonic</span><span class="p">()</span> <span class="o">&gt;=</span> <span class="n">deadline</span><span class="p">:</span>
+                <span class="k">return</span> <span class="kc">False</span>
+            <span class="n">remaining</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dock_poll_interval_s</span>
+            <span class="k">if</span> <span class="n">deadline</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">remaining</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="n">remaining</span><span class="p">,</span> <span class="nb">max</span><span class="p">(</span><span class="mf">0.0</span><span class="p">,</span> <span class="n">deadline</span> <span class="o">-</span> <span class="n">time</span><span class="o">.</span><span class="n">monotonic</span><span class="p">()))</span>
+            <span class="k">if</span> <span class="n">stop_event</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">stop_event</span><span class="o">.</span><span class="n">wait</span><span class="p">(</span><span class="n">remaining</span><span class="p">):</span>
+                    <span class="k">return</span> <span class="kc">False</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="n">remaining</span><span class="p">)</span></code></pre></div>
+<p><code>MuleSupervisor</code> gains <code>stop_event</code> and <code>dock_wait_timeout_s</code> constructor parameters, and
+the two call sites become:</p>
+<div class="codewrap"><span class="lang">python</span><pre class="code"><code>        <span class="c1"># A dead cluster must surface as an error, not an infinite wait.</span>
+        <span class="c1"># 300 s is generous relative to a mission (tens of seconds) while</span>
+        <span class="c1"># still bounded.</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">client_cluster</span><span class="o">.</span><span class="n">wait_for_dock</span><span class="p">(</span>
+            <span class="n">timeout</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">dock_wait_timeout_s</span><span class="p">,</span> <span class="n">stop_event</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_stop_event</span><span class="p">,</span>
+        <span class="p">):</span>
+            <span class="k">raise</span> <span class="n">MuleSupervisorError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;dock did not become available within &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">dock_wait_timeout_s</span><span class="si">}</span><span class="s2">s between passes&quot;</span>
+            <span class="p">)</span></code></pre></div>
+<p><code>MuleService</code> passes its existing <code>_stop_event</code> into the supervisor.</p>
+<p><strong>Verification.</strong> Existing tests construct the supervisor without a stop event and get
+<code>stop_event=None</code> plus a generous default timeout — the current
+<code>wait_for_dock(timeout=None)</code> semantics are preserved for every path that has a live
+cluster. New test: SIGTERM during an inter-pass dock wait exits within one poll interval.</p>
+<hr />
+      </section>
+      <section id="5-observability-that-cannot-crash-its-caller">
+        <div class="sec-eyebrow">§&nbsp;05 · Observability that cannot crash its caller</div>
+        <h2>Observability that cannot crash its caller</h2>
+<p><strong>Defect (H-07).</strong> <code>events.py:108</code> serializes outside the guard, contradicting the module
+docstring and <code>_coerce</code>'s own comment.</p>
+<div class="codewrap wide"><span class="lang">python</span><pre class="code"><code><span class="c1"># hermes/observability/events.py</span>
+
+<span class="k">def</span> <span class="nf">_coerce</span><span class="p">(</span><span class="n">v</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;JSON-friendly coercion of the value types that reach event lines.</span>
+
+<span class="sd">    numpy scalars and 0-d arrays are the common accident: ``metrics.observe``</span>
+<span class="sd">    and per-round evaluation both produce ``np.float32`` / ``np.float64``,</span>
+<span class="sd">    and ``json.dumps`` rejects them. Coercing here (rather than relying on</span>
+<span class="sd">    every call site to remember ``float(...)``) is what makes the</span>
+<span class="sd">    &quot;observability never crashes the caller&quot; contract actually hold.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">[</span><span class="n">_coerce</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">v</span><span class="p">]</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">[</span><span class="n">_coerce</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">v</span><span class="p">]</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">{</span><span class="nb">str</span><span class="p">(</span><span class="n">k</span><span class="p">):</span> <span class="n">_coerce</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">v</span><span class="o">.</span><span class="n">items</span><span class="p">()}</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="n">Path</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">str</span><span class="p">(</span><span class="n">v</span><span class="p">)</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="n">Enum</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">v</span><span class="o">.</span><span class="n">value</span>
+    <span class="c1"># numpy scalars / arrays — imported lazily so observability keeps its</span>
+    <span class="c1"># stdlib-only dependency footprint when numpy is absent.</span>
+    <span class="n">item</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="s2">&quot;item&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+    <span class="k">if</span> <span class="nb">callable</span><span class="p">(</span><span class="n">item</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="s2">&quot;shape&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="o">==</span> <span class="p">():</span>
+        <span class="k">return</span> <span class="n">item</span><span class="p">()</span>
+    <span class="n">tolist</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="s2">&quot;tolist&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+    <span class="k">if</span> <span class="nb">callable</span><span class="p">(</span><span class="n">tolist</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="s2">&quot;shape&quot;</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">tolist</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">v</span>
+
+
+    <span class="k">def</span> <span class="nf">emit</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">event</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="o">**</span><span class="n">fields</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Append one event line. Never raises.&quot;&quot;&quot;</span>
+        <span class="n">record</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s2">&quot;ts&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_clock</span><span class="p">()),</span>
+            <span class="s2">&quot;schema_version&quot;</span><span class="p">:</span> <span class="n">SCHEMA_VERSION</span><span class="p">,</span>
+            <span class="s2">&quot;role&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_role</span><span class="p">,</span>
+            <span class="s2">&quot;id&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_id</span><span class="p">,</span>
+            <span class="s2">&quot;event&quot;</span><span class="p">:</span> <span class="n">event</span><span class="p">,</span>
+        <span class="p">}</span>
+        <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">fields</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">record</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="n">record</span><span class="p">[</span><span class="n">k</span><span class="p">]</span> <span class="o">=</span> <span class="n">_coerce</span><span class="p">(</span><span class="n">v</span><span class="p">)</span>
+
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">_lock</span><span class="p">:</span>
+            <span class="n">fp</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_fp</span>
+            <span class="k">if</span> <span class="n">fp</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="k">return</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="c1"># H-07: serialization moved INSIDE the guard. It was outside,</span>
+                <span class="c1"># so a non-serializable field raised TypeError straight into</span>
+                <span class="c1"># the instrumented code path — the exact failure the module</span>
+                <span class="c1"># docstring promises cannot happen. ``default=repr`` means an</span>
+                <span class="c1"># exotic value degrades to a readable string instead of</span>
+                <span class="c1"># dropping the whole event.</span>
+                <span class="n">line</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">record</span><span class="p">,</span> <span class="n">separators</span><span class="o">=</span><span class="p">(</span><span class="s2">&quot;,&quot;</span><span class="p">,</span> <span class="s2">&quot;:&quot;</span><span class="p">),</span> <span class="n">default</span><span class="o">=</span><span class="nb">repr</span><span class="p">)</span>
+                <span class="n">fp</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">line</span> <span class="o">+</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+                <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;event emit failed (event=</span><span class="si">%s</span><span class="s2">)&quot;</span><span class="p">,</span> <span class="n">event</span><span class="p">,</span> <span class="n">exc_info</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span></code></pre></div>
+<p><strong>Verification.</strong> Existing <code>test_observability.py</code> unchanged. Add:</p>
+<div class="codewrap wide"><span class="lang">python</span><pre class="code"><code><span class="k">def</span> <span class="nf">test_emit_never_raises_on_numpy_or_exotic_values</span><span class="p">(</span><span class="n">tmp_path</span><span class="p">):</span>
+    <span class="n">em</span> <span class="o">=</span> <span class="n">JsonEventEmitter</span><span class="p">(</span><span class="n">tmp_path</span> <span class="o">/</span> <span class="s2">&quot;e.jsonl&quot;</span><span class="p">,</span> <span class="n">role</span><span class="o">=</span><span class="s2">&quot;test&quot;</span><span class="p">,</span> <span class="n">node_id</span><span class="o">=</span><span class="s2">&quot;t&quot;</span><span class="p">)</span>
+    <span class="n">em</span><span class="o">.</span><span class="n">emit</span><span class="p">(</span><span class="s2">&quot;m&quot;</span><span class="p">,</span> <span class="n">auc</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">(</span><span class="mf">0.87</span><span class="p">),</span> <span class="n">shape</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="mi">3</span><span class="p">),</span> <span class="n">obj</span><span class="o">=</span><span class="nb">object</span><span class="p">())</span>  <span class="c1"># must not raise</span>
+    <span class="n">em</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+    <span class="n">rec</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">((</span><span class="n">tmp_path</span> <span class="o">/</span> <span class="s2">&quot;e.jsonl&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">read_text</span><span class="p">()</span><span class="o">.</span><span class="n">strip</span><span class="p">())</span>
+    <span class="k">assert</span> <span class="n">rec</span><span class="p">[</span><span class="s2">&quot;auc&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="n">pytest</span><span class="o">.</span><span class="n">approx</span><span class="p">(</span><span class="mf">0.87</span><span class="p">,</span> <span class="nb">abs</span><span class="o">=</span><span class="mf">1e-6</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="n">rec</span><span class="p">[</span><span class="s2">&quot;shape&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="p">[</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">]</span></code></pre></div>
+<hr />
+      </section>
+      <section id="6-inverting-the-experiments-dependency">
+        <div class="sec-eyebrow">§&nbsp;06 · Inverting the `experiments` dependency</div>
+        <h2>Inverting the `experiments` dependency</h2>
+<p><strong>Defect (H-08).</strong> <code>hermes/processes/cluster.py:113,140,461</code> and <code>device.py:89</code> import
+<code>experiments.exp4.model_task</code>, so the core library cannot ship without the paper harness.</p>
+<p><code>hermes/</code> already defines the two Protocols this needs. The fix is to resolve the
+<em>implementation</em> from configuration instead of naming it:</p>
+<div class="codewrap wide"><span class="lang">python</span><pre class="code"><code><span class="c1"># hermes/processes/providers.py  (new)</span>
+<span class="sd">&quot;&quot;&quot;Runtime resolution of pluggable model providers.</span>
+
+<span class="sd">``hermes`` defines two Protocols the outside world implements:</span>
+
+<span class="sd">* :class:`hermes.cluster.host_cluster.GeneratorHost`  — θ_gen + synth batch</span>
+<span class="sd">* :class:`hermes.mission.client_mission.LocalTrainFn` — device-side training</span>
+
+<span class="sd">Before this module, ``hermes.processes.{cluster,device}`` imported concrete</span>
+<span class="sd">implementations from ``experiments.exp4.model_task`` directly, inverting the</span>
+<span class="sd">layering: the reusable library depended on the throwaway harness, and the</span>
+<span class="sd">real-model path only worked when CWD happened to be the repo root.</span>
+
+<span class="sd">Now the config carries an entry-point string (&quot;pkg.module:Factory&quot;) and this</span>
+<span class="sd">module resolves it at runtime. ``hermes`` names no concrete provider, and</span>
+<span class="sd">callers can supply their own without touching the library.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">from</span> <span class="nn">__future__</span> <span class="kn">import</span> <span class="n">annotations</span>
+
+<span class="kn">import</span> <span class="nn">importlib</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Any</span>
+
+
+<span class="k">class</span> <span class="nc">ProviderResolutionError</span><span class="p">(</span><span class="ne">RuntimeError</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Raised when a configured provider cannot be imported or constructed.&quot;&quot;&quot;</span>
+
+
+<span class="k">def</span> <span class="nf">load_provider</span><span class="p">(</span><span class="n">spec</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Resolve ``&quot;package.module:attribute&quot;`` and call it with ``kwargs``.</span>
+
+<span class="sd">    Raises :class:`ProviderResolutionError` with the offending spec on any</span>
+<span class="sd">    failure — an unimportable provider is a configuration error and must be</span>
+<span class="sd">    loud, not a silent fall-back to the stub.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="s2">&quot;:&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">spec</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">ProviderResolutionError</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;provider spec </span><span class="si">{</span><span class="n">spec</span><span class="si">!r}</span><span class="s2"> must be &#39;package.module:attribute&#39;&quot;</span>
+        <span class="p">)</span>
+    <span class="n">module_name</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">attr</span> <span class="o">=</span> <span class="n">spec</span><span class="o">.</span><span class="n">partition</span><span class="p">(</span><span class="s2">&quot;:&quot;</span><span class="p">)</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">module</span> <span class="o">=</span> <span class="n">importlib</span><span class="o">.</span><span class="n">import_module</span><span class="p">(</span><span class="n">module_name</span><span class="p">)</span>
+    <span class="k">except</span> <span class="ne">ImportError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">ProviderResolutionError</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;cannot import provider module </span><span class="si">{</span><span class="n">module_name</span><span class="si">!r}</span><span class="s2"> from spec </span><span class="si">{</span><span class="n">spec</span><span class="si">!r}</span><span class="s2">: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="p">)</span> <span class="kn">from</span> <span class="nn">e</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">factory</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="n">attr</span><span class="p">)</span>
+    <span class="k">except</span> <span class="ne">AttributeError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">ProviderResolutionError</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;module </span><span class="si">{</span><span class="n">module_name</span><span class="si">!r}</span><span class="s2"> has no attribute </span><span class="si">{</span><span class="n">attr</span><span class="si">!r}</span><span class="s2"> (spec </span><span class="si">{</span><span class="n">spec</span><span class="si">!r}</span><span class="s2">)&quot;</span>
+        <span class="p">)</span> <span class="kn">from</span> <span class="nn">e</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">factory</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+    <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">ProviderResolutionError</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;provider </span><span class="si">{</span><span class="n">spec</span><span class="si">!r}</span><span class="s2"> raised during construction: </span><span class="si">{</span><span class="n">e</span><span class="si">!r}</span><span class="s2">&quot;</span>
+        <span class="p">)</span> <span class="kn">from</span> <span class="nn">e</span></code></pre></div>
+<p><code>ClusterConfig</code> / <code>DeviceConfig</code> gain optional <code>generator_provider</code> /
+<code>local_train_provider</code> strings, and the entry points become:</p>
+<div class="codewrap wide"><span class="lang">python</span><pre class="code"><code><span class="c1"># hermes/processes/cluster.py</span>
+        <span class="k">if</span> <span class="n">cfg</span><span class="o">.</span><span class="n">generator_provider</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">generator</span> <span class="o">=</span> <span class="n">load_provider</span><span class="p">(</span>
+                <span class="n">cfg</span><span class="o">.</span><span class="n">generator_provider</span><span class="p">,</span>
+                <span class="n">init_theta_path</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">init_theta_path</span><span class="p">,</span>
+                <span class="n">input_dim</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">input_dim</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">generator</span> <span class="o">=</span> <span class="n">StubGeneratorHost</span><span class="p">(</span><span class="n">disc_weights</span><span class="o">=</span><span class="n">_stub_disc_weights</span><span class="p">())</span>
+
+<span class="c1"># hermes/processes/device.py</span>
+<span class="k">def</span> <span class="nf">_build_local_train</span><span class="p">(</span><span class="n">cfg</span><span class="p">:</span> <span class="n">DeviceConfig</span><span class="p">,</span> <span class="n">seed</span><span class="p">:</span> <span class="nb">int</span><span class="p">):</span>
+    <span class="k">if</span> <span class="n">cfg</span><span class="o">.</span><span class="n">local_train_provider</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">load_provider</span><span class="p">(</span>
+            <span class="n">cfg</span><span class="o">.</span><span class="n">local_train_provider</span><span class="p">,</span>
+            <span class="n">shard_path</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">train_shard_path</span><span class="p">,</span>
+            <span class="n">input_dim</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">input_dim</span><span class="p">,</span>
+            <span class="n">epochs</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">local_epochs</span><span class="p">,</span>
+            <span class="n">batch_size</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">local_batch_size</span><span class="p">,</span>
+            <span class="n">seed</span><span class="o">=</span><span class="n">seed</span><span class="p">,</span>
+        <span class="p">)</span>
+    <span class="k">return</span> <span class="n">_stub_train_factory</span><span class="p">(</span><span class="n">seed</span><span class="p">)</span></code></pre></div>
+<p>Existing Exp-4 topologies keep working by setting
+<code>"local_train_provider": "experiments.exp4.model_task:make_local_train_provider"</code> in the
+generated config — the same code runs, but <code>hermes/</code> no longer names it.</p>
+<p><strong>Verification.</strong> <code>grep -rn "^from experiments\|^import experiments" hermes/</code> returns
+nothing. <code>pip install hermes</code> with <code>experiments/</code> absent imports cleanly. Exp-4
+integration tests pass with the provider string set. Add an import-graph test alongside
+the existing <code>test_loopback_retirement.py</code>, which already pins a similar invariant.</p>
+<hr />
+      </section>
+      <section id="7-registry-persistence-and-indexing">
+        <div class="sec-eyebrow">§&nbsp;07 · Registry persistence and indexing</div>
+        <h2>Registry persistence and indexing</h2>
+<p><strong>Defect (H-06, H-05, H-09).</strong> <code>save()</code>/<code>load()</code> are no-ops; <code>slice_for</code> is O(N) per
+call; <code>rebalance</code> is round-robin over device IDs and unstable under <code>is_new</code> flips.</p>
+<div class="codewrap wide"><span class="lang">python</span><pre class="code"><code><span class="c1"># hermes/cluster/registry_store.py  (new)</span>
+<span class="sd">&quot;&quot;&quot;Pluggable persistence for :class:`DeviceRegistry`.</span>
+
+<span class="sd">The registry is the cluster&#39;s authoritative state — on-time history, missed</span>
+<span class="sd">history, delivery priority, per-device position, and mule assignment. Before</span>
+<span class="sd">this module its ``save``/``load`` were documented no-ops (&quot;Phase-6 hook&quot;),</span>
+<span class="sd">so a cluster restart produced empty MissionSlices for every mule, empty</span>
+<span class="sd">contact queues, and permanent &quot;no submissions to aggregate&quot; failures with</span>
+<span class="sd">no operator-visible cause.</span>
+
+<span class="sd">``InMemoryStore`` is the default and reproduces the previous behaviour</span>
+<span class="sd">exactly, so nothing changes unless a store is configured.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">from</span> <span class="nn">__future__</span> <span class="kn">import</span> <span class="n">annotations</span>
+
+<span class="kn">import</span> <span class="nn">json</span>
+<span class="kn">import</span> <span class="nn">sqlite3</span>
+<span class="kn">from</span> <span class="nn">pathlib</span> <span class="kn">import</span> <span class="n">Path</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Iterable</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Protocol</span>
+
+<span class="kn">from</span> <span class="nn">hermes.types</span> <span class="kn">import</span> <span class="n">DeviceID</span><span class="p">,</span> <span class="n">DeviceRecord</span><span class="p">,</span> <span class="n">MuleID</span><span class="p">,</span> <span class="n">SpectrumSig</span>
+
+
+<span class="k">class</span> <span class="nc">RegistryStore</span><span class="p">(</span><span class="n">Protocol</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">save</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">records</span><span class="p">:</span> <span class="n">Iterable</span><span class="p">[</span><span class="n">DeviceRecord</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span> <span class="o">...</span>
+    <span class="k">def</span> <span class="nf">load</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">DeviceRecord</span><span class="p">]:</span> <span class="o">...</span>
+
+
+<span class="k">class</span> <span class="nc">InMemoryStore</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;No-op store — preserves the pre-existing (non-persistent) behaviour.&quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="nf">save</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">records</span><span class="p">:</span> <span class="n">Iterable</span><span class="p">[</span><span class="n">DeviceRecord</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">return</span> <span class="kc">None</span>
+
+    <span class="k">def</span> <span class="nf">load</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">DeviceRecord</span><span class="p">]:</span>
+        <span class="k">return</span> <span class="p">[]</span>
+
+
+<span class="k">class</span> <span class="nc">SQLiteRegistryStore</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Durable store. One row per device, whole-registry upsert per snapshot.</span>
+
+<span class="sd">    SQLite rather than a JSON dump because the write must be atomic against</span>
+<span class="sd">    a mid-write crash — a torn JSON file is indistinguishable from an empty</span>
+<span class="sd">    registry, which is the exact failure mode this is meant to eliminate.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">_SCHEMA</span> <span class="o">=</span> <span class="s2">&quot;&quot;&quot;</span>
+<span class="s2">    CREATE TABLE IF NOT EXISTS device_records (</span>
+<span class="s2">        device_id        TEXT PRIMARY KEY,</span>
+<span class="s2">        assigned_mule    TEXT,</span>
+<span class="s2">        pos_x            REAL NOT NULL,</span>
+<span class="s2">        pos_y            REAL NOT NULL,</span>
+<span class="s2">        pos_z            REAL NOT NULL,</span>
+<span class="s2">        is_new           INTEGER NOT NULL,</span>
+<span class="s2">        on_time_history  INTEGER NOT NULL,</span>
+<span class="s2">        missed_history   INTEGER NOT NULL,</span>
+<span class="s2">        delivery_priority INTEGER NOT NULL,</span>
+<span class="s2">        spectrum_sig     TEXT NOT NULL</span>
+<span class="s2">    );</span>
+<span class="s2">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">path</span><span class="p">:</span> <span class="n">Path</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_path</span><span class="o">.</span><span class="n">parent</span><span class="o">.</span><span class="n">mkdir</span><span class="p">(</span><span class="n">parents</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">_connect</span><span class="p">()</span> <span class="k">as</span> <span class="n">conn</span><span class="p">:</span>
+            <span class="n">conn</span><span class="o">.</span><span class="n">executescript</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_SCHEMA</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_connect</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">sqlite3</span><span class="o">.</span><span class="n">Connection</span><span class="p">:</span>
+        <span class="n">conn</span> <span class="o">=</span> <span class="n">sqlite3</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_path</span><span class="p">,</span> <span class="n">isolation_level</span><span class="o">=</span><span class="s2">&quot;IMMEDIATE&quot;</span><span class="p">)</span>
+        <span class="n">conn</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s2">&quot;PRAGMA journal_mode=WAL&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">conn</span>
+
+    <span class="k">def</span> <span class="nf">save</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">records</span><span class="p">:</span> <span class="n">Iterable</span><span class="p">[</span><span class="n">DeviceRecord</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">rows</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="p">(</span>
+                <span class="nb">str</span><span class="p">(</span><span class="n">r</span><span class="o">.</span><span class="n">device_id</span><span class="p">),</span>
+                <span class="nb">str</span><span class="p">(</span><span class="n">r</span><span class="o">.</span><span class="n">assigned_mule</span><span class="p">)</span> <span class="k">if</span> <span class="n">r</span><span class="o">.</span><span class="n">assigned_mule</span> <span class="k">else</span> <span class="kc">None</span><span class="p">,</span>
+                <span class="nb">float</span><span class="p">(</span><span class="n">r</span><span class="o">.</span><span class="n">last_known_position</span><span class="p">[</span><span class="mi">0</span><span class="p">]),</span>
+                <span class="nb">float</span><span class="p">(</span><span class="n">r</span><span class="o">.</span><span class="n">last_known_position</span><span class="p">[</span><span class="mi">1</span><span class="p">]),</span>
+                <span class="nb">float</span><span class="p">(</span><span class="n">r</span><span class="o">.</span><span class="n">last_known_position</span><span class="p">[</span><span class="mi">2</span><span class="p">]),</span>
+                <span class="nb">int</span><span class="p">(</span><span class="n">r</span><span class="o">.</span><span class="n">is_new</span><span class="p">),</span>
+                <span class="nb">int</span><span class="p">(</span><span class="n">r</span><span class="o">.</span><span class="n">on_time_history</span><span class="p">),</span>
+                <span class="nb">int</span><span class="p">(</span><span class="n">r</span><span class="o">.</span><span class="n">missed_history</span><span class="p">),</span>
+                <span class="nb">int</span><span class="p">(</span><span class="n">r</span><span class="o">.</span><span class="n">delivery_priority</span><span class="p">),</span>
+                <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">({</span>
+                    <span class="s2">&quot;bands&quot;</span><span class="p">:</span> <span class="nb">list</span><span class="p">(</span><span class="n">r</span><span class="o">.</span><span class="n">spectrum_sig</span><span class="o">.</span><span class="n">bands</span><span class="p">),</span>
+                    <span class="s2">&quot;last_good_snr_per_band&quot;</span><span class="p">:</span> <span class="nb">list</span><span class="p">(</span><span class="n">r</span><span class="o">.</span><span class="n">spectrum_sig</span><span class="o">.</span><span class="n">last_good_snr_per_band</span><span class="p">),</span>
+                <span class="p">}),</span>
+            <span class="p">)</span>
+            <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">records</span>
+        <span class="p">]</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">_connect</span><span class="p">()</span> <span class="k">as</span> <span class="n">conn</span><span class="p">:</span>
+            <span class="n">conn</span><span class="o">.</span><span class="n">executemany</span><span class="p">(</span>
+                <span class="s2">&quot;INSERT INTO device_records VALUES (?,?,?,?,?,?,?,?,?,?) &quot;</span>
+                <span class="s2">&quot;ON CONFLICT(device_id) DO UPDATE SET &quot;</span>
+                <span class="s2">&quot;  assigned_mule=excluded.assigned_mule,&quot;</span>
+                <span class="s2">&quot;  pos_x=excluded.pos_x, pos_y=excluded.pos_y, pos_z=excluded.pos_z,&quot;</span>
+                <span class="s2">&quot;  is_new=excluded.is_new,&quot;</span>
+                <span class="s2">&quot;  on_time_history=excluded.on_time_history,&quot;</span>
+                <span class="s2">&quot;  missed_history=excluded.missed_history,&quot;</span>
+                <span class="s2">&quot;  delivery_priority=excluded.delivery_priority,&quot;</span>
+                <span class="s2">&quot;  spectrum_sig=excluded.spectrum_sig&quot;</span><span class="p">,</span>
+                <span class="n">rows</span><span class="p">,</span>
+            <span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">load</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">DeviceRecord</span><span class="p">]:</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">_connect</span><span class="p">()</span> <span class="k">as</span> <span class="n">conn</span><span class="p">:</span>
+            <span class="n">cur</span> <span class="o">=</span> <span class="n">conn</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s2">&quot;SELECT * FROM device_records&quot;</span><span class="p">)</span>
+            <span class="n">out</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">DeviceRecord</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">cur</span><span class="o">.</span><span class="n">fetchall</span><span class="p">():</span>
+                <span class="n">sig</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">row</span><span class="p">[</span><span class="mi">9</span><span class="p">])</span>
+                <span class="n">out</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">DeviceRecord</span><span class="p">(</span>
+                    <span class="n">device_id</span><span class="o">=</span><span class="n">DeviceID</span><span class="p">(</span><span class="n">row</span><span class="p">[</span><span class="mi">0</span><span class="p">]),</span>
+                    <span class="n">assigned_mule</span><span class="o">=</span><span class="n">MuleID</span><span class="p">(</span><span class="n">row</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span> <span class="k">if</span> <span class="n">row</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="k">else</span> <span class="kc">None</span><span class="p">,</span>
+                    <span class="n">last_known_position</span><span class="o">=</span><span class="p">(</span><span class="n">row</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span> <span class="n">row</span><span class="p">[</span><span class="mi">3</span><span class="p">],</span> <span class="n">row</span><span class="p">[</span><span class="mi">4</span><span class="p">]),</span>
+                    <span class="n">is_new</span><span class="o">=</span><span class="nb">bool</span><span class="p">(</span><span class="n">row</span><span class="p">[</span><span class="mi">5</span><span class="p">]),</span>
+                    <span class="n">on_time_history</span><span class="o">=</span><span class="n">row</span><span class="p">[</span><span class="mi">6</span><span class="p">],</span>
+                    <span class="n">missed_history</span><span class="o">=</span><span class="n">row</span><span class="p">[</span><span class="mi">7</span><span class="p">],</span>
+                    <span class="n">delivery_priority</span><span class="o">=</span><span class="n">row</span><span class="p">[</span><span class="mi">8</span><span class="p">],</span>
+                    <span class="n">spectrum_sig</span><span class="o">=</span><span class="n">SpectrumSig</span><span class="p">(</span>
+                        <span class="n">bands</span><span class="o">=</span><span class="nb">tuple</span><span class="p">(</span><span class="n">sig</span><span class="p">[</span><span class="s2">&quot;bands&quot;</span><span class="p">]),</span>
+                        <span class="n">last_good_snr_per_band</span><span class="o">=</span><span class="nb">tuple</span><span class="p">(</span><span class="n">sig</span><span class="p">[</span><span class="s2">&quot;last_good_snr_per_band&quot;</span><span class="p">]),</span>
+                    <span class="p">),</span>
+                <span class="p">))</span>
+            <span class="k">return</span> <span class="n">out</span></code></pre></div>
+<p><code>DeviceRegistry</code> gains the store plus an assignment index (H-05: <code>slice_for</code> is called
+once per mule per dock, each time scanning every device):</p>
+<div class="codewrap wide"><span class="lang">python</span><pre class="code"><code><span class="k">class</span> <span class="nc">DeviceRegistry</span><span class="p">:</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">store</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">RegistryStore</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_records</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="n">DeviceID</span><span class="p">,</span> <span class="n">DeviceRecord</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="c1"># H-05: maintained alongside _records so slice_for is O(slice) rather</span>
+        <span class="c1"># than O(all devices). At 1 K devices x M mules x every dock the old</span>
+        <span class="c1"># full scan dominated dock latency.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_by_mule</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="n">MuleID</span><span class="p">,</span> <span class="n">Set</span><span class="p">[</span><span class="n">DeviceID</span><span class="p">]]</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_lock</span> <span class="o">=</span> <span class="n">threading</span><span class="o">.</span><span class="n">RLock</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_round_counter</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_store</span><span class="p">:</span> <span class="n">RegistryStore</span> <span class="o">=</span> <span class="n">store</span> <span class="ow">or</span> <span class="n">InMemoryStore</span><span class="p">()</span>
+
+    <span class="k">def</span> <span class="nf">slice_for</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">mule_id</span><span class="p">:</span> <span class="n">MuleID</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">DeviceID</span><span class="p">,</span> <span class="o">...</span><span class="p">]:</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">_lock</span><span class="p">:</span>
+            <span class="k">return</span> <span class="nb">tuple</span><span class="p">(</span><span class="nb">sorted</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_by_mule</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">mule_id</span><span class="p">,</span> <span class="p">())))</span>
+
+    <span class="k">def</span> <span class="nf">snapshot_to_store</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Persist current state. Called on every cluster-round close.&quot;&quot;&quot;</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">_lock</span><span class="p">:</span>
+            <span class="n">records</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_records</span><span class="o">.</span><span class="n">values</span><span class="p">())</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_store</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="n">records</span><span class="p">)</span>
+
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">restore</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">store</span><span class="p">:</span> <span class="n">RegistryStore</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;DeviceRegistry&quot;</span><span class="p">:</span>
+        <span class="n">reg</span> <span class="o">=</span> <span class="bp">cls</span><span class="p">(</span><span class="n">store</span><span class="o">=</span><span class="n">store</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">rec</span> <span class="ow">in</span> <span class="n">store</span><span class="o">.</span><span class="n">load</span><span class="p">():</span>
+            <span class="n">reg</span><span class="o">.</span><span class="n">_records</span><span class="p">[</span><span class="n">rec</span><span class="o">.</span><span class="n">device_id</span><span class="p">]</span> <span class="o">=</span> <span class="n">rec</span>
+            <span class="k">if</span> <span class="n">rec</span><span class="o">.</span><span class="n">assigned_mule</span><span class="p">:</span>
+                <span class="n">reg</span><span class="o">.</span><span class="n">_by_mule</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="n">rec</span><span class="o">.</span><span class="n">assigned_mule</span><span class="p">,</span> <span class="nb">set</span><span class="p">())</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">rec</span><span class="o">.</span><span class="n">device_id</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">reg</span></code></pre></div>
+<p>And the H-09 assignment fix, defaulting to today's behaviour:</p>
+<div class="codewrap"><span class="lang">python</span><pre class="code"><code>    <span class="k">def</span> <span class="nf">rebalance</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">mules</span><span class="p">:</span> <span class="n">Iterable</span><span class="p">[</span><span class="n">MuleID</span><span class="p">],</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">round_counter</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">now</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">strategy</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;round_robin&quot;</span><span class="p">,</span>       <span class="c1"># &quot;round_robin&quot; | &quot;spatial&quot;</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="n">MuleID</span><span class="p">,</span> <span class="n">MissionSlice</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Disjoint slice over all devices.</span>
+
+<span class="sd">        ``strategy=&quot;round_robin&quot;`` is the historical behaviour and stays the</span>
+<span class="sd">        default so nothing changes without an explicit opt-in.</span>
+
+<span class="sd">        ``strategy=&quot;spatial&quot;`` addresses two defects in the round-robin path:</span>
+
+<span class="sd">        * It ignores ``last_known_position`` entirely, so two devices 500 m</span>
+<span class="sd">          apart with adjacent IDs go to different mules while two devices at</span>
+<span class="sd">          the same spot also go to different mules — S3a can never cluster</span>
+<span class="sd">          them into one contact.</span>
+<span class="sd">        * Its sort key ``(not is_new, device_id)`` makes assignment unstable:</span>
+<span class="sd">          when one device&#39;s ``is_new`` flips to False, every device after it</span>
+<span class="sd">          shifts a slot and roughly half the fleet is reassigned, discarding</span>
+<span class="sd">          each moved device&#39;s cached scheduler state and delivery-priority</span>
+<span class="sd">          carryover on the mule.</span>
+
+<span class="sd">        The spatial strategy partitions by position and breaks ties with</span>
+<span class="sd">        rendezvous hashing on ``(device_id, mule_id)``, so adding or removing</span>
+<span class="sd">        a mule moves only the devices that must move.</span>
+<span class="sd">        &quot;&quot;&quot;</span></code></pre></div>
+<p><strong>Verification.</strong> Every existing registry test passes untouched against the
+<code>InMemoryStore</code> + <code>round_robin</code> defaults. New tests: kill-and-restart preserves history;
+<code>slice_for</code> is O(slice); a spatial rebalance after an <code>is_new</code> flip moves ≤1 device.</p>
+<hr />
+      </section>
+      <section id="8-summary-of-expected-impact">
+        <div class="sec-eyebrow">§&nbsp;08 · Summary of expected impact</div>
+        <h2>Summary of expected impact</h2>
+<div class="tablewrap"><table class="wide">
+<thead>
+<tr>
+<th>Change</th>
+<th>LOC delta</th>
+<th>Behaviour in tested regime</th>
+<th>Fixes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>_sockopt.py</code> + RF socket lifetime</td>
+<td>+130</td>
+<td>identical</td>
+<td>H-01</td>
+</tr>
+<tr>
+<td>Client reconnect + device backoff</td>
+<td>+70</td>
+<td>identical</td>
+<td>H-01</td>
+</tr>
+<tr>
+<td>Unified contact exchange</td>
+<td><strong>−150</strong></td>
+<td>identical</td>
+<td>H-02, H-03, Q-01</td>
+</tr>
+<tr>
+<td>Cancellable dock wait</td>
+<td>+25</td>
+<td>identical</td>
+<td>H-04</td>
+</tr>
+<tr>
+<td>Observability guard</td>
+<td>+20</td>
+<td>identical</td>
+<td>H-07</td>
+</tr>
+<tr>
+<td>Provider indirection</td>
+<td>+60</td>
+<td>identical</td>
+<td>H-08</td>
+</tr>
+<tr>
+<td>Registry store + index + strategy</td>
+<td>+220</td>
+<td>identical (defaults)</td>
+<td>H-06, H-05, H-09</td>
+</tr>
+</tbody>
+</table></div>
+<p>Net ≈ <strong>+375 LOC</strong> for seven defect classes, of which one (H-01) is the difference
+between a system that works in a 30-second smoke test and one that works in the field.
+No public API in <code>hermes/</code> changes signature except by adding optional keyword arguments
+with backward-compatible defaults.</p>
+      </section>
+
+      <div class="foot">
+        <p class="mono">Generated from HERMES_Production_Code.md. File:line references are to
+        the repository as read on 2026-08-10 (main @ 35e2eeb); verify against current
+        source before acting. This document is a review artefact — no project code was
+        modified to produce it.</p>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script>
+  // TOC active-state only. No animation; reduced-motion respected via CSS.
+  // getElementById, not querySelector: several ids begin with a digit, which
+  // is legal HTML but an invalid CSS selector.
+  (function(){
+    var links = Array.prototype.slice.call(document.querySelectorAll('nav.toc a'));
+    var secs  = links.map(function(a){
+      return document.getElementById(a.getAttribute('href').slice(1));
+    });
+    if(!('IntersectionObserver' in window)) return;
+    var io = new IntersectionObserver(function(entries){
+      entries.forEach(function(e){
+        if(e.isIntersecting){
+          var i = secs.indexOf(e.target);
+          links.forEach(function(l){ l.style.background=''; l.style.color=''; });
+          if(i>-1){ var l=links[i]; l.style.background='var(--surface-2)'; l.style.color='var(--ink)'; }
+        }
+      });
+    },{rootMargin:'-10% 0px -80% 0px'});
+    secs.forEach(function(s){ if(s) io.observe(s); });
+  })();
+</script>
+
+</body>
+</html>
