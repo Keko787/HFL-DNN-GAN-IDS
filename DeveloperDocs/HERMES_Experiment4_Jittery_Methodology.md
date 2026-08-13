@@ -75,6 +75,41 @@ assumed.
   device) and failed Pass-1 contacts — so it is ~1.0 for any mule regardless of
   collection success. Do **not** headline it; use `mission_completion_rate`.
 
+### 3.1 `final_auc` is bimodal — the session-collapse mode (disclosed)
+
+A trial whose session never lands an aggregated update leaves θ at its
+initialisation, so its `final_auc` **is** `init_auc` (≈0.25) — not a model that
+learned the wrong thing, a model that never moved. `final_auc` is therefore a
+**two-component distribution**: a collapse mode at ≈0.25 and a trained mode at
+≈0.96–0.99, with **nothing in between** (0 of 519 rows fall in [0.30, 0.65];
+10/519 = 1.9 % sit bit-identically at `init_auc` with `delta_auc = 0`).
+
+Three consequences, all applied in this document:
+
+1. **Means are expectations over collapse risk**, not typical outcomes. Where a
+   mean is quoted, the collapse rate is quoted with it (§6.1).
+2. **± SD is never reported for AUC.** The spread is tail-driven, not unimodal;
+   a symmetric ±1 SD interval both implies a spread that does not exist and
+   extends past AUC = 1.0, which is impossible. Figures use the **percentile
+   bootstrap CI of the mean** (bounded in [0,1] by construction) and overlay the
+   per-seed points so the collapse mode is visible rather than smeared.
+3. **Rank-based tests are unaffected.** The paired Wilcoxon + Cliff's δ of §5
+   operate on ranks, so the tail does not distort them; the bootstrap CI is
+   likewise computed on the paired differences.
+
+**On `init_auc` ≈ 0.25.** The untrained network is effectively a *constant*
+predictor — its outputs span ≈0.4995–0.5052 on the held-out set, `init_loss`
+≈ ln 2, and it labels nearly every row "attack". AUC is rank-based and
+scale-free, so it magnifies that sub-1 % tilt into an apparently decisive 0.25.
+It is **not** evidence of an anti-predictive model, and it is **not** an
+inversion bug: `roc_auc_score(y, 1−p)` returns exactly 1 − 0.276, a
+random-permutation baseline on the same labels gives 0.4999, and the identical
+code path reports 0.99 after training (a global inversion would report 0.01).
+Because `Exp4Driver.theta_seed` is fixed, every trial reuses the *same* untrained
+network, so 0.25 is **one draw, not an average** — sweeping the init seed gives
+mean 0.41 (sd 0.20, range 0.13–0.84), i.e. centred on chance. Describe it as
+"the untrained initialisation", never as an achieved score.
+
 ## 4. Scope boundary (stated, not hidden)
 
 The integrated experiment models the **network + computation** layers with real
@@ -152,17 +187,51 @@ the surface (mission_completion_rate) shows the crossover boundary:**
   `dead_zone=0.6` (δ up to **+0.98**, H1 delivers ~0.73 completion vs H0's
   0.23–0.28). **The flip test the review demanded (dz=0.0, link=0.7 → H0 > H1)
   did occur, and is reported.**
-* **AUC is a *small* but real jittery win** (+0.023, p=0.0024, δ=+0.12 pooled) —
-  weaker than participation, and it reverses under clean (−0.027). The compact
-  IDS partly saturates, so the participation gap only partly propagates to AUC.
-  Lead with participation; report AUC as the secondary, smaller effect.
+* **The jittery AUC gap is a _session-survival_ effect, not a model-quality
+  effect.** The pooled +0.023 (p=0.0024, δ=+0.12) is real, but decomposing it
+  (§6.1) shows **76 %** of it comes from how often a session collapses entirely
+  and only **24 %** from the quality of the model when it does train. Conditional
+  on both arms actually training, the difference is +0.0070 with a bootstrap CI
+  of **[−0.0009, +0.0147] — straddling 0, i.e. a tie by this document's own
+  claim rule (§5)**. Report the mechanism, not just the number.
+
+### 6.1 Decomposition — what the AUC difference actually measures
+
+`final_auc` is a **two-component (bimodal) distribution**. A trial that never
+receives an aggregated update ends with θ still at its initialisation, so its
+"final" AUC *is* `init_auc` (≈0.25); every other trial lands near ≈0.96–0.99.
+Across `h0h1_all.csv` there are **zero observations between 0.30 and 0.65** —
+10/519 rows (1.9 %) sit at exactly `init_auc` (bit-identical, `delta_auc = 0`),
+the rest above 0.65. Averaging the two modes yields a mean that no single trial
+attains, so the mean must be read as an *expectation over collapse risk*.
+
+Splitting the pooled jittery result (n = 239 paired seeds) accordingly:
+
+| Component | H1 | H0 | Contribution to the +0.0231 gap |
+|---|---|---|---|
+| **Session-collapse rate** (trial ended at the untrained init) | 2/239 = **0.84 %** | 8/239 = **3.35 %** | **+0.0177 (76.3 %)** |
+| **AUC given the session trained** (n = 229 pairs, neither collapsed) | 0.9646 | 0.9577 | +0.0055 (23.7 %) |
+| Conditional paired test | — | — | +0.0070, CI **[−0.0009, +0.0147]**, p=0.011, δ=+0.12 → **tie** |
+| Median paired difference (robust to the tail) | — | — | **+0.0023** |
+
+No pair had *both* arms collapse. So the honest reading is: **the mule's jittery
+AUC advantage is almost entirely that its sessions survive** — H0's long-range
+backhaul fails outright 4× more often, and a failed session returns an untrained
+model. Once a session trains at all, the two arms' models are statistically
+indistinguishable at this scale (the compact IDS saturates near ~0.96–0.99).
+
+That is a *stronger* claim than a vague accuracy edge, and it is the same
+mechanism the participation metrics measure — which is why participation, not
+AUC, remains the headline.
 
 **Defensible framing:** *"When the backhaul is healthy, centralized flat FL is
-strictly better — the mule is overhead. But as devices lose their long-range
-path (dead-zone), mule-based HERMES's participation advantage grows
-monotonically, from a tie to decisive (Cliff's δ up to +0.98, p<0.001 at
-dead_zone=0.6), with a small corresponding AUC gain; the crossover boundary sits
-around dead_zone≈0.2–0.4."* This is Observation 3 as a **conditional,
+strictly better — the mule is overhead. As devices lose their long-range path,
+mule-based HERMES's participation advantage grows monotonically, from a tie to
+decisive (Cliff's δ up to +0.98, p<0.001 at dead_zone=0.6). Its end-model AUC
+advantage (+0.023 pooled) is predominantly (76 %) a matter of the session
+completing at all — H0's session collapses 3.35 % of the time vs H1's 0.84 % —
+rather than a better-trained model: conditional on training, the AUC difference
+is not distinguishable from zero."* This is Observation 3 as a **conditional,
 operating-regime-dependent** claim — the honest and far more defensible form,
 now backed by 20 seeds across a 12-point surface rather than a single tuned cell.
 

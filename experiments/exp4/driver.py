@@ -475,7 +475,29 @@ class Exp4Driver:
                 n_missions_target=n_missions,
                 tau=self.tau,
             )
-            return summary.to_row()
+            row = summary.to_row()
+            # A trial that produced NO model evaluation at all never trained a
+            # model — its convergence columns are blank while its federation
+            # columns are hard zeros. Recorded as `ok`, that asymmetry biases
+            # the analysis: the blank AUC is dropped by `.dropna()` while the
+            # 0.0 participation is averaged as if it were a real observation
+            # (it flipped the sign of several H3−H2 differences in the first
+            # H2/H3 dead-zone sweep). Mark it so `status == "ok"` filters
+            # exclude it from EVERY metric, not just the ones that are blank.
+            if self.real_model and int(summary.rounds_evaluated) == 0:
+                row["status"] = "no_eval"
+                row["error"] = (
+                    f"trial produced no model_evaluation events "
+                    f"(mule_ready={obs.mule_ready} "
+                    f"dock_bootstrapped={obs.dock_bootstrapped} "
+                    f"cluster_ready={obs.cluster_ready}); not a valid trial"
+                )
+                log.warning(
+                    "exp4 trial cell=%s trial=%d arm=%s: no model evaluations "
+                    "— recording status=no_eval (excluded from analysis)",
+                    cell.cell_id, cell.trial_index, cell.arm,
+                )
+            return row
         finally:
             orch.cleanup()
 
