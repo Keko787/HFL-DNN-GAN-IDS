@@ -10,6 +10,26 @@
 # Concurrency 3: at 5 the box exhausted memory and ~30 % of trials failed.
 set -uo pipefail
 
+# --- single-instance lock -------------------------------------------------- #
+# Two concurrent runs append to the SAME csv and produce duplicate
+# (cell, arm, trial) rows, which silently corrupts the sweep. This happened
+# once: a kill that appeared to succeed did not (Git Bash `pkill` does not
+# reach Windows processes), and the surviving shell then re-read this file
+# after it was edited underneath it.
+#
+# Two rules follow, and the lock enforces the first:
+#   1. never run two instances;
+#   2. NEVER edit this script while it is running — bash reads it incrementally
+#      by byte offset, so an edit makes a running shell execute shifted text.
+LOCK="${LOCK:-results/exp4_matrix/.matrix.lock}"
+mkdir -p "$(dirname "$LOCK")"
+if ! mkdir "$LOCK" 2>/dev/null; then
+  echo "REFUSING TO START: $LOCK exists — another run is active." >&2
+  echo "If you are certain none is, remove it: rmdir $LOCK" >&2
+  exit 1
+fi
+trap 'rmdir "$LOCK" 2>/dev/null' EXIT
+
 PY="${PY:-/c/Users/kskos/AppData/Local/Programs/Python/Python311/python.exe}"
 OUT="${OUT:-results/exp4_matrix}"
 SEEDS="${SEEDS:-20}"

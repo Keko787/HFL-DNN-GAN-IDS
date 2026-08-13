@@ -600,6 +600,40 @@ With several metrics per comparison, **state the multiplicity position explicitl
 reporting the one that hit (the §5.0a pilot is the worked example of why). Every row carries
 `mission_budget_s` and `mission_window_adaptation`, so the file is self-describing.
 
+### 5.1c Run log — and a corruption that nearly went unnoticed
+
+| Sweep | Status | Rows |
+|---|---|---|
+| **A1** clean (H0 vs H1) | ✅ complete, clean | 40 |
+| **A2** jittery surface | ⚠ first attempt **discarded**, re-run | 480 expected |
+| **C** L1 (H2 vs H3) | ✅ complete, clean | 40 |
+| **B** policy | on hold (§5.1b) | — |
+
+**What went wrong.** Two `run_matrix.sh` instances ran concurrently and both appended to
+`A_jittery.csv`, producing **344 duplicated `(cell, arm, trial)` rows out of 361 unique** — the file
+looked like a healthy 705-row sweep. Two compounding causes:
+
+1. **A kill that reported success but did nothing.** Git Bash `pkill` does not reach Windows
+   processes, and the follow-up `ps` check could not see them either, so the first run appeared
+   stopped while four of its shells were still alive.
+2. **The script was edited while running.** Bash reads a script incrementally by byte offset, so a
+   surviving shell picked up the *new* invocation lines and executed them alongside the relaunch.
+
+**Why it was caught.** Not by a failure — there were zero failures — but by checking row counts
+against the *expected* grid size: 705 rows across 9 cells is ~78 per cell where the design says 40.
+Duplicate rows do not raise anything; they would have silently doubled the sample and tightened
+every confidence interval on **fabricated** replication.
+
+**Fixes.** `run_matrix.sh` now takes a **single-instance lock** (`mkdir`-based, released on EXIT) and
+carries the second rule as a comment: *never edit a running script*. Verified after relaunch that
+exactly one `runner_main` process exists.
+
+**A1 and C survived** — both unduplicated, complete, all-`ok` — so only A2 was re-run. Concurrent
+load affects wall-clock, not seeded trial outcomes, and no trial came near the 300 s budget.
+
+> **The transferable check:** a sweep's row count must be reconciled against its *designed* cell ×
+> arm × seed product before analysis. "No failures" is not evidence of a valid sweep.
+
 ### 5.1b Sweep B is ON HOLD — the policy comparison is vacuous as designed
 
 **Caught by the pre-launch smoke, before spending the 32 minutes.** At the designed operating point
