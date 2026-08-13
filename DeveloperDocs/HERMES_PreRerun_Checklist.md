@@ -8,7 +8,11 @@ either done or explicitly deferred with a reason. It exists so we pay the comput
 
 **Progress:** Phase 0 — 8 of 11 closed (3 open, all no-re-run). Phase 1 — **done, scheduler
 frozen**, amended twice since (see §1a). Phase 2 — first pass done, **full-text verification is the
-current blocker**. Phases 3–4 — not started.
+current blocker**. Phase 3 — not started; its **§5.0 S3c pilot is costed and ready to run** the
+moment Phase 2 clears. Phase 4 — not started.
+
+**Next action when Phase 2 clears:** the ~8-minute stub pilot in §5.0. It is the cheapest decision
+on the board — it can only shrink the matrix.
 
 ---
 
@@ -169,6 +173,54 @@ baseline arm can be designed in rather than bolted on.
 
 ## 5. Phase 3 — Build the final experimental matrix
 
+### 5.0 Pre-step — the S3c pilot *(runs after Phase 2, before the matrix is fixed)*
+
+**Why this is a pre-step and not a matrix cell.** If S3c enters the matrix as an axis it **doubles
+every cell**. A short pilot decides whether it belongs there at all — and all three possible
+outcomes make the matrix *smaller or cheaper*, which is the same trade this whole document exists
+to enforce:
+
+| Pilot outcome | Consequence for the matrix |
+|---|---|
+| **Null even with the budget on** | Drop S3c from the matrix entirely. Report it as a negative result: the mechanism exists, is tested, and does not move the metric at this operating point. |
+| **Recovers part of enforcement's −0.225 completion cost** | That *is* S3c's headline, and it is a paired one-flag comparison at fixed budget — not an axis. |
+| **Only bites at tight budgets** | Pin it to a single setting rather than sweeping it. |
+
+**Sequencing.** After the Phase-2 SOTA baseline, because that settles the **arm list** and S3c
+cannot sensibly be designed against a matrix whose arms are still open. Before the matrix, because
+that is the only point at which the pilot can still save the doubling.
+
+**Costings** — measured from recorded sweeps (`exp4_s3b` n=100, `h2h3_l1` n=80) plus a stub run at
+the target configuration, at **concurrency 3** (at 5 shards the box exhausted memory and ~30 % of
+trials failed):
+
+| Design | Trials | Est. wall-clock |
+|---|---|---|
+| **Stub pilot, 1 cell, 20 paired seeds** ← *start here* | 40 | **~8 min** |
+| Real-model, 1 cell, `n_missions=6` | 40 | ~19 min |
+| Real-model, `n_missions=8` | 40 | ~27 min |
+| + budget ladder (120 / 60 / 30 s, spanning the ~60 s knee) | 120 | ~80 min |
+| + second arm (H1 **and** H3) | 240 | ~2 h 40 m |
+
+Per-trial means behind those figures: real-model `n_missions=4` **37.8 s** (p90 52.6), real-model
+`n_missions=6` **69.5 s** (p90 81.5), stub `n_missions=6` **26.7 s**.
+
+> **Design trap — do not run this pilot at `n_missions=4`.** The default history window is 5, and
+> the first mission has no history at all, so at the headline mission count S3c can barely act. An
+> A/B there would likely show nothing **whether or not the mechanism works** — a null that cannot
+> be interpreted, which is the worst outcome available. Use `n_missions≥8`, or lower
+> `--mission-window-history` to 3, and say which in the write-up.
+
+- [ ] Run the stub pilot (2 configurations × 20 paired seeds, budget on, `n_missions≥8`).
+- [ ] Record which of the three outcomes above it produced, **in this document**, before the matrix
+      is fixed.
+- [ ] Only if it is non-null: decide axis-vs-pinned and carry the decision into §5's arm/axis lists.
+
+Both configurations write **one new CSV each** — an existing file cannot be resumed now that rows
+carry provenance columns (§1a).
+
+### 5.1 The matrix itself
+
 Finalize E1–E4, baselines, scaling, sensitivity, statistics, provenance labels — **once**.
 
 - [ ] Arms: H0, H1, H2, H3 + SOTA baseline(s). State which pairwise comparisons are valid
@@ -178,27 +230,32 @@ Finalize E1–E4, baselines, scaling, sensitivity, statistics, provenance labels
 - [ ] **Decide the two scheduler toggles (§1a).** `--mission-budget-s` carries A1+A2 with it;
       `--mission-window-adaptation` is independent. Both default off, so *not* deciding means
       shipping a scheduler whose deadline is a sort key — defensible only if stated plainly.
-- [ ] **If window adaptation is in, run it as a paired A/B, not as a new default.** It is a
-      one-flag delta on an otherwise identical configuration, which is the cheapest clean
-      comparison available and the reason it was built as a toggle. Its own parameters
-      (`--mission-window-target`, `--mission-window-gain`, `--mission-window-history`,
-      `--mission-window-max-scale`) are matrix values, not code defaults — the same rule as D1.
-      Expect it to matter **only** when the S3b gate binds; with no budget there is nothing for a
-      wider window to rescue, so an adaptation-only arm should read as a tie by construction.
+- [ ] **Window adaptation enters as a paired A/B, never as a new default** — and only if §5.0's
+      pilot says it earns a place. It is a one-flag delta on an otherwise identical configuration,
+      which is the cheapest clean comparison available and the reason it was built as a toggle. Its
+      own parameters (`--mission-window-target`, `--mission-window-gain`,
+      `--mission-window-history`, `--mission-window-max-scale`) are matrix values, not code
+      defaults — the same rule as D1. Expect it to matter **only** when the S3b gate binds; with no
+      budget there is nothing for a wider window to rescue, so an adaptation-only arm should read
+      as a tie by construction.
 - [ ] Seeds per cell (≥20) and the pairing key.
 - [ ] Statistics: paired Wilcoxon + Cliff's δ + bootstrap CI; claim only when CI excludes 0 **and**
       p<0.05.
 - [ ] Provenance label per row.
-- [ ] **Cost the matrix in wall-clock before launching** (trials × ~47 s ÷ concurrency), and cap
-      shard concurrency — at 5 concurrent shards the box exhausted memory and ~30 % of trials failed.
+- [ ] **Cost the matrix in wall-clock before launching**, and cap shard concurrency at **3** — at 5
+      concurrent shards the box exhausted memory and ~30 % of trials failed. Use the measured
+      per-trial means in §5.0 rather than the old ~47 s rule of thumb: cost depends strongly on
+      `n_missions` (37.8 s at 4, 69.5 s at 6, real-model).
 
 ### Exit criteria — re-run only when all are true
 
 1. Phase 0 open items are closed **or** explicitly deferred with a written reason.
 2. The scheduler is **frozen** (§3), including the enforcement decision.
 3. Baselines are chosen, and anything scorable retroactively has been scored (§4).
-4. The matrix is written down and costed (§5).
-5. Every item in the §1 ledger marked "forces a re-run" is either **in** this matrix or **out** of
+4. **The S3c pilot has run and its outcome is recorded** (§5.0) — so the matrix is not doubled by
+   an axis nobody has evidence for.
+5. The matrix is written down and costed (§5.1).
+6. Every item in the §1 ledger marked "forces a re-run" is either **in** this matrix or **out** of
    the paper.
 
 ---
