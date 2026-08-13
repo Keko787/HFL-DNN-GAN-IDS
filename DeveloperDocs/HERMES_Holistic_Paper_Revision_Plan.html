@@ -1,0 +1,1191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>HERMES Holistic Paper Revision Plan</title>
+<style>
+  :root{
+    --ink:#172033;
+    --muted:#667085;
+    --line:#d9dee8;
+    --panel:#f7f9fc;
+    --accent:#2f5bea;
+    --accent2:#6f42c1;
+    --ok:#157347;
+    --warn:#a15c00;
+    --danger:#b42318;
+    --white:#ffffff;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;
+    font-family:Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+    color:var(--ink);
+    background:#eef2f7;
+    line-height:1.55;
+  }
+  .page{
+    max-width:1180px;
+    margin:32px auto;
+    background:var(--white);
+    box-shadow:0 8px 30px rgba(23,32,51,.09);
+    border-radius:18px;
+    overflow:hidden;
+  }
+  header{
+    padding:48px 56px 34px;
+    background:linear-gradient(135deg,#172033 0%, #263b68 55%, #2f5bea 100%);
+    color:#fff;
+  }
+  header .eyebrow{
+    text-transform:uppercase;
+    letter-spacing:.12em;
+    font-size:.78rem;
+    opacity:.78;
+    font-weight:700;
+  }
+  h1{
+    font-size:2.65rem;
+    line-height:1.05;
+    margin:.35rem 0 .7rem;
+  }
+  header p{
+    max-width:880px;
+    margin:0;
+    font-size:1.05rem;
+    color:rgba(255,255,255,.9);
+  }
+  .meta{
+    display:flex;
+    flex-wrap:wrap;
+    gap:10px;
+    margin-top:22px;
+  }
+  .chip{
+    background:rgba(255,255,255,.12);
+    border:1px solid rgba(255,255,255,.24);
+    padding:6px 10px;
+    border-radius:999px;
+    font-size:.82rem;
+  }
+  main{padding:42px 56px 56px}
+  h2{
+    margin:2.3rem 0 .9rem;
+    font-size:1.65rem;
+    padding-bottom:.35rem;
+    border-bottom:2px solid var(--line);
+  }
+  h3{
+    margin:1.7rem 0 .5rem;
+    font-size:1.2rem;
+    color:#243554;
+  }
+  h4{
+    margin:1.15rem 0 .35rem;
+    font-size:1rem;
+  }
+  p{margin:.55rem 0 1rem}
+  ul,ol{margin:.4rem 0 1rem 1.2rem}
+  li{margin:.28rem 0}
+  .callout{
+    border-left:5px solid var(--accent);
+    background:#f3f6ff;
+    padding:18px 20px;
+    border-radius:10px;
+    margin:18px 0;
+  }
+  .callout strong{color:#173b9a}
+  .warning{
+    border-left-color:var(--warn);
+    background:#fff8ed;
+  }
+  .danger{
+    border-left-color:var(--danger);
+    background:#fff3f2;
+  }
+  .success{
+    border-left-color:var(--ok);
+    background:#effaf5;
+  }
+  .thesis{
+    font-size:1.12rem;
+    font-weight:650;
+  }
+  .grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(240px,1fr));
+    gap:14px;
+    margin:14px 0 22px;
+  }
+  .card{
+    border:1px solid var(--line);
+    border-radius:14px;
+    padding:18px;
+    background:#fff;
+  }
+  .card h3{margin-top:0}
+  table{
+    width:100%;
+    border-collapse:collapse;
+    margin:14px 0 24px;
+    font-size:.92rem;
+  }
+  th,td{
+    border:1px solid var(--line);
+    padding:10px 11px;
+    text-align:left;
+    vertical-align:top;
+  }
+  th{
+    background:#eef3fb;
+    font-weight:700;
+  }
+  tr:nth-child(even) td{background:#fbfcfe}
+  code, .formula{
+    font-family:"SFMono-Regular",Consolas,"Liberation Mono",monospace;
+  }
+  .formula{
+    display:block;
+    background:#f8fafc;
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:12px 14px;
+    margin:10px 0 16px;
+    overflow:auto;
+  }
+  .phase{
+    display:flex;
+    gap:14px;
+    align-items:flex-start;
+    margin:14px 0;
+    padding:14px 0;
+    border-bottom:1px dashed var(--line);
+  }
+  .phase .num{
+    width:34px;height:34px;min-width:34px;
+    display:grid;place-items:center;
+    border-radius:50%;
+    background:var(--accent);
+    color:#fff;font-weight:800;
+  }
+  .priority-high{color:var(--danger);font-weight:700}
+  .priority-med{color:var(--warn);font-weight:700}
+  .priority-low{color:var(--ok);font-weight:700}
+  .small{font-size:.87rem;color:var(--muted)}
+  .toc{
+    columns:2;
+    gap:40px;
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:12px;
+    padding:18px 22px;
+  }
+  .toc a{color:var(--accent);text-decoration:none}
+  .toc li{break-inside:avoid}
+  footer{
+    padding:24px 56px 38px;
+    color:var(--muted);
+    border-top:1px solid var(--line);
+    font-size:.86rem;
+    background:#fbfcfe;
+  }
+  @media (max-width:760px){
+    header,main,footer{padding-left:24px;padding-right:24px}
+    h1{font-size:2rem}
+    .toc{columns:1}
+    table{font-size:.82rem}
+  }
+  @media print{
+    body{background:white}
+    .page{box-shadow:none;margin:0;max-width:none;border-radius:0}
+    a{color:inherit;text-decoration:none}
+    .card,.callout,table{break-inside:avoid}
+  }
+</style>
+</head>
+
+<body>
+<div class="page">
+<header>
+  <div class="eyebrow">Research & Development Revision Blueprint · IEEE ICNC</div>
+  <h1>HERMES Holistic Paper Revision Plan</h1>
+  <p>
+    A consolidated revision strategy derived from the submitted HERMES manuscript,
+    reviewer critiques, professor OKR notes, rebuttal analysis, provenance audit,
+    and the <strong>now-completed end-to-end experiment (E4)</strong>.
+  </p>
+  <div class="meta">
+    <span class="chip">Target venue: <strong>IEEE ICNC</strong></span>
+    <span class="chip">Primary focus: Novelty + evaluation + clarity</span>
+    <span class="chip">Drafted 2026-07-23 · Updated 2026-08-13</span>
+    <span class="chip">E4: run, analysed, adversarially audited</span>
+  </div>
+</header>
+
+<main>
+<section>
+  <h2>Executive Summary</h2>
+  <p>
+    The revision should be treated as a <strong>paper rebuild around one defensible thesis</strong>,
+    not as a sequence of isolated reviewer patches. The reviewer feedback, professor OKR,
+    rebuttal notes, and current manuscript all converge on the same core problem:
+    HERMES presently risks reading as an integration of useful existing components rather than
+    as a clearly identifiable systems and scheduling contribution.
+  </p>
+
+  <div class="callout">
+    <div class="thesis">
+      Recommended central thesis:
+      HERMES enables federated learning to continue across persistently disconnected edge regions
+      by coordinating physical model transport, RF adaptation, mobility-aware scheduling, and
+      hierarchical aggregation without requiring continuous end-to-end reachability.
+    </div>
+  </div>
+
+  <p>
+    The revised paper should therefore avoid positioning HERMES as a universal replacement for
+    conventional federated learning. Instead, it should establish HERMES as a
+    <strong>targeted DDIL intervention</strong>: ordinary federated learning is preferable when
+    infrastructure is healthy, while HERMES becomes valuable when the federation graph is
+    fragmented, connectivity is intermittent, and stationary infrastructure cannot reliably reach
+    the participating devices.
+  </p>
+
+  <div class="callout success">
+    <strong>2026-08-13 update — the crossover thesis is now measured, not hypothesised.</strong>
+    E4 has been built, run at 20 paired seeds over a 12-point severity surface, and put through an
+    adversarial audit. The predicted crossover <em>held</em>: flat FL wins under a clean backhaul,
+    and HERMES's advantage grows monotonically with terrain blockage to Cliff's δ = +0.98
+    (p&lt;0.001). That is the paper's payoff result and it is defensible as written.
+  </div>
+
+  <div class="callout warning">
+    <strong>One planned claim did not survive and must be dropped.</strong> The Layer-1 adaptive-radio
+    benefit is <em>not</em> detectable end-to-end: across five severity conditions × four metrics,
+    all twenty paired tests are ties. An earlier apparent effect came from a contaminated sweep plus
+    an unpaired effect-size computation, and has been retracted (§7.5). Layer 1 must be presented as a
+    <strong>backhaul-robustness mechanism, not an accuracy driver</strong>. Sections 7 and 10 are
+    updated accordingly; do not reinstate the older wording.
+  </div>
+</section>
+
+<section id="whatschanged">
+  <h2>0. What Changed Since This Plan Was Drafted</h2>
+  <p>
+    This plan was written before E4 existed. E4 now exists, and running it changed several
+    assumptions in the original document. Read this section before acting on any later one.
+  </p>
+
+  <table>
+    <thead>
+      <tr><th>Plan item</th><th>Original assumption</th><th>Status after E4</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>E4 end-to-end experiment (§7.4)</td>
+        <td>Proposed; expected to show a crossover</td>
+        <td class="priority-low"><strong>Done and confirmed.</strong> Full arm ladder H0→H3 on the real
+          multi-process orchestrator with a real DNN-IDS in the loop; 20 paired seeds over
+          dead-zone × link-quality. Crossover reproduced with large effect sizes.</td>
+      </tr>
+      <tr>
+        <td>Layer-1 contribution (§7.2, C4)</td>
+        <td>Expected to be a demonstrable end-to-end contribution</td>
+        <td class="priority-high"><strong>Downgraded.</strong> Real controller now shipped and wired,
+          but its integrated effect is a statistical tie everywhere tested. Claim the channel-level
+          loss reduction only.</td>
+      </tr>
+      <tr>
+        <td>Energy calibration (§3.4)</td>
+        <td>ε_bit fork unresolved; absolute joules unusable</td>
+        <td class="priority-med"><strong>Half-resolved.</strong> ε_bit reconciled to 7.0×10⁻¹⁰ J/bit and
+          marked verified for both experiments; <code>ε_prop = 10.0 J/m</code> is still a placeholder,
+          so <em>normalized</em> energy remains the only reportable form.</td>
+      </tr>
+      <tr>
+        <td>Deadline equation (§3.1)</td>
+        <td>Manuscript prints the update with the sign reversed</td>
+        <td class="priority-low"><strong>Fixed in code</strong> with unit coverage: failed contact widens
+          the window, reliable service tightens it. The manuscript text still needs correcting.</td>
+      </tr>
+      <tr>
+        <td>Statistics &amp; figures</td>
+        <td>Not specified beyond “paired tests + effect sizes”</td>
+        <td class="priority-med"><strong>Now a hard standard</strong> (§7.6). Two figure defects were
+          caught and fixed — AUC rendered above 1.0, and a figure built from a different sweep than the
+          table it illustrated.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="callout danger">
+    <strong>Methodological lesson worth carrying into every remaining experiment.</strong>
+    Two of the three most serious problems found in E4 were <em>silent</em>: trials that produced no
+    model at all were recorded as successes (their blank accuracy columns were dropped from one mean
+    while their zeroed participation columns were averaged into another), and an effect size was
+    computed unpaired against a paired protocol. Neither raised an error; both changed conclusions.
+    Every sweep from here should assert that a trial produced what it claims to have produced, and
+    every figure should draw its numbers from the same module that produces the tables.
+  </div>
+</section>
+
+<section>
+  <h2>Table of Contents</h2>
+  <ol class="toc">
+    <li><a href="#whatschanged">What Changed Since Drafting</a></li>
+    <li><a href="#claim">Central Research Claim</a></li>
+    <li><a href="#pillars">Four Contribution Pillars</a></li>
+    <li><a href="#phase0">Phase 0: Correctness & Provenance Audit</a></li>
+    <li><a href="#scheduler">Scheduling Methodology Redesign</a></li>
+    <li><a href="#hfl">Reposition HFL as Core Infrastructure</a></li>
+    <li><a href="#gan">GAN Decision Gate</a></li>
+    <li><a href="#experiments">Four-Experiment Evaluation Plan</a></li>
+    <li><a href="#sota">State-of-the-Art Comparison Plan</a></li>
+    <li><a href="#structure">Revised Paper Structure</a></li>
+    <li><a href="#icnc">Fitting the Paper to IEEE ICNC</a></li>
+    <li><a href="#traceability">Reviewer-to-Revision Traceability</a></li>
+    <li><a href="#workflow">Recommended Execution Order</a></li>
+    <li><a href="#success">Submission Success Criteria</a></li>
+  </ol>
+</section>
+
+<section id="claim">
+  <h2>1. Central Research Claim</h2>
+  <p>
+    The paper should be organized around the missing capability in conventional systems:
+    <strong>continued federation when persistent end-to-end connectivity no longer exists.</strong>
+  </p>
+
+  <div class="grid">
+    <div class="card">
+      <h3>Domain</h3>
+      <p>DDIL, disaster-response, tactical-edge, and mobile-edge environments with fragmented or unstable connectivity.</p>
+    </div>
+    <div class="card">
+      <h3>Missing Capability</h3>
+      <p>Conventional FL assumes enough ongoing reachability to exchange updates and close rounds.</p>
+    </div>
+    <div class="card">
+      <h3>HERMES Intervention</h3>
+      <p>Use mobile UAV data mules to physically move model state between disconnected regions while adapting communication and scheduling.</p>
+    </div>
+    <div class="card">
+      <h3>Research Payoff</h3>
+      <p>Federation can continue even when stationary infrastructure cannot directly reach every participant.</p>
+    </div>
+  </div>
+
+  <div class="callout success">
+    <strong>Capability-level novelty:</strong>
+    HERMES should be judged not only by whether a metric improves by a few percent, but by whether
+    the system can perform useful federated coordination in operating regimes where baseline
+    infrastructure-dependent approaches fail to make progress at all.
+  </div>
+</section>
+
+<section id="pillars">
+  <h2>2. Four Contribution Pillars</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Contribution</th>
+        <th>Revised Claim</th>
+        <th>Required Revision</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>C1 — Capability / System</strong></td>
+        <td>HERMES sustains federation without persistent end-to-end connectivity through UAV-carried model state.</td>
+        <td>Make this the primary contribution instead of generic architectural integration.</td>
+      </tr>
+      <tr>
+        <td><strong>C2 — Scheduling Methodology</strong></td>
+        <td>A gated mobility-aware federation scheduler decides who should be served, when, and at what cost under deadlines, reachability, readiness, reliability, distance, energy, and RF conditions.</td>
+        <td>Formalize the method, fix current inconsistencies, justify each rule, and add ablation/sensitivity analysis.</td>
+      </tr>
+      <tr>
+        <td><strong>C3 — HFL Infrastructure</strong></td>
+        <td>Hierarchical FL acts as the coordination and model-transport substrate connecting device → mule → cluster.</td>
+        <td>Stop presenting Layer 3 primarily as “FedAvg”; explain its system invariants and infrastructure role.</td>
+      </tr>
+      <tr>
+        <td><strong>C4 — Cross-Layer Validation</strong></td>
+        <td>RF adaptation, mobility scheduling, and hierarchical aggregation jointly preserve useful learning under degrading connectivity.</td>
+        <td>Add the integrated end-to-end experiment with actual model convergence metrics.</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="phase0">
+  <h2>3. Phase 0 — Correctness and Provenance Audit</h2>
+  <p>
+    This phase must precede substantive rewriting. Several notes identify discrepancies between
+    the manuscript, code, experimental provenance, and calibration assumptions.
+  </p>
+
+  <h3>3.1 Correct the scheduling equations and behavior</h3>
+  <p>The revised scheduler description should use the implementation-consistent deadline form:</p>
+  <span class="formula">Deadline(j) = t_ref(j) + Φ(j)</span>
+  <p>
+    A successful clean contact should re-anchor <code>t_ref</code> and shrink the adaptive window,
+    while a failed or partial contact should widen the window and preserve the previous reference.
+    <strong>The code now implements this correctly, with unit coverage</strong>; what remains is
+    correcting the manuscript text and Algorithm 1, which still print the update with the sign reversed.
+  </p>
+
+  <h3>3.2 Correct experiment provenance</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Experiment / Result</th>
+        <th>Correct Platform / Method</th>
+        <th>Revision Needed</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Table V / Figs. 5–6</td>
+        <td>Chameleon Cloud, real TCP over a tc/netem-shaped 10 Mbps link</td>
+        <td>Remove incorrect AERPAW attribution and do not describe this as actual model training if it only measures transport.</td>
+      </tr>
+      <tr>
+        <td>Table II / Figs. 3–4</td>
+        <td>AERPAW digital-twin mobility/SNR trace replay with modeled channel gains</td>
+        <td>State clearly that CH2/CH3 are modeled gains and that the study is not separate hardware flights per channel.</td>
+      </tr>
+      <tr>
+        <td>Scheduling RL</td>
+        <td>Single-agent Double-DQN trained offline in a lightweight in-process simulator</td>
+        <td>Remove incorrect CTDE/AERPAW training claims and align labels consistently.</td>
+      </tr>
+      <tr>
+        <td>Scheduling sweep</td>
+        <td>Legacy data corresponds to the full four-β grid</td>
+        <td>Correct cell/trial counts and ensure the Methods section matches the dataset that generated the reported table.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>3.3 Resolve reproducibility risks</h3>
+  <div class="callout danger">
+    <strong>Fig. 7 / Table VI:</strong>
+    if the generating code, seed count, and data provenance cannot be established, remove them.
+    An omitted secondary experiment is safer than an irreproducible result.
+  </div>
+
+  <h3>3.4 Resolve energy-model calibration <span class="priority-med">[partly done]</span></h3>
+  <p>
+    Absolute propulsion-energy claims should be avoided until the propulsion coefficient and
+    conflicting communication-energy constants are calibrated consistently. Until then,
+    report <strong>relative or normalized energy</strong> rather than treating absolute joules per update
+    as platform-measured quantities.
+  </p>
+  <div class="callout success">
+    <strong>Status:</strong> the &epsilon;_bit fork is <em>resolved</em> &mdash; E1 and E3 both used to
+    carry different per-bit costs (7.0&times;10<sup>&minus;10</sup> vs 1.2&times;10<sup>&minus;9</sup> J/bit)
+    under a comment claiming they were the same physics, so no single trial could emit a comm-transmit
+    and a mission-transmit energy consistently. Both are now 7.0&times;10<sup>&minus;10</sup> and marked
+    verified. <strong>&epsilon;_prop remains a placeholder (10.0 J/m)</strong>, so the aggregate
+    provenance status is still <code>placeholder</code> and every energy figure keeps its watermark.
+    <strong>Normalized energy remains the only reportable form for ICNC.</strong>
+  </div>
+
+  <h3>3.5 Fix implementation issues before publishing stronger scheduling claims</h3>
+  <ul>
+    <li>Ensure the “new node” trust/reachability gate can eventually close.</li>
+    <li>Prevent the feasibility-aware baseline from pathological over-pruning or explicitly reframe it as a cautionary arm.</li>
+    <li>Clear deadline overrides correctly after cluster amendments.</li>
+    <li>Add an upper bound to Φ to support bounded/stability claims.</li>
+    <li>Separate PARTIAL and TIMEOUT semantics if they are intended to represent different outcomes.</li>
+    <li>Integrate the existing reliability statistic into the actual scheduling decision if reliability/trust is claimed.</li>
+    <li>Verify that readiness filtering is active in production code before claiming its experimental effect.</li>
+  </ul>
+</section>
+
+<section id="scheduler">
+  <h2>4. Turn Layer 2 into the Identifiable Methodology Contribution</h2>
+
+  <h3>4.1 Separate hard constraints from learned optimization</h3>
+  <p>
+    The scheduler should be presented as a <strong>gated decision process</strong> rather than as
+    “EDF plus DQN.” Deterministic rules should first establish which choices are legal; learning
+    should only rank among already-valid choices.
+  </p>
+
+  <div class="callout">
+    <strong>Core architectural guarantee:</strong>
+    the learned policy cannot override mission-critical hard constraints.
+  </div>
+
+  <p>Recommended decision pipeline:</p>
+  <ol>
+    <li><strong>Eligibility gate</strong> — device belongs to the mission or is admitted opportunistically.</li>
+    <li><strong>Readiness gate</strong> — a useful local update is actually available.</li>
+    <li><strong>Reachability / feasibility gate</strong> — contact is physically and temporally achievable.</li>
+    <li><strong>Mission-budget gate</strong> — travel + contact + return can fit within the remaining budget.</li>
+    <li><strong>Priority / deadline ordering</strong> — deterministic ordering identifies the active candidate set.</li>
+    <li><strong>Bounded RL tie-break</strong> — the learned selector acts only within the allowed candidate set.</li>
+  </ol>
+
+  <h3>4.2 Make the scheduling objective explicit</h3>
+  <p>
+    The professor's OKR requires energy, distance, readiness, trust/reliability, and other
+    operational constraints to be visible in the methodology. A revised scoring or reward model could take the form:
+  </p>
+  <span class="formula">U_j = w_r R_j + w_t T_j + w_q Q_j + w_u U_j − w_d D_j − w_e E_j − w_τ C_j</span>
+
+  <table>
+    <thead><tr><th>Term</th><th>Interpretation</th></tr></thead>
+    <tbody>
+      <tr><td><code>R_j</code></td><td>Model/update readiness.</td></tr>
+      <tr><td><code>T_j</code></td><td>Observed reliability or trust based on contact history.</td></tr>
+      <tr><td><code>Q_j</code></td><td>RF/link quality or RF prior.</td></tr>
+      <tr><td><code>U_j</code></td><td>Federated-learning urgency or expected update utility.</td></tr>
+      <tr><td><code>D_j</code></td><td>Travel distance or route cost.</td></tr>
+      <tr><td><code>E_j</code></td><td>Expected propulsion and communication energy.</td></tr>
+      <tr><td><code>C_j</code></td><td>Contact/deadline cost.</td></tr>
+    </tbody>
+  </table>
+
+  <p class="small">
+    Important: this multi-objective formulation is a proposed revision direction. It should not be
+    claimed as implemented until the corresponding code and experiments exist.
+  </p>
+
+  <h3>4.3 Formalize deadline adaptation</h3>
+  <p>The paper should explicitly define:</p>
+  <ul>
+    <li>every scheduling variable and its units;</li>
+    <li>clean, partial, timeout, and unreachable outcomes;</li>
+    <li>the exact adaptation update for each outcome;</li>
+    <li>minimum and maximum adaptive-window bounds;</li>
+    <li>why failure widens the scheduling window;</li>
+    <li>why reliable service shrinks it;</li>
+    <li>how adaptation magnitudes are chosen; and</li>
+    <li>sensitivity to those choices.</li>
+  </ul>
+
+  <h3>4.4 Clarify bucket semantics</h3>
+  <p>
+    Priority buckets should be described as <strong>candidate provenance / admission classes</strong>,
+    not vaguely as urgency or expected FL quality. Recommended semantics:
+  </p>
+  <ol>
+    <li><strong>NEW</strong> — never successfully served.</li>
+    <li><strong>SCHEDULED_THIS_ROUND</strong> — assigned to the current mission slice.</li>
+    <li><strong>BEACON_ACTIVE</strong> — recently detected and opportunistically serviceable.</li>
+  </ol>
+  <p>
+    Urgency should then be determined by deadline order within the selected bucket, while RL acts
+    only as a bounded tie-breaker.
+  </p>
+</section>
+
+<section id="hfl">
+  <h2>5. Reposition HFL as Core System Infrastructure</h2>
+  <p>
+    Layer 3 should no longer be presented mainly as a standard aggregation component.
+    Instead, hierarchical federated learning should be defined as the
+    <strong>state-distribution, synchronization, and data-transport substrate</strong>
+    that makes physical federation possible.
+  </p>
+
+  <div class="grid">
+    <div class="card">
+      <h3>Non-blocking Federation</h3>
+      <p>A round closes over available mission aggregates rather than stalling forever on an unreachable participant.</p>
+    </div>
+    <div class="card">
+      <h3>Hierarchical Scalability</h3>
+      <p>Updates are aggregated at device/contact/mule levels before cross-mule aggregation at the cluster.</p>
+    </div>
+    <div class="card">
+      <h3>Model-State Consistency</h3>
+      <p>The explicit collect → aggregate → redistribute lifecycle reduces uncontrolled asynchronous drift.</p>
+    </div>
+    <div class="card">
+      <h3>Physical Model Transport</h3>
+      <p>Model updates and refreshed global state are carried across disconnected regions rather than assuming a live end-to-end graph.</p>
+    </div>
+  </div>
+
+  <div class="callout">
+    <strong>Recommended wording direction:</strong>
+    HERMES does not claim a novel aggregation operator. Its novelty lies in how hierarchical
+    aggregation is used as infrastructure to coordinate distributed model state across intermittently
+    reachable regions.
+  </div>
+</section>
+
+<section id="gan">
+  <h2>6. GAN Decision Gate</h2>
+  <p>
+    The professor OKR proposes elevating the GAN component to strengthen algorithmic novelty.
+    This should only be done if the GAN addresses a HERMES-specific failure mode.
+  </p>
+
+  <table>
+    <thead><tr><th>Path</th><th>When to Use It</th><th>Benefit</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><strong>Preferred: Scheduler as primary algorithmic contribution</strong></td>
+        <td>If the gated scheduler is sufficiently formalized, extended, and validated with sensitivity, scale, and ablation analysis.</td>
+        <td>Keeps the paper focused and directly answers the EDF/heuristic critique.</td>
+      </tr>
+      <tr>
+        <td><strong>Optional: GAN-enhanced resilient learning</strong></td>
+        <td>If disconnected devices suffer sparse, non-IID, incomplete, or missing-class observations and GAN augmentation measurably improves robustness.</td>
+        <td>Creates a second algorithmic contribution tied directly to constrained learning.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="callout warning">
+    Avoid adding a GAN merely to “have another algorithm.” RF + UAV + scheduler + HFL + IDS + GAN
+    without a single coherent failure mode would reinforce the reviewers' concern that the work is
+    an integration of many existing technologies.
+  </div>
+</section>
+
+<section id="experiments">
+  <h2>7. Four-Experiment Evaluation Plan</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Experiment</th>
+        <th>Research Question</th>
+        <th>Main Comparison</th>
+        <th>Primary Metrics</th>
+        <th>Critique Addressed</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>E1 — FL Transport Microbenchmark</strong></td>
+        <td>Why are compact model updates a necessary substrate under constrained links?</td>
+        <td>FL update transport vs. raw-data transfer</td>
+        <td>Bytes, wall time, deadline completion</td>
+        <td>Establishes motivation only; should not be used as proof that HERMES beats SOTA.</td>
+      </tr>
+      <tr>
+        <td><strong>E2 — RF Adaptation</strong></td>
+        <td>Does Layer 1 recover useful communication opportunities without prior channel knowledge?</td>
+        <td>Fixed channels, expected-fixed baseline, adaptive HERMES, retrospective oracle</td>
+        <td>Offload, rate, effective SNR, switches</td>
+        <td>Layer 1 contribution and RF robustness.</td>
+      </tr>
+      <tr>
+        <td><strong>E3 — Scheduling & Scale</strong></td>
+        <td>When does HERMES scheduling outperform simpler scheduling, and why?</td>
+        <td>FIFO / EDF / feasibility baselines / SOTA-inspired UAV-FL schedulers / HERMES</td>
+        <td>Update yield, mission completion, distance, relative energy, readiness/reliability, fairness</td>
+        <td>74A, 74B, 74C, 74D.</td>
+      </tr>
+      <tr>
+        <td><strong>E4 — End-to-End Federation</strong> <span class="priority-low">[RUN]</span></td>
+        <td>Does the integrated system preserve actual learning when infrastructure becomes unreachable?</td>
+        <td>H0 flat FL vs. H1 mule-HFL vs. H2 +RL selector vs. H3 +adaptive RF</td>
+        <td>AUC, accuracy, loss, convergence, updates/round, round-close, mission completion</td>
+        <td>74C integration + 74D model-quality critique. <strong>Answered — see §7.4.</strong></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>7.1 E1 should be demoted rhetorically</h3>
+  <p>
+    FL versus centralized raw-data transfer is structurally expected to favor FL on communication
+    volume. Keep this experiment as an architectural microbenchmark validating why compact model
+    updates are suitable for DDIL operation, but do not treat it as a competitive HERMES result.
+  </p>
+
+  <h3>7.2 E2 should become a reproducible RF-layer validation</h3>
+  <p>
+    Preserve the distinction between deployable adaptive selection and the retrospective static
+    oracle. If possible, use multiple mobility/SNR traces or repeated trace segments so the result
+    is not dependent on a single captured trajectory.
+  </p>
+
+  <h3>7.3 E3 should become the main algorithm experiment</h3>
+  <p>Expand the scheduling study to include:</p>
+  <ul>
+    <li>larger device populations and, if practical, multiple mule counts;</li>
+    <li>component ablations for each gate and each reward/state feature;</li>
+    <li>deadline-adaptation sensitivity;</li>
+    <li>trust/reliability and readiness sensitivity;</li>
+    <li>easy / moderate / hard operating regimes;</li>
+    <li>worst-quartile and variance analysis in addition to mean results;</li>
+    <li>paired Wilcoxon tests and Cliff's δ effect sizes; and</li>
+    <li>SOTA-inspired policy baselines implemented under the same simulator and seeds.</li>
+  </ul>
+
+  <div class="callout success">
+    <strong>Preferred RL finding:</strong>
+    the learned selector is not necessary under unconstrained conditions; its benefit becomes
+    significant when budgets are tight, links are degraded, and multiple superficially similar
+    candidates must be distinguished.
+  </div>
+
+  <h3>7.4 E4 is the paper's payoff experiment — and it delivered</h3>
+  <p>
+    E4 is built and run: the full arm ladder <code>H0 → H1 → H2 → H3</code> executes on the real
+    multi-process orchestrator (real subprocesses, real TCP, real two-pass hierarchical FedAvg) with
+    a real DNN-IDS training in every device process. 20 paired seeds across a
+    <code>dead_zone × link_quality</code> surface, canonical CIC-IoT-2023.
+    <strong>The predicted crossover is confirmed, and it is conditional — which is the stronger claim.</strong>
+  </p>
+
+  <table>
+    <thead>
+      <tr><th>Regime</th><th>Metric</th><th>H0 flat FL</th><th>H1 HERMES</th><th>H1 − H0</th><th>95% CI</th><th>Verdict</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Clean</td><td>Participation</td><td>0.573</td><td>0.217</td><td>−0.356</td><td>[−0.429, −0.294]</td><td class="priority-high">H0 &gt; H1</td></tr>
+      <tr><td>Clean</td><td>Final AUC</td><td>0.985</td><td>0.958</td><td>−0.027</td><td>[−0.039, −0.017]</td><td class="priority-high">H0 &gt; H1</td></tr>
+      <tr><td>Jittery, dz 0.4</td><td>Participation</td><td>0.197</td><td>0.272</td><td>+0.075</td><td>[+0.039, +0.113]</td><td class="priority-low">H1 &gt; H0</td></tr>
+      <tr><td>Jittery, dz 0.6</td><td>Participation</td><td>0.093</td><td>0.272</td><td>+0.179</td><td>[+0.154, +0.206]</td><td class="priority-low">H1 &gt; H0</td></tr>
+      <tr><td>Jittery, dz 0.6</td><td>Final AUC</td><td>0.846</td><td>0.963</td><td>+0.117</td><td>[+0.067, +0.177]</td><td class="priority-low">H1 &gt; H0 (δ = +0.98)</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout success">
+    <strong>The headline for the revision:</strong> under a healthy backhaul, centralized flat FL is
+    strictly better — the mule is pure overhead, and the paper should say so plainly. As devices lose
+    their long-range path, HERMES's advantage grows monotonically, from a tie to decisive
+    (Cliff's δ up to +0.98, p&lt;0.001 at 60 % blockage). The crossover boundary sits around
+    <strong>dead-zone ≈ 0.2–0.4</strong>. This is exactly the “targeted DDIL intervention” framing of
+    the Executive Summary, now with numbers behind it.
+  </div>
+
+  <h4>Report the flip, do not bury it</h4>
+  <p>
+    At the well-connected corner (dead-zone 0.0, link quality 0.7) the surface <em>flips</em>:
+    H0 significantly beats H1. The reviewer critique explicitly asked whether such a flip exists;
+    it does, and reporting it is what makes the rest of the surface credible.
+  </p>
+
+  <h4>State the mechanism, not just the AUC gap</h4>
+  <p>
+    Decomposing the pooled jittery AUC advantage (+0.023): <strong>76 % is session-survival rate</strong>
+    (H0's session collapses 3.35 % of the time vs H1's 0.84 %) and only 24 % is model quality.
+    Conditional on the session training at all, the AUC difference is +0.007 with a CI of
+    [−0.001, +0.015] — <strong>a tie by our own claim rule</strong>. So the honest sentence is
+    “the mule's sessions survive,” not “the mule trains a better model.” Lead with participation and
+    round-close; report AUC as the downstream consequence.
+  </p>
+
+  <h3>7.5 E2 / Layer 1 — the adaptive-radio claim must be scaled back</h3>
+  <div class="callout danger">
+    <strong>Retracted:</strong> an earlier layer-1 result appeared to show adaptive band selection
+    improving model quality at every blockage level (Cliff's δ +0.14…+0.37). A clean re-run
+    (200/200 valid trials, 20/20 paired seeds per cell) shows <strong>all 5 conditions × 4 metrics are
+    ties</strong>, two nominally negative. The earlier reading came from a contaminated sweep combined
+    with an <em>unpaired</em> effect size computed against a paired protocol. Do not reuse those numbers.
+  </div>
+  <p>
+    What survives, and is defensible: the <code>U(c,t)</code> controller — which the audit found was
+    specified in the paper but never actually shipped as runtime code — now exists, is wired end-to-end
+    (including the L1→L2 RF-prior edge that was previously a hardcoded constant), and measurably
+    reduces modelled mule→base-station backhaul loss under a jittery, band-crossing channel
+    (≈0.13–0.14 at our calibration; adaptive never worse across 1000 seeds; ≈0 on a healthy channel,
+    correctly).
+  </p>
+  <p>
+    <strong>Recommended framing for ICNC:</strong> present Layer 1 as a
+    <em>backhaul-robustness mechanism</em>, not an accuracy driver. If asked for end-to-end evidence,
+    the honest answer is that the integrated effect is small and we could not resolve it at this
+    sample size — one cell at a 6-mission horizon reaches significance, a five-cell sweep at a
+    4-mission horizon does not. A candid negative result here costs little and protects the two claims
+    that <em>are</em> strong (C1 capability, C2 scheduling).
+  </p>
+
+  <h3>7.6 Figure and statistical standards (now enforced in code)</h3>
+  <p>
+    Two figure defects were caught during E4 and both are the kind a reviewer finds first. The
+    standards below are now implemented in a shared module
+    (<code>experiments/analysis/figstyle.py</code>) rather than left to convention, and are recorded in
+    the methodology document’s §5.1.
+  </p>
+  <table>
+    <thead><tr><th>Rule</th><th>Why</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>Figures take their numbers from the same module that produces the tables</td>
+        <td>A layer-1 figure was built from a different sweep than the table it illustrated and
+          disagreed with it by ~0.19 AUC. Shared code makes that impossible.</td>
+      </tr>
+      <tr>
+        <td>Uncertainty is a percentile bootstrap CI of the mean — never ±SD</td>
+        <td>Final AUC is bimodal (a session either trains or stays at its untrained initialization), so
+          ±SD implies a spread that does not exist <em>and</em> rendered above AUC = 1.0 — an impossible
+          value that shipped in a committed figure.</td>
+      </tr>
+      <tr>
+        <td>All metrics normalized to [0,1]; shared axes across figures</td>
+        <td>Updates/round was a raw count on a panel adjacent to a fraction. Normalizing and fixing one
+          difference-axis range means a null cannot look as dramatic as a large effect.</td>
+      </tr>
+      <tr>
+        <td>Truncated axes are declared, and nothing is cropped</td>
+        <td>The AUC panels are zoomed to [0.60, 1.00] for readability, with break marks, a caption
+          stating bar lengths are not proportional, and below-window sessions shown as explicit counts.
+          The floor is 0.60 because 0.80 would have cropped a real bar mean and four CI bounds.</td>
+      </tr>
+      <tr>
+        <td>A claim requires the CI to exclude 0 <em>and</em> p&lt;0.05</td>
+        <td>Several E4 cells have p&lt;0.05 with a CI spanning zero. Under a single-criterion rule they
+          would have been reported as wins.</td>
+      </tr>
+      <tr>
+        <td>Invalid trials fail loudly; excluded rows are counted in the output</td>
+        <td>Trials that produced no model were recorded as successes and silently skewed the means.</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="sota">
+  <h2>8. State-of-the-Art Comparison Plan</h2>
+  <p>
+    The absence of recent UAV-FL baselines was raised repeatedly and should not remain an acknowledged
+    gap in the resubmission.
+  </p>
+
+  <h3>8.1 Baseline families to represent</h3>
+  <ul>
+    <li>resource-aware FL client selection;</li>
+    <li>utility-guided FL participant selection;</li>
+    <li>UAV-enabled FL trajectory/resource-allocation methods;</li>
+    <li>freshness / Age-of-Information-aware UAV-FL scheduling;</li>
+    <li>multi-community UAV-aided FL; and</li>
+    <li>relevant mobile-relay or semi-decentralized FL approaches.</li>
+  </ul>
+
+  <h3>8.2 Preferred comparison methodology</h3>
+  <p>
+    Where feasible, reimplement the scheduling logic or decision principles of the competing methods
+    inside the same HERMES evaluation harness. This keeps mobility, RF conditions, seeds, mission
+    budgets, and metrics controlled.
+  </p>
+
+  <h3>8.3 Revise the SOTA feature table</h3>
+  <p>
+    Avoid an overly broad “everyone is ×, HERMES is ✓ everywhere” presentation. Compare narrower,
+    defensible capabilities instead:
+  </p>
+  <ul>
+    <li>persistent-connectivity assumption;</li>
+    <li>physical model transport;</li>
+    <li>adaptive relay scheduling;</li>
+    <li>RF-aware scheduling input;</li>
+    <li>hierarchical / multi-stage aggregation;</li>
+    <li>disconnected federation support;</li>
+    <li>hard-constrained learned selection.</li>
+  </ul>
+</section>
+
+<section id="structure">
+  <h2>9. Revised Manuscript Structure</h2>
+
+  <h3>I. Introduction</h3>
+  <p>
+    Use the requested progression:
+    <strong>Domain → Problem → Challenge → Existing Limitation → HERMES → What Becomes Possible → Contributions.</strong>
+  </p>
+
+  <h3>II. Related Work and Capability Gap</h3>
+  <p>Organize prior work by assumptions and supported capabilities, not merely by technology category.</p>
+
+  <h3>III. System Model and Design Requirements</h3>
+  <ul>
+    <li>DDIL connectivity model;</li>
+    <li>stationary server reachability;</li>
+    <li>mule/device/contact assumptions;</li>
+    <li>readiness and reliability/trust definitions;</li>
+    <li>model-state lifecycle; and</li>
+    <li>energy/mission-budget model.</li>
+  </ul>
+
+  <h3>IV. HERMES Architecture</h3>
+  <p>
+    Retain the three-layer architecture because reviewers generally found the layered decomposition
+    understandable. Correct all implementation labels and use the architecture diagram as the visual
+    backbone of the system explanation.
+  </p>
+
+  <h3>V. Gated Federation Scheduling Methodology</h3>
+  <p>
+    Promote the scheduler from a buried implementation subsection into its own major methodological
+    section, with formal equations, gates, algorithm, complexity, invariants, and design rationale.
+  </p>
+
+  <h3>VI. Hierarchical Federation and Model Transport</h3>
+  <p>
+    Explain the collect → partial aggregate → cross-mule aggregate → redistribute lifecycle and the
+    infrastructure properties it enables.
+  </p>
+
+  <h3>VII. Experimental Methodology</h3>
+  <p>
+    Begin with a provenance table showing which results are real hardware/cloud, digital twin,
+    trace replay, simulation, or full multi-process execution.
+  </p>
+
+  <h3>VIII. Results</h3>
+  <p>
+    Organize results as E1 → E2 → E3 → E4. Each subsection should begin with a research question and
+    end with a direct answer.
+  </p>
+
+  <h3>IX. Discussion and Limitations</h3>
+  <ul>
+    <li>when HERMES helps;</li>
+    <li>when ordinary FL is preferable;</li>
+    <li>simulation-to-real limitations;</li>
+    <li>calibration limits;</li>
+    <li>multi-UAV scale limits; and</li>
+    <li>what remains future work.</li>
+  </ul>
+
+  <h3>X. Conclusion</h3>
+  <p>
+    Re-state the capability enabled by HERMES rather than summarizing the three layers as independent improvements.
+  </p>
+</section>
+
+<section id="icnc">
+  <h2>10. Fitting the Paper to IEEE ICNC</h2>
+  <p>
+    ICNC is a computing/networking/communications venue, which suits HERMES better than a
+    machine-learning venue would: the contribution readers will reward is the
+    <strong>networked-systems capability</strong> — sustaining federation without end-to-end
+    reachability — with the IDS model as the workload that proves it, not as the contribution itself.
+  </p>
+
+  <div class="callout warning">
+    <strong>Confirm against the current CFP before committing.</strong> Page limit, template
+    (IEEE conference two-column), anonymity policy, and deadlines should be read off the official
+    ICNC call rather than assumed from previous years. The guidance below is about
+    <em>what to include</em>, not about format specifics.
+  </div>
+
+  <h3>10.1 What to lead with at this venue</h3>
+  <ul>
+    <li><strong>Lead with the capability and the crossover.</strong> “Federation continues where
+      infrastructure cannot reach, and here is exactly where that starts paying off” is a networking
+      result. The dead-zone ≈ 0.2–0.4 boundary is the single most quotable number in the paper.</li>
+    <li><strong>Lead with participation, not accuracy.</strong> Round-close rate, update yield and
+      mission completion are the systems metrics an ICNC audience reads natively — and per §7.4 they
+      are also where the effect genuinely lives. AUC follows as the downstream consequence.</li>
+    <li><strong>Keep the scheduler as the algorithmic core (C2).</strong> The gated-decision framing
+      with a bounded RL tie-break answers the “this is just EDF” critique in the language of a
+      networking reviewer: hard constraints first, learning only within the feasible set.</li>
+    <li><strong>Keep the provenance table.</strong> Distinguishing Chameleon Cloud, AERPAW digital
+      twin, simulation, and full multi-process execution is unusually rigorous for a 6-page venue and
+      directly defuses the “real vs simulated” critique.</li>
+  </ul>
+
+  <h3>10.2 What to cut for a short-format venue</h3>
+  <p>
+    A tight page budget forces a choice, and the E4 results make that choice easy. Suggested priority
+    if space is short:
+  </p>
+  <table>
+    <thead><tr><th>Keep</th><th>Compress</th><th>Cut or defer</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>E4 crossover figure + surface table; gated scheduler formalization; E3 scheduling ablation;
+          provenance table</td>
+        <td>E1 to a few sentences of motivation (it is a microbenchmark, not a competitive result);
+          E2 to the channel-level claim only</td>
+        <td>The GAN direction (§6) — it adds a second algorithmic thread the page budget cannot
+          support and no reviewer asked for it; absolute energy figures until ε_prop is measured</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>10.3 Two candid statements that will help, not hurt</h3>
+  <ol>
+    <li><strong>“Ordinary FL is better under healthy infrastructure.”</strong> Stating the clean-regime
+      loss (δ −0.69 on AUC, −0.96 on participation) up front makes the jittery result credible. A
+      reviewer who finds that concession themselves will distrust everything else.</li>
+    <li><strong>“The adaptive-radio layer's end-to-end benefit was not resolvable at our sample
+      size.”</strong> Reporting the L1 null (§7.5) is cheap — the paper's claims rest on C1 and C2 —
+      and it signals the kind of rigor that makes the strong results believable.</li>
+  </ol>
+
+  <div class="callout">
+    <strong>Single-sentence pitch to aim the abstract at:</strong>
+    <em>HERMES sustains federated learning across regions that stationary infrastructure cannot reach,
+    by physically transporting model state on UAV data mules under a gated, mobility-aware scheduler —
+    and we show measurably where that stops being overhead and starts being necessary.</em>
+  </div>
+</section>
+
+<section id="traceability">
+  <h2>11. Reviewer-to-Revision Traceability Matrix</h2>
+  <table>
+    <thead><tr><th>Critique</th><th>Revision Action</th></tr></thead>
+    <tbody>
+      <tr><td>74A — No recent UAV-FL baselines</td><td>Add SOTA policy-level baselines to E3/E4.</td></tr>
+      <tr><td>74A — Scheduling appears to be EDF</td><td>Formal gated methodology + multi-objective state/cost + ablations.</td></tr>
+      <tr><td>74A — Scale is too small</td><td>Expand node/mule population and report scaling curves.</td></tr>
+      <tr><td>74B — No new algorithm</td><td>Elevate scheduling methodology; formalize constraints, adaptation, RL boundary, and optional GAN decision.</td></tr>
+      <tr><td>74B — Deadline function unexplained</td><td>Correct equation, add rationale, bounds, and sensitivity analysis.</td></tr>
+      <tr><td>74B — Buckets unexplained</td><td>Define bucket semantics and separate admission class from urgency.</td></tr>
+      <tr><td>74C — Layers not evaluated end-to-end</td><td><span class="priority-low">Done.</span> E4 runs H0–H3 on the real orchestrator with a real DNN-IDS in the loop; §7.4.</td></tr>
+      <tr><td>74C — FL-vs-centralized baseline weak</td><td>Demote E1 to an architectural transport microbenchmark.</td></tr>
+      <tr><td>74C — RL benefit unclear</td><td>Report regime-dependent effect, not only pooled means. <strong>Note:</strong> E4's H2-vs-H1 selector comparison is not yet run with trained weights &mdash; do not claim an RL benefit from E4.</td></tr>
+      <tr><td>74C — Real vs simulation unclear</td><td>Add explicit provenance table and fix incorrect labels.</td></tr>
+      <tr><td>74D — Limited real-world validation</td><td>Clearly distinguish Chameleon, AERPAW DT, simulation, and orchestrator; add more real execution if feasible.</td></tr>
+      <tr><td>74D — Weak learning outcomes</td><td><span class="priority-low">Done.</span> E4 reports AUC 0.27&rarr;0.96 convergence, accuracy and loss per round; §7.4. Note the gap is 76% session-survival, so lead with participation.</td></tr>
+      <tr><td>74D — Missing sensitivity/statistics</td><td><span class="priority-low">Done for E4.</span> 12-point dead-zone&times;link surface, 20 paired seeds, paired Wilcoxon + Cliff's &delta; + bootstrap CI, claim only when CI excludes 0. Still to do for E3.</td></tr>
+      <tr><td>Professor — Energy/distance/readiness/trust</td><td>Make these explicit scheduling quantities and ablate them.</td></tr>
+      <tr><td>Professor — HFL role</td><td>Recast HFL as coordination/data-transport infrastructure.</td></tr>
+      <tr><td>Professor — GAN</td><td>Integrate only if tied to a specific constrained-learning failure mode.</td></tr>
+      <tr><td>Professor — Experiment 4</td><td><span class="priority-low">Done.</span> E4 is built, run and audited; it is the centerpiece (&sect;7.4).</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="workflow">
+  <h2>12. Recommended Execution Order</h2>
+
+  <div class="phase">
+    <div class="num">0</div>
+    <div>
+      <h3>Correctness and Provenance</h3>
+      <p><span class="priority-high">Highest priority.</span> Audit equations, code behavior, experiment provenance, calibration, trial counts, and questionable figures/tables.</p>
+    </div>
+  </div>
+
+  <div class="phase">
+    <div class="num">1</div>
+    <div>
+      <h3>Freeze the Scheduling Methodology</h3>
+      <p>Correct and formalize the scheduler, add trust/readiness only if implemented, define gates and guarantees, then freeze the design before running final experiments.</p>
+    </div>
+  </div>
+
+  <div class="phase">
+    <div class="num">2</div>
+    <div>
+      <h3>Build the Final Experimental Matrix</h3>
+      <p>Finalize E1–E4, SOTA baselines, scaling factors, sensitivity factors, statistical tests, and provenance labels.</p>
+    </div>
+  </div>
+
+  <div class="phase">
+    <div class="num">3</div>
+    <div>
+      <h3>Run / Reparse Experiments</h3>
+      <p>Prefer re-analysis of valid existing data where possible; run new experiments only where needed to answer unresolved methodological claims.</p>
+    </div>
+  </div>
+
+  <div class="phase">
+    <div class="num">4</div>
+    <div>
+      <h3>Write Results from the Data</h3>
+      <p>Include cases where HERMES loses. Explicitly identify the operating regime where HERMES becomes necessary.</p>
+    </div>
+  </div>
+
+  <div class="phase">
+    <div class="num">5</div>
+    <div>
+      <h3>Rewrite Related Work</h3>
+      <p>Now that the final contribution is known, compare against prior systems using the exact capability distinctions the experiments test.</p>
+    </div>
+  </div>
+
+  <div class="phase">
+    <div class="num">6</div>
+    <div>
+      <h3>Rewrite Introduction and Abstract Last</h3>
+      <p>Only after the methodology and final numbers are stable should the opening claims be written.</p>
+    </div>
+  </div>
+</section>
+
+<section id="success">
+  <h2>13. Submission Success Criteria</h2>
+  <p>The revision is ready when all of the following are true:</p>
+  <ul>
+    <li>A reader can identify the problem, missing capability, HERMES solution, and main novelty from the first page.</li>
+    <li>The scheduling methodology is independently describable as a research contribution.</li>
+    <li>Every scheduling variable and update rule is justified and empirically tested.</li>
+    <li>HFL is clearly presented as system infrastructure, not merely a standard aggregation block.</li>
+    <li>The paper contains four claim-driven experiments with distinct research questions.</li>
+    <li>The end-to-end experiment reports actual learning quality and convergence.</li>
+    <li>Recent UAV-FL scheduling approaches are represented as fair baselines.</li>
+    <li>Simulation, digital twin, cloud execution, trace replay, and real-system execution are clearly distinguished.</li>
+    <li>All reported tables and figures are reproducible and their provenance is known.</li>
+    <li>Energy claims are appropriately calibrated or explicitly normalized.</li>
+    <li>RL is presented as regime-dependent rather than universally superior.</li>
+    <li>The final paper explicitly states when ordinary FL is better and when HERMES becomes necessary.</li>
+    <li><strong>Every figure draws its numbers from the same code that produces the tables</strong>, so
+      the two cannot disagree.</li>
+    <li><strong>No axis renders a value the metric cannot take</strong>, and any truncated axis is
+      declared with break marks and a caption.</li>
+    <li><strong>A claim is made only where the confidence interval excludes zero and p&lt;0.05</strong>;
+      cells failing either test are reported as ties.</li>
+    <li><strong>Null results are reported rather than dropped</strong> — specifically the Layer-1
+      end-to-end null (§7.5).</li>
+    <li><strong>Invalid trials cannot masquerade as successes</strong>: a run that produced no model is
+      recorded as such and excluded from every metric, not just the ones it left blank.</li>
+  </ul>
+
+  <div class="callout success">
+    <strong>Final positioning:</strong>
+    Conventional FL is preferable when reliable infrastructure already exists.
+    HERMES's contribution is making useful federation continue when that assumption fails.
+    Its gated scheduler determines which physically reachable model contributions are worth acquiring
+    under mobility and resource constraints; its HFL substrate moves and reconciles those contributions
+    without blocking on absent devices; and its RF layer improves the quality of temporary communication
+    opportunities.
+  </div>
+</section>
+
+<section>
+  <h2>Source Basis</h2>
+  <p>
+    This revision plan consolidates the content of the submitted HERMES manuscript
+    (<em>HERMES: A Layered Coordination Framework for Federated Learning with Drones as Data Mules</em>)
+    and the accompanying markdown revision notes containing the professor OKR, reviews 74A–74D,
+    rebuttal drafts, audit findings, and camera-ready action items.
+  </p>
+  <p class="small">
+    Proposed additions in this document — such as the example multi-objective utility formulation —
+    are explicitly labeled as revision directions and should not be represented as implemented results
+    until corresponding code and experiments exist.
+  </p>
+
+  <h3>Where the E4 evidence lives</h3>
+  <p class="small">
+    Every E4 number quoted above is reproducible from the repository, and the numbers in §7.4 / §7.5
+    were re-derived independently of the analysis module before being written down.
+  </p>
+  <table>
+    <thead><tr><th>Artifact</th><th>Path</th></tr></thead>
+    <tbody>
+      <tr><td>Validity record — surface, decomposition, L1 audit, figure standards</td><td><code>DeveloperDocs/HERMES_Experiment4_Jittery_Methodology.md</code> (§3.1, §5.1, §6, §6.1, §7–7.4)</td></tr>
+      <tr><td>Design &amp; build status</td><td><code>DeveloperDocs/HERMES_Experiment4_Integrated_Design_and_Plan.html</code></td></tr>
+      <tr><td>Reproducer</td><td><code>DeveloperDocs/Experiment_4_Run_Guide.md</code>; sweeps under <code>experiments/exp4/run_*.sh</code></td></tr>
+      <tr><td>Result data</td><td><code>results/exp4_paper/h0h1_all.csv</code> (519 rows), <code>h2h3_dz_*.csv</code> (200 rows, 20/20 paired per cell)</td></tr>
+      <tr><td>Figures + generators</td><td><code>results/exp4_paper/fig_exp4_{crossover,layer1}.png</code>; <code>DeveloperDocs/exp4_figure*.py</code>; shared style in <code>experiments/analysis/figstyle.py</code></td></tr>
+      <tr><td>Paired statistics</td><td><code>python -m experiments.analysis.exp4 --csv &lt;sweep&gt;.csv --surface</code></td></tr>
+      <tr><td>Pinned environment</td><td><code>AppSetup/requirements_exp4.txt</code> (Python 3.11 stack that produced the CSVs)</td></tr>
+    </tbody>
+  </table>
+</section>
+</main>
+
+<footer>
+  HERMES Holistic Paper Revision Plan · Self-contained HTML · Designed for browser viewing and print-to-PDF
+</footer>
+</div>
+</body>
+</html>
