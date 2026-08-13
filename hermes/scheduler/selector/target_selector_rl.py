@@ -88,7 +88,16 @@ class TargetSelectorRL:
         epsilon: float = 0.0,
         rng_seed: Optional[int] = None,
     ):
-        self._ddqn = ddqn if ddqn is not None else DDQN(feature_dim=FEATURE_DIM)
+        # ``rng_seed`` seeds the network too, not only the epsilon RNG. Before
+        # this, an untrained selector built with rng_seed=0 drew its weights
+        # from OS entropy, so two "identically seeded" selectors got different
+        # networks and a run was not reproducible on the selector component —
+        # which matters because arms H2/H3 of Experiment 4 use exactly this
+        # random-init path when no trained .npz is supplied.
+        self._ddqn = (
+            ddqn if ddqn is not None
+            else DDQN(feature_dim=FEATURE_DIM, seed=rng_seed)
+        )
         if self._ddqn.feature_dim != FEATURE_DIM:
             raise ValueError(
                 f"DDQN feature_dim={self._ddqn.feature_dim} != "

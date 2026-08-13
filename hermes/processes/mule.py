@@ -109,6 +109,9 @@ class MuleService:
         rf_prior = getattr(cfg, "rf_prior_snr_db", None)
         if rf_prior is not None:
             sup_kwargs["rf_prior_snr_db"] = float(rf_prior)
+        budget = getattr(cfg, "mission_budget_s", None)
+        if budget is not None:
+            sup_kwargs["mission_budget_s"] = float(budget)
         self.supervisor = MuleSupervisor(
             mule_id=MuleID(cfg.mule_id),
             rf=self.rf,

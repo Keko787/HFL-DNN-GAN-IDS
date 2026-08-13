@@ -6,9 +6,13 @@ Companion to [`HERMES_Experiment4_Methodology_and_Implementation.md`](HERMES_Exp
 and [`HERMES_Experiment4_L1_RF_Layer.md`](HERMES_Experiment4_L1_RF_Layer.md).
 
 > **Read §4 before citing this layer in the paper.** Experiment 4 exercises a materially narrower
-> slice of Layer 2 than the four-stage description implies. Several stages the paper describes are
-> inert at runtime, and the deadline machinery — the part reviewers asked about — does not bind in
-> this experiment at all. That is Experiment 3's territory.
+> slice of Layer 2 than the four-stage description implies: several stages the paper describes are
+> inert at runtime (§4.1, §4.4).
+>
+> **Deadline enforcement was missing and has since been added** (S3b, §4.2) — but it is opt-in and
+> was **off for every committed result**, and Exp 4 still models no flight budget or propulsion
+> energy. Claims about the deadline *design* therefore remain Experiment 3's territory until an
+> Exp-4 run is made with a binding budget.
 
 ---
 
@@ -94,15 +98,36 @@ The gate that *does* fire is a separate inline check inside `HFLHostMission.run_
 `min_utility = 0.0` — which cannot reject anything, given devices pin themselves to `FL_OPEN` for
 the whole run.
 
-### 4.2 The deadline is computed but never enforced
+### 4.2 The deadline was computed but never enforced — now fixed, and off by default
 
-**This is the most important limitation.** `deadline_ts` is computed and used as a **sort key**, but
-nothing in the mule/mission/exp4 path ever compares it to a clock. Deadlines sit 35–110 s in the
-future and never elapse. `n_missions` is the only real termination bound.
+**As traced, this was the most important limitation:** `deadline_ts` was computed and used as a
+**sort key**, but nothing in the mule/mission/exp4 path ever compared it to a clock. A device whose
+deadline had passed was still queued and still visited, so "deadline-aware scheduling" was not true
+of the code.
 
-> Experiment 4 therefore provides **no evidence about the deadline design** — not about the
-> adaptation rule, not about bounds, not about feasibility. Reviewer questions about the deadline
-> function must be answered from Experiment 3, which does model a flight budget.
+**The gap is now closed** by **S3b — the deadline feasibility gate**
+([`stages/s3b_feasibility.py`](../hermes/scheduler/stages/s3b_feasibility.py)). It runs between S3a
+and the bucket walk — i.e. **before ordering**, so the learned selector cannot resurrect anything it
+drops, preserving the architectural contract. A contact is dropped when either:
+
+* it cannot be **reached before its own `deadline_ts`** (given transit at `cruise_speed_m_s`), or
+* serving it would **overrun the remaining mission budget**.
+
+The walk is greedy in EDF order, advancing a simulated pose and clock, so later estimates account
+for earlier stops. Rejections are returned by reason (`dropped_overdue` / `dropped_budget`) and
+logged, so a device that is not served can be explained rather than vanishing.
+
+> **It is opt-in, and that is deliberate.** With no `mission_budget_s` configured the gate is a
+> strict no-op — pinned by test — so **every previously recorded result remains reproducible**.
+> Enforcement turns on by supplying a budget:
+> `--mission-budget-s <seconds>` (→ `MuleConfig.mission_budget_s` → `FLScheduler`).
+
+> **What this does and does not change for the paper.** The mechanism now exists and is tested, so
+> the scheduler is honestly deadline-aware. But **the committed Exp-4 results were produced with the
+> gate off**, and Exp 4 still has no propulsion-energy or flight-budget model — so claims about the
+> deadline *design* (the adaptation rule, its bounds, its sensitivity) still belong to Experiment 3.
+> To make Exp 4 speak to the deadline, re-run with a budget tight enough to bind: with the default
+> timings, deadlines sit 35–110 s out and a generous budget will not fire the gate.
 >
 > Note also that Exp 4's `deadline_met` column is **redefined** as a quorum-plus-backhaul indicator
 > (≥1 update **and** the backhaul upload was not dropped). It is not the L2 deadline.
@@ -155,22 +180,21 @@ N=6 devices, one mule. Multi-mule coordination and larger-N bucket behaviour are
 > framing as a *severity sweep* is wrong wherever it appears, and is corrected in the L1 document,
 > the validity record §7.4, and the revision plan.
 
-### 5.2 The untrained selector is not reproducible
+### 5.2 The untrained selector was not reproducible — now fixed
 
-`TargetSelectorRL(..., rng_seed=0)` seeds only the **epsilon** RNG — which is unused at
-`epsilon=0.0`. The network itself is built by `DDQN(feature_dim=FEATURE_DIM)`
-(`target_selector_rl.py:91`) **with no seed**, so its weights come from OS entropy.
+`TargetSelectorRL(..., rng_seed=0)` seeded only the **epsilon** RNG — unused at `epsilon=0.0`. The
+network itself was built by `DDQN(feature_dim=FEATURE_DIM)` **with no seed**, so its weights came
+from OS entropy: two selectors constructed with `rng_seed=0` received **different weights**
+(verified empirically).
 
-Verified empirically: two selectors constructed with `rng_seed=0` receive **different weights**.
+**Fixed** — `rng_seed` is now threaded to the network
+(`DDQN(feature_dim=FEATURE_DIM, seed=rng_seed)`). Same seed → identical weights; different seed →
+different weights; no seed → still nondeterministic, by design. Regression-tested.
 
-> **Consequence:** H2/H3 rows are not byte-reproducible on the selector component, and the arms are
-> unpaired with respect to it. This does not confound the committed H3-vs-H2 comparison in a way
-> that manufactures an effect — the result is a null, and both arms draw fresh weights — but it does
-> mean a re-run will not reproduce the same orderings.
->
-> **Recommended fix (not yet applied):** thread the seed through to the network, e.g.
-> `DDQN(feature_dim=FEATURE_DIM, seed=rng_seed)`. Applying it changes the weights relative to the
-> committed runs, so it should be paired with a re-run rather than done silently.
+> **Consequence for the committed data:** the H2/H3 rows already on disk were produced under the old
+> behaviour, so they are still not byte-reproducible on the selector component. This does not
+> manufacture an effect — the result is a null and both arms drew fresh weights — but a re-run is
+> required before H2/H3 can be described as reproducible.
 
 ---
 

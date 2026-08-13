@@ -60,6 +60,8 @@ def build_exp4_topology(
     # (cluster) + the chosen channel's mean SNR as the selector's RF prior (mule).
     backhaul_loss_schedule: Optional[List[float]] = None,
     rf_prior_snr_db: Optional[float] = None,
+    # S3b — per-mission time budget; when set, the deadline is ENFORCED.
+    mission_budget_s: Optional[float] = None,
 ) -> TopologyConfig:
     """Return a validated :class:`TopologyConfig` for one H1 trial.
 
@@ -149,6 +151,7 @@ def build_exp4_topology(
         use_rl_selector=use_rl_selector,
         selector_weights_path=selector_weights_path,
         rf_prior_snr_db=rf_prior_snr_db,
+        mission_budget_s=mission_budget_s,
     )
     topo = TopologyConfig(cluster=cluster, mules=[mule], devices=devices)
     topo.validate()

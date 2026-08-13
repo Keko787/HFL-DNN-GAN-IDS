@@ -79,6 +79,8 @@ class FLScheduler:
         beacon_window_s: float = 30.0,
         now_fn=time.time,
         target_selector=None,
+        mission_budget_s: Optional[float] = None,
+        feasibility_model=None,
     ):
         self._device_states: Dict[DeviceID, DeviceSchedulerState] = {}
         self._current_slice: Optional[MissionSlice] = None
@@ -89,6 +91,20 @@ class FLScheduler:
         # deterministic distance placeholder in :func:`select_order`
         # runs.
         self._target_selector = target_selector
+        # S3b — deadline feasibility gate. ``None`` (the default) leaves the
+        # deadline as a sort key only, which is the historical behaviour every
+        # recorded result was produced under. Supplying a per-mission budget
+        # turns the deadline into an enforced constraint: contacts that cannot
+        # be reached before their own deadline, or that would overrun the
+        # budget, are dropped BEFORE ordering — so the learned selector still
+        # cannot resurrect them.
+        self._mission_budget_s = (
+            None if mission_budget_s is None else float(mission_budget_s)
+        )
+        self._feasibility_model = feasibility_model
+        # Stamped when a mission slice opens; the budget is measured from it.
+        self._mission_start_ts: Optional[float] = None
+        self.last_feasibility: Optional[object] = None
 
     # ------------------------------------------------------------------ #
     # Introspection — tests & observability
@@ -127,6 +143,8 @@ class FLScheduler:
         * Folds the amendment (deadline overrides + registry_deltas).
         """
         self._current_slice = mission_slice
+        # A new slice starts a new mission; the S3b budget is measured from here.
+        self._mission_start_ts = self._now()
         slice_ids = set(mission_slice.device_ids)
 
         # Pre-seed from registry if the caller handed it over.
@@ -373,6 +391,32 @@ class FLScheduler:
         )
         if not contacts:
             return []
+
+        # S3b — deadline feasibility gate (hard, and BEFORE ordering, so the
+        # learned selector cannot resurrect anything it drops). No-op unless a
+        # mission budget is configured.
+        if self._mission_budget_s is not None:
+            from .stages.s3b_feasibility import filter_feasible  # noqa: WPS433
+
+            start = self._mission_start_ts if self._mission_start_ts is not None else _now
+            feas = filter_feasible(
+                contacts,
+                now=_now,
+                mule_pose=mule_pose,
+                mission_deadline_ts=start + self._mission_budget_s,
+                model=self._feasibility_model,
+            )
+            self.last_feasibility = feas
+            if feas.n_dropped:
+                log.info(
+                    "S3b feasibility gate dropped %d/%d contacts "
+                    "(%d unreachable before deadline, %d over mission budget)",
+                    feas.n_dropped, len(contacts),
+                    len(feas.dropped_overdue), len(feas.dropped_budget),
+                )
+            contacts = feas.kept
+            if not contacts:
+                return []
 
         # Group contacts by their inherited bucket and walk priority order.
         by_bucket: Dict[Bucket, List[ContactWaypoint]] = {b: [] for b in BUCKET_PRIORITY}

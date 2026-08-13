@@ -170,6 +170,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
              "effect is ~null by construction. Use with --realism.",
     )
     parser.add_argument(
+        "--mission-budget-s", type=float, default=None,
+        help="Per-mission time budget (s). When set, the S3 deadline is "
+             "ENFORCED: the S3b gate drops contacts that cannot be reached "
+             "before their own deadline or would overrun the budget. Omit "
+             "(default) to keep the historical behaviour where the deadline "
+             "is only a sort key -- that is what the committed results used.",
+    )
+    parser.add_argument(
         "--l1-channel-bands", type=int, default=3,
         help="Arm H3: number of RF bands the controller chooses among.",
     )
@@ -224,6 +232,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         selector_weights_path=(str(args.selector_weights) if args.selector_weights else None),
         l1_channel=bool(args.l1_channel),
         l1_channel_bands=int(args.l1_channel_bands),
+        mission_budget_s=args.mission_budget_s,
     )
     if args.real_model:
         log.info(

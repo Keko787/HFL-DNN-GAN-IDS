@@ -134,6 +134,7 @@ class MuleSupervisor:
         beacon_window_s: float = 30.0,
         session_ttl_s: float = 5.0,
         rf_range_m: Optional[float] = None,
+        mission_budget_s: Optional[float] = None,
         now_fn=time.time,
     ) -> None:
         self.mule_id = mule_id
@@ -149,6 +150,9 @@ class MuleSupervisor:
             beacon_window_s=beacon_window_s,
             now_fn=now_fn,
             target_selector=target_selector,
+            # S3b — when set, the deadline stops being a sort key and becomes
+            # an enforced constraint (see stages/s3b_feasibility.py).
+            mission_budget_s=mission_budget_s,
         )
 
         # Mission server — emits one RoundCloseDelta per session into the

@@ -141,6 +141,10 @@ class Exp4Driver:
     # Use with --realism (contact reliability) for the H1->H2->H3 ladder.
     l1_channel: bool = False
     l1_channel_bands: int = 3
+    # S3b — per-mission time budget (seconds). None (default) reproduces every
+    # previously-recorded result: the S3 deadline stays a sort key. Setting it
+    # turns on the feasibility gate so the deadline actually binds.
+    mission_budget_s: Optional[float] = None
 
     def run_trial(self, cell: Cell) -> Mapping[str, Any]:
         params = cell.params
@@ -193,6 +197,8 @@ class Exp4Driver:
             use_rl_selector=(arm in ("H2", "H3")),
             selector_weights_path=self.selector_weights_path,
         )
+        if self.mission_budget_s is not None:
+            selector_kwargs["mission_budget_s"] = float(self.mission_budget_s)
 
         # EX-4.3 arm H3 — L1 adaptive channel. H1/H2 hold the best-average
         # fixed band; H3 runs the U(c,t) controller. The per-mission loss

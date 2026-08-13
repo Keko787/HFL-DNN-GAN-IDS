@@ -131,6 +131,12 @@ class MuleConfig:
     # selector's rf_prior feature, instead of the hardcoded 20.0 default. This
     # is the real RF prior the SEC26 audit found was never wired at runtime.
     rf_prior_snr_db: Optional[float] = None
+    # S3b — per-mission time budget (seconds). When set, the scheduler's
+    # deadline feasibility gate is ACTIVE: contacts that cannot be reached
+    # before their own deadline, or that would overrun this budget, are
+    # dropped before ordering. ``None`` keeps the historical behaviour in
+    # which Deadline(j) is only a sort key.
+    mission_budget_s: Optional[float] = None
 
 
 @dataclass
