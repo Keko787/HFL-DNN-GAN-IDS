@@ -6,6 +6,10 @@ either done or explicitly deferred with a reason. It exists so we pay the comput
 
 **Status:** open. Nothing is scheduled to re-run until §5's exit criteria are met.
 
+**Progress:** Phase 0 — 7 of 10 closed (3 open, all no-re-run). Phase 1 — **done, scheduler
+frozen**. Phase 2 — first pass done, **full-text verification is the current blocker**.
+Phases 3–4 — not started.
+
 ---
 
 ## 1. The re-run ledger — what actually forces a re-run
@@ -54,9 +58,10 @@ Audit equations, code behaviour, provenance, calibration, trial counts, question
       Code is correct; the paper is not. *(No re-run.)*
 - [ ] **Provenance table** for the paper: which results are Chameleon, AERPAW DT, simulation, full
       multi-process. *(No re-run.)*
-- [ ] **Decide the status of inert L2 machinery** — S2A/S2B readiness (never invoked), beacons /
-      `BEACON_ACTIVE` (unreachable), `mule_energy` (frozen at 1.0). Each is either *wired* (re-run)
-      or *removed from the claims* (no re-run). **Deciding this is a Phase-1 gate.**
+- [x] ~~**Decide the status of inert L2 machinery**~~ — **resolved by the freeze.** S2A/S2B
+      readiness and beacons / `BEACON_ACTIVE` are **removed from the claims, not wired**
+      (Freeze D3, D6); `mule_energy` stays frozen at 1.0 and is stated as a scope limit. No re-run:
+      nothing about trial behaviour changed.
 
 ---
 
@@ -110,14 +115,18 @@ Audit equations, code behaviour, provenance, calibration, trial counts, question
 The gap flagged by 74A and still unanswered. Do the reading **before** the matrix is fixed, so a
 baseline arm can be designed in rather than bolted on.
 
-- [ ] Survey recent UAV-FL / FL-UAV scheduling work: resource-aware client selection, utility-guided
-      selection, UAV trajectory + resource allocation, AoI/freshness-aware scheduling, multi-community
-      UAV-aided FL, mobile-relay / semi-decentralized FL.
-- [ ] For each candidate: what does its **scheduling decision rule** reduce to, and can it be
-      re-implemented inside our harness (same mobility, seeds, budgets, metrics)?
-- [ ] **Decide the comparison mode — retroactive first.** Can any baseline be scored against
-      *existing* committed data (re-analysis, no re-run)? If yes, do that. Only if not, add it as an
-      arm in the Phase-3 matrix.
+- [x] Survey recent UAV-FL / FL-UAV scheduling work — **first pass done** (Tier A general FL
+      selection, Tier B UAV-specific, Tier C AoI/freshness). Abstract-level only.
+- [x] Reduce each candidate to a decision rule and judge implementability — **done for the scan**,
+      including the finding that Oort / Power-of-Choice assume the server can *poll* clients before
+      choosing, which a data mule cannot, so they are not faithfully implementable here.
+- [ ] **Full-text verification of every rule.** ⚠ **Blocking** — the scan is abstract-level, so
+      treat its readings as hypotheses. Run `/deep-research` (prompt in the candidates doc §5) or
+      read the papers directly before implementing or citing anything.
+- [ ] **Decide the comparison mode — retroactive first.** Recommendation on the table: **FedCS-style
+      deadline-feasibility** + **AoI/staleness-greedy**, both scoreable against committed data with
+      no re-run. Needs confirming against the harness (does it expose last-served time and
+      per-contact history?).
 - [ ] Document the chosen baselines + the fairness argument (same harness, same seeds) before running.
 
 ---
