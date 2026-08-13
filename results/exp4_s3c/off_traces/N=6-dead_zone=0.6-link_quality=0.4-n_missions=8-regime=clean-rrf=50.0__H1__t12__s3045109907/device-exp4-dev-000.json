@@ -1,0 +1,16 @@
+{
+  "device_id": "exp4-dev-000",
+  "mule_rf_host": "127.0.0.1",
+  "mule_rf_port": 62094,
+  "position": [
+    -43.46254324780443,
+    128.943526150754,
+    0.0
+  ],
+  "n_serves": null,
+  "train_shard_path": null,
+  "input_dim": null,
+  "local_epochs": 1,
+  "local_batch_size": 64,
+  "contact_reliability": 0.6229179815050047
+}

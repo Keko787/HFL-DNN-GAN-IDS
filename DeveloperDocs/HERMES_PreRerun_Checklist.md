@@ -241,11 +241,64 @@ Per-trial means behind those figures: real-model `n_missions=4` **37.8 s** (p90 
 > be interpreted, which is the worst outcome available. Use `n_missions≥8`, or lower
 > `--mission-window-history` to 3, and say which in the write-up.
 
-- [ ] Run the stub pilot (2 configurations × 20 paired seeds, budget on, `n_missions≥8`), **with
-      `--keep-event-traces`** so even the pilot is re-analysable.
-- [ ] Record which of the three outcomes above it produced, **in this document**, before the matrix
-      is fixed.
-- [ ] Only if it is non-null: decide axis-vs-pinned and carry the decision into §5's arm/axis lists.
+- [x] Run the stub pilot (2 configurations × 20 paired seeds, budget on, `n_missions≥8`), **with
+      `--keep-event-traces`**. ✅ **Done 2026-08-13** — 40/40 trials `ok`, seeds matched on every
+      pair, traces retained. `results/exp4_s3c/{off,on}.csv`.
+- [x] Record which of the three outcomes it produced. ✅ **See §5.0a below.**
+- [ ] Carry the §5.0a decision (**pin, do not sweep**) into §5.1's axis list.
+
+### 5.0a Pilot result — non-null, but narrow and *transient*
+
+**Configuration:** H1, N=6, `rrf=50`, `n_missions=8`, `--realism`, `--mission-budget-s 120`,
+20 paired seeds, stub. Arms differ by **exactly one flag**; `mission_budget_s` identical, seeds
+matched on all 20 pairs (both verified from the provenance columns).
+
+| Metric | off | on | diff | CI95 | p | δ | |
+|---|---|---|---|---|---|---|---|
+| **update_yield** | 1.6062 | 1.8000 | **+0.1938** | [+0.0625, +0.3127] | **0.0178** | +0.278 | **meets the claim rule** |
+| rounds_closed | 6.700 | 7.150 | +0.450 | [+0.0000, +0.9000] | 0.0701 | +0.210 | tie (near) |
+| mission_completion_rate | 0.7000 | 0.6750 | −0.0250 | [−0.0752, +0.0250] | 0.6180 | −0.070 | tie |
+| coverage / missions_completed | — | — | 0 | — | 1.0 | 0 | identical on every pair (ceiling) |
+| jains_fairness, participation_entropy, completion_fairness | — | — | ≈0 | straddles 0 | >0.49 | — | tie |
+
+**⚠ Two caveats that must travel with this number.**
+
+1. **It does not survive multiplicity correction.** Eight metrics were tested; Bonferroni/Holm put
+   the threshold at α = 0.05/8 = **0.00625**, and p = 0.0178 exceeds it. Under the null, testing
+   eight metrics gives ~34 % odds of at least one hit at α = 0.05. On the p-value alone this is
+   **suggestive, not established** — and this project has already retracted one result that looked
+   like this.
+2. **Completion moved the other way** (−0.025, not significant). More devices served costs mission
+   time. If this holds up it is a **trade-off, not a free win**, and should be reported as one.
+
+**What rescues it from "probably noise" — the mechanism was verified independently of the
+statistics,** from the retained traces:
+
+| Mission round | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 |
+|---|---|---|---|---|---|---|---|---|
+| post-S3b queue, off | 2.10 | 2.35 | 2.75 | 2.75 | 3.25 | 3.25 | 3.65 | 3.40 |
+| post-S3b queue, on | 2.10 | 3.45 | 3.45 | 3.10 | 3.40 | 3.50 | 3.50 | 3.65 |
+| diff | **0.00** | +1.10 | +0.70 | +0.35 | +0.15 | +0.25 | −0.15 | +0.25 |
+
+* **Round 1 is exactly identical** — no history, so the scale is exactly 1.0. The inert-by-default
+  guarantee, visible in live data rather than only in a unit test.
+* **Rounds 2–4 diverge, then converge.** The `off` arm reaches a similar queue size eventually,
+  using per-device widening alone.
+* Served events per trial: **72.55 → 78.65 (+8.4 %)**.
+
+**Interpretation — and this is the useful finding.** S3c does not reach a *better* steady state; it
+**reaches the workable state faster**. The per-device rule gets there on its own, given enough
+missions. S3c's value is in the warm-up, exactly where a per-device rule has the least information.
+
+**Testable prediction this generates:** the advantage should **shrink as `n_missions` grows** and
+**grow at small `n_missions`**. That is a sharp, falsifiable claim and a much better basis for a
+paper sentence than "+0.19 update yield".
+
+**Decision — pin, do not sweep.** It is not an axis (it does not interact with the other axes; it
+interacts with *mission count*). Recommended: fix `--mission-window-adaptation` on or off in the
+matrix, and if the transient claim is worth making, test it with a **small `n_missions` ladder**
+(4 / 8 / 16 at one cell) rather than by doubling every cell. That ladder is the confirmatory run
+that would also settle caveat 1.
 
 Both configurations write **one new CSV each** — an existing file cannot be resumed now that rows
 carry provenance columns (§1a).

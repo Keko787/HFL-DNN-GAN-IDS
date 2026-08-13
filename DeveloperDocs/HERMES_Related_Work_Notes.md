@@ -136,10 +136,24 @@ and modest enough to defend:
   opens a session at all, so it generates no feedback event of any kind. That failure is created by
   having a hard gate, which the utility-ranking approaches do not have.
 
-> **Honesty constraint on this paragraph.** S3c is implemented, tested, and **off by default** — no
-> committed result uses it. Until the §5.0 pilot runs, the claim is *mechanism*, not *measured
-> benefit*. Write it as design rationale, not as a result. See the
-> [pre-re-run checklist](HERMES_PreRerun_Checklist.md) §1a.
+> **Honesty constraint on this paragraph — updated after the pilot ran (2026-08-13).**
+>
+> The pilot (checklist §5.0a) found a **narrow, transient** effect, and the framing above must
+> match it. What is defensible to write:
+>
+> * S3c raised **update yield +0.194** (CI [+0.063, +0.313], p = 0.0178, δ = +0.278 *small*) at one
+>   operating point with the deadline gate binding — but that **does not survive correction for
+>   testing 8 metrics** (Bonferroni α = 0.00625). *Suggestive, not established.*
+> * **Mission completion moved the other way** (−0.025, n.s.). Report the **trade-off**, not a win.
+> * The mechanism *was* independently verified from the traces: round 1 identical across arms
+>   (no history ⇒ scale exactly 1.0), divergence at rounds 2–4, convergence after.
+> * **The honest claim is about the warm-up, not the steady state:** S3c reaches a workable window
+>   *faster*; the per-device rule gets there on its own given enough missions. Which predicts the
+>   advantage shrinks as mission count grows — sharp, falsifiable, and a better sentence than the
+>   raw effect size.
+>
+> Until the confirmatory `n_missions` ladder runs, keep this as **design rationale with a measured
+> illustration**, not as a headline result.
 
 ## 6. What we should **not** claim
 
