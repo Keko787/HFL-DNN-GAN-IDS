@@ -43,6 +43,44 @@ would have dismissed Oort — one of the most-cited selection papers in FL — o
 have. Any reviewer who knows the paper would read that as not having read it, which is precisely
 the criticism 74A already made.
 
+## 2a. The candidate the first pass missed — closest architectural match found
+
+**UAV-Aided Multi-Community Federated Learning** (Mestoukirdi, Esrafilian, Gesbert, Li — GLOBECOM
+2022, [arXiv:2206.02043](https://arxiv.org/abs/2206.02043)). Surfaced by a general UAV-FL sweep, not
+by the original scan. Full-text verified.
+
+**Why it matters more than anything in the original list:** its UAV is **not** a hovering base
+station. It flies a trajectory of **discrete stops** and devices transmit only when it is nearby —
+the same physical model as our mule. Every Tier A/B candidate either assumes persistent
+connectivity or is architecture-agnostic; this one shares our problem shape.
+
+Its device-importance metric is also a direct structural analogue of ours:
+
+```
+ψ_c = CoV of validation accuracy across community c        (heterogeneity proxy)
+δ_k = p_k · ψ_c · λ   if the device failed or was NOT scheduled last round
+      p_k · ψ_c       otherwise
+```
+
+That **λ multiplier for devices that failed or went unscheduled** is prior art for the exact
+problem Freeze Amendment 1 (A2) addresses — a device the scheduler skipped must be made more
+attractive next time, or it starves. They solve it with an importance multiplier; we solve it with
+window widening plus mission-level adaptation. **That contrast belongs in Related Work**, and it is
+a much better citation than "no one has considered starvation".
+
+**But it is not usable as our baseline arm**, for one specific reason: trajectory and scheduling are
+**jointly optimised** (alternating sub-problems, greedy graph-based trajectory initialisation).
+Re-implementing the scheduling rule against our fixed S3a/S3.5 routing would not be faithful to the
+design — it would be their metric inside our router, which is neither their system nor a clean
+comparison. The state it needs is otherwise mule-compatible: validation accuracies arrive
+*alongside the models during uplink* (retrospective, refreshed every ℓ rounds), and locations,
+dataset sizes and participation history are all known.
+
+**Verdict: cite in Related Work as the closest architectural prior; do not implement as an arm.**
+If a reviewer asks for a UAV-specific comparator rather than a general-FL one, this is the paper to
+discuss, and the joint-optimisation scope difference is the honest reason it is discussed rather
+than run.
+
 ## 3. The capability argument — narrower, and now correct
 
 The first pass claimed Oort and Power-of-Choice "assume the server can *poll* clients before
@@ -84,6 +122,30 @@ Drop from consideration: the vehicular reputation paper (blockchain + RL, out of
 A3C joint-placement paper (trajectory optimisation, much larger scope). Keep the Sensors MAB as
 optional — its rule is implementable and its freshness term is computable from our data, but its
 hovering-base-station model is a different problem shape, which must be stated if used.
+
+## 4a. Triage — the broad UAV-FL literature, and why most of it is not a baseline
+
+A general UAV-FL sweep returns mostly work that is *relevant reading* but **fails the baseline bar**
+for a structural reason, not a quality one. Recording the categories so this is not re-litigated:
+
+| Category | Example work | Why it is not a baseline arm |
+|---|---|---|
+| **UAV as FL *client*** | drones training on their own aerial imagery / RF captures | Our UAV **carries** updates; it does not generate training data. Different role, so there is no scheduling rule to port. |
+| **UAV as flying base station / relay** | UAV hovers to provide connectivity to ground IoT | Assumes the UAV **restores persistent connectivity** — which is the assumption our architecture exists to remove. Their scheduler cannot be run on a mule without inventing the link it presumes. |
+| **Aggregation algorithms** | FedWT (MST-weighted tree aggregation), ClusterAvg, over-the-air aggregation | No scheduling component. Ours is an L3 question, and Exp 4 already uses two-pass hierarchical FedAvg. |
+| **Byzantine / adversarial robustness** | UAV-assisted heterogeneous FL against Byzantine attacks | Orthogonal threat model. Worth citing if we make robustness claims; we do not. |
+| **Joint trajectory + resource RL** | DRL/A3C trajectory + power + scheduling co-design | Optimises the flight path itself. Our trajectory follows from S3a clustering and the contact queue, so a faithful port would replace the system under test. |
+| **Application-level UAV anomaly detection** | adaptive FL for UAV anomaly detection under non-IID | Closest to our *application* (IDS), useful for motivation and the non-IID framing, but contains no target-scheduling rule. |
+
+**The single distinction that decides all of these:** does the UAV **restore connectivity**, or does
+it **substitute for it**? Almost all UAV-FL work does the former — the drone is infrastructure that
+flies. HERMES does the latter — the drone is transport. A scheduler written for the first case
+assumes state that only exists in the first case. That is the capability argument in §3, and this
+table is the evidence that it generalises beyond the three Tier A papers.
+
+> **Scope honesty:** the rows above are triaged **by architecture class**, from abstracts and
+> summaries — not full-text verified individually. That is sufficient to exclude them as *arms*,
+> and insufficient to *cite* them. Any of these that ends up in Related Work must be read first.
 
 ## 5. Open questions before implementing
 
@@ -128,12 +190,32 @@ Checked 2026-08-13 against full text, not abstracts:
 | Fairness-Enhanced MAB (Sensors 2024) | Full text via PMC (MDPI returns 403); Eq. 12/14/15/16 |
 | Vehicular reputation (CJA 2024) | Publisher abstract + indexed summaries — **enough to disqualify on scope**, not full text |
 | MAX-AoI greedy | Confirmed as a named comparator across the AoI/UAV scheduling literature |
+| UAV-Aided Multi-Community FL (GLOBECOM 2022) | Full text; connectivity model, CoV metric and the λ unscheduled-device penalty, joint trajectory/scheduling structure |
+| Broad UAV-FL sweep (§4a) | Triaged **by architecture class** from abstracts — sufficient to exclude as arms, **not** sufficient to cite |
 
 ## 7. Sources
 
-- [Client Selection in Federated Learning: Convergence Analysis and Power-of-Choice Selection Strategies](https://arxiv.org/abs/2010.01243)
-- [Oort: Efficient Federated Learning via Guided Participant Selection](https://arxiv.org/abs/2010.06081)
-- [Client Selection for Federated Learning with Heterogeneous Resources in Mobile Edge (FedCS)](https://arxiv.org/abs/1804.08333)
+**Tier A — verified, citation-ready:**
+
+- **FedCS** — Nishio & Yonetani, *Client Selection for Federated Learning with Heterogeneous
+  Resources in Mobile Edge*. **Proc. IEEE ICC 2019** ·
+  [doi:10.1109/ICC.2019.8761315](https://doi.org/10.1109/ICC.2019.8761315) ·
+  [arXiv:1804.08333](https://arxiv.org/abs/1804.08333)
+- **Oort** — Lai, Zhu, Madhyastha & Chowdhury, *Oort: Efficient Federated Learning via Guided
+  Participant Selection*. **USENIX OSDI 2021** · [arXiv:2010.06081](https://arxiv.org/abs/2010.06081)
+- **Power-of-Choice** — Cho, Wang & Joshi. Preprint
+  [arXiv:2010.01243](https://arxiv.org/abs/2010.01243) *(Client Selection in Federated Learning:
+  Convergence Analysis and Power-of-Choice Selection Strategies)*; published **retitled** as
+  *Towards Understanding Biased Client Selection in Federated Learning*, **AISTATS 2022**, PMLR
+  151:10351–10375 — [proceedings](https://proceedings.mlr.press/v151/jee-cho22a.html).
+  ⚠ **Cite the AISTATS version for the venue, but confirm the `pow-d`/`cpow-d`/`rpow-d` naming
+  survived into it** — our capability argument (§3) refers to `rpow-d` by name, so the citation must
+  point somewhere that label appears.
+- **UAV-Aided Multi-Community FL** — Mestoukirdi, Esrafilian, Gesbert & Li. **IEEE GLOBECOM 2022**
+  (SAC Aerial Communications) · [arXiv:2206.02043](https://arxiv.org/abs/2206.02043)
+
+**Other sources:**
+
 - [A Fairness-Enhanced Federated Learning Scheduling Mechanism for UAV-Assisted Emergency Communication](https://pmc.ncbi.nlm.nih.gov/articles/PMC10934714/)
 - [Client selection and resource scheduling in reliable federated learning for UAV-assisted vehicular networks](https://www.sciencedirect.com/science/article/pii/S100093612400236X)
 - [Reliability- and Connectivity-Constrained Age-of-Information Optimization for UAV Swarm IoT Data Collection](https://arxiv.org/abs/2608.00061)
