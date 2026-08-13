@@ -66,6 +66,18 @@ class FLReadyAdv:
     utility: float                  # w1*perf + w2*diversity (device-computed)
     last_round_outcome: Optional[MissionOutcome] = None
     issued_at: float = 0.0
+    # --- Oort baseline inputs (arm B2) -------------------------------------- #
+    # The RAW local training loss and local sample count, carried alongside the
+    # derived `utility` rather than folded into it. Oort's statistical utility
+    # is |B_i| * sqrt(mean Loss^2), which cannot be recovered from `utility`:
+    # that is w1*perf + w2*diversity, and `perf` already collapses accuracy, AUC
+    # and loss into one score. Reusing it would be a different algorithm wearing
+    # Oort's name.
+    #
+    # Optional, defaulting to None/0 — every existing arm ignores them, so the
+    # advertisement stays wire-compatible and H0-H3 behaviour is unchanged.
+    local_loss: Optional[float] = None
+    num_examples: int = 0
 
     def is_eligible(self) -> bool:
         return self.state.can_open_session()
@@ -166,6 +178,10 @@ class RoundCloseDelta:
     outcome: MissionOutcome
     utility: float
     contact_ts: float
+    # Oort baseline inputs (arm B2), forwarded verbatim from the device's
+    # advertisement. Optional so every existing emitter stays valid.
+    local_loss: Optional[float] = None
+    num_examples: int = 0
 
 
 # --------------------------------------------------------------------------- #

@@ -253,6 +253,8 @@ class HFLHostMission:
                 outcome=MissionOutcome.PARTIAL,
                 contact_ts=time.time(),
                 utility=adv.utility,
+                local_loss=adv.local_loss,
+                num_examples=adv.num_examples,
                 bytes_received=0,
                 bytes_sent=0,
             )
@@ -287,6 +289,8 @@ class HFLHostMission:
                 outcome=outcome,
                 contact_ts=time.time(),
                 utility=adv.utility,
+                local_loss=adv.local_loss,
+                num_examples=adv.num_examples,
                 bytes_received=0,
                 bytes_sent=push_byte_count(push),
             )
@@ -308,6 +312,8 @@ class HFLHostMission:
             outcome=outcome,
             contact_ts=grad.submitted_at,
             utility=adv.utility,
+            local_loss=adv.local_loss,
+            num_examples=adv.num_examples,
             bytes_received=grad.byte_count,
             bytes_sent=push_byte_count(push),
         )
@@ -446,6 +452,8 @@ class HFLHostMission:
                     outcome=MissionOutcome.PARTIAL,
                     contact_ts=time.time(),
                     utility=adv.utility,
+                    local_loss=adv.local_loss,
+                    num_examples=adv.num_examples,
                     bytes_received=0,
                     bytes_sent=0,
                 )
@@ -471,6 +479,8 @@ class HFLHostMission:
                     outcome=MissionOutcome.TIMEOUT,
                     contact_ts=time.time(),
                     utility=adv.utility,
+                    local_loss=adv.local_loss,
+                    num_examples=adv.num_examples,
                     bytes_received=0,
                     bytes_sent=0,
                 )
@@ -490,6 +500,8 @@ class HFLHostMission:
                     outcome=MissionOutcome.TIMEOUT,
                     contact_ts=time.time(),
                     utility=adv.utility,
+                    local_loss=adv.local_loss,
+                    num_examples=adv.num_examples,
                     bytes_received=0,
                     bytes_sent=push_byte_count(push),
                 )
@@ -509,6 +521,8 @@ class HFLHostMission:
                 outcome=outcome,
                 contact_ts=grad.submitted_at,
                 utility=adv.utility,
+                local_loss=adv.local_loss,
+                num_examples=adv.num_examples,
                 bytes_received=grad.byte_count,
                 bytes_sent=push_byte_count(push),
             )
@@ -816,6 +830,11 @@ class HFLHostMission:
         utility: float,
         bytes_received: int,
         bytes_sent: int,
+        # Freeze Amendment 3 — Oort baseline inputs, forwarded from the
+        # device's advertisement. Optional so callers that do not carry them
+        # (and every pre-B2 arm) stay valid and fold to a no-op.
+        local_loss: Optional[float] = None,
+        num_examples: int = 0,
     ) -> None:
         with self._lock:
             if self._report is None:
@@ -842,6 +861,8 @@ class HFLHostMission:
                     outcome=outcome,
                     utility=utility,
                     contact_ts=contact_ts,
+                    local_loss=local_loss,
+                    num_examples=num_examples,
                 )
             )
         except Exception:  # pragma: no cover — bus faults must not kill the mule

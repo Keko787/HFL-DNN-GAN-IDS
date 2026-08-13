@@ -155,6 +155,51 @@ and 2 (8 abort/starvation + 36 S3c); **609 unit tests pass**.
 (`--mission-window-adaptation`) and its four tunables belong to the Phase-3 matrix. Expect it to
 matter only where the S3b gate binds: with no budget there is nothing for a wider window to rescue.
 
+## 5c. Amendment 3 — Oort baseline inputs on the device→mule path (2026-08-13)
+
+**Reason.** Arm **B2** implements *Oort's statistical-utility selection* as a SOTA comparator
+(Phase-2 decision, checklist §5.1a-B). Oort ranks on `|B_i|·√(mean Loss²)`, and **no per-device
+training loss existed on the device→mule path**. `RoundCloseDelta.utility` is `w1·perf + w2·diversity`
+— an S2B readiness term in which `perf` has already collapsed accuracy, AUC and loss into one score.
+Reusing it would be a different algorithm wearing Oort's name.
+
+**Frozen surface touched: `stages/s3_deadline.py` only, in `fold_round_close_delta`** — three
+assignments beside the existing `state.last_utility` line:
+
+```python
+if delta.local_loss is not None:      state.last_loss = delta.local_loss
+if delta.num_examples:                state.last_num_examples = delta.num_examples
+state.last_served_round = delta.mission_round
+```
+
+**Inert for H0–H3, pinned by test.** The new fields default to `None`/`0` on both `FLReadyAdv` and
+`RoundCloseDelta`, so every pre-B2 emitter folds nothing and no arm's behaviour changes. A test also
+pins that a later delta *without* the fields does not wipe an earlier measurement.
+
+Everything else is outside the frozen surface: the two new optional fields on each message type
+(`types/`), retaining the raw values the device already computed and discarded
+(`mission/client_mission.py`), forwarding them through the single `_record_outcome` funnel
+(`mission/host_mission.py`), the policy itself (`scheduler/policies/oort.py`), and the arm wiring.
+
+**Three fidelity deviations — stated in the module docstring, and the paper must carry them:**
+
+| # | Deviation | Why |
+|---|---|---|
+| 1 | **No system-speed term** | Oort multiplies statistical utility by a straggler penalty over client compute/comm speed. We model no per-device speed, so the term is **dropped** rather than approximated by something else |
+| 2 | **Mean loss, not RMS** | Oort specifies `√(Σ Loss(k)²/\|B_i\|)` over per-sample losses; our callback reports Keras' mean loss. Monotone in the same direction, not identical |
+| 3 | **Rounds, not wall-clock, for staleness** | `L(i)` is the last mission round in which the device was served |
+
+⇒ **The arm is "Oort's statistical-utility selection", not "Oort".**
+
+**It requires `--real-model`, and refuses without it.** The stub reports `loss=uniform(0.1,0.3)` and
+`num_examples=randint(4,16)` — pure noise — so ranking on it would be a random ordering wearing
+Oort's name. The driver raises for `B2` without `--real-model`, and the policy itself raises
+`OortUnusableError` if devices have been served but no loss signal arrived. Failing loudly beats
+emitting a meaningless order that looks like a result.
+
+25 new tests; **676 unit tests pass**. Verified end to end in-process — a real `LocalTrainResult`
+loss reaches `statistical_utility` intact through advertisement, delta and fold.
+
 ## 6. Unfreezing
 
 Amend this document with the reason, the changed files, and which recorded sweeps are invalidated.

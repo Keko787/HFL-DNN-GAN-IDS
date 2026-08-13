@@ -176,6 +176,14 @@ def fold_round_close_delta(
     state.last_contact_ts = delta.contact_ts
     state.last_outcome = delta.outcome
     state.last_utility = delta.utility
+    # Freeze Amendment 3 — carry the Oort baseline's raw inputs alongside the
+    # derived utility. Inert for H0–H3: emitters that do not set these send
+    # None/0, so the fold is a no-op and no HERMES arm's behaviour changes.
+    if delta.local_loss is not None:
+        state.last_loss = delta.local_loss
+    if delta.num_examples:
+        state.last_num_examples = delta.num_examples
+    state.last_served_round = delta.mission_round
 
     if delta.outcome is MissionOutcome.CLEAN:
         state.is_new = False

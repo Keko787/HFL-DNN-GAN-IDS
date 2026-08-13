@@ -53,7 +53,7 @@ log = logging.getLogger("experiments.exp4.driver")
 #: "B1" is the MAX-AoI SOTA baseline arm. It shares H1's transport and realism
 #: and differs ONLY in the contact-ranking policy, so B1-vs-H1 isolates the
 #: scheduling policy — which is the comparison reviewer 74A asked for.
-ARMS = ("H0", "H1", "H2", "H3", "B1")
+ARMS = ("H0", "H1", "H2", "H3", "B1", "B2")
 
 #: Scheduler-configuration columns the driver stamps on every row, on top of
 #: the metric schema. They exist so a results CSV is self-describing: rows
@@ -255,6 +255,17 @@ class Exp4Driver:
         # compose with the RL selector, which is why use_rl_selector stays off.
         if arm == "B1":
             selector_kwargs["contact_policy"] = "max_aoi"
+        # B2 — Oort's statistical-utility selection. Needs REAL training: the
+        # stub's loss is a random draw, so ranking on it would be a random
+        # ordering wearing Oort's name. The policy itself raises rather than
+        # emit a meaningless order, but fail here with a clearer message.
+        if arm == "B2":
+            if not self.real_model:
+                raise ValueError(
+                    "arm B2 (Oort) requires --real-model: the stub reports a "
+                    "random loss, so its ranking signal would be pure noise"
+                )
+            selector_kwargs["contact_policy"] = "oort"
         if self.mission_budget_s is not None:
             selector_kwargs["mission_budget_s"] = float(self.mission_budget_s)
         if self.mission_window_adaptation:

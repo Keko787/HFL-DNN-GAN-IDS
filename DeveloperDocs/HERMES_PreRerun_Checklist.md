@@ -408,9 +408,24 @@ slightly smaller than, the S3c work.
    `evaluate` hands us the **mean** loss. Close, monotone in the same direction, **not identical**.
    Record it as a stated approximation rather than letting a reader assume exactness.
 
-**Verdict: ~300 LOC, one 2-line freeze amendment, and no new data path — but three fidelity
+**Verdict: ~300 LOC, one small freeze amendment, and no new data path — but three fidelity
 statements the paper must carry.** The honest framing is that we implement Oort's *statistical
 utility + staleness* ranking on mule-visible state, which is precisely the part that ports.
+
+> ### ✅ **IMPLEMENTED as arm `B2` — Freeze Amendment 3, 2026-08-13.**
+> `hermes/scheduler/policies/oort.py`; `--arms B2`. Estimate held: the frozen surface was touched
+> by **three assignments** in `fold_round_close_delta`, all inert for H0–H3 and pinned by test.
+> 25 new tests; **676 unit tests pass**.
+>
+> Verified end to end in-process rather than inferred from a green trial: a real `LocalTrainResult`
+> loss reaches `statistical_utility` intact through advertisement → delta → fold.
+>
+> **Both guards fire.** The driver refuses `B2` without `--real-model`; the policy raises
+> `OortUnusableError` if devices have been served but no loss arrived. The stub's random loss can
+> never masquerade as a ranking signal.
+>
+> **Still to do:** add B1/B2 to §5.1's arm list and cost them. Note B2 is real-model-only, so it
+> cannot appear in stub pilots.
 
 > **Recommendation: MAX-AoI first, Oort second.** MAX-AoI is cheap, needs no new data, and is the
 > UAV/AoI-shaped comparator 74A actually asked for — it directly rivals our bucket+deadline

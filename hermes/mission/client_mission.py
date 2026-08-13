@@ -142,6 +142,11 @@ class ClientMission:
         self._last_diversity: float = 0.0
         self._last_utility: float = 0.0
         self._last_outcome: Optional[MissionOutcome] = None
+        # Oort baseline inputs (arm B2). The RAW loss and sample count, kept
+        # because `_last_utility` collapses accuracy/AUC/loss into one score and
+        # Oort's |B_i|*sqrt(mean Loss^2) cannot be recovered from it.
+        self._last_loss: Optional[float] = None
+        self._last_num_examples: int = 0
 
         # Sprint 1.5 — offline-training state. ``train_offline()`` runs
         # local training against ``_theta_basis`` (the θ most recently
@@ -195,6 +200,8 @@ class ClientMission:
                 utility=self._last_utility,
                 last_round_outcome=self._last_outcome,
                 issued_at=time.time(),
+                local_loss=self._last_loss,
+                num_examples=self._last_num_examples,
             )
 
     def emit_beacon(self) -> FLReadyAdv:
@@ -480,6 +487,8 @@ class ClientMission:
             self._last_performance = perf
             self._last_diversity = div
             self._last_utility = u
+            self._last_loss = float(result.loss)
+            self._last_num_examples = int(result.num_examples)
         log.debug(
             "device=%s utility update perf=%.3f div=%.3f util=%.3f",
             self.device_id, perf, div, u,

@@ -65,8 +65,14 @@ def _build_target_selector(cfg: MuleConfig):
             log.info("mule %s: MAX-AoI baseline policy (SOTA comparator)",
                      cfg.mule_id)
             return MaxAoIPolicy()
+        if policy == "oort":
+            from hermes.scheduler.policies import OortPolicy
+            log.info("mule %s: Oort statistical-utility baseline policy "
+                     "(SOTA comparator; requires --real-model)", cfg.mule_id)
+            return OortPolicy()
         raise ValueError(
-            f"unknown contact_policy {policy!r}; expected 'max_aoi' or None"
+            f"unknown contact_policy {policy!r}; "
+            f"expected 'max_aoi', 'oort' or None"
         )
 
     if not getattr(cfg, "use_rl_selector", False):

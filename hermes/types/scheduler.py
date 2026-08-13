@@ -93,6 +93,17 @@ class DeviceSchedulerState:
     idle_time_ref_ts: float = 0.0         # last on-time participation ts
     deadline_override_ts: Optional[float] = None  # from ClusterAmendment
 
+    # Oort baseline inputs (arm B2) — the raw training loss and sample count
+    # from this device's most recent contact, folded in beside `last_utility`.
+    # Retrospective by construction: they describe the LAST time we visited,
+    # which is the only client state a data mule can hold. `None` means "never
+    # served, or this arm does not carry them".
+    last_loss: Optional[float] = None
+    last_num_examples: int = 0
+    #: Mission round in which this device was last served — Oort's ``L(i)``.
+    #: 0 = never served.
+    last_served_round: int = 0
+
     # RF / opportunistic
     last_beacon_ts: float = 0.0
 
