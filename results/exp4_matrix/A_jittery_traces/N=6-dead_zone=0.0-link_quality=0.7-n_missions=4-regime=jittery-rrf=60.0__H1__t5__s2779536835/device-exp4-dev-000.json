@@ -1,0 +1,16 @@
+{
+  "device_id": "exp4-dev-000",
+  "mule_rf_host": "127.0.0.1",
+  "mule_rf_port": 57453,
+  "position": [
+    -27.919696319245915,
+    -51.87809370229803,
+    0.0
+  ],
+  "n_serves": null,
+  "train_shard_path": "C:\\Users\\kskos\\AppData\\Local\\Temp\\exp4_prep_71fx0cop\\shard-000.npz",
+  "input_dim": 21,
+  "local_epochs": 1,
+  "local_batch_size": 64,
+  "contact_reliability": 0.798688492580433
+}

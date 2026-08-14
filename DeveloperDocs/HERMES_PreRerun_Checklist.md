@@ -20,8 +20,15 @@ explicitly **out**).
 **The matrix is written and costed: 680 trials, ≈2.4 h at concurrency 3** (§5.1). Six arms exist:
 `H0 H1 H2 H3 B1 B2`. Enforcement is **ON**; S3c is **pinned off**.
 
-**RUNNING (2026-08-13).** Sweeps **A** (H0 vs H1, 520 trials) and **C** (H2 vs H3, 40 trials) are
-executing — `experiments/exp4/run_matrix.sh` → `results/exp4_matrix/`.
+**✅ MATRIX RUN AND ANALYSED (2026-08-13) — results in
+[`HERMES_Matrix_Results.md`](HERMES_Matrix_Results.md).** 560 trials, 0 failures, 0 duplicates, every
+sweep reconciled against its designed grid. Headline holds decisively: under jitter **H1 > H0 on all
+five metrics, every p ≤ 0.0001, all surviving Bonferroni** — and the surface shows the advantage is
+entirely a function of severity, with H1's AUC flat at 0.92–0.93 across all twelve cells while H0
+falls to 0.587. Under **clean** conditions H0 wins participation (the mule costs throughput when
+availability is not the problem) with model quality a tie. The **L1 result is suggestive only** —
+p=0.018 does not survive correction for five metrics, and this project has retracted an L1 effect
+before.
 
 > **Sweep A is two invocations, not one cross product** — and this was caught only after a first
 > launch had to be killed. `dead_zone` and `link_quality` describe how the clean regime is *degraded
