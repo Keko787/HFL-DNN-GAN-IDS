@@ -1,0 +1,10 @@
+{"ts":1786681748.5600235,"schema_version":1,"role":"device","id":"exp4-dev-000","event":"device_ready","mule_rf_host":"127.0.0.1","mule_rf_port":62955,"position":[9.060563087207512,65.18574593711514,0.0],"n_serves":null}
+{"ts":1786681757.523659,"schema_version":1,"role":"device","id":"exp4-dev-000","event":"device_served","outcome":"clean"}
+{"ts":1786681764.1010308,"schema_version":1,"role":"device","id":"exp4-dev-000","event":"device_served","outcome":"clean"}
+{"ts":1786681764.1020317,"schema_version":1,"role":"device","id":"exp4-dev-000","event":"device_served","outcome":"clean"}
+{"ts":1786681770.7137208,"schema_version":1,"role":"device","id":"exp4-dev-000","event":"device_served","outcome":"clean"}
+{"ts":1786681773.7301762,"schema_version":1,"role":"device","id":"exp4-dev-000","event":"device_served","outcome":"timeout"}
+{"ts":1786681777.3342173,"schema_version":1,"role":"device","id":"exp4-dev-000","event":"device_served","outcome":"clean"}
+{"ts":1786681780.3513782,"schema_version":1,"role":"device","id":"exp4-dev-000","event":"device_served","outcome":"clean"}
+{"ts":1786681783.957547,"schema_version":1,"role":"device","id":"exp4-dev-000","event":"device_served","outcome":"clean"}
+{"ts":1786681789.9785914,"schema_version":1,"role":"device","id":"exp4-dev-000","event":"device_served","outcome":"timeout"}

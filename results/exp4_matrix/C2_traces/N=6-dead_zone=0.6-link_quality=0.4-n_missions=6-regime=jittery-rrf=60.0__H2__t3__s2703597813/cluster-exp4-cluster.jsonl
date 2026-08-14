@@ -1,0 +1,13 @@
+{"ts":1786679883.551774,"schema_version":1,"role":"cluster","id":"exp4-cluster","event":"cluster_ready","dock_host":"127.0.0.1","dock_port":53215,"expected_mules":["exp4-mule"],"seed_devices":6,"synth_batch_size":2,"min_participation":1,"tier3_wired":false}
+{"ts":1786679889.9531028,"schema_version":1,"role":"cluster","id":"exp4-cluster","event":"model_eval","cluster_round":0,"accuracy":0.358,"auc":0.266107125,"loss":0.6959068775177002,"n_test":6000}
+{"ts":1786679889.9541044,"schema_version":1,"role":"cluster","id":"exp4-cluster","event":"mule_bootstrapped","mule_id":"exp4-mule"}
+{"ts":1786679898.9180417,"schema_version":1,"role":"cluster","id":"exp4-cluster","event":"backhaul_upload_lost","mule_id":"exp4-mule","mission_round":null}
+{"ts":1786679907.6452334,"schema_version":1,"role":"cluster","id":"exp4-cluster","event":"backhaul_upload_lost","mule_id":"exp4-mule","mission_round":null}
+{"ts":1786679913.9710574,"schema_version":1,"role":"cluster","id":"exp4-cluster","event":"up_bundle_ingested","mule_id":"exp4-mule","mission_round":null}
+{"ts":1786679913.9710574,"schema_version":1,"role":"cluster","id":"exp4-cluster","event":"cluster_round_closed","cluster_round":1}
+{"ts":1786679914.4180768,"schema_version":1,"role":"cluster","id":"exp4-cluster","event":"model_eval","cluster_round":1,"accuracy":0.6926666666666667,"auc":0.6588863125000001,"loss":0.6822377443313599,"n_test":6000}
+{"ts":1786679917.8587928,"schema_version":1,"role":"cluster","id":"exp4-cluster","event":"up_bundle_ingested","mule_id":"exp4-mule","mission_round":null}
+{"ts":1786679917.8587928,"schema_version":1,"role":"cluster","id":"exp4-cluster","event":"cluster_round_closed","cluster_round":2}
+{"ts":1786679918.2888184,"schema_version":1,"role":"cluster","id":"exp4-cluster","event":"model_eval","cluster_round":2,"accuracy":0.7055,"auc":0.8448798125,"loss":0.6706696152687073,"n_test":6000}
+{"ts":1786679927.7194574,"schema_version":1,"role":"cluster","id":"exp4-cluster","event":"backhaul_upload_lost","mule_id":"exp4-mule","mission_round":null}
+{"ts":1786679934.0252757,"schema_version":1,"role":"cluster","id":"exp4-cluster","event":"backhaul_upload_lost","mule_id":"exp4-mule","mission_round":null}

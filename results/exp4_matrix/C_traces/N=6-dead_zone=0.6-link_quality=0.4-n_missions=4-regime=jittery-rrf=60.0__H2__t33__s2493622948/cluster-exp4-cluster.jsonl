@@ -1,0 +1,15 @@
+{"ts":1786680616.1327138,"schema_version":1,"role":"cluster","id":"exp4-cluster","event":"cluster_ready","dock_host":"127.0.0.1","dock_port":58993,"expected_mules":["exp4-mule"],"seed_devices":6,"synth_batch_size":2,"min_participation":1,"tier3_wired":false}
+{"ts":1786680625.952437,"schema_version":1,"role":"cluster","id":"exp4-cluster","event":"model_eval","cluster_round":0,"accuracy":0.35583333333333333,"auc":0.286269125,"loss":0.6958317756652832,"n_test":6000}
+{"ts":1786680625.952437,"schema_version":1,"role":"cluster","id":"exp4-cluster","event":"mule_bootstrapped","mule_id":"exp4-mule"}
+{"ts":1786680634.7903183,"schema_version":1,"role":"cluster","id":"exp4-cluster","event":"up_bundle_ingested","mule_id":"exp4-mule","mission_round":null}
+{"ts":1786680634.7903183,"schema_version":1,"role":"cluster","id":"exp4-cluster","event":"cluster_round_closed","cluster_round":1}
+{"ts":1786680635.1191244,"schema_version":1,"role":"cluster","id":"exp4-cluster","event":"model_eval","cluster_round":1,"accuracy":0.6546666666666666,"auc":0.7295676249999999,"loss":0.6775650978088379,"n_test":6000}
+{"ts":1786680646.6576347,"schema_version":1,"role":"cluster","id":"exp4-cluster","event":"up_bundle_ingested","mule_id":"exp4-mule","mission_round":null}
+{"ts":1786680646.6576347,"schema_version":1,"role":"cluster","id":"exp4-cluster","event":"cluster_round_closed","cluster_round":2}
+{"ts":1786680646.972911,"schema_version":1,"role":"cluster","id":"exp4-cluster","event":"model_eval","cluster_round":2,"accuracy":0.802,"auc":0.8707590624999999,"loss":0.6681455373764038,"n_test":6000}
+{"ts":1786680650.2710364,"schema_version":1,"role":"cluster","id":"exp4-cluster","event":"up_bundle_ingested","mule_id":"exp4-mule","mission_round":null}
+{"ts":1786680650.2710364,"schema_version":1,"role":"cluster","id":"exp4-cluster","event":"cluster_round_closed","cluster_round":3}
+{"ts":1786680650.5934448,"schema_version":1,"role":"cluster","id":"exp4-cluster","event":"model_eval","cluster_round":3,"accuracy":0.788,"auc":0.93673475,"loss":0.6351203322410583,"n_test":6000}
+{"ts":1786680656.9021132,"schema_version":1,"role":"cluster","id":"exp4-cluster","event":"up_bundle_ingested","mule_id":"exp4-mule","mission_round":null}
+{"ts":1786680656.9021132,"schema_version":1,"role":"cluster","id":"exp4-cluster","event":"cluster_round_closed","cluster_round":4}
+{"ts":1786680657.2239022,"schema_version":1,"role":"cluster","id":"exp4-cluster","event":"model_eval","cluster_round":4,"accuracy":0.7886666666666666,"auc":0.97550625,"loss":0.5743440985679626,"n_test":6000}

@@ -1,0 +1,78 @@
+{
+  "cluster_id": "exp4-cluster",
+  "dock_host": "127.0.0.1",
+  "dock_port": 0,
+  "expected_mules": [
+    "exp4-mule"
+  ],
+  "seed_devices": [
+    {
+      "device_id": "exp4-dev-000",
+      "position": [
+        77.46723484160768,
+        -93.4086480658104,
+        0.0
+      ],
+      "assigned_mule": "exp4-mule"
+    },
+    {
+      "device_id": "exp4-dev-001",
+      "position": [
+        -79.51330226561635,
+        -35.738154628279716,
+        0.0
+      ],
+      "assigned_mule": "exp4-mule"
+    },
+    {
+      "device_id": "exp4-dev-002",
+      "position": [
+        72.02223674385345,
+        -82.5243709175268,
+        0.0
+      ],
+      "assigned_mule": "exp4-mule"
+    },
+    {
+      "device_id": "exp4-dev-003",
+      "position": [
+        -12.156715342171822,
+        68.56551381782847,
+        0.0
+      ],
+      "assigned_mule": "exp4-mule"
+    },
+    {
+      "device_id": "exp4-dev-004",
+      "position": [
+        -90.01891825355017,
+        28.488434486929236,
+        0.0
+      ],
+      "assigned_mule": "exp4-mule"
+    },
+    {
+      "device_id": "exp4-dev-005",
+      "position": [
+        -5.335744302598016,
+        -11.106471988260296,
+        0.0
+      ],
+      "assigned_mule": "exp4-mule"
+    }
+  ],
+  "synth_batch_size": 2,
+  "min_participation": 1,
+  "tier3_url": null,
+  "init_theta_path": "C:\\Users\\kskos\\AppData\\Local\\Temp\\exp4_prep_bm91w_7f\\theta_init.npz",
+  "eval_test_path": "C:\\Users\\kskos\\AppData\\Local\\Temp\\exp4_prep_bm91w_7f\\test.npz",
+  "input_dim": 21,
+  "backhaul_loss_pct": 2.0,
+  "backhaul_rng_seed": 324987816,
+  "backhaul_loss_schedule": [
+    0.010037249326565273,
+    0.02545749174226892,
+    0.029058640633686957,
+    0.05327760740221986
+  ]
+}

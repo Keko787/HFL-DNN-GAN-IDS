@@ -1,0 +1,13 @@
+{"ts":1786680474.855836,"schema_version":1,"role":"cluster","id":"exp4-cluster","event":"cluster_ready","dock_host":"127.0.0.1","dock_port":58454,"expected_mules":["exp4-mule"],"seed_devices":6,"synth_batch_size":2,"min_participation":1,"tier3_wired":false}
+{"ts":1786680481.4493399,"schema_version":1,"role":"cluster","id":"exp4-cluster","event":"model_eval","cluster_round":0,"accuracy":0.3565,"auc":0.2601513125,"loss":0.6959301829338074,"n_test":6000}
+{"ts":1786680481.4503412,"schema_version":1,"role":"cluster","id":"exp4-cluster","event":"mule_bootstrapped","mule_id":"exp4-mule"}
+{"ts":1786680490.2160852,"schema_version":1,"role":"cluster","id":"exp4-cluster","event":"up_bundle_ingested","mule_id":"exp4-mule","mission_round":null}
+{"ts":1786680490.2160852,"schema_version":1,"role":"cluster","id":"exp4-cluster","event":"cluster_round_closed","cluster_round":1}
+{"ts":1786680490.5365694,"schema_version":1,"role":"cluster","id":"exp4-cluster","event":"model_eval","cluster_round":1,"accuracy":0.7478333333333333,"auc":0.7469841250000001,"loss":0.6725653409957886,"n_test":6000}
+{"ts":1786680502.1003156,"schema_version":1,"role":"cluster","id":"exp4-cluster","event":"backhaul_upload_lost","mule_id":"exp4-mule","mission_round":null}
+{"ts":1786680502.5194845,"schema_version":1,"role":"cluster","id":"exp4-cluster","event":"up_bundle_ingested","mule_id":"exp4-mule","mission_round":null}
+{"ts":1786680502.5194845,"schema_version":1,"role":"cluster","id":"exp4-cluster","event":"cluster_round_closed","cluster_round":2}
+{"ts":1786680502.9249377,"schema_version":1,"role":"cluster","id":"exp4-cluster","event":"model_eval","cluster_round":2,"accuracy":0.8025,"auc":0.834295375,"loss":0.6658008098602295,"n_test":6000}
+{"ts":1786680509.3484466,"schema_version":1,"role":"cluster","id":"exp4-cluster","event":"up_bundle_ingested","mule_id":"exp4-mule","mission_round":null}
+{"ts":1786680509.3484466,"schema_version":1,"role":"cluster","id":"exp4-cluster","event":"cluster_round_closed","cluster_round":3}
+{"ts":1786680509.6682677,"schema_version":1,"role":"cluster","id":"exp4-cluster","event":"model_eval","cluster_round":3,"accuracy":0.791,"auc":0.9118497499999999,"loss":0.6223636269569397,"n_test":6000}

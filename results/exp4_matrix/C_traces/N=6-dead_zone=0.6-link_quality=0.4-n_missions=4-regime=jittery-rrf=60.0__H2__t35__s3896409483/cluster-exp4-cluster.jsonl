@@ -1,0 +1,12 @@
+{"ts":1786680790.7372644,"schema_version":1,"role":"cluster","id":"exp4-cluster","event":"cluster_ready","dock_host":"127.0.0.1","dock_port":54216,"expected_mules":["exp4-mule"],"seed_devices":6,"synth_batch_size":2,"min_participation":1,"tier3_wired":false}
+{"ts":1786680797.7159758,"schema_version":1,"role":"cluster","id":"exp4-cluster","event":"model_eval","cluster_round":0,"accuracy":0.3595,"auc":0.25787306249999997,"loss":0.695952296257019,"n_test":6000}
+{"ts":1786680797.7169762,"schema_version":1,"role":"cluster","id":"exp4-cluster","event":"mule_bootstrapped","mule_id":"exp4-mule"}
+{"ts":1786680806.716897,"schema_version":1,"role":"cluster","id":"exp4-cluster","event":"up_bundle_ingested","mule_id":"exp4-mule","mission_round":null}
+{"ts":1786680806.716897,"schema_version":1,"role":"cluster","id":"exp4-cluster","event":"cluster_round_closed","cluster_round":1}
+{"ts":1786680807.03875,"schema_version":1,"role":"cluster","id":"exp4-cluster","event":"model_eval","cluster_round":1,"accuracy":0.6813333333333333,"auc":0.7256944375,"loss":0.6730010509490967,"n_test":6000}
+{"ts":1786680815.7281969,"schema_version":1,"role":"cluster","id":"exp4-cluster","event":"up_bundle_ingested","mule_id":"exp4-mule","mission_round":null}
+{"ts":1786680815.7281969,"schema_version":1,"role":"cluster","id":"exp4-cluster","event":"cluster_round_closed","cluster_round":2}
+{"ts":1786680816.0438104,"schema_version":1,"role":"cluster","id":"exp4-cluster","event":"model_eval","cluster_round":2,"accuracy":0.757,"auc":0.88844075,"loss":0.6530109643936157,"n_test":6000}
+{"ts":1786680834.4017582,"schema_version":1,"role":"cluster","id":"exp4-cluster","event":"up_bundle_ingested","mule_id":"exp4-mule","mission_round":null}
+{"ts":1786680834.4017582,"schema_version":1,"role":"cluster","id":"exp4-cluster","event":"cluster_round_closed","cluster_round":3}
+{"ts":1786680834.83329,"schema_version":1,"role":"cluster","id":"exp4-cluster","event":"model_eval","cluster_round":3,"accuracy":0.8486666666666667,"auc":0.9386184375,"loss":0.6190576553344727,"n_test":6000}

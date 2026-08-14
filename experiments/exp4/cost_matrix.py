@@ -16,13 +16,27 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
-#: Concurrent trials. At 5 the box exhausted memory and ~30 % of trials failed;
-#: 3 ran a 200-trial sweep with zero failures.
-CONCURRENCY = 3
+#: Concurrent trials — i.e. how many runner PROCESSES run at once.
+#:
+#: CORRECTED 2026-08-13 after sweep A came in 2.44x over. The per-trial figures
+#: below were accurate to 1.7 % (28.4 s actual vs 27.9 s predicted); the error was
+#: entirely here. `run_matrix.sh` ran one runner at a time, so the real
+#: concurrency was 1, not 3 — the runner executes a grid SEQUENTIALLY, and
+#: parallelism only comes from sharding a sweep across several runner processes
+#: writing DIFFERENT csv files.
+#:
+#: Set this to the number of shards you will actually launch. 3 is safe (at 5 the
+#: box exhausted memory and ~30 % of trials failed); 1 is what an unsharded
+#: script gives you.
+CONCURRENCY = 1
 
-#: Fraction added for process-tree startup, the inter-shard stagger, and the
-#: p90 tail dragging the effective mean above the sample mean.
-OVERHEAD = 0.25
+#: Fraction added for startup and tail effects.
+#:
+#: CORRECTED to 0. The measured per-trial durations are END-TO-END trial times
+#: taken from `duration_s`, which already include process-tree spawn and
+#: teardown. Adding an overhead on top double-counted it. Measured multiplier on
+#: sweep A was 1.017 — i.e. the per-trial mean alone predicts wall-clock.
+OVERHEAD = 0.0
 
 
 @dataclass

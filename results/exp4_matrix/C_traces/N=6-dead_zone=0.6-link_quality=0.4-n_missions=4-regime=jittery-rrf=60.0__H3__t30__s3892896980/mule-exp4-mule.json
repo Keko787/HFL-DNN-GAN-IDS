@@ -1,0 +1,28 @@
+{
+  "mule_id": "exp4-mule",
+  "rf_host": "127.0.0.1",
+  "rf_port": 0,
+  "dock_host": "127.0.0.1",
+  "dock_port": 63587,
+  "expected_devices": [
+    "exp4-dev-000",
+    "exp4-dev-001",
+    "exp4-dev-002",
+    "exp4-dev-003",
+    "exp4-dev-004",
+    "exp4-dev-005"
+  ],
+  "rf_range_m": 60.0,
+  "session_ttl_s": 3.0,
+  "n_missions": 4,
+  "use_rl_selector": true,
+  "selector_weights_path": null,
+  "rf_prior_snr_db": 10.412906383619333,
+  "mission_budget_s": 120.0,
+  "contact_policy": null,
+  "mission_window_adaptation": false,
+  "mission_window_history": 5,
+  "mission_window_target": 0.8,
+  "mission_window_gain": 2.0,
+  "mission_window_max_scale": 4.0
+}
