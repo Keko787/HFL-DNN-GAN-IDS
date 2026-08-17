@@ -641,7 +641,15 @@ load affects wall-clock, not seeded trial outcomes, and no trial came near the 3
 > **The transferable check:** a sweep's row count must be reconciled against its *designed* cell ×
 > arm × seed product before analysis. "No failures" is not evidence of a valid sweep.
 
-### 5.1b Sweep B is ON HOLD — the policy comparison is vacuous as designed
+### 5.1b Sweep B is RETIRED — superseded by the whole-scheduler comparison
+
+> **Superseded 2026-08-13 by [`HERMES_SOTA_Comparison_Design.md`](HERMES_SOTA_Comparison_Design.md).**
+> Sweep B compared *ordering* policies through the `target_selector` slot, which only permutes an
+> already-admitted list — so it was vacuous by construction, as the evidence below shows. The
+> replacement gives the baselines **admission authority** (they replace S3/S3b/S3.5, not just S3.5)
+> and measures **reach-rate at τ**, since conditional time-to-accuracy is a measured tie in this
+> system. `B1`/`B2` are retired in favour of `D1`/`D2`; the evidence below is kept because it is
+> *why* the redesign was necessary.
 
 **Caught by the pre-launch smoke, before spending the 32 minutes.** At the designed operating point
 (N=6, `rrf`=60, budget 120 s) **H1, B1, B2, H2 and H3 all produce byte-identical `final_auc` and
