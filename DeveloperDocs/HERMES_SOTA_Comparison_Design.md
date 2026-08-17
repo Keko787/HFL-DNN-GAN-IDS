@@ -119,6 +119,67 @@ If (1) fails at this point, widen the field (N=12, radius 300) and re-pilot — 
 matrix operating point**, because a result there is directly comparable to the headline numbers
 instead of living in a separate, heavily-degraded regime.
 
+## 5a. Pilot result (2026-08-13) — ⚠ the stated criterion FAILED, and the reason is informative
+
+30/30 trials `ok` at the matrix operating point (N=6, `rrf`=60, budget 120 s, jittery, `n_missions`=4,
+10 seeds, H1 vs D1 vs D2).
+
+**Condition 1 — admitted sets differ: FAIL as stated (22 %, threshold was >50 %).**
+
+| | D1 | D2 | H1 |
+|---|---|---|---|
+| mean devices served **per mission** (of 6) | 5.97 | 6.00 | **5.60** |
+| missions where the served sets differ across arms | | 9/40 (22 %) | |
+
+The differences concentrate in **mission 1** and mostly vanish afterwards. The reason is structural:
+in mission 1 every device is unserved, so D1 sees everyone as *infinitely stale* and D2 sees everyone
+as *unexplored* — both admit the lot. **Our S3b gate does not**: it drops on per-device deadline
+feasibility and serves 5.60/6. After mission 1 the budget is ample for all three.
+
+> **First measurement worth having anyway:** *our gate is more restrictive than a plain greedy budget
+> walk.* That is a real property of the design, not a bug — but it is the opposite of what one might
+> assume, and the full run should be framed around it.
+
+**Condition 2 — reach-rate inside 0.2–0.8: FAILS at τ=0.82, PASSES at τ=0.85.**
+
+| τ | D1 | D2 | H1 | |
+|---|---|---|---|---|
+| 0.75 | 1.00 | 1.00 | 1.00 | saturated |
+| **0.82** | 0.90 | 0.80 | 0.90 | saturated high |
+| **0.85** | **0.20** | **0.20** | **0.50** | **discriminating** |
+
+τ=0.82 was chosen from the **whole 640-trial matrix**, which pooled H0 and the full degradation
+surface. At *this* operating point accuracy runs higher, so the discriminating threshold here is
+**0.85**. The lesson: τ must be set from the distribution of the sweep it is applied to, not
+inherited.
+
+### Raw outcome means — no test run, n=10
+
+| Arm | `final_auc` | `final_accuracy` | completion | `update_yield` |
+|---|---|---|---|---|
+| **D1** MAX-AoI | 0.9405 | 0.8339 | **0.817** | **2.125** |
+| **D2** Oort | 0.9395 | 0.8285 | 0.783 | 2.100 |
+| **H1** ours | 0.9176 | **0.8437** | 0.667 | 1.725 |
+
+**Do not read these as a result.** n=10, no paired test, and the arms are not yet separated
+statistically. What they *do* show is that the comparison is **not vacuous** — unlike sweep B, the
+arms differ substantially — and the pattern is worth stating so the full run is not designed around
+a wrong expectation: **the baselines serve more devices and complete more missions; ours reaches the
+harder accuracy threshold more often.** If that survives n=20 with a paired test, it is a genuinely
+interesting trade-off rather than a win or a loss.
+
+### Decision required
+
+The stated criterion failed, so per the design this **must not** proceed silently. Three options:
+
+1. **Accept at τ=0.85** and run as designed. Admission binds weakly (mission 1 mostly) but outcomes
+   differ clearly, so the comparison is informative. Cheapest, and stays at the matrix operating
+   point so results remain comparable to the headline.
+2. **Tighten the budget** (e.g. 60 s) so admission binds across all missions, then re-pilot. Stronger
+   test of the admission rule specifically, but moves off the matrix operating point.
+3. **Both** — run at 120 s and 60 s as a two-point budget axis, reporting how the comparison changes
+   as the constraint tightens. ~240 trials.
+
 ## 6. Cost
 
 | Step | Trials | Wall (3 shards) |
