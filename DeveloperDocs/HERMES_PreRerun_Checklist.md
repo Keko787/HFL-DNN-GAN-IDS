@@ -6,10 +6,11 @@ either done or explicitly deferred with a reason. It exists so we pay the comput
 
 **Status:** ✅ **GATE OPEN** (2026-08-13). All six exit criteria met; the matrix in §5.1 is cleared to run.
 
-**Progress:** Phase 0 — 8 of 11 closed (3 open, all no-re-run). Phase 1 — **done, scheduler
-frozen**, amended twice since (§1a). Phase 2 — **done, full-text verified**; baselines chosen, and
-the reading *reversed* the first pass's recommendation (§4). Phase 3 — **§5.0 pilot run, result in
-§5.0a**; the matrix itself (§5.1) is **the remaining blocker**. Phase 4 — not started.
+**Progress:** Phase 0 — **closed** (§2). Phase 1 — **done, scheduler frozen**, amended three times
+since (§1a). Phase 2 — **done, full-text verified**; the reading *reversed* the first pass's
+recommendation (§4). Phase 3 — **matrix run and analysed** (§5.1, results doc). Phase 4 — the
+whole-scheduler SOTA comparison is **designed, not yet built**
+([`HERMES_SOTA_Comparison_Design.md`](HERMES_SOTA_Comparison_Design.md)).
 
 **Exit criteria status: 6 of 6 met — THE GATE IS OPEN.** ✅ 1 (Phase-0 items closed: two deferred
 with reasons, provenance table written — §2, §2a) · ✅ 2 (frozen; amended three times, each inert by
@@ -26,9 +27,14 @@ sweep reconciled against its designed grid. Headline holds decisively: under jit
 five metrics, every p ≤ 0.0001, all surviving Bonferroni** — and the surface shows the advantage is
 entirely a function of severity, with H1's AUC flat at 0.92–0.93 across all twelve cells while H0
 falls to 0.587. Under **clean** conditions H0 wins participation (the mule costs throughput when
-availability is not the problem) with model quality a tie. The **L1 result is suggestive only** —
-p=0.018 does not survive correction for five metrics, and this project has retracted an L1 effect
-before.
+availability is not the problem) with model quality a tie.
+
+**L1 is now CONFIRMED** — the first pass was suggestive (p=0.018, failing a 5-metric Bonferroni), so
+two confirmations were run: doubling the seeds took AUC to p=0.0016 and accuracy to p=0.0026 (both
+survive), and an independent operating point reproduced it. Recomputing T@τ from the retained traces
+then showed **what** it does: conditional on reaching τ the arms are *identical* (2.83 vs 2.83
+rounds), and the whole effect is **reachability** — 39/40 vs 30/40 at τ=0.75, McNemar p=0.0039.
+*L1 does not make training faster; it makes the target reachable.*
 
 > **Sweep A is two invocations, not one cross product** — and this was caught only after a first
 > launch had to be killed. `dead_zone` and `link_quality` describe how the clean regime is *degraded
@@ -39,10 +45,13 @@ before.
 > design and the cost model. *Same class of error as Freeze D5: sweeping an axis that varies nothing
 > for the condition under test.*
 
-**Sweep B is ON HOLD (§5.1b).** The pre-launch smoke found H1/B1/B2 produce **identical** results at
-the designed operating point: S3b fixes *who* is served before the policy runs, and the policy only
-reorders an already-decided set. It needs re-targeting at the binding band first — a redesign is
-proposed in §5.1b and needs a decision, because the band sits in a heavily-degraded regime.
+**Sweep B is RETIRED (§5.1b), superseded by the whole-scheduler comparison.** It compared *ordering*
+policies, which S3b makes vacuous: the gate fixes *who* is served before the policy runs, so all
+arms came out byte-identical. The replacement gives the baselines **admission authority** and
+measures **reach-rate at τ** — see
+[`HERMES_SOTA_Comparison_Design.md`](HERMES_SOTA_Comparison_Design.md). **Next action: its §5 pilot**
+(~30 trials, ~10 min sharded), which checks the admitted *sets* actually differ before anything
+larger runs.
 
 > **Two constraints the matrix respects.** `B2` is **real-model-only** (the stub's loss is a random
 > draw), so it cannot appear in stub pilots. And **`--keep-event-traces` goes on every run** (§4) —
