@@ -50,6 +50,8 @@ from hermes.scheduler.selector.scope_guard import (
     assert_candidates_admitted,
 )
 
+from .budget_walk import greedy_budget_walk
+
 #: Oort's exploration weight on the staleness bonus (paper's Algorithm 1).
 DEFAULT_STALENESS_WEIGHT = 0.1
 
@@ -203,10 +205,65 @@ class OortPolicy:
                 )
             return total
 
-        def _key(wp: ContactWaypoint) -> Tuple[float, str]:
-            # Descending utility; device id breaks ties so the order is
-            # deterministic and independent of input order.
-            return (-_contact_utility(wp),
-                    ",".join(sorted(str(d) for d in wp.devices)))
+        return sorted(candidates, key=self._rank_key(device_states, current_round))
 
-        return sorted(candidates, key=_key)
+    # ------------------------------------------------------------------ #
+    # Whole-scheduler mode (arm D2)
+    # ------------------------------------------------------------------ #
+
+    def _rank_key(self, device_states, current_round: int):
+        """Descending contact utility; device id breaks ties deterministically."""
+        def _key(wp: ContactWaypoint) -> Tuple[float, str]:
+            total = 0.0
+            for did in wp.devices:
+                st = device_states.get(did)
+                if st is None:
+                    return (-UNEXPLORED_UTILITY,
+                            ",".join(sorted(str(d) for d in wp.devices)))
+                u = statistical_utility(st)
+                if u == UNEXPLORED_UTILITY:
+                    return (-UNEXPLORED_UTILITY,
+                            ",".join(sorted(str(d) for d in wp.devices)))
+                total += u + staleness_bonus(
+                    st, current_round=current_round,
+                    weight=self.staleness_weight,
+                )
+            return (-total, ",".join(sorted(str(d) for d in wp.devices)))
+        return _key
+
+    def _current_round(self, contacts, device_states) -> int:
+        members = [d for wp in contacts for d in wp.devices]
+        return 1 + max(
+            (st.last_served_round
+             for d in members
+             if (st := device_states.get(d)) is not None),
+            default=0,
+        )
+
+    def admit_and_order(
+        self,
+        contacts: Sequence[ContactWaypoint],
+        device_states: Dict[DeviceID, DeviceSchedulerState],
+        env: SelectorEnv,
+        *,
+        mission_deadline_ts: Optional[float] = None,
+        feasibility_model=None,
+    ) -> List[ContactWaypoint]:
+        """Oort as a **complete scheduler** — it decides *who*, not just order.
+
+        Presence of this method makes the arm a whole-scheduler baseline: the
+        scheduler delegates S3/S3b/S3.5 entirely, so this policy owns the
+        admission decision our S3b gate would otherwise make. Visit the
+        highest-utility contacts until the budget runs out.
+        """
+        if not contacts:
+            return []
+        return greedy_budget_walk(
+            contacts,
+            key=self._rank_key(device_states,
+                               self._current_round(contacts, device_states)),
+            mule_pose=env.mule_pose,
+            now=env.now,
+            mission_deadline_ts=mission_deadline_ts,
+            model=feasibility_model,
+        )

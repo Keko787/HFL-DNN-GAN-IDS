@@ -426,6 +426,54 @@ class FLScheduler:
         if not contacts:
             return []
 
+        # Freeze Amendment 4 — whole-scheduler baseline delegation (arms D1/D2).
+        #
+        # A policy that exposes `admit_and_order` owns BOTH decisions: it
+        # replaces S3's deadline ordering, S3b's admission gate and S3.5's
+        # tie-break, and returns the route directly. This exists because the
+        # earlier ordering-only comparison was vacuous — S3b fixes *who* is
+        # served before any ranking policy runs, so a baseline confined to the
+        # selector slot could only permute a list our gate had already decided,
+        # and every arm produced byte-identical results.
+        #
+        # S1 and S3a still run above: slice membership and RF clustering are
+        # physics, not policy, and every arm must face the same ones. The budget
+        # is passed through unchanged, and the baseline is handed OUR feasibility
+        # model so both arms price travel identically — otherwise the experiment
+        # would measure whose cost model is cheaper, not whose policy is better.
+        #
+        # Inert for every arm that does not implement the method (H0-H3), so no
+        # recorded result is affected.
+        if self._target_selector is not None and hasattr(
+            self._target_selector, "admit_and_order"
+        ):
+            from .selector import SelectorEnv  # noqa: WPS433
+
+            start = (self._mission_start_ts
+                     if self._mission_start_ts is not None else _now)
+            route = self._target_selector.admit_and_order(
+                contacts,
+                self._device_states,
+                SelectorEnv(
+                    mule_pose=mule_pose,
+                    mule_energy=mule_energy,
+                    rf_prior_snr_db=rf_prior_snr_db,
+                    beacon_window_s=self._beacon_window_s,
+                    now=_now,
+                ),
+                mission_deadline_ts=(
+                    None if self._mission_budget_s is None
+                    else start + self._mission_budget_s
+                ),
+                feasibility_model=self._feasibility_model,
+            )
+            log.info(
+                "whole-scheduler policy %s admitted %d/%d contacts",
+                getattr(self._target_selector, "name", "?"),
+                len(route), len(contacts),
+            )
+            return route
+
         # S3b — deadline feasibility gate (hard, and BEFORE ordering, so the
         # learned selector cannot resurrect anything it drops). No-op unless a
         # mission budget is configured.

@@ -50,6 +50,8 @@ from hermes.scheduler.selector.scope_guard import (
     assert_candidates_admitted,
 )
 
+from .budget_walk import greedy_budget_walk
+
 #: Age assigned to a device that has never been served. Any finite age loses to
 #: this, so unvisited devices always sort first.
 NEVER_SERVED_AGE = float("inf")
@@ -109,17 +111,51 @@ class MaxAoIPolicy:
             members, admitted if admitted is not None else members,
         )
 
-        def _dist(wp: ContactWaypoint) -> float:
-            return sum(
-                (a - b) ** 2 for a, b in zip(env.mule_pose, wp.position)
+        return sorted(candidates, key=self._rank_key(device_states, env.mule_pose,
+                                                     env.now))
+
+    # ------------------------------------------------------------------ #
+    # Whole-scheduler mode (arm D1)
+    # ------------------------------------------------------------------ #
+
+    @staticmethod
+    def _rank_key(device_states, mule_pose, now):
+        """Age descending, nearest-first as the tie-break, id for determinism."""
+        def _key(wp: ContactWaypoint):
+            dist = sum(
+                (a - b) ** 2 for a, b in zip(mule_pose, wp.position)
             ) ** 0.5
-
-        def _key(wp: ContactWaypoint) -> Tuple[float, float, str]:
-            # Negated age -> descending. Distance ascending is the
-            # "nearest predecessor" tie-break. Device id last, so the order is
-            # deterministic across runs rather than dependent on input order.
-            return (-contact_age(wp, device_states, env.now),
-                    _dist(wp),
+            # Negated age -> descending. Distance ascending is the literature's
+            # "nearest predecessor" rule. Device id last so the order does not
+            # depend on input order.
+            return (-contact_age(wp, device_states, now),
+                    dist,
                     ",".join(sorted(str(d) for d in wp.devices)))
+        return _key
 
-        return sorted(candidates, key=_key)
+    def admit_and_order(
+        self,
+        contacts: Sequence[ContactWaypoint],
+        device_states: Dict[DeviceID, DeviceSchedulerState],
+        env: SelectorEnv,
+        *,
+        mission_deadline_ts: Optional[float] = None,
+        feasibility_model=None,
+    ) -> List[ContactWaypoint]:
+        """MAX-AoI as a **complete scheduler** — it decides *who*, not just order.
+
+        Presence of this method is what makes the arm a whole-scheduler baseline:
+        the scheduler delegates S3/S3b/S3.5 to it entirely, so this policy owns
+        the admission decision our S3b gate would otherwise make. Fly to the
+        stalest devices until the budget runs out.
+        """
+        if not contacts:
+            return []
+        return greedy_budget_walk(
+            contacts,
+            key=self._rank_key(device_states, env.mule_pose, env.now),
+            mule_pose=env.mule_pose,
+            now=env.now,
+            mission_deadline_ts=mission_deadline_ts,
+            model=feasibility_model,
+        )

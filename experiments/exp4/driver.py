@@ -50,10 +50,14 @@ from .topology_builder import build_exp4_topology
 log = logging.getLogger("experiments.exp4.driver")
 
 
-#: "B1" is the MAX-AoI SOTA baseline arm. It shares H1's transport and realism
-#: and differs ONLY in the contact-ranking policy, so B1-vs-H1 isolates the
-#: scheduling policy — which is the comparison reviewer 74A asked for.
-ARMS = ("H0", "H1", "H2", "H3", "B1", "B2")
+#: D1/D2 are the SOTA baseline arms — WHOLE SCHEDULERS, not tie-breakers. Each
+#: shares H1's transport, realism and seeds but replaces S3 + S3b + S3.5 with its
+#: own rule, so it owns the ADMISSION decision our gate would otherwise make.
+#:
+#: They supersede the earlier ordering-only B1/B2, which were vacuous: S3b fixes
+#: who is served before any ranking policy runs, so those arms could only permute
+#: a list our gate had already decided and produced byte-identical results.
+ARMS = ("H0", "H1", "H2", "H3", "D1", "D2")
 
 #: Scheduler-configuration columns the driver stamps on every row, on top of
 #: the metric schema. They exist so a results CSV is self-describing: rows
@@ -253,18 +257,18 @@ class Exp4Driver:
             use_rl_selector=(arm in ("H2", "H3")),
             selector_weights_path=self.selector_weights_path,
         )
-        # B1 — MAX-AoI baseline. Replaces the ranking outright; it does not
-        # compose with the RL selector, which is why use_rl_selector stays off.
-        if arm == "B1":
+        # D1 — MAX-AoI as a whole scheduler. Replaces our policy outright; it
+        # does not compose with the RL selector, so use_rl_selector stays off.
+        if arm == "D1":
             selector_kwargs["contact_policy"] = "max_aoi"
-        # B2 — Oort's statistical-utility selection. Needs REAL training: the
-        # stub's loss is a random draw, so ranking on it would be a random
-        # ordering wearing Oort's name. The policy itself raises rather than
-        # emit a meaningless order, but fail here with a clearer message.
-        if arm == "B2":
+        # D2 — Oort's statistical-utility selection, likewise whole-scheduler.
+        # Needs REAL training: the stub's loss is a random draw, so ranking on
+        # it would be a random ordering wearing Oort's name. The policy itself
+        # raises, but fail here with a clearer message.
+        if arm == "D2":
             if not self.real_model:
                 raise ValueError(
-                    "arm B2 (Oort) requires --real-model: the stub reports a "
+                    "arm D2 (Oort) requires --real-model: the stub reports a "
                     "random loss, so its ranking signal would be pure noise"
                 )
             selector_kwargs["contact_policy"] = "oort"
