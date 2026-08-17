@@ -105,40 +105,68 @@ under more data; noise regresses instead.**
 Reproduces in direction and significance at a point that shares no seeds with C1. p=0.0125 is
 marginal against a 5-metric Bonferroni, so C2 **corroborates** C1 rather than standing alone.
 
-### A prediction that failed — and what it implies
+### What L1 actually does — settled from the traces, no re-run
 
-I predicted **more** missions would give a **larger** effect, since L1 chooses a channel per mission
-and the advantage should compound. **It halved: +0.046 at 4 missions, +0.023 at 6.** Both arms
-improved with more rounds (H2 0.865 → 0.908; H3 0.911 → 0.930) — **H2 closes the gap.**
+Two hypotheses were on the table, and **both were wrong.**
 
-That falsifies "L1 reaches a better model" and points to **"L1 reaches the same model sooner"** —
-choosing a better channel drops fewer backhaul uploads early, and given enough rounds the fixed-band
-arm catches up. It is the same shape as the S3c pilot result, which is at least a consistent story
-about this system: *these mechanisms buy convergence speed, not a better endpoint.*
+I first read the AUC gap narrowing with more missions (+0.046 at 4, +0.023 at 6) as *"L1 reaches
+the same model sooner"*. The traces say otherwise. `--keep-event-traces` preserved every round's
+`model_eval`, so **T@τ was recomputed at arbitrary τ without re-running anything** — the first
+payoff of trace retention.
 
-> **Not established.** The two gaps' CIs overlap ([+0.021,+0.073] vs [+0.007,+0.040]), and C1/C2
-> differ in sample size. The narrowing is **suggestive**, and the direct test is blocked (below).
+**Conditional on reaching τ, the two arms are indistinguishable:**
 
-### ⚠ The metric that would settle it is currently unusable
+| τ | H3 rounds | H2 rounds | diff | p |
+|---|---|---|---|---|
+| 0.82 | 2.83 | 2.83 | **0.000** | 1.0 |
+| 0.85 | 3.33 | 3.22 | +0.111 | 1.0 |
+| 0.75 | 2.27 | 2.27 | **0.000** | 1.0 |
 
-Time-to-accuracy (`t_at_tau_round`) is exactly the right instrument for a speed claim — and for the
-SOTA comparison, where the natural framing is *improvement in training time to a target accuracy*.
-**It cannot be used at τ = 0.9:** only **1 of 40** H3 trials and 2 of 40 H2 trials ever reach it.
+**The entire effect is _reachability_** — how often a run gets there at all. Paired per seed, so
+McNemar on the discordant pairs is the right test:
 
-Across all 640 matrix trials, `final_accuracy` has median **0.820** and p90 **0.888**:
+| τ | H3 reaches | H2 reaches | H3-only | H2-only | McNemar p |
+|---|---|---|---|---|---|
+| 0.90 | 1/40 | 2/40 | 0 | 1 | 1.0000 |
+| 0.88 | 4/40 | 4/40 | 0 | 0 | 1.0000 |
+| 0.85 | 16/40 | 10/40 | 7 | 1 | 0.0703 |
+| **0.82** | **28/40** | **19/40** | 10 | 1 | **0.0117** ✅ |
+| 0.80 | 32/40 | 24/40 | 9 | 1 | 0.0215 ✅ |
+| **0.75** | **39/40** | **30/40** | 9 | **0** | **0.0039** ✅✅ |
 
-| τ | trials reaching it |
-|---|---|
-| 0.90 (current) | **5.9 %** |
-| 0.88 | 13.8 % |
-| **0.85** | **30.0 %** |
-| **0.82** | **50.2 %** |
-| 0.80 | 61.1 % |
+**The discordance is essentially one-directional** — 9–10 seeds where H3 reached the target and H2
+did not, against 0–1 the other way. τ=0.75 survives Bonferroni over all six thresholds (0.0039 <
+0.0083).
 
-**Recommendation: set τ = 0.82** (the median, so ~half of trials reach it and the metric has
-resolution in both directions), and report τ = 0.85 as a sensitivity check. τ = 0.9 is above p90 —
-it measures almost nothing. *This is a no-re-run change if the per-round evaluation history is in the
-retained traces; otherwise it needs a re-run, which is now cheap because traces are kept.*
+> **The claim, stated correctly:** *L1 adaptivity does not make training faster. It makes the target
+> reachable.* Choosing a better channel drops fewer backhaul uploads, so more rounds actually close,
+> so more runs converge at all — and the ones that converge do so at the same rate.
+
+This also explains the narrowing gap: with more missions H2 gets more chances to reach τ, so the
+reachability advantage compresses. Consistent with the same mechanism, no longer a puzzle.
+
+### τ was the problem, and the data proves it
+
+The τ=0.90 row above is the diagnosis in one line: **1 vs 2 of 40 trials reach it, 38 reach
+neither** — zero resolution, which is why the metric looked dead. **τ is now 0.82 by default**
+(`--tau`, and `Exp4Driver.tau`), the median `final_accuracy` over the 640-trial matrix, where the
+metric discriminates cleanly.
+
+> **Asymmetry to remember: only the mule arms are traced.** H0 runs in-process with no orchestrator
+> and emits no run-dir JSONL. So T@τ is recomputable for H1/H2/H3/B1/B2 but **not H0** — an
+> H0-vs-H1 time-to-accuracy comparison still needs a re-run. The L1 comparison did not.
+
+### Consequence for the SOTA comparison
+
+This changes the metric the whole-system comparison should lead with. *Training time to target
+accuracy* is the natural framing from the Oort and FedCS abstracts — but in this system,
+**time-to-accuracy conditional on success is identical across arms**, so it would report a tie and
+miss the real effect.
+
+**The discriminating metric here is _probability of reaching target accuracy within the mission
+budget_.** That is what differs, it is what a deployment actually cares about under DDIL, and it has
+a natural paired test (McNemar). Recommend leading with reach-rate and reporting conditional
+time-to-accuracy alongside it as the honest null.
 
 ---
 

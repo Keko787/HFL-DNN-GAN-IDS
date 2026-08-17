@@ -123,7 +123,9 @@ class Exp4Driver:
     data_source: str = "canonical"  # "canonical" | "synthetic"
     local_epochs: int = 1
     local_batch_size: int = 64
-    tau: float = 0.9
+    # Target accuracy for T@tau. 0.82 = median final_accuracy over the
+    # Phase-3 matrix; 0.9 sat above p90 and made the metric unusable.
+    tau: float = 0.82
     theta_seed: int = 12345
     # canonical loader knobs
     train_files: int = 3

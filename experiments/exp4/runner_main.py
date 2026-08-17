@@ -112,8 +112,15 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     )
     parser.add_argument("--local-epochs", type=int, default=1)
     parser.add_argument("--local-batch-size", type=int, default=64)
-    parser.add_argument("--tau", type=float, default=0.9,
-                        help="Target accuracy for the T@tau metric.")
+    parser.add_argument(
+        "--tau", type=float, default=0.82,
+        help="Target accuracy for the T@tau (time-to-accuracy) metric. "
+             "0.82 is the MEDIAN final_accuracy over the 640-trial Phase-3 "
+             "matrix, so ~half of trials reach it and the metric has "
+             "resolution in both directions. The previous default of 0.9 sat "
+             "ABOVE the p90 (0.888) and was reached by only 5.9%% of trials, "
+             "which made T@tau unusable -- 1 of 40 in the L1 sweep. Use 0.85 "
+             "(30%% reach it) as a sensitivity check.")
     parser.add_argument("--train-files", type=int, default=3,
                         help="canonical: CICIOT csv parts to draw train from.")
     parser.add_argument("--test-files", type=int, default=1,
