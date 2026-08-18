@@ -1,0 +1,16 @@
+{"ts":1787014343.1538212,"schema_version":1,"role":"mule","id":"exp4-mule","event":"mule_ready","rf_host":"127.0.0.1","rf_port":55925,"dock_host":"127.0.0.1","dock_port":59480,"expected_devices":["exp4-dev-000","exp4-dev-001","exp4-dev-002","exp4-dev-003","exp4-dev-004","exp4-dev-005"],"rf_range_m":60.0,"session_ttl_s":3.0,"n_missions":4}
+{"ts":1787014362.7332273,"schema_version":1,"role":"mule","id":"exp4-mule","event":"dock_bootstrapped"}
+{"ts":1787014362.7332273,"schema_version":1,"role":"mule","id":"exp4-mule","event":"mission_started","mission_index":0}
+{"ts":1787014368.75388,"schema_version":1,"role":"mule","id":"exp4-mule","event":"mission_empty","mission_round":1}
+{"ts":1787014368.7548816,"schema_version":1,"role":"mule","id":"exp4-mule","event":"mission_completed","mission_round":1,"queue_size":2,"pass_1_contacts":2,"pass_2_contacts":0,"duration_s":6.020652770996094,"pass_1_updates":null,"pass_1_scheduled":3,"pass_1_clean_devices":null,"delivered":null,"undelivered":null}
+{"ts":1787014368.7548816,"schema_version":1,"role":"mule","id":"exp4-mule","event":"mission_started","mission_index":1}
+{"ts":1787014373.9070666,"schema_version":1,"role":"mule","id":"exp4-mule","event":"mission_empty","mission_round":2}
+{"ts":1787014373.9070666,"schema_version":1,"role":"mule","id":"exp4-mule","event":"mission_completed","mission_round":2,"queue_size":2,"pass_1_contacts":2,"pass_2_contacts":0,"duration_s":5.152184963226318,"pass_1_updates":null,"pass_1_scheduled":3,"pass_1_clean_devices":null,"delivered":null,"undelivered":null}
+{"ts":1787014373.9070666,"schema_version":1,"role":"mule","id":"exp4-mule","event":"mission_started","mission_index":2}
+{"ts":1787014382.948745,"schema_version":1,"role":"mule","id":"exp4-mule","event":"mission_empty","mission_round":3}
+{"ts":1787014382.949746,"schema_version":1,"role":"mule","id":"exp4-mule","event":"mission_completed","mission_round":3,"queue_size":3,"pass_1_contacts":3,"pass_2_contacts":0,"duration_s":9.041678428649902,"pass_1_updates":null,"pass_1_scheduled":5,"pass_1_clean_devices":null,"delivered":null,"undelivered":null}
+{"ts":1787014382.949746,"schema_version":1,"role":"mule","id":"exp4-mule","event":"mission_started","mission_index":3}
+{"ts":1787014385.958384,"schema_version":1,"role":"mule","id":"exp4-mule","event":"mission_empty","mission_round":4}
+{"ts":1787014385.958384,"schema_version":1,"role":"mule","id":"exp4-mule","event":"mission_completed","mission_round":4,"queue_size":1,"pass_1_contacts":1,"pass_2_contacts":0,"duration_s":3.0086381435394287,"pass_1_updates":null,"pass_1_scheduled":2,"pass_1_clean_devices":null,"delivered":null,"undelivered":null}
+{"ts":1787014385.9593828,"schema_version":1,"role":"mule","id":"exp4-mule","event":"metrics_snapshot","metrics":{"counter.missions_completed":4,"counter.missions_empty":4,"timer.mission_duration_s":{"count":4,"sum_s":23.223154306411743,"min_s":3.0086381435394287,"max_s":9.041678428649902,"mean_s":5.805788576602936}}}
+{"ts":1787014385.9603817,"schema_version":1,"role":"mule","id":"exp4-mule","event":"service_stopped"}

@@ -1,6 +1,12 @@
 # Whole-scheduler SOTA comparison — design
 
-**Status: design, not yet implemented.** Supersedes the held sweep B
+**Status: BUILT AND RUN — results in [`HERMES_SOTA_Results.md`](HERMES_SOTA_Results.md).**
+Both budget points complete (120 trials, 0 failures). The pre-registered primary metric
+(reach-rate) came back **null**; the secondary metrics show a **crossover** — baselines collect more
+under a loose budget, we produce better models under a tight one — which does not survive full
+multiplicity correction but is mechanistically explained by admission behaviour in the traces.
+
+*(Original design below, kept as written.)* Supersedes the held sweep B
 ([checklist §5.1b](HERMES_PreRerun_Checklist.md)), which compared *ordering* policies and was
 vacuous by construction.
 

@@ -1,0 +1,2 @@
+{"ts":1787012667.1865094,"schema_version":1,"role":"device","id":"exp4-dev-000","event":"device_ready","mule_rf_host":"127.0.0.1","mule_rf_port":51542,"position":[52.282304698957915,67.29270693021888,0.0],"n_serves":null}
+{"ts":1787012682.8340635,"schema_version":1,"role":"device","id":"exp4-dev-000","event":"device_served","outcome":"clean"}
