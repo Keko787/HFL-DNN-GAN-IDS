@@ -1,0 +1,626 @@
+<title>Does HERMES Need RL?</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap">
+
+<style>
+:root{
+  --paper:#F1F3F2; --surface:#FBFCFB; --surface-2:#E8ECEA;
+  --ink:#171B1D; --ink-2:#414D51; --muted:#77868B;
+  --rule:#D6DDDA; --rule-2:#C2CBC7;
+  --rf:#A8630B; --rf-soft:rgba(168,99,11,.10);
+  --nav:#1B5B63; --nav-soft:rgba(27,91,99,.10);
+  --stop:#93372B;
+  --shadow:0 1px 2px rgba(23,27,29,.05);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#0F1315; --surface:#171C1E; --surface-2:#1E2427;
+    --ink:#E9EEEC; --ink-2:#B3BFC1; --muted:#7B898D;
+    --rule:#283033; --rule-2:#364145;
+    --rf:#E4A244; --rf-soft:rgba(228,162,68,.12);
+    --nav:#59B0B8; --nav-soft:rgba(89,176,184,.12);
+    --stop:#D8796A;
+    --shadow:0 1px 2px rgba(0,0,0,.3);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0F1315; --surface:#171C1E; --surface-2:#1E2427;
+  --ink:#E9EEEC; --ink-2:#B3BFC1; --muted:#7B898D;
+  --rule:#283033; --rule-2:#364145;
+  --rf:#E4A244; --rf-soft:rgba(228,162,68,.12);
+  --nav:#59B0B8; --nav-soft:rgba(89,176,184,.12);
+  --stop:#D8796A;
+  --shadow:0 1px 2px rgba(0,0,0,.3);
+}
+
+*{box-sizing:border-box}
+body{
+  background:var(--paper); color:var(--ink);
+  font-family:"Source Serif 4",Georgia,"Times New Roman",serif;
+  font-size:17px; line-height:1.62;
+  -webkit-font-smoothing:antialiased;
+  padding:0 0 96px;
+}
+.doc{max-width:1080px; margin:0 auto; padding:0 28px;}
+.col{max-width:68ch;}
+.plate{width:100%;}
+
+h1,h2,h3,.disp{font-family:Archivo,"Helvetica Neue",Arial,sans-serif; text-wrap:balance;}
+
+/* ---------- masthead ---------- */
+.mast{padding:64px 0 0;}
+.mast-top{display:flex; flex-wrap:wrap; gap:20px 40px; align-items:baseline; justify-content:space-between; border-bottom:1px solid var(--rule); padding-bottom:22px;}
+h1{font-size:clamp(38px,6.2vw,60px); font-weight:700; line-height:1.02; letter-spacing:-.026em; margin:0;}
+.stamp{font-family:"IBM Plex Mono",ui-monospace,monospace; font-size:11px; letter-spacing:.10em; text-transform:uppercase; color:var(--muted); line-height:1.9; text-align:right;}
+.thesis{max-width:64ch; margin:28px 0 0; font-size:20px; line-height:1.5; color:var(--ink-2);}
+.thesis strong{color:var(--ink); font-weight:600;}
+.provenance{margin:30px 0 0; padding:14px 0 0; border-top:1px solid var(--rule);
+  font-family:"IBM Plex Mono",ui-monospace,monospace; font-size:11.5px; line-height:1.85; color:var(--muted);}
+.provenance b{color:var(--ink-2); font-weight:500;}
+
+/* ---------- sections ---------- */
+section{margin-top:78px;}
+.eyebrow{font-family:"IBM Plex Mono",ui-monospace,monospace; font-size:11px; font-weight:600;
+  letter-spacing:.16em; text-transform:uppercase; color:var(--muted); margin:0 0 14px;
+  display:flex; align-items:center; gap:14px;}
+.eyebrow::after{content:""; flex:1; height:1px; background:var(--rule);}
+h2{font-size:clamp(27px,3.4vw,34px); font-weight:600; letter-spacing:-.018em; line-height:1.14; margin:0 0 20px;}
+h3{font-size:19px; font-weight:600; letter-spacing:-.008em; margin:38px 0 10px;}
+p{margin:0 0 18px;}
+.col > p:last-child{margin-bottom:0;}
+a{color:var(--ink); text-decoration-color:var(--rule-2); text-underline-offset:3px;}
+a:hover{text-decoration-color:var(--rf);}
+:focus-visible{outline:2px solid var(--rf); outline-offset:3px; border-radius:2px;}
+code,.mono{font-family:"IBM Plex Mono",ui-monospace,monospace; font-size:.87em;}
+code{background:var(--surface-2); padding:.1em .34em; border-radius:3px;}
+em{font-style:italic;}
+strong{font-weight:600;}
+
+/* ---------- pull quote / evidence ---------- */
+.evidence{margin:26px 0; padding:20px 24px; background:var(--surface); border:1px solid var(--rule);
+  border-left:3px solid var(--rf); box-shadow:var(--shadow);}
+.evidence p{margin:0; font-size:16.5px;}
+.evidence p + p{margin-top:12px;}
+.src{display:block; margin-top:12px; font-family:"IBM Plex Mono",ui-monospace,monospace;
+  font-size:10.5px; letter-spacing:.07em; text-transform:uppercase; color:var(--muted);}
+
+/* ---------- figures ---------- */
+figure{margin:44px 0; padding:0;}
+.figframe{background:var(--surface); border:1px solid var(--rule); padding:26px 22px 20px; overflow-x:auto; box-shadow:var(--shadow);}
+figure svg{display:block; width:100%; min-width:640px; height:auto;}
+figcaption{margin-top:16px; max-width:72ch; font-size:14.5px; line-height:1.6; color:var(--ink-2);}
+figcaption b{color:var(--ink); font-weight:600;}
+
+/* ---------- cut list ---------- */
+.cuts{list-style:none; margin:30px 0 0; padding:0; display:grid; gap:1px; background:var(--rule); border:1px solid var(--rule);}
+.cuts li{background:var(--surface); padding:18px 22px; display:grid; grid-template-columns:30px 1fr; gap:0 18px; align-items:start;}
+.cutn{font-family:"IBM Plex Mono",ui-monospace,monospace; font-size:12px; font-weight:600; color:var(--paper);
+  background:var(--ink); width:24px; height:24px; border-radius:50%; display:grid; place-items:center; margin-top:2px;}
+.cuts h4{font-family:Archivo,sans-serif; font-size:16px; font-weight:600; margin:0 0 6px; letter-spacing:-.005em;}
+.cuts p{margin:0; font-size:15px; color:var(--ink-2);}
+.cuts .where{margin-top:8px; font-family:"IBM Plex Mono",ui-monospace,monospace; font-size:11.5px; color:var(--muted); line-height:1.7;}
+
+/* ---------- Q blocks ---------- */
+.q{border-top:1px solid var(--rule); padding-top:26px; margin-top:36px;}
+.q:first-of-type{border-top:none; padding-top:0;}
+.qhead{display:flex; flex-wrap:wrap; align-items:baseline; gap:12px 16px; margin-bottom:14px;}
+.qn{font-family:"IBM Plex Mono",ui-monospace,monospace; font-size:12px; font-weight:600; letter-spacing:.1em; color:var(--muted);}
+.qtitle{font-family:Archivo,sans-serif; font-size:22px; font-weight:600; letter-spacing:-.014em; line-height:1.2; flex:1 1 300px; margin:0;}
+.chip{font-family:"IBM Plex Mono",ui-monospace,monospace; font-size:10.5px; font-weight:600; letter-spacing:.11em;
+  text-transform:uppercase; padding:5px 11px; border:1px solid currentColor; border-radius:2px; white-space:nowrap;}
+.chip.yes{color:var(--nav);}
+.chip.rf{color:var(--rf);}
+.chip.no{color:var(--stop);}
+.chip.test{color:var(--ink-2);}
+
+/* ---------- tables ---------- */
+.tablewrap{overflow-x:auto; margin:28px 0; border:1px solid var(--rule); background:var(--surface); box-shadow:var(--shadow);}
+table{border-collapse:collapse; width:100%; min-width:660px; font-size:15px;}
+th,td{text-align:left; padding:14px 18px; border-bottom:1px solid var(--rule); vertical-align:top;}
+thead th{font-family:"IBM Plex Mono",ui-monospace,monospace; font-size:10.5px; font-weight:600;
+  letter-spacing:.11em; text-transform:uppercase; color:var(--muted); background:var(--surface-2); border-bottom:1px solid var(--rule-2);}
+tbody tr:last-child td{border-bottom:none;}
+td.k{font-family:Archivo,sans-serif; font-weight:600; font-size:15px; white-space:nowrap;}
+td .m,.num{font-family:"IBM Plex Mono",ui-monospace,monospace; font-size:13px; font-variant-numeric:tabular-nums;}
+.tag{font-family:"IBM Plex Mono",ui-monospace,monospace; font-size:10px; font-weight:600; letter-spacing:.09em;
+  text-transform:uppercase; padding:3px 8px; border-radius:2px; white-space:nowrap;}
+.tag.rf{background:var(--rf-soft); color:var(--rf);}
+.tag.nav{background:var(--nav-soft); color:var(--nav);}
+.tag.flat{background:var(--surface-2); color:var(--muted);}
+
+/* ---------- steps ---------- */
+.steps{list-style:none; counter-reset:s; margin:30px 0 0; padding:0;}
+.steps li{counter-increment:s; display:grid; grid-template-columns:44px 1fr auto; gap:4px 18px;
+  padding:20px 0; border-bottom:1px solid var(--rule); align-items:baseline;}
+.steps li::before{content:counter(s,decimal-leading-zero); font-family:"IBM Plex Mono",ui-monospace,monospace;
+  font-size:13px; font-weight:600; color:var(--muted); font-variant-numeric:tabular-nums;}
+.steps b{font-family:Archivo,sans-serif; font-size:16.5px; font-weight:600; letter-spacing:-.006em; display:block; margin-bottom:5px;}
+.steps span.d{font-size:15px; color:var(--ink-2); grid-column:2;}
+.cost{font-family:"IBM Plex Mono",ui-monospace,monospace; font-size:10.5px; letter-spacing:.09em;
+  text-transform:uppercase; color:var(--muted); white-space:nowrap; grid-row:1;}
+
+/* ---------- closing note ---------- */
+.note{margin-top:34px; padding:26px 28px; background:var(--surface); border:1px solid var(--rule); border-top:3px solid var(--nav); box-shadow:var(--shadow);}
+.note p{margin:0; font-size:16.5px;}
+.note p + p{margin-top:14px;}
+
+@media (max-width:720px){
+  body{font-size:16px;}
+  .doc{padding:0 20px;}
+  .stamp{text-align:left;}
+  .steps li{grid-template-columns:34px 1fr; gap:4px 12px;}
+  .cost{grid-column:2; grid-row:auto; margin-top:8px;}
+  .cuts li{grid-template-columns:1fr; gap:10px;}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important; transition:none!important;}}
+</style>
+
+<div class="doc">
+
+<header class="mast">
+  <div class="mast-top">
+    <h1>Does HERMES<br>need RL?</h1>
+    <div class="stamp">
+      Layer redefinition &middot; decision memo<br>
+      Traced against E4 matrix + L1/L2 records<br>
+      26 August 2026
+    </div>
+  </div>
+
+  <p class="thesis">Adding a trajectory layer will not justify reinforcement learning. <strong>Adding a coupling will.</strong> The distinction is testable, and the test is an ablation you can run on the code you already have.</p>
+
+  <p class="provenance">
+    <b>Sources traced:</b> HERMES_Matrix_Results.md (640 trials, 2026-08-13) &middot; Exp4 L1 RF layer record &middot; Exp4 L2 scheduling layer record &middot; Related Work notes &middot; Holistic Revision Plan &sect;7.3 / Freeze D4 &middot; hermes_rl/drone_env.py &middot; experiments/exp4/{driver,channel}.py
+  </p>
+</header>
+
+<!-- ============ DIAGNOSIS ============ -->
+<section>
+  <p class="eyebrow">The prior problem</p>
+  <div class="col">
+    <h2>Before any redesign: the reward is flat</h2>
+
+    <p>The layer question is downstream of a measurement problem that will defeat any architecture you choose. It is already visible in the matrix results, stated as a strength &mdash; which it is &mdash; without the consequence being drawn.</p>
+  </div>
+
+  <div class="evidence col">
+    <p>H1's <code>final_auc</code> sits between <span class="num">0.922</span> and <span class="num">0.933</span> in <em>every one of the twelve cells</em> &mdash; flat. H0's falls from <span class="num">0.943</span> to <span class="num">0.587</span> as the infrastructure degrades.</p>
+    <span class="src">HERMES_Matrix_Results.md &middot; sweep A2</span>
+  </div>
+
+  <div class="col">
+    <p>That flatness is the headline finding: the mule is insensitive to backhaul degradation because it never uses the backhaul that is failing. It is also the reason <strong>no policy operating inside the mule arm can demonstrate anything.</strong> The mule already saturates the outcome. There is almost no variance left for a scheduler to explain, which is exactly why H2 ties H1 &mdash; and exactly what the C-sweep found on its own when its prediction failed:</p>
+  </div>
+
+  <div class="evidence col">
+    <p>Predicted <em>more</em> missions would give a <em>larger</em> effect. It halved: <span class="num">+0.046</span> at 4 missions, <span class="num">+0.023</span> at 6. That falsifies "L1 reaches a better model" and points to <strong>"L1 reaches the same model sooner."</strong></p>
+    <span class="src">HERMES_Matrix_Results.md &middot; sweep C, a prediction that failed</span>
+  </div>
+
+  <div class="col">
+    <p>These mechanisms buy <em>convergence speed</em>, not a better endpoint. So the endpoint metric cannot see them, and no amount of new machinery changes that. Two fixes follow, both already identified in your own notes, neither requiring new architecture:</p>
+  </div>
+
+  <div class="tablewrap plate">
+    <table>
+      <thead>
+        <tr><th>Fix</th><th>Currently</th><th>Change to</th><th>Why it unlocks the signal</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="k">Convergence target &tau;</td>
+          <td><span class="m">&tau; = 0.90</span><br><span class="m">5.9 % of trials reach it</span></td>
+          <td><span class="m">&tau; = 0.82</span><br><span class="m">50.2 % reach it</span></td>
+          <td>&tau; = 0.90 sits above the p90 of <span class="m">final_accuracy</span>. It measures almost nothing. At the median the metric has resolution in <em>both</em> directions.</td>
+        </tr>
+        <tr>
+          <td class="k">Operating point</td>
+          <td><span class="m">--mission-budget-s 120</span><br><span class="m">deliberately slack</span></td>
+          <td><span class="m">~60 s</span> &mdash; the S3b knee<br><span class="m">plus a 30 s stress cell</span></td>
+          <td>Decisions only matter where something is scarce. At 120 s the budget barely binds; below 30 s round-closure collapses to &asymp; 0. The interesting regime is between.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="col">
+    <p>Do both and the existing system may already show an effect. Skip them and the redesign inherits an unmeasurable outcome.</p>
+  </div>
+</section>
+
+<!-- ============ MECHANISM ============ -->
+<section>
+  <p class="eyebrow">The mechanism</p>
+  <div class="col">
+    <h2>A layer is additive. A coupling is not.</h2>
+    <p>The reason "trajectory navigation" reads as <em>just another layer</em> is that, as specified, it is one. Three modules that each optimise their own objective and hand a result downstream compose into a chain &mdash; and a chain decomposes, which means a cross-heuristic solves it, which means RL is unjustified. Correctly.</p>
+    <p>But the physics of this system is not a chain. It is a cycle, and three of its edges are currently severed in code.</p>
+  </div>
+
+  <figure class="plate">
+    <div class="figframe">
+      <svg viewBox="0 0 920 540" role="img" aria-label="A six-node cycle: band choice sets RF range, which sets S3a clustering, which sets the route and travel time, which sets the arrival clock, which sets the channel phase and achievable rate on arrival, which sets dwell cost and S3b feasibility, which sets the served set and whether the FL round closes, which sets the next mission's demand and feeds back into band choice. Three edges are marked as severed in the current code: band to range, arrival clock to rate at arrival, and dwell to feasibility.">
+        <defs>
+          <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="var(--ink)"/>
+          </marker>
+          <marker id="ahc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/>
+          </marker>
+        </defs>
+
+        <!-- ---- live edges ---- -->
+        <line x1="558" y1="64" x2="686" y2="90" stroke="var(--ink)" stroke-width="1.5" marker-end="url(#ah)"/>
+        <line x1="362" y1="442" x2="234" y2="400" stroke="var(--ink)" stroke-width="1.5" marker-end="url(#ah)"/>
+        <line x1="128" y1="352" x2="128" y2="144" stroke="var(--ink)" stroke-width="1.5" marker-end="url(#ah)"/>
+
+        <!-- ---- severed edges ---- -->
+        <line x1="226" y1="92" x2="354" y2="66" stroke="var(--muted)" stroke-width="1.5" stroke-dasharray="5 5" marker-end="url(#ahc)"/>
+        <line x1="792" y1="136" x2="792" y2="344" stroke="var(--muted)" stroke-width="1.5" stroke-dasharray="5 5" marker-end="url(#ahc)"/>
+        <line x1="694" y1="400" x2="566" y2="440" stroke="var(--muted)" stroke-width="1.5" stroke-dasharray="5 5" marker-end="url(#ahc)"/>
+
+        <!-- ---- edge labels ---- -->
+        <g font-family="IBM Plex Mono, monospace" font-size="11.5" fill="var(--muted)">
+          <text x="300" y="118" text-anchor="middle">range sets</text>
+          <text x="300" y="133" text-anchor="middle">rf_range_m</text>
+
+          <text x="622" y="118" text-anchor="middle">contact</text>
+          <text x="622" y="133" text-anchor="middle">waypoints</text>
+
+          <text x="764" y="238" text-anchor="end">arrival</text>
+          <text x="764" y="253" text-anchor="end">clock t</text>
+
+          <text x="612" y="380" text-anchor="middle">dwell cost</text>
+          <text x="612" y="395" text-anchor="middle">+ travel</text>
+
+          <text x="296" y="380" text-anchor="middle">served</text>
+          <text x="296" y="395" text-anchor="middle">set</text>
+
+          <text x="146" y="238" text-anchor="start">demand: who,</text>
+          <text x="146" y="253" text-anchor="start">how urgent</text>
+        </g>
+
+        <!-- ---- cut badges ---- -->
+        <g font-family="IBM Plex Mono, monospace" font-size="11.5" font-weight="600">
+          <circle cx="290" cy="79" r="11.5" fill="var(--paper)" stroke="var(--stop)" stroke-width="1.5"/>
+          <text x="290" y="83.5" text-anchor="middle" fill="var(--stop)">1</text>
+          <circle cx="792" cy="240" r="11.5" fill="var(--paper)" stroke="var(--stop)" stroke-width="1.5"/>
+          <text x="792" y="244.5" text-anchor="middle" fill="var(--stop)">2</text>
+          <circle cx="630" cy="420" r="11.5" fill="var(--paper)" stroke="var(--stop)" stroke-width="1.5"/>
+          <text x="630" y="424.5" text-anchor="middle" fill="var(--stop)">3</text>
+        </g>
+
+        <!-- ---- centre claim ---- -->
+        <g text-anchor="middle">
+          <text x="460" y="216" font-family="IBM Plex Mono, monospace" font-size="11" font-weight="600" letter-spacing="1.8" fill="var(--stop)">WITH 1 2 3 CUT</text>
+          <text x="460" y="252" font-family="Archivo, sans-serif" font-size="26" font-weight="600" fill="var(--ink)">the ring is a chain</text>
+          <text x="460" y="280" font-family="IBM Plex Mono, monospace" font-size="11.5" fill="var(--muted)">a chain decomposes &mdash; which is why</text>
+          <text x="460" y="297" font-family="IBM Plex Mono, monospace" font-size="11.5" fill="var(--muted)">a heuristic wins the system you have today</text>
+        </g>
+
+        <!-- ---- nodes ---- -->
+        <!-- N1 band -->
+        <rect x="30" y="66" width="196" height="70" fill="var(--surface-2)" stroke="var(--rule-2)"/>
+        <rect x="30" y="66" width="3" height="70" fill="var(--rf)"/>
+        <text x="46" y="88" font-family="IBM Plex Mono, monospace" font-size="9.5" font-weight="600" letter-spacing="1.4" fill="var(--rf)">L1 &middot; RF</text>
+        <text x="46" y="108" font-family="Archivo, sans-serif" font-size="14" font-weight="600" fill="var(--ink)">Band choice</text>
+        <text x="46" y="125" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">U(c,t) controller</text>
+
+        <!-- N2 cluster -->
+        <rect x="362" y="30" width="196" height="70" fill="var(--surface-2)" stroke="var(--rule-2)"/>
+        <rect x="362" y="30" width="3" height="70" fill="var(--ink)"/>
+        <text x="378" y="52" font-family="IBM Plex Mono, monospace" font-size="9.5" font-weight="600" letter-spacing="1.4" fill="var(--muted)">SCHEDULER</text>
+        <text x="378" y="72" font-family="Archivo, sans-serif" font-size="14" font-weight="600" fill="var(--ink)">S3a clustering</text>
+        <text x="378" y="89" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">who shares a contact</text>
+
+        <!-- N3 route -->
+        <rect x="694" y="66" width="196" height="70" fill="var(--surface-2)" stroke="var(--rule-2)"/>
+        <rect x="694" y="66" width="3" height="70" fill="var(--nav)"/>
+        <text x="710" y="88" font-family="IBM Plex Mono, monospace" font-size="9.5" font-weight="600" letter-spacing="1.4" fill="var(--nav)">L2 &middot; NAV</text>
+        <text x="710" y="108" font-family="Archivo, sans-serif" font-size="14" font-weight="600" fill="var(--ink)">Route + travel</text>
+        <text x="710" y="125" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">order, distance, time</text>
+
+        <!-- N4 rate at arrival -->
+        <rect x="694" y="352" width="196" height="70" fill="var(--surface-2)" stroke="var(--rule-2)"/>
+        <rect x="694" y="352" width="3" height="70" fill="var(--rf)"/>
+        <text x="710" y="374" font-family="IBM Plex Mono, monospace" font-size="9.5" font-weight="600" letter-spacing="1.4" fill="var(--rf)">L1 &middot; RF</text>
+        <text x="710" y="394" font-family="Archivo, sans-serif" font-size="14" font-weight="600" fill="var(--ink)">Rate at arrival</text>
+        <text x="710" y="411" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">phase when you land</text>
+
+        <!-- N5 feasibility -->
+        <rect x="362" y="418" width="196" height="70" fill="var(--surface-2)" stroke="var(--rule-2)"/>
+        <rect x="362" y="418" width="3" height="70" fill="var(--ink)"/>
+        <text x="378" y="440" font-family="IBM Plex Mono, monospace" font-size="9.5" font-weight="600" letter-spacing="1.4" fill="var(--muted)">SCHEDULER</text>
+        <text x="378" y="460" font-family="Archivo, sans-serif" font-size="14" font-weight="600" fill="var(--ink)">S3b feasibility</text>
+        <text x="378" y="477" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">deadline + budget</text>
+
+        <!-- N6 round -->
+        <rect x="30" y="352" width="196" height="70" fill="var(--surface-2)" stroke="var(--rule-2)"/>
+        <rect x="30" y="352" width="3" height="70" fill="var(--nav)"/>
+        <text x="46" y="374" font-family="IBM Plex Mono, monospace" font-size="9.5" font-weight="600" letter-spacing="1.4" fill="var(--nav)">L3 &middot; FL</text>
+        <text x="46" y="394" font-family="Archivo, sans-serif" font-size="14" font-weight="600" fill="var(--ink)">Round closes</text>
+        <text x="46" y="411" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">over the served set</text>
+      </svg>
+    </div>
+    <figcaption><b>The decision cycle, and the three edges that break it.</b> Band choice and route choice are not two problems &mdash; each determines the other's inputs. Solid arrows are wired in the Exp-4 code path today; dashed arrows are severed. Restore all three and the ordering becomes a fixed point rather than a pipeline stage, which is the structural precondition for learning to beat decomposition.</figcaption>
+  </figure>
+
+  <ol class="cuts plate">
+    <li>
+      <span class="cutn">1</span>
+      <div>
+        <h4>Band does not set range</h4>
+        <p>In physics, band determines range and penetration <em>and</em> rate &mdash; a low band buys reach at the cost of throughput, a high band inverts it. In the code they are independent: <code>rf_range_m</code> is a fixed 60 m constant regardless of which band L1 selects, so band choice cannot change who shares a contact waypoint, and therefore cannot change the route.</p>
+        <p class="where">experiments/exp4/driver.py:75,155 &mdash; rf_range_m default 60.0, no band dependence</p>
+      </div>
+    </li>
+    <li>
+      <span class="cutn">2</span>
+      <div>
+        <h4>Arrival time does not set the rate you find</h4>
+        <p>The RF prior reaching the selector is <code>mean_chosen_snr_db</code> &mdash; one mission-mean scalar, identical across every candidate in a ranking batch. The channel is time-varying by construction, so the quantity that actually matters is the phase at the moment the mule <em>arrives</em>, which is a function of the route. Today that link does not exist, and it is one reason four of the eleven feature slots are constant within every batch.</p>
+        <p class="where">channel.py &rarr; MuleConfig.rf_prior_snr_db &rarr; selector/features.py:49 slot 10 &middot; L2 record &sect;4.6</p>
+      </div>
+    </li>
+    <li>
+      <span class="cutn">3</span>
+      <div>
+        <h4>Dwell does not depend on the rate</h4>
+        <p>Partially severed, and worth stating precisely: S3b <em>does</em> model travel at <code>cruise_speed_m_s</code> and <em>does</em> test the mission budget. What it does not model is dwell &mdash; <code>session_time</code> is a constant 1.0 s, so a slow band and a fast band cost the same time at a stop. That constant is what stops rate from feeding back into feasibility, and it is an uncited platform placeholder besides.</p>
+        <p class="where">hermes/scheduler/stages/s3b_feasibility.py &middot; Freeze D2 (session_time = 1.0 s, cruise = 5.0 m/s)</p>
+      </div>
+    </li>
+  </ol>
+</section>
+
+<!-- ============ ANTICIPATION ============ -->
+<section>
+  <p class="eyebrow">The sharpest case for learning</p>
+  <div class="col">
+    <h2>You already prototyped the right structure</h2>
+    <p><code>hermes_rl/drone_env.py</code> has the joint action &mdash; <span class="mono">(waypoint, base station, channel)</span> &mdash; with transit consuming time and carrying no transfer, and <span class="mono">alpha &gt; beta</span> so the time-varying term dominates distance. Its parameters put it squarely in the regime where myopic scoring is <em>structurally</em> wrong, not merely mistuned.</p>
+  </div>
+
+  <figure class="plate">
+    <div class="figframe">
+      <svg viewBox="0 0 720 232" role="img" aria-label="A sine wave showing one band's upload rate over time. The drone departs at time zero when the band is at its peak, spends sixty timesteps in transit with no data transfer, and arrives when the same band has fallen to ninety-one percent of the way to its trough.">
+        <defs>
+          <marker id="ah2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/>
+          </marker>
+        </defs>
+
+        <text x="60" y="26" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--muted)">one band's rate over the sortie</text>
+        <text x="680" y="26" text-anchor="end" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--muted)">omega = 0.15 &rarr; period &asymp; 42 steps</text>
+
+        <!-- transit shading -->
+        <rect x="60" y="42" width="354" height="122" fill="var(--rf-soft)"/>
+
+        <!-- zero line -->
+        <line x1="60" y1="105" x2="680" y2="105" stroke="var(--rule-2)" stroke-width="1" stroke-dasharray="3 4"/>
+
+        <!-- the wave -->
+        <polyline fill="none" stroke="var(--nav)" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"
+          points="60,57 89,70 119,102 148,135 178,152 208,144 237,115 266,80 296,59 326,62 355,88 384,124 414,149 443,151 473,128 503,93 532,64 561,58 591,77 620,110 650,142 680,153"/>
+
+        <!-- departure -->
+        <line x1="60" y1="57" x2="60" y2="184" stroke="var(--muted)" stroke-width="1" stroke-dasharray="3 4"/>
+        <circle cx="60" cy="57" r="4.5" fill="var(--rf)"/>
+        <text x="72" y="52" font-family="IBM Plex Mono, monospace" font-size="12" font-weight="600" fill="var(--rf)">+1.00</text>
+        <text x="72" y="67" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">what you measure</text>
+
+        <!-- arrival -->
+        <line x1="414" y1="149" x2="414" y2="184" stroke="var(--muted)" stroke-width="1" stroke-dasharray="3 4"/>
+        <circle cx="414" cy="149" r="4.5" fill="var(--stop)"/>
+        <text x="426" y="145" font-family="IBM Plex Mono, monospace" font-size="12" font-weight="600" fill="var(--stop)">&minus;0.91</text>
+        <text x="426" y="160" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">what you get</text>
+
+        <!-- transit bracket -->
+        <line x1="60" y1="184" x2="414" y2="184" stroke="var(--muted)" stroke-width="1" marker-start="url(#ah2)" marker-end="url(#ah2)"/>
+        <text x="237" y="203" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11.5" fill="var(--ink-2)">60 steps in transit &mdash; no transfer</text>
+        <text x="60" y="222" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">depart W0 (20,70)</text>
+        <text x="414" y="222" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">arrive W2 (80,70)</text>
+      </svg>
+    </div>
+    <figcaption><b>The anticipation gap, computed from your own config.</b> A single W0&rarr;W2 hop is 60 timesteps at <span class="mono">drone_speed = 1.0</span>, against a channel period of &asymp;42. Depart on a band at its peak and you land 91 % of the way to its trough. Across the five waypoints, hops run <span class="mono">25&ndash;82</span> steps &mdash; <b>0.6 to 2.0 full channel cycles each.</b> A rule that scores "best channel now" is not mistuned in that regime; it is measuring a quantity that no longer exists on arrival.</figcaption>
+  </figure>
+
+  <div class="col">
+    <p>This is the strongest RL argument available to you, and it is the one to build the experiment around: <strong>the agent must choose a destination based on what the channel will be when it gets there.</strong> Value functions exist for exactly that. Make the ratio of transit time to channel period an explicit swept parameter &mdash; it is the knob that turns the learned policy's advantage on and off, and a sweep over it produces a crossover curve rather than a single contested number.</p>
+  </div>
+</section>
+
+<!-- ============ THE FIVE QUESTIONS ============ -->
+<section>
+  <p class="eyebrow">The five questions</p>
+  <div class="col">
+    <h2>Answers</h2>
+  </div>
+
+  <div class="col">
+    <div class="q">
+      <div class="qhead">
+        <span class="qn">Q1</span>
+        <p class="qtitle">Should we include a trajectory navigation layer?</p>
+        <span class="chip yes">Yes &mdash; half of it</span>
+      </div>
+      <p>Split what the doc lists. <strong>Distance and order: add.</strong> That is travel cost, and Exp 4 currently has none of it &mdash; no flight budget, travel time, propulsion or communication energy anywhere in the path. You have the machinery in Exp 3's <code>sim_env</code> and in S3b; it is disconnected, not missing.</p>
+      <p><strong>Environment and obstacles: don't.</strong> Obstacle avoidance is solved motion planning. A reviewer will say "use A* or RRT" and be right, and it adds no FL-relevant structure &mdash; an obstacle changes your path length, which you could obtain by sampling path lengths. It buys complexity without buying coupling, which is the specific failure mode you are trying to escape.</p>
+    </div>
+
+    <div class="q">
+      <div class="qhead">
+        <span class="qn">Q2</span>
+        <p class="qtitle">Should the navigation be dynamic?</p>
+        <span class="chip yes">Yes &mdash; one sense only</span>
+      </div>
+      <p>Dynamic in the sense of <strong>re-planning when the world diverges from the plan</strong>, not reacting to terrain. You already have the seed: <code>MuleSupervisor._remaining_is_feasible()</code> re-runs the S3b check from the mule's current pose and clock before each stop. Today it aborts. Make it re-plan.</p>
+      <p>Your L2 record already draws the boundary correctly, and it should survive into the paper: running out of <em>time</em> is a deterministic function of clock and geometry and can be foreseen; a <em>random link failure</em> is stochastic by construction and cannot. That is a property of the model, not a gap in it.</p>
+    </div>
+
+    <div class="q">
+      <div class="qhead">
+        <span class="qn">Q3</span>
+        <p class="qtitle">Should we jointly optimise RF band and navigation?</p>
+        <span class="chip rf">Yes &mdash; and this is the contribution</span>
+      </div>
+      <p>Yes, but the joint variable has to be the one that carries the coupling. Not "band and route tuned together for their own sakes" &mdash; that is still two objectives in a trench coat. The load-bearing chain is <span class="mono">band &rarr; range &rarr; clustering &rarr; route &rarr; arrival &rarr; rate &rarr; dwell &rarr; feasibility</span>, closing back on band. Restore cuts 1&ndash;3 and you cannot pick the band without knowing the route, or the route without knowing the clustering the band induces.</p>
+      <p>The test for whether you built a system or a stack is a one-line ablation: <strong>cut the band&rarr;range edge and see whether the result moves.</strong> If it doesn't, you added a layer. Run it either way and report it &mdash; a negative there is far cheaper to discover now than in review.</p>
+    </div>
+
+    <div class="q">
+      <div class="qhead">
+        <span class="qn">Q4</span>
+        <p class="qtitle">How do RF and navigation connect back to the FL job scheduler?</p>
+        <span class="chip test">Bilevel, three edges</span>
+      </div>
+      <p>This is the best question in the document, and its answer is your architecture figure. Frame it as a bilevel problem with a bidirectional interface:</p>
+    </div>
+  </div>
+
+  <div class="tablewrap plate">
+    <table>
+      <thead>
+        <tr><th>Edge</th><th>Direction</th><th>What crosses it</th><th>Where it lands in the code</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="k">Demand</td>
+          <td><span class="tag flat">Scheduler &rarr; RF/Nav</span></td>
+          <td>Which devices need service, how urgently (deadline), expected update value (readiness &times; effectiveness). This is the lower layer's objective function.</td>
+          <td><span class="m">S3 deadline + bucket classify</span></td>
+        </tr>
+        <tr>
+          <td class="k">Coupling</td>
+          <td><span class="tag rf">RF</span> <span class="tag nav">&harr; Nav</span></td>
+          <td>Band sets range, range sets clustering and dwell; route sets which bands are usable at which stop, and the phase you find on arrival.</td>
+          <td><span class="m">cuts 1&ndash;3 above</span></td>
+        </tr>
+        <tr>
+          <td class="k">Feasible set</td>
+          <td><span class="tag flat">RF/Nav &rarr; Scheduler</span></td>
+          <td>Not a route &mdash; a <em>feasible set plus a cost vector.</em> "These contacts are reachable, at these costs, with this predicted link quality." The scheduler consumes it as a hard gate.</td>
+          <td><span class="m">S3b gate &middot; features.py slot 10</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="col">
+    <p>You already have both sockets for the return edge, which is what makes this a rewiring rather than a rewrite. S3b is where the feasible set lands; slot 10 is where the link-quality estimate lands. Slot 10 today carries a mission-mean scalar &mdash; make it a <em>per-contact predicted SNR at estimated arrival time</em> and the same change that closes cut 2 also makes the feature discriminative instead of constant across the batch.</p>
+    <p>The formal statement, which is also the sentence for the paper: <strong>the scheduler is the outer problem (which devices are worth acquiring), RF-plus-navigation is the inner problem (can we reach them, at what cost), and the coupling is bidirectional because value depends on cost and feasibility depends on which devices you selected.</strong> Note that this preserves your architectural guarantee untouched &mdash; the hard gates still run before anything learned ranks anything.</p>
+
+    <div class="q">
+      <div class="qhead">
+        <span class="qn">Q5</span>
+        <p class="qtitle">Is this enough to justify RL over a cross-heuristic?</p>
+        <span class="chip no">It justifies testing, not asserting</span>
+      </div>
+      <p>Honest answer: the coupling justifies <em>testing</em> whether RL is needed. It does not guarantee RL wins &mdash; and the useful move is to stop needing it to.</p>
+      <p>Whoever told you to check the cross-heuristic is right, and you should build it. But <strong>it is your baseline, not your threat.</strong> Without a strong joint heuristic, "RL helps" is unfalsifiable and reviewer 74C's complaint never closes. With one, you can state a boundary &mdash; and a boundary is a better result than a win.</p>
+    </div>
+  </div>
+
+  <div class="note col">
+    <p>The claim to aim for is not <em>"RL beats heuristics."</em> It is:</p>
+    <p><strong>Here is where a decomposed heuristic provably stops working, and we locate that boundary empirically.</strong></p>
+    <p>Your revision plan already has this instinct at &sect;7.3 &mdash; "the learned selector is not necessary under unconstrained conditions; its benefit becomes significant when budgets are tight." And your A1/A2 result is <em>already</em> a paper written in that voice: the mule loses on a clean backhaul, wins decisively under jitter, reported as a crossover surface rather than a pooled mean. Do the same thing for RL and you inherit a rhetorical structure that has already survived scrutiny.</p>
+  </div>
+</section>
+
+<!-- ============ THE TEST ============ -->
+<section>
+  <p class="eyebrow">The test</p>
+  <div class="col">
+    <h2>Three properties, each measurable</h2>
+    <p>Design the experiment to <em>measure</em> these rather than assert them. If all three hold and the cross-heuristic still wins, the paper is still good &mdash; it becomes <em>when does learning pay for itself in mule-based FL?</em>, which is publishable, honest, and much harder to attack than a contested effect size.</p>
+  </div>
+
+  <div class="tablewrap plate">
+    <table>
+      <thead>
+        <tr><th>Property</th><th>The claim</th><th>How to measure it</th><th>What falsifies it</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="k">a &middot; Non-<br>decomposability</td>
+          <td>Greedy band-then-route is measurably worse than joint search.</td>
+          <td>Offline oracle on small instances (N &le; 6, exhaustive over band &times; permutation). Report the optimality gap of each decomposition.</td>
+          <td>Gap &asymp; 0. Then the problem genuinely decomposes and you should ship the heuristic.</td>
+        </tr>
+        <tr>
+          <td class="k">b &middot; Delayed<br>consequence</td>
+          <td>A band choice at mission <span class="m">m</span> affects the round closing at <span class="m">m+2</span>.</td>
+          <td>Sweep the credit-assignment horizon &mdash; train with discount &gamma; near 0 (myopic) up to &gamma; near 1, and plot performance against it.</td>
+          <td>Flat curve in &gamma;. Then there is no temporal credit to assign and a one-step rule suffices.</td>
+        </tr>
+        <tr>
+          <td class="k">c &middot; Non-<br>stationarity</td>
+          <td>No single static weight vector wins across regimes.</td>
+          <td>Tune the cross-heuristic's weights <em>per regime</em> and show the winning weights change across the clean/jittery &times; tight/slack grid.</td>
+          <td>One weight vector wins everywhere. Then publish the heuristic &mdash; that is a cleaner result than RL.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="col">
+    <p>Keep the existing claim rule &mdash; bootstrap CI excluding 0 <em>and</em> paired Wilcoxon <span class="mono">p &lt; 0.05</span>, with the multiplicity position stated explicitly. It is what makes the A2 result credible and it will do the same work here.</p>
+  </div>
+</section>
+
+<!-- ============ SEQUENCE ============ -->
+<section>
+  <p class="eyebrow">Sequence</p>
+  <div class="col">
+    <h2>What to do, in order</h2>
+    <p>Ordered by dependency, and deliberately front-loaded with the cheap measurement changes &mdash; two of the six require no new architecture, and either could resolve the question before you build anything.</p>
+  </div>
+
+  <ol class="steps plate">
+    <li>
+      <b>Fix the measurement</b>
+      <span class="cost">no new code</span>
+      <span class="d">&tau; = 0.82 time-to-accuracy, and run where S3b binds (~60 s, not 120 s). May reveal signal the current setup structurally cannot see.</span>
+    </li>
+    <li>
+      <b>Wire band &rarr; rf_range_m &rarr; S3a clustering</b>
+      <span class="cost">small &middot; cut 1</span>
+      <span class="d">Creates the coupling. Immediately testable by ablation, and the ablation is the evidence that you built a system rather than a stack.</span>
+    </li>
+    <li>
+      <b>Make slot 10 per-contact predicted SNR at arrival</b>
+      <span class="cost">small &middot; cut 2</span>
+      <span class="d">Closes the anticipation edge and fixes the constant-feature problem in one change.</span>
+    </li>
+    <li>
+      <b>Put travel time and rate-dependent dwell into the budget</b>
+      <span class="cost">medium &middot; cut 3</span>
+      <span class="d">Port Exp 3's cost model into the Exp-4 path; replace the constant <span class="mono">session_time</span> with a function of achieved rate.</span>
+    </li>
+    <li>
+      <b>Build the joint cross-heuristic as a first-class arm</b>
+      <span class="cost">medium</span>
+      <span class="d">Alongside B1 (MAX-AoI) and B2 (Oort statistical utility), sharing transport, realism and seeds so the comparison isolates the policy.</span>
+    </li>
+    <li>
+      <b>Then decide on RL, using (a)&ndash;(c) as the criteria</b>
+      <span class="cost">gated on 1&ndash;5</span>
+      <span class="d">Not before. Every step above is worth doing whichever way the decision goes, which is what makes this ordering safe.</span>
+    </li>
+  </ol>
+</section>
+
+<!-- ============ SCOPE ============ -->
+<section>
+  <p class="eyebrow">Scope</p>
+  <div class="col">
+    <h2>This is E3, not a new front</h2>
+    <p>Worth saying to the team explicitly, because it changes what the redefinition costs. Your holistic revision plan already records that E3 &mdash; the scheduling and scale experiment &mdash; is <em>"the largest untouched block of work in this plan,"</em> and Freeze D4 already settles that E4 makes no RL claim and that the RL question belongs to E3.</p>
+    <p>So this redefinition is not opening a new thread. It is <strong>finally specifying the experiment your own plan reserved for exactly this question.</strong> The practical consequence: the ICNC submission does not have to carry it. E4's crossover surface stands on its own as an availability result, and the RL question ships with E3 on its own timeline.</p>
+    <p>One thing to protect while you do this: the honest framing that already makes the E4 result credible &mdash; <em>HERMES is not a general improvement on federated learning; it is an availability mechanism, and it costs throughput when availability is not the problem.</em> The same discipline applied to RL is what will make the boundary claim land.</p>
+  </div>
+</section>
+
+</div>

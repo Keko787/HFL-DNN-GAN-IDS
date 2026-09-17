@@ -1,0 +1,116 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1160 618" role="img" aria-label="Four panels in a two-by-two grid. Rows are the two joint enclosures from the workflow, plan and fly; columns are a heuristic filling and a learned filling. The enclosures, inputs and outputs are identical across each row. In the heuristic column the first decision consults one input and two further inputs are drawn as dashed stubs that stop short; the plan-time chain runs once with no loop, and the flight-time band is chosen from the phase now and the next stop from the committed order. In the learned column all three inputs reach a value function trained on realised round closure; the plan-time search iterates over candidate pairs, and the flight-time policy chooses band and next stop together, trading rate now for phase later.">
+<defs>
+<marker id="p-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#171B1D"/></marker>
+<marker id="p-nav" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#1B5B63"/></marker>
+</defs>
+<text x="305" y="24" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10.5" font-weight="600" fill="#414D51">HEURISTIC — a fixed rule in the slot</text>
+<text x="865" y="24" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10.5" font-weight="600" fill="#1B5B63">LEARNED — a value function in the slot</text>
+<line x1="585" y1="36" x2="585" y2="606" stroke="#D6DDDA" stroke-width="1"/>
+<rect x="60" y="66" width="490" height="224" fill="none" stroke="#1B5B63" stroke-width="1.2" stroke-dasharray="6 5"/>
+<text x="72" y="84" text-anchor="start" font-family="IBM Plex Mono, monospace" font-size="10" font-weight="600" fill="#1B5B63">JOINT · PLAN</text>
+<text x="72" y="58" text-anchor="start" font-family="IBM Plex Mono, monospace" font-size="10" fill="#77868B">in: candidates · urgency</text>
+<text x="72" y="306" text-anchor="start" font-family="IBM Plex Mono, monospace" font-size="10" fill="#414D51">out: feasible set + cost → S3b gate</text>
+<rect x="210" y="94" width="250" height="56" fill="#E8ECEA" stroke="#C2CBC7"/>
+<rect x="210" y="94" width="3" height="56" fill="#171B1D"/>
+<text x="224" y="116" text-anchor="start" font-family="Archivo, sans-serif" font-size="13" font-weight="600" fill="#171B1D">Band class</text>
+<text x="224" y="133" text-anchor="start" font-family="IBM Plex Mono, monospace" font-size="10" fill="#77868B">argmax mean SNR over the window</text>
+<path d="M 80 104 L 186 104" fill="none" stroke="#77868B" stroke-width="1.2" stroke-dasharray="3 4"/>
+<text x="144" y="99" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="9.5" fill="#77868B">the route, jointly</text>
+<path d="M 80 122 L 208 122" fill="none" stroke="#171B1D" stroke-width="1.5" marker-end="url(#p-ink)"/>
+<text x="144" y="117" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="9.5" fill="#414D51">mean SNR</text>
+<path d="M 80 140 L 186 140" fill="none" stroke="#77868B" stroke-width="1.2" stroke-dasharray="3 4"/>
+<text x="144" y="135" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="9.5" fill="#77868B">demand · deadlines</text>
+<path d="M 335 152 L 335 168" fill="none" stroke="#171B1D" stroke-width="1.5" marker-end="url(#p-ink)"/>
+<text x="343" y="164" text-anchor="start" font-family="IBM Plex Mono, monospace" font-size="10" fill="#77868B">range</text>
+<rect x="210" y="170" width="250" height="40" fill="#E8ECEA" stroke="#C2CBC7"/>
+<rect x="210" y="170" width="3" height="40" fill="#171B1D"/>
+<text x="224" y="187" text-anchor="start" font-family="Archivo, sans-serif" font-size="13" font-weight="600" fill="#171B1D">Clustering + route</text>
+<text x="224" y="204" text-anchor="start" font-family="IBM Plex Mono, monospace" font-size="10" fill="#77868B">S3a at that range · nearest-first</text>
+<path d="M 335 212 L 335 228" fill="none" stroke="#171B1D" stroke-width="1.5" marker-end="url(#p-ink)"/>
+<text x="343" y="224" text-anchor="start" font-family="IBM Plex Mono, monospace" font-size="10" fill="#77868B">arrival times</text>
+<rect x="210" y="230" width="250" height="40" fill="#E8ECEA" stroke="#C2CBC7"/>
+<rect x="210" y="230" width="3" height="40" fill="#171B1D"/>
+<text x="224" y="247" text-anchor="start" font-family="Archivo, sans-serif" font-size="13" font-weight="600" fill="#171B1D">Predicted cost</text>
+<text x="224" y="264" text-anchor="start" font-family="IBM Plex Mono, monospace" font-size="10" fill="#77868B">Σ travel + dwell at mean rate</text>
+<text x="72" y="284" text-anchor="start" font-family="IBM Plex Mono, monospace" font-size="10" fill="#414D51">one pass · band before route · route before phases</text>
+<rect x="620" y="66" width="490" height="224" fill="none" stroke="#1B5B63" stroke-width="1.2" stroke-dasharray="6 5"/>
+<text x="632" y="84" text-anchor="start" font-family="IBM Plex Mono, monospace" font-size="10" font-weight="600" fill="#1B5B63">JOINT · PLAN</text>
+<text x="632" y="58" text-anchor="start" font-family="IBM Plex Mono, monospace" font-size="10" fill="#77868B">in: candidates · urgency</text>
+<text x="632" y="306" text-anchor="start" font-family="IBM Plex Mono, monospace" font-size="10" fill="#414D51">out: feasible set + cost → S3b gate</text>
+<rect x="770" y="94" width="250" height="56" fill="rgba(27,91,99,.10)" stroke="#1B5B63" stroke-width="1.5"/>
+<rect x="770" y="94" width="3" height="56" fill="#1B5B63"/>
+<text x="784" y="116" text-anchor="start" font-family="Archivo, sans-serif" font-size="13" font-weight="600" fill="#171B1D">V(class, route | demand)</text>
+<text x="784" y="133" text-anchor="start" font-family="IBM Plex Mono, monospace" font-size="10" fill="#77868B">trained on realised round closure</text>
+<path d="M 640 104 L 768 104" fill="none" stroke="#1B5B63" stroke-width="1.5" marker-end="url(#p-nav)"/>
+<text x="704" y="99" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="9.5" fill="#1B5B63">the route, jointly</text>
+<path d="M 640 122 L 768 122" fill="none" stroke="#1B5B63" stroke-width="1.5" marker-end="url(#p-nav)"/>
+<text x="704" y="117" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="9.5" fill="#1B5B63">mean SNR</text>
+<path d="M 640 140 L 768 140" fill="none" stroke="#1B5B63" stroke-width="1.5" marker-end="url(#p-nav)"/>
+<text x="704" y="135" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="9.5" fill="#1B5B63">demand · deadlines</text>
+<path d="M 895 152 L 895 168" fill="none" stroke="#171B1D" stroke-width="1.5" marker-end="url(#p-ink)"/>
+<text x="903" y="164" text-anchor="start" font-family="IBM Plex Mono, monospace" font-size="10" fill="#77868B">score</text>
+<rect x="770" y="170" width="250" height="40" fill="#E8ECEA" stroke="#C2CBC7"/>
+<rect x="770" y="170" width="3" height="40" fill="#171B1D"/>
+<text x="784" y="187" text-anchor="start" font-family="Archivo, sans-serif" font-size="13" font-weight="600" fill="#171B1D">Argmax over pairs</text>
+<text x="784" y="204" text-anchor="start" font-family="IBM Plex Mono, monospace" font-size="10" fill="#77868B">keep the best-scoring pair</text>
+<path d="M 895 212 L 895 228" fill="none" stroke="#171B1D" stroke-width="1.5" marker-end="url(#p-ink)"/>
+<rect x="770" y="230" width="250" height="40" fill="#E8ECEA" stroke="#C2CBC7"/>
+<rect x="770" y="230" width="3" height="40" fill="#171B1D"/>
+<text x="784" y="247" text-anchor="start" font-family="Archivo, sans-serif" font-size="13" font-weight="600" fill="#171B1D">Predicted cost</text>
+<text x="784" y="264" text-anchor="start" font-family="IBM Plex Mono, monospace" font-size="10" fill="#77868B">of the chosen pair</text>
+<path d="M 1020 190 Q 1058 157 1022 124" fill="none" stroke="#1B5B63" stroke-width="1.5" marker-end="url(#p-nav)"/>
+<text x="1064" y="161" text-anchor="start" font-family="IBM Plex Mono, monospace" font-size="10" fill="#1B5B63">iterate</text>
+<text x="632" y="284" text-anchor="start" font-family="IBM Plex Mono, monospace" font-size="10" fill="#414D51">scored together · V learned which pairs land arrivals badly</text>
+<rect x="60" y="362" width="490" height="224" fill="none" stroke="#1B5B63" stroke-width="1.2" stroke-dasharray="6 5"/>
+<text x="72" y="380" text-anchor="start" font-family="IBM Plex Mono, monospace" font-size="10" font-weight="600" fill="#1B5B63">JOINT · FLY</text>
+<text x="72" y="354" text-anchor="start" font-family="IBM Plex Mono, monospace" font-size="10" fill="#77868B">in: arrival at stop k</text>
+<text x="72" y="602" text-anchor="start" font-family="IBM Plex Mono, monospace" font-size="10" fill="#414D51">out: (band, next stop) → serve, or abort</text>
+<rect x="210" y="390" width="250" height="56" fill="#E8ECEA" stroke="#C2CBC7"/>
+<rect x="210" y="390" width="3" height="56" fill="#171B1D"/>
+<text x="224" y="412" text-anchor="start" font-family="Archivo, sans-serif" font-size="13" font-weight="600" fill="#171B1D">Band</text>
+<text x="224" y="429" text-anchor="start" font-family="IBM Plex Mono, monospace" font-size="10" fill="#77868B">argmax rate at the phase now</text>
+<path d="M 80 400 L 186 400" fill="none" stroke="#77868B" stroke-width="1.2" stroke-dasharray="3 4"/>
+<text x="144" y="395" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="9.5" fill="#77868B">remaining queue</text>
+<path d="M 80 418 L 208 418" fill="none" stroke="#171B1D" stroke-width="1.5" marker-end="url(#p-ink)"/>
+<text x="144" y="413" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="9.5" fill="#414D51">phase now</text>
+<path d="M 80 436 L 186 436" fill="none" stroke="#77868B" stroke-width="1.2" stroke-dasharray="3 4"/>
+<text x="144" y="431" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="9.5" fill="#77868B">clock left</text>
+<path d="M 335 448 L 335 464" fill="none" stroke="#171B1D" stroke-width="1.5" marker-end="url(#p-ink)"/>
+<text x="343" y="460" text-anchor="start" font-family="IBM Plex Mono, monospace" font-size="10" fill="#77868B">dwell · clock</text>
+<rect x="210" y="466" width="250" height="40" fill="#E8ECEA" stroke="#C2CBC7"/>
+<rect x="210" y="466" width="3" height="40" fill="#171B1D"/>
+<text x="224" y="483" text-anchor="start" font-family="Archivo, sans-serif" font-size="13" font-weight="600" fill="#171B1D">Next stop</text>
+<text x="224" y="500" text-anchor="start" font-family="IBM Plex Mono, monospace" font-size="10" fill="#77868B">the committed order, k + 1</text>
+<path d="M 335 508 L 335 524" fill="none" stroke="#171B1D" stroke-width="1.5" marker-end="url(#p-ink)"/>
+<rect x="210" y="526" width="250" height="40" fill="#E8ECEA" stroke="#C2CBC7"/>
+<rect x="210" y="526" width="3" height="40" fill="#171B1D"/>
+<text x="224" y="543" text-anchor="start" font-family="Archivo, sans-serif" font-size="13" font-weight="600" fill="#171B1D">Still feasible?</text>
+<text x="224" y="560" text-anchor="start" font-family="IBM Plex Mono, monospace" font-size="10" fill="#77868B">S3b re-check → serve, else abort</text>
+<text x="72" y="580" text-anchor="start" font-family="IBM Plex Mono, monospace" font-size="10" fill="#414D51">sees only now · a good band now can burn the clock k + 1 needs</text>
+<rect x="620" y="362" width="490" height="224" fill="none" stroke="#1B5B63" stroke-width="1.2" stroke-dasharray="6 5"/>
+<text x="632" y="380" text-anchor="start" font-family="IBM Plex Mono, monospace" font-size="10" font-weight="600" fill="#1B5B63">JOINT · FLY</text>
+<text x="632" y="354" text-anchor="start" font-family="IBM Plex Mono, monospace" font-size="10" fill="#77868B">in: arrival at stop k</text>
+<text x="632" y="602" text-anchor="start" font-family="IBM Plex Mono, monospace" font-size="10" fill="#414D51">out: (band, next stop) → serve, or re-plan</text>
+<rect x="770" y="390" width="250" height="56" fill="rgba(27,91,99,.10)" stroke="#1B5B63" stroke-width="1.5"/>
+<rect x="770" y="390" width="3" height="56" fill="#1B5B63"/>
+<text x="784" y="412" text-anchor="start" font-family="Archivo, sans-serif" font-size="13" font-weight="600" fill="#171B1D">Q(s, band, next stop)</text>
+<text x="784" y="429" text-anchor="start" font-family="IBM Plex Mono, monospace" font-size="10" fill="#77868B">trained on realised round closure</text>
+<path d="M 640 400 L 768 400" fill="none" stroke="#1B5B63" stroke-width="1.5" marker-end="url(#p-nav)"/>
+<text x="704" y="395" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="9.5" fill="#1B5B63">remaining queue</text>
+<path d="M 640 418 L 768 418" fill="none" stroke="#1B5B63" stroke-width="1.5" marker-end="url(#p-nav)"/>
+<text x="704" y="413" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="9.5" fill="#1B5B63">phase now</text>
+<path d="M 640 436 L 768 436" fill="none" stroke="#1B5B63" stroke-width="1.5" marker-end="url(#p-nav)"/>
+<text x="704" y="431" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="9.5" fill="#1B5B63">clock left</text>
+<path d="M 895 448 L 895 464" fill="none" stroke="#171B1D" stroke-width="1.5" marker-end="url(#p-ink)"/>
+<text x="903" y="460" text-anchor="start" font-family="IBM Plex Mono, monospace" font-size="10" fill="#77868B">score</text>
+<rect x="770" y="466" width="250" height="40" fill="#E8ECEA" stroke="#C2CBC7"/>
+<rect x="770" y="466" width="3" height="40" fill="#171B1D"/>
+<text x="784" y="483" text-anchor="start" font-family="Archivo, sans-serif" font-size="13" font-weight="600" fill="#171B1D">Argmax (band, next)</text>
+<text x="784" y="500" text-anchor="start" font-family="IBM Plex Mono, monospace" font-size="10" fill="#77868B">trades rate now for phase later</text>
+<path d="M 895 508 L 895 524" fill="none" stroke="#171B1D" stroke-width="1.5" marker-end="url(#p-ink)"/>
+<rect x="770" y="526" width="250" height="40" fill="#E8ECEA" stroke="#C2CBC7"/>
+<rect x="770" y="526" width="3" height="40" fill="#171B1D"/>
+<text x="784" y="543" text-anchor="start" font-family="Archivo, sans-serif" font-size="13" font-weight="600" fill="#171B1D">Still feasible?</text>
+<text x="784" y="560" text-anchor="start" font-family="IBM Plex Mono, monospace" font-size="10" fill="#77868B">S3b re-check → serve, else re-plan</text>
+<text x="632" y="580" text-anchor="start" font-family="IBM Plex Mono, monospace" font-size="10" fill="#414D51">sees the rest of the sortie · each band is priced by its consequence</text>
+</svg>
