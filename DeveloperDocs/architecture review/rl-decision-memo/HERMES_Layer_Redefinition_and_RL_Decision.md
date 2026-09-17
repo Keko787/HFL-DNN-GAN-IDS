@@ -11,9 +11,9 @@ novel (FL for edge devices that cannot reach the FL host), the solution space is
 on the table was a Trajectory Navigation layer plus joint optimisation with RF band selection, with
 the open worry that a cross-heuristic would be just as good.
 
-**Traced against:** [`HERMES_Matrix_Results.md`](HERMES_Matrix_Results.md) (640 trials,
-2026-08-13) · [Exp4 L1 record](HERMES_Experiment4_L1_RF_Layer.md) · [Exp4 L2 record](HERMES_Experiment4_L2_Scheduling_Layer.md)
-· [Related Work notes](HERMES_Related_Work_Notes.md) · [Baseline candidates](HERMES_SOTA_Baseline_Candidates.md)
+**Traced against:** [`HERMES_Matrix_Results.md`](../../HERMES_Matrix_Results.md) (640 trials,
+2026-08-13) · [Exp4 L1 record](../../HERMES_Experiment4_L1_RF_Layer.md) · [Exp4 L2 record](../../HERMES_Experiment4_L2_Scheduling_Layer.md)
+· [Related Work notes](../../HERMES_Related_Work_Notes.md) · [Baseline candidates](../../HERMES_SOTA_Baseline_Candidates.md)
 · Holistic Revision Plan §7.3 / Freeze D4 · `hermes_rl/drone_env.py` · `experiments/exp4/{driver,channel}.py`
 · Chen et al., GLOBECOM Wkshps 2023 + `github.com/Cirrick/Multi_UAV_Data_Harvesting`.
 
@@ -317,7 +317,7 @@ consistent with §1's diagnosis that the old action had no consequence to learn 
 **The other axis — *when the ranking signal is obtained* (pre-selection reporting vs
 retrospective) — is a capability axis, not a performance axis.** It decides who is *admitted* to the
 grid (why FedCS runs degraded and Oort runs faithfully). It belongs in Related Work as the argument
-for the arm list, per [`HERMES_SOTA_Baseline_Candidates.md`](HERMES_SOTA_Baseline_Candidates.md) §3.
+for the arm list, per [`HERMES_SOTA_Baseline_Candidates.md`](../../HERMES_SOTA_Baseline_Candidates.md) §3.
 It is not a column in the results.
 
 ### 6.3 Chen et al. (GLOBECOM Wkshps 2023) — what it is, what transfers
@@ -443,7 +443,7 @@ the content.
       (artifact version 12, 2026-09-17). `hermes-rl-decision.html` is the **first** publish
       (2026-08-26) and is deliberately retained unchanged as the pre-correction baseline.
 - [ ] Add Chen et al. 2023 and Bayerlein et al. 2021 to
-      [`HERMES_Related_Work_Notes.md`](HERMES_Related_Work_Notes.md) §3 (UAV-specific thread) and §7
+      [`HERMES_Related_Work_Notes.md`](../../HERMES_Related_Work_Notes.md) §3 (UAV-specific thread) and §7
       (citation readiness — both need full-text verification marks).
 - [ ] Relabel the to-do doc's "Static / Adaptive" split as *selection-only / trajectory-and-selection*.
 - [ ] When step 1 runs, record whether τ = 0.82 alone surfaces an H2-vs-H1 effect — it changes how
