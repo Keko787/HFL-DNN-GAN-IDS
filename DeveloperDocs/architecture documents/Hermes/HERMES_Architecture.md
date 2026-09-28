@@ -31,7 +31,7 @@ runtime to schedule.
 | `hermes/mission/` | 1,552 | `HFLHostMission` (mule-side FL server), `ClientMission` (device), `partial_fedavg`, utility | `types`, `transport` |
 | `hermes/cluster/` | 756 | `HFLHostCluster`, `DeviceRegistry`, `cross_mule_fedavg` | `types`, `transport` |
 | `hermes/mule/` | 1,335 | `MuleSupervisor`, `ClientCluster`, `BundleDistributor` | all of the above |
-| `hermes/l1/` | 363 | `ChannelDDQN` RF band selector, RF prior | `types` |
+| `hermes/l1/` | 363 | `AdaptiveChannelController` (the U(c, t) backhaul band choice Exp 4 arm H3 runs), `ChannelDDQN` (untrained, not wired in), RF prior | `types` |
 | `hermes/processes/` | 1,552 | Per-role CLI entry points + `MultiProcessOrchestrator` | all + `experiments` ⚠ |
 | `hermes/observability/` | 382 | JSONL event emitter, `MetricsRegistry` | stdlib only |
 
@@ -52,7 +52,7 @@ graph LR
     end
     subgraph T2M["Tier 2-mobile — Mule NUC (UAV/UGV)"]
         SUP["MuleSupervisor"]
-        L1["ChannelDDQN<br/>(L1, band choice)"]
+        L1["L1 channel controller<br/>(U(c,t), backhaul band)"]
         SCH["FLScheduler<br/>S1→S2A/S2B→S3→S3a→S3.5"]
         HM["HFLHostMission<br/>(FL server in-field)"]
         CC["ClientCluster<br/>(dock client)"]

@@ -1,0 +1,1192 @@
+<meta charset="utf-8">
+<title>FeRRy Build Plan</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,600;1,6..72,400&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --bg:#f6f4ef; --bg2:#ece9e1; --ink:#1d2229; --ink2:#4a5261; --ink3:#6f7784;
+  --rule:#d8d4ca; --panel:#fbfaf7;
+  --hermes:#b8651f; --hermes-soft:#f3dfcb;
+  --prior:#2e6f78; --prior-soft:#d5e7e8;
+  --warn:#9b2f2f; --warn-soft:#f1d9d9;
+  --ok:#3d6b3a; --ok-soft:#dbe6d6;
+  --code:#e9e6dd;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#15181c; --bg2:#1d2126; --ink:#e6e3dc; --ink2:#b3b0a8; --ink3:#8f8c85;
+    --rule:#33383f; --panel:#1a1e23;
+    --hermes:#e0924f; --hermes-soft:#3a2a1b;
+    --prior:#6fb7bf; --prior-soft:#1c3336;
+    --warn:#e07a7a; --warn-soft:#3b2222;
+    --ok:#8ec48a; --ok-soft:#213222;
+    --code:#22272d;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#15181c; --bg2:#1d2126; --ink:#e6e3dc; --ink2:#b3b0a8; --ink3:#8f8c85;
+  --rule:#33383f; --panel:#1a1e23;
+  --hermes:#e0924f; --hermes-soft:#3a2a1b;
+  --prior:#6fb7bf; --prior-soft:#1c3336;
+  --warn:#e07a7a; --warn-soft:#3b2222;
+  --ok:#8ec48a; --ok-soft:#213222;
+  --code:#22272d;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:16px;line-height:1.55;padding-inline:16px;padding-block:0 72px}
+.wrap{max-width:1080px;margin:0 auto}
+h1,h2,h3{font-family:"Newsreader",Georgia,"Times New Roman",serif;font-weight:600;line-height:1.15;text-wrap:balance;margin:0}
+h1{font-size:clamp(34px,5vw,52px);letter-spacing:-0.01em}
+h2{font-size:clamp(26px,3.2vw,34px);margin-top:72px;padding-top:24px;border-top:1px solid var(--rule)}
+h3{font-size:21px;margin-top:36px}
+p{max-width:72ch;margin:14px 0}
+ul,ol{max-width:72ch;padding-left:1.3em}
+li{margin:6px 0}
+a{color:var(--prior)}
+a:focus-visible,button:focus-visible{outline:2px solid var(--hermes);outline-offset:2px}
+.eyebrow{font-family:"IBM Plex Mono",ui-monospace,Menlo,monospace;font-size:12px;letter-spacing:0.08em;text-transform:uppercase;color:var(--ink3)}
+header{padding-block:56px 20px;border-bottom:1px solid var(--rule)}
+header .meta{display:flex;flex-wrap:wrap;gap:8px 24px;margin-top:18px;font-family:"IBM Plex Mono",monospace;font-size:12.5px;color:var(--ink2)}
+.lede{font-family:"Newsreader",Georgia,serif;font-size:21px;line-height:1.4;color:var(--ink2);max-width:62ch;margin-top:20px}
+nav.toc{margin-top:28px;display:flex;flex-wrap:wrap;gap:6px 18px;font-size:14px}
+nav.toc a{color:var(--ink2);text-decoration:none;border-bottom:1px solid var(--rule)}
+nav.toc a:hover,nav.toc a:focus{color:var(--hermes);border-color:var(--hermes)}
+section:first-of-type h2{border-top:0;margin-top:40px;padding-top:0}
+.findings{display:grid;grid-template-columns:repeat(auto-fit,minmax(235px,1fr));gap:14px;margin-top:24px}
+.finding{background:var(--panel);border:1px solid var(--rule);padding:18px 20px;border-radius:4px}
+.finding .k{font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--hermes);letter-spacing:0.06em;text-transform:uppercase}
+.finding h3{margin-top:6px;font-size:19px}
+.finding p{font-size:14.5px;margin:8px 0 0;color:var(--ink2)}
+figure{margin:28px 0;padding:0}
+figure svg{max-width:100%;height:auto;display:block;color:var(--ink);font-family:"IBM Plex Sans",system-ui,sans-serif}
+figure .scroll svg{min-width:760px}
+figcaption{font-size:13.5px;color:var(--ink2);max-width:82ch;margin-top:10px;line-height:1.5}
+figcaption b{color:var(--ink)}
+.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{border-collapse:collapse;width:100%;font-size:13.5px;line-height:1.4}
+th,td{text-align:left;vertical-align:top;padding:9px 10px;border-bottom:1px solid var(--rule)}
+th{font-family:"IBM Plex Mono",monospace;font-size:11.5px;letter-spacing:0.06em;text-transform:uppercase;color:var(--ink3);font-weight:500;border-bottom:2px solid var(--rule)}
+td:first-child{font-weight:500}
+tr.ours td{background:var(--hermes-soft)}
+tr.ours td:first-child{font-weight:600;color:var(--hermes)}
+tr.group td{background:var(--bg2);font-family:"IBM Plex Mono",monospace;font-size:11.5px;letter-spacing:0.06em;text-transform:uppercase;color:var(--ink2);font-weight:500;padding-block:6px}
+table.wide{min-width:980px}
+table.xwide{min-width:1180px}
+td.c{text-align:center;font-family:"IBM Plex Mono",monospace;font-size:14px;white-space:nowrap}
+code,pre{font-family:"IBM Plex Mono",ui-monospace,Menlo,monospace;font-size:13px}
+code{background:var(--code);padding:1px 5px;border-radius:3px;overflow-wrap:anywhere}
+pre{background:var(--code);padding:14px 16px;border-radius:4px;overflow-x:auto;line-height:1.5;max-width:100%}
+pre code{background:none;padding:0}
+.eq{font-family:"IBM Plex Mono",monospace;font-size:13.5px;background:var(--panel);border-left:3px solid var(--hermes);padding:12px 16px;margin:16px 0;overflow-x:auto;max-width:86ch;line-height:1.6}
+.note{border-left:3px solid var(--prior);background:var(--prior-soft);padding:12px 16px;margin:18px 0;max-width:82ch;font-size:14.5px}
+.note.warn{border-left-color:var(--warn);background:var(--warn-soft)}
+.note p{margin:6px 0}
+.small{font-size:13.5px;color:var(--ink2)}
+.tag{display:inline-block;font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:0.05em;text-transform:uppercase;padding:1px 6px;border-radius:3px;border:1px solid currentColor;vertical-align:1px;white-space:nowrap}
+.tag.new{color:var(--hermes);background:var(--hermes-soft)}
+.tag.chg{color:var(--hermes)}
+.tag.keep{color:var(--ink3)}
+.tag.opt{color:var(--ink3);border-style:dashed}
+.tag.p{color:var(--prior)}
+.tag.w{color:var(--warn)}
+.tag.g{color:var(--ok)}
+.cb{display:inline-block;font-family:"IBM Plex Mono",monospace;font-size:11px;font-weight:500;letter-spacing:0.04em;padding:1px 6px;border-radius:3px;color:#fff;background:var(--hermes);margin-right:3px;vertical-align:1px}
+:root[data-theme="dark"] .cb{color:#15181c}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .cb{color:#15181c}}
+.legend{display:flex;flex-wrap:wrap;gap:8px 20px;font-size:13px;color:var(--ink2);margin:10px 0 0;align-items:center}
+.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:22px;align-items:start}
+/* phases */
+.phase{border:1px solid var(--rule);background:var(--panel);border-radius:4px;padding:18px 20px;margin-top:22px}
+.phase .head{display:flex;flex-wrap:wrap;gap:6px 16px;align-items:baseline;justify-content:space-between;border-bottom:1px solid var(--rule);padding-bottom:10px;margin-bottom:12px}
+.phase .head h3{margin:0;font-size:22px}
+.phase .num{font-family:"IBM Plex Mono",monospace;font-size:13px;color:var(--hermes);letter-spacing:0.06em;margin-right:10px}
+.phase .est{font-family:"IBM Plex Mono",monospace;font-size:12.5px;color:var(--ink2)}
+.phase .goal{font-family:"Newsreader",Georgia,serif;font-size:18px;line-height:1.4;margin:0 0 12px;max-width:80ch}
+.phase .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px 26px}
+.lbl{font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:0.07em;text-transform:uppercase;color:var(--ink3);margin:0 0 6px}
+.phase .grid p{margin:0 0 6px;font-size:14.5px}
+.phase .grid ul{margin:0;padding-left:1.1em;font-size:14.5px}
+.phase .grid li{margin:4px 0}
+.phase .gate{grid-column:1 / -1;border-left:3px solid var(--hermes);padding:8px 14px;background:var(--hermes-soft);font-size:14.5px}
+.phase .gate b{font-weight:600}
+ul.files{list-style:none;padding-left:0}
+ul.files li{display:grid;grid-template-columns:auto 1fr;gap:2px 8px;align-items:baseline}
+ul.files li .tag{grid-row:span 2}
+ul.files code{font-size:12.5px}
+ul.files span{font-size:13.5px;color:var(--ink2);grid-column:2}
+/* walk-through */
+ol.seq{counter-reset:s;list-style:none;padding:0;max-width:86ch}
+ol.seq li{counter-increment:s;position:relative;padding:12px 0 12px 56px;border-top:1px solid var(--rule);margin:0}
+ol.seq li::before{content:counter(s,decimal-leading-zero);position:absolute;left:0;top:12px;font-family:"IBM Plex Mono",monospace;font-size:13px;color:var(--hermes)}
+ol.seq li b{display:block;font-weight:600}
+ol.seq li span{font-size:14.5px;color:var(--ink2)}
+ol.seq li.clock{padding-left:0;border-top:2px solid var(--ink);font-family:"IBM Plex Mono",monospace;font-size:12px;letter-spacing:0.08em;text-transform:uppercase;color:var(--ink2);counter-increment:none}
+ol.seq li.clock::before{content:none}
+/* module tree */
+.tree{font-family:"IBM Plex Mono",monospace;font-size:12.5px;line-height:1.75;background:var(--panel);border:1px solid var(--rule);border-radius:4px;padding:14px 16px;overflow-x:auto}
+.tree .row{display:grid;grid-template-columns:minmax(300px,max-content) 64px 1fr;gap:0 14px;white-space:nowrap}
+.tree .row .d{white-space:normal;color:var(--ink2);font-family:"IBM Plex Sans",system-ui,sans-serif;font-size:13px}
+.tree .dir{color:var(--ink3)}
+.tree .row .tag{justify-self:start;align-self:center}
+/* experiment cards */
+.exp{border-top:1px solid var(--rule);padding:18px 0 6px}
+.exp .head{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:baseline}
+.exp .head h3{margin:0;font-size:20px}
+.exp .id{font-family:"IBM Plex Mono",monospace;font-size:13px;color:var(--hermes)}
+.exp dl{display:grid;grid-template-columns:150px 1fr;gap:6px 18px;margin:12px 0 0;font-size:14.5px;max-width:100ch}
+.exp dt{font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:0.07em;text-transform:uppercase;color:var(--ink3);padding-top:3px}
+.exp dd{margin:0}
+@media (max-width:640px){.exp dl{grid-template-columns:1fr}.exp dt{padding-top:8px}}
+.dot{display:inline-block;width:11px;height:11px;border-radius:50%;vertical-align:-1px}
+.dot.f{background:var(--ink)}
+.dot.o{background:var(--hermes)}
+.dot.h{border:1.5px solid var(--ink2);background:transparent}
+.src{font-size:13.5px;columns:2;column-gap:32px;max-width:none}
+.src li{break-inside:avoid;margin:4px 0}
+@media (max-width:640px){.src{columns:1}}
+@media (prefers-reduced-motion: reduce){*{scroll-behavior:auto!important}}
+/* figures */
+.fx-new{fill:var(--hermes-soft);stroke:var(--hermes);stroke-width:1.5}
+.fx-chg{fill:var(--panel);stroke:var(--hermes);stroke-width:1.3;stroke-dasharray:5 3}
+.fx-ph{fill:var(--panel);stroke:var(--ink3);stroke-width:1}
+.fx-ph.rerun{stroke:var(--warn);stroke-width:1.6}
+.fx-th{fill:var(--prior-soft);stroke:var(--prior);stroke-width:1}
+.fx-dia{fill:var(--bg);stroke:var(--hermes);stroke-width:1.5}
+.fx-t{fill:var(--ink);font-size:12.5px;font-weight:600}
+.fx-d{fill:var(--ink2);font-size:11px}
+.fx-m{fill:var(--ink3);font-family:"IBM Plex Mono",ui-monospace,Menlo,monospace;font-size:10.5px}
+.fx-pn{fill:var(--hermes);font-family:"IBM Plex Mono",ui-monospace,Menlo,monospace;font-size:11px;letter-spacing:.06em}
+.fx-ln{stroke:var(--ink2);stroke-width:1.4;fill:none}
+.fx-ln.d{stroke-dasharray:4 3}
+.fx-ah{fill:var(--ink2)}
+.fx-lb{fill:var(--ink2);font-size:11px}
+.fx-lb.ok{fill:var(--ok)}
+.fx-lb.w{fill:var(--warn)}
+.fx-lane{fill:var(--ink3);font-family:"IBM Plex Mono",ui-monospace,Menlo,monospace;font-size:11px;letter-spacing:.1em}
+.fx-bg{fill:var(--bg)}
+.fx-thl{fill:var(--ink);font-size:11.5px}
+.sw{display:inline-block;width:18px;height:12px;border-radius:2px;vertical-align:-1px;margin-right:6px}
+.sw.new{background:var(--hermes-soft);border:1.5px solid var(--hermes)}
+.sw.chg{background:var(--panel);border:1.5px dashed var(--hermes)}
+table.mx td{text-align:center;vertical-align:middle}
+table.mx td:first-child{text-align:left;white-space:nowrap}
+table.mx th{text-align:center}
+table.mx th:first-child{text-align:left}
+.callout{border:1px solid var(--prior);background:var(--prior-soft);border-radius:4px;padding:14px 18px;margin-top:22px;max-width:86ch}
+.callout .lbl{color:var(--prior)}
+.callout p{margin:6px 0;font-size:14.5px}
+.defect{border:1px solid var(--warn);background:var(--warn-soft);border-radius:4px;padding:14px 18px;margin-top:22px}
+.defect .lbl{color:var(--warn)}
+.defect ol{margin:8px 0 0;padding-left:1.2em;font-size:14.5px;max-width:92ch}
+.defect li{margin:8px 0}
+.defect p{font-size:14.5px;margin:10px 0 0}
+.dec{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px;margin-top:20px}
+.dec .d{border:1px solid var(--rule);background:var(--panel);border-radius:4px;padding:14px 16px}
+.dec .d .id{font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--warn);letter-spacing:.05em}
+.dec .d h3{font-size:18px;margin:4px 0 0}
+.dec .d p{font-size:14px;margin:8px 0 0;color:var(--ink2)}
+.dec .d .when{font-family:"IBM Plex Mono",monospace;font-size:11.5px;color:var(--ink3);margin-top:10px}
+</style>
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">Research record · FeRRy (HERMES Path A) · build plan</div>
+  <h1>FeRRy Build Plan</h1>
+  <p class="lede">What has to change in the HERMES repository to build the system that contributions C1 to C5 describe, in the order the dependencies allow; what the finished system does on one mission; and which baselines and experiments decide whether each contribution is earned.</p>
+  <div class="meta">
+    <span>27 Sep 2026</span>
+    <span>AERI Lab · University of Missouri</span>
+    <span>repo Keko787/HFL-DNN-GAN-IDS @ 229a093 (HEAD, unchanged since the audit)</span>
+    <span>inputs: Novelty Audit Rev. 3 · FeRRy deck (23 Sep) · Chen 2023 note · code maps of hermes/ and experiments/</span>
+  </div>
+  <nav class="toc" aria-label="Contents">
+    <a href="#bottom-line">Bottom line</a>
+    <a href="#today">What the code does today</a>
+    <a href="#architecture">Finished architecture</a>
+    <a href="#mission">One mission, end to end</a>
+    <a href="#phases">Phased plan</a>
+    <a href="#decisions">Decisions to take first</a>
+    <a href="#baselines">Baselines</a>
+    <a href="#experiments">Experiments</a>
+    <a href="#metrics">Metrics and statistics</a>
+    <a href="#risks">Risks and non-goals</a>
+    <a href="#sources">Sources</a>
+  </nav>
+</header>
+
+<section id="bottom-line">
+  <h2>Bottom line</h2>
+  <p>FeRRy is the Path A system the contribution ledger calls HERMES; <code>hermes/</code> is the package it gets built in. The plan below was checked against the code at 229a093, and the code changes the cost picture in three places the ledger did not see.</p>
+  <div class="findings">
+    <div class="finding">
+      <div class="k">The build</div>
+      <h3>Seven phases, one learned object</h3>
+      <p>Repair the ground truth, ship the age-weighted merge and the channel-free baselines, then build the simulated clock and contact link, the plan clock, and the flight-time (band, stop) score. Everything except that score stays deterministic or exhaustive.</p>
+    </div>
+    <div class="finding">
+      <div class="k">Before any new code</div>
+      <h3>Two recorded results need a re-run</h3>
+      <p>The backhaul loss schedule was never indexed past mission 1, which narrows what the L1 confirmation measured. And an empty mission never refreshed the budget stamp, so later missions planned against a shrinking budget; in the 60 s cell 72–81% of missions were empty. Both are now fixed.</p>
+    </div>
+    <div class="finding">
+      <div class="k">Costlier than the ledger says</div>
+      <h3>Age is not observable yet</h3>
+      <p>No θ version travels with an update, so neither merge knows an update's age, and Pass 2 re-delivers θ to the whole slice, so ages barely spread. C3's cutoff needs a version on four message types and a budgeted Pass 2.</p>
+    </div>
+    <div class="finding">
+      <div class="k">Decide first</div>
+      <h3>Band classes by bandwidth, not carrier</h3>
+      <p>3.32, 3.34 and 3.90 GHz differ by at most 1.4 dB of free-space loss, so a range trade has to come from channel width. With an 18.8 KB model, dwell only matters on narrow classes or larger payloads, so payload size is a decision too.</p>
+    </div>
+  </div>
+</section>
+
+<section id="today">
+  <h2>What the code does today</h2>
+  <p>Each row reads the ledger's target against the code as it runs in the process runtime, not as the design documents describe it. File references are to 229a093.</p>
+  <div class="scroll">
+  <table class="xwide">
+    <thead><tr><th>Contribution</th><th>Target (ledger)</th><th>Today at 229a093</th><th>What must change</th><th>Built in</th><th>Tested by</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><span class="cb">C1</span> Reach is a decision</td>
+        <td>The band class b̄ picked before takeoff sets contact range and rate; range sets the stops.</td>
+        <td><code>rf_range_m</code> is one scalar (60 m) that also switches one-pass and two-pass missions (<code>mule_main.py:284</code>). The contact link has no band, and the RF server broadcasts to every registered device, so range is never enforced. 3.32/3.34/3.90 GHz exist only as constants.</td>
+        <td>Band classes with a range–rate model; clustering per class; range-gated solicit; b̄ in the plan.</td>
+        <td>P3, P4</td>
+        <td>5.4, 5.8</td>
+      </tr>
+      <tr>
+        <td><span class="cb">C2</span> One derived objective</td>
+        <td>FedEx's bound with Δ(b̄, π) = travel + dwell + upload plus a coverage term, used as plan score, reward and merge weight.</td>
+        <td>No plan score. The selector reward is 200·completed − time − energy, scaled by 1/150 (<code>selector/sim_env.py:599-603</code>). Merge weights are <code>num_examples</code>. Dwell is a constant: 1 s in S3b, 30 s in ContactSim.</td>
+        <td>Theory; <code>plan_score.py</code>; a reward built from the L3 weight; rate-dependent dwell.</td>
+        <td>theory, P1, P4, P5</td>
+        <td>5.1, 5.7</td>
+      </tr>
+      <tr>
+        <td><span class="cb">C3</span> One deadline, three roles</td>
+        <td>Deadline(j) admits (S3b), orders (S3) and cuts off the merge weight (L3), under a stated law.</td>
+        <td>The two-phase mechanism is built: Φ −5 s on time (floor 5 s), +10 s on a miss, no ceiling. The deadline drives S3b admission, but H1 flies bucket-then-distance order and discards S3b's EDF order. No θ version travels with an update, so neither merge knows an age. The cluster never sends deadline overrides, and nothing would clear them.</td>
+        <td>Version threading; age-weighted merge with cutoff; FedProx; a multiplicative clamped law; deadline-aware flight order.</td>
+        <td>P1 (P3 for the flown order)</td>
+        <td>5.1, 5.2</td>
+      </tr>
+      <tr>
+        <td><span class="cb">C4</span> Two clocks, re-decided per stop</td>
+        <td>Commit at the dock; at each arrival pick (band, next stop) from ≤ 18 masked pairs; re-plan on drift.</td>
+        <td>There is no flight clock: the mule teleports (<code>mule_main.py:465</code>) and the in-flight check compares wall-clock time with start + budget. The process runtime passes no channel actor, so no band is picked at all; <code>ChannelDDQN</code> (8→16→3) is untrained. The selector ranks once from the start pose. <code>_remaining_is_feasible()</code> tests the next contact only and aborts the whole suffix.</td>
+        <td>Simulated clock; seconds-axis channel; band actuated; pair features and a masked pair Q; 2-OPT re-plan.</td>
+        <td>P3, P5</td>
+        <td>5.5, 5.6, 5.3</td>
+      </tr>
+      <tr>
+        <td><span class="cb">C5</span> Fairness under physical cost</td>
+        <td>Coverage term, hard age cap S, missed devices rise in rank, Network AoU reported.</td>
+        <td>A miss lowers rank by design: Φ + 10 s pushes the deadline later (<code>s3_deadline.py:55-57</code>). NEW-tier probation and <code>delivery_priority</code> push the other way only weakly. No age cap, coverage term or AoU metric exists; Exp 4 reports coverage, Jain's index and participation entropy.</td>
+        <td>A priority key; an age-cap gate; the coverage term; Network AoU from traces.</td>
+        <td>P0 (metric), P1 (priority), P4</td>
+        <td>5.8, 5.4</td>
+      </tr>
+      <tr>
+        <td>Measurement and baselines</td>
+        <td>Time to τ = 0.82 in seconds, round closure, deadline-miss rate, Network AoU; Holm–Bonferroni; the SOTA arms.</td>
+        <td><code>t_at_tau_round</code> counts rounds at whatever τ the run used (0.9 in the matrix CSVs, 0.85 in the SOTA CSVs); τ = 0.82 is recomputed from traces, for mule arms only. Holm is applied by hand. Arms H0–H3, D1 (MAX-AoI) and D2 (Oort) exist, and every committed H2 run used random-init weights.</td>
+        <td>A trace scorer; the missing statistics; D3, D4, D5, E3, O1, M1; FX, FB+ and the ablations.</td>
+        <td>P0, P2, P5</td>
+        <td>all</td>
+      </tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="defect">
+    <div class="lbl">Defects that touch recorded results · status 27 Sep</div>
+    <ol>
+      <li><b>The backhaul loss schedule was only ever read at mission 1.</b> <span class="tag g">fixed, Amendment 5</span> <code>processes/cluster.py</code> passed <code>getattr(up, "mission_round", None)</code> to <code>_backhaul_dropped()</code>, but <code>UpBundle</code> has no <code>mission_round</code>; it lives on <code>up.partial_aggregate</code>. The index was therefore always 0, and every <code>--l1-channel</code> run applied mission 1's loss to every mission. H3 got the loss of its mission-1 best band for the whole trial; H2 got its best-average band's mission-1 loss. The L1 confirmation (H3 vs H2, n = 40, jittery, 120 s) measured that difference, not per-mission adaptation. For the same reason <code>backhaul_lost_rounds</code> was always empty, so <code>round_close_rate</code> counted backhaul-dropped rounds as closed in every run with backhaul loss. Re-scored from the L1 cell's traces, closure at k = 1 falls from 0.831 to 0.675 for H2 and from 0.838 to 0.813 for H3.</li>
+      <li><b>Abandoning a device reset its age for D1 and D2.</b> <span class="tag g">fixed, Amendment 5</span> <code>_widen_abandoned()</code> feeds a synthetic TIMEOUT stamped <code>now</code>, and the fold wrote it into the fields MAX-AoI (D1) and Oort's staleness term (D2) aged devices from. Both now age from the last CLEAN. The effect on recorded runs is probably small: D1 and D2 never trigger the pre-flight widen, in-flight aborts are rare while the abort check mixes wall-clock time with simulated transit, and D2's staleness term is about 1e-4 of its utility.</li>
+      <li><b>An empty mission never refreshed the budget stamp.</b> <span class="tag g">fixed, Amendment 6</span> The budget was stamped only when a DOWN bundle arrived, and an empty mission skips the dock, so the next mission planned against the old stamp. In the 60 s traces 72–81% of missions were empty (H1 116/160, D1 126/160, D2 129/160), and in one D1 trial the budget left at planning fell from 60 s to about 39 s by mission 4. Every mission now starts its own budget clock.</li>
+    </ol>
+    <p>Every recorded cell that set a budget ran under the stale stamp: the 08-13 matrix, the L1 confirmation, the S3b and S3c runs and every SOTA run. Re-run a cell before citing it, starting with the L1 cells and the 60 s SOTA cell (H1 +0.073 accuracy over D1, +0.088 over D2).</p>
+  </div>
+</section>
+
+<section id="architecture">
+  <h2>Finished architecture</h2>
+  <p>FeRRy keeps HERMES's tiers (device, mule, edge cluster, cloud), its two-pass missions and its hard gates, and adds one decision on each clock: the band class and route at the dock, and the (band, next stop) pair at every arrival. The figure shows the finished pipeline with the module each box lives in.</p>
+
+  <figure>
+    <div class="scroll">
+    <svg viewBox="0 0 1040 484" role="img" aria-label="Finished FeRRy pipeline in three lanes plus shared services. Plan lane at the dock: demand per device, band class sets reach, search over band class and route, gate, commit. Fly lane at every arrival: arrive and observe, choose band and next stop, serve, check feasibility; re-plan the remainder when it fails, return to dock at the deadline. Merge lane: merge on the mule, merge across mules at the dock, Pass 2 delivery, devices train offline, then the next mission's demand. Shared services: mission clock, channel model, FerrySim trainer, trace scorer.">
+      <defs>
+        <marker id="ah1" viewBox="0 0 8 8" refX="8" refY="4" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,0 L8,4 L0,8 z" class="fx-ah"/></marker>
+      </defs>
+
+      <text class="fx-lane" text-anchor="middle" transform="translate(20 60) rotate(-90)">PLAN</text>
+      <text class="fx-lane" text-anchor="middle" transform="translate(20 228) rotate(-90)">FLY</text>
+      <text class="fx-lane" text-anchor="middle" transform="translate(20 356) rotate(-90)">MERGE</text>
+      <text class="fx-lane" text-anchor="middle" transform="translate(20 442) rotate(-90)">SHARED</text>
+
+      <!-- next-mission feedback rail -->
+      <path class="fx-ln" d="M1016 356 H1030 V10 H136 V27" marker-end="url(#ah1)"/>
+      <rect class="fx-bg" x="390" y="2" width="340" height="16"/>
+      <text class="fx-lb" x="560" y="14" text-anchor="middle">next mission: amendments, θ version v+1, device ages</text>
+
+      <!-- PLAN lane -->
+      <rect class="fx-chg" x="48" y="28" width="176" height="64" rx="4"/>
+      <text class="fx-t" x="58" y="50">Demand per device</text>
+      <text class="fx-d" x="58" y="67">deadline, value, age</text>
+      <text class="fx-m" x="58" y="83">stages/s3_deadline.py</text>
+
+      <rect class="fx-new" x="246" y="28" width="176" height="64" rx="4"/>
+      <text class="fx-t" x="256" y="50">Band class b̄ → reach</text>
+      <text class="fx-d" x="256" y="67">R(b̄), rate → S3a stops</text>
+      <text class="fx-m" x="256" y="83">l1/contact_link.py</text>
+
+      <rect class="fx-new" x="444" y="28" width="176" height="64" rx="4"/>
+      <text class="fx-t" x="454" y="50">Search (b̄, π)</text>
+      <text class="fx-d" x="454" y="67">V = tour time + coverage</text>
+      <text class="fx-m" x="454" y="83">plan/plan_search.py</text>
+
+      <rect class="fx-chg" x="642" y="28" width="176" height="64" rx="4"/>
+      <text class="fx-t" x="652" y="50">Gate before commit</text>
+      <text class="fx-d" x="652" y="67">S3b predicate, age cap S</text>
+      <text class="fx-m" x="652" y="83">s3b + s3d_age_cap.py</text>
+
+      <rect class="fx-chg" x="840" y="28" width="176" height="64" rx="4"/>
+      <text class="fx-t" x="850" y="50">Commit the plan</text>
+      <text class="fx-d" x="850" y="67">b̄, ordered queue, budget</text>
+      <text class="fx-m" x="850" y="83">types/scheduler.py</text>
+
+      <path class="fx-ln" d="M224 60 H245" marker-end="url(#ah1)"/>
+      <path class="fx-ln" d="M422 60 H443" marker-end="url(#ah1)"/>
+      <path class="fx-ln" d="M620 60 H641" marker-end="url(#ah1)"/>
+      <path class="fx-ln" d="M818 60 H839" marker-end="url(#ah1)"/>
+
+      <!-- take off, and the yes loop joining it -->
+      <path class="fx-ln" d="M928 92 V124 H160 V155" marker-end="url(#ah1)"/>
+      <text class="fx-lb" x="936" y="114">take off</text>
+      <path class="fx-ln" d="M904 156 V128" marker-end="url(#ah1)"/>
+      <text class="fx-lb" x="896" y="147" text-anchor="end">yes: fly to next stop</text>
+
+      <!-- FLY lane -->
+      <rect class="fx-chg" x="48" y="156" width="224" height="64" rx="4"/>
+      <text class="fx-t" x="58" y="178">Arrive at stop k</text>
+      <text class="fx-d" x="58" y="195">observe SNR on each band now</text>
+      <text class="fx-m" x="58" y="211">mule/mule_main.py</text>
+
+      <rect class="fx-new" x="296" y="156" width="224" height="64" rx="4"/>
+      <text class="fx-t" x="306" y="178">Choose (band, next stop)</text>
+      <text class="fx-d" x="306" y="195">one score over ≤ 18 masked pairs</text>
+      <text class="fx-m" x="306" y="211">selector/pair_features.py</text>
+
+      <rect class="fx-chg" x="544" y="156" width="224" height="64" rx="4"/>
+      <text class="fx-t" x="554" y="178">Serve the stop on band b</text>
+      <text class="fx-d" x="554" y="195">dwell = bytes / rate(b, SNR)</text>
+      <text class="fx-m" x="554" y="211">mission/host_mission.py</text>
+
+      <rect class="fx-chg" x="792" y="156" width="224" height="64" rx="4"/>
+      <text class="fx-t" x="802" y="178">Remaining queue feasible?</text>
+      <text class="fx-d" x="802" y="195">predicate at the observed rate</text>
+      <text class="fx-m" x="802" y="211">stages/s3b_feasibility.py</text>
+
+      <path class="fx-ln" d="M272 188 H295" marker-end="url(#ah1)"/>
+      <path class="fx-ln" d="M520 188 H543" marker-end="url(#ah1)"/>
+      <path class="fx-ln" d="M768 188 H791" marker-end="url(#ah1)"/>
+
+      <!-- no: re-plan -->
+      <path class="fx-ln" d="M904 220 V239" marker-end="url(#ah1)"/>
+      <text class="fx-lb" x="912" y="234">no</text>
+      <rect class="fx-new" x="792" y="240" width="224" height="60" rx="4"/>
+      <text class="fx-t" x="802" y="261">Re-plan the remainder</text>
+      <text class="fx-d" x="802" y="277">2-OPT under S3b; beacons gated</text>
+      <text class="fx-m" x="802" y="292">routing/two_opt.py</text>
+      <path class="fx-ln" d="M792 270 H436 V221" marker-end="url(#ah1)"/>
+      <text class="fx-lb" x="614" y="264" text-anchor="middle">edited queue</text>
+
+      <!-- exit to merge -->
+      <path class="fx-ln" d="M380 220 V300 H160 V323" marker-end="url(#ah1)"/>
+      <text class="fx-lb" x="372" y="252" text-anchor="end">deadline or queue empty</text>
+      <text class="fx-lb" x="270" y="294" text-anchor="middle">to dock</text>
+
+      <!-- MERGE lane -->
+      <rect class="fx-chg" x="48" y="324" width="224" height="64" rx="4"/>
+      <text class="fx-t" x="58" y="346">Merge on the mule</text>
+      <text class="fx-d" x="58" y="363">w ∝ n·v·s(age), 0 past a_max</text>
+      <text class="fx-m" x="58" y="379">mission/partial_fedavg.py</text>
+
+      <rect class="fx-chg" x="296" y="324" width="224" height="64" rx="4"/>
+      <text class="fx-t" x="306" y="346">Dock: merge across mules</text>
+      <text class="fx-d" x="306" y="363">same weight; issue θ version v+1</text>
+      <text class="fx-m" x="306" y="379">cluster/cross_mule_fedavg.py</text>
+
+      <rect class="fx-chg" x="544" y="324" width="224" height="64" rx="4"/>
+      <text class="fx-t" x="554" y="346">Pass 2: deliver θ v+1</text>
+      <text class="fx-d" x="554" y="363">within the budget</text>
+      <text class="fx-m" x="554" y="379">mule/mule_main.py</text>
+
+      <rect class="fx-chg" x="792" y="324" width="224" height="64" rx="4"/>
+      <text class="fx-t" x="802" y="346">Devices train offline</text>
+      <text class="fx-d" x="802" y="363">local loss + FedProx term</text>
+      <text class="fx-m" x="802" y="379">exp4/model_task.py</text>
+
+      <path class="fx-ln" d="M272 356 H295" marker-end="url(#ah1)"/>
+      <path class="fx-ln" d="M520 356 H543" marker-end="url(#ah1)"/>
+      <path class="fx-ln" d="M768 356 H791" marker-end="url(#ah1)"/>
+
+      <!-- SHARED -->
+      <rect class="fx-new" x="48" y="412" width="224" height="60" rx="4"/>
+      <text class="fx-t" x="58" y="433">Mission clock</text>
+      <text class="fx-d" x="58" y="449">simulated seconds: transit, dwell</text>
+      <text class="fx-m" x="58" y="464">l1/mission_clock.py</text>
+
+      <rect class="fx-new" x="296" y="412" width="224" height="60" rx="4"/>
+      <text class="fx-t" x="306" y="433">Channel model</text>
+      <text class="fx-d" x="306" y="449">SNR(t, band, distance), seeded</text>
+      <text class="fx-m" x="306" y="464">l1/channel_model.py</text>
+
+      <rect class="fx-new" x="544" y="412" width="224" height="60" rx="4"/>
+      <text class="fx-t" x="554" y="433">FerrySim and trainer</text>
+      <text class="fx-d" x="554" y="449">trains pair score on L3 reward</text>
+      <text class="fx-m" x="554" y="464">selector/ferry_sim.py</text>
+
+      <rect class="fx-new" x="792" y="412" width="224" height="60" rx="4"/>
+      <text class="fx-t" x="802" y="433">Trace scorer</text>
+      <text class="fx-d" x="802" y="449">ages, Network AoU, misses, TTA</text>
+      <text class="fx-m" x="802" y="464">analysis/traces_scorer.py</text>
+    </svg>
+    </div>
+    <div class="legend"><span><span class="sw new"></span>new module</span><span><span class="sw chg"></span>existing module that changes</span><span>paths are relative to <code>hermes/</code> or <code>experiments/</code></span></div>
+    <figcaption><b>Figure 1. The finished pipeline.</b> The plan lane runs once per mission at the dock. The fly lane runs at every arrival and loops until the deadline or an empty queue; when the remaining queue stops fitting, it is edited in place instead of abandoned. The merge lane closes the round and feeds the next mission's demand. The pair choice in the fly lane is the only learned component: FerrySim trains it offline on the same clock, channel and reward code the stack runs, and the cross-heuristic can fill the same slot.</figcaption>
+  </figure>
+
+  <h3>Module map</h3>
+  <p>The finished layout of the parts that change. Everything not listed keeps its current role, including S1 eligibility, the device-side S2B gate, the transports and the observability layer.</p>
+  <div class="tree" role="table" aria-label="Module map">
+    <div class="row"><span class="dir">hermes/l1/</span><span></span><span></span></div>
+    <div class="row"><span>&nbsp;&nbsp;contact_link.py</span><span class="tag new">new</span><span class="d">Band classes: bandwidth, range R(b) at the rate floor, rate(b, SNR), dwell(bytes, b, SNR).</span></div>
+    <div class="row"><span>&nbsp;&nbsp;channel_model.py</span><span class="tag new">new</span><span class="d">Seconds-axis SNR(t, band, distance), seeded; one instance for the contact link, one for the backhaul.</span></div>
+    <div class="row"><span>&nbsp;&nbsp;mission_clock.py</span><span class="tag new">new</span><span class="d">Simulated clock injected as <code>now_fn</code>; advances by transit, dwell and upload.</span></div>
+    <div class="row"><span>&nbsp;&nbsp;channel_utility.py</span><span class="tag keep">keep</span><span class="d">The backhaul U(c, t) controller, which is the L1 policy the results actually evaluate.</span></div>
+    <div class="row"><span>&nbsp;&nbsp;channel_ddqn.py</span><span class="tag w">retire</span><span class="d">Untrained 8→16→3 network; retire it, or train it in Phase 5 if it is kept.</span></div>
+    <div class="row"><span class="dir">hermes/scheduler/</span><span></span><span></span></div>
+    <div class="row"><span>&nbsp;&nbsp;fl_scheduler.py</span><span class="tag chg">change</span><span class="d"><code>plan_mode = ferry | legacy</code>; clustering per class; commit; a visited set per mission.</span></div>
+    <div class="row"><span>&nbsp;&nbsp;stages/s3_deadline.py</span><span class="tag chg">change</span><span class="d">Multiplicative clamped law; PARTIAL and TIMEOUT split; a separate priority key; overrides expire.</span></div>
+    <div class="row"><span>&nbsp;&nbsp;stages/s3a_cluster.py</span><span class="tag chg">change</span><span class="d">Radius from R(b̄); called once per band class.</span></div>
+    <div class="row"><span>&nbsp;&nbsp;stages/s3b_feasibility.py</span><span class="tag chg">change</span><span class="d">One FeasibilityModel: transit + bytes/rate + return + upload; energy clause (simulated); single-contact predicate.</span></div>
+    <div class="row"><span>&nbsp;&nbsp;stages/s3d_age_cap.py</span><span class="tag new">new</span><span class="d">Hard age cap S: promote, exempt from the overdue check and the in-flight drop, log violations.</span></div>
+    <div class="row"><span>&nbsp;&nbsp;plan/plan_search.py</span><span class="tag new">new</span><span class="d">(b̄, π) search: exhaustive up to 6 stops, 2-OPT and insertion above.</span></div>
+    <div class="row"><span>&nbsp;&nbsp;plan/plan_score.py</span><span class="tag new">new</span><span class="d">V(b̄, π | demand): the FedEx-form tour-time term, a coverage term and energy.</span></div>
+    <div class="row"><span>&nbsp;&nbsp;routing/two_opt.py</span><span class="tag new">new</span><span class="d">2-OPT and cheapest insertion, shared by D4, the re-plan and the plan search.</span></div>
+    <div class="row"><span>&nbsp;&nbsp;policies/max_aoi.py, oort.py</span><span class="tag chg">change</span><span class="d">D1 and D2 read the last CLEAN, not fields that synthetic TIMEOUTs overwrite.</span></div>
+    <div class="row"><span>&nbsp;&nbsp;policies/whittle.py</span><span class="tag new">new</span><span class="d">D3: Whittle index on weighted Age of Updates, after Cui et al.</span></div>
+    <div class="row"><span>&nbsp;&nbsp;policies/fedex_card.py</span><span class="tag new">new</span><span class="d">D4: FedEx-Async with CARD (Gibbs assignment, 2-OPT visit-all tour).</span></div>
+    <div class="row"><span>&nbsp;&nbsp;policies/fedcs_degraded.py</span><span class="tag opt">optional</span><span class="d">D5: FedCS with last-known state in place of its Resource Request.</span></div>
+    <div class="row"><span>&nbsp;&nbsp;policies/cross_heuristic.py</span><span class="tag new">new</span><span class="d">FX filling: best-rate band now plus nearest feasible stop.</span></div>
+    <div class="row"><span>&nbsp;&nbsp;policies/chen_dqn.py</span><span class="tag new">new</span><span class="d">E3: DQN over the contact graph, after Chen et al.</span></div>
+    <div class="row"><span>&nbsp;&nbsp;policies/monolithic_ho.py</span><span class="tag opt">optional</span><span class="d">M1: one DDQN over every (band, stop) pair, no gates, no plan.</span></div>
+    <div class="row"><span>&nbsp;&nbsp;selector/pair_features.py</span><span class="tag new">new</span><span class="d">About 15 floats per (band, stop) pair.</span></div>
+    <div class="row"><span>&nbsp;&nbsp;selector/ddqn.py, replay.py</span><span class="tag chg">change</span><span class="d">Masked pointer Q over pairs; the target takes a real max; checkpoints.</span></div>
+    <div class="row"><span>&nbsp;&nbsp;selector/ferry_sim.py</span><span class="tag new">new</span><span class="d">Training simulator on the seconds clock, with the reward built from the L3 weight.</span></div>
+    <div class="row"><span class="dir">hermes/mule/, mission/, cluster/, processes/, types/</span><span></span><span></span></div>
+    <div class="row"><span>&nbsp;&nbsp;mule/mule_main.py</span><span class="tag chg">change</span><span class="d">Per-arrival pair choice; band actuated; re-plan instead of abort; budgeted Pass 2.</span></div>
+    <div class="row"><span>&nbsp;&nbsp;mission/host_mission.py</span><span class="tag chg">change</span><span class="d">One contact routine for both passes (finding D-01); band; dwell charged to the clock; range-gated solicit.</span></div>
+    <div class="row"><span>&nbsp;&nbsp;mission/client_mission.py</span><span class="tag chg">change</span><span class="d">Stores the θ basis version and echoes it with the update.</span></div>
+    <div class="row"><span>&nbsp;&nbsp;mission/partial_fedavg.py</span><span class="tag chg">change</span><span class="d">Delta form with w ∝ n·v·s(age) and the cutoff at a_max.</span></div>
+    <div class="row"><span>&nbsp;&nbsp;mission/aggregation_rules.py</span><span class="tag new">new</span><span class="d">agg:plain · cutoff · fedbuff · asynchfl · seq · fedex.</span></div>
+    <div class="row"><span>&nbsp;&nbsp;cluster/cross_mule_fedavg.py, host_cluster.py</span><span class="tag chg">change</span><span class="d">Same weight at the cluster, age in cluster rounds; server mixing instead of overwrite; versions and SpectrumSig go down.</span></div>
+    <div class="row"><span>&nbsp;&nbsp;processes/cluster.py</span><span class="tag chg">change</span><span class="d">Backhaul schedule indexed by the partial's mission round (Phase 0).</span></div>
+    <div class="row"><span>&nbsp;&nbsp;processes/config.py</span><span class="tag chg">change</span><span class="d">Band classes, clock, aggregation rule, age cap, plan mode, FedProx ρ.</span></div>
+    <div class="row"><span>&nbsp;&nbsp;types/*</span><span class="tag chg">change</span><span class="d">Version, age and band fields on DiscPush, GradientSubmission, PartialAggregate, MissionRoundCloseLine and ContactWaypoint.</span></div>
+    <div class="row"><span class="dir">experiments/</span><span></span><span></span></div>
+    <div class="row"><span>&nbsp;&nbsp;sim/drone_env/</span><span class="tag p">move</span><span class="d">The vendored <code>hermes_rl</code> prototype (finding G-01), seeded; the time-axis channel it proves out.</span></div>
+    <div class="row"><span>&nbsp;&nbsp;exp4/model_task.py</span><span class="tag chg">change</span><span class="d">FedProx term (ρ/2)‖θ − θ_received‖² in local training.</span></div>
+    <div class="row"><span>&nbsp;&nbsp;exp5/</span><span class="tag new">new</span><span class="d">Studies 5.1–5.10: grids, runners, shard scripts with single-instance locks.</span></div>
+    <div class="row"><span>&nbsp;&nbsp;analysis/stats.py</span><span class="tag chg">change</span><span class="d">Holm–Bonferroni, Friedman, difference of differences on paired seeds.</span></div>
+    <div class="row"><span>&nbsp;&nbsp;analysis/traces_scorer.py</span><span class="tag new">new</span><span class="d">Network AoU, per-device ages, deadline misses, time to τ in seconds.</span></div>
+    <div class="row"><span>&nbsp;&nbsp;oracle/zhai_oracle.py</span><span class="tag opt">optional</span><span class="d">O1: exhaustive oracle for N ≤ 6.</span></div>
+  </div>
+
+  <h3>Rules the build keeps</h3>
+  <ul>
+    <li><b>Hard gates stay deterministic.</b> S1, the S3b predicate and the age cap run before anything learned, and the pair score only ranks inside the admitted set. <code>scope_guard.py</code> checks pairs the way it checks contacts today. This is design principle 12 in spirit.</li>
+    <li><b>The mule never inspects payloads.</b> It weights updates by metadata (n, reported loss, basis version), and in <code>agg:seq</code> it forwards θ without reading it (principles 9 and 10).</li>
+    <li><b>The cluster never sees an individual update</b> (principle 3); missions stay two-pass (13); local training stays offline and sessions stay exchange-only (14).</li>
+    <li><b><code>hermes/</code> stays numpy-only.</b> The clock, channel and contact-link code live in <code>hermes/l1/</code>, so FerrySim and the stack share them without <code>hermes</code> importing <code>experiments</code> (finding A-01).</li>
+    <li><b>Three principles change, and Freeze Amendment 7 records how:</b> 1 (one job per layer) and 5 (only the waypoint crosses from L2 to L1) because band now enters the next-stop decision, and the letter of 12 because a (band, stop) choice is more than ordering within a bucket. The same amendment keeps the frozen pipeline as a legacy mode, on by default, so every recorded arm can still run.</li>
+  </ul>
+</section>
+
+<section id="mission">
+  <h2>One mission, end to end</h2>
+  <p>What the finished system does from one dock to the next, for one mule over its slice. The numbering is the order of events.</p>
+  <ol class="seq">
+    <li class="clock">Plan clock · at the dock, once per mission</li>
+    <li><b>Take the DOWN bundle.</b><span>θ with its global version v, the mission slice, deadline amendments and each device's per-band SNR signature. The simulated clock resets and the mule's pose returns to the dock.</span></li>
+    <li><b>Build demand.</b><span>S1 eligibility, then for each device Deadline(j) = t_ref(j) + Φ(j), a value proxy v_j from its last reported loss and example count, its age a_j in cluster rounds, and a cap flag once a_j reaches S. A device that missed carries a priority boost that is separate from its deadline window.</span></li>
+    <li><b>Cluster once per band class.</b><span>For each class b̄, S3a groups the eligible devices into stops at range R(b̄). A narrower, longer-reach class makes fewer, farther stops and slower sessions.</span></li>
+    <li><b>Search and score.</b><span>Every (b̄, π) candidate gets V(b̄, π): the FedEx-form term in tour time Δ = travel + Σ dwell at the class's predicted rate + upload, plus a coverage penalty for each device it leaves out. Exhaustive up to 6 stops, 2-OPT above.</span></li>
+    <li><b>Gate.</b><span>S3b keeps a candidate only if every stop's transit + session + return + upload fits min(Deadline(j), budget) and the energy clause holds. A candidate that drops a capped device loses to any feasible one that keeps it.</span></li>
+    <li><b>Commit.</b><span>(b̄, ordered queue, budget) for this mule's slice. Path B+ is this step with b̄ pinned to one class.</span></li>
+    <li class="clock">Flight clock · at every arrival</li>
+    <li><b>Fly.</b><span>The clock advances by distance over cruise speed. Nothing sleeps in real time.</span></li>
+    <li><b>Arrive and observe.</b><span>Read the SNR on each band at this position and time from the channel model, not the plan's prediction.</span></li>
+    <li><b>Choose (band, next stop).</b><span>One score over the admitted pairs, at most 3 bands × 6 stops = 18, with the pairs the predicate rejects at the observed rate masked out. FeRRy fills this slot with the learned pair Q; FX fills it with the best-rate band and the nearest feasible stop.</span></li>
+    <li><b>Serve.</b><span>Solicit only the stop's devices within R(b); push θ_v; collect each Δθ with its basis version, example count and local loss. Dwell = bytes / rate(b, SNR) is charged to the clock.</span></li>
+    <li><b>Check and re-plan.</b><span>Re-run the predicate on the remaining queue at the observed rate. If it fails, drop or reorder with 2-OPT under the predicate, capped stops first, instead of aborting. A device that beacons in joins the queue only if the predicate admits it.</span></li>
+    <li class="clock">Merge clock · at the deadline, then at the dock</li>
+    <li><b>Merge on the mule.</b><span>θ_mule = θ_base + Σ w_i·Δθ_i with w_i ∝ n_i·v_i·s(age_i), and w_i = 0 past a_max. Each device's age, band and outcome go into the round report, and the fast-phase deadline update applies.</span></li>
+    <li><b>Merge across mules at the dock.</b><span>The cluster applies the same weight with age in cluster rounds, mixes the result into θ instead of overwriting it, and issues θ_{v+1} with slow-phase amendments.</span></li>
+    <li><b>Deliver inside the budget.</b><span>Pass 2 carries θ_{v+1} out. Devices the mule does not reach keep training on the older base, and their next update carries that age.</span></li>
+    <li><b>Log.</b><span>Per-device ages, Network AoU, deadline misses, round closure and time to τ go to the traces. FerrySim computes the pair Q's reward from the same quantities: r_k = Σ w_dl·s(age)·v − c_t·Δt − c_e·ΔE − c_miss·[miss], with the coverage penalty at the end of the episode.</span></li>
+  </ol>
+</section>
+
+<section id="phases">
+  <h2>Phased plan</h2>
+  <p>The order follows the ledger's dependency argument with the code's corrections folded in. Phase 0 repairs what later phases would otherwise inherit. Phases 1 and 2 need nothing from the channel model, so their conclusions carry over when Phase 3 changes what every trial does. Phases 4 and 5 add one decision per clock. Line counts include tests and are estimates from the code maps.</p>
+
+  <figure>
+    <div class="scroll">
+    <svg viewBox="0 0 1040 316" role="img" aria-label="Build order. Phase 0 ground truth forks to Phase 1 aggregation with age and Phase 2 SOTA baselines, which join at decision D1 to D3 before Phase 3 clock and contact link, where every mule arm re-runs. Decision D4 precedes Phase 4 plan clock, then Phase 5 flight clock and Phase 6 campaign. A theory track under Phases 1 to 4 feeds the constants of V to Phase 4 and the reward form to Phase 5.">
+      <defs>
+        <marker id="ah2" viewBox="0 0 8 8" refX="8" refY="4" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,0 L8,4 L0,8 z" class="fx-ah"/></marker>
+      </defs>
+      <text class="fx-lb ok" x="172" y="14">conclusions carry over the Phase 3 re-run</text>
+      <text class="fx-lb w" x="424" y="78">every mule arm re-runs here</text>
+
+      <rect class="fx-ph" x="16" y="88" width="128" height="100" rx="4"/>
+      <text class="fx-pn" x="26" y="108">PHASE 0</text>
+      <text class="fx-t" x="26" y="128">Ground truth</text>
+      <text class="fx-d" x="26" y="145">fixes · stats</text>
+      <text class="fx-m" x="26" y="162">~450 lines</text>
+      <text class="fx-m" x="26" y="179">re-run 2 cells</text>
+
+      <rect class="fx-ph" x="172" y="24" width="164" height="100" rx="4"/>
+      <text class="fx-pn" x="182" y="44">PHASE 1</text>
+      <text class="fx-t" x="182" y="64">Aggregation with age</text>
+      <text class="fx-d" x="182" y="81">C3 · C2 weights</text>
+      <text class="fx-m" x="182" y="98">~1.0k lines</text>
+      <text class="fx-m" x="182" y="115">→ study 5.1</text>
+
+      <rect class="fx-ph" x="172" y="152" width="164" height="100" rx="4"/>
+      <text class="fx-pn" x="182" y="172">PHASE 2</text>
+      <text class="fx-t" x="182" y="192">SOTA baselines</text>
+      <text class="fx-d" x="182" y="209">D3 · D4 · multi-mule</text>
+      <text class="fx-m" x="182" y="226">~0.9k lines</text>
+      <text class="fx-m" x="182" y="243">→ 5.3, no channel</text>
+
+      <rect class="fx-ph rerun" x="424" y="88" width="152" height="100" rx="4"/>
+      <text class="fx-pn" x="434" y="108">PHASE 3</text>
+      <text class="fx-t" x="434" y="128">Clock and link</text>
+      <text class="fx-d" x="434" y="145">C1 · C4 foundation</text>
+      <text class="fx-m" x="434" y="162">~1.4k lines</text>
+      <text class="fx-m" x="434" y="179">re-run mule arms</text>
+
+      <rect class="fx-ph" x="640" y="88" width="128" height="100" rx="4"/>
+      <text class="fx-pn" x="650" y="108">PHASE 4</text>
+      <text class="fx-t" x="650" y="128">Plan clock</text>
+      <text class="fx-d" x="650" y="145">C1 · C2 · C5</text>
+      <text class="fx-m" x="650" y="162">~0.8k lines</text>
+      <text class="fx-m" x="650" y="179">→ 5.2, 5.4, 5.8</text>
+
+      <rect class="fx-ph" x="792" y="88" width="116" height="100" rx="4"/>
+      <text class="fx-pn" x="802" y="108">PHASE 5</text>
+      <text class="fx-t" x="802" y="128">Flight clock</text>
+      <text class="fx-d" x="802" y="145">C4 · C2 reward</text>
+      <text class="fx-m" x="802" y="162">~1.5k lines</text>
+      <text class="fx-m" x="802" y="179">→ 5.5–5.7</text>
+
+      <rect class="fx-ph" x="932" y="88" width="92" height="100" rx="4"/>
+      <text class="fx-pn" x="940" y="108">PHASE 6</text>
+      <text class="fx-t" x="940" y="128">Campaign</text>
+      <text class="fx-d" x="940" y="145">Exp 5</text>
+      <text class="fx-m" x="940" y="162">~0.4k lines</text>
+      <text class="fx-m" x="940" y="179">→ 5.9, 5.10</text>
+
+      <path class="fx-ln" d="M144 118 H158 V74 H171" marker-end="url(#ah2)"/>
+      <path class="fx-ln" d="M144 158 H158 V202 H171" marker-end="url(#ah2)"/>
+      <path class="fx-ln" d="M336 74 H368 V125" marker-end="url(#ah2)"/>
+      <path class="fx-ln" d="M336 202 H368 V151" marker-end="url(#ah2)"/>
+      <polygon class="fx-dia" points="368,126 380,138 368,150 356,138"/>
+      <text class="fx-lb" x="384" y="127">D1–D3</text>
+      <path class="fx-ln" d="M380 138 H423" marker-end="url(#ah2)"/>
+      <path class="fx-ln" d="M576 138 H591" marker-end="url(#ah2)"/>
+      <polygon class="fx-dia" points="604,126 616,138 604,150 592,138"/>
+      <text class="fx-lb" x="620" y="127">D4</text>
+      <path class="fx-ln" d="M616 138 H639" marker-end="url(#ah2)"/>
+      <path class="fx-ln" d="M768 138 H791" marker-end="url(#ah2)"/>
+      <path class="fx-ln" d="M908 138 H931" marker-end="url(#ah2)"/>
+
+      <rect class="fx-th" x="172" y="270" width="596" height="30" rx="4"/>
+      <text class="fx-thl" x="184" y="289">Theory track · extended bound: FedEx Thm 1 with Δ(b̄, π) plus a coverage term</text>
+      <path class="fx-ln" d="M704 270 V189" marker-end="url(#ah2)"/>
+      <text class="fx-lb" x="712" y="232">constants of V</text>
+      <path class="fx-ln d" d="M768 285 H850 V189" marker-end="url(#ah2)"/>
+      <text class="fx-lb" x="858" y="232">reward form</text>
+    </svg>
+    </div>
+    <figcaption><b>Figure 2. Build order.</b> Phases 1 and 2 need nothing from the channel model, so their conclusions carry over when Phase 3 moves the mission onto a simulated seconds clock and every mule arm has to re-run. Decisions D1–D3 (band classes, channel model, payload and energy) gate Phase 3; D4 (the age cap) gates Phase 4. The theory track supplies V's constants to Phase 4 and the reward's form to Phase 5; until it lands, both are swept. Total: about 6,500 lines including tests, of which about 300 are optional arms. The ledger's 1,900–2,400 covered the FeRRy core; the difference is the simulated clock, version threading, multi-mule hardening, the full baseline set and the analysis code.</figcaption>
+  </figure>
+
+  <div class="phase" id="p0">
+    <div class="head"><h3><span class="num">PHASE 0</span>Ground truth and housekeeping</h3><span class="est">~450 lines · supports all · <span class="cb">C5</span> metric</span></div>
+    <p class="goal">Repair the two defects that change recorded results, add the statistics and metrics every later study needs, and open the scheduler freeze on purpose instead of by drift.</p>
+    <div class="grid">
+      <div>
+        <p class="lbl">Changes</p>
+        <ul class="files">
+          <li><span class="tag g">done</span><code>processes/cluster.py</code><span>The backhaul draw and both UP events take the round from <code>up.partial_aggregate</code> through <code>_up_mission_round()</code>; <code>test_backhaul_schedule.py</code> pins it.</span></li>
+          <li><span class="tag g">done</span><code>policies/max_aoi.py, oort.py, stages/s3_deadline.py</code><span>D1 and D2 age devices from two new fields, <code>last_clean_ts</code> and <code>last_clean_round</code>, that only a CLEAN sets; <code>test_baseline_age_after_abandonment.py</code> pins it.</span></li>
+          <li><span class="tag g">done</span><code>fl_scheduler.py, mule_main.py</code><span>Every mission stamps its own budget clock through <code>start_mission()</code>, empty ones included; <code>test_mission_budget_clock.py</code> pins it.</span></li>
+          <li><span class="tag g">done</span><code>experiments/analysis/stats.py</code><span><code>holm_bonferroni</code>, <code>friedman_test</code> (with Kendall's W and mean ranks), <code>factorial_2x2</code> and <code>difference_of_differences</code> for the memo's interaction test, and <code>compare_to_reference</code>, which applies the claim rule across a Holm-adjusted family; <code>test_stats_multi_arm.py</code> pins them.</span></li>
+          <li><span class="tag g">done</span><code>experiments/analysis/traces_scorer.py</code><span>Re-scores any trace root: the summary columns with round closure corrected, time to any τ in missions, rounds and wall-clock seconds, per-device update age and Network AoU, and the deadline-miss rate. The consumer now keeps timestamps; <code>mission_completed</code> records the Pass-1 plan and outcomes and <code>device_served</code> its round and pass. On the L1 cell it reproduces the recorded reach counts exactly.</span></li>
+          <li><span class="tag g">done</span><code>hermes_rl/ → experiments/sim/drone_env/</code><span>Copied from commit a8a453f with a provenance README; with default settings it reproduces the original exactly, pinned by golden rollouts. Seeded variation of positions, phases, deadlines and rate noise is opt-in. The training scenario now builds without torch.</span></li>
+          <li><span class="tag g">done</span><code>HERMES_Scheduler_Freeze.md</code><span>Amendments 4 to 7 are written up. Amendment 7 opens <code>fl_scheduler.py</code>, <code>stages/</code>, <code>selector/</code> and <code>mule_main.py</code> behind switches whose defaults keep the frozen pipeline, restates principles 1, 5 and 12 (and 13 to 15), and records what L1 and the selector actually ran. The code behind the recorded results is tagged <code>exp4-recorded</code>; the pre-re-run checklist is re-opened with the re-runs it owes; the README, architecture notes and CEDA comparison no longer present L1 as a working DDQN.</span></li>
+        </ul>
+      </div>
+      <div>
+        <p class="lbl">Tests</p>
+        <ul>
+          <li>The backhaul draw indexes by mission.</li>
+          <li>D1 and D2 ages survive an abandonment.</li>
+          <li>The new statistics match scipy and hand-worked cases.</li>
+          <li>The scorer reproduces the τ = 0.82 reach counts in <code>HERMES_Matrix_Results.md</code> from the recorded traces.</li>
+        </ul>
+        <p class="lbl" style="margin-top:14px">Status, 28 Sep</p>
+        <ul>
+          <li>Done: the backhaul index and the baseline ages (Freeze Amendment 5), the per-mission budget clock (Amendment 6), the family statistics, the trace scorer and the <code>drone_env</code> copy, with 81 new tests plus the prototype's own 33. The full suite passes 944 tests; its 9 failures predate these changes.</li>
+          <li>The stale stamp did not drop every contact outright, but it shrank the budget of every mission that followed an empty one, for every budgeted arm.</li>
+          <li>Found while copying <code>drone_env</code>: it ignores seeds by default, so the trainer behind SEC'26 Table VI selected its best checkpoint and ran its final evaluation on the same fixed episode. The 76.40 is a best-of-about-30 score on one instance.</li>
+          <li>Open: the re-runs. The checklist says what must hold first: Amendments 5 and 6 committed, fresh CSV paths, traces kept and scored with the scorer.</li>
+        </ul>
+      </div>
+      <div class="gate"><b>Exit gate.</b> The L1 cell (H3 vs H2, n = 40) and the 60 s SOTA cell (H1, D1, D2, n = 40) re-run on the fixed code, budget stamp included: about 200 trials, under an hour on 3 shards. Decisions D1–D6 written down.</div>
+    </div>
+  </div>
+
+  <div class="phase" id="p1">
+    <div class="head"><h3><span class="num">PHASE 1</span>Aggregation that knows age</h3><span class="est">~1,000 lines · <span class="cb">C3</span><span class="cb">C2</span><span class="cb">C5</span></span></div>
+    <p class="goal">Give every update an age, weight the merge by it with the deadline as the cutoff, and state the deadline law as a formula.</p>
+    <div class="grid">
+      <div>
+        <p class="lbl">Changes</p>
+        <ul class="files">
+          <li><span class="tag g">done</span><code>types/fl_messages.py, aggregate.py, round_report.py</code><span><code>basis_version</code> and <code>update_form</code> on DiscPush and GradientSubmission; version, per-device versions, ages and weights on PartialAggregate; age, basis version, band (None until Phase 3) and example count on MissionRoundCloseLine; a SKIPPED delivery outcome.</span></li>
+          <li><span class="tag g">done</span><code>mule_main.py, host_mission.py, client_mission.py, client_cluster.py</code><span>The DOWN bundle's version is kept, pushed with θ, stored with the device's basis (and with each prepared update, which may ship after a newer basis arrives) and echoed with the update; the mule refuses an update in the wrong form.</span></li>
+          <li><span class="tag g">done</span><code>mission/partial_fedavg.py</code><span>Delta form θ_base + Σ w_i·Δθ_i with w_i = n_i·v_i·s(age_i), zero past a_max, guarded against Σw = 0. Devices send Δθ against their own basis when the rule asks, so nobody keeps old models. With every basis current and η = 1 it equals today's mean (the regression test); <code>agg:plain</code> keeps the original function.</span></li>
+          <li><span class="tag g">done</span><code>cluster/cross_mule_fedavg.py, host_cluster.py</code><span>The same weight with age in cluster rounds, mixed in at a server rate η instead of overwriting the global θ. FedBuff holds the round open while its buffer fills, and the service still sends the mule its DOWN.</span></li>
+          <li><span class="tag g">done</span><code>mission/aggregation_rules.py</code><span>A registry behind <code>ClusterConfig.aggregation</code>: <code>agg:plain</code>, <code>agg:cutoff</code>, <code>agg:fedbuff</code> and <code>agg:asynchfl</code> run. <code>agg:fedex</code> moves to Phase 2 with arm D4; <code>agg:seq</code> needs in-session training, a protocol change. Both are refused by name.</span></li>
+          <li><span class="tag g">done</span><code>exp4/model_task.py</code><span>The FedProx term (ρ/2)‖θ − θ_received‖², with <code>DeviceConfig.fedprox_rho</code>, in a custom loop; ρ = 0 keeps <code>model.fit</code>.</span></li>
+          <li><span class="tag g">done</span><code>stages/s3_deadline.py, s3b_feasibility.py</code><span>Multiplicative law with clamps: Φ·β_on after an on-time delivery, Φ·β_partial or Φ·β_timeout after a miss, Φ_min ≤ Φ ≤ Φ_max; log Φ drifts by p·log β_on + (1 − p)·log β_timeout, so it breaks even at p* ≈ 0.65 and stays bounded. Overrides are one-shot. A separate priority key (the miss streak) orders S3b's admission walk ahead of the deadline. The additive law keeps its original arithmetic.</span></li>
+          <li><span class="tag g">done</span><code>mule_main.py</code> (Pass 2)<span>Walk Pass 2 against the budget so unreached devices keep an older base. Without it ages never spread, because Pass 2 re-delivers θ to the whole slice. Pass 2 is its own sortie, priced with the S3b model, skip-don't-stop.</span></li>
+        </ul>
+      </div>
+      <div>
+        <p class="lbl">Decision inside the phase</p>
+        <p>Age is counted in cluster rounds, which are global and comparable across mules. a_max_j converts Deadline(j) into rounds using the mission period; the conversion goes into the configuration reference.</p>
+        <p class="lbl" style="margin-top:14px">Tests</p>
+        <ul>
+          <li>The version round-trips over the wire.</li>
+          <li>The weight is exactly zero past a_max.</li>
+          <li>Regression equality with today's mean.</li>
+          <li>One unit test per rule; the FedProx gradient.</li>
+          <li>The law is monotone and clamped; the priority order holds.</li>
+        </ul>
+        <p class="lbl" style="margin-top:14px">Status, 28 Sep</p>
+        <ul>
+          <li>Done: version threading, the delta merge and its four rules, the cluster fold at rate η, FedProx, the budgeted Pass 2, the D5 cutoff conversion (configuration reference §14), the deadline law and the priority key (§15), and the Exp 4 flags. 70 new tests, including a real-orchestrator run; <code>agg:plain</code> output is byte-identical to before, and the additive law folds every state field as before.</li>
+          <li>Open: the exit gate, Study 5.1. Study 5.2 also needs the F·round and F·pref deadline forms, which come with arm F in Phase 4.</li>
+          <li>A device once on time and then unserved for more than Φ is dropped by S3b as overdue, and the priority key cannot help it. The multiplicative law's growth catches up with the clock, but only up to Φ_max; beyond that it is the Phase 4 age cap's job.</li>
+          <li>On the Exp 4 wall clock one mission takes about 10 s and Φ starts at 60 s, so the D5 cutoff is about 6 rounds and does not bind in a 4-mission trial until Phase 3's clock; use <code>--agg-a-max</code> meanwhile.</li>
+        </ul>
+      </div>
+      <div class="gate"><b>Exit gate.</b> Study 5.1 on fixed H1 routes: all rules tie with Pass 2 unbudgeted, which is the sanity check, and separate once ages spread. The ledger's "~40 lines" is the weight formula alone.</div>
+    </div>
+  </div>
+
+  <div class="phase" id="p2">
+    <div class="head"><h3><span class="num">PHASE 2</span>Baselines that need no channel model</h3><span class="est">~900 lines · references for <span class="cb">C3</span><span class="cb">C5</span></span></div>
+    <p class="goal">Build the SOTA arms whose comparisons do not depend on the channel, and make multi-mule runs real.</p>
+    <div class="grid">
+      <div>
+        <p class="lbl">Changes</p>
+        <ul class="files">
+          <li><span class="tag new">new</span><code>scheduler/routing/two_opt.py</code><span>2-OPT and cheapest insertion over stops, shared with the Phase 3 re-plan and the Phase 4 search.</span></li>
+          <li><span class="tag new">new</span><code>policies/fedex_card.py</code> (D4)<span>FedEx-Async with CARD: Gibbs-sampling assignment of devices to mules that minimises Σ R_k·Δ_k², a 2-OPT visit-all tour, no gates. Paired with <code>agg:fedex</code>; logs whether each tour fits the budget.</span></li>
+          <li><span class="tag new">new</span><code>policies/whittle.py</code> (D3)<span>Cui's closed-form Whittle index over (AoU, connected), with ω_i from Oort statistical utility and ρ_i from reachability history; admits through <code>greedy_budget_walk</code>.</span></li>
+          <li><span class="tag opt">optional</span><code>policies/fedcs_degraded.py</code> (D5)<span>The largest set that fits one round deadline, greedily, with last-known state in place of FedCS's Resource Request.</span></li>
+          <li><span class="tag chg">change</span><code>processes/mule.py:61-76, exp4/driver.py:60, 262-274, processes/config.py</code><span>Register D3–D5 and their parameters.</span></li>
+          <li><span class="tag chg">change</span>multi-mule runtime<span>DOWN delivers the latest θ instead of a FIFO backlog (<code>tcp_dock_link.py:420-433</code>); a <code>min_participation</code> timeout no longer ends the mule loop (<code>client_cluster.py:125</code>, <code>processes/mule.py:330-334</code>); the busy flag is claimed at runtime; the topology builder makes K mules over disjoint slices. Every recorded run so far used one mule, so the cross-mule merge has only ever been an identity.</span></li>
+        </ul>
+      </div>
+      <div>
+        <p class="lbl">Tests</p>
+        <ul>
+          <li>2-OPT on instances with known optima.</li>
+          <li>Gibbs assignment lowers Σ R_k·Δ_k².</li>
+          <li>The Whittle index matches Cui's eq. 48 on hand-worked cases.</li>
+          <li>A 2-mule integration test with a real cross-mule merge and no stale DOWN.</li>
+        </ul>
+      </div>
+      <div class="gate"><b>Exit gate.</b> The channel-free cells of Study 5.3 run: H1, D1, D2, D3 and D4 at 30 s and 60 s, with 1 and 3 mules, n = 40.</div>
+    </div>
+  </div>
+
+  <div class="phase" id="p3">
+    <div class="head"><h3><span class="num">PHASE 3</span>Mission clock and contact link</h3><span class="est">~1,400 lines · <span class="cb">C1</span><span class="cb">C4</span> foundations · gated by D1–D3</span></div>
+    <p class="goal">Put the mission on a simulated seconds clock, give the contact link a band with a physical price, and replace abort with re-plan. Every mule arm re-runs after this phase.</p>
+    <div class="grid">
+      <div>
+        <p class="lbl">Changes</p>
+        <ul class="files">
+          <li><span class="tag new">new</span><code>l1/mission_clock.py</code><span>A simulated clock injected as <code>now_fn</code> into MuleSupervisor, FLScheduler and HFLHostMission. It advances by transit, dwell and upload, the pose resets to the dock, and the budget is stamped at takeoff. Wall-clock stays only for transport timeouts, so finding P-02 (drops after 30 s of silence) cannot fire on a long leg.</span></li>
+          <li><span class="tag new">new</span><code>l1/channel_model.py</code><span>Seconds-axis SNR(t, band, distance) with a per-band period, gain and seeded noise, for the contact link and, separately, the backhaul. It replaces the mission-indexed <code>exp4/channel.py</code> behind a shim.</span></li>
+          <li><span class="tag new">new</span><code>l1/contact_link.py</code><span>Band classes: bandwidth, range R(b) at the rate floor, rate(b, SNR) from an MCS table capped by Shannon, dwell(bytes, b, SNR).</span></li>
+          <li><span class="tag chg">change</span><code>mission/host_mission.py</code><span>Merge <code>run_contact</code> and <code>deliver_contact</code> (finding D-01), add the band, charge dwell = bytes/rate to the clock, and solicit only devices within R(b) of the stop.</span></li>
+          <li><span class="tag chg">change</span><code>stages/s3b_feasibility.py</code><span>One FeasibilityModel for S3b, the budget walk and the in-flight check: transit + bytes/rate(b) + return + upload ≤ min(Deadline(j), budget), the session included in the per-contact check, the energy clause declared simulated, a single-contact predicate, and a pass-through from MuleSupervisor.</span></li>
+          <li><span class="tag chg">change</span><code>mule_main.py:417-447</code><span>A mutable remainder, re-filtered at the observed rate and re-planned with 2-OPT (capped stops first) instead of aborted. The predicate runs on the route actually flown, which today it never does; Pass 2 gets the same check; a beacon hook goes through the predicate.</span></li>
+          <li><span class="tag chg">change</span><code>mule_main.py:678-697</code>, types<span>Per-band SNR at arrival, the real mule-to-device distance and a decremented energy in the L1 state; <code>ContactWaypoint.band</code>, <code>range_m</code>, <code>pred_snr_db</code>; SpectrumSig forwarded to the mule; band choices written to the JSONL.</span></li>
+          <li><span class="tag chg">change</span><code>exp4/topology_builder.py:111-124</code><span>Contact reliability from the channel at the stop instead of distance to the origin.</span></li>
+        </ul>
+      </div>
+      <div>
+        <p class="lbl">Tests</p>
+        <ul>
+          <li>Clock arithmetic.</li>
+          <li>The seeded channel is reproducible and paired across arms.</li>
+          <li>Dwell scales with bytes/rate.</li>
+          <li>The re-plan never admits a stop the predicate rejects.</li>
+          <li>Range gating.</li>
+          <li>The full existing suite passes with the clock injected.</li>
+        </ul>
+      </div>
+      <div class="gate"><b>Exit gate.</b> H1, D1, D2, D3 and D4 re-baselined on the new clock, which is the re-run bill, and the Phase 1–2 studies re-scored in simulated seconds.</div>
+    </div>
+  </div>
+
+  <div class="phase" id="p4">
+    <div class="head"><h3><span class="num">PHASE 4</span>Plan clock: reach as a decision</h3><span class="est">~800 lines · <span class="cb">C1</span><span class="cb">C2</span><span class="cb">C5</span> · gated by D4</span></div>
+    <p class="goal">Let the mule choose band class and route together, scored by the extended bound, with fairness enforced by deterministic gates.</p>
+    <div class="grid">
+      <div>
+        <p class="lbl">Changes</p>
+        <ul class="files">
+          <li><span class="tag new">new</span><code>scheduler/plan/plan_search.py</code><span>For each class b̄: S3a at R(b̄), then every order when there are at most 6 stops (at most 3 × 720 candidates), 2-OPT and insertion above. Returns the best admitted (b̄, π).</span></li>
+          <li><span class="tag new">new</span><code>scheduler/plan/plan_score.py</code><span>V(b̄, π | demand) = −[c₁·Δ(b̄, π)² + c₂·(1 − served/N) + c₃·Σ_j link(b̄, t_j)] − c₄·E(π). The constants come from the theory track and are swept until it lands.</span></li>
+          <li><span class="tag new">new</span><code>stages/s3d_age_cap.py</code><span>A device whose age reaches S missions is promoted: candidates that drop it lose to any feasible one that keeps it, it is exempt from the overdue check and the in-flight drop, and every violation is logged.</span></li>
+          <li><span class="tag chg">change</span><code>fl_scheduler.py</code><span><code>plan_mode = ferry | legacy</code>. The ferry path runs S1 → S3 → cap → S3a per class → search → S3b → commit.</span></li>
+          <li><span class="tag chg">change</span><code>processes/config.py</code><span><code>band_class_policy = search | fixed:&lt;class&gt;</code>. Path B+ is the fixed setting, so the C1 ablation costs one flag.</span></li>
+        </ul>
+      </div>
+      <div>
+        <p class="lbl">Tests</p>
+        <ul>
+          <li>The search equals brute force for N ≤ 6.</li>
+          <li>B+ equals FeRRy with b̄ pinned.</li>
+          <li>Every device is served within S missions in simulation.</li>
+          <li>V falls as coverage falls.</li>
+        </ul>
+      </div>
+      <div class="gate"><b>Exit gate.</b> FX (plan search with the cross-heuristic in flight) runs end to end at 30 s and 60 s, and pilots of 5.4 and 5.8 at n = 20 show the pipeline behaves.</div>
+    </div>
+  </div>
+
+  <div class="phase" id="p5">
+    <div class="head"><h3><span class="num">PHASE 5</span>Flight clock: the (band, stop) score</h3><span class="est">~1,500 lines (~300 optional) · <span class="cb">C4</span><span class="cb">C2</span></span></div>
+    <p class="goal">Fill the per-arrival pair choice with a score learned on the reward the merge actually pays, and build the learned competitors it has to beat.</p>
+    <div class="grid">
+      <div>
+        <p class="lbl">Changes</p>
+        <ul class="files">
+          <li><span class="tag new">new</span><code>selector/pair_features.py</code><span>About 15 floats per (band, stop): band one-hot, predicted SNR at estimated arrival on that band, travel time, dwell at that band's rate, deadline slack, base-model age, value proxy, clock left, energy left, on-time rate, members, cap flag. Today's constant slots (bucket one-hot, energy, RF prior, z) go; five of the eleven are constant in every ranking call.</span></li>
+          <li><span class="tag chg">change</span><code>selector/ddqn.py, replay.py</code><span>A masked pointer Q over pair rows. Transitions store the next candidate matrix and mask so the target takes a real max; today it scores the stored next state. Adam, Huber loss, checkpoints.</span></li>
+          <li><span class="tag new">new</span><code>selector/ferry_sim.py</code><span>The training simulator, on the same clock, channel and contact-link code: bands, deadlines, ages, capped devices and a NEW/SCHEDULED mix. Today's ContactSim trains everything as SCHEDULED while mission 1 at runtime is all NEW. The reward r_k comes from the L3 weight, with a coverage penalty at the end.</span></li>
+          <li><span class="tag new">new</span><code>policies/cross_heuristic.py</code> (FX)<span>The best-rate band now and the nearest feasible stop, in the same slot.</span></li>
+          <li><span class="tag new">new</span><code>policies/chen_dqn.py</code> (E3)<span>A DQN over the contact graph with Chen's observation (per-device SNR, reachable flag, remaining data, relative position), a feasibility mask and a bytes reward, started from the vendored joint-action DQN.</span></li>
+          <li><span class="tag opt">optional</span><code>monolithic_ho.py</code> (M1), <code>oracle/zhai_oracle.py</code> (O1)<span>One DDQN over the full (band, stop) product with no gates or plan; an exhaustive band class × clustering × route × per-stop band oracle for N ≤ 6 under visit-within-S.</span></li>
+          <li><span class="tag chg">change</span><code>mule_main.py, scope_guard.py, selector_train.py</code><span>The pair choice replaces <code>_pick_channel_contact</code>; the guard checks pairs against the admitted set; training gets a γ sweep, a reward-weight grid and seeded checkpoints committed with each run, so no random-init arm ships again.</span></li>
+        </ul>
+      </div>
+      <div>
+        <p class="lbl">Tests</p>
+        <ul>
+          <li>The mask never passes an infeasible pair.</li>
+          <li>With one band, the pair Q reduces to today's contact ranking.</li>
+          <li>FerrySim is deterministic under a seed.</li>
+          <li>The reward equals the L3 weight on a hand-worked mission.</li>
+        </ul>
+      </div>
+      <div class="gate"><b>Exit gate.</b> Trained checkpoints committed, and Study 5.5 decides the model class. A flat γ curve means FX is published as FeRRy's filling, with the negative result.</div>
+    </div>
+  </div>
+
+  <div class="phase" id="p6">
+    <div class="head"><h3><span class="num">PHASE 6</span>Campaign and write-up</h3><span class="est">~400 lines</span></div>
+    <p class="goal">Run Exp 5 on the final stack, with each study's primary metric registered before it runs.</p>
+    <div class="grid">
+      <div>
+        <p class="lbl">Changes</p>
+        <ul class="files">
+          <li><span class="tag new">new</span><code>experiments/exp5/</code><span>Grids, runners and shard scripts with single-instance locks.</span></li>
+          <li><span class="tag new">new</span><code>experiments/analysis/exp5.py</code><span>Tables, figures and a provenance table: real processes, TCP and Keras training on one side; simulated flight clock, channel and energy on the other.</span></li>
+        </ul>
+      </div>
+      <div>
+        <p class="lbl">Hardware</p>
+        <p>AERPAW runs of F and FX if access lands; otherwise stated as planned.</p>
+      </div>
+      <div class="gate"><b>Exit gate.</b> Every study reports its registered primary metric with a bootstrap CI, the Wilcoxon p and the Holm-adjusted p.</div>
+    </div>
+  </div>
+
+  <div class="callout">
+    <div class="lbl">Theory track · beside Phases 1 to 4</div>
+    <p>Start from FedEx Theorem 1, whose error term is proportional to Σ_k R_k·Δ_k². Substitute Δ_k(b̄, π) = Σ travel + Σ_j dwell(b̄, t_j) + upload, add Zhai's coverage term for the devices the deadline excludes, and optionally Cui's sequence form for <code>agg:seq</code>. State the result on a convex surrogate and say so. Output: the constants in <code>plan_score.py</code> and the derivation of the L3 weight. Cite FedEx, Zhai, Cui, and Chen et al. (TVT 2025) for mobility as mixing.</p>
+  </div>
+</section>
+
+<section id="decisions">
+  <h2>Decisions to take first</h2>
+  <p>Four physical and modelling choices gate Phases 3 and 4. Two more are settled inside Phase 1 or by the venue. None of them needs code to decide, and each one changes what the code has to do.</p>
+  <div class="dec">
+    <div class="d">
+      <div class="id">D1 · gates Phase 3</div>
+      <h3>Band classes and their range–rate model</h3>
+      <p>Define classes by channel bandwidth and MCS on one carrier. The AERPAW carriers differ by 0.05 dB (3.32 vs 3.34 GHz) and 1.40 dB (3.32 vs 3.90 GHz) of free-space loss, too little to carry a range trade. Narrowing a channel from 20 MHz to 1.4 MHz lowers the noise floor by about 11.5 dB, which stretches range about 2.4× at a path-loss exponent of 3, for a proportionally lower peak rate. Anchor the numbers to measured AERPAW ranges where they exist; otherwise cite the model and its parameters.</p>
+      <div class="when">without it, C1 is a knob, not a claim</div>
+    </div>
+    <div class="d">
+      <div class="id">D2 · gates Phase 3</div>
+      <h3>Seconds-axis channel and the re-run bill</h3>
+      <p>Index SNR by simulated seconds with a period per band, so that transit time over channel period can be swept for test (c). Noise must be a seeded function of time so that seeds stay paired. Accept the bill: the checklist's rule is that anything that changes what a trial does forces a re-run, which here means every mule arm.</p>
+      <div class="when">today's channel is indexed by mission, one cycle per trial</div>
+    </div>
+    <div class="d">
+      <div class="id">D3 · gates Phase 3</div>
+      <h3>Payload size and energy</h3>
+      <p>The IDS model is about 18.8 KB per direction, so at Mb/s rates its dwell is a fraction of a second and the dwell term only bites on narrow classes. Report the real payload and sweep 18.8 KB, 1 MB and 10 MB (Exp 3's clean and jittery sizes). ε_prop = 10 J/m is still a placeholder: calibrate it, or label every energy figure simulated.</p>
+      <div class="when">decides whether the dwell term is visible at all</div>
+    </div>
+    <div class="d">
+      <div class="id">D4 · gates Phase 4</div>
+      <h3>Age cap S against the budget</h3>
+      <p>Too small an S makes every plan infeasible under a 30 s budget. Choose the smallest S for which the Phase 4 pilot finds a covering schedule at both budgets, and report cap violations as a metric instead of hiding them.</p>
+      <div class="when">today nothing caps age: Φ has no ceiling</div>
+    </div>
+    <div class="d">
+      <div class="id">D5 · inside Phase 1</div>
+      <h3>Age unit and a_max</h3>
+      <p>Count age in cluster rounds, which are global and comparable across mules, and convert Deadline(j) into a_max_j with the mission period. Record the conversion in the configuration reference.</p>
+      <div class="when">mission rounds are per mule today and cannot be compared</div>
+    </div>
+    <div class="d">
+      <div class="id">D6 · venue</div>
+      <h3>Which half carries the paper</h3>
+      <p>The repo's paper plan targets ICNC, the audit's transcript mentions IPDPS, and SEC 2026 was the last submission. The phases are the same for all three. IPDPS puts Phase 2's multi-mule work and the FedEx comparison forward as the distributed contribution; ICNC or SEC puts Phases 4 and 5, the coupling, forward.</p>
+      <div class="when">changes emphasis, not order</div>
+    </div>
+  </div>
+</section>
+
+<section id="baselines">
+  <h2>Baselines</h2>
+  <p>Three families of arms. SOTA arms reproduce a published method as faithfully as a mule allows. FeRRy arms are the system with one mechanism switched off, so each contribution has a test that removes it. Aggregation arms vary L3 with the route held fixed. Labels follow the code: H and D arms exist today; D3 onward and every F arm are new.</p>
+
+  <h3>SOTA and literature baselines</h3>
+  <div class="scroll">
+  <table class="xwide">
+    <thead><tr><th>Arm</th><th>Method and source</th><th>Decides</th><th>Port and deviations</th><th>What it isolates against FeRRy</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr><td>H0</td><td>Synchronous FedAvg over a live link, all clients every round</td><td>Nothing; every client, every round</td><td>A <code>dead_zone</code> fraction of clients is unreachable under jitter; the rest succeed with probability rel × link quality.</td><td>Whether muling is worth it when links fail. Under jitter its AUC fell from 0.943 to 0.587 while H1 held 0.922–0.933.</td><td><span class="tag g">exists</span></td></tr>
+      <tr><td>D1</td><td>MAX-AoI greedy (the standard AoI comparator)</td><td>Who is served and in what order</td><td>Oldest contact first, admitted through the budget walk. Age runs from the last CLEAN (fixed in Phase 0).</td><td>Value- and deadline-blind fairness.</td><td><span class="tag g">exists</span> <span class="tag g">fixed P0</span></td></tr>
+      <tr><td>D2</td><td>Oort statistical utility (Lai et al., OSDI 2021)</td><td>Who is served and in what order</td><td>|B_i|·|loss| plus the staleness bonus; no system-speed term; mean rather than RMS loss; L(i) is the last CLEAN round (fixed in Phase 0). Unlike Oort, the utility is not normalised before the bonus is added and the bonus is 0.1·log R/√L rather than √(0.1·log R/L), so the bonus is about 1e-4 of the utility.</td><td>A learned-utility selector with an exploration bonus, the direct rival to window widening.</td><td><span class="tag g">exists</span> <span class="tag g">fixed P0</span> <span class="tag w">fidelity</span></td></tr>
+      <tr><td>D3</td><td>Whittle index on weighted AoU (Cui et al., TMC 2024)</td><td>Who is served</td><td>Closed-form index over (age, connected); ω_i from Oort utility instead of a Shapley estimate; ρ_i from reachability history.</td><td>The fairness reference: optimal for value-weighted age when selection is free. FeRRy should match it while paying for travel.</td><td><span class="tag new">new P2</span></td></tr>
+      <tr><td>D4</td><td>FedEx-Async with CARD (Bian, Shen, Chen, Xu, TMC 2025)</td><td>Device-to-mule assignment and each mule's tour</td><td>Gibbs assignment, 2-OPT visit-all tour, 1/N accumulation applied on return; no gates, band, deadline or re-plan. Runs twice: faithful (<code>agg:fedex</code>) and route-only (<code>agg:cutoff</code>).</td><td>The closest prior: travel-only bound, fixed reach, never skips. Report how often its tour overruns the budget.</td><td><span class="tag new">new P2</span></td></tr>
+      <tr><td>D5</td><td>FedCS, degraded (Nishio and Yonetani, ICC 2019)</td><td>Who joins this round</td><td>Largest set that fits one round deadline, with last-known state in place of the Resource Request. Labelled degraded.</td><td>Admission by one round deadline against per-device deadlines.</td><td><span class="tag opt">optional P2</span></td></tr>
+      <tr><td>E3</td><td>DQN over the contact graph, after Chen et al. (GLOBECOM Workshops 2023)</td><td>Next stop, per arrival</td><td>Single agent, Chen's observation design, feasibility mask, bytes reward. Never labelled FedQMIX; scored on update yield and round closure, never bytes.</td><td>A learned per-step policy with none of FeRRy's deadline, plan-time or coverage machinery.</td><td><span class="tag new">new P5</span></td></tr>
+      <tr><td>O1</td><td>Offline oracle, after Zhai et al. (TWC 2025)</td><td>Everything, offline</td><td>Exhaustive band class × clustering × route × per-stop band for N ≤ 6 under visit-within-S.</td><td>The optimality gap for test (a).</td><td><span class="tag opt">optional P5</span></td></tr>
+      <tr><td>M1</td><td>Monolithic agent, after Ho et al. (IAAA 2025)</td><td>(band, stop) with no gates</td><td>One DDQN over the full product with a positions-plus-phase state; no plan, no mask.</td><td>Whether the gates earn their keep.</td><td><span class="tag opt">optional P5</span></td></tr>
+      <tr><td>cite only</td><td>Mestoukirdi et al. 2022; pow-d; Yang JSAC 2025 bandit; rpow-d</td><td>—</td><td>Mestoukirdi optimises scheduling and trajectory jointly, so it cannot be ported into a fixed router; pow-d needs a loss query before selection. rpow-d and Yang's contextual bandit are optional selection-only arms if a reviewer asks.</td><td>—</td><td><span class="tag keep">citation</span></td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3>FeRRy arms and ablations</h3>
+  <div class="scroll">
+  <table class="wide">
+    <thead><tr><th>Arm</th><th>What changes from full FeRRy</th><th>Tests</th><th>Study</th></tr></thead>
+    <tbody>
+      <tr class="ours"><td>F</td><td>Nothing: plan search over (b̄, π), learned pair Q, <code>agg:cutoff</code>, age cap, coverage term, priority key.</td><td>The system under test</td><td>all</td></tr>
+      <tr><td>FX</td><td>The flight slot is filled by best-rate band plus nearest feasible stop.</td><td><span class="cb">C4</span> learned vs fixed rule in the same slot</td><td>5.3, 5.5, 5.6</td></tr>
+      <tr><td>FB+</td><td>Path B+: b̄ pinned to one class, so the band-to-range edge is cut.</td><td><span class="cb">C1</span> property (a)</td><td>5.4, 5.8</td></tr>
+      <tr><td>F−dwell, F−cov</td><td>The plan score without the dwell term, or without the coverage term.</td><td><span class="cb">C2</span></td><td>5.7</td></tr>
+      <tr><td>F·hand</td><td>Today's hand-set reward (200·completed − time − energy) instead of the derived one.</td><td><span class="cb">C2</span></td><td>5.7</td></tr>
+      <tr><td>F·add</td><td>The additive ±5/10 s deadline law in place of the multiplicative one.</td><td><span class="cb">C3</span> the law</td><td>5.2</td></tr>
+      <tr><td>F·round, F·pref</td><td>One round deadline for everyone (after FedCS), or a preferred duration that penalises slow devices (after Oort).</td><td><span class="cb">C3</span> per-device deadline</td><td>5.2</td></tr>
+      <tr><td>F−cap, F−prio</td><td>No age cap, or no priority boost after a miss (F−cov also serves here).</td><td><span class="cb">C5</span> attribution</td><td>5.8</td></tr>
+      <tr><td>H1, H2, H3</td><td>HERMES as submitted, as reference points. H2 either gets a trained checkpoint or is dropped.</td><td>continuity</td><td>5.3, 5.9</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3>Aggregation arms</h3>
+  <div class="scroll">
+  <table class="wide">
+    <thead><tr><th>Rule</th><th>Merge</th><th>Source</th><th>Role</th></tr></thead>
+    <tbody>
+      <tr><td><code>agg:plain</code></td><td>num_examples-weighted mean, as today</td><td>HERMES</td><td>The baseline every rule must beat</td></tr>
+      <tr class="ours"><td><code>agg:cutoff</code></td><td>n_i·v_i·s(age_i), zero past a_max; FedProx on devices</td><td>FedAsync hinge with Yang JSAC 2025's cutoff; Shen 2024's proximal term</td><td>FeRRy's rule</td></tr>
+      <tr><td><code>agg:fedbuff</code></td><td>Apply after K updates arrive, K = slice size</td><td>Nguyen et al., AISTATS 2022</td><td>Count-triggered against deadline-triggered</td></tr>
+      <tr><td><code>agg:asynchfl</code></td><td>Exponential staleness decay at the mule and at the cluster, plus a proximal term</td><td>Yu et al., IoTDI 2023</td><td>Hierarchical decay reference</td></tr>
+      <tr><td><code>agg:seq</code></td><td>Carry the model device to device; the route is the SGD sequence</td><td>After Cui et al., TMC 2024</td><td>The strongest form of the route-controlled claim, as an ablation</td></tr>
+      <tr><td><code>agg:fedex</code></td><td>1/N accumulation, applied when the mule returns</td><td>FedEx-Async</td><td>D4's faithful merge</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <div class="note"><p><b>Attribution rule.</b> Scheduler arms vary the route with L3 fixed at <code>agg:cutoff</code>; aggregation arms vary L3 with the route fixed. Never both at once. D4 runs with its own merge and with FeRRy's so that its route and its merge are attributed separately.</p></div>
+</section>
+
+<section id="experiments">
+  <h2>Experiments</h2>
+  <p>Exp 5 runs on the real-process stack (one cluster, K mules and N device processes over loopback TCP, with real Keras training on CICIoT2023) once Phase 3 has put it on the simulated clock. Study 5.1 and the channel-free cells of 5.3 can start on today's Exp 4 harness. Unless a study says otherwise: N = 6 devices per slice, 4 missions, the jittery regime, budgets of 60 s (the S3b knee) and 30 s (stress), 40 paired seeds, τ = 0.82. Costs assume about 40 s per trial (37.8 s was measured for H1 at N = 6) and 3 shards, the most that ran without memory failures.</p>
+
+  <div class="scroll">
+  <table class="wide mx">
+    <thead><tr><th>Study</th><th>F</th><th>FX</th><th>FB+</th><th>F ablations</th><th>H0 · H1</th><th>D1</th><th>D2</th><th>D3</th><th>D4</th><th>D5</th><th>E3</th><th>O1 · M1</th><th>L3 arms</th></tr></thead>
+    <tbody>
+      <tr><td>5.1 Aggregation with age</td><td><span class="dot h" title="route source"></span></td><td></td><td></td><td></td><td><span class="dot h" title="route source"></span></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td><span class="dot o" title="compared"></span></td></tr>
+      <tr><td>5.2 Deadline form</td><td><span class="dot o"></span></td><td></td><td></td><td><span class="dot o"></span></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+      <tr><td>5.3 Whole-scheduler comparison</td><td><span class="dot o"></span></td><td><span class="dot o"></span></td><td></td><td></td><td><span class="dot h"></span></td><td><span class="dot o"></span></td><td><span class="dot o"></span></td><td><span class="dot o"></span></td><td><span class="dot o"></span></td><td><span class="dot h"></span></td><td><span class="dot o"></span></td><td></td><td></td></tr>
+      <tr><td>5.4 Test (a): reach</td><td><span class="dot o"></span></td><td></td><td><span class="dot o"></span></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td><span class="dot h"></span></td><td></td></tr>
+      <tr><td>5.5 Test (b): γ-sweep</td><td><span class="dot o"></span></td><td><span class="dot h"></span></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+      <tr><td>5.6 Test (c): when learning helps</td><td><span class="dot o"></span></td><td><span class="dot o"></span></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td><span class="dot h"></span></td><td><span class="dot h"></span></td><td></td></tr>
+      <tr><td>5.7 One objective</td><td><span class="dot o"></span></td><td></td><td></td><td><span class="dot o"></span></td><td></td><td></td><td></td><td></td><td><span class="dot h"></span></td><td></td><td></td><td></td><td><span class="dot h"></span></td></tr>
+      <tr><td>5.8 Fairness under cost</td><td><span class="dot o"></span></td><td></td><td><span class="dot o"></span></td><td><span class="dot o"></span></td><td></td><td><span class="dot h"></span></td><td></td><td><span class="dot o"></span></td><td><span class="dot o"></span></td><td></td><td></td><td></td><td></td></tr>
+      <tr><td>5.9 Scale and robustness</td><td><span class="dot o"></span></td><td><span class="dot o"></span></td><td></td><td></td><td><span class="dot h"></span></td><td></td><td></td><td><span class="dot o"></span></td><td><span class="dot o"></span></td><td></td><td></td><td></td><td></td></tr>
+      <tr><td>5.10 Real radios</td><td><span class="dot o"></span></td><td><span class="dot o"></span></td><td></td><td></td><td><span class="dot h"></span></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+    </tbody>
+  </table>
+  </div>
+  <div class="legend"><span><span class="dot o"></span> compared in the study's family</span><span><span class="dot h"></span> reference, control or route source</span></div>
+
+  <div class="exp" id="s51">
+    <div class="head"><span class="id">5.1</span><h3>Aggregation with age</h3><span class="cb">C3</span><span class="cb">C2</span></div>
+    <dl>
+      <dt>Question</dt><dd>Does weighting updates by age, with the deadline as the cutoff, reach τ sooner than today's mean, and how does it compare with the asynchronous-FL rules?</dd>
+      <dt>Arms</dt><dd><code>agg:plain</code>, <code>agg:cutoff</code> with and without FedProx, <code>agg:fedbuff</code>, <code>agg:asynchfl</code>, <code>agg:seq</code>; weights derived from the bound against hand-set weights.</dd>
+      <dt>Held fixed</dt><dd>The route: H1's routes on the Exp 4 harness first, FeRRy's routes after Phase 4. Seeds paired across rules.</dd>
+      <dt>Sweep</dt><dd>Budget 60 s and 30 s. Pass 2 unbudgeted (ages stay at 1 or less, so every rule should tie) and budgeted (ages spread).</dd>
+      <dt>Primary metric</dt><dd>Time to τ = 0.82: rounds before Phase 3, simulated seconds after.</dd>
+      <dt>Also reported</dt><dd>Final accuracy and AUC, round closure, the age distribution at merge.</dd>
+      <dt>Reads as</dt><dd>C3's third role is earned if <code>agg:cutoff</code> beats <code>agg:plain</code> once ages spread and does not lose to the asynchronous rules. The tie with ages at 1 or less is the sanity check.</dd>
+      <dt>Cost</dt><dd>About 1,100 trials: roughly 4 h on 3 shards per route family.</dd>
+    </dl>
+  </div>
+
+  <div class="exp" id="s52">
+    <div class="head"><span class="id">5.2</span><h3>Deadline form</h3><span class="cb">C3</span></div>
+    <dl>
+      <dt>Question</dt><dd>Does one per-device deadline that admits, orders and cuts off beat the deadlines the selection literature uses?</dd>
+      <dt>Arms</dt><dd>F with the multiplicative law; F·add, the additive law in the code today; F·round, one round deadline for all devices after FedCS; F·pref, a preferred duration that penalises slow devices after Oort.</dd>
+      <dt>Held fixed</dt><dd>Route policy and L3 rule.</dd>
+      <dt>Primary metric</dt><dd>Deadline-miss rate.</dd>
+      <dt>Also reported</dt><dd>Round closure, Network AoU, time to τ.</dd>
+      <dt>Cost</dt><dd>320 trials: about 1.2 h.</dd>
+    </dl>
+  </div>
+
+  <div class="exp" id="s53">
+    <div class="head"><span class="id">5.3</span><h3>Whole-scheduler comparison</h3><span class="small">context for</span><span class="cb">C4</span><span class="cb">C5</span></div>
+    <dl>
+      <dt>Question</dt><dd>Where does FeRRy stand against every runnable published scheduler at the same budget?</dd>
+      <dt>Arms</dt><dd>F, FX, H1, H0 as the live-link reference, D1, D2, D3, D4 (faithful and route-only), E3; D5 if built.</dd>
+      <dt>Held fixed</dt><dd>L3 at <code>agg:cutoff</code> for every arm except faithful D4.</dd>
+      <dt>Sweep</dt><dd>Budget 30, 60 and 120 s; 1 and 3 mules, since D4's assignment step needs more than one.</dd>
+      <dt>Primary metric</dt><dd>Time to τ = 0.82, with reach rate at τ where many runs never get there.</dd>
+      <dt>Also reported</dt><dd>Round closure, deadline-miss rate, Network AoU, update yield, and how often D4's tour overruns the budget.</dd>
+      <dt>Reads as</dt><dd>The headline table, and the answer to SEC'26 reviewer 74A's request for recent UAV-FL baselines.</dd>
+      <dt>Cost</dt><dd>About 2,200 trials: 8 h or more on 3 shards, since 3-mule cells run slower.</dd>
+    </dl>
+  </div>
+
+  <div class="exp" id="s54">
+    <div class="head"><span class="id">5.4</span><h3>Test (a): is reach worth deciding?</h3><span class="cb">C1</span></div>
+    <dl>
+      <dt>Question</dt><dd>How much does choosing the band class at plan time add over flying one fixed class?</dd>
+      <dt>Arms</dt><dd>F against FB+ pinned to each class (wide, medium, narrow); O1 for the optimality gap at N ≤ 6.</dd>
+      <dt>Held fixed</dt><dd>Everything except the band-to-range edge.</dd>
+      <dt>Sweep</dt><dd>The classes' range–rate trade (the narrow class's range multiplier), the share of devices beyond the widest class's reach, payload 18.8 KB and 1 MB.</dd>
+      <dt>Primary metric</dt><dd>Network AoU, where C1 should show first because far devices get served.</dd>
+      <dt>Also reported</dt><dd>Round closure, time to τ, share of far devices served.</dd>
+      <dt>Reads as</dt><dd>A curve rather than one number: the region of the trade where the F − FB+ gap excludes zero.</dd>
+      <dt>Cost</dt><dd>About 960 trials: roughly 3.6 h.</dd>
+    </dl>
+  </div>
+
+  <div class="exp" id="s55">
+    <div class="head"><span class="id">5.5</span><h3>Test (b): is there a delayed consequence?</h3><span class="cb">C4</span></div>
+    <dl>
+      <dt>Question</dt><dd>Does the flight-clock choice need a horizon, or does a one-step rule suffice?</dd>
+      <dt>Arms</dt><dd>F's pair Q trained at γ ∈ {0, 0.25, 0.5, 0.75, 0.9, 0.99}; FX as the one-step reference.</dd>
+      <dt>Held fixed</dt><dd>Features, reward, simulator.</dd>
+      <dt>Sweep</dt><dd>γ, with five training seeds each; the best and worst γ also run on the stack.</dd>
+      <dt>Primary metric</dt><dd>Held-out return in FerrySim over 1,000 episodes.</dd>
+      <dt>Also reported</dt><dd>Time to τ and round closure on the stack.</dd>
+      <dt>Reads as</dt><dd>A flat curve means FX is FeRRy's filling and the null gets published; a rising curve keeps the learned Q. A learned plan-time value, and with it a hierarchy, is considered only if the plan clock shows a slope too.</dd>
+      <dt>Cost</dt><dd>30 training runs in the simulator, plus 160 trials on the stack.</dd>
+    </dl>
+  </div>
+
+  <div class="exp" id="s56">
+    <div class="head"><span class="id">5.6</span><h3>Test (c): when does learning help?</h3><span class="cb">C4</span></div>
+    <dl>
+      <dt>Question</dt><dd>Does the learned pair score beat the fixed rule in the same slot, and does its advantage track transit time over channel period?</dd>
+      <dt>Arms</dt><dd>F against FX; E3 (after Chen) and M1 (after Ho, no gates) as controls.</dd>
+      <dt>Held fixed</dt><dd>Plan clock, L3 rule, seeds.</dd>
+      <dt>Sweep</dt><dd>Transit over period ∈ {0.25, 0.5, 1, 2}; clean and jittery, with FX tuned separately per regime as the memo's check for non-stationarity.</dd>
+      <dt>Primary metric</dt><dd>Time to τ.</dd>
+      <dt>Also reported</dt><dd>Round closure and stops served per mission; for E3, update yield and round closure.</dd>
+      <dt>Reads as</dt><dd>The only place learning is claimed. If M1 matches F, the gates are decoration; if it does not, gate-then-learn earned its place.</dd>
+      <dt>Cost</dt><dd>About 1,300 trials at 60 s: roughly 4.7 h.</dd>
+    </dl>
+  </div>
+
+  <div class="exp" id="s57">
+    <div class="head"><span class="id">5.7</span><h3>One objective</h3><span class="cb">C2</span></div>
+    <dl>
+      <dt>Question</dt><dd>Do the dwell and coverage terms, and a reward derived from the merge weight, change outcomes compared with hand-set choices?</dd>
+      <dt>Arms</dt><dd>F against F−dwell, F−cov and F·hand; D4 as the travel-only reference; the derived-against-hand-set weights from 5.1.</dd>
+      <dt>Sweep</dt><dd>Reward weights (c_t, c_e, c_miss) on a grid, reported as the front of round closure against energy and deadline misses.</dd>
+      <dt>Primary metric</dt><dd>Round closure.</dd>
+      <dt>Also reported</dt><dd>Time to τ, Network AoU.</dd>
+      <dt>Reads as</dt><dd>Answers the fixed-weights objection a reviewer raised against A2FeD (#28) before anyone raises it here.</dd>
+      <dt>Cost</dt><dd>400 trials, about 1.5 h, plus the weight grid in FerrySim.</dd>
+    </dl>
+  </div>
+
+  <div class="exp" id="s58">
+    <div class="head"><span class="id">5.8</span><h3>Fairness under physical cost</h3><span class="cb">C5</span></div>
+    <dl>
+      <dt>Question</dt><dd>Is FeRRy fair when reaching a device costs time, battery and dwell?</dd>
+      <dt>Arms</dt><dd>F; F−cov, F−cap and F−prio, one mechanism off each; FB+ with the reach lever off; D3 (the fairness reference); D4 (visit-all); D1 (MAX-AoI).</dd>
+      <dt>Primary metric</dt><dd>Network AoU and the per-device age distribution (maximum and 95th percentile).</dd>
+      <dt>Also reported</dt><dd>Round closure, time to τ, Jain's index of service counts, cap violations.</dd>
+      <dt>Reads as</dt><dd>The claim is that F stays within a stated margin of D3's Network AoU while closing rounds under the budget. It is not "fairer than Cui": in Cui's own model the index is optimal.</dd>
+      <dt>Cost</dt><dd>640 trials: about 2.4 h.</dd>
+    </dl>
+  </div>
+
+  <div class="exp" id="s59">
+    <div class="head"><span class="id">5.9</span><h3>Scale and robustness</h3></div>
+    <dl>
+      <dt>Question</dt><dd>Do the results hold beyond six devices and one mule, and beyond the setting the pair score was trained on?</dd>
+      <dt>Arms</dt><dd>F, FX, H1, D3, D4.</dd>
+      <dt>Sweep</dt><dd>N ∈ {6, 12, 24} per slice; 1 to 3 mules; budgets from 30 to 120 s; clean and jittery; 20 seeds per cell.</dd>
+      <dt>Primary metric</dt><dd>Time to τ.</dd>
+      <dt>Reads as</dt><dd>Answers reviewer 74A on scale and the population objection raised against A2FeD (#62).</dd>
+      <dt>Cost</dt><dd>The largest study, about 2,700 trials; run last.</dd>
+    </dl>
+  </div>
+
+  <div class="exp" id="s510">
+    <div class="head"><span class="id">5.10</span><h3>Real radios, if AERPAW access lands</h3></div>
+    <dl>
+      <dt>Arms</dt><dd>F, FX and H1 on AERPAW's three carriers.</dd>
+      <dt>Reads as</dt><dd>Validation rather than a statistical study. If access does not land, the paper states it as planned.</dd>
+    </dl>
+  </div>
+</section>
+
+<section id="metrics">
+  <h2>Metrics and statistics</h2>
+  <div class="scroll">
+  <table class="wide">
+    <thead><tr><th>Metric</th><th>Definition</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr><td>Time to τ</td><td>Simulated seconds until the global model's test accuracy first reaches τ = 0.82, with rounds alongside and reach rate (share of runs that get there) where many runs do not.</td><td><span class="tag g">scorer</span> missions, rounds, wall-clock s; simulated s in Phase 3</td></tr>
+      <tr><td>Round closure</td><td>Share of rounds that closed with at least k updates and a delivered backhaul, for k = 1, 2, N/2, N.</td><td><span class="tag g">exists</span> corrected by the scorer</td></tr>
+      <tr><td>Deadline-miss rate</td><td>Share of admitted device visits that finished after Deadline(j) or were dropped in flight.</td><td><span class="tag g">scorer</span> traces from 28 Sep</td></tr>
+      <tr><td>Network AoU</td><td>Σ_i ω_i·AoU_i after each mission, with AoU_i the missions since device i's last merged update and ω_i its normalised weight (Cui's weighted AoU; uniform until a value proxy reaches the traces).</td><td><span class="tag g">scorer</span></td></tr>
+      <tr><td>Age distribution</td><td>Maximum and 95th-percentile per-device age; Jain's index of merged-update counts; cap violations.</td><td><span class="tag g">scorer</span> cap violations in Phase 4</td></tr>
+      <tr><td>Update yield</td><td>Updates merged per mission slot.</td><td><span class="tag g">exists</span></td></tr>
+      <tr><td>Tour overrun rate</td><td>Share of missions where D4's visit-all tour exceeds the budget.</td><td><span class="tag new">new</span></td></tr>
+      <tr><td>Energy</td><td>E = T·P_idle + B·ε_bit + L·ε_prop, labelled simulated until ε_prop is calibrated.</td><td><span class="tag chg">change</span> Exp 3 only today</td></tr>
+      <tr><td>Optimality gap</td><td>V of an arm over V of O1, for N ≤ 6.</td><td><span class="tag opt">optional</span></td></tr>
+    </tbody>
+  </table>
+  </div>
+  <ul>
+    <li><b>Pairing.</b> The seed hashes the cell id, so every arm inside one study runs in the same cell with the same seeds; sweeps that differ in any axis are not paired with each other. Headline cells use n = 40, pilots n = 20.</li>
+    <li><b>Per comparison.</b> A bootstrap 95% CI on paired differences (2,000 resamples) and a Wilcoxon signed-rank test with Cliff's δ, both already in <code>stats.py</code>; exact McNemar for reach, already in <code>analyze_sota.py</code>.</li>
+    <li><b>Per study.</b> Holm–Bonferroni across the study's family of comparisons, Friedman where more than two arms are ranked, and the 2×2 interaction as a difference of differences on paired seeds. All three are now in <code>stats.py</code>, along with <code>compare_to_reference</code>, which runs one arm against each baseline as a Holm-adjusted family and applies the claim rule.</li>
+    <li><b>Claim rule, unchanged.</b> The CI excludes zero and the Holm-adjusted p is below 0.05, with the multiplicity position stated and the primary metric fixed before the run.</li>
+    <li><b>Units.</b> Report simulated seconds and wall-clock time, never rounds alone, since rounds are not comparable across asynchronous arms (the A2FeD reviewer's #35).</li>
+  </ul>
+</section>
+
+<section id="risks">
+  <h2>Risks and non-goals</h2>
+  <div class="scroll">
+  <table class="wide">
+    <thead><tr><th>Risk</th><th>Consequence</th><th>Mitigation</th></tr></thead>
+    <tbody>
+      <tr><td>Dwell is too small to matter at 18.8 KB</td><td>The dwell term in C1 and C2 is inert</td><td>A narrow class, the payload sweep, and reporting where the term starts to bite (D3)</td></tr>
+      <tr><td>Band classes are not defensible</td><td>C1 becomes a tuning knob</td><td>Bandwidth-based classes with measured or cited ranges (D1)</td></tr>
+      <tr><td>The pair Q ties the cross-heuristic, as H2 tied H1</td><td>No learning claim</td><td>The architecture stands with FX in the slot; 5.5 and 5.6 say when learning helps; publish the null</td></tr>
+      <tr><td>The re-run bill slips the schedule</td><td>Late results</td><td>Phases 1 and 2 first, since their conclusions carry over</td></tr>
+      <tr><td>The age cap is infeasible under 30 s</td><td>Plans rejected wholesale</td><td>S chosen from the budget, a fallback that keeps the oldest capped devices that fit, violations reported (D4)</td></tr>
+      <tr><td>The multi-mule runtime has latent faults</td><td>Cross-mule claims rest on an identity merge</td><td>Phase 2 hardening and a 2-mule integration test before any IPDPS framing</td></tr>
+      <tr><td>The theory lands late</td><td>V's constants are hand-set</td><td>Sweep the constants and present V in FedEx's form with the convex-surrogate caveat</td></tr>
+      <tr><td>Simulator-to-stack gap for the learned score</td><td>A policy that works only in FerrySim</td><td>FerrySim and the stack share the clock, channel and contact-link code; report both</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3>Non-goals</h3>
+  <ul>
+    <li>No rebranding as asynchronous FL. The survey taxonomy would absorb it and the comparison would shrink to FedAsync against partial FedAvg.</li>
+    <li>No motion planning or obstacle avoidance. Navigation means next-stop selection and re-planning over known device positions.</li>
+    <li>No hybrid-action RL unless dwell, speed or power become continuous, and no hierarchy unless test (b) shows a slope on both clocks.</li>
+    <li>No QMIX and no policy averaging while each mule owns a slice. Chen's learned channel twin is journal scope, where it would supply the predicted SNR at arrival.</li>
+    <li>No claim to be fairer than Cui; the claim is fairness under costs Cui's model does not charge.</li>
+  </ul>
+
+  <h3>What the SEC'26 reviewers asked for</h3>
+  <div class="scroll">
+  <table class="wide">
+    <thead><tr><th>Reviewer point</th><th>Where the plan answers it</th></tr></thead>
+    <tbody>
+      <tr><td>74A · no recent UAV-FL baselines</td><td>D3 (Cui), D4 (FedEx), E3 (Chen), with D1 and D2 repaired; Study 5.3</td></tr>
+      <tr><td>74A · the scheduler looks like plain EDF</td><td>H1 does not even fly EDF order today. FeRRy's contribution is the band–route coupling and the per-arrival pair choice (C1, C4), tested in 5.4 and 5.6</td></tr>
+      <tr><td>74A · scale too small</td><td>Study 5.9: up to 24 devices per slice and 3 mules</td></tr>
+      <tr><td>74B · no new algorithm; the deadline function is unexplained and printed with its sign reversed</td><td>C2's objective; C3's law stated as a formula with clamps; the tie-break, busy-flag arbitration and re-plan written as algorithms</td></tr>
+      <tr><td>74C · layers only integration-tested; the RL benefit is unclear</td><td>Exp 5 runs the full stack with one ablation per mechanism; tests (b) and (c); trained checkpoints only</td></tr>
+      <tr><td>74C · real versus simulated is unclear</td><td>A provenance table: real processes, TCP and Keras training; simulated flight clock, channel and energy</td></tr>
+      <tr><td>74D · little real-world validation; no sensitivity analysis or statistics</td><td>AERPAW if it lands; payload, trade, γ, reward-weight and budget sweeps; Holm across every study</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<section id="sources">
+  <h2>Sources</h2>
+  <ul class="src">
+    <li>HERMES Novelty Audit, Revision 3 (23 Sep 2026), with the contribution ledger C1–C5.</li>
+    <li>FeRRy: Federated RF-aware Routing Framework, slide deck (23 Sep 2026).</li>
+    <li>HERMES_vs_Chen2023_Model-Aided_FedQMIX.md (23 Sep 2026).</li>
+    <li>DeveloperDocs/architecture review/rl-decision-memo/HERMES_Layer_Redefinition_and_RL_Decision.md (the 09-17 memo: cuts 1–3, properties (a)–(c), the 2×2).</li>
+    <li>DeveloperDocs: HERMES_FL_Scheduler_Design.md (principles 1–15), HERMES_Scheduler_Freeze.md, HERMES_PreRerun_Checklist.md, HERMES_Matrix_Results.md, HERMES_SOTA_Results.md, HERMES_SOTA_Comparison_Design.md, HERMES_Related_Work_Notes.md, Codebase Review/00_Critical_Problem_Areas.md, SEC26_Code_Audit.md, SEC26_Rebuttal_Draft.md.</li>
+    <li>Code at 229a093: hermes/scheduler, selector, mule, mission, cluster, l1, processes, transport, types; experiments/exp3, exp4, analysis, runner; the untracked hermes_rl prototype.</li>
+    <li>Bian, Shen, Chen, Xu. Indirect-Communication Federated Learning via Mobile Transporters (FedEx). IEEE TMC 24(6), 2025.</li>
+    <li>Cui, Yang, Wu, Feng, Hu. Data Value Based Asynchronous FL for UAV Swarm Under Unstable Communication. IEEE TMC 23(6), 2024.</li>
+    <li>Chen, Esrafilian, Bayerlein, Gesbert, Caccamo. Model-Aided Federated RL for Multi-UAV Trajectory Planning in IoT Networks. IEEE GLOBECOM Workshops 2023.</li>
+    <li>Lai, Zhu, Madhyastha, Chowdhury. Oort. OSDI 2021. Nishio, Yonetani. FedCS. ICC 2019.</li>
+    <li>Zhai, Yuan, Wang, Yang. UAV-Enabled Asynchronous FL. IEEE TWC 24(3), 2025. Ho et al. Energy-Efficient DDPG-Based UAV-Assisted Asynchronous FL. IAAA 2025.</li>
+    <li>Xie et al. FedAsync, 2019. Nguyen et al. FedBuff, AISTATS 2022. Yu et al. Async-HFL, IoTDI 2023. Yang et al. JSAC 2025. Shen et al. IoTJ 2024. Mestoukirdi et al. GLOBECOM 2022.</li>
+  </ul>
+</section>
+
+</div>

@@ -4,7 +4,41 @@
 *after* a sweep invalidates it. This document is a **gate**: we re-run when everything below is
 either done or explicitly deferred with a reason. It exists so we pay the compute once.
 
-**Status:** ✅ **GATE OPEN** (2026-08-13). All six exit criteria met; the matrix in §5.1 is cleared to run.
+**Status:** ⛔ **RE-OPENED (2026-09-28).** Not cleared to re-run until the items in the block below
+hold. The status of 2026-08-13 follows it, kept for the record.
+
+> **Why it re-opened.** Scheduler Freeze Amendments 5 and 6 fixed three defects that change what
+> recorded cells measured: the backhaul loss schedule was read only at mission 1, abandoning a device
+> reset its age for D1 and D2, and a mission's budget ran from the last DOWN bundle instead of its own
+> start. Amendment 7 opens the frozen surface for the FeRRy build. Freeze §6 says to re-open this
+> checklist after any amendment.
+>
+> - **What the fixes mean for the results below.** The L1 confirmation ("L1 is now CONFIRMED")
+>   compared each arm's mission-1 backhaul band held for the whole trial, not adaptation from mission
+>   to mission; re-scoring its retained traces moves round closure at k = 1 from 0.831 to 0.675 for
+>   H2 and from 0.838 to 0.813 for H3, with accuracy and yield unchanged. In every budgeted cell,
+>   each mission after the first planned against a budget already partly spent: on the previous
+>   mission's Pass 2 and, after an empty mission (72–81% of missions in the `b60` cells), on
+>   everything since the last DOWN. Nothing below is withdrawn, but no budgeted, `--l1-channel` or
+>   D1/D2 number is cited until its cell is re-run.
+> - **Re-runs owed, in order:** the L1 confirmation cells C1 (H3 vs H2, n = 40, jittery, 120 s) and
+>   C2; the 60 s SOTA cell (H1, D1, D2, n = 40); then each other cell in Amendment 6's list before
+>   it is cited.
+> - **Before any of them runs:** (1) run on commit `dc90f84` (Amendments 5 and 6) or a later one,
+>   and record the commit with the rows; later commits add FeRRy switches whose defaults are pinned
+>   to this behaviour (the code behind the recorded rows is the tag `exp4-recorded`); (2) write to a fresh CSV
+>   path, because the runner skips (cell, arm, trial) keys already in a file and a reused file
+>   silently keeps the old numbers; (3) keep `--keep-event-traces` on and score each cell with
+>   `experiments/analysis/traces_scorer.py` as well as from the CSV; (4) apply the claim rule of
+>   §5.1 with Holm–Bonferroni across each family (`holm_bonferroni` in
+>   `experiments/analysis/stats.py`) instead of reporting the metric that hit.
+> - **The FeRRy build (Amendment 7)** lands behind switches whose defaults keep the frozen pipeline,
+>   so a change confined to ferry mode forces no legacy re-run. Its Phase 3 (simulated clock,
+>   seconds-axis channel) re-baselines every arm for Exp 5, the bill the build plan accepts in its
+>   decision D2. New ledger rows are in §1, the amendments in §1a.
+
+**Status on 2026-08-13:** ✅ **GATE OPEN.** All six exit criteria met; the matrix in §5.1 is cleared
+to run.
 
 **Progress:** Phase 0 — **closed** (§2). Phase 1 — **done, scheduler frozen**, amended three times
 since (§1a). Phase 2 — **done, full-text verified**; the reading *reversed* the first pass's
@@ -77,7 +111,14 @@ The single most useful distinction here. Most open items do **not** need new tri
 | Retain event traces (`--keep-event-traces`) | **No** — but do it *with* the matrix | Changes no trial behaviour; it only stops the run-dir JSONL being deleted. ~9.7 KB/trial. Skipping it means the next baseline request costs another full re-run |
 | Change N, mule count, or `n_missions` | **Yes** | Different operating point |
 | Wire S2A/S2B readiness gating | **Yes** if it changes admission | Currently inert |
+| Backhaul-schedule index fix (Freeze Amendment 5) | **Yes**, every `--l1-channel` cell | Each arm's mission-1 loss probability was applied to every mission. Round closure can be re-scored from retained traces; the comparison itself cannot |
+| D1/D2 age from the last CLEAN (Amendment 5) | **Yes**, D1/D2 cells | Small in Exp 4 (only in-flight aborts fed the synthetic TIMEOUTs), but re-run the 60 s cell before citing it |
+| Per-mission budget clock (Amendment 6) | **Yes**, every budgeted cell | No mission loses budget to an earlier one; the loss grew with the share of empty missions |
+| Turn a FeRRy switch on (Amendment 7) | **Yes** (new arm) | Changes what the scheduler decides |
+| Simulated mission clock and seconds-axis channel for every arm (FeRRy Phase 3) | **Yes**, every arm | Build-plan decision D2: Exp 5 re-baselines H0–H3, D1 and D2 on the new clock |
 | — | — | — |
+| Land a FeRRy switch at its legacy default (Amendment 7) | **No** | Legacy behaviour unchanged; each switch lands with a test that pins its default to the frozen pipeline |
+| Re-score retained traces with `traces_scorer.py` | **No** | Re-analysis of kept JSONL; possible only where `--keep-event-traces` was on |
 | `ε_prop` calibration | **No** | Energy is a post-hoc function of recorded columns |
 | Manuscript deadline-sign correction | **No** | Prose/algorithm text only |
 | Figure regeneration, new plots | **No** | Re-analysis of committed CSVs |
@@ -115,6 +156,22 @@ means **an existing CSV cannot be resumed** by a newer runner: it fails loudly w
 `pass allow_schema_change=True to override`. That is the desired behaviour, not a defect — rows
 recorded with these mechanisms active must never be pooled with historical rows, so being forced
 into a new file is the correct outcome. Start a new CSV; do not override.
+
+### Amendments 4–7 (2026-08-17 to 2026-09-28) — and what they did cost
+
+The title of this section held through Amendment 4. It no longer holds: Amendments 5 and 6 are
+defect fixes, so their default *is* the corrected behaviour, and they change recorded results.
+
+| Freeze § | Change | Toggle | Recorded results |
+|---|---|---|---|
+| 5d, Amendment 4 | Whole-scheduler baselines D1 and D2 own admission | arm `D1`/`D2` | None: inert for H0–H3 |
+| 5e, Amendment 5 | Backhaul schedule indexed by mission; D1/D2 age from the last CLEAN | none (fixes) | Every `--l1-channel` cell; the D1/D2 cells |
+| 5f, Amendment 6 | Every mission's budget runs from its own start | `--mission-budget-s` | Every budgeted cell |
+| 5g, Amendment 7 | The FeRRy build opens the frozen surface | one switch per mechanism, legacy by default | None by itself |
+
+The caveat above now applies to the numbers as well as the files: `main` does not reproduce the
+recorded budgeted, `--l1-channel` or D1/D2 rows. Re-derive a recorded number from the tag
+`exp4-recorded` (commit `229a093`, code as of `d0e80d4`).
 
 ---
 

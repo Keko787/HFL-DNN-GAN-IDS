@@ -47,6 +47,8 @@ with `compute_idle_time` = `0.0` if `idle_time_ref_ts <= 0.0` else `max(0.0, now
 
 **Other side conditions the printed equation omits.** (i) `deadline_override_ts` short-circuits everything and **nothing in `hermes/` ever clears it back to `None`** (only write: `s3_deadline.py:188`) — the bypass is sticky. (ii) The cluster can overwrite Φ wholesale via `registry_deltas['deadline_fulfilment_s']` (`s3_deadline.py:198-203`), so Φ is not purely mule-local. (iii) A device that passes S1 on an override alone but has no bucket is silently dropped with a warning (`fl_scheduler.py:256-259`).
 
+*Status (2026-09-28).* FeRRy's multiplicative deadline law (Scheduler Freeze Amendment 7; `DeadlineLaw` in `s3_deadline.py`) makes an override one-shot — it stops applying once its time passes or the device's next outcome arrives — and clamps a cluster-supplied Φ to the law's bounds. It also gives Φ a ceiling, which the additive law lacks. The recorded additive law keeps (i) and (ii) as described, and (iii) is unchanged under both.
+
 ### What the paper says that is wrong
 
 | Paper location | Text | Problem | Replacement |

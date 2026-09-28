@@ -5,6 +5,11 @@ Design §2.7 + Implementation Plan §3 Phase 5 task 3::
     Offline CTDE training on AERPAW digital twin.
     Reward: −time_to_complete − w·energy + completed_session_bonus.
 
+As built, the harness trains one agent in the simulators of ``sim_env.py``
+(``BucketSim`` per device, ``ContactSim`` per contact); no AERPAW twin was
+used and nothing is multi-agent. See Scheduler Freeze Amendment 7
+(``DeveloperDocs/HERMES_Scheduler_Freeze.md`` §5g).
+
 We keep the harness framework-agnostic (pure numpy) so it runs in a
 pytest fixture, inside a jupyter cell, or in the AERPAW control loop.
 The outer loop is the standard DDQN recipe:

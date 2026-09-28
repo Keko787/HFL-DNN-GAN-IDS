@@ -254,7 +254,7 @@ The hardware target post-clarification is **4 stationary + 4 mobile AVNs** (1 cl
 1. ✅ Replace `Transport/rf_link.py` loopback with TCP socket transport + a simple wireless channel emulator stub (configurable loss / delay), bound to localhost ports per AVN. *(chunks A–E)*
 2. ✅ Replace `Transport/dock_link.py` loopback with TCP socket transport (high-bandwidth profile, lossless). *(chunks A, C)*
 3. ✅ `Transport/cloud_link.py`: outbound-only HTTP polling pattern per slides 30–32 (matches AERPAW's no-inbound restriction when the testbed returns). *(chunk F)*
-4. ✅ Per-process entry points (`hermes/processes/{cluster,mule,device}.py`): launch `L1 channel DDQN`, `FLScheduler`, `HFLHostMission`, `ClientCluster` from a single config; supports the per-mule AVN model. *(chunks G–K)*
+4. ✅ Per-process entry points (`hermes/processes/{cluster,mule,device}.py`): launch `L1 channel DDQN`, `FLScheduler`, `HFLHostMission`, `ClientCluster` from a single config; supports the per-mule AVN model. *(chunks G–K)* *Correction (2026-09-28): the mule process passes no channel actor, so no L1 DDQN runs; L1 as evaluated is the U(c, t) backhaul controller. See Scheduler Freeze Amendment 7.*
 5. ✅ Process topology: a Python supervisor (`MultiProcessOrchestrator`) brings up 1 cluster + N mule processes + M device processes, each on its own localhost port. Same shape AERPAW would expose with AVN IPs. *(chunk L)*
 6. ✅ Observability: structured JSON logs for every state transition; per-process JSONL files under the orchestrator's run dir; counters/gauges/timers via `MetricsRegistry`. *(chunk M)*
 7. ✅ Run the full 2-pass §4 flow end-to-end on the local emulation. Pinned by `tests/integration/test_e2e_topology.py`. *(chunk N)*
