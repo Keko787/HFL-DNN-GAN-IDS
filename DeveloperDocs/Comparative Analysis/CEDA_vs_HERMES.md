@@ -193,9 +193,9 @@ hidden units, only makes sense *because* the gates carry the constraints.
 | Domain | medical supply delivery, disaster response | hierarchical FL for network intrusion detection |
 | Agents | 2 drones, homogeneous | 1 mule per mission; N mules per cluster, coordinated by the edge server |
 | Tiers | drones ↔ patients (flat) | 4 — device, mule NUC, edge server, cloud |
-| Learning | CTDE DQN, joint replay, local execution | two independent DDQNs: L1 channel, L2 intra-bucket selector |
+| Learning | CTDE DQN, joint replay, local execution | one DDQN, the L2 intra-bucket selector (random-init in Exp 4); L1 as evaluated is a deterministic utility controller, and its channel DDQN is untrained |
 | Policy scope | routing + assignment + navigation + energy + triage | ordering within one bucket, ≥ 2 candidates |
-| Observation | 140 dims/agent (280 joint) | 11 selector features; 8-dim L1 state |
+| Observation | 140 dims/agent (280 joint) | 11 selector features; L1 reads per-band SNR |
 | Action space | 6 discrete moves | argmax over candidate contacts |
 | Framework | PyTorch (RTX 3090) | **numpy, no ML framework in `hermes/`** |
 | Coordination | emergent via reward (spatial separation penalty) | explicit — disjoint `MissionSlice` per mule from the registry |

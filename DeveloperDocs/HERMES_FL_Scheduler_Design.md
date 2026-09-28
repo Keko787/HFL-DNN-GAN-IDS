@@ -16,7 +16,7 @@ The seven cooperating programs are:
 4. **`ClientCluster`** — *(new)* dock-handoff client on the mule's NUC, talks to `HFLHostCluster`.
 5. **`ClientMission`** — *(was `EdgeClient`)* in-field FL client on the edge device, talks to `HFLHostMission`.
 6. **`HFLHostCluster`** — cluster-scope FL server on the edge server (Tier 2).
-7. **`L1 RL Module`** — *(narrowed to RF channel selection only)* DDQN actor on the mule's NUC.
+7. **`L1 RL Module`** — *(narrowed to RF channel selection only)* DDQN actor on the mule's NUC. *As built, a deterministic controller on the backhaul; see §2.6.*
 
 All six are coordinated by four information flows — **intra-NUC call** (L1↔L2↔HFL-Mission↔ClientCluster), **in-field RF link** (HFLHostMission↔ClientMission), **dock handoff** (ClientCluster↔HFLHostCluster), and **cloud sync** (HFLHostCluster↔Tier 3). Each flow is bounded by the design principles called out in the deck.
 
@@ -141,6 +141,8 @@ Operates in two modes, set per Pass:
 | **Never** outputs trajectory — navigation is mechanical, target is L2's choice | — |
 
 > **Algorithm implication.** With the position head removed, L1 reduces from MA-P-DQN to a single DDQN (or the discrete head of MA-P-DQN, kept for backward compatibility). The "joint action" framing in slides 20/21 no longer applies — it survives only as a training-time formality if MA-P-DQN is retained.
+
+> **As built (2026-09-28).** No DDQN runs at L1. The policy the recorded results evaluate is the deterministic utility controller U(c, t) in `hermes/l1/channel_utility.py`, which picks the mule-to-base-station backhaul band once per mission (Exp 4 arm H3, `--l1-channel`). `ChannelDDQN` has no trainer in the repository, and the process runtime passes none to the mule. The contact link has no band. The FeRRy build replaces principle 5 below: a band class is committed at the dock and a band is chosen per contact. See Scheduler Freeze Amendment 7 (`HERMES_Scheduler_Freeze.md` §5g).
 
 ### 2.7 `TargetSelectorRL` — Intra-Bucket Selector *(new, sub-model of L2 S3.5)*
 **Where the trajectory head went.** What was "trajectory" in MA-P-DQN was actually a **next-target selector**. After Sprint 1.5, the selector picks the next *contact position* (a stop where the mule serves N≥1 devices in parallel), not an individual device. The selector queries only when a bucket has ≥2 candidate positions.
@@ -658,6 +660,8 @@ eligible(i)    = (has_active_deadline(i)) ∨ (beacon_heard_in_range(i))        
 14. **Local training is offline; FL sessions are exchange-only.** ClientMission trains the discriminator against locally-stored data on its own schedule, between mule visits. When the mule arrives, the FL session is purely a data exchange (push θ_disc + synth, pull pre-prepared Δθ). No fitting happens during the session. This keeps contact time short, which is what makes contact-level parallel sessions practical inside an RF window.
 15. **The mule's circuit is decomposed into contact events, not per-device visits.** When the mule stops at a position, every device within `rf_range_m` of that position is served in parallel — one *contact event* covers N≥1 devices. The scheduler clusters slice members into contact positions (S3a clustering stage); the selector picks among contact positions, not individual devices. Per-contact partial-FedAvg merges the N parallel Δθ into a contact-level batch aggregate, which then folds into the running mission aggregate. The N=1 case (isolated device) is the degenerate-but-valid form of the same code path — no special-cased branch.
 
+*FeRRy (2026-09-28):* these principles hold as written in legacy mode. Scheduler Freeze Amendment 7 (`HERMES_Scheduler_Freeze.md` §5g) restates 1, 12, 13, 14 and 15 and replaces 5 for ferry mode, where band and route are chosen together.
+
 ---
 
 ## 8. Implementation Mapping to HiFINS
@@ -674,6 +678,8 @@ eligible(i)    = (has_active_deadline(i)) ∨ (beacon_heard_in_range(i))        
 | `partial_round_state` | reuse FlightFramework checkpoint to survive mid-round mule disconnects. Owned by `HFLHostMission`, persisted across `ClientCluster` dock cycles. |
 | Round-close report writer | new; written by `HFLHostMission`, consumed in-flight by `FLScheduler` (fast-phase) and shipped at dock by `ClientCluster` to `HFLHostCluster` (slow-phase). |
 | `ClusterCloudClient` | optional new module on edge server; client peer to Tier 3 for `θ_gen` refinement — keeps `HFLHostCluster` symmetric to the mule's `HFLHostMission` (server-only at its own boundary). |
+
+*As built (2026-09-28):* `TargetSelectorRL` was trained, where at all, in the single-agent simulators of `hermes/scheduler/selector/sim_env.py` (BucketSim, then ContactSim), not under CTDE on an AERPAW twin, and every recorded Exp 4 row ran it with random-init weights. L1 runs the deterministic U(c, t) controller on the backhaul, not a DDQN. See §2.6 and Scheduler Freeze Amendment 7.
 
 ---
 

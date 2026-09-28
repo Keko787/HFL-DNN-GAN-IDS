@@ -818,6 +818,12 @@ this repository and it will be silently lost on a fresh clone.
 `.gitignore` is 7 lines and covers `__pycache__/`, `*.feather`, `*.pt`, `*.log`, `*.zip`,
 `tmp/`, `datasets/`.
 
+**Status, 2026-09-28.** `hermes_rl/` has since moved out of the repository, to a sibling folder,
+and `.claude/` is no longer inside it either. The prototype's code is now tracked source at
+`experiments/sim/drone_env/`, copied from commit `a8a453f` with a provenance README and tests
+that pin its default behaviour to that commit; the original checkout keeps its history.
+`.idea/` is still untracked and un-ignored, and a broken `.venv/` stub has appeared beside it.
+
 ---
 
 ## Cross-cutting statistics

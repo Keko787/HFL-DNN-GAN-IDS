@@ -1,9 +1,11 @@
-"""Replay buffer — experience storage for offline CTDE training.
+"""Replay buffer — experience storage for offline training.
 
 Design §2.7 "replay_buffer": trained centrally, deployed small. The
 buffer is intentionally tiny (tens of thousands of transitions at most)
-because the intra-bucket selection problem has a low-dim state and we
-only train offline on the AERPAW digital twin.
+because the intra-bucket selection problem has a low-dim state and
+training is offline. As built, training runs in the single-agent
+simulators of ``sim_env.py`` (``BucketSim``, ``ContactSim``); the design's
+AERPAW digital twin was never used, and nothing here is multi-agent.
 
 A transition is flat, independent of the selector's input shape: the
 upstream caller already turned the state into the feature vector for

@@ -733,7 +733,7 @@ hidden units, only makes sense <em>because</em> the gates carry the constraints.
 <tr>
 <td>Learning</td>
 <td>CTDE DQN, joint replay, local execution</td>
-<td>two independent DDQNs: L1 channel, L2 intra-bucket selector</td>
+<td>one DDQN, the L2 intra-bucket selector (random-init in Exp 4); L1 as evaluated is a deterministic utility controller, and its channel DDQN is untrained</td>
 </tr>
 <tr>
 <td>Policy scope</td>
@@ -743,7 +743,7 @@ hidden units, only makes sense <em>because</em> the gates carry the constraints.
 <tr>
 <td>Observation</td>
 <td>140 dims/agent (280 joint)</td>
-<td>11 selector features; 8-dim L1 state</td>
+<td>11 selector features; L1 reads per-band SNR</td>
 </tr>
 <tr>
 <td>Action space</td>

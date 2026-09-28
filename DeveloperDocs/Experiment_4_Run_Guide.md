@@ -184,9 +184,48 @@ done?" costs a full re-run.
 | **Cost** | ~9.7 KB per trial — about **2.3 MB for a 240-trial matrix** |
 | **What you get** | `device_served` / `device_serve_failed` with timestamps, plus **device positions** (kept from the configs — the events do not carry them, and no spatial policy can be scored without them) |
 | **Failed trials** | captured too — traces are taken *before* the timeout check, so timed-out runs keep theirs |
-| **Caveat** | `device_served` has no `mission_round`; attribute rounds by joining timestamps against `mission_started` / `mission_completed` |
+| **Since 2026-09-28** | `device_served` carries `mission_round` and `pass_kind` (`collect` / `deliver`); `mission_completed` carries `pass_1_plan` (each contact's devices and deadline) and `pass_1_outcomes` (each session's device, outcome and contact time) |
+| **Older traces** | none of those fields; attribute events to missions by joining timestamps against `mission_started` / `mission_completed`, which the scorer below does |
 
 **Rule of thumb: if a run is expensive enough that you would not want to repeat it, pass this flag.**
+
+**Scoring retained traces.** `experiments/analysis/traces_scorer.py` re-scores any trace root
+without a re-run: the standard summary columns with round closure corrected (traces from before
+Freeze Amendment 5 counted backhaul-dropped rounds as closed), time to τ in missions, cluster
+rounds and wall-clock seconds, per-device update age and Network AoU, and the deadline-miss rate
+where the trace records the Pass-1 plan.
+
+```bash
+python -m experiments.analysis.traces_scorer --traces results/exp4_matrix/C_traces --tau 0.82 0.75 --csv c_scored.csv
+```
+
+### 2.4 FeRRy Phase 1 — merge rules, FedProx, budgeted Pass 2 (mule arms)
+
+All off by default; the defaults reproduce the recorded runs. H0 ignores them (flat FL keeps its
+own mean). Every value is described in `HERMES_Configuration_Reference.md` §14–15, and each row
+records `aggregation`, `aggregation_params` (JSON), `fedprox_rho`, `pass_2_budget`,
+`deadline_law`, `deadline_params` (JSON) and `miss_priority`, so, as in §2.1, start a new CSV.
+
+| Flag | Default | Meaning |
+|---|---|---|
+| `--aggregation` | `agg:plain` | The L3 merge rule, set on the cluster and the mule together. `agg:cutoff` (FeRRy: n·v·hinge(age), zero past the cutoff), `agg:asynchfl` (exp(−λ·age) at the mule and the cluster), `agg:fedbuff` (apply the mean after K updates). |
+| `--agg-server-lr`, `--agg-a-max`, `--agg-period-s`, `--agg-hinge-a`, `--agg-hinge-b`, `--agg-decay`, `--agg-value`, `--agg-buffer-k` | see §14 | The rule's parameters. `--agg-period-s` turns each device's deadline window into its cutoff (decision D5). |
+| `--fedprox-rho` | 0 | FedProx weight on every device. |
+| `--pass-2-budget` | off | Walk Pass 2 against `--mission-budget-s` (required); skipped devices keep their older basis, so ages spread. |
+| `--deadline-law` | `additive` | `multiplicative`: Φ ← clamp(β·Φ), β_on after an on-time delivery, β_partial ≤ β_timeout after a miss, one-shot cluster overrides. Tunables `--deadline-beta-on` (0.8), `--deadline-beta-partial` (1.25), `--deadline-beta-timeout` (1.5), `--deadline-phi-min` (5), `--deadline-phi-max` (300); see §15 of the configuration reference. |
+| `--miss-priority` | off | S3b admits contacts by their members' consecutive misses before their deadline. Only acts with `--mission-budget-s`, since S3b does nothing without a budget. |
+
+Each `mission_completed` event now carries `pass_1_merge` (rule, base version, per-device age and
+weight, updates excluded past the cutoff), `pass_2_skipped`, and `deadline_state` (each device's
+window Φ in seconds and miss streak after the mission); each `pass_1_outcomes` entry carries the
+update's `basis_version` and `age`. Age-aware rules add `cluster_merge` events (and
+`cluster_merge_deferred` while FedBuff fills).
+
+A Study 5.1 cell (H1 routes, budgeted Pass 2 so ages spread; repeat per rule with the same seeds):
+
+```bash
+python -m experiments.exp4.runner_main --csv results/exp5_s51/cutoff_b60.csv --arms H1 --N 6 --n-missions 4 --regime jittery --n-trials 40 --real-model --realism --mission-budget-s 60 --pass-2-budget --aggregation agg:cutoff --agg-a-max 2 --keep-event-traces
+```
 
 ---
 

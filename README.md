@@ -84,7 +84,7 @@ Seven cooperating programs replace the original monolithic Flower server/client 
 4. **`ClientCluster`** ([`hermes/mule/client_cluster.py`](hermes/mule/client_cluster.py)) — Dock-handoff client on the mule's NUC. Owns the entire dock lifecycle (UP partial-aggregate / DOWN next-mission bundle); never trains.
 5. **`ClientMission`** ([`hermes/mission/client_mission.py`](hermes/mission/client_mission.py)) — Edge-device FL client + flagger. Trains the discriminator **offline between mule visits**, computes a utility score (`w₁·perf + w₂·diversity_adjusted`), and beacons `FL_OPEN` when worth federating.
 6. **`HFLHostCluster`** ([`hermes/cluster/host_cluster.py`](hermes/cluster/host_cluster.py)) — Cluster FL coordinator on Tier 2. Authoritative `DeviceRegistry`, slices missions per-mule, hosts θ_gen and the synth sample generator, runs cross-mule FedAvg, dispatches dock bundles.
-7. **`L1 RL Module`** ([`hermes/l1/channel_ddqn.py`](hermes/l1/channel_ddqn.py)) — RF channel selector (DDQN, channel-only). The original "trajectory" head moved up to `TargetSelectorRL` because mule navigation is mechanical between known device positions.
+7. **`L1 RL Module`** ([`hermes/l1/channel_utility.py`](hermes/l1/channel_utility.py)) — RF channel selection. As built it is the deterministic utility controller U(c, t), which picks the mule-to-base-station backhaul band once per mission (Exp 4 arm H3, `--l1-channel`). A channel-only DDQN ([`hermes/l1/channel_ddqn.py`](hermes/l1/channel_ddqn.py)) exists but has no trainer and is not wired into the process runtime. The original "trajectory" head moved up to `TargetSelectorRL` because mule navigation is mechanical between known device positions.
 
 These are coordinated by four information flows: **intra-NUC** (L1 ↔ L2 ↔ HFL-Mission ↔ ClientCluster), **in-field RF link** (HFLHostMission ↔ ClientMission), **dock handoff** (ClientCluster ↔ HFLHostCluster), and **cloud sync** (HFLHostCluster ↔ Tier 3).
 
@@ -125,7 +125,7 @@ FL-DNN-GAN-IDS/
 │   │   ├── stages/          # s1_eligibility, s2a_readiness, s2b_flag, s3_deadline, s3a_cluster, s35_selector
 │   │   ├── selector/        # TargetSelectorRL (DDQN), features, replay, sim_env, scope_guard
 │   │   └── policies/        # arrival_order, edf_feasibility
-│   ├── l1/                  # ChannelDDQN, RF prior
+│   ├── l1/                  # U(c,t) channel controller, ChannelDDQN (unwired), RF prior
 │   ├── transport/           # rf_link, dock_link, cloud_link, tcp_*, channel_emulator, wire
 │   ├── types/               # bundles, fl_messages, fl_state, ids, registry, signatures, ...
 │   ├── processes/           # MultiProcessOrchestrator + cluster/mule/device entrypoints

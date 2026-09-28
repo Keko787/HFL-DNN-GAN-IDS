@@ -95,7 +95,7 @@ chunk swaps the reward calibration, lift them into a `RewardConfig` dataclass.
 |---|---|---|---|---|
 | `MIN_DEADLINE_FULFILMENT_S` | [hermes/scheduler/stages/s3_deadline.py:48](hermes/scheduler/stages/s3_deadline.py:48) | 5.0 | module constant | Floor on the rolling fulfilment window. Stops fast-phase shrinks from collapsing the deadline to zero. |
 | `FAST_PHASE_ON_TIME_SHRINK_S` | [hermes/scheduler/stages/s3_deadline.py:44](hermes/scheduler/stages/s3_deadline.py:44) | 5.0 | module constant | How much a CLEAN delta tightens the next deadline window. |
-| `FAST_PHASE_MISSED_WIDEN_S` | [hermes/scheduler/stages/s3_deadline.py:45](hermes/scheduler/stages/s3_deadline.py:45) | 10.0 | module constant | How much a TIMEOUT/PARTIAL delta loosens the next deadline window. Asymmetric (widen > shrink) to err on the side of attempt rather than skip. |
+| `FAST_PHASE_MISSED_WIDEN_S` | [hermes/scheduler/stages/s3_deadline.py:45](hermes/scheduler/stages/s3_deadline.py:45) | 10.0 | module constant | How much a TIMEOUT/PARTIAL delta loosens the next deadline window. Asymmetric (widen > shrink) to err on the side of attempt rather than skip. These three constants are the recorded **additive** law; FeRRy's multiplicative law is configured in §15. |
 | `beacon_window_s` | [hermes/scheduler/fl_scheduler.py:79](hermes/scheduler/fl_scheduler.py:79) | 30.0 | constructor arg | How recent a beacon must be to count as "active." |
 | `BUCKET_PRIORITY` | [hermes/types/scheduler.py](hermes/types/scheduler.py) | `[NEW, SCHEDULED_THIS_ROUND, BEACON_ACTIVE]` | enum order | Bucket-walking order in `build_target_queue` / `build_contact_queue`. |
 
@@ -229,6 +229,80 @@ The same module ships several other architectures (`create_high_performance_nids
 * **Experiment 3 (scheduling ablation)** — A1 (centralized FL) needs the model for the actual Flower training round. A2/A3/A4 are scheduling sims — they don't touch the model.
 * **Experiment 4 (integrated end-to-end)** — calls the model at every device's local-train step. This is the primary consumer.
 * **HERMES `--mode hermes` path** — when wired, `ClientMission`'s `local_train` callback should call into this model's `.fit` step. Sprint-1B left a stub at [App/TrainingApp/Client/TrainingClient.py:192-197](App/TrainingApp/Client/TrainingClient.py:192) (`_stub_train`) that explicitly raises pending Sprint-1.5 / Sprint-2 wiring; replace with a wrapper around `create_CICIOT_Model` + `model.fit()` when integrating.
+
+---
+
+## 14. L3 merge rules and update age (FeRRy Phase 1)
+
+The merge rule is chosen once per run and must be the same on the cluster and
+the mule; the Exp 4 driver sets both from `--aggregation`. Every default below
+reproduces the recorded runs. Code: [hermes/mission/aggregation_rules.py](../hermes/mission/aggregation_rules.py).
+
+| Symbol | Where | Default | Surface | Rationale |
+|---|---|---|---|---|
+| `aggregation` | `ClusterConfig`, `MuleConfig` | `agg:plain` | config field; `--aggregation` | `agg:plain` is the num_examples-weighted mean of full models that every recorded run used, on its original code path. `agg:cutoff` (FeRRy), `agg:asynchfl` and `agg:fedbuff` merge deltas weighted by age. `agg:fedex` (Phase 2, with arm D4) and `agg:seq` (needs in-session training) are refused by name. |
+| `server_lr` (η) | `aggregation_params` | 1.0 | config field; `--agg-server-lr` | The cluster adds η × the merged update to θ. At η = 1 with every basis current, the age-aware rules equal `agg:plain`, which the regression test pins. |
+| `hinge_a`, `hinge_b` | `aggregation_params` | 1.0, 0 | config field; `--agg-hinge-a/-b` | FedAsync's hinge s(a) = 1 for a ≤ b, else 1/(a·(a − b) + 1) (`agg:cutoff`). To be replaced by the constants the theory track derives. |
+| `a_max` | `aggregation_params` | None | config field; `--agg-a-max` | Fixed cutoff in cluster rounds; weight is exactly 0 past it. At the cluster it also cuts whole partials older than `a_max`. |
+| `period_s` (T) | `aggregation_params` | None | config field; `--agg-period-s` | Mission period for the per-device cutoff of decision D5 (below). |
+| `decay` (λ) | `aggregation_params` | 0.5 | config field; `--agg-decay` | `agg:asynchfl`: s(a) = exp(−λ·a), at the mule and again at the cluster. |
+| `value` | `aggregation_params` | `uniform` | config field; `--agg-value` | v_i in w_i = n_i·v_i·s(a_i): 1, or the update's loss over the mean loss of the merge (`loss`), which re-weights without rescaling. |
+| `buffer_k` (K) | `aggregation_params` | registered devices | config field; `--agg-buffer-k` | `agg:fedbuff`: updates buffered per server step. While the buffer fills the round stays open and θ unchanged; the service still sends the mule its DOWN. |
+| `fedprox_rho` (ρ) | `DeviceConfig` | 0.0 | config field; `--fedprox-rho` | Local loss + (ρ/2)·‖θ − θ_received‖² over trainable weights, in a custom loop. 0 keeps the plain Keras `fit`. |
+| `pass_2_budget` | `MuleConfig` | False | config field; `--pass-2-budget` | Walks Pass 2 against `mission_budget_s` as a second sortie with the full budget, priced with the S3b cost model from the mule's tracked pose (its last Pass-1 stop until Phase 3 returns the pose to the dock), skipping rather than stopping at a contact that does not fit. Skipped devices get a `SKIPPED` delivery line and keep their older basis; without it every basis is current and ages never spread. Needs `mission_budget_s`. |
+
+**Age and the cutoff (decision D5).** Model versions are cluster rounds: the
+DOWN bundle's `mission_slice.issued_round` is the version of its θ. An update's
+age is the version of the θ the mule carried minus the version its device
+trained from, so ages are global and comparable across mules. Under
+`agg:cutoff` each device's cutoff comes from its own deadline window:
+
+    a_max_j = ⌊ Φ_j · s / T ⌋,   Φ_j = max(MIN_DEADLINE_FULFILMENT_S, deadline_fulfilment_s_j)
+
+with s the S3c window scale (1.0 unless S3c is on) and T = `period_s`. If
+`a_max` is also set, the smaller cap wins. Φ_j and T must be on the same clock.
+On the Exp 4 harness that is the wall clock, where one mission cycle takes
+about 9–10 s and Φ starts at 60 s, so a period near the measured cycle gives a
+cutoff of about 6 rounds and does not bind in a 4-mission trial; report the T
+used with every run. From FeRRy Phase 3 both are simulated seconds.
+
+---
+
+## 15. Deadline law and miss priority (FeRRy Phase 1)
+
+Set on the mule (`MuleConfig`); the Exp 4 driver sets them from `--deadline-law`
+and `--miss-priority`. The defaults are the recorded behaviour. Code:
+`DeadlineLaw` in [hermes/scheduler/stages/s3_deadline.py](../hermes/scheduler/stages/s3_deadline.py).
+
+| Symbol | Where | Default | Surface | Rationale |
+|---|---|---|---|---|
+| `deadline_law` | `MuleConfig` | `additive` | config field; `--deadline-law` | `additive` is the recorded law (§7): −5 s on time, +10 s on any miss, 5 s floor, no ceiling, sticky cluster overrides. `multiplicative` is Φ ← clamp(β·Φ). |
+| `beta_on` | `deadline_params` | 0.8 | config field; `--deadline-beta-on` | Factor after an on-time delivery (< 1: tighten). |
+| `beta_partial` | `deadline_params` | 1.25 | config field; `--deadline-beta-partial` | Factor after a PARTIAL: the device answered but the exchange failed, so it was reachable and relaxes less than after a TIMEOUT. |
+| `beta_timeout` | `deadline_params` | 1.5 | config field; `--deadline-beta-timeout` | Factor after a TIMEOUT, including the synthetic ones for devices S3b dropped or an abort abandoned. |
+| `phi_min`, `phi_max` | `deadline_params` | 5 s, 300 s | config field; `--deadline-phi-min/-max` | Clamps. The ceiling is what the additive law lacks. |
+| `expire_overrides` | `deadline_params` | follows the law (on for multiplicative) | config field | A cluster deadline override stops applying once its time passes or the device's next outcome arrives. Under the recorded law it is never cleared (SEC26_Code_Audit.md). |
+| `miss_priority` | `MuleConfig` | False | config field; `--miss-priority` | S3b's admission walk orders contacts by their members' consecutive misses (`DeviceSchedulerState.miss_streak`, reset by a CLEAN) before their deadline, so the wider window a miss earns no longer sends the device to the back of the queue. The visit order of what is admitted is unchanged. |
+
+**Why this form, and the defaults.** log Φ moves by log β per outcome, so a
+device on time with probability p (misses being timeouts) drifts by
+p·log β_on + (1 − p)·log β_timeout per contact. That is zero at
+p* = log β_timeout / (log β_timeout − log β_on) = 0.645 with the defaults,
+close to the additive law's break-even of 2/3. Devices more reliable than p*
+tighten toward Φ_min, less reliable ones relax toward Φ_max, and Φ is bounded
+either way. The β values and clamps are placeholders until the theory track
+supplies them; sweep them rather than tune them per result.
+
+**One interaction to know.** A device that was once on time has deadline
+t_last_on_time + Φ, so once it goes unserved for longer than Φ, S3b drops it as
+overdue, and each drop widens Φ. Under the additive law Φ grows 10 s per drop,
+about as fast as Exp 4's clock advances per mission, so it rarely catches up.
+The multiplicative law catches up geometrically, but not past Φ_max: a device
+unserved for more than Φ_max after its last on-time contact stays overdue until
+the age cap (FeRRy Phase 4, which exempts capped devices from the overdue check)
+brings it back. A device never on time has deadline now + Φ and is overdue only
+if the flight alone exceeds Φ. At Exp 4's time scales (trials of about a minute)
+the Φ_max case does not arise.
 
 ---
 
