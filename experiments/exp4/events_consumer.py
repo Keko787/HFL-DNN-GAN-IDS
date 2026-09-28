@@ -51,6 +51,28 @@ class MissionRecord:
     delivered: Optional[int]
     undelivered: Optional[int]
     duration_s: Optional[float]
+    # Trace-scorer additions (Phase 0). The time window comes from the
+    # envelope timestamps of this mission's ``mission_started`` and
+    # ``mission_completed`` events; hand-built rows without ``ts`` leave it
+    # None. The plan and outcomes are None on traces recorded before the mule
+    # emitted them — distinct from an empty tuple, which is a recorded plan
+    # (or outcome list) with nothing in it.
+    mule_id: Optional[str] = None
+    started_ts: Optional[float] = None
+    completed_ts: Optional[float] = None
+    #: ``(device, deadline_ts)`` for every device admitted to Pass 1.
+    pass_1_deadlines: Optional[Tuple[Tuple[str, float], ...]] = None
+    #: ``(device, outcome, contact_ts)`` for every Pass-1 session recorded.
+    pass_1_outcomes: Optional[Tuple[Tuple[str, str, float], ...]] = None
+
+    def contains(self, ts: Optional[float]) -> bool:
+        """Whether ``ts`` falls inside this mission's time window."""
+        return (
+            ts is not None
+            and self.started_ts is not None
+            and self.completed_ts is not None
+            and self.started_ts <= ts <= self.completed_ts
+        )
 
 
 @dataclass(frozen=True)
@@ -66,6 +88,7 @@ class ModelEvalPoint:
     auc: float
     loss: float
     n_test: int
+    ts: Optional[float] = None
 
 
 @dataclass
@@ -122,37 +145,20 @@ def observation_from_rows(
     processes in the run (already concatenated if there were several of
     a role).
     """
-    # ------------------------------ cluster ------------------------------ #
-    cluster_rounds_closed = len(_events(cluster_rows, "cluster_round_closed"))
-    up_bundles_ingested = len(_events(cluster_rows, "up_bundle_ingested"))
-    cluster_ready = bool(_events(cluster_rows, "cluster_ready"))
-
-    backhaul_lost_rounds: Set[int] = set()
-    for r in _events(cluster_rows, "backhaul_upload_lost"):
-        mr = r.get("mission_round")
-        if mr is not None:
-            try:
-                backhaul_lost_rounds.add(int(mr))
-            except (TypeError, ValueError):
-                pass
-    backhaul_losses = len(_events(cluster_rows, "backhaul_upload_lost"))
-
-    model_evals: List[ModelEvalPoint] = []
-    for r in _events(cluster_rows, "model_eval"):
-        model_evals.append(
-            ModelEvalPoint(
-                cluster_round=int(r.get("cluster_round", 0) or 0),
-                accuracy=float(r.get("accuracy", 0.0) or 0.0),
-                auc=float(r.get("auc", 0.0) or 0.0),
-                loss=float(r.get("loss", 0.0) or 0.0),
-                n_test=int(r.get("n_test", 0) or 0),
-            )
-        )
-    model_evals.sort(key=lambda p: p.cluster_round)
-
     # ------------------------------- mule -------------------------------- #
+    # Parsed first so the cluster section can place its events in a
+    # mission's time window. Rows are walked in order per mule: each
+    # ``mission_started`` opens the window its ``mission_completed`` closes.
     missions: List[MissionRecord] = []
-    for r in _events(mule_rows, "mission_completed"):
+    started_at: Dict[Optional[str], Optional[float]] = {}
+    for r in mule_rows:
+        event = r.get("event")
+        mule_id = _opt_str(r.get("id"))
+        if event == "mission_started":
+            started_at[mule_id] = _opt_float(r.get("ts"))
+            continue
+        if event != "mission_completed":
+            continue
         clean = r.get("pass_1_clean_devices")
         clean_tuple: Tuple[str, ...] = (
             tuple(str(d) for d in clean) if isinstance(clean, (list, tuple)) else ()
@@ -168,8 +174,48 @@ def observation_from_rows(
                 delivered=_opt_int(r.get("delivered")),
                 undelivered=_opt_int(r.get("undelivered")),
                 duration_s=_opt_float(r.get("duration_s")),
+                mule_id=mule_id,
+                started_ts=started_at.pop(mule_id, None),
+                completed_ts=_opt_float(r.get("ts")),
+                pass_1_deadlines=_plan_deadlines(r.get("pass_1_plan")),
+                pass_1_outcomes=_session_outcomes(r.get("pass_1_outcomes")),
             )
         )
+
+    # ------------------------------ cluster ------------------------------ #
+    cluster_rounds_closed = len(_events(cluster_rows, "cluster_round_closed"))
+    up_bundles_ingested = len(_events(cluster_rows, "up_bundle_ingested"))
+    cluster_ready = bool(_events(cluster_rows, "cluster_ready"))
+
+    # Traces recorded before Freeze Amendment 5 carry no mission round on
+    # ``backhaul_upload_lost`` (the cluster read it from the wrong object).
+    # The loss happens at the inter-pass dock, inside the mission's window,
+    # so the round is recovered from the mule's timestamps instead.
+    backhaul_lost_rounds: Set[int] = set()
+    for r in _events(cluster_rows, "backhaul_upload_lost"):
+        mr = _opt_int(r.get("mission_round"))
+        if mr is None:
+            mr = _mission_round_at(
+                missions, _opt_str(r.get("mule_id")), _opt_float(r.get("ts")),
+            )
+        if mr is not None:
+            backhaul_lost_rounds.add(mr)
+    backhaul_losses = len(_events(cluster_rows, "backhaul_upload_lost"))
+
+    model_evals: List[ModelEvalPoint] = []
+    for r in _events(cluster_rows, "model_eval"):
+        model_evals.append(
+            ModelEvalPoint(
+                cluster_round=int(r.get("cluster_round", 0) or 0),
+                accuracy=float(r.get("accuracy", 0.0) or 0.0),
+                auc=float(r.get("auc", 0.0) or 0.0),
+                loss=float(r.get("loss", 0.0) or 0.0),
+                n_test=int(r.get("n_test", 0) or 0),
+                ts=_opt_float(r.get("ts")),
+            )
+        )
+    model_evals.sort(key=lambda p: p.cluster_round)
+
     mission_failures = len(_events(mule_rows, "mission_failed"))
     missions_empty = len(_events(mule_rows, "mission_empty"))
     mule_ready = bool(_events(mule_rows, "mule_ready"))
@@ -277,3 +323,55 @@ def _opt_float(v) -> Optional[float]:
         return float(v)
     except (TypeError, ValueError):
         return None
+
+
+def _opt_str(v) -> Optional[str]:
+    return None if v is None else str(v)
+
+
+def _mission_round_at(
+    missions: Sequence[MissionRecord],
+    mule_id: Optional[str],
+    ts: Optional[float],
+) -> Optional[int]:
+    """Round of the mission (flown by ``mule_id``) whose window contains ``ts``."""
+    for m in missions:
+        same_mule = mule_id is None or m.mule_id is None or m.mule_id == mule_id
+        if same_mule and m.contains(ts):
+            return m.mission_round
+    return None
+
+
+def _plan_deadlines(raw) -> Optional[Tuple[Tuple[str, float], ...]]:
+    """``pass_1_plan`` → ``(device, deadline_ts)`` pairs; None when absent.
+
+    Each planned contact carries its tightest member's deadline (S3a), and
+    every member is held to it: that is the deadline the plan committed to.
+    """
+    if not isinstance(raw, list):
+        return None
+    pairs: List[Tuple[str, float]] = []
+    for contact in raw:
+        if not isinstance(contact, dict):
+            continue
+        deadline = _opt_float(contact.get("deadline_ts"))
+        if deadline is None:
+            continue
+        for device in contact.get("devices") or ():
+            pairs.append((str(device), deadline))
+    return tuple(pairs)
+
+
+def _session_outcomes(raw) -> Optional[Tuple[Tuple[str, str, float], ...]]:
+    """``pass_1_outcomes`` → ``(device, outcome, contact_ts)``; None when absent."""
+    if not isinstance(raw, list):
+        return None
+    sessions: List[Tuple[str, str, float]] = []
+    for s in raw:
+        if not isinstance(s, dict):
+            continue
+        contact_ts = _opt_float(s.get("contact_ts"))
+        if s.get("device") is None or s.get("outcome") is None or contact_ts is None:
+            continue
+        sessions.append((str(s["device"]), str(s["outcome"]), contact_ts))
+    return tuple(sessions)

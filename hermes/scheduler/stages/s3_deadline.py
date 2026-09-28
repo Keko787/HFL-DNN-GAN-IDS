@@ -160,12 +160,13 @@ def fold_round_close_delta(
         - clear ``is_new`` (distribution landed, so no longer brand new)
         - shrink the fulfilment window toward the floor
         - refresh ``idle_time_ref_ts`` + ``last_contact_ts``
+        - refresh ``last_clean_ts`` + ``last_clean_round`` (baseline ages)
 
     Partial/timeout outcome:
         - widen the fulfilment window
         - record contact_ts but do **not** reset idle_time_ref_ts (a
           failed attempt doesn't reset the "when were you last reliable"
-          clock)
+          clock), nor the ``last_clean_*`` fields the baselines age from
     """
     if delta.device_id != state.device_id:
         raise ValueError(
@@ -188,6 +189,12 @@ def fold_round_close_delta(
     if delta.outcome is MissionOutcome.CLEAN:
         state.is_new = False
         state.idle_time_ref_ts = delta.contact_ts
+        # Freeze Amendment 5 — the D1/D2 baselines age a device from its last
+        # successful participation. Only a CLEAN sets these, so the synthetic
+        # TIMEOUT fed for an abandoned device cannot reset its age. Inert for
+        # H0–H3, which read neither field.
+        state.last_clean_ts = delta.contact_ts
+        state.last_clean_round = delta.mission_round
         state.on_time_count += 1
         state.deadline_fulfilment_s = max(
             MIN_DEADLINE_FULFILMENT_S,

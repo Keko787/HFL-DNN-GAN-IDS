@@ -70,6 +70,9 @@ class DeviceSchedulerState:
 
     # Contact / outcome history (this mule only)
     last_outcome: Optional[MissionOutcome] = None
+    #: Timestamp of this device's most recent outcome of ANY kind, including
+    #: the synthetic TIMEOUT fed for a device the mule abandoned without a
+    #: contact. Not an age source: use ``last_clean_ts`` for that.
     last_contact_ts: float = 0.0
     last_utility: float = 0.0
     # Running tallies that mirror DeviceRecord.on_time_history /
@@ -100,9 +103,18 @@ class DeviceSchedulerState:
     # served, or this arm does not carry them".
     last_loss: Optional[float] = None
     last_num_examples: int = 0
-    #: Mission round in which this device was last served — Oort's ``L(i)``.
-    #: 0 = never served.
+    #: Mission round of this device's most recent outcome of ANY kind,
+    #: including failed and abandoned attempts. 0 = no outcome yet. The Oort
+    #: arm derives its current round from this; its ``L(i)`` is
+    #: ``last_clean_round``.
     last_served_round: int = 0
+
+    # Baseline age inputs (arms D1/D2) — set ONLY on a CLEAN outcome, so a
+    # failed or abandoned attempt never counts as service. MAX-AoI ages a
+    # device from ``last_clean_ts``; Oort's ``L(i)`` is ``last_clean_round``.
+    # 0 = never participated successfully. Inert for H0–H3, which read neither.
+    last_clean_ts: float = 0.0
+    last_clean_round: int = 0
 
     # RF / opportunistic
     last_beacon_ts: float = 0.0

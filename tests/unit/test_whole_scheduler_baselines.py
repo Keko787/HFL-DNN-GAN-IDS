@@ -50,8 +50,10 @@ def _env(pose=(0.0, 0.0, 0.0), now=NOW) -> SelectorEnv:
 
 
 def _states(**last_seen):
+    """Each device last served successfully at the given time."""
     return {DeviceID(d): DeviceSchedulerState(device_id=DeviceID(d),
-                                              last_contact_ts=ts)
+                                              last_contact_ts=ts,
+                                              last_clean_ts=ts)
             for d, ts in last_seen.items()}
 
 
@@ -138,8 +140,10 @@ def test_d1_admits_everything_when_the_budget_is_ample():
 # --------------------------------------------------------------------------- #
 
 def _oort_state(did, loss, n, served_round=1):
-    s = DeviceSchedulerState(device_id=DeviceID(did), last_contact_ts=NOW - 10)
+    s = DeviceSchedulerState(device_id=DeviceID(did), last_contact_ts=NOW - 10,
+                             last_clean_ts=NOW - 10)
     s.last_loss, s.last_num_examples, s.last_served_round = loss, n, served_round
+    s.last_clean_round = served_round
     s.on_time_count = 1
     return s
 

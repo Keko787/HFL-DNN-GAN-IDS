@@ -24,7 +24,9 @@ here so the paper can state them too:
    per-sample losses. Our training callback reports Keras' **mean** loss.
    Monotone in the same direction, not identical.
 3. **Rounds, not wall-clock, for staleness.** ``L(i)`` is the last mission round
-   in which device *i* was served.
+   in which device *i* participated successfully (a CLEAN outcome). Failed
+   sessions and the synthetic TIMEOUT fed for an abandoned device do not count,
+   matching Oort, which updates a client's round only when its feedback lands.
 
 **It requires real training.** On the stub path the reported loss and sample
 count are random draws, so this policy would rank on noise — a random-order
@@ -99,9 +101,9 @@ def staleness_bonus(
     """
     if current_round <= 1:
         return 0.0
-    if state.last_served_round <= 0:
+    if state.last_clean_round <= 0:
         return 0.0                      # never served: UNEXPLORED_UTILITY covers it
-    return weight * math.log(current_round) / math.sqrt(state.last_served_round)
+    return weight * math.log(current_round) / math.sqrt(state.last_clean_round)
 
 
 class OortPolicy:
@@ -143,7 +145,9 @@ class OortPolicy:
         # Current round is DERIVED from state rather than counted per call:
         # counting couples the policy to how often the scheduler happens to
         # invoke it (once per non-empty bucket), which is not the same thing as
-        # a mission round and would silently drift.
+        # a mission round and would silently drift. `last_served_round` moves on
+        # every outcome, so it keeps pace with the mission counter even in
+        # rounds where nothing succeeded; L(i) itself is `last_clean_round`.
         current_round = 1 + max(
             (st.last_served_round
              for d in members
