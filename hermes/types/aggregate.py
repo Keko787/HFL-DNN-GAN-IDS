@@ -35,6 +35,22 @@ class PartialAggregate:
 
     ``num_examples`` is the total count of training examples behind this
     partial — the weight used in cluster-scope FedAvg.
+
+    FeRRy Phase 1 fields (defaults describe every recorded run):
+
+    * ``rule`` / ``update_form`` — the merge rule that built this partial. With
+      ``update_form == "weights"`` (``agg:plain``) ``weights`` is the
+      num_examples-weighted mean of full models. With ``"delta"`` it is the
+      weighted mean update Σ w_i·Δθ_i / Σ w_i, to be added to the global θ.
+    * ``base_version`` — version of the θ the mule carried on this mission.
+    * ``weight_mass`` — Σ w_i behind a delta partial, so partials from several
+      mules combine as one merge over all their devices. ``n_updates`` counts
+      the updates admitted.
+    * ``device_basis_versions`` / ``device_ages`` / ``device_weights`` —
+      aligned with ``contributing_devices``: each update's basis version, its
+      age in cluster rounds, and its normalised merge weight.
+    * ``excluded_devices`` — clean updates the rule gave zero weight (past the
+      age cutoff).
     """
 
     mule_id: MuleID
@@ -42,6 +58,15 @@ class PartialAggregate:
     weights: Weights
     num_examples: int
     contributing_devices: Tuple[DeviceID, ...] = ()
+    rule: str = "agg:plain"
+    update_form: str = "weights"
+    base_version: Optional[int] = None
+    weight_mass: float = 0.0
+    n_updates: int = 0
+    device_basis_versions: Tuple[Optional[int], ...] = ()
+    device_ages: Tuple[Optional[int], ...] = ()
+    device_weights: Tuple[float, ...] = ()
+    excluded_devices: Tuple[DeviceID, ...] = ()
 
     def is_empty(self) -> bool:
         return self.num_examples == 0 or not self.weights

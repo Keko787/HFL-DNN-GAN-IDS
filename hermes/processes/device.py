@@ -101,6 +101,7 @@ def _build_local_train(cfg: DeviceConfig, seed: int):
             epochs=cfg.local_epochs,
             batch_size=cfg.local_batch_size,
             seed=seed,
+            fedprox_rho=float(getattr(cfg, "fedprox_rho", 0.0) or 0.0),
         )
     return _stub_train_factory(seed)
 

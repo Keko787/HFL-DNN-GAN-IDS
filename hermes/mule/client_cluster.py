@@ -75,15 +75,20 @@ class ClientClusterState(str, Enum):
 
 SchedulerSlowPhaseSink = Callable[[MissionSlice, ClusterAmendment], None]
 MissionModelSink = Callable[[Weights, List], None]  # (theta_disc, synth_batch)
+ModelVersionSink = Callable[[int], None]  # version of the θ about to be staged
 
 
 @dataclass
 class BundleDistributor:
-    """Holds the two intra-NUC callables the dock fan-out delivers into.
+    """Holds the intra-NUC callables the dock fan-out delivers into.
 
     Default sinks are no-ops so a ``ClientCluster`` constructed in tests
     doesn't need both callables wired up. Production builds (Phase 6)
     pass real scheduler / mission-server handles.
+
+    ``on_model_version`` receives the version of the DOWN bundle's θ (the
+    cluster round that produced it, ``mission_slice.issued_round``) just
+    before ``on_next_round_model`` receives θ itself (FeRRy Phase 1).
     """
 
     on_slice_and_amendment: SchedulerSlowPhaseSink = field(
@@ -92,6 +97,7 @@ class BundleDistributor:
     on_next_round_model: MissionModelSink = field(
         default=lambda _w, _b: None
     )
+    on_model_version: ModelVersionSink = field(default=lambda _v: None)
 
 
 # --------------------------------------------------------------------------- #
@@ -417,7 +423,12 @@ class ClientCluster:
         except Exception:
             log.exception("scheduler slow-phase sink raised; continuing")
 
-        # Next-round model state into HFLHostMission
+        # Next-round model state into HFLHostMission. Its version first, so the
+        # model sink can stage the two together.
+        try:
+            self.distributor.on_model_version(int(down.mission_slice.issued_round))
+        except Exception:
+            log.exception("model-version sink raised; continuing")
         try:
             self.distributor.on_next_round_model(down.theta_disc, down.synth_batch)
         except Exception:

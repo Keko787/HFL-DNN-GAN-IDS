@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 from .ids import DeviceID, MuleID
 
@@ -42,6 +42,9 @@ class DeliveryOutcome(str, Enum):
 
     DELIVERED = "delivered"  # device acknowledged θ' receipt
     UNDELIVERED = "undelivered"  # device did not acknowledge in TTL
+    # Budgeted Pass 2 (FeRRy Phase 1) did not fly to this device: it keeps its
+    # older basis. Counts as not delivered wherever delivery is tallied.
+    SKIPPED = "skipped"
 
     def is_delivered(self) -> bool:
         return self is DeliveryOutcome.DELIVERED
@@ -49,13 +52,23 @@ class DeliveryOutcome(str, Enum):
 
 @dataclass(frozen=True)
 class MissionRoundCloseLine:
-    """One device's row in the mission round-close report."""
+    """One device's row in the mission round-close report.
+
+    ``basis_version`` and ``age`` describe the update a CLEAN session
+    collected: the version of the θ it was trained from, and how many cluster
+    rounds older that is than the θ the mule carried. ``band`` is the contact
+    band once the contact link has one (FeRRy Phase 3); None until then.
+    """
 
     device_id: DeviceID
     outcome: MissionOutcome
     contact_ts: float  # epoch seconds when contact was made
     bytes_received: int = 0
     bytes_sent: int = 0
+    num_examples: int = 0
+    basis_version: Optional[int] = None
+    age: Optional[int] = None
+    band: Optional[int] = None
 
 
 @dataclass

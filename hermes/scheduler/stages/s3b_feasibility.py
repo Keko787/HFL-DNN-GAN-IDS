@@ -37,7 +37,7 @@ estimates account for earlier stops.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List, Optional, Sequence, Tuple
+from typing import Callable, List, Optional, Sequence, Tuple
 
 from hermes.types.scheduler import ContactWaypoint
 
@@ -83,12 +83,19 @@ def filter_feasible(
     mule_pose: MulePose = (0.0, 0.0, 0.0),
     mission_deadline_ts: Optional[float] = None,
     model: Optional[FeasibilityModel] = None,
+    priority: Optional[Callable[[ContactWaypoint], float]] = None,
 ) -> FeasibilityResult:
     """Drop contacts that cannot be served in time. EDF-ordered greedy walk.
 
     ``mission_deadline_ts`` is an **absolute** timestamp. ``None`` disables the
     gate entirely — every contact is kept, and the result is indistinguishable
     from not calling this stage at all.
+
+    ``priority`` (FeRRy Phase 1, off by default) is a key that outranks the
+    deadline in the walk: higher-priority contacts are admitted first and the
+    rest share what budget remains. The scheduler passes each contact's
+    longest miss streak, so a device that was missed is not also pushed to the
+    back of the queue by the wider window its miss earned it.
 
     Returns the survivors plus the two rejection reasons, so a caller can log
     *why* a device was not served instead of it vanishing silently.
@@ -99,7 +106,13 @@ def filter_feasible(
     mdl = model or FeasibilityModel()
     # EDF: tightest deadline first, then a stable tie-break so the gate is
     # deterministic across re-runs.
-    ordered = sorted(contacts, key=lambda c: (c.deadline_ts, c.position, c.devices))
+    if priority is None:
+        ordered = sorted(contacts, key=lambda c: (c.deadline_ts, c.position, c.devices))
+    else:
+        ordered = sorted(
+            contacts,
+            key=lambda c: (-priority(c), c.deadline_ts, c.position, c.devices),
+        )
 
     kept: List[ContactWaypoint] = []
     overdue: List[ContactWaypoint] = []

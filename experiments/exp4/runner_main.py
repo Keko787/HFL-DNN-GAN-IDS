@@ -231,6 +231,99 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "--l1-channel-bands", type=int, default=3,
         help="Arm H3: number of RF bands the controller chooses among.",
     )
+    # FeRRy Phase 1 — L3 merge rules, FedProx, budgeted Pass 2 (mule arms).
+    parser.add_argument(
+        "--aggregation", default="agg:plain",
+        choices=("agg:plain", "agg:cutoff", "agg:asynchfl", "agg:fedbuff"),
+        help="L3 merge rule for the cluster and the mule "
+             "(hermes/mission/aggregation_rules.py). agg:plain (default) is the "
+             "num_examples mean every recorded run used; the others merge "
+             "deltas weighted by age in cluster rounds.",
+    )
+    parser.add_argument(
+        "--agg-server-lr", type=float, default=None,
+        help="Server rate η: the cluster adds η times the merged update to θ "
+             "(default 1.0).",
+    )
+    parser.add_argument(
+        "--agg-a-max", type=int, default=None,
+        help="agg:cutoff: fixed age cutoff in cluster rounds; weight is exactly "
+             "0 past it.",
+    )
+    parser.add_argument(
+        "--agg-period-s", type=float, default=None,
+        help="agg:cutoff: mission period T (s). Each device's cutoff becomes "
+             "floor(deadline window / T) rounds (decision D5); combined with "
+             "--agg-a-max, the smaller wins.",
+    )
+    parser.add_argument(
+        "--agg-hinge-a", type=float, default=None,
+        help="agg:cutoff: FedAsync hinge slope a (default 1.0).",
+    )
+    parser.add_argument(
+        "--agg-hinge-b", type=float, default=None,
+        help="agg:cutoff: FedAsync hinge knee b in rounds (default 0).",
+    )
+    parser.add_argument(
+        "--agg-decay", type=float, default=None,
+        help="agg:asynchfl: staleness decay λ in exp(-λ·age) (default 0.5).",
+    )
+    parser.add_argument(
+        "--agg-value", choices=("uniform", "loss"), default=None,
+        help="Value proxy v_i in w_i = n_i·v_i·s(age_i) (default uniform).",
+    )
+    parser.add_argument(
+        "--agg-buffer-k", type=int, default=None,
+        help="agg:fedbuff: updates buffered per server step (default: the "
+             "number of registered devices).",
+    )
+    parser.add_argument(
+        "--fedprox-rho", type=float, default=0.0,
+        help="FedProx weight ρ on every device: local loss + (ρ/2)·||θ − "
+             "θ_received||². 0 (default) keeps the plain Keras fit.",
+    )
+    parser.add_argument(
+        "--pass-2-budget", action="store_true",
+        help="Walk Pass 2 against --mission-budget-s instead of delivering to "
+             "the whole slice; devices it skips keep their older basis, so "
+             "update ages spread. Requires --mission-budget-s.",
+    )
+    # FeRRy Phase 1 — the deadline law and the priority key (mule arms).
+    parser.add_argument(
+        "--deadline-law", default="additive",
+        choices=("additive", "multiplicative"),
+        help="How each outcome moves a device's window Φ. additive (default) "
+             "is the recorded -5 s / +10 s law, unbounded above; "
+             "multiplicative is Φ <- clamp(β·Φ) with β_on < 1 after an "
+             "on-time delivery and β_partial <= β_timeout after a miss, and "
+             "makes cluster overrides one-shot.",
+    )
+    parser.add_argument(
+        "--deadline-beta-on", type=float, default=None,
+        help="multiplicative: factor after an on-time delivery (default 0.8).",
+    )
+    parser.add_argument(
+        "--deadline-beta-partial", type=float, default=None,
+        help="multiplicative: factor after a PARTIAL (default 1.25).",
+    )
+    parser.add_argument(
+        "--deadline-beta-timeout", type=float, default=None,
+        help="multiplicative: factor after a TIMEOUT (default 1.5).",
+    )
+    parser.add_argument(
+        "--deadline-phi-min", type=float, default=None,
+        help="multiplicative: lower clamp on Φ in seconds (default 5).",
+    )
+    parser.add_argument(
+        "--deadline-phi-max", type=float, default=None,
+        help="multiplicative: upper clamp on Φ in seconds (default 300).",
+    )
+    parser.add_argument(
+        "--miss-priority", action="store_true",
+        help="S3b admits contacts by their members' consecutive misses before "
+             "their deadline, so a missed device is not pushed back by the "
+             "wider window its miss earned. Off by default.",
+    )
     args = parser.parse_args(argv)
 
     logging.basicConfig(
@@ -259,6 +352,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         base_seed=args.base_seed,
     )
 
+    if args.pass_2_budget and args.mission_budget_s is None:
+        parser.error("--pass-2-budget needs --mission-budget-s")
     driver = Exp4Driver(
         trial_budget_s=float(args.trial_budget_s),
         startup_timeout_s=float(args.startup_timeout_s),
@@ -292,6 +387,36 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             (args.trace_dir or args.csv.with_name(f"{args.csv.stem}_traces"))
             if args.keep_event_traces else None
         ),
+        aggregation=args.aggregation,
+        aggregation_params={
+            key: value
+            for key, value in (
+                ("server_lr", args.agg_server_lr),
+                ("a_max", args.agg_a_max),
+                ("period_s", args.agg_period_s),
+                ("hinge_a", args.agg_hinge_a),
+                ("hinge_b", args.agg_hinge_b),
+                ("decay", args.agg_decay),
+                ("value", args.agg_value),
+                ("buffer_k", args.agg_buffer_k),
+            )
+            if value is not None
+        },
+        fedprox_rho=float(args.fedprox_rho),
+        pass_2_budget=bool(args.pass_2_budget),
+        deadline_law=args.deadline_law,
+        deadline_params={
+            key: value
+            for key, value in (
+                ("beta_on", args.deadline_beta_on),
+                ("beta_partial", args.deadline_beta_partial),
+                ("beta_timeout", args.deadline_beta_timeout),
+                ("phi_min", args.deadline_phi_min),
+                ("phi_max", args.deadline_phi_max),
+            )
+            if value is not None
+        },
+        miss_priority=bool(args.miss_priority),
     )
     if args.real_model:
         log.info(

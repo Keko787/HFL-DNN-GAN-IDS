@@ -148,14 +148,16 @@ def test_the_outcomes_payload_records_every_session():
         mule_id=MuleID("m1"), mission_round=1, started_at=0.0, finished_at=1.0,
         lines=[
             MissionRoundCloseLine(device_id=DeviceID("a"), outcome=MissionOutcome.CLEAN,
-                                  contact_ts=1004.0),
+                                  contact_ts=1004.0, basis_version=2, age=1),
             MissionRoundCloseLine(device_id=DeviceID("b"), outcome=MissionOutcome.TIMEOUT,
                                   contact_ts=1006.0),
         ],
     )
     assert _pass_1_outcomes_payload(SimpleNamespace(report=report, empty=False)) == [
-        {"device": "a", "outcome": "clean", "contact_ts": 1004.0},
-        {"device": "b", "outcome": "timeout", "contact_ts": 1006.0},
+        {"device": "a", "outcome": "clean", "contact_ts": 1004.0,
+         "basis_version": 2, "age": 1},
+        {"device": "b", "outcome": "timeout", "contact_ts": 1006.0,
+         "basis_version": None, "age": None},
     ]
 
 

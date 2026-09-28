@@ -87,6 +87,15 @@ class FLReadyAdv:
 # In-session payloads
 # --------------------------------------------------------------------------- #
 
+#: What a device's update carries. ``weights`` is the full model after local
+#: training — what every recorded arm shipped, and what ``agg:plain`` averages.
+#: ``delta`` is that model minus the basis the device trained from, which the
+#: age-aware merge rules need (FeRRy Phase 1).
+UPDATE_FORM_WEIGHTS = "weights"
+UPDATE_FORM_DELTA = "delta"
+UPDATE_FORMS = (UPDATE_FORM_WEIGHTS, UPDATE_FORM_DELTA)
+
+
 @dataclass
 class DiscPush:
     """Mule -> device — push discriminator weights + synth batch.
@@ -97,6 +106,12 @@ class DiscPush:
     ``pass_kind`` mirrors :class:`FLOpenSolicit` — DELIVER means "store
     these weights, start fresh local training, send a DeliveryAck instead
     of a GradientSubmission." Default COLLECT for backward compat.
+
+    ``basis_version`` is the version of ``theta_disc``: the cluster round that
+    produced it. The device keeps it with its training basis and echoes it
+    with the update it later trains from that basis, which is how every update
+    gets an age. ``update_form`` tells a Pass-1 device which form to answer
+    in. Both default to what every recorded run did (no version, full weights).
     """
 
     mule_id: MuleID
@@ -105,6 +120,8 @@ class DiscPush:
     synth_batch: List[np.ndarray]
     weights_sig: str = ""
     pass_kind: MissionPass = MissionPass.COLLECT
+    basis_version: Optional[int] = None
+    update_form: str = UPDATE_FORM_WEIGHTS
 
     def __post_init__(self) -> None:
         if not self.weights_sig:
@@ -135,6 +152,12 @@ class GradientSubmission:
     # — otherwise the mule's ranking signal lags a full mission round behind the
     # training it summarises, which would handicap the baseline unfairly.
     local_loss: Optional[float] = None
+    # The version of the basis this update was trained from (the
+    # ``DiscPush.basis_version`` the device stored with it), and whether
+    # ``delta_theta`` holds full weights or a delta against that basis. None
+    # means the sender did not know the version.
+    basis_version: Optional[int] = None
+    update_form: str = UPDATE_FORM_WEIGHTS
 
     def __post_init__(self) -> None:
         if self.byte_count == 0:

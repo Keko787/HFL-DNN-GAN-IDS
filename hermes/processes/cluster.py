@@ -158,12 +158,20 @@ class ClusterService:
                 len(self._eval_y), self._eval_input_dim,
             )
 
+        # FeRRy Phase 1 — the L3 merge rule; agg:plain unless configured.
+        from hermes.mission.aggregation_rules import AggregationSpec
+
+        self.aggregation = AggregationSpec.from_config(
+            getattr(cfg, "aggregation", None),
+            getattr(cfg, "aggregation_params", None),
+        )
         self.cluster = HFLHostCluster(
             registry=self.registry,
             generator=self.generator,
             dock=self.dock,
             synth_batch_size=cfg.synth_batch_size,
             min_participation=cfg.min_participation,
+            aggregation=self.aggregation,
         )
 
         # Optional Tier-3 outbound link.
@@ -353,7 +361,25 @@ class ClusterService:
                     )
                     self.metrics.increment("up_bundles_ingested")
                     merged = self.cluster.aggregate_pending()
+                    if merged is None and self.cluster.defers_merges:
+                        # agg:fedbuff is still filling its buffer: θ is
+                        # unchanged and the round stays open, but the mule is
+                        # waiting at its inter-pass dock for a DOWN.
+                        self.events.emit(
+                            "cluster_merge_deferred",
+                            mule_id=str(up.mule_id),
+                            **(self.cluster.last_merge or {}),
+                        )
+                        self.dock.send_down(
+                            self.cluster.dispatch_down_bundle(up.mule_id)
+                        )
+                        self.metrics.increment("down_bundles_dispatched")
                     if merged is not None:
+                        if self.cluster.last_merge is not None:
+                            # Age-aware rules only; agg:plain traces unchanged.
+                            self.events.emit(
+                                "cluster_merge", **self.cluster.last_merge,
+                            )
                         self.cluster.close_cluster_round()
                         self.events.emit(
                             "cluster_round_closed",

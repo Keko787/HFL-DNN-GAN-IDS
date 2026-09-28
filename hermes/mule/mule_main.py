@@ -41,12 +41,13 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass, field
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 
 from hermes.l1.channel_ddqn import ChannelDDQN, L1_STATE_DIM
 from hermes.mission import HFLHostMission, MissionSessionError
+from hermes.mission.aggregation_rules import AggregationSpec, age_cap
 from hermes.mule import BundleDistributor, ClientCluster
 from hermes.scheduler import FLScheduler
 from hermes.transport import DockLink, RFLink
@@ -54,6 +55,7 @@ from hermes.types import (
     ClusterAmendment,
     ContactHistory,
     ContactWaypoint,
+    DeviceID,
     MissionDeliveryReport,
     MissionPass,
     MissionRoundCloseReport,
@@ -165,6 +167,10 @@ class MuleSupervisor:
         mission_budget_s: Optional[float] = None,
         mission_window_adapter=None,
         now_fn=time.time,
+        aggregation: Optional[AggregationSpec] = None,
+        pass_2_budget: bool = False,
+        deadline_law=None,
+        miss_priority: bool = False,
     ) -> None:
         self.mule_id = mule_id
         self.mule_pose = mule_pose
@@ -172,6 +178,12 @@ class MuleSupervisor:
         self.rf_prior_snr_db = rf_prior_snr_db
         self.rf_range_m = rf_range_m
         self._now = now_fn
+        # FeRRy Phase 1. The merge rule (agg:plain, the recorded merge, by
+        # default) and whether Pass 2 is walked against the budget. Off, Pass 2
+        # delivers to the whole slice, so every basis is current and ages never
+        # spread; on, devices it cannot reach keep their older basis.
+        self.aggregation: AggregationSpec = aggregation or AggregationSpec()
+        self.pass_2_budget = bool(pass_2_budget)
 
         # Scheduler — slow-phase amendments + fast-phase round-close deltas
         # are wired through here.
@@ -186,6 +198,10 @@ class MuleSupervisor:
             # shortfall widens every device's window together
             # (see stages/s3c_mission_window.py).
             mission_window_adapter=mission_window_adapter,
+            # FeRRy Phase 1 — the deadline law (None = the recorded additive
+            # law) and the miss-streak priority key in S3b.
+            deadline_law=deadline_law,
+            miss_priority=miss_priority,
         )
 
         # Mission server — emits one RoundCloseDelta per session into the
@@ -195,6 +211,7 @@ class MuleSupervisor:
             rf=rf,
             scheduler_bus=self.scheduler.ingest_round_close_delta,
             session_ttl_s=session_ttl_s,
+            aggregation=self.aggregation,
         )
 
         # ClientCluster owns the dock lifecycle. The distributor fans the
@@ -202,6 +219,10 @@ class MuleSupervisor:
         # (theta + synth, stashed for the next open_round).
         self._next_theta: Optional[Weights] = None
         self._next_synth = None
+        # Version of ``_next_theta``: the cluster round that produced it. It
+        # rides every push so each update comes back with an age.
+        self._next_theta_version: Optional[int] = None
+        self._incoming_theta_version: Optional[int] = None
         # H3 — Pass-2 delivery report from the most recent mission, held
         # locally until the next mission's Pass-1 dock UPs it as
         # ``UpBundle.prev_mission_delivery_report``.
@@ -209,6 +230,7 @@ class MuleSupervisor:
         self.distributor = BundleDistributor(
             on_slice_and_amendment=self._on_slice_and_amendment,
             on_next_round_model=self._on_next_round_model,
+            on_model_version=self._on_model_version,
         )
         self.client_cluster = ClientCluster(
             mule_id=mule_id,
@@ -241,9 +263,17 @@ class MuleSupervisor:
         # but only at the integration level.
         self.scheduler.ingest_slice(mission_slice, amendment=amendment)
 
+    def _on_model_version(self, version: int) -> None:
+        # Arrives just before the model itself, from the same DOWN bundle.
+        self._incoming_theta_version = int(version)
+
     def _on_next_round_model(self, theta: Weights, synth_batch) -> None:
         self._next_theta = theta
         self._next_synth = synth_batch
+        # Keep the version the DOWN bundle issued with θ (FeRRy Phase 1); it
+        # used to be dropped here, so no update could be aged.
+        self._next_theta_version = self._incoming_theta_version
+        self._incoming_theta_version = None
 
     # ------------------------------------------------------------------ #
     # Mission cycle
@@ -296,12 +326,14 @@ class MuleSupervisor:
 
         theta = self._next_theta
         synth = self._next_synth
+        theta_version = self._next_theta_version
         # Consumed — the next dock cycle restages.
         self._next_theta = None
         self._next_synth = None
+        self._next_theta_version = None
 
         # 1. Open round on the mission server.
-        mission_round = self.mission.open_round(theta)
+        mission_round = self.mission.open_round(theta, theta_version=theta_version)
 
         # 2. Build the visit queue from the scheduler.
         queue = self.scheduler.build_target_queue(
@@ -332,7 +364,9 @@ class MuleSupervisor:
 
         # 4. Close round → partial FedAvg + report + contacts.
         try:
-            agg, report, contacts = self.mission.close_round()
+            agg, report, contacts = self.mission.close_round(
+                age_caps=self._age_caps(),
+            )
         except MissionSessionError as e:
             # No clean gradients — abort the dock cycle and let the
             # caller decide whether to skip the UP.
@@ -390,11 +424,15 @@ class MuleSupervisor:
 
         theta_pass_1 = self._next_theta
         synth_pass_1 = self._next_synth
+        version_pass_1 = self._next_theta_version
         self._next_theta = None
         self._next_synth = None
+        self._next_theta_version = None
 
         # ============================ Pass 1 ============================
-        mission_round = self.mission.open_round(theta_pass_1)
+        mission_round = self.mission.open_round(
+            theta_pass_1, theta_version=version_pass_1,
+        )
         pass_1_queue = self.scheduler.build_contact_queue(
             rf_range_m=rf_range_m,
             mule_pose=self.mule_pose,
@@ -484,14 +522,17 @@ class MuleSupervisor:
             )
 
         try:
-            agg, report, contacts = self.mission.close_round()
+            agg, report, contacts = self.mission.close_round(
+                age_caps=self._age_caps(),
+            )
         except MissionSessionError as e:
             # EX-4.2: no device uplink succeeded this Pass 1 (e.g. under lossy
             # short-range links). This is a recoverable outcome, not a fatal
             # error: per the design principle that FL never stalls on absent
             # devices, we record a zero-update round, skip the inter-pass dock
             # and Pass 2 (nothing to aggregate or deliver), restage the same θ,
-            # and let the sortie continue to the next mission.
+            # and let the sortie continue to the next mission. Under agg:cutoff
+            # the same holds when every update collected was past its cutoff.
             log.warning(
                 "mule=%s round=%d Pass 1 collected no updates; recording an "
                 "empty round and continuing: %s",
@@ -499,6 +540,7 @@ class MuleSupervisor:
             )
             self._next_theta = theta_pass_1
             self._next_synth = synth_pass_1
+            self._next_theta_version = version_pass_1
             return MissionRunResult(
                 mission_round=mission_round,
                 pass_1_queue=list(pass_1_queue),
@@ -531,6 +573,7 @@ class MuleSupervisor:
             )
         theta_pass_2 = self._next_theta
         synth_pass_2 = self._next_synth
+        version_pass_2 = self._next_theta_version
         # We deliberately DO NOT clear _next_theta here; Pass 2 itself
         # re-uses the same θ as the basis for next mission's training,
         # so the next run_one_mission call will see it staged. This
@@ -538,17 +581,27 @@ class MuleSupervisor:
         # — no extra dock cycle needed at end of mission.
 
         # ============================ Pass 2 ============================
-        self.mission.open_pass_2(theta_pass_2)
+        self.mission.open_pass_2(theta_pass_2, theta_version=version_pass_2)
         # H5 — Pass-2 plans from the mule's *current* pose (advanced by
         # Pass-1 contacts above), not from the constructor-time origin.
         pass_2_queue = self.scheduler.build_pass_2_queue(
             rf_range_m=rf_range_m,
             mule_pose=self.mule_pose,
         )
+        # FeRRy Phase 1 — a budgeted Pass 2 flies only what fits; the devices
+        # it skips keep their older basis, which is what lets ages spread.
+        skipped_pass_2: List[ContactWaypoint] = []
+        if self.pass_2_budget:
+            pass_2_queue, skipped_pass_2 = self._budget_pass_2(pass_2_queue)
+            if skipped_pass_2:
+                self.mission.record_skipped_delivery(
+                    [d for wp in skipped_pass_2 for d in wp.devices]
+                )
         log.info(
-            "mule=%s round=%d pass=2 contacts=%d devices_total=%d",
+            "mule=%s round=%d pass=2 contacts=%d devices_total=%d skipped=%d",
             self.mule_id, mission_round, len(pass_2_queue),
             sum(len(c.devices) for c in pass_2_queue),
+            sum(len(c.devices) for c in skipped_pass_2),
         )
 
         # M5 — Pass-2 channel choices accumulate separately.
@@ -626,10 +679,10 @@ class MuleSupervisor:
         """
         if not remaining:
             return False
-        budget = getattr(self.scheduler, "_mission_budget_s", None)
+        budget = self.scheduler.mission_budget_s
         if budget is None:
             return True
-        start = getattr(self.scheduler, "_mission_start_ts", None)
+        start = self.scheduler.mission_start_ts
         if start is None:
             return True
 
@@ -640,9 +693,59 @@ class MuleSupervisor:
             now=self._now(),
             mule_pose=self.mule_pose,
             mission_deadline_ts=start + budget,
-            model=getattr(self.scheduler, "_feasibility_model", None),
+            model=self.scheduler.feasibility_model,
         )
         return bool(feas.kept)
+
+    def _age_caps(self) -> Optional[Dict[DeviceID, Optional[int]]]:
+        """Each slice device's merge cutoff in cluster rounds (``agg:cutoff``).
+
+        Decision D5: a device's deadline window Φ_j, scaled by S3c exactly as
+        ``compute_deadline`` scales it, converts to rounds with the mission
+        period. None when the rule has no cutoff.
+        """
+        spec = self.aggregation
+        if not spec.uses_age_cap:
+            return None
+        from hermes.scheduler.stages.s3_deadline import effective_window
+
+        scale = self.scheduler.window_scale
+        law = self.scheduler.deadline_law
+        return {
+            did: age_cap(spec, effective_window(st, law=law) * scale)
+            for did, st in self.scheduler.device_states.items()
+        }
+
+    def _budget_pass_2(
+        self, queue: List[ContactWaypoint],
+    ) -> Tuple[List[ContactWaypoint], List[ContactWaypoint]]:
+        """Walk the Pass-2 queue against the budget; return (fly, skip).
+
+        Pass 2 is a second sortie, so it gets the mission budget afresh,
+        priced with the S3b cost model (transit at cruise speed plus the
+        session time) from the mule's tracked pose — its last Pass-1 stop,
+        since the pose returns to the dock only once FeRRy Phase 3 lands the
+        mission clock. The walk keeps the queue's nearest-first order and
+        skips, rather than stops at, a contact that does not fit — the greedy
+        walk the D1/D2 arms use. Planned seconds only, no wall clock, so the
+        cut is reproducible. With no budget configured nothing is skipped.
+        """
+        budget = self.scheduler.mission_budget_s
+        if budget is None or not queue:
+            return list(queue), []
+        from hermes.scheduler.policies.budget_walk import greedy_budget_walk
+
+        order = {wp: i for i, wp in enumerate(queue)}
+        fly = greedy_budget_walk(
+            queue,
+            key=lambda wp: (order[wp],),
+            mule_pose=self.mule_pose,
+            now=0.0,
+            mission_deadline_ts=float(budget),
+            model=self.scheduler.feasibility_model,
+        )
+        kept = set(fly)
+        return fly, [wp for wp in queue if wp not in kept]
 
     def _widen_abandoned(
         self, abandoned: List[ContactWaypoint], *, mission_round: int,

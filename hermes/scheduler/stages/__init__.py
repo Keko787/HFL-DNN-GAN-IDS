@@ -19,6 +19,7 @@ from .s1_eligibility import is_eligible, filter_eligible
 from .s2a_readiness import is_on_contact_ready
 from .s2b_flag import passes_fl_threshold
 from .s3_deadline import (
+    DeadlineLaw,
     compute_deadline,
     classify_bucket,
     fold_round_close_delta,
@@ -32,6 +33,7 @@ __all__ = [
     "filter_eligible",
     "is_on_contact_ready",
     "passes_fl_threshold",
+    "DeadlineLaw",
     "compute_deadline",
     "classify_bucket",
     "fold_round_close_delta",

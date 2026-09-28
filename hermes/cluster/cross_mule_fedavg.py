@@ -8,6 +8,11 @@ average using ``num_examples`` as the weight.
 
 Pulled out of ``HFLHostCluster`` so it can be unit-tested against
 hand-computed references without spinning up the whole cluster server.
+
+:func:`apply_weighted_deltas` is the age-aware counterpart (FeRRy Phase 1):
+partials carry updates rather than models, and the cluster adds their weighted
+mean to θ at a server rate η. The rules that feed it live in
+``hermes.mission.aggregation_rules``.
 """
 
 from __future__ import annotations
@@ -73,3 +78,57 @@ def cross_mule_fedavg(partials: Sequence[PartialAggregate]) -> Weights:
         merged.append(acc.astype(non_empty[0].weights[layer_idx].dtype))
 
     return merged
+
+
+def apply_weighted_deltas(
+    theta: Weights,
+    partials: Sequence[PartialAggregate],
+    partial_weights: Sequence[float],
+    *,
+    server_lr: float = 1.0,
+) -> Weights:
+    """θ + η · Σ_m W_m·Δ_m / Σ_m W_m over delta-form partials.
+
+    FeRRy Phase 1: the age-aware rules mix the merged update into the global θ
+    at a server rate η instead of overwriting it. ``partial_weights`` are the
+    W_m the rule computed (weight mass times partial staleness); a partial with
+    W_m = 0 contributes nothing. With one partial, W > 0 and η = 1 this is
+    θ + Δ_m.
+
+    Raises:
+        FedAvgError: every W_m is zero, or shapes disagree with θ.
+    """
+    if len(partial_weights) != len(partials):
+        raise FedAvgError(
+            f"{len(partial_weights)} weights for {len(partials)} partials"
+        )
+    live = [
+        (p, float(w)) for p, w in zip(partials, partial_weights)
+        if w > 0.0 and not p.is_empty()
+    ]
+    total = sum(w for _, w in live)
+    if not live or not total > 0.0:
+        raise FedAvgError("apply_weighted_deltas: no partial carries weight")
+
+    layer_shapes = [np.shape(t) for t in theta]
+    for p, _ in live:
+        if len(p.weights) != len(layer_shapes):
+            raise FedAvgError(
+                f"layer count mismatch: partial from {p.mule_id!r} has "
+                f"{len(p.weights)} layers; θ has {len(layer_shapes)}"
+            )
+        for i, w in enumerate(p.weights):
+            if w.shape != layer_shapes[i]:
+                raise FedAvgError(
+                    f"layer {i} shape mismatch: {w.shape} vs {layer_shapes[i]} "
+                    f"(mule={p.mule_id!r})"
+                )
+
+    out: List[np.ndarray] = []
+    for layer_idx, base in enumerate(theta):
+        acc = np.zeros(layer_shapes[layer_idx], dtype=np.float64)
+        for p, w in live:
+            acc += p.weights[layer_idx].astype(np.float64) * (w / total)
+        updated = np.asarray(base, dtype=np.float64) + server_lr * acc
+        out.append(updated.astype(np.asarray(base).dtype))
+    return out

@@ -116,9 +116,53 @@ def _pass_1_outcomes_payload(result) -> Optional[List[dict]]:
             "device": str(line.device_id),
             "outcome": line.outcome.value,
             "contact_ts": float(line.contact_ts),
+            # FeRRy Phase 1: the collected update's basis and age in cluster
+            # rounds (None when the session collected nothing).
+            "basis_version": getattr(line, "basis_version", None),
+            "age": getattr(line, "age", None),
         }
         for line in report.lines
     ]
+
+
+def _pass_1_merge_payload(result) -> Optional[dict]:
+    """How the mule merged this mission's updates (FeRRy Phase 1).
+
+    The rule, the version of the θ the mule carried, and per merged device its
+    age and normalised weight; ``excluded`` lists updates past their cutoff.
+    None for an empty mission.
+    """
+    agg = getattr(result, "aggregate", None)
+    if agg is None:
+        return None
+    return {
+        "rule": getattr(agg, "rule", "agg:plain"),
+        "base_version": getattr(agg, "base_version", None),
+        "devices": [str(d) for d in agg.contributing_devices],
+        "ages": list(getattr(agg, "device_ages", ())),
+        "weights": [float(w) for w in getattr(agg, "device_weights", ())],
+        "excluded": [str(d) for d in getattr(agg, "excluded_devices", ())],
+    }
+
+
+def _deadline_state_payload(device_states) -> dict:
+    """Each device's window Φ and miss streak after the mission (FeRRy
+    Phase 1), so the deadline law's trajectory can be read from the trace."""
+    return {
+        str(did): {
+            "phi_s": round(float(st.deadline_fulfilment_s), 6),
+            "miss_streak": int(getattr(st, "miss_streak", 0)),
+        }
+        for did, st in device_states.items()
+    }
+
+
+def _pass_2_skipped(result) -> Optional[int]:
+    """Devices a budgeted Pass 2 did not fly to; None without a Pass 2."""
+    report = getattr(result, "delivery_report", None)
+    if report is None:
+        return None
+    return sum(1 for line in report.lines if line.outcome.value == "skipped")
 
 
 class MuleService:
@@ -176,6 +220,22 @@ class MuleService:
                 gain=float(getattr(cfg, "mission_window_gain", 2.0)),
                 max_scale=float(getattr(cfg, "mission_window_max_scale", 4.0)),
             )
+        # FeRRy Phase 1 — the merge rule (must match the cluster's) and the
+        # budgeted Pass 2. Defaults reproduce every recorded run.
+        from hermes.mission.aggregation_rules import AggregationSpec
+
+        sup_kwargs["aggregation"] = AggregationSpec.from_config(
+            getattr(cfg, "aggregation", None),
+            getattr(cfg, "aggregation_params", None),
+        )
+        sup_kwargs["pass_2_budget"] = bool(getattr(cfg, "pass_2_budget", False))
+        from hermes.scheduler.stages.s3_deadline import DeadlineLaw
+
+        sup_kwargs["deadline_law"] = DeadlineLaw.from_config(
+            getattr(cfg, "deadline_law", None),
+            getattr(cfg, "deadline_params", None),
+        )
+        sup_kwargs["miss_priority"] = bool(getattr(cfg, "miss_priority", False))
         self.supervisor = MuleSupervisor(
             mule_id=MuleID(cfg.mule_id),
             rf=self.rf,
@@ -355,6 +415,11 @@ class MuleService:
                     # deadline-miss rate can be scored from the trace alone.
                     pass_1_plan=_pass_1_plan_payload(result.pass_1_queue),
                     pass_1_outcomes=_pass_1_outcomes_payload(result),
+                    pass_1_merge=_pass_1_merge_payload(result),
+                    pass_2_skipped=_pass_2_skipped(result),
+                    deadline_state=_deadline_state_payload(
+                        self.supervisor.scheduler.device_states
+                    ),
                 )
             except MuleSupervisorError as e:
                 log.error("mule %s: supervisor error: %s", self.cfg.mule_id, e)

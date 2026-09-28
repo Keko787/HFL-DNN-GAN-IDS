@@ -29,14 +29,15 @@ chunks; an unknown arm is rejected loudly.
 
 from __future__ import annotations
 
+import json
 import logging
 import shutil
 import subprocess
 import tempfile
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Mapping, Optional
+from typing import Any, Dict, Mapping, Optional
 
 from experiments.runner import Cell
 
@@ -65,7 +66,15 @@ ARMS = ("H0", "H1", "H2", "H3", "D1", "D2")
 #: comparable with historical rows, and without these nothing in the file says
 #: which is which. Owned by the driver, not the metric summary — they describe
 #: how the trial was configured, not what it measured.
-PROVENANCE_COLUMNS = ("mission_budget_s", "mission_window_adaptation")
+PROVENANCE_COLUMNS = (
+    "mission_budget_s", "mission_window_adaptation",
+    # FeRRy Phase 1: the L3 merge rule and its parameters (JSON; blank under
+    # agg:plain), the devices' FedProx weight, and the budgeted Pass 2.
+    "aggregation", "aggregation_params", "fedprox_rho", "pass_2_budget",
+    # ...and the deadline law with its parameters (JSON; blank when additive)
+    # and the miss-streak priority key.
+    "deadline_law", "deadline_params", "miss_priority",
+)
 
 #: Characters Windows forbids in a path component. Cell ids are built from the
 #: grid axes and contain ``|`` and ``=`` (e.g.
@@ -205,6 +214,41 @@ class Exp4Driver:
     # future baseline is a re-parse instead of another full re-run. Changes no
     # trial behaviour; it only stops the deletion.
     trace_root: Optional[Path] = None
+    # FeRRy Phase 1 — mule arms only (H0 is flat FL and keeps its own mean).
+    # ``aggregation`` names the L3 merge rule the cluster AND the mule run
+    # (hermes/mission/aggregation_rules.py) and ``aggregation_params`` its
+    # parameters; ``fedprox_rho`` is the devices' proximal weight;
+    # ``pass_2_budget`` walks Pass 2 against ``mission_budget_s`` so the
+    # devices it cannot reach keep an older basis. The defaults reproduce
+    # every recorded run.
+    aggregation: str = "agg:plain"
+    aggregation_params: Dict[str, Any] = field(default_factory=dict)
+    fedprox_rho: float = 0.0
+    pass_2_budget: bool = False
+    # FeRRy Phase 1 — the deadline law on the mule's scheduler ("additive" is
+    # the recorded law) and the miss-streak priority key in S3b.
+    deadline_law: str = "additive"
+    deadline_params: Dict[str, Any] = field(default_factory=dict)
+    miss_priority: bool = False
+
+    def __post_init__(self) -> None:
+        from hermes.mission.aggregation_rules import AggregationSpec
+        from hermes.scheduler.stages.s3_deadline import DeadlineLaw
+
+        # Fail on a bad rule or law before any process is spawned.
+        self._aggregation_spec = AggregationSpec.from_config(
+            self.aggregation, self.aggregation_params,
+        )
+        self._deadline_law = DeadlineLaw.from_config(
+            self.deadline_law, self.deadline_params,
+        )
+        if self.fedprox_rho < 0.0:
+            raise ValueError(f"fedprox_rho must be >= 0, got {self.fedprox_rho}")
+        if self.pass_2_budget and self.mission_budget_s is None:
+            raise ValueError(
+                "pass_2_budget walks Pass 2 against mission_budget_s; set a "
+                "budget (--mission-budget-s) or drop --pass-2-budget"
+            )
 
     def run_trial(self, cell: Cell) -> Mapping[str, Any]:
         params = cell.params
@@ -282,6 +326,20 @@ class Exp4Driver:
                 mission_window_gain=float(self.mission_window_gain),
                 mission_window_max_scale=float(self.mission_window_max_scale),
             )
+        # FeRRy Phase 1 — one rule for cluster and mule, FedProx on devices,
+        # and the budgeted Pass 2.
+        selector_kwargs.update(
+            aggregation=self._aggregation_spec.rule,
+            aggregation_params=self._aggregation_spec.to_params(),
+            fedprox_rho=float(self.fedprox_rho),
+            pass_2_budget=bool(self.pass_2_budget),
+            deadline_law=self._deadline_law.form,
+            deadline_params=(
+                {} if self._deadline_law.is_recorded
+                else self._deadline_law.to_params()
+            ),
+            miss_priority=bool(self.miss_priority),
+        )
 
         # EX-4.3 arm H3 — L1 adaptive channel. H1/H2 hold the best-average
         # fixed band; H3 runs the U(c,t) controller. The per-mission loss
@@ -613,6 +671,20 @@ class Exp4Driver:
                 "" if self.mission_budget_s is None else float(self.mission_budget_s)
             )
             row["mission_window_adaptation"] = int(bool(self.mission_window_adaptation))
+            spec = self._aggregation_spec
+            row["aggregation"] = spec.rule
+            row["aggregation_params"] = (
+                "" if spec.is_plain else json.dumps(spec.to_params(), sort_keys=True)
+            )
+            row["fedprox_rho"] = float(self.fedprox_rho)
+            row["pass_2_budget"] = int(bool(self.pass_2_budget))
+            law = self._deadline_law
+            row["deadline_law"] = law.form
+            row["deadline_params"] = (
+                "" if law.is_recorded
+                else json.dumps(law.to_params(), sort_keys=True)
+            )
+            row["miss_priority"] = int(bool(self.miss_priority))
             # A trial that produced NO model evaluation at all never trained a
             # model — its convergence columns are blank while its federation
             # columns are hard zeros. Recorded as `ok`, that asymmetry biases

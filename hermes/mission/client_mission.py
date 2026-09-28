@@ -39,6 +39,7 @@ from hermes.types import (
     MissionPass,
     Weights,
 )
+from hermes.types.fl_messages import UPDATE_FORM_DELTA, UPDATE_FORM_WEIGHTS
 
 from .utility import diversity_adjusted, performance_score, utility
 
@@ -167,6 +168,13 @@ class ClientMission:
         self._theta_basis: Optional[Weights] = None
         self._last_synth_batch: List[np.ndarray] = []
         self._prepared_delta: Optional[LocalTrainResult] = None
+        # FeRRy Phase 1 — the version of ``_theta_basis`` (from the push that
+        # delivered it), and the basis a prepared result was trained from, with
+        # its version. A prepared update ships later, possibly after a newer
+        # basis arrived, so it must carry the basis it was actually trained on.
+        self._theta_basis_version: Optional[int] = None
+        self._prepared_basis: Optional[Weights] = None
+        self._prepared_basis_version: Optional[int] = None
 
         # register self with the loopback (real RF would just listen on addr)
         if hasattr(rf, "register_device"):
@@ -337,6 +345,7 @@ class ClientMission:
         """
         with self._lock:
             theta = self._theta_basis
+            theta_version = self._theta_basis_version
             stashed_synth = list(self._last_synth_batch)
         if theta is None:
             log.debug(
@@ -354,6 +363,8 @@ class ClientMission:
 
         with self._lock:
             self._prepared_delta = result
+            self._prepared_basis = theta
+            self._prepared_basis_version = theta_version
         self._update_utility(result, theta_global=theta)
         return result
 
@@ -371,7 +382,9 @@ class ClientMission:
             self._contact_reliability is not None
             and float(self._contact_rng.random()) >= self._contact_reliability
         ):
-            self._set_theta_basis(push.theta_disc, push.synth_batch)
+            self._set_theta_basis(
+                push.theta_disc, push.synth_batch, version=push.basis_version,
+            )
             self._set_last_outcome(MissionOutcome.TIMEOUT)
             log.info(
                 "device=%s: Pass-1 contact uplink dropped (reliability=%.3f)",
@@ -386,7 +399,11 @@ class ClientMission:
         # its fresh delta clobbered to None silently.
         with self._lock:
             prepared = self._prepared_delta
+            prepared_basis = self._prepared_basis
+            prepared_version = self._prepared_basis_version
             self._prepared_delta = None
+            self._prepared_basis = None
+            self._prepared_basis_version = None
 
         if prepared is None:
             # Fallback path — the device hasn't run train_offline yet.
@@ -409,17 +426,39 @@ class ClientMission:
                     self.device_id,
                 )
                 return MissionOutcome.PARTIAL
+            basis, basis_version = push.theta_disc, push.basis_version
         else:
             result = prepared
+            basis, basis_version = prepared_basis, prepared_version
+
+        # The mule names the form it merges in: full weights (agg:plain, every
+        # recorded run) or the update against the basis it was trained from.
+        form = push.update_form
+        if form == UPDATE_FORM_DELTA:
+            if basis is None:
+                log.warning(
+                    "device=%s: delta requested but the training basis is "
+                    "unknown; sending nothing this contact", self.device_id,
+                )
+                return MissionOutcome.PARTIAL
+            payload = [
+                np.asarray(w) - np.asarray(b)
+                for w, b in zip(result.delta_theta, basis)
+            ]
+        else:
+            form = UPDATE_FORM_WEIGHTS
+            payload = result.delta_theta
 
         grad = GradientSubmission(
             device_id=self.device_id,
             mule_id=push.mule_id,
             mission_round=push.mission_round,
-            delta_theta=result.delta_theta,
+            delta_theta=payload,
             num_examples=result.num_examples,
             submitted_at=time.time(),
             local_loss=float(result.loss),
+            basis_version=basis_version,
+            update_form=form,
         )
         self.rf.send_gradient(grad)
 
@@ -428,7 +467,9 @@ class ClientMission:
         # under two-pass missions, the Pass-1 push and Pass-2 push carry
         # the same θ — Pass 1 is informational, Pass 2 is authoritative.)
         self._update_utility(result, theta_global=push.theta_disc)
-        self._set_theta_basis(push.theta_disc, push.synth_batch)
+        self._set_theta_basis(
+            push.theta_disc, push.synth_batch, version=push.basis_version,
+        )
         self._set_last_outcome(MissionOutcome.CLEAN)
         return MissionOutcome.CLEAN
 
@@ -445,7 +486,9 @@ class ClientMission:
         stays without a prepared delta and the next Pass-1 visit will
         log an M1 fallback warning.
         """
-        self._set_theta_basis(push.theta_disc, push.synth_batch)
+        self._set_theta_basis(
+            push.theta_disc, push.synth_batch, version=push.basis_version,
+        )
         ack = DeliveryAck(
             device_id=self.device_id,
             mule_id=push.mule_id,
@@ -473,9 +516,16 @@ class ClientMission:
         self._set_last_outcome(MissionOutcome.CLEAN)
         return MissionOutcome.CLEAN
 
-    def _set_theta_basis(self, theta: Weights, synth: List[np.ndarray]) -> None:
+    def _set_theta_basis(
+        self,
+        theta: Weights,
+        synth: List[np.ndarray],
+        *,
+        version: Optional[int] = None,
+    ) -> None:
         with self._lock:
             self._theta_basis = [w.copy() for w in theta]
+            self._theta_basis_version = version
             self._last_synth_batch = list(synth)
 
     # ---------------------------------------------- internal

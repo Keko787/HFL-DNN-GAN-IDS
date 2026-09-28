@@ -53,6 +53,7 @@ from .stages import (
     select_order,
 )
 from .stages.s2b_flag import DEFAULT_FL_THRESHOLD
+from .stages.s3_deadline import DeadlineLaw
 
 log = logging.getLogger(__name__)
 
@@ -82,8 +83,17 @@ class FLScheduler:
         mission_budget_s: Optional[float] = None,
         feasibility_model=None,
         mission_window_adapter=None,
+        deadline_law: Optional[DeadlineLaw] = None,
+        miss_priority: bool = False,
     ):
         self._device_states: Dict[DeviceID, DeviceSchedulerState] = {}
+        # FeRRy Phase 1. ``deadline_law`` None is the recorded additive law,
+        # run with its original arithmetic; see stages/s3_deadline.py. With
+        # ``miss_priority`` S3b admits contacts by their members' miss streak
+        # before their deadline, so a device the mule missed is not also sent
+        # to the back of the queue by the wider window the miss gave it.
+        self._deadline_law = deadline_law
+        self._miss_priority = bool(miss_priority)
         self._current_slice: Optional[MissionSlice] = None
         self._fl_threshold = fl_threshold
         self._beacon_window_s = beacon_window_s
@@ -142,6 +152,41 @@ class FLScheduler:
         if self._window_adapter is None:
             return 1.0
         return float(self._window_adapter.scale)
+
+    # Freeze Amendment 7 — read-only views of the S3b budget, its start stamp
+    # and the cost model, so the mule stops reading the private fields.
+
+    @property
+    def mission_budget_s(self) -> Optional[float]:
+        """Per-mission time budget in seconds; None = no enforcement."""
+        return self._mission_budget_s
+
+    @property
+    def mission_start_ts(self) -> Optional[float]:
+        """Stamp the current mission's budget is measured from."""
+        return self._mission_start_ts
+
+    @property
+    def feasibility_model(self):
+        """The S3b cost model, or None for its defaults."""
+        return self._feasibility_model
+
+    @property
+    def deadline_law(self) -> Optional[DeadlineLaw]:
+        """The fast-phase law; None = the recorded additive law."""
+        return self._deadline_law
+
+    @property
+    def miss_priority(self) -> bool:
+        return self._miss_priority
+
+    def _contact_miss_priority(self, wp: ContactWaypoint) -> int:
+        """A contact's priority: the longest miss streak among its members."""
+        return max(
+            (self._device_states[d].miss_streak for d in wp.devices
+             if d in self._device_states),
+            default=0,
+        )
 
     def record_mission_outcome(self, *, served: int, planned: int) -> None:
         """Feed one mission's served/planned into S3c. No-op without an adapter.
@@ -229,7 +274,9 @@ class FLScheduler:
 
         # Slow-phase deadline fold.
         if amendment is not None:
-            fold_cluster_amendment(self._device_states, amendment)
+            fold_cluster_amendment(
+                self._device_states, amendment, law=self._deadline_law,
+            )
 
         log.info(
             "scheduler ingest_slice round=%d slice_size=%d amendments=%s",
@@ -251,7 +298,7 @@ class FLScheduler:
             raise FLSchedulerError(
                 f"RoundCloseDelta for untracked device {delta.device_id!r}"
             )
-        fold_round_close_delta(st, delta)
+        fold_round_close_delta(st, delta, law=self._deadline_law)
 
     def ingest_beacon(self, obs: BeaconObservation) -> None:
         """Opportunistic RF beacon (design §4 step 16).
@@ -329,7 +376,9 @@ class FLScheduler:
                 continue
             st.bucket = bucket
             by_bucket[bucket].append(did)
-            deadlines[did] = compute_deadline(st, now=_now, window_scale=_wscale)
+            deadlines[did] = compute_deadline(
+                st, now=_now, window_scale=_wscale, law=self._deadline_law,
+            )
 
         # S3.5 — intra-bucket order.
         selector_env = None
@@ -427,7 +476,9 @@ class FLScheduler:
                 log.warning("build_contact_queue: S3 refused to bucket %s", did)
                 continue
             st.bucket = bucket
-            deadlines[did] = compute_deadline(st, now=_now, window_scale=_wscale)
+            deadlines[did] = compute_deadline(
+                st, now=_now, window_scale=_wscale, law=self._deadline_law,
+            )
 
         # Filter out anyone S3 couldn't bucket (kept simple — drop them).
         bucketed = [d for d in eligible_ids if self._device_states[d].bucket is not None]
@@ -505,6 +556,9 @@ class FLScheduler:
                 mule_pose=mule_pose,
                 mission_deadline_ts=start + self._mission_budget_s,
                 model=self._feasibility_model,
+                priority=(
+                    self._contact_miss_priority if self._miss_priority else None
+                ),
             )
             self.last_feasibility = feas
             if feas.n_dropped:
@@ -622,7 +676,9 @@ class FLScheduler:
         shadow_states: Dict[DeviceID, DeviceSchedulerState] = {}
         for did in slice_ids:
             st = self._device_states[did]
-            deadlines[did] = compute_deadline(st, now=_now, window_scale=_wscale)
+            deadlines[did] = compute_deadline(
+                st, now=_now, window_scale=_wscale, law=self._deadline_law,
+            )
             if st.bucket is None:
                 # Build a shallow copy with a transient bucket — the
                 # original state row is left untouched.

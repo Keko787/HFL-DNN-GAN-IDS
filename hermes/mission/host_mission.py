@@ -21,7 +21,7 @@ import logging
 import threading
 import time
 from dataclasses import dataclass, field
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from hermes.transport import RFLink, RFLinkError
 from hermes.types import (
@@ -48,7 +48,8 @@ from hermes.types import (
     weights_signature,
 )
 
-from .partial_fedavg import PartialFedAvgError, partial_fedavg
+from .aggregation_rules import AggregationSpec, merge_on_mule, update_age
+from .partial_fedavg import PartialFedAvgError
 
 log = logging.getLogger(__name__)
 
@@ -95,18 +96,26 @@ class HFLHostMission:
         scheduler_bus: Optional[SchedulerBus] = None,
         session_ttl_s: float = 30.0,
         busy_ttl_s: float = 45.0,
+        aggregation: Optional[AggregationSpec] = None,
     ) -> None:
         self.mule_id = mule_id
         self.rf = rf
         self.scheduler_bus = scheduler_bus or (lambda _delta: None)
         self.session_ttl_s = session_ttl_s
         self.busy_ttl_s = busy_ttl_s
+        # FeRRy Phase 1 — the merge rule decides which form devices answer in
+        # (full weights for agg:plain, a delta against their basis otherwise)
+        # and how close_round merges.
+        self.aggregation: AggregationSpec = aggregation or AggregationSpec()
 
         self._lock = threading.RLock()
         self._mission_round: int = 0
 
         # Round-scoped state (reset between rounds)
         self._current_theta: Optional[Weights] = None
+        # Version of ``_current_theta`` (the cluster round that produced it),
+        # pushed with it so every update can be aged. None = unknown.
+        self._current_theta_version: Optional[int] = None
         self._accepted: List[GradientSubmission] = []
         self._report: Optional[MissionRoundCloseReport] = None
         self._contacts: Optional[ContactHistory] = None
@@ -129,16 +138,20 @@ class HFLHostMission:
 
     # -------------------------------------------------------------- round API
 
-    def open_round(self, theta_disc: Weights) -> int:
+    def open_round(
+        self, theta_disc: Weights, *, theta_version: Optional[int] = None,
+    ) -> int:
         """Start a new mission round with a fresh copy of θ_disc.
 
         Returns the new ``mission_round`` integer. Pass-1 (COLLECT) is
         the default mode — call :meth:`open_pass_2` to switch to
-        DELIVER mode after the inter-pass dock.
+        DELIVER mode after the inter-pass dock. ``theta_version`` is the
+        cluster round that produced θ_disc; it rides every push.
         """
         with self._lock:
             self._mission_round += 1
             self._current_theta = [w.copy() for w in theta_disc]
+            self._current_theta_version = theta_version
             self._accepted = []
             self._round_started_at = time.time()
             self._report = MissionRoundCloseReport(
@@ -165,10 +178,17 @@ class HFLHostMission:
 
     def close_round(
         self,
+        *,
+        age_caps: Optional[Mapping[DeviceID, Optional[int]]] = None,
     ) -> Tuple[PartialAggregate, MissionRoundCloseReport, ContactHistory]:
         """End the mission round: run partial FedAvg, finalize report.
 
-        Raises if no gradients were accepted (all timeouts / all partial).
+        The merge follows ``self.aggregation``: ``agg:plain`` is the original
+        num_examples-weighted mean; the age-aware rules merge deltas, weighted
+        by age, with ``age_caps`` giving each device's cutoff in cluster rounds.
+
+        Raises if no gradients were accepted (all timeouts / all partial), or
+        if the rule gave every accepted update zero weight.
         """
         with self._lock:
             if self._report is None or self._contacts is None:
@@ -176,10 +196,13 @@ class HFLHostMission:
             self._report.finished_at = time.time()
 
             try:
-                aggregate = partial_fedavg(
+                aggregate = merge_on_mule(
+                    self.aggregation,
                     mule_id=self.mule_id,
                     mission_round=self._mission_round,
                     submissions=self._accepted,
+                    base_version=self._current_theta_version,
+                    age_caps=age_caps,
                 )
             except PartialFedAvgError as e:
                 log.warning(
@@ -228,6 +251,7 @@ class HFLHostMission:
         with self._lock:
             self._require_open_round()
             theta = [w.copy() for w in self._current_theta]  # type: ignore[arg-type]
+            theta_version = self._current_theta_version
             mission_round = self._mission_round
 
         # Solicit + wait for a reply (outside the lock so long blocks don't stall
@@ -273,6 +297,8 @@ class HFLHostMission:
             mission_round=mission_round,
             theta_disc=theta,
             synth_batch=synth_batch,
+            basis_version=theta_version,
+            update_form=self.aggregation.update_form,
         )
         self.rf.push_disc(adv.device_id, push)
 
@@ -322,6 +348,8 @@ class HFLHostMission:
             num_examples=(grad.num_examples or adv.num_examples),
             bytes_received=grad.byte_count,
             bytes_sent=push_byte_count(push),
+            basis_version=grad.basis_version,
+            line_num_examples=grad.num_examples,
         )
         self._release_busy(adv.device_id)
         return outcome
@@ -381,6 +409,7 @@ class HFLHostMission:
         with self._lock:
             self._require_open_round()
             theta = [w.copy() for w in self._current_theta]  # type: ignore[arg-type]
+            theta_version = self._current_theta_version
             mission_round = self._mission_round
 
         # 1. Broadcast solicit (Pass 1).
@@ -475,6 +504,8 @@ class HFLHostMission:
                 theta_disc=theta,
                 synth_batch=synth_batch,
                 pass_kind=MissionPass.COLLECT,
+                basis_version=theta_version,
+                update_form=self.aggregation.update_form,
             )
             try:
                 self.rf.push_disc(adv.device_id, push)
@@ -531,6 +562,8 @@ class HFLHostMission:
                 num_examples=adv.num_examples,
                 bytes_received=grad.byte_count,
                 bytes_sent=push_byte_count(push),
+                basis_version=grad.basis_version,
+                line_num_examples=grad.num_examples,
             )
             self._release_busy(adv.device_id)
             with outcomes_lock:
@@ -547,13 +580,16 @@ class HFLHostMission:
 
         return outcomes
 
-    def open_pass_2(self, theta_disc_new: Weights) -> None:
+    def open_pass_2(
+        self, theta_disc_new: Weights, *, theta_version: Optional[int] = None,
+    ) -> None:
         """Switch the mission to Pass-2 DELIVER mode.
 
         Called between Pass 1's UP and Pass 2's outbound flight (after
         ``close_round`` has finalised Pass 1 and the cluster has
         aggregated + dispatched fresh θ'). Stages the new θ in the
         mission server and initializes the Pass-2 delivery report.
+        ``theta_version`` rides each delivery so devices know their basis.
 
         Pre-condition: ``open_round`` has been called at some point in
         this mission (i.e. ``mission_round > 0``). Pass 1's per-pass
@@ -570,6 +606,7 @@ class HFLHostMission:
                 )
             self._current_pass = MissionPass.DELIVER
             self._current_theta = [w.copy() for w in theta_disc_new]
+            self._current_theta_version = theta_version
             self._delivery_report = MissionDeliveryReport(
                 mule_id=self.mule_id,
                 mission_round=self._mission_round,
@@ -614,6 +651,7 @@ class HFLHostMission:
                     "deliver_contact called without open_pass_2 staging θ'"
                 )
             theta = [w.copy() for w in self._current_theta]
+            theta_version = self._current_theta_version
             mission_round = self._mission_round
 
         solicit = FLOpenSolicit(
@@ -677,6 +715,7 @@ class HFLHostMission:
                 theta_disc=theta,
                 synth_batch=synth_batch,
                 pass_kind=MissionPass.DELIVER,
+                basis_version=theta_version,
             )
             try:
                 self.rf.push_disc(adv.device_id, push)
@@ -723,6 +762,18 @@ class HFLHostMission:
             t.join(timeout=self.session_ttl_s * 2.0)
 
         return outcomes
+
+    def record_skipped_delivery(self, devices: Sequence[DeviceID]) -> None:
+        """Log devices a budgeted Pass 2 will not fly to (FeRRy Phase 1).
+
+        Each gets a SKIPPED line, which the cluster counts as not delivered,
+        so the device keeps its older basis and its delivery priority rises.
+        """
+        now = time.time()
+        for did in devices:
+            self._record_delivery_line(
+                device_id=did, outcome=DeliveryOutcome.SKIPPED, contact_ts=now,
+            )
 
     def close_pass_2(self) -> MissionDeliveryReport:
         """Finalise and return the Pass-2 delivery report.
@@ -817,6 +868,16 @@ class HFLHostMission:
             )
             return MissionOutcome.PARTIAL
 
+        # A full model and a delta are not interchangeable: merging one as the
+        # other would corrupt θ silently, so a form the rule did not ask for is
+        # refused like any other bad receipt.
+        if grad.update_form != self.aggregation.update_form:
+            log.warning(
+                "verify: update form mismatch device=%s got=%s expected=%s",
+                grad.device_id, grad.update_form, self.aggregation.update_form,
+            )
+            return MissionOutcome.PARTIAL
+
         # TTL: fudge factor of 2x session_ttl for clock skew tolerance.
         if time.time() - grad.submitted_at > 2 * self.session_ttl_s:
             log.warning(
@@ -841,6 +902,11 @@ class HFLHostMission:
         # (and every pre-B2 arm) stay valid and fold to a no-op.
         local_loss: Optional[float] = None,
         num_examples: int = 0,
+        # FeRRy Phase 1 — for the report line only: the collected update's
+        # basis version and example count. The scheduler delta above keeps
+        # the values it always had.
+        basis_version: Optional[int] = None,
+        line_num_examples: Optional[int] = None,
     ) -> None:
         with self._lock:
             if self._report is None:
@@ -852,6 +918,12 @@ class HFLHostMission:
                     contact_ts=contact_ts,
                     bytes_received=bytes_received,
                     bytes_sent=bytes_sent,
+                    num_examples=int(
+                        num_examples if line_num_examples is None
+                        else line_num_examples
+                    ),
+                    basis_version=basis_version,
+                    age=update_age(self._current_theta_version, basis_version),
                 )
             )
             mission_round = self._mission_round

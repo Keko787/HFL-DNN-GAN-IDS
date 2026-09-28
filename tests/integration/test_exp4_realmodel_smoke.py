@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import pytest
 
-from experiments.exp4.driver import Exp4Driver
+from experiments.exp4.driver import PROVENANCE_COLUMNS, Exp4Driver
 from experiments.exp4.metrics import Exp4MetricSummary
 from experiments.runner.grid import Cell
 
@@ -45,7 +45,7 @@ def test_exp4_real_model_synthetic_converges():
     row = dict(driver.run_trial(cell))
 
     # Row is complete + CSV-shaped.
-    assert set(row.keys()) == set(Exp4MetricSummary.csv_columns())
+    assert set(row.keys()) == set(Exp4MetricSummary.csv_columns()) | set(PROVENANCE_COLUMNS)
 
     # The integrated stack ran: real two-pass + cross-mule FedAvg.
     assert row["missions_completed"] >= 1, row
@@ -226,7 +226,7 @@ def test_exp4_h2_rl_selector_runs_end_to_end():
         params={"N": 6, "rrf": 60.0, "n_missions": 3, "regime": "clean"},
     )
     row = dict(driver.run_trial(cell))
-    assert set(row.keys()) == set(Exp4MetricSummary.csv_columns())
+    assert set(row.keys()) == set(Exp4MetricSummary.csv_columns()) | set(PROVENANCE_COLUMNS)
     assert row["missions_completed"] >= 1
     assert row["rounds_closed"] >= 1
     assert row["rounds_evaluated"] >= 2
@@ -264,7 +264,7 @@ def test_exp4_h3_l1_channel_runs_end_to_end():
         params={"N": 6, "rrf": 60.0, "n_missions": 4, "regime": "jittery"},
     )
     row = dict(driver.run_trial(cell))
-    assert set(row.keys()) == set(Exp4MetricSummary.csv_columns())
+    assert set(row.keys()) == set(Exp4MetricSummary.csv_columns()) | set(PROVENANCE_COLUMNS)
     # The integrated stack ran with the channel-driven backhaul + RL selector.
     assert row["missions_completed"] >= 1, row
     assert row["rounds_closed"] >= 1, row
