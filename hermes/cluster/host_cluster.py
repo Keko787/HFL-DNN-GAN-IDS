@@ -35,8 +35,17 @@ from hermes.types import (
     sign_down_bundle,
 )
 from hermes.types.aggregate import Weights
+from hermes.mission.aggregation_rules import (
+    AGG_FEDBUFF,
+    AggregationConfigError,
+    AggregationSpec,
+    FedBuffBuffer,
+    check_partial_form,
+    partial_age,
+    partial_staleness,
+)
 
-from .cross_mule_fedavg import FedAvgError, cross_mule_fedavg
+from .cross_mule_fedavg import FedAvgError, apply_weighted_deltas, cross_mule_fedavg
 from .device_registry import DeviceRegistry
 
 log = logging.getLogger(__name__)
@@ -155,12 +164,20 @@ class HFLHostCluster:
         dock: DockLink,
         synth_batch_size: int = 32,
         min_participation: int = 1,
+        aggregation: Optional[AggregationSpec] = None,
     ) -> None:
         self.registry = registry
         self.generator = generator
         self.dock = dock
         self.synth_batch_size = synth_batch_size
         self.min_participation = min_participation
+        # FeRRy Phase 1 — the L3 merge rule. The default, agg:plain, is the
+        # merge every recorded run used and keeps its original code path.
+        self.aggregation: AggregationSpec = aggregation or AggregationSpec()
+        self._fedbuff: Optional[FedBuffBuffer] = None
+        #: What the latest age-aware fold did, for the service's event log.
+        #: None under agg:plain.
+        self.last_merge: Optional[dict] = None
 
         self._cluster_round: int = 0
         self._pending: Optional[_PendingRound] = None
@@ -263,6 +280,8 @@ class HFLHostCluster:
                     self.min_participation,
                 )
                 return None
+            if not self.aggregation.is_plain:
+                return self._aggregate_age_aware()
             try:
                 merged = cross_mule_fedavg(self._pending.partials)
             except FedAvgError:
@@ -271,6 +290,79 @@ class HFLHostCluster:
                 raise
             self.generator.update_disc_from_cluster_avg(merged)
             return merged
+
+    @property
+    def defers_merges(self) -> bool:
+        """True when an ingested UP may leave θ unchanged (``agg:fedbuff``).
+
+        The service must then still send the uploading mule a DOWN, or the mule
+        waits at the inter-pass dock for a θ that is not coming.
+        """
+        return self.aggregation.rule == AGG_FEDBUFF
+
+    def _aggregate_age_aware(self) -> Optional[Weights]:
+        """Fold pending delta partials into θ under the configured rule.
+
+        Caller holds the lock and has checked min_participation. Returns the
+        new θ, or None when FedBuff is still filling its buffer.
+        """
+        assert self._pending is not None
+        spec = self.aggregation
+        version = self._cluster_round
+        partials = list(self._pending.partials)
+        try:
+            for p in partials:
+                check_partial_form(spec, p)
+            theta = self.generator.get_global_disc_weights()
+            ages = [partial_age(p, version) for p in partials]
+            if spec.rule == AGG_FEDBUFF:
+                if self._fedbuff is None:
+                    self._fedbuff = FedBuffBuffer(spec=spec, k=self._fedbuff_k())
+                for p in partials:
+                    self._fedbuff.add(p, cluster_version=version)
+                # The partials now live in the buffer. Clear them from the open
+                # round so the same mule's next UP is not refused as a duplicate.
+                self._pending.partials = []
+                self._pending.seen_mules = []
+                if not self._fedbuff.ready:
+                    self.last_merge = {
+                        "rule": spec.rule, "applied": False,
+                        "buffered": self._fedbuff.count, "k": self._fedbuff.k,
+                        "partial_ages": ages,
+                    }
+                    return None
+                buffered = self._fedbuff.count
+                merged = self._fedbuff.apply(theta)
+                self.last_merge = {
+                    "rule": spec.rule, "applied": True,
+                    "buffered": buffered, "k": self._fedbuff.k,
+                    "partial_ages": ages,
+                }
+            else:
+                weights = [
+                    p.weight_mass * partial_staleness(spec, p, version)
+                    for p in partials
+                ]
+                merged = apply_weighted_deltas(
+                    theta, partials, weights, server_lr=spec.server_lr,
+                )
+                self.last_merge = {
+                    "rule": spec.rule, "applied": True,
+                    "partial_ages": ages, "partial_weights": weights,
+                    "n_updates": sum(p.n_updates for p in partials),
+                }
+        except (FedAvgError, AggregationConfigError):
+            log.exception("%s merge failed; dropping cluster round", spec.rule)
+            self._reset_pending()
+            raise
+        self.generator.update_disc_from_cluster_avg(merged)
+        return merged
+
+    def _fedbuff_k(self) -> int:
+        """FedBuff's K: the configured buffer size, else the registered devices."""
+        if self.aggregation.buffer_k is not None:
+            return int(self.aggregation.buffer_k)
+        return max(1, len(self.registry.all()))
 
     # ----------------------------------------------- bundle DOWN dispatch
 

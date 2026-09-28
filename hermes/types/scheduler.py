@@ -116,6 +116,12 @@ class DeviceSchedulerState:
     last_clean_ts: float = 0.0
     last_clean_round: int = 0
 
+    #: Consecutive non-CLEAN outcomes since the last CLEAN, synthetic TIMEOUTs
+    #: for dropped or abandoned devices included. FeRRy's priority key: with
+    #: ``miss_priority`` on, S3b admits contacts with a longer streak first.
+    #: Maintained always; nothing reads it otherwise.
+    miss_streak: int = 0
+
     # RF / opportunistic
     last_beacon_ts: float = 0.0
 

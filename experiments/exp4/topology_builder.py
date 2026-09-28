@@ -70,6 +70,16 @@ def build_exp4_topology(
     mission_window_target: float = 0.8,
     mission_window_gain: float = 2.0,
     mission_window_max_scale: float = 4.0,
+    # FeRRy Phase 1 — the L3 merge rule (set on cluster AND mule so they
+    # agree), FedProx on the devices, and the budgeted Pass 2.
+    aggregation: str = "agg:plain",
+    aggregation_params: Optional[dict] = None,
+    fedprox_rho: float = 0.0,
+    pass_2_budget: bool = False,
+    # FeRRy Phase 1 — the mule scheduler's deadline law and priority key.
+    deadline_law: str = "additive",
+    deadline_params: Optional[dict] = None,
+    miss_priority: bool = False,
 ) -> TopologyConfig:
     """Return a validated :class:`TopologyConfig` for one H1 trial.
 
@@ -133,6 +143,7 @@ def build_exp4_topology(
                 local_epochs=local_epochs,
                 local_batch_size=local_batch_size,
                 contact_reliability=contact_reliability,
+                fedprox_rho=float(fedprox_rho),
             )
         )
 
@@ -148,6 +159,8 @@ def build_exp4_topology(
         backhaul_loss_pct=backhaul_loss_pct,
         backhaul_rng_seed=backhaul_rng_seed,
         backhaul_loss_schedule=backhaul_loss_schedule,
+        aggregation=str(aggregation),
+        aggregation_params=dict(aggregation_params or {}),
     )
     mule = MuleConfig(
         mule_id=mule_id,
@@ -166,6 +179,12 @@ def build_exp4_topology(
         mission_window_target=float(mission_window_target),
         mission_window_gain=float(mission_window_gain),
         mission_window_max_scale=float(mission_window_max_scale),
+        aggregation=str(aggregation),
+        aggregation_params=dict(aggregation_params or {}),
+        pass_2_budget=bool(pass_2_budget),
+        deadline_law=str(deadline_law),
+        deadline_params=dict(deadline_params or {}),
+        miss_priority=bool(miss_priority),
     )
     topo = TopologyConfig(cluster=cluster, mules=[mule], devices=devices)
     topo.validate()

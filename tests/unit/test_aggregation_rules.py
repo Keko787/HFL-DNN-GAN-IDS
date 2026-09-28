@@ -1,0 +1,388 @@
+"""FeRRy Phase 1 — the L3 merge rules (``hermes/mission/aggregation_rules.py``).
+
+Pins the three properties the build plan names for the weight formula: it
+reduces to today's mean when every basis is current (the regression test),
+it is exactly zero past the cutoff, and each rule's staleness function is the
+one its source defines. Pure numpy; no links, no TensorFlow.
+"""
+
+from __future__ import annotations
+
+import math
+
+import numpy as np
+import pytest
+
+from hermes.cluster.cross_mule_fedavg import (
+    FedAvgError,
+    apply_weighted_deltas,
+    cross_mule_fedavg,
+)
+from hermes.mission.aggregation_rules import (
+    AGG_ASYNCHFL,
+    AGG_CUTOFF,
+    AGG_FEDBUFF,
+    AGG_FEDEX,
+    AGG_PLAIN,
+    AGG_SEQ,
+    AggregationConfigError,
+    AggregationSpec,
+    FedBuffBuffer,
+    age_cap,
+    check_partial_form,
+    merge_on_mule,
+    partial_age,
+    partial_staleness,
+    staleness,
+    update_age,
+    update_weights,
+)
+from hermes.mission.partial_fedavg import (
+    PartialFedAvgError,
+    partial_fedavg,
+    partial_fedavg_delta,
+)
+from hermes.types import DeviceID, GradientSubmission, MuleID
+from hermes.types.fl_messages import UPDATE_FORM_DELTA, UPDATE_FORM_WEIGHTS
+
+MULE = MuleID("mule-agg")
+ROUND = 3
+
+
+def _theta(seed: int = 0):
+    rng = np.random.default_rng(seed)
+    return [
+        rng.normal(size=(4,)).astype(np.float32),
+        rng.normal(size=(3, 3)).astype(np.float32),
+    ]
+
+
+def _local(theta, seed):
+    rng = np.random.default_rng(1000 + seed)
+    return [(w + rng.normal(0.0, 0.1, size=w.shape)).astype(w.dtype) for w in theta]
+
+
+def _sub(did, weights, n, *, basis=None, form=UPDATE_FORM_WEIGHTS, loss=None):
+    return GradientSubmission(
+        device_id=DeviceID(did),
+        mule_id=MULE,
+        mission_round=ROUND,
+        delta_theta=weights,
+        num_examples=n,
+        submitted_at=0.0,
+        local_loss=loss,
+        basis_version=basis,
+        update_form=form,
+    )
+
+
+def _delta_sub(did, local, basis_theta, n, *, basis=None, loss=None):
+    delta = [a - b for a, b in zip(local, basis_theta)]
+    return _sub(did, delta, n, basis=basis, form=UPDATE_FORM_DELTA, loss=loss)
+
+
+# --------------------------------------------------------------------------- #
+# The spec
+# --------------------------------------------------------------------------- #
+
+def test_default_spec_is_plain_and_asks_for_full_weights():
+    spec = AggregationSpec()
+    assert spec.rule == AGG_PLAIN and spec.is_plain
+    assert spec.update_form == UPDATE_FORM_WEIGHTS
+    assert AggregationSpec(rule=AGG_CUTOFF).update_form == UPDATE_FORM_DELTA
+
+
+@pytest.mark.parametrize("rule", [AGG_FEDEX, AGG_SEQ])
+def test_planned_rules_are_refused_with_the_reason(rule):
+    with pytest.raises(AggregationConfigError, match="not implemented yet"):
+        AggregationSpec(rule=rule)
+
+
+def test_unknown_rule_and_bad_parameters_are_refused():
+    with pytest.raises(AggregationConfigError, match="unknown aggregation rule"):
+        AggregationSpec(rule="agg:nope")
+    for bad in (
+        dict(server_lr=0.0), dict(a_max=-1), dict(period_s=0.0),
+        dict(hinge_a=-1.0), dict(decay=-0.1), dict(value="gradient"),
+        dict(buffer_k=0),
+    ):
+        with pytest.raises(AggregationConfigError):
+            AggregationSpec(rule=AGG_CUTOFF, **bad)
+
+
+def test_from_config_round_trips_and_rejects_unknown_keys():
+    spec = AggregationSpec(rule=AGG_CUTOFF, a_max=2, period_s=12.5, server_lr=0.5)
+    again = AggregationSpec.from_config(spec.rule, spec.to_params())
+    assert again == spec
+    assert AggregationSpec.from_config(None, {}) == AggregationSpec()
+    with pytest.raises(AggregationConfigError, match="unknown aggregation parameter"):
+        AggregationSpec.from_config(AGG_CUTOFF, {"eta": 0.5})
+
+
+# --------------------------------------------------------------------------- #
+# Staleness, age and cutoff
+# --------------------------------------------------------------------------- #
+
+def test_hinge_matches_fedasync():
+    spec = AggregationSpec(rule=AGG_CUTOFF, hinge_a=2.0, hinge_b=1.0)
+    assert staleness(spec, 0) == 1.0
+    assert staleness(spec, 1) == 1.0
+    assert staleness(spec, 2) == pytest.approx(1.0 / (2.0 * 1 + 1.0))
+    assert staleness(spec, 4) == pytest.approx(1.0 / (2.0 * 3 + 1.0))
+    assert staleness(spec, -3) == 1.0  # negative ages count as 0
+
+
+def test_other_rules_staleness():
+    assert staleness(AggregationSpec(rule=AGG_ASYNCHFL, decay=0.5), 2) == pytest.approx(math.exp(-1.0))
+    assert staleness(AggregationSpec(rule=AGG_FEDBUFF), 3) == pytest.approx(0.5)
+    assert staleness(AggregationSpec(), 7) == 1.0
+
+
+def test_age_cap_converts_the_deadline_window_with_the_mission_period():
+    spec = AggregationSpec(rule=AGG_CUTOFF, period_s=20.0)
+    assert age_cap(spec, 60.0) == 3
+    assert age_cap(spec, 59.9) == 2          # floor, not round
+    assert age_cap(spec, 5.0) == 0
+    both = AggregationSpec(rule=AGG_CUTOFF, period_s=20.0, a_max=1)
+    assert age_cap(both, 60.0) == 1          # the smaller cap wins
+    assert age_cap(AggregationSpec(rule=AGG_CUTOFF, a_max=2), None) == 2
+    assert age_cap(AggregationSpec(rule=AGG_CUTOFF), 60.0) is None
+    assert age_cap(AggregationSpec(rule=AGG_ASYNCHFL, a_max=1), 60.0) is None
+
+
+def test_update_age():
+    assert update_age(5, 3) == 2
+    assert update_age(5, 5) == 0
+    assert update_age(5, 7) == 0              # newer basis counts as current
+    assert update_age(None, 3) is None
+    assert update_age(5, None) is None
+
+
+def test_weight_is_exactly_zero_past_the_cutoff():
+    spec = AggregationSpec(rule=AGG_CUTOFF, a_max=1)
+    th = _theta()
+    subs = [
+        _sub("a", th, 10, basis=5, form=UPDATE_FORM_DELTA),   # age 0
+        _sub("b", th, 10, basis=4, form=UPDATE_FORM_DELTA),   # age 1 = cap
+        _sub("c", th, 10, basis=3, form=UPDATE_FORM_DELTA),   # age 2 > cap
+    ]
+    caps = {DeviceID(d): 1 for d in "abc"}
+    ws = update_weights(spec, subs, base_version=5, age_caps=caps)
+    assert [w.age for w in ws] == [0, 1, 2]
+    assert ws[0].weight == 10.0
+    assert ws[1].weight == pytest.approx(10.0 * staleness(spec, 1))
+    assert ws[2].weight == 0.0 and not ws[2].admitted
+
+
+def test_fedbuff_weights_ignore_example_counts():
+    spec = AggregationSpec(rule=AGG_FEDBUFF)
+    th = _theta()
+    ws = update_weights(
+        spec,
+        [_sub("a", th, 5, basis=2), _sub("b", th, 500, basis=0)],
+        base_version=2,
+    )
+    assert ws[0].weight == 1.0
+    assert ws[1].weight == pytest.approx(1.0 / math.sqrt(3.0))
+
+
+def test_loss_value_proxy_reweights_without_rescaling():
+    spec = AggregationSpec(rule=AGG_CUTOFF, value="loss")
+    th = _theta()
+    subs = [_sub("a", th, 10, basis=1, loss=0.2), _sub("b", th, 10, basis=1, loss=0.6)]
+    ws = update_weights(spec, subs, base_version=1)
+    # losses 0.2 and 0.6 against a mean of 0.4 -> v = 0.5 and 1.5
+    assert [w.weight for w in ws] == pytest.approx([5.0, 15.0])
+
+
+# --------------------------------------------------------------------------- #
+# Mule-side merge
+# --------------------------------------------------------------------------- #
+
+def test_plain_merge_is_partial_fedavg_unchanged_plus_ages():
+    th = _theta()
+    subs = [
+        _sub("a", _local(th, 1), 10, basis=4),
+        _sub("b", _local(th, 2), 30, basis=3),
+    ]
+    ref = partial_fedavg(MULE, ROUND, subs)
+    got = merge_on_mule(
+        AggregationSpec(), mule_id=MULE, mission_round=ROUND,
+        submissions=subs, base_version=4,
+    )
+    for a, b in zip(got.weights, ref.weights):
+        assert np.array_equal(a, b)
+    assert got.num_examples == ref.num_examples == 40
+    assert got.update_form == UPDATE_FORM_WEIGHTS and got.rule == AGG_PLAIN
+    assert got.base_version == 4
+    assert got.device_basis_versions == (4, 3)
+    assert got.device_ages == (0, 1)
+
+
+@pytest.mark.parametrize("rule", [AGG_CUTOFF, AGG_ASYNCHFL])
+def test_every_basis_current_reduces_to_todays_mean(rule):
+    """The regression test: θ_v + Σ (n_i/Σn)(θ_i − θ_v) = Σ (n_i/Σn)·θ_i."""
+    theta_v = _theta(7)
+    locals_ = [_local(theta_v, s) for s in range(3)]
+    ns = [12, 30, 5]
+    plain = merge_on_mule(
+        AggregationSpec(), mule_id=MULE, mission_round=ROUND,
+        submissions=[_sub(f"d{i}", w, n, basis=9) for i, (w, n) in enumerate(zip(locals_, ns))],
+        base_version=9,
+    )
+    today = cross_mule_fedavg([plain])
+
+    spec = AggregationSpec(rule=rule)
+    partial = merge_on_mule(
+        spec, mule_id=MULE, mission_round=ROUND,
+        submissions=[
+            _delta_sub(f"d{i}", w, theta_v, n, basis=9)
+            for i, (w, n) in enumerate(zip(locals_, ns))
+        ],
+        base_version=9,
+    )
+    assert partial.update_form == UPDATE_FORM_DELTA and partial.rule == rule
+    assert partial.device_ages == (0, 0, 0)
+    assert partial.weight_mass == pytest.approx(sum(ns))
+    merged = apply_weighted_deltas(theta_v, [partial], [partial.weight_mass], server_lr=1.0)
+    for a, b in zip(merged, today):
+        np.testing.assert_allclose(a, b, rtol=1e-6, atol=1e-6)
+
+
+def test_stale_update_is_down_weighted_and_expired_one_excluded():
+    theta_v = _theta(3)
+    spec = AggregationSpec(rule=AGG_CUTOFF, a_max=2, hinge_a=1.0, hinge_b=0.0)
+    subs = [
+        _delta_sub("fresh", _local(theta_v, 1), theta_v, 10, basis=6),
+        _delta_sub("stale", _local(theta_v, 2), theta_v, 10, basis=5),
+        _delta_sub("expired", _local(theta_v, 3), theta_v, 10, basis=2),
+    ]
+    caps = {DeviceID(d): 2 for d in ("fresh", "stale", "expired")}
+    p = merge_on_mule(
+        spec, mule_id=MULE, mission_round=ROUND, submissions=subs,
+        base_version=6, age_caps=caps,
+    )
+    assert p.contributing_devices == (DeviceID("fresh"), DeviceID("stale"))
+    assert p.excluded_devices == (DeviceID("expired"),)
+    assert p.device_ages == (0, 1)
+    # raw weights 10 and 10*1/2 -> normalised 2/3 and 1/3
+    assert p.device_weights == pytest.approx((2 / 3, 1 / 3))
+    assert p.weight_mass == pytest.approx(15.0)
+    expected = [
+        (2 / 3) * a.astype(np.float64) + (1 / 3) * b.astype(np.float64)
+        for a, b in zip(subs[0].delta_theta, subs[1].delta_theta)
+    ]
+    for got, exp in zip(p.weights, expected):
+        np.testing.assert_allclose(got, exp, rtol=1e-6, atol=1e-7)
+
+
+def test_all_updates_past_the_cutoff_raise_instead_of_dividing_by_zero():
+    theta_v = _theta()
+    spec = AggregationSpec(rule=AGG_CUTOFF, a_max=0)
+    subs = [_delta_sub("a", _local(theta_v, 1), theta_v, 10, basis=1)]
+    with pytest.raises(PartialFedAvgError, match="past their age cutoff"):
+        merge_on_mule(
+            spec, mule_id=MULE, mission_round=ROUND, submissions=subs,
+            base_version=2, age_caps={DeviceID("a"): 0},
+        )
+
+
+def test_delta_merge_refuses_full_weights_and_zero_mass():
+    th = _theta()
+    with pytest.raises(PartialFedAvgError, match="delta merge needs"):
+        partial_fedavg_delta(MULE, ROUND, [_sub("a", th, 3)], weights=[1.0], normalizer=1.0)
+    sub = _sub("a", th, 3, form=UPDATE_FORM_DELTA)
+    with pytest.raises(PartialFedAvgError, match="sum to"):
+        partial_fedavg_delta(MULE, ROUND, [sub], weights=[0.0], normalizer=0.0)
+
+
+def test_fedbuff_partial_averages_over_the_update_count():
+    theta_v = _theta()
+    spec = AggregationSpec(rule=AGG_FEDBUFF)
+    subs = [
+        _delta_sub("a", _local(theta_v, 1), theta_v, 10, basis=4),   # s = 1
+        _delta_sub("b", _local(theta_v, 2), theta_v, 90, basis=1),   # age 3, s = 1/2
+    ]
+    p = merge_on_mule(spec, mule_id=MULE, mission_round=ROUND, submissions=subs, base_version=4)
+    assert p.weight_mass == 2.0 and p.n_updates == 2
+    expected = [
+        (a.astype(np.float64) + 0.5 * b.astype(np.float64)) / 2.0
+        for a, b in zip(subs[0].delta_theta, subs[1].delta_theta)
+    ]
+    for got, exp in zip(p.weights, expected):
+        np.testing.assert_allclose(got, exp, rtol=1e-6, atol=1e-7)
+
+
+# --------------------------------------------------------------------------- #
+# Cluster-side fold
+# --------------------------------------------------------------------------- #
+
+def _delta_partial(theta_v, spec, *, base, seed, n=10):
+    return merge_on_mule(
+        spec, mule_id=MuleID(f"m{seed}"), mission_round=ROUND,
+        submissions=[_delta_sub(f"x{seed}", _local(theta_v, seed), theta_v, n, basis=base)],
+        base_version=base,
+    )
+
+
+def test_server_rate_mixes_the_update_in():
+    theta = _theta(11)
+    spec = AggregationSpec(rule=AGG_CUTOFF)
+    p = _delta_partial(theta, spec, base=0, seed=1)
+    half = apply_weighted_deltas(theta, [p], [1.0], server_lr=0.5)
+    for t, d, h in zip(theta, p.weights, half):
+        np.testing.assert_allclose(h, t + 0.5 * d, rtol=1e-6, atol=1e-7)
+
+
+def test_zero_weight_partials_are_ignored_and_all_zero_raises():
+    theta = _theta(12)
+    spec = AggregationSpec(rule=AGG_CUTOFF)
+    p1 = _delta_partial(theta, spec, base=0, seed=1)
+    p2 = _delta_partial(theta, spec, base=0, seed=2)
+    only_p1 = apply_weighted_deltas(theta, [p1, p2], [3.0, 0.0])
+    ref = apply_weighted_deltas(theta, [p1], [3.0])
+    for a, b in zip(only_p1, ref):
+        assert np.array_equal(a, b)
+    with pytest.raises(FedAvgError, match="no partial carries weight"):
+        apply_weighted_deltas(theta, [p1, p2], [0.0, 0.0])
+
+
+def test_partial_staleness_and_cluster_cutoff():
+    theta = _theta()
+    spec = AggregationSpec(rule=AGG_CUTOFF, a_max=1)
+    p = _delta_partial(theta, spec, base=3, seed=1)
+    assert partial_age(p, 3) == 0
+    assert partial_age(p, 5) == 2
+    assert partial_staleness(spec, p, 4) == pytest.approx(0.5)
+    assert partial_staleness(spec, p, 5) == 0.0          # past a_max at the cluster
+    decay = AggregationSpec(rule=AGG_ASYNCHFL, decay=1.0)
+    assert partial_staleness(decay, p, 5) == pytest.approx(math.exp(-2.0))
+
+
+def test_check_partial_form_refuses_a_rule_mismatch():
+    theta = _theta()
+    p = _delta_partial(theta, AggregationSpec(rule=AGG_CUTOFF), base=0, seed=1)
+    check_partial_form(AggregationSpec(rule=AGG_CUTOFF), p)
+    with pytest.raises(AggregationConfigError, match="Set the same rule"):
+        check_partial_form(AggregationSpec(), p)
+    with pytest.raises(AggregationConfigError, match="Set the same rule"):
+        check_partial_form(AggregationSpec(rule=AGG_ASYNCHFL), p)
+
+
+def test_fedbuff_buffer_applies_the_mean_once_k_updates_arrive():
+    theta = _theta(21)
+    spec = AggregationSpec(rule=AGG_FEDBUFF, server_lr=1.0)
+    buf = FedBuffBuffer(spec=spec, k=3)
+    p1 = _delta_partial(theta, spec, base=0, seed=1)
+    p2 = _delta_partial(theta, spec, base=0, seed=2)
+    p3 = _delta_partial(theta, spec, base=0, seed=3)
+    buf.add(p1, cluster_version=0)
+    buf.add(p2, cluster_version=0)
+    assert buf.count == 2 and not buf.ready
+    buf.add(p3, cluster_version=0)
+    assert buf.ready
+    out = buf.apply(theta)
+    for i, t in enumerate(theta):
+        mean = (p1.weights[i].astype(np.float64) + p2.weights[i] + p3.weights[i]) / 3.0
+        np.testing.assert_allclose(out[i], t + mean, rtol=1e-6, atol=1e-7)
+    assert buf.count == 0 and not buf.ready

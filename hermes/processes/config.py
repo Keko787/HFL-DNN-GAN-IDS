@@ -94,6 +94,12 @@ class ClusterConfig:
     # lower-loss schedule than the fixed channel (H1/H2), so L1's effect is
     # a real, seed-consistent reduction in dropped rounds.
     backhaul_loss_schedule: Optional[List[float]] = None
+    # FeRRy Phase 1 — the L3 merge rule (hermes/mission/aggregation_rules.py)
+    # and its parameters (AggregationSpec fields other than ``rule``).
+    # "agg:plain" is the num_examples mean every recorded run used. The mule
+    # must run the same rule; the driver sets both from one flag.
+    aggregation: str = "agg:plain"
+    aggregation_params: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -156,6 +162,22 @@ class MuleConfig:
     mission_window_target: float = 0.8
     mission_window_gain: float = 2.0
     mission_window_max_scale: float = 4.0
+    # FeRRy Phase 1 — the merge rule, which must match the cluster's (it
+    # decides how the mule merges and which form devices answer in), and
+    # whether Pass 2 is walked against ``mission_budget_s``. Off, Pass 2
+    # delivers to the whole slice, as in every recorded run.
+    aggregation: str = "agg:plain"
+    aggregation_params: dict = field(default_factory=dict)
+    pass_2_budget: bool = False
+    # FeRRy Phase 1 — the deadline law (DeadlineLaw in
+    # hermes/scheduler/stages/s3_deadline.py). "additive" is the recorded
+    # −5 s / +10 s law; "multiplicative" scales and clamps the window, splits
+    # PARTIAL from TIMEOUT and makes cluster overrides one-shot. Parameters
+    # are DeadlineLaw fields. ``miss_priority`` makes S3b admit contacts by
+    # their members' miss streak before their deadline.
+    deadline_law: str = "additive"
+    deadline_params: dict = field(default_factory=dict)
+    miss_priority: bool = False
 
 
 @dataclass
@@ -184,6 +206,9 @@ class DeviceConfig:
     # (the EX-4.0/4.1 behaviour). Set by the driver from a seeded
     # Uniform(0.15, 1.0) reliability x distance falloff.
     contact_reliability: Optional[float] = None
+    # FeRRy Phase 1 — FedProx proximal weight ρ: local training minimises
+    # loss + (ρ/2)·‖θ − θ_received‖². 0 keeps the plain Keras fit.
+    fedprox_rho: float = 0.0
 
 
 class TopologyValidationError(ValueError):

@@ -132,6 +132,21 @@ def initial_theta(input_dim: int = INPUT_DIM, *, seed: int = 0) -> Weights:
 # Local training + evaluation
 # --------------------------------------------------------------------------- #
 
+def proximal_term(variables, anchors, rho: float):
+    """FedProx's (ρ/2)·Σ‖w − w₀‖² over paired variables and anchors.
+
+    Its gradient with respect to each w is ρ·(w − w₀), which pulls local
+    training back toward the model the device received (Li et al., 2020).
+    """
+    import tensorflow as tf  # lazy
+
+    total = tf.add_n([
+        tf.reduce_sum(tf.square(tf.convert_to_tensor(w) - tf.convert_to_tensor(a)))
+        for w, a in zip(variables, anchors)
+    ])
+    return 0.5 * float(rho) * total
+
+
 def make_local_train_fn(
     X: np.ndarray,
     y: np.ndarray,
@@ -142,6 +157,7 @@ def make_local_train_fn(
     l2_alpha: float = 1e-3,
     learning_rate: float = 1e-3,
     seed: int = 0,
+    fedprox_rho: float = 0.0,
 ) -> LocalTrainFn:
     """Build a ``local_train(theta, synth)`` callable over one device shard.
 
@@ -150,6 +166,12 @@ def make_local_train_fn(
     runtime. ``synth_batch`` (the GAN synthetic augmentation) is accepted
     for signature compatibility with :class:`hermes.mission.ClientMission`
     but ignored in EX-4.1 (the GAN is separate, revision-scope work).
+
+    ``fedprox_rho`` > 0 (FeRRy Phase 1) trains on the binary cross-entropy
+    plus the model's regularisation losses plus FedProx's proximal term
+    (ρ/2)·‖θ − θ_received‖² over the trainable weights, in a custom loop with
+    the same optimiser, epochs and batch size. ρ = 0 keeps ``model.fit``
+    exactly as every recorded run used it.
     """
     import tensorflow as tf  # lazy
 
@@ -162,10 +184,53 @@ def make_local_train_fn(
     Xf = np.asarray(X, dtype=np.float32)
     yf = np.asarray(y, dtype=np.float32).reshape(-1)
     n = int(len(yf))
+    rho = float(fedprox_rho)
+    if rho < 0.0:
+        raise ValueError(f"fedprox_rho must be >= 0, got {rho}")
+
+    prox_fit = None
+    if rho > 0.0:
+        anchors = [
+            tf.Variable(np.asarray(v), trainable=False)
+            for v in model.trainable_variables
+        ]
+        bce = tf.keras.losses.BinaryCrossentropy()
+        order_rng = np.random.default_rng(int(seed))
+
+        @tf.function(input_signature=[
+            tf.TensorSpec([None, dim], tf.float32),
+            tf.TensorSpec([None, 1], tf.float32),
+        ])
+        def _prox_step(xb, yb):
+            with tf.GradientTape() as tape:
+                pred = model(xb, training=True)
+                loss = bce(yb, pred)
+                if model.losses:
+                    loss = loss + tf.add_n(model.losses)
+                loss = loss + proximal_term(model.trainable_variables, anchors, rho)
+            grads = tape.gradient(loss, model.trainable_variables)
+            model.optimizer.apply_gradients(zip(grads, model.trainable_variables))
+            return loss
+
+        def prox_fit() -> None:
+            # The anchor is the model as received this round.
+            for a, v in zip(anchors, model.trainable_variables):
+                a.assign(np.asarray(v))
+            bs = min(batch_size, max(1, n))
+            for _ in range(int(epochs)):
+                idx = order_rng.permutation(n)
+                for start in range(0, n, bs):
+                    sel = idx[start:start + bs]
+                    _prox_step(
+                        tf.constant(Xf[sel]),
+                        tf.constant(yf[sel].reshape(-1, 1)),
+                    )
 
     def _local_train(theta: Weights, synth_batch) -> "LocalTrainResult":
         model.set_weights(theta)
-        if n > 0:
+        if n > 0 and prox_fit is not None:
+            prox_fit()
+        elif n > 0:
             model.fit(
                 Xf, yf,
                 epochs=epochs,
