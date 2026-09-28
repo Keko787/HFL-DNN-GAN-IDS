@@ -92,6 +92,35 @@ def _build_target_selector(cfg: MuleConfig):
     return TargetSelectorRL(epsilon=0.0, rng_seed=0)
 
 
+def _pass_1_plan_payload(pass_1_queue) -> List[dict]:
+    """The committed Pass-1 plan for ``mission_completed``: each contact's
+    devices and the deadline it was admitted under (its tightest member's)."""
+    return [
+        {"devices": [str(d) for d in wp.devices], "deadline_ts": float(wp.deadline_ts)}
+        for wp in pass_1_queue
+    ]
+
+
+def _pass_1_outcomes_payload(result) -> Optional[List[dict]]:
+    """Every Pass-1 session the mule recorded: device, outcome, contact time.
+
+    An empty mission has no round report (nothing reached the mule), so it
+    records an empty list rather than None: the trace scorer reads None as
+    "a trace from before these fields existed".
+    """
+    report = getattr(result, "report", None)
+    if report is None:
+        return [] if getattr(result, "empty", False) else None
+    return [
+        {
+            "device": str(line.device_id),
+            "outcome": line.outcome.value,
+            "contact_ts": float(line.contact_ts),
+        }
+        for line in report.lines
+    ]
+
+
 class MuleService:
     """Lifecycle holder for a mule-process service loop."""
 
@@ -321,6 +350,11 @@ class MuleService:
                         if result.delivery_report is not None
                         else None
                     ),
+                    # Trace-scorer fields (additive, optional): the plan with
+                    # its deadlines and every session's outcome, so the
+                    # deadline-miss rate can be scored from the trace alone.
+                    pass_1_plan=_pass_1_plan_payload(result.pass_1_queue),
+                    pass_1_outcomes=_pass_1_outcomes_payload(result),
                 )
             except MuleSupervisorError as e:
                 log.error("mule %s: supervisor error: %s", self.cfg.mule_id, e)

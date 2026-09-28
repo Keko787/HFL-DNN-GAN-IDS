@@ -196,7 +196,14 @@ class DeviceService:
                         "device %s: served, outcome=%s",
                         self.cfg.device_id, outcome.value,
                     )
-                    self.events.emit("device_served", outcome=outcome.value)
+                    # The pass and round let a trace tell a Pass-1 collect from
+                    # a Pass-2 delivery; both land here. None when no push came.
+                    self.events.emit(
+                        "device_served",
+                        outcome=outcome.value,
+                        mission_round=getattr(self.client, "last_push_round", None),
+                        pass_kind=getattr(self.client, "last_push_pass", None),
+                    )
                     self.metrics.increment("serves_completed")
                     self.metrics.increment(f"serves_outcome_{outcome.value}")
             except Exception as e:

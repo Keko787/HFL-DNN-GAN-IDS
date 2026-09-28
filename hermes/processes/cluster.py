@@ -72,6 +72,19 @@ def _spectrum_sig_from_raw(raw: Optional[dict]) -> SpectrumSig:
     return SpectrumSig(bands=bands, last_good_snr_per_band=snrs)
 
 
+def _up_mission_round(up) -> Optional[int]:
+    """The mission round an UP bundle closes, or None if it carries none.
+
+    ``UpBundle`` has no ``mission_round`` of its own; the round lives on its
+    partial aggregate. Reading ``up.mission_round`` returned None, so the
+    per-mission backhaul schedule was indexed at mission 1 for every mission
+    and ``backhaul_upload_lost`` events carried no round.
+    """
+    pa = getattr(up, "partial_aggregate", None)
+    mission_round = getattr(pa, "mission_round", None)
+    return None if mission_round is None else int(mission_round)
+
+
 class ClusterService:
     """Lifecycle holder for a cluster-process service loop."""
 
@@ -311,7 +324,8 @@ class ClusterService:
             # last iteration, regardless of whether an UP arrived.
             self._dispatch_to_new_mules(bootstrapped)
 
-            if up is not None and self._backhaul_dropped(getattr(up, "mission_round", None)):
+            up_round = _up_mission_round(up) if up is not None else None
+            if up is not None and self._backhaul_dropped(up_round):
                 # EX-4.2: model long-range mule->BS backhaul upload loss.
                 # Drop this mule's aggregate (the round does not close) but
                 # still send DOWN with the current θ so the mule can finish
@@ -320,7 +334,7 @@ class ClusterService:
                 self.events.emit(
                     "backhaul_upload_lost",
                     mule_id=str(up.mule_id),
-                    mission_round=getattr(up, "mission_round", None),
+                    mission_round=up_round,
                 )
                 self.metrics.increment("backhaul_uploads_lost")
                 try:
@@ -335,7 +349,7 @@ class ClusterService:
                     self.events.emit(
                         "up_bundle_ingested",
                         mule_id=str(up.mule_id),
-                        mission_round=getattr(up, "mission_round", None),
+                        mission_round=up_round,
                     )
                     self.metrics.increment("up_bundles_ingested")
                     merged = self.cluster.aggregate_pending()

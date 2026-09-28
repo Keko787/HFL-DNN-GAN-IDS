@@ -195,3 +195,41 @@ def test_local_train_exception_yields_partial():
     outcome = cm.serve_once()
     t.join(timeout=2.0)
     assert outcome is MissionOutcome.PARTIAL
+
+
+def test_serve_once_records_which_push_it_answered():
+    """The device process labels ``device_served`` with the push's round and
+    pass, so a trace can tell a Pass-1 collect from a Pass-2 delivery."""
+    rf = LoopbackRFLink()
+    cm = ClientMission(
+        device_id=_dev("d1"),
+        rf=rf,
+        local_train=_fake_local_train,
+        solicit_timeout_s=1.0,
+        disc_push_timeout_s=1.0,
+    )
+    cm.set_state(FLState.FL_OPEN)
+
+    def mule_side():
+        rf.broadcast_open_solicit(
+            FLOpenSolicit(mule_id=_mule(), mission_round=3, issued_at=time.time())
+        )
+        rf.recv_ready_adv(timeout=1.0)
+        rf.push_disc(_dev("d1"), DiscPush(
+            mule_id=_mule(),
+            mission_round=3,
+            theta_disc=[np.zeros((3,), dtype=np.float32)],
+            synth_batch=[],
+        ))
+        rf.recv_gradient(_dev("d1"), timeout=1.0)
+
+    t = threading.Thread(target=mule_side)
+    t.start()
+    assert cm.serve_once() is MissionOutcome.CLEAN
+    t.join(timeout=2.0)
+    assert (cm.last_push_round, cm.last_push_pass) == (3, "collect")
+
+    # The next call gets no solicit, so no push: the labels reset.
+    cm.solicit_timeout_s = 0.05
+    assert cm.serve_once() is None
+    assert (cm.last_push_round, cm.last_push_pass) == (None, None)

@@ -147,6 +147,11 @@ class ClientMission:
         # Oort's |B_i|*sqrt(mean Loss^2) cannot be recovered from it.
         self._last_loss: Optional[float] = None
         self._last_num_examples: int = 0
+        # Which push the most recent ``serve_once`` answered — its mission
+        # round and pass ("collect" / "deliver") — or None when no push
+        # arrived. Read by the device process to label ``device_served``.
+        self.last_push_round: Optional[int] = None
+        self.last_push_pass: Optional[str] = None
 
         # Sprint 1.5 — offline-training state. ``train_offline()`` runs
         # local training against ``_theta_basis`` (the θ most recently
@@ -231,6 +236,9 @@ class ClientMission:
         Returns the outcome tag, or ``None`` if the solicit timed out
         or the device was not FL_OPEN.
         """
+        self.last_push_round = None
+        self.last_push_pass = None
+
         # Wait for a mule to ping us
         try:
             solicit = self.rf.recv_open_solicit(
@@ -260,6 +268,9 @@ class ClientMission:
                 "device=%s: disc push timeout mule=%s", self.device_id, solicit.mule_id
             )
             return MissionOutcome.TIMEOUT
+
+        self.last_push_round = push.mission_round
+        self.last_push_pass = push.pass_kind.value
 
         if push.pass_kind is MissionPass.DELIVER:
             return self._handle_delivery_push(push)

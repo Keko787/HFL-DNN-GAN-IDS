@@ -51,13 +51,17 @@ def _wp(x: float, *devs: str) -> ContactWaypoint:
     )
 
 
-def _st(did: str, *, loss=None, n=0, served_round=0, contact_ts=NOW - 10):
+def _st(did: str, *, loss=None, n=0, served_round=0, contact_ts=NOW - 10,
+        clean_round=None):
+    """``served_round`` is the last round with any outcome; ``clean_round``
+    (by default the same round) is the last successful one, Oort's L(i)."""
     return DeviceSchedulerState(
         device_id=DeviceID(did),
         last_loss=loss,
         last_num_examples=n,
         last_served_round=served_round,
         last_contact_ts=contact_ts,
+        last_clean_round=served_round if clean_round is None else clean_round,
     )
 
 
@@ -234,7 +238,8 @@ def test_repeated_FAILED_contacts_do_not_trip_the_guard():
     """Contacted twice, both sessions failed -> no loss, entirely legitimate.
     Keying the guard on contact count instead of successful participation
     killed healthy trials mid-sweep."""
-    st_a = _st("a", loss=None, n=0, served_round=3, contact_ts=NOW - 5)
+    st_a = _st("a", loss=None, n=0, served_round=3, contact_ts=NOW - 5,
+               clean_round=0)
     st_a.on_time_count = 0           # contacted repeatedly, never succeeded
     assert len(_rank([_wp(1.0, "a")], {DeviceID("a"): st_a})) == 1
 

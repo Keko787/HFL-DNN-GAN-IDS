@@ -28,9 +28,14 @@ rather than a re-ranking inside our own tiers, which would have flattered us.
 that of its **stalest member** — max, not mean. Minimising peak AoI is the
 objective the greedy rule is built for, and averaging would let one long-neglected
 device hide behind well-served neighbours. A device never served has
-``last_contact_ts == 0.0`` and is treated as **infinitely stale**, so unexplored
+``last_clean_ts == 0.0`` and is treated as **infinitely stale**, so unexplored
 devices sort first — the correct AoI reading, and it also matches the
 "explore the unvisited" behaviour of the utility-based selectors.
+
+Age runs from the last **successful** update (``last_clean_ts``), because AoI
+only resets when an update is delivered. ``last_contact_ts`` is the wrong clock:
+it also moves on failed sessions and on the synthetic TIMEOUT the mule feeds for
+a device it abandons, which made an abandoned device look freshly served.
 """
 
 from __future__ import annotations
@@ -66,14 +71,14 @@ def contact_age(
 
     Max rather than mean: the greedy rule targets peak AoI, and a mean would let
     one long-neglected device hide behind well-served neighbours in the same
-    cluster.
+    cluster. Each member's age runs from its last CLEAN outcome.
     """
     ages: List[float] = []
     for did in wp.devices:
         st = device_states.get(did)
-        if st is None or st.last_contact_ts <= 0.0:
+        if st is None or st.last_clean_ts <= 0.0:
             return NEVER_SERVED_AGE          # never served ⇒ maximally stale
-        ages.append(max(0.0, now - st.last_contact_ts))
+        ages.append(max(0.0, now - st.last_clean_ts))
     return max(ages) if ages else NEVER_SERVED_AGE
 
 

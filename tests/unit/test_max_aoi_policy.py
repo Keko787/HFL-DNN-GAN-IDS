@@ -40,9 +40,12 @@ def _wp(x: float, *devs: str) -> ContactWaypoint:
 
 
 def _states(**last_seen: float):
-    """device id -> state, with `last_contact_ts` set from kwargs."""
+    """device id -> state last served successfully at the given time, as a
+    CLEAN fold leaves it (``last_clean_ts`` is the age source)."""
     return {
-        DeviceID(d): DeviceSchedulerState(device_id=DeviceID(d), last_contact_ts=ts)
+        DeviceID(d): DeviceSchedulerState(
+            device_id=DeviceID(d), last_contact_ts=ts, last_clean_ts=ts,
+        )
         for d, ts in last_seen.items()
     }
 

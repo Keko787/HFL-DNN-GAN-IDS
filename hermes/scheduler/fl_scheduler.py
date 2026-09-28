@@ -103,7 +103,9 @@ class FLScheduler:
             None if mission_budget_s is None else float(mission_budget_s)
         )
         self._feasibility_model = feasibility_model
-        # Stamped when a mission slice opens; the budget is measured from it.
+        # The budget is measured from this stamp. The mule sets it at the start
+        # of every mission (start_mission); ingest_slice also sets it, for
+        # callers that drive the scheduler without a mule.
         self._mission_start_ts: Optional[float] = None
         self.last_feasibility: Optional[object] = None
         # S3c — mission-level window adaptation. ``None`` (the default) means no
@@ -154,6 +156,19 @@ class FLScheduler:
         except Exception:  # bookkeeping must never kill a mission
             log.warning("scheduler: mission-outcome record failed", exc_info=True)
 
+    def start_mission(self) -> float:
+        """Start the S3b budget clock for a new mission; returns the stamp.
+
+        Freeze Amendment 6. The mule calls this at the start of every mission,
+        before Pass 1 is planned. Stamping only in ``ingest_slice`` tied the
+        clock to DOWN bundles, which arrive mid-mission (the inter-pass dock)
+        and not at all after an empty mission (no updates, so no dock). The
+        next mission then planned against a stale stamp, and its budget shrank
+        by however long the previous missions took.
+        """
+        self._mission_start_ts = self._now()
+        return self._mission_start_ts
+
     # ------------------------------------------------------------------ #
     # Slow-phase ingest — dock
     # ------------------------------------------------------------------ #
@@ -175,7 +190,10 @@ class FLScheduler:
         * Folds the amendment (deadline overrides + registry_deltas).
         """
         self._current_slice = mission_slice
-        # A new slice starts a new mission; the S3b budget is measured from here.
+        # Fallback budget stamp for callers that drive the scheduler without a
+        # mule. The mule re-stamps at the start of every mission
+        # (start_mission): a DOWN also arrives mid-mission, at the inter-pass
+        # dock, and not at all after an empty mission.
         self._mission_start_ts = self._now()
         slice_ids = set(mission_slice.device_ids)
 

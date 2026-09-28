@@ -281,6 +281,12 @@ class MuleSupervisor:
                 "did you call wait_for_initial_dock first?"
             )
 
+        # Freeze Amendment 6 — each mission's budget runs from its own start.
+        # The scheduler also stamps on every DOWN bundle, but a DOWN arrives
+        # mid-mission (the inter-pass dock) and not at all after an empty
+        # mission, which left the next mission planning against a stale stamp.
+        self.scheduler.start_mission()
+
         if self.rf_range_m is not None:
             return self._run_two_pass_mission()
         return self._run_single_pass_mission()
