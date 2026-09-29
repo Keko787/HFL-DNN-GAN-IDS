@@ -8,9 +8,10 @@ either done or explicitly deferred with a reason. It exists so we pay the comput
 hold. The status of 2026-08-13 follows it, kept for the record.
 
 > **Why it re-opened.** Scheduler Freeze Amendments 5 and 6 fixed three defects that change what
-> recorded cells measured: the backhaul loss schedule was read only at mission 1, abandoning a device
-> reset its age for D1 and D2, and a mission's budget ran from the last DOWN bundle instead of its own
-> start. Amendment 7 opens the frozen surface for the FeRRy build. Freeze §6 says to re-open this
+> recorded cells measured: the backhaul loss schedule was read only at mission 1, any failed contact
+> (not only an abandoned device) reset its age for D1 and D2, and a mission's budget ran from the
+> last DOWN bundle instead of its own start. Amendment 7 opens the frozen surface for the FeRRy
+> build. Amendment 8 stops the in-flight re-check holding D1/D2 routes to our per-device deadline. Freeze §6 says to re-open this
 > checklist after any amendment.
 >
 > - **What the fixes mean for the results below.** The L1 confirmation ("L1 is now CONFIRMED")
@@ -24,7 +25,8 @@ hold. The status of 2026-08-13 follows it, kept for the record.
 > - **Re-runs owed, in order:** the L1 confirmation cells C1 (H3 vs H2, n = 40, jittery, 120 s) and
 >   C2; the 60 s SOTA cell (H1, D1, D2, n = 40); then each other cell in Amendment 6's list before
 >   it is cited.
-> - **Before any of them runs:** (1) run on commit `dc90f84` (Amendments 5 and 6) or a later one,
+> - **Before any of them runs:** (1) run on commit `c417554` (Amendment 8) or a later one (for the
+>   L1 cells, which have no D arm, `dc90f84` with Amendments 5 and 6 is enough),
 >   and record the commit with the rows; later commits add FeRRy switches whose defaults are pinned
 >   to this behaviour (the code behind the recorded rows is the tag `exp4-recorded`); (2) write to a fresh CSV
 >   path, because the runner skips (cell, arm, trial) keys already in a file and a reused file
@@ -112,8 +114,12 @@ The single most useful distinction here. Most open items do **not** need new tri
 | Change N, mule count, or `n_missions` | **Yes** | Different operating point |
 | Wire S2A/S2B readiness gating | **Yes** if it changes admission | Currently inert |
 | Backhaul-schedule index fix (Freeze Amendment 5) | **Yes**, every `--l1-channel` cell | Each arm's mission-1 loss probability was applied to every mission. Round closure can be re-scored from retained traces; the comparison itself cannot |
-| D1/D2 age from the last CLEAN (Amendment 5) | **Yes**, D1/D2 cells | Small in Exp 4 (only in-flight aborts fed the synthetic TIMEOUTs), but re-run the 60 s cell before citing it |
+| D1/D2 age from the last CLEAN (Amendment 5) | **Yes**, every D1/D2 cell | Not small: every failed Pass-1 session used to reset age, and in the `b60` D1 traces only 34 of 608 scheduled Pass-1 devices came back CLEAN, so D1's route changes in most missions *(corrected 2026-09-28; this row first said only in-flight aborts were affected)* |
 | Per-mission budget clock (Amendment 6) | **Yes**, every budgeted cell | No mission loses budget to an earlier one; the loss grew with the share of empty missions |
+| Budget-only in-flight check for D1/D2 (Amendment 8) | **Yes**, every budgeted D1/D2 cell | The re-check before each stop applied S3b's per-device deadline to the baselines' routes, and MAX-AoI routes the most overdue devices first. Already owed under Amendments 5 and 6 |
+| Plan diagnostics reset per plan (Amendment 8) | **No** in Exp 4 | Fires only for a plan with no eligible device, which the Exp 4 topologies do not produce |
+| Mule failures fail the trial; bootstrap and reconnects survive (Amendment 9) | **No** | Fault paths only; no recorded run failed, bootstrapped late or reconnected. A trial whose mule fails is now `status=error` instead of a truncated `ok` |
+| Run with several mules, D3–D5 or `agg:fedex` (FeRRy Phase 2) | **Yes** (new arms) | New cells; one mule and the recorded arms are unchanged |
 | Turn a FeRRy switch on (Amendment 7) | **Yes** (new arm) | Changes what the scheduler decides |
 | Simulated mission clock and seconds-axis channel for every arm (FeRRy Phase 3) | **Yes**, every arm | Build-plan decision D2: Exp 5 re-baselines H0–H3, D1 and D2 on the new clock |
 | — | — | — |
@@ -157,7 +163,7 @@ means **an existing CSV cannot be resumed** by a newer runner: it fails loudly w
 recorded with these mechanisms active must never be pooled with historical rows, so being forced
 into a new file is the correct outcome. Start a new CSV; do not override.
 
-### Amendments 4–7 (2026-08-17 to 2026-09-28) — and what they did cost
+### Amendments 4–9 (2026-08-17 to 2026-09-28) — and what they did cost
 
 The title of this section held through Amendment 4. It no longer holds: Amendments 5 and 6 are
 defect fixes, so their default *is* the corrected behaviour, and they change recorded results.
@@ -168,6 +174,8 @@ defect fixes, so their default *is* the corrected behaviour, and they change rec
 | 5e, Amendment 5 | Backhaul schedule indexed by mission; D1/D2 age from the last CLEAN | none (fixes) | Every `--l1-channel` cell; the D1/D2 cells |
 | 5f, Amendment 6 | Every mission's budget runs from its own start | `--mission-budget-s` | Every budgeted cell |
 | 5g, Amendment 7 | The FeRRy build opens the frozen surface | one switch per mechanism, legacy by default | None by itself |
+| 5h, Amendment 8 | D1/D2 budget-checked in flight; a plan's diagnostics reset per plan; the Phase 1 audit fixes (ferry mode only) | none for parts 1–2 (fixes) | Every budgeted D1/D2 cell (already owed) |
+| 5i, Amendment 9 | Mule failures fail the trial; bootstrap and reconnects survive; Phase 2 multi-mule runtime and arms D3–D5 behind switches | none for parts 1–4 (fault paths) | None |
 
 The caveat above now applies to the numbers as well as the files: `main` does not reproduce the
 recorded budgeted, `--l1-channel` or D1/D2 rows. Re-derive a recorded number from the tag

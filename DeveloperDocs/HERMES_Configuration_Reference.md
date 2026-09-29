@@ -240,16 +240,35 @@ reproduces the recorded runs. Code: [hermes/mission/aggregation_rules.py](../her
 
 | Symbol | Where | Default | Surface | Rationale |
 |---|---|---|---|---|
-| `aggregation` | `ClusterConfig`, `MuleConfig` | `agg:plain` | config field; `--aggregation` | `agg:plain` is the num_examples-weighted mean of full models that every recorded run used, on its original code path. `agg:cutoff` (FeRRy), `agg:asynchfl` and `agg:fedbuff` merge deltas weighted by age. `agg:fedex` (Phase 2, with arm D4) and `agg:seq` (needs in-session training) are refused by name. |
-| `server_lr` (η) | `aggregation_params` | 1.0 | config field; `--agg-server-lr` | The cluster adds η × the merged update to θ. At η = 1 with every basis current, the age-aware rules equal `agg:plain`, which the regression test pins. |
+| `aggregation` | `ClusterConfig`, `MuleConfig` | `agg:plain` | config field; `--aggregation` | `agg:plain` is the num_examples-weighted mean of full models that every recorded run used, on its original code path. `agg:cutoff` (FeRRy), `agg:asynchfl` and `agg:fedbuff` merge deltas weighted by age. `agg:fedex` (Phase 2, arm D4) is FedEx-Async's server step: the mule sends the sum of its updates and the cluster applies θ + η·Σ/N on each return, unweighted by n or age. `agg:seq` (needs in-session training) is refused by name. |
+| `server_lr` (η) | `aggregation_params` | 1.0 | config field; `--agg-server-lr` | The cluster adds η × the merged update to θ. At η = 1 with every basis current and `value = uniform`, the age-aware rules equal `agg:plain`, which the regression test pins. |
 | `hinge_a`, `hinge_b` | `aggregation_params` | 1.0, 0 | config field; `--agg-hinge-a/-b` | FedAsync's hinge s(a) = 1 for a ≤ b, else 1/(a·(a − b) + 1) (`agg:cutoff`). To be replaced by the constants the theory track derives. |
-| `a_max` | `aggregation_params` | None | config field; `--agg-a-max` | Fixed cutoff in cluster rounds; weight is exactly 0 past it. At the cluster it also cuts whole partials older than `a_max`. |
+| `a_max` | `aggregation_params` | None | config field; `--agg-a-max` | Fixed cutoff in cluster rounds; weight is exactly 0 past it. At the cluster it also cuts whole partials older than `a_max`; a fold whose every partial is cut takes no step, leaves the round open and sends every waiting mule its DOWN (event `cluster_merge_expired`). An update whose age is unknown (no basis version) counts as age 0 and is never cut. |
 | `period_s` (T) | `aggregation_params` | None | config field; `--agg-period-s` | Mission period for the per-device cutoff of decision D5 (below). |
-| `decay` (λ) | `aggregation_params` | 0.5 | config field; `--agg-decay` | `agg:asynchfl`: s(a) = exp(−λ·a), at the mule and again at the cluster. |
-| `value` | `aggregation_params` | `uniform` | config field; `--agg-value` | v_i in w_i = n_i·v_i·s(a_i): 1, or the update's loss over the mean loss of the merge (`loss`), which re-weights without rescaling. |
-| `buffer_k` (K) | `aggregation_params` | registered devices | config field; `--agg-buffer-k` | `agg:fedbuff`: updates buffered per server step. While the buffer fills the round stays open and θ unchanged; the service still sends the mule its DOWN. |
+| `decay` (λ) | `aggregation_params` | 0.5 | config field; `--agg-decay` | `agg:asynchfl`: s(a) = exp(−λ·a) on each device's age at the mule, and on each partial's age at the cluster. |
+| `value` | `aggregation_params` | `uniform` | config field; `--agg-value` | v_i in w_i = n_i·v_i·s(a_i): 1, or the update's raw training loss (`loss`), taken over the updates admitted past the cutoff; an update with no loss gets the mean of the known ones. Raw rather than divided by a mean, so partials from several mules combine exactly as one merge over all their devices. |
+| `buffer_k` (K) | `aggregation_params` | the slice size of the mule whose partial first opens the buffer (all registered devices if that slice is empty), fixed for the run | config field; `--agg-buffer-k` | `agg:fedbuff`: updates buffered per server step. K is FedBuff's own quorum, so `min_participation` does not gate it. While the buffer fills the round stays open and θ unchanged; the service still sends the mule its DOWN (event `cluster_merge_deferred`). A buffer still filling when the trial ends never reaches θ, and the mean is not n-weighted, so FedBuff at the default K does not tie with `agg:plain` even with every basis current; run it with K = 1 for that check. |
+| `fedex_n` (N) | `aggregation_params` | the cluster's registered devices | config field | `agg:fedex`: N in x ← x + (1/N)·Σ_i Δθ_i, the total number of clients (FedEx-Async, TMC 2025). Faithful at η = 1 and `min_participation` = 1, so every return is its own step. |
 | `fedprox_rho` (ρ) | `DeviceConfig` | 0.0 | config field; `--fedprox-rho` | Local loss + (ρ/2)·‖θ − θ_received‖² over trainable weights, in a custom loop. 0 keeps the plain Keras `fit`. |
-| `pass_2_budget` | `MuleConfig` | False | config field; `--pass-2-budget` | Walks Pass 2 against `mission_budget_s` as a second sortie with the full budget, priced with the S3b cost model from the mule's tracked pose (its last Pass-1 stop until Phase 3 returns the pose to the dock), skipping rather than stopping at a contact that does not fit. Skipped devices get a `SKIPPED` delivery line and keep their older basis; without it every basis is current and ages never spread. Needs `mission_budget_s`. |
+| `pass_2_budget` | `MuleConfig` | False | config field; `--pass-2-budget` | Walks Pass 2 against `mission_budget_s` as a second sortie with the full budget, priced with the S3b cost model from the mule's tracked pose (its last Pass-1 stop until Phase 3 returns the pose to the dock), skipping rather than stopping at a contact that does not fit. Skipped devices get a `SKIPPED` delivery line and keep their older basis; without it every basis is current and ages never spread. With it on, the Pass-1 push also asks each device to train ahead on the basis it adopts, on a background thread, so a device collected in Pass 1 and skipped in Pass 2 ships its next update one round old instead of training in session on the new θ. Needs `mission_budget_s`. |
+
+**How staleness enters the step.** The mule merges its admitted updates as
+
+    Δ_m = Σ_i n_i·v_i·s(a_i)·Δθ_i / M_m,   M_m = Σ_i n_i·v_i   (admitted updates only)
+
+and the cluster, holding θ at version V, folds the live partials (those with
+s(V − v_m) > 0) as
+
+    θ ← θ + η · Σ_m M_m·s(V − v_m)·Δ_m / Σ_m M_m
+
+The normaliser M_m is staleness-free, so staleness shrinks the step instead of
+only redistributing weight: a mission whose updates are all one round old moves
+θ by s(1) × the mean update, and a single partial folds as θ + η·s(V − v_m)·Δ_m,
+the FedAsync / Async-HFL mixing form. With every age 0, `value = uniform` and
+η = 1 both reduce to the plain mean. `pass_1_merge.weights` in the trace are
+w_i / M_m, which sum to the mass-weighted mean staleness: 1 only when no update
+is discounted (s(a_i) = 1 for every i, e.g. every age ≤ `hinge_b` under
+`agg:cutoff`). `agg:plain` records no shares, so its `weights` list is empty.
 
 **Age and the cutoff (decision D5).** Model versions are cluster rounds: the
 DOWN bundle's `mission_slice.issued_round` is the version of its θ. An update's
@@ -260,7 +279,10 @@ trained from, so ages are global and comparable across mules. Under
     a_max_j = ⌊ Φ_j · s / T ⌋,   Φ_j = max(MIN_DEADLINE_FULFILMENT_S, deadline_fulfilment_s_j)
 
 with s the S3c window scale (1.0 unless S3c is on) and T = `period_s`. If
-`a_max` is also set, the smaller cap wins. Φ_j and T must be on the same clock.
+`a_max` is also set, the smaller cap wins. Φ_j and s are the values the device
+was planned under: the mule computes the caps once per mission, right after the
+Pass-1 plan, before any session folds its outcome into Φ_j (a CLEAN would
+tighten it) or S3c moves its scale. Φ_j and T must be on the same clock.
 On the Exp 4 harness that is the wall clock, where one mission cycle takes
 about 9–10 s and Φ starts at 60 s, so a period near the measured cycle gives a
 cutoff of about 6 rounds and does not bind in a 4-mission trial; report the T
@@ -276,17 +298,18 @@ and `--miss-priority`. The defaults are the recorded behaviour. Code:
 
 | Symbol | Where | Default | Surface | Rationale |
 |---|---|---|---|---|
-| `deadline_law` | `MuleConfig` | `additive` | config field; `--deadline-law` | `additive` is the recorded law (§7): −5 s on time, +10 s on any miss, 5 s floor, no ceiling, sticky cluster overrides. `multiplicative` is Φ ← clamp(β·Φ). |
+| `deadline_law` | `MuleConfig` | `additive` | config field; `--deadline-law` | `additive` is the recorded law (§7): −5 s on time, +10 s on any miss, 5 s floor, no ceiling, sticky cluster overrides. `multiplicative` is Φ ← clamp(β·clamp(Φ)): the step applies to the clamped window the deadline uses, so a stored Φ outside the clamps still moves on its first outcome. |
 | `beta_on` | `deadline_params` | 0.8 | config field; `--deadline-beta-on` | Factor after an on-time delivery (< 1: tighten). |
-| `beta_partial` | `deadline_params` | 1.25 | config field; `--deadline-beta-partial` | Factor after a PARTIAL: the device answered but the exchange failed, so it was reachable and relaxes less than after a TIMEOUT. |
-| `beta_timeout` | `deadline_params` | 1.5 | config field; `--deadline-beta-timeout` | Factor after a TIMEOUT, including the synthetic ones for devices S3b dropped or an abort abandoned. |
+| `beta_partial` | `deadline_params` | 1.25 | config field; `--deadline-beta-partial` | Factor after a miss by a device that answered (its advert arrived) — a PARTIAL, or a TIMEOUT after the advert such as Exp 4's lost uplink. The device was reachable, so it relaxes less. The mule marks this with `RoundCloseDelta.answered`. |
+| `beta_timeout` | `deadline_params` | 1.5 | config field; `--deadline-beta-timeout` | Factor after a miss by a device that never answered, including the synthetic TIMEOUTs for devices S3b dropped or an abort abandoned (marked `synthetic`). |
 | `phi_min`, `phi_max` | `deadline_params` | 5 s, 300 s | config field; `--deadline-phi-min/-max` | Clamps. The ceiling is what the additive law lacks. |
 | `expire_overrides` | `deadline_params` | follows the law (on for multiplicative) | config field | A cluster deadline override stops applying once its time passes or the device's next outcome arrives. Under the recorded law it is never cleared (SEC26_Code_Audit.md). |
 | `miss_priority` | `MuleConfig` | False | config field; `--miss-priority` | S3b's admission walk orders contacts by their members' consecutive misses (`DeviceSchedulerState.miss_streak`, reset by a CLEAN) before their deadline, so the wider window a miss earns no longer sends the device to the back of the queue. The visit order of what is admitted is unchanged. |
 
 **Why this form, and the defaults.** log Φ moves by log β per outcome, so a
 device on time with probability p (misses being timeouts) drifts by
-p·log β_on + (1 − p)·log β_timeout per contact. That is zero at
+p·log β_on + (1 − p)·log β_timeout per contact (β_partial replaces β_timeout
+for the misses of a device that answered). That is zero at
 p* = log β_timeout / (log β_timeout − log β_on) = 0.645 with the defaults,
 close to the additive law's break-even of 2/3. Devices more reliable than p*
 tighten toward Φ_min, less reliable ones relax toward Φ_max, and Φ is bounded
@@ -303,6 +326,47 @@ the age cap (FeRRy Phase 4, which exempts capped devices from the overdue check)
 brings it back. A device never on time has deadline now + Φ and is overdue only
 if the flight alone exceeds Φ. At Exp 4's time scales (trials of about a minute)
 the Φ_max case does not arise.
+
+---
+
+## 16. Several mules and the Phase 2 baselines (FeRRy Phase 2)
+
+Every default reproduces the one-mule topology every recorded run used, byte for
+byte (Freeze §5i). The Exp 4 driver sets these from its flags; `N` stays the
+TOTAL device count, split across the mules. Code:
+[experiments/exp4/topology_builder.py](../experiments/exp4/topology_builder.py),
+[hermes/processes/cluster.py](../hermes/processes/cluster.py),
+[hermes/mule/client_cluster.py](../hermes/mule/client_cluster.py).
+
+| Symbol | Where | Default | Surface | Rationale |
+|---|---|---|---|---|
+| `n_mules` (K) | driver, topology builder | 1 | `--n-mules` | At K > 1 the mules are `exp4-mule-<k>`, the seeded devices are split into K contiguous angular sectors around the dock (sizes within one) so each mule tours its own area, every mule starts at the dock, and backhaul loss draws from one stream per mule so paired seeds hold whatever the upload order. Arm D4 replaces the sectors with its CARP assignment. |
+| `min_participation` | `ClusterConfig` | 1 | `--min-participation` | Partials per cluster merge. With several mules it must be 1 (asynchronous: each return is a merge; needs an age-aware rule or `agg:fedex`) or K (synchronous rounds). `agg:plain` at K > 1 needs K: at 1 each merge would overwrite θ with one mule's mean. A value strictly between is refused because the last partial of the run can be stranded; FedBuff is exempt (K is its quorum). Under a quorum above 1 a lost backhaul upload holds its mule's place with an empty partial, so the mules stay in step. |
+| `dock_on_empty` | `MuleConfig` | off; on at K > 1 | `--dock-on-empty` | An empty mission still docks, uploading an empty partial (with its round report and Pass-2 ledger) that counts toward the quorum and adds nothing to θ; it takes the current θ and skips Pass 2. Without it a quorum of K deadlocks as soon as one mule collects nothing. |
+| `down_wait_s` | `MuleConfig` | None (one 10 s wait whose expiry ends the loop); the trial budget at K > 1 | `--down-wait-s` | How long a docked mule waits for its DOWN. Set, a timeout is survived: `dock_down_timeout`, restage the Pass-1 θ and version, skip Pass 2, fly the next mission. Queued stale DOWNs are also drained before each upload. |
+| `contact_policy` | `MuleConfig` | None (our pipeline) | arm | `max_aoi` (D1), `oort` (D2), `whittle` (D3), `fedex` (D4), `fedcs` (D5): whole-scheduler baselines that replace S3, S3b and S3.5. The in-flight re-check is the budget only for D1–D3 and D5, and none for D4 (Freeze §5h). |
+| `whittle_variant` | `MuleConfig` | `expected` | `--whittle-variant` | D3: `expected` is Cui's eq. 48 index in expectation over the unobserved connection, ρ·I(x, 1) = ω[ρ·x(x−1)/2 + x]; `literal` is I(x, 1), which makes unreachable devices budget sinks. x = missions since the device's last merged update + 1; ρ = (answered + 1)/(attempts + 2), clamped to ≥ 0.05. |
+| `whittle_weights` | `MuleConfig` | `uniform` | `--whittle-weights` | D3's ω: 1, or `oort` (Oort's statistical utility normalised to mean 1; never-measured devices get the mean). `oort` needs `--real-model`. |
+| `fedcs_value` | `MuleConfig` | `unit` | `--fedcs-value` | D5 (FedCS Algorithm 3, degraded): the greedy key is value/total seconds; `unit` is the paper's argmin marginal time, `devices` weighs a contact by its device count. |
+| D4 assignment | driver | CARP at K > 1 | arm D4 | Computed once per trial with `carp_assign` (Gibbs sampling over single-client moves minimising Σ R_k·Δ_k², FedEx-Async Theorem 2): dock at the origin, 5 m/s, 1 s per client, seeded from the trial. Static because each device is wired to one mule. The tour is a closed 2-OPT tour from and back to the dock; it never skips. Run faithful with `--aggregation agg:fedex`, route-only with `agg:cutoff`. |
+
+**Trace fields at K > 1.** `mule_ready` records `down_wait_s` and
+`dock_on_empty`; `mission_empty` gains `docked` when the switch is on (true
+once the empty partial is uploaded, even if its DOWN then timed out, which
+`dock_down_timeout` records); the
+cluster emits `mule_bootstrapped`, and `backhaul_upload_lost.awaits_quorum`,
+`up_bundle_ingested.partial_refused`/`held_mission_round` and
+`cluster_round_closed.mule_id` where they apply. Rows gain the provenance
+columns `n_mules`, `min_participation`, `dock_params` and `policy_params`
+(blank at their one-mule defaults), so start a new CSV.
+
+**Scoring at K > 1.** Each device ages in its own mule's missions; Network AoU is
+sampled after every mission of any mule; Pass-2 coverage divides by the mule's
+own slice; an upload the cluster refused (`partial_refused`) or never folded
+is not credited, and a mission whose upload was lost under a quorum is counted
+once, as lost, though the fold lists the place held for it with the expired
+partials; `missions_to_τ` is the reaching mission's place among its own mule's
+missions (it counts mission periods, so it compares across fleet sizes).
 
 ---
 

@@ -211,15 +211,25 @@ records `aggregation`, `aggregation_params` (JSON), `fedprox_rho`, `pass_2_budge
 | `--aggregation` | `agg:plain` | The L3 merge rule, set on the cluster and the mule together. `agg:cutoff` (FeRRy: n·v·hinge(age), zero past the cutoff), `agg:asynchfl` (exp(−λ·age) at the mule and the cluster), `agg:fedbuff` (apply the mean after K updates). |
 | `--agg-server-lr`, `--agg-a-max`, `--agg-period-s`, `--agg-hinge-a`, `--agg-hinge-b`, `--agg-decay`, `--agg-value`, `--agg-buffer-k` | see §14 | The rule's parameters. `--agg-period-s` turns each device's deadline window into its cutoff (decision D5). |
 | `--fedprox-rho` | 0 | FedProx weight on every device. |
-| `--pass-2-budget` | off | Walk Pass 2 against `--mission-budget-s` (required); skipped devices keep their older basis, so ages spread. |
-| `--deadline-law` | `additive` | `multiplicative`: Φ ← clamp(β·Φ), β_on after an on-time delivery, β_partial ≤ β_timeout after a miss, one-shot cluster overrides. Tunables `--deadline-beta-on` (0.8), `--deadline-beta-partial` (1.25), `--deadline-beta-timeout` (1.5), `--deadline-phi-min` (5), `--deadline-phi-max` (300); see §15 of the configuration reference. |
+| `--pass-2-budget` | off | Walk Pass 2 against `--mission-budget-s` (required); skipped devices keep their older basis, so ages spread. Pass-1 devices train ahead on the basis they adopt, so one skipped in Pass 2 ships its next update one round old. |
+| `--deadline-law` | `additive` | `multiplicative`: Φ ← clamp(β·clamp(Φ)), β_on after an on-time delivery, β_partial after a miss by a device that answered, β_timeout after one by a device that did not, one-shot cluster overrides. Tunables `--deadline-beta-on` (0.8), `--deadline-beta-partial` (1.25), `--deadline-beta-timeout` (1.5), `--deadline-phi-min` (5), `--deadline-phi-max` (300); see §15 of the configuration reference. |
 | `--miss-priority` | off | S3b admits contacts by their members' consecutive misses before their deadline. Only acts with `--mission-budget-s`, since S3b does nothing without a budget. |
 
 Each `mission_completed` event now carries `pass_1_merge` (rule, base version, per-device age and
-weight, updates excluded past the cutoff), `pass_2_skipped`, and `deadline_state` (each device's
-window Φ in seconds and miss streak after the mission); each `pass_1_outcomes` entry carries the
-update's `basis_version` and `age`. Age-aware rules add `cluster_merge` events (and
-`cluster_merge_deferred` while FedBuff fills).
+weight share w_i / M_m under the age-aware rules, empty under `agg:plain`, updates excluded past
+the cutoff), `pass_1_merged_devices` and
+`pass_1_merged_updates` (the CLEAN devices whose update the merge used), `pass_2_skipped`, and
+`deadline_state` (each device's window Φ in seconds and miss streak after the mission); each
+`pass_1_plan` contact carries `device_deadlines` (each member's own deadline) and each
+`pass_1_outcomes` entry the update's `basis_version` and `age`. A mission whose every update was
+past its cutoff is reported empty but keeps its `pass_1_outcomes`. `mule_ready` records the
+settings the mule actually runs (rule and parameters, deadline law and parameters, miss priority,
+Pass-2 budget, mission budget) and `device_ready` the device's `fedprox_rho`. Age-aware rules add
+cluster events carrying the uploading `mission_round` and the `partials` involved:
+`cluster_merge` for a step, `cluster_merge_deferred` while FedBuff fills, and
+`cluster_merge_expired` when every pending partial was past `a_max` (no step, round left open).
+With `--keep-event-traces`, each kept trace also gets a `trial_status.json` (status, error,
+run time), which `experiments/analysis/traces_scorer.py` uses to leave failed trials out.
 
 A Study 5.1 cell (H1 routes, budgeted Pass 2 so ages spread; repeat per rule with the same seeds):
 
@@ -228,6 +238,30 @@ python -m experiments.exp4.runner_main --csv results/exp5_s51/cutoff_b60.csv --a
 ```
 
 ---
+
+### 2.5 Several mules and the Phase 2 baselines
+
+FeRRy Phase 2. Every default is the one-mule topology; see
+`HERMES_Configuration_Reference.md` §16 for each value and Freeze §5i for what changed.
+
+| Flag | Default | Meaning |
+|---|---|---|
+| `--arms D3 D4 D5` | — | D3 Whittle index (Cui et al., TMC 2024), D4 FedEx-Async with CARP (TMC 2025), D5 FedCS Algorithm 3 degraded (ICC 2019). Whole schedulers, like D1/D2. |
+| `--n-mules` | 1 | Mules on one cluster; `--N` stays the total device count. |
+| `--min-participation` | 1 | Partials per merge: 1 or `--n-mules`. `agg:plain` at several mules needs `--n-mules`. |
+| `--dock-on-empty / --no-dock-on-empty` | on at several mules | An empty mission still docks with an empty partial. |
+| `--down-wait-s` | the trial budget at several mules | How long a docked mule waits for its DOWN before flying on. |
+| `--whittle-variant`, `--whittle-weights` | `expected`, `uniform` | D3's port choice and its ω. `oort` weights need `--real-model`. |
+| `--fedcs-value` | `unit` | D5's greedy key. |
+| `--agg-fedex-n` | registered devices | N in `agg:fedex`'s θ + Σ Δθ / N. |
+
+A Study 5.3 channel-free cell (3 mules, 60 s budget; repeat per arm with the same seeds; D4
+faithful uses `--aggregation agg:fedex`, every other arm an age-aware rule so a quorum of 1 is
+sound):
+
+```bash
+python -m experiments.exp4.runner_main --csv results/exp5_s53/k3_b60_d4.csv --arms D4 --N 18 --n-mules 3 --n-missions 4 --regime clean --n-trials 40 --real-model --mission-budget-s 60 --aggregation agg:fedex --keep-event-traces
+```
 
 ## 3. Smoke run (one trial, no dataset)
 
