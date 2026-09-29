@@ -41,14 +41,18 @@ class PartialAggregate:
     * ``rule`` / ``update_form`` — the merge rule that built this partial. With
       ``update_form == "weights"`` (``agg:plain``) ``weights`` is the
       num_examples-weighted mean of full models. With ``"delta"`` it is the
-      weighted mean update Σ w_i·Δθ_i / Σ w_i, to be added to the global θ.
+      update Σ w_i·Δθ_i / M_m (w_i = n_i·v_i·s(a_i), or s(a_i) alone under
+      ``agg:fedbuff``), to be added to the global θ; staleness shrinks it
+      rather than cancelling out.
     * ``base_version`` — version of the θ the mule carried on this mission.
-    * ``weight_mass`` — Σ w_i behind a delta partial, so partials from several
-      mules combine as one merge over all their devices. ``n_updates`` counts
-      the updates admitted.
+    * ``weight_mass`` — M_m, the staleness-free mass Σ n_i·v_i of the admitted
+      updates behind a delta partial (their count under ``agg:fedbuff``), so
+      partials from several mules combine as one merge over all their
+      devices. ``n_updates`` counts the updates admitted.
     * ``device_basis_versions`` / ``device_ages`` / ``device_weights`` —
       aligned with ``contributing_devices``: each update's basis version, its
-      age in cluster rounds, and its normalised merge weight.
+      age in cluster rounds, and its merge weight w_i / M_m. The weights sum
+      to the mass-weighted mean staleness, 1 only when nothing is discounted.
     * ``excluded_devices`` — clean updates the rule gave zero weight (past the
       age cutoff).
     """

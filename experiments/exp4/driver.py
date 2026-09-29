@@ -35,6 +35,7 @@ import shutil
 import subprocess
 import tempfile
 import time
+import traceback
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Mapping, Optional
@@ -58,7 +59,18 @@ log = logging.getLogger("experiments.exp4.driver")
 #: They supersede the earlier ordering-only B1/B2, which were vacuous: S3b fixes
 #: who is served before any ranking policy runs, so those arms could only permute
 #: a list our gate had already decided and produced byte-identical results.
-ARMS = ("H0", "H1", "H2", "H3", "D1", "D2")
+#:
+#: FeRRy Phase 2 adds D3 (Cui's Whittle index), D4 (FedEx-Async's visit-all
+#: tour; with several mules its devices are split between them by CARP) and D5
+#: (FedCS's greedy selection, degraded to last-known state). D4's two runs in
+#: the build plan differ only in ``aggregation`` (agg:fedex faithful, agg:cutoff
+#: route-only), so they share the label.
+ARMS = ("H0", "H1", "H2", "H3", "D1", "D2", "D3", "D4", "D5")
+
+#: ``MuleConfig.contact_policy`` of each whole-scheduler arm.
+_ARM_POLICY = {
+    "D1": "max_aoi", "D2": "oort", "D3": "whittle", "D4": "fedex", "D5": "fedcs",
+}
 
 #: Scheduler-configuration columns the driver stamps on every row, on top of
 #: the metric schema. They exist so a results CSV is self-describing: rows
@@ -74,7 +86,22 @@ PROVENANCE_COLUMNS = (
     # ...and the deadline law with its parameters (JSON; blank when additive)
     # and the miss-streak priority key.
     "deadline_law", "deadline_params", "miss_priority",
+    # FeRRy Phase 2: the mule count, the cluster's quorum (blank for one mule
+    # with a quorum of 1), the dock settings (JSON of dock_on_empty and
+    # down_wait_s; blank when both are off) and the D3/D5 policy options
+    # (JSON; blank for every other arm). New columns only: the ones above keep
+    # their values, so a single-mule row differs by n_mules=1 and three blanks.
+    "n_mules", "min_participation", "dock_params", "policy_params",
 )
+
+#: Marker written next to every kept trace: the ``status`` and ``error`` the
+#: driver hands the runner, the mission target, and the trial's run time and
+#: budget — the runner relabels a trial that returned past its soft cap
+#: ``timeout`` only after the marker is written, so the marker keeps what that
+#: decision is made from. A trace outlives its CSV row's context (it is
+#: re-scored from the directory alone), and without this the trace scorer
+#: cannot tell a timed-out or ``no_eval`` trial from a good one.
+TRIAL_STATUS_FILE = "trial_status.json"
 
 #: Characters Windows forbids in a path component. Cell ids are built from the
 #: grid axes and contain ``|`` and ``=`` (e.g.
@@ -110,6 +137,50 @@ class Exp4TrialTimeout(RuntimeError):
     The orchestrator is killed before this propagates; the harness
     records the row with ``status=error`` and the sweep continues.
     """
+
+
+class Exp4MuleFailure(RuntimeError):
+    """Raised when a mule process exits non-zero on its own.
+
+    A mule whose mission loop ends on a failure it cannot recover from exits
+    non-zero (``hermes.processes.mule.EXIT_*``), and so does one that crashes.
+    Its trial ran fewer missions than asked for, so the harness records it as
+    ``status=error`` rather than as a short but valid trial.
+    """
+
+
+def d4_slice_assignment(devices, n_mules: int, seed: int) -> Dict[int, int]:
+    """Arm D4's device-to-mule split: CARP over the trial's seeded positions.
+
+    FedEx-Async's Gibbs-sampled assignment (``carp_assign``, objective
+    Σ_k R_k·Δ_k²), with every tour closed at the dock every mule starts from
+    (``DOCK_POSE``, the origin), priced with the shared ``FeasibilityModel``
+    defaults (cruise speed as every mule's speed, the session time as the
+    per-client time) and seeded from the trial seed, so paired trials split
+    identically. Computed once per trial: devices are wired to one mule's RF
+    link at launch, so the split cannot change while the trial runs. Returns
+    device index -> mule index.
+    """
+    from hermes.processes.mule import DOCK_POSE
+    from hermes.scheduler.policies import carp_assign
+    from hermes.scheduler.stages.s3b_feasibility import FeasibilityModel
+    from hermes.types import DeviceID
+
+    from .model_task import _u32
+
+    model = FeasibilityModel()
+    positions = {
+        DeviceID(d.device_id): tuple(float(c) for c in d.position) for d in devices
+    }
+    by_id = carp_assign(
+        positions,
+        n_transporters=int(n_mules),
+        depot=DOCK_POSE,
+        speeds=[model.cruise_speed_m_s] * int(n_mules),
+        t_trans=model.session_time_s,
+        seed=_u32(seed, "d4_carp"),
+    )
+    return {i: int(by_id[DeviceID(d.device_id)]) for i, d in enumerate(devices)}
 
 
 @dataclass
@@ -211,8 +282,9 @@ class Exp4Driver:
     # policy can be scored retroactively against a finished sweep — there is
     # nothing left to replay. Setting a trace root copies each trial's raw
     # events (and the configs carrying device positions) alongside the CSV, so a
-    # future baseline is a re-parse instead of another full re-run. Changes no
-    # trial behaviour; it only stops the deletion.
+    # future baseline is a re-parse instead of another full re-run, and labels
+    # each with its status (TRIAL_STATUS_FILE). Changes no trial behaviour; it
+    # only stops the deletion.
     trace_root: Optional[Path] = None
     # FeRRy Phase 1 — mule arms only (H0 is flat FL and keeps its own mean).
     # ``aggregation`` names the L3 merge rule the cluster AND the mule run
@@ -230,9 +302,28 @@ class Exp4Driver:
     deadline_law: str = "additive"
     deadline_params: Dict[str, Any] = field(default_factory=dict)
     miss_priority: bool = False
+    # FeRRy Phase 2 — mule arms only. ``n_mules`` mules share the cluster over
+    # disjoint spatial slices of the same N devices (N is the total, not per
+    # slice); ``min_participation`` is the cluster's quorum, 1 or ``n_mules``
+    # (FedBuff ignores it). 1 and 1 are the recorded single-mule topology. ``dock_on_empty`` and ``down_wait_s`` are
+    # the mules' dock settings; None picks them from ``n_mules``: off for one
+    # mule (the recorded dock), and for several an empty mission still docks
+    # (so no quorum waits on it) and a DOWN is waited for as long as the trial
+    # budget (so a quorum wait never ends a mule's run on its own).
+    n_mules: int = 1
+    min_participation: int = 1
+    dock_on_empty: Optional[bool] = None
+    down_wait_s: Optional[float] = None
+    # FeRRy Phase 2 — D3/D5 options (the policies' defaults). D3's
+    # weights='oort' ranks on Oort's utility, which needs --real-model.
+    whittle_variant: str = "expected"
+    whittle_weights: str = "uniform"
+    fedcs_value: str = "unit"
 
     def __post_init__(self) -> None:
         from hermes.mission.aggregation_rules import AggregationSpec
+        from hermes.scheduler.policies.fedcs_degraded import VALUE_KINDS
+        from hermes.scheduler.policies.whittle import VARIANTS, WEIGHT_MODES
         from hermes.scheduler.stages.s3_deadline import DeadlineLaw
 
         # Fail on a bad rule or law before any process is spawned.
@@ -249,8 +340,100 @@ class Exp4Driver:
                 "pass_2_budget walks Pass 2 against mission_budget_s; set a "
                 "budget (--mission-budget-s) or drop --pass-2-budget"
             )
+        if self.whittle_variant not in VARIANTS:
+            raise ValueError(
+                f"whittle_variant must be one of {VARIANTS}, got {self.whittle_variant!r}"
+            )
+        if self.whittle_weights not in WEIGHT_MODES:
+            raise ValueError(
+                f"whittle_weights must be one of {WEIGHT_MODES}, "
+                f"got {self.whittle_weights!r}"
+            )
+        if self.fedcs_value not in VALUE_KINDS:
+            raise ValueError(
+                f"fedcs_value must be one of {VALUE_KINDS}, got {self.fedcs_value!r}"
+            )
+        self._check_multi_mule()
+
+    def _check_multi_mule(self) -> None:
+        """Refuse a mule count and quorum that cannot run or would mis-measure."""
+        if int(self.n_mules) < 1:
+            raise ValueError(f"n_mules must be >= 1, got {self.n_mules}")
+        if not 1 <= int(self.min_participation) <= int(self.n_mules):
+            raise ValueError(
+                f"min_participation must be in 1..n_mules={self.n_mules}, got "
+                f"{self.min_participation}: a quorum larger than the mules "
+                f"that can meet it never closes a round"
+            )
+        if self.down_wait_s is not None and not float(self.down_wait_s) > 0.0:
+            raise ValueError(f"down_wait_s must be > 0, got {self.down_wait_s}")
+        if (
+            int(self.n_mules) > 1
+            and self._aggregation_spec.is_plain
+            and int(self.min_participation) != int(self.n_mules)
+        ):
+            # agg:plain overwrites θ with the mean of the merge's partials; a
+            # quorum below every mule makes that one mule's models each time.
+            raise ValueError(
+                f"agg:plain with n_mules={self.n_mules} needs "
+                f"min_participation={self.n_mules} (got {self.min_participation}): "
+                f"with fewer, each merge overwrites θ with one mule's models, "
+                f"last writer wins. Use an age-aware rule for asynchronous merges."
+            )
+        from hermes.mission.aggregation_rules import AGG_FEDBUFF
+
+        if (
+            1 < int(self.min_participation) < int(self.n_mules)
+            and self._aggregation_spec.rule != AGG_FEDBUFF
+        ):
+            # Each merge takes the first quorum of mules to upload, so partials
+            # pair up in no fixed order, and near the end of the run the last
+            # mule's final partial can wait for mules that have finished — for
+            # the whole trial budget, by default, and the trial times out.
+            raise ValueError(
+                f"min_participation={self.min_participation} with "
+                f"n_mules={self.n_mules}: use 1 (asynchronous merges) or "
+                f"{self.n_mules} (every mule in each merge); a quorum between "
+                f"them can leave the last partial of the run waiting for mules "
+                f"that have already finished"
+            )
+        if (
+            int(self.min_participation) > 1
+            and self._aggregation_spec.rule != AGG_FEDBUFF
+            and not self.effective_dock_on_empty
+        ):
+            raise ValueError(
+                f"min_participation={self.min_participation} needs dock_on_empty: "
+                f"a mule whose mission collects nothing would never dock, and "
+                f"the quorum could never close"
+            )
+
+    @property
+    def effective_dock_on_empty(self) -> bool:
+        """``dock_on_empty``, or on exactly when there are several mules."""
+        if self.dock_on_empty is not None:
+            return bool(self.dock_on_empty)
+        return int(self.n_mules) > 1
+
+    @property
+    def effective_down_wait_s(self) -> Optional[float]:
+        """``down_wait_s``, or the trial budget when there are several mules."""
+        if self.down_wait_s is not None:
+            return float(self.down_wait_s)
+        return float(self.trial_budget_s) if int(self.n_mules) > 1 else None
+
+    def _policy_params(self, arm: str) -> Dict[str, Any]:
+        """The options of the arm's policy (D3, D5); empty for every other arm."""
+        if arm == "D3":
+            return {"variant": self.whittle_variant, "weights": self.whittle_weights}
+        if arm == "D5":
+            return {"value": self.fedcs_value}
+        return {}
 
     def run_trial(self, cell: Cell) -> Mapping[str, Any]:
+        # Only the trial-status marker reads this: the runner's soft cap is
+        # applied to the whole call, data preparation included.
+        started = time.monotonic()
         params = cell.params
         arm = cell.arm
         if arm not in ARMS:
@@ -301,21 +484,34 @@ class Exp4Driver:
             use_rl_selector=(arm in ("H2", "H3")),
             selector_weights_path=self.selector_weights_path,
         )
-        # D1 — MAX-AoI as a whole scheduler. Replaces our policy outright; it
-        # does not compose with the RL selector, so use_rl_selector stays off.
-        if arm == "D1":
-            selector_kwargs["contact_policy"] = "max_aoi"
-        # D2 — Oort's statistical-utility selection, likewise whole-scheduler.
-        # Needs REAL training: the stub's loss is a random draw, so ranking on
-        # it would be a random ordering wearing Oort's name. The policy itself
-        # raises, but fail here with a clearer message.
-        if arm == "D2":
-            if not self.real_model:
+        # D1-D5 — whole schedulers (``_ARM_POLICY`` names each one's policy).
+        # Each replaces our policy outright and does not compose with the RL
+        # selector, so use_rl_selector stays off. D1 is MAX-AoI; D3-D5 are the
+        # FeRRy Phase 2 arms, in the same slot.
+        if arm in _ARM_POLICY:
+            selector_kwargs["contact_policy"] = _ARM_POLICY[arm]
+        # D2 — Oort's statistical-utility selection. Needs REAL training: the
+        # stub's loss is a random draw, so ranking on it would be a random
+        # ordering wearing Oort's name. The policy itself raises, but fail here
+        # with a clearer message.
+        if arm == "D2" and not self.real_model:
+            raise ValueError(
+                "arm D2 (Oort) requires --real-model: the stub reports a "
+                "random loss, so its ranking signal would be pure noise"
+            )
+        if arm == "D3":
+            if self.whittle_weights == "oort" and not self.real_model:
                 raise ValueError(
-                    "arm D2 (Oort) requires --real-model: the stub reports a "
-                    "random loss, so its ranking signal would be pure noise"
+                    "arm D3 with whittle_weights='oort' requires --real-model: "
+                    "its ω is Oort's utility, and the stub's loss is a random "
+                    "draw; use whittle_weights='uniform' on the stub"
                 )
-            selector_kwargs["contact_policy"] = "oort"
+            selector_kwargs.update(
+                whittle_variant=self.whittle_variant,
+                whittle_weights=self.whittle_weights,
+            )
+        if arm == "D5":
+            selector_kwargs["fedcs_value"] = self.fedcs_value
         if self.mission_budget_s is not None:
             selector_kwargs["mission_budget_s"] = float(self.mission_budget_s)
         if self.mission_window_adaptation:
@@ -340,6 +536,18 @@ class Exp4Driver:
             ),
             miss_priority=bool(self.miss_priority),
         )
+        # FeRRy Phase 2 — the mule count, the quorum and the dock settings. At
+        # one mule with the defaults these are the builder's own defaults, so
+        # the topology is the recorded one.
+        if int(self.n_mules) > 1 or int(self.min_participation) != 1:
+            selector_kwargs.update(
+                n_mules=int(self.n_mules),
+                min_participation=int(self.min_participation),
+            )
+        if self.effective_dock_on_empty:
+            selector_kwargs["dock_on_empty"] = True
+        if self.effective_down_wait_s is not None:
+            selector_kwargs["down_wait_s"] = self.effective_down_wait_s
 
         # EX-4.3 arm H3 — L1 adaptive channel. H1/H2 hold the best-average
         # fixed band; H3 runs the U(c,t) controller. The per-mission loss
@@ -379,33 +587,40 @@ class Exp4Driver:
                     cell.cell_id, cell.trial_index, regime, self.realism,
                     self.data_source, prep.input_dim, prep.n_train, prep.is_synthetic,
                 )
-                topo = build_exp4_topology(
-                    n_devices=n_devices,
-                    rf_range_m=rf_range_m,
-                    n_missions=n_missions,
-                    seed=cell.seed,
+                model_kwargs = dict(
                     train_shard_paths=prep.shard_paths,
                     input_dim=prep.input_dim,
                     local_epochs=self.local_epochs,
                     local_batch_size=self.local_batch_size,
                     init_theta_path=prep.init_theta_path,
                     eval_test_path=prep.test_path,
-                    **realism_kwargs,
-                    **selector_kwargs,
                 )
             else:
-                topo = build_exp4_topology(
+                model_kwargs = {}
+
+            def _build(**extra):
+                return build_exp4_topology(
                     n_devices=n_devices,
                     rf_range_m=rf_range_m,
                     n_missions=n_missions,
                     seed=cell.seed,
+                    **model_kwargs,
                     **realism_kwargs,
                     **selector_kwargs,
+                    **extra,
                 )
+
+            topo = _build()
+            if arm == "D4" and int(self.n_mules) > 1:
+                # FedEx's CARP split, once per trial, over the positions this
+                # seed lays out (the same ones the default split was built on).
+                topo = _build(slice_assignment=d4_slice_assignment(
+                    topo.devices, int(self.n_mules), cell.seed,
+                ))
 
             return self._run_topology(
                 topo, cell=cell, n_devices=n_devices,
-                rf_range_m=rf_range_m, n_missions=n_missions,
+                rf_range_m=rf_range_m, n_missions=n_missions, started=started,
             )
         finally:
             if prep_dir is not None:
@@ -627,11 +842,63 @@ class Exp4Driver:
                 cell.cell_id, cell.trial_index, cell.arm, exc_info=True,
             )
 
-    def _run_topology(self, topo, *, cell, n_devices, rf_range_m, n_missions):
+    def _write_trial_status(
+        self, cell, *, status, error, n_missions, started=None,
+    ) -> None:
+        """Label this trial's kept trace with the status its CSV row records.
+
+        Called once the status is decided: ``ok`` / ``no_eval`` from the row,
+        or ``error`` with the exception's last line when the trial raises —
+        which is what the runner writes for a raise, an
+        :class:`Exp4TrialTimeout` included. The runner's own soft timeout is
+        decided after this returns, against the caller's cap, which the driver
+        is never told. So the marker records what it is decided from instead:
+        ``run_s``, the seconds since ``run_trial`` began (``started``; None
+        when the trial was not started through it), and ``trial_budget_s``,
+        which is the runner's cap unless ``--timeout-s`` overrode it. ``run_s``
+        leaves out the teardown still to come (removing the run and prep
+        directories), so it can fall a fraction of a second short of the
+        runner's duration.
+
+        Never raises, and writes nothing when there is no kept trace to label.
+        """
+        if self.trace_root is None:
+            return
+        try:
+            dest = Path(self.trace_root) / trace_dir_name(cell)
+            if not dest.is_dir():
+                return
+            run_s = None if started is None else time.monotonic() - started
+            with open(dest / TRIAL_STATUS_FILE, "w", encoding="utf-8") as f:
+                json.dump(
+                    {
+                        "status": str(status),
+                        "error": str(error or ""),
+                        "n_missions_target": int(n_missions),
+                        "run_s": run_s,
+                        "trial_budget_s": float(self.trial_budget_s),
+                    },
+                    f,
+                )
+        except Exception:
+            log.warning(
+                "exp4 trial cell=%s trial=%d arm=%s: could not write %s "
+                "(continuing; the trial itself is unaffected)",
+                cell.cell_id, cell.trial_index, cell.arm, TRIAL_STATUS_FILE,
+                exc_info=True,
+            )
+
+    def _run_topology(
+        self, topo, *, cell, n_devices, rf_range_m, n_missions, started=None,
+    ):
         orch = MultiProcessOrchestrator(topo, capture_output=True)
+        captured = False
         try:
             orch.start_all(timeout=self.startup_timeout_s)
             timed_out = not self._await_mules(orch, self.trial_budget_s)
+            # Read before shutdown, which would give any mule still running a
+            # non-zero status of its own making.
+            failed = {} if timed_out else self._failed_mules(orch)
             orch.shutdown_all(
                 timeout=self.shutdown_timeout_s, cleanup_tmpdir=False,
             )
@@ -640,11 +907,21 @@ class Exp4Driver:
             # having, and they are exactly the ones that would otherwise raise
             # straight past this and be deleted in the `finally`.
             self._capture_traces(orch.tmpdir, cell)
+            captured = True
             if timed_out:
                 raise Exp4TrialTimeout(
                     f"exp4 trial exceeded {self.trial_budget_s:.0f}s budget "
                     f"(cell={cell.cell_id}, trial={cell.trial_index}); "
                     f"orchestrator killed"
+                )
+            if failed:
+                # FeRRy Phase 2: a mule that ended on an unrecovered failure
+                # ran fewer missions than asked; it used to exit 0 and its
+                # truncated trial was recorded as ok.
+                raise Exp4MuleFailure(
+                    f"mule process(es) exited non-zero {failed} "
+                    f"(cell={cell.cell_id}, trial={cell.trial_index}); "
+                    f"see mission_failed / dock_bootstrap_timeout in the trace"
                 )
             obs = consume_run_dir(orch.tmpdir, n_devices=n_devices)
             if obs.missions_completed == 0:
@@ -685,6 +962,7 @@ class Exp4Driver:
                 else json.dumps(law.to_params(), sort_keys=True)
             )
             row["miss_priority"] = int(bool(self.miss_priority))
+            row.update(self._multi_mule_provenance(getattr(cell, "arm", "")))
             # A trial that produced NO model evaluation at all never trained a
             # model — its convergence columns are blank while its federation
             # columns are hard zeros. Recorded as `ok`, that asymmetry biases
@@ -706,9 +984,59 @@ class Exp4Driver:
                     "— recording status=no_eval (excluded from analysis)",
                     cell.cell_id, cell.trial_index, cell.arm,
                 )
+            self._write_trial_status(
+                cell, status=row.get("status", "ok"), error=row.get("error", ""),
+                n_missions=n_missions, started=started,
+            )
             return row
+        except Exception as exc:
+            # The runner records any raise, the timeout above included, as
+            # status=error with the exception's last line; say the same beside
+            # the trace so it is not scored as a good trial.
+            if captured:
+                self._write_trial_status(
+                    cell, status="error",
+                    error=traceback.format_exception_only(type(exc), exc)[-1].strip(),
+                    n_missions=n_missions, started=started,
+                )
+            raise
         finally:
             orch.cleanup()
+
+    def _multi_mule_provenance(self, arm: str) -> Dict[str, Any]:
+        """The FeRRy Phase 2 provenance columns for a row of ``arm``.
+
+        ``n_mules`` is always the count, as the trace scorer reports it. The
+        others are blank at their recorded value — a quorum of 1 with one
+        mule, the recorded dock, no policy options — so a single-mule row
+        reads as it always did.
+        """
+        recorded_topology = int(self.n_mules) == 1 and int(self.min_participation) == 1
+        dock_on_empty = self.effective_dock_on_empty
+        down_wait_s = self.effective_down_wait_s
+        policy = self._policy_params(arm)
+        return {
+            "n_mules": int(self.n_mules),
+            "min_participation": "" if recorded_topology else int(self.min_participation),
+            "dock_params": (
+                "" if not dock_on_empty and down_wait_s is None
+                else json.dumps(
+                    {"dock_on_empty": bool(dock_on_empty), "down_wait_s": down_wait_s},
+                    sort_keys=True,
+                )
+            ),
+            "policy_params": json.dumps(policy, sort_keys=True) if policy else "",
+        }
+
+    @staticmethod
+    def _failed_mules(orch: MultiProcessOrchestrator) -> Dict[str, int]:
+        """Mules that have exited with a non-zero status: mule id -> status."""
+        out: Dict[str, int] = {}
+        for mule_id, handle in orch.mule_handles.items():
+            rc = handle.returncode()
+            if rc not in (None, 0):
+                out[str(mule_id)] = int(rc)
+        return out
 
     def _await_mules(
         self, orch: MultiProcessOrchestrator, budget_s: float,

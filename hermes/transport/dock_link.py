@@ -17,13 +17,32 @@ from __future__ import annotations
 import queue
 import threading
 from abc import ABC, abstractmethod
-from typing import Optional
+from typing import List, Optional
 
 from hermes.types import DownBundle, MuleID, UpBundle
 
 
 class DockLinkError(RuntimeError):
     """Raised when a dock-link operation fails (timeout, drop, etc.)."""
+
+
+class DockLinkTimeout(DockLinkError):
+    """A blocking receive ran out of time; the link itself may still be up.
+
+    A subclass, so every caller that catches :class:`DockLinkError` keeps
+    working. It exists so a mule can tell "the cluster has not answered yet"
+    (worth waiting on, FeRRy Phase 2) from "the link is gone" (not).
+    """
+
+
+def _drain(q: "queue.Queue[DownBundle]") -> List[DownBundle]:
+    """Everything queued right now, oldest first, without blocking."""
+    out: List[DownBundle] = []
+    while True:
+        try:
+            out.append(q.get_nowait())
+        except queue.Empty:
+            return out
 
 
 class DockLink(ABC):
@@ -59,6 +78,16 @@ class DockLink(ABC):
         self, mule_id: MuleID, timeout: Optional[float] = None
     ) -> DownBundle:
         """Mule-side: block until this mule's DOWN bundle arrives."""
+
+    def client_drain_down(self, mule_id: MuleID) -> List[DownBundle]:
+        """Mule-side: take every DOWN already queued for this mule, oldest first.
+
+        Never blocks. A mule calls it to throw away a DOWN that answered an
+        upload it stopped waiting for, and to pick the newest of several
+        (FeRRy Phase 2). Not abstract: a transport that cannot queue more than
+        one bundle has nothing to drain, so the default returns nothing.
+        """
+        return []
 
     # ---- shared -------------------------------------------------------------
 
@@ -109,7 +138,7 @@ class LoopbackDockLink(DockLink):
         try:
             return self._up.get(timeout=timeout)
         except queue.Empty as e:
-            raise DockLinkError(f"recv_up timed out after {timeout}s") from e
+            raise DockLinkTimeout(f"recv_up timed out after {timeout}s") from e
 
     def send_down(self, bundle: DownBundle) -> None:
         if self._closed:
@@ -133,9 +162,12 @@ class LoopbackDockLink(DockLink):
         try:
             return q.get(timeout=timeout)
         except queue.Empty as e:
-            raise DockLinkError(
+            raise DockLinkTimeout(
                 f"client_recv_down for {mule_id!r} timed out after {timeout}s"
             ) from e
+
+    def client_drain_down(self, mule_id: MuleID) -> List[DownBundle]:
+        return _drain(self._ensure_down_queue(mule_id))
 
     # ---- shared --------------------------------------------------------------
 

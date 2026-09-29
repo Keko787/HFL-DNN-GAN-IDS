@@ -122,6 +122,10 @@ class DiscPush:
     pass_kind: MissionPass = MissionPass.COLLECT
     basis_version: Optional[int] = None
     update_form: str = UPDATE_FORM_WEIGHTS
+    # Set on Pass-1 pushes when the mule's Pass 2 is budgeted and may not come
+    # back: the device then trains ahead on the basis this push gives it, in
+    # the background, instead of waiting for a delivery (principle 14).
+    train_ahead: bool = False
 
     def __post_init__(self) -> None:
         if not self.weights_sig:
@@ -210,6 +214,13 @@ class RoundCloseDelta:
     # advertisement. Optional so every existing emitter stays valid.
     local_loss: Optional[float] = None
     num_examples: int = 0
+    # FeRRy: whether the device answered this contact (its FLReadyAdv
+    # arrived), whatever the outcome. The multiplicative deadline law relaxes
+    # a reachable device's window less than an unreachable one's, and the
+    # reach history D3 needs counts it. ``synthetic`` marks the TIMEOUT fed
+    # for a device the mule dropped or abandoned without an attempt.
+    answered: bool = False
+    synthetic: bool = False
 
 
 # --------------------------------------------------------------------------- #

@@ -15,9 +15,9 @@ The cluster process:
 3. Builds a :class:`HFLHostCluster` with a :class:`TCPDockLinkServer`.
 4. Optionally connects an :class:`HTTPCloudLink` to Tier-3 if
    ``cluster.tier3_url`` is set.
-5. Runs the service loop: wait for expected mules → dispatch initial
-   DOWN to each → loop {recv UP, ingest, aggregate when quorum,
-   dispatch DOWN to each docked mule}.
+5. Runs the service loop: dispatch an initial DOWN to each expected
+   mule as it registers → loop {recv UP, ingest, aggregate when quorum,
+   dispatch DOWN to each mule waiting at the dock}.
 6. Exits cleanly on SIGTERM / SIGINT.
 
 Logs go to stderr in plain text. Chunk M wraps these in structured JSON.
@@ -26,18 +26,23 @@ Logs go to stderr in plain text. Chunk M wraps these in structured JSON.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import logging
 import signal
 import sys
 import threading
 import time
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 import numpy as np
 
 from hermes.cluster import DeviceRegistry, HFLHostCluster
-from hermes.cluster.host_cluster import StubGeneratorHost
+from hermes.cluster.host_cluster import (
+    OUTCOME_DEFERRED,
+    OUTCOME_EXPIRED,
+    StubGeneratorHost,
+)
 from hermes.observability import (
     JsonEventEmitter,
     MetricsRegistry,
@@ -47,7 +52,16 @@ from hermes.transport import (
     HTTPCloudLink,
     TCPDockLinkServer,
 )
-from hermes.types import DeviceID, MuleID, SpectrumSig
+from hermes.mission.aggregation_rules import AGG_FEDBUFF
+from hermes.types import (
+    ContactHistory,
+    DeviceID,
+    MissionRoundCloseReport,
+    MuleID,
+    PartialAggregate,
+    SpectrumSig,
+    UpBundle,
+)
 
 from .config import ClusterConfig, cluster_config_from_json
 
@@ -83,6 +97,44 @@ def _up_mission_round(up) -> Optional[int]:
     pa = getattr(up, "partial_aggregate", None)
     mission_round = getattr(pa, "mission_round", None)
     return None if mission_round is None else int(mission_round)
+
+
+def _lost_upload_stand_in(up, mission_round: Optional[int], spec) -> UpBundle:
+    """The empty partial the cluster holds for ``up`` when its upload was lost.
+
+    Tagged with the cluster's own rule so it passes the form check whatever the
+    lost partial held, and with the lost partial's mission and base version so
+    the fold's event fields name the right mission and age. Nothing else of the
+    bundle is used: its model, round report and Pass-2 ledger were lost.
+    """
+    lost = up.partial_aggregate
+    rnd = int(mission_round) if mission_round is not None else 0
+    return UpBundle(
+        mule_id=up.mule_id,
+        partial_aggregate=PartialAggregate(
+            mule_id=up.mule_id,
+            mission_round=rnd,
+            weights=[],
+            num_examples=0,
+            rule=spec.rule,
+            update_form=spec.update_form,
+            base_version=getattr(lost, "base_version", None),
+        ),
+        round_close_report=MissionRoundCloseReport(
+            mule_id=up.mule_id, mission_round=rnd, started_at=0.0, finished_at=0.0,
+        ),
+        contact_history=ContactHistory(mule_id=up.mule_id, mission_round=rnd),
+    )
+
+
+def _mule_stream_key(mule_id) -> int:
+    """A stable 32-bit key for ``mule_id``, to seed its own backhaul stream.
+
+    ``hash()`` is salted per process, so it cannot seed anything that must
+    reproduce across runs.
+    """
+    digest = hashlib.sha256(str(mule_id).encode("utf-8")).digest()
+    return int.from_bytes(digest[:4], "big")
 
 
 class ClusterService:
@@ -146,6 +198,18 @@ class ClusterService:
         # EX-4.2 — long-range backhaul (mule->BS) upload loss.
         self._backhaul_loss_pct = float(getattr(cfg, "backhaul_loss_pct", 0.0) or 0.0)
         self._backhaul_rng = np.random.default_rng(getattr(cfg, "backhaul_rng_seed", None))
+        # FeRRy Phase 2 — with several mules, one shared stream would hand its
+        # draws out in upload-arrival order, which depends on process timing,
+        # so a paired seed would not reproduce the same losses. Each mule then
+        # draws from its own stream, seeded from the trial's seed and its id.
+        # One mule keeps the single stream above, draw for draw.
+        self._backhaul_per_mule = len(cfg.expected_mules) > 1
+        self._backhaul_mule_rngs: Dict[str, np.random.Generator] = {}
+        # Mules blocked at the dock for a DOWN: each ingested UP adds its mule,
+        # each DOWN that answers one removes it (FeRRy Phase 2). Ordered, no
+        # repeats. Only these mules get a DOWN after a merge; a mule still in
+        # flight would otherwise find a stale one queued at its next dock.
+        self._awaiting: List[MuleID] = []
         # EX-4.3 — per-mission loss schedule (probabilities, 0..1) from the L1
         # channel model; overrides the flat pct when set.
         self._backhaul_loss_schedule = getattr(cfg, "backhaul_loss_schedule", None)
@@ -265,25 +329,42 @@ class ClusterService:
     # of seconds), so 5 s is plenty.
     _TIER3_POLL_INTERVAL_S: float = 5.0
 
+    #: How long startup waits for every expected mule to register, and how
+    #: often it bootstraps the ones that already have (FeRRy Phase 2).
+    _BOOTSTRAP_WAIT_S: float = 60.0
+    _BOOTSTRAP_TICK_S: float = 1.0
+
     def run(self) -> None:
         """Service loop — runs until ``request_stop`` is called.
 
         Loop:
             1. Wait for every expected mule to register (with a long
-               but bounded timeout).
-            2. Dispatch the initial DOWN bundle to each mule
-               (bootstrap; gives the mule its slice + θ).
-            3. Loop forever:
+               but bounded timeout), dispatching each one's initial DOWN
+               bundle (bootstrap; gives the mule its slice + θ) as soon as
+               it has registered.
+            2. Loop forever:
                  a. Try recv_up (1s timeout).
                  b. L-M1: check stop_event before doing the ingest work
                     (we may have been signalled while blocked on recv).
                  c. On UP arrival: ingest, then if min_participation
                     is met, run cross-mule FedAvg + close round +
-                    dispatch fresh DOWN to every currently-docked mule.
+                    dispatch a fresh DOWN to every mule waiting at the
+                    dock — the mules whose UP was ingested and not yet
+                    answered, never a mule still in flight. When an
+                    age-aware fold leaves θ unchanged without a quorum
+                    wait, the round stays open and only the mules left
+                    waiting get a DOWN: the uploader when FedBuff defers,
+                    and every waiting mule when all the fold's partials
+                    expired (or were empty). A lost backhaul upload is
+                    answered at once, except under a quorum above 1, where
+                    an empty partial holds the mule's place in the round.
                  d. L-H2: detect newly-docked mules each iteration and
                     dispatch DOWN to them so a reconnecting mule doesn't
                     sit slice-less waiting for the next aggregation.
                  e. L-L6: periodic Tier-3 poll on a throttled cadence.
+
+        With one mule every DOWN still goes where it always went: that mule
+        is the only uploader, the only mule waiting, and the only one docked.
         """
         expected_mules = [MuleID(m) for m in self.cfg.expected_mules]
         log.info(
@@ -295,21 +376,35 @@ class ClusterService:
         # before any aggregation. Also warms TensorFlow while mules register.
         self._emit_model_evaluation(0)
 
-        if expected_mules:
-            if not self.dock.wait_for_mules(expected_mules, timeout=60.0):
-                log.error(
-                    "cluster %s: not all mules registered within 60s "
-                    "(saw %s, wanted %s); proceeding with whoever's here",
-                    self.cfg.cluster_id,
-                    sorted(self.registry.snapshot().by_mule.keys()),
-                    expected_mules,
-                )
-
         # L-H2: track mules we've already bootstrapped so we can detect
         # mid-flight reconnects (mule died, restarted, redocked) and
         # send them a fresh DOWN bundle without waiting for the next
         # aggregation cycle.
         bootstrapped: set = set()
+        if expected_mules:
+            # FeRRy Phase 2: bootstrap each mule as soon as it registers. The
+            # bootstraps used to wait for the last expected mule, up to 60 s,
+            # while a mule gives up on its bootstrap after 30 s, so one slow
+            # mule start could take every other mule down with it.
+            deadline = time.monotonic() + self._BOOTSTRAP_WAIT_S
+            while True:
+                self._dispatch_to_new_mules(bootstrapped)
+                if set(expected_mules) <= bootstrapped or self._stop_event.is_set():
+                    break
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    log.error(
+                        "cluster %s: not all mules registered within %.0fs "
+                        "(saw %s, wanted %s); proceeding with whoever's here",
+                        self.cfg.cluster_id,
+                        self._BOOTSTRAP_WAIT_S,
+                        sorted(self.registry.snapshot().by_mule.keys()),
+                        expected_mules,
+                    )
+                    break
+                self.dock.wait_for_mules(
+                    expected_mules, timeout=min(self._BOOTSTRAP_TICK_S, remaining),
+                )
         self._dispatch_to_new_mules(bootstrapped)
 
         last_tier3_poll = 0.0
@@ -333,77 +428,45 @@ class ClusterService:
             self._dispatch_to_new_mules(bootstrapped)
 
             up_round = _up_mission_round(up) if up is not None else None
-            if up is not None and self._backhaul_dropped(up_round):
-                # EX-4.2: model long-range mule->BS backhaul upload loss.
-                # Drop this mule's aggregate (the round does not close) but
-                # still send DOWN with the current θ so the mule can finish
-                # its two-pass mission — the update is carried, not lost
-                # (reconciled at a later dock, unlike H0's permanent loss).
-                self.events.emit(
-                    "backhaul_upload_lost",
-                    mule_id=str(up.mule_id),
-                    mission_round=up_round,
-                )
-                self.metrics.increment("backhaul_uploads_lost")
-                try:
-                    self.dock.send_down(self.cluster.dispatch_down_bundle(up.mule_id))
-                except Exception:
-                    log.exception("post-loss DOWN failed for %s", up.mule_id)
+            if up is not None and self._backhaul_dropped(up_round, up.mule_id):
+                if self._lost_upload_holds_quorum():
+                    self._hold_lost_upload(up, up_round)
+                else:
+                    # EX-4.2: model long-range mule->BS backhaul upload loss.
+                    # Drop this mule's aggregate (the round does not close) but
+                    # still send DOWN with the current θ so the mule can finish
+                    # its two-pass mission — the update is carried, not lost
+                    # (reconciled at a later dock, unlike H0's permanent loss).
+                    self.events.emit(
+                        "backhaul_upload_lost",
+                        mule_id=str(up.mule_id),
+                        mission_round=up_round,
+                    )
+                    self.metrics.increment("backhaul_uploads_lost")
+                    self._stop_waiting(up.mule_id)
+                    try:
+                        self.dock.send_down(self.cluster.dispatch_down_bundle(up.mule_id))
+                    except Exception:
+                        log.exception("post-loss DOWN failed for %s", up.mule_id)
                 up = None  # consumed as lost; skip the ingest path below
 
             if up is not None:
                 try:
-                    self.cluster.ingest_up_bundle(up)
-                    self.events.emit(
-                        "up_bundle_ingested",
-                        mule_id=str(up.mule_id),
-                        mission_round=up_round,
-                    )
-                    self.metrics.increment("up_bundles_ingested")
-                    merged = self.cluster.aggregate_pending()
-                    if merged is None and self.cluster.defers_merges:
-                        # agg:fedbuff is still filling its buffer: θ is
-                        # unchanged and the round stays open, but the mule is
-                        # waiting at its inter-pass dock for a DOWN.
+                    accepted = self.cluster.ingest_up_bundle(up)
+                    # Waiting from here until a DOWN answers it, whether or not
+                    # its partial was kept: either way the mule is blocked at
+                    # its inter-pass dock.
+                    self._start_waiting(up.mule_id)
+                    if accepted:
                         self.events.emit(
-                            "cluster_merge_deferred",
+                            "up_bundle_ingested",
                             mule_id=str(up.mule_id),
-                            **(self.cluster.last_merge or {}),
+                            mission_round=up_round,
                         )
-                        self.dock.send_down(
-                            self.cluster.dispatch_down_bundle(up.mule_id)
-                        )
-                        self.metrics.increment("down_bundles_dispatched")
-                    if merged is not None:
-                        if self.cluster.last_merge is not None:
-                            # Age-aware rules only; agg:plain traces unchanged.
-                            self.events.emit(
-                                "cluster_merge", **self.cluster.last_merge,
-                            )
-                        self.cluster.close_cluster_round()
-                        self.events.emit(
-                            "cluster_round_closed",
-                            cluster_round=self.cluster._cluster_round,
-                        )
-                        self.metrics.increment("cluster_rounds_closed")
-                        # EX-4.1 — convergence point for the just-aggregated θ'.
-                        self._emit_model_evaluation(self.cluster._cluster_round)
-                        # Dispatch a fresh DOWN to every currently-docked
-                        # mule (registered_mules, not expected_mules —
-                        # if a mule is offline we'd just hit a write
-                        # error trying to send down a dead socket).
-                        for mid in self.dock.registered_mules():
-                            try:
-                                self.dock.send_down(
-                                    self.cluster.dispatch_down_bundle(mid)
-                                )
-                                self.metrics.increment("down_bundles_dispatched")
-                            except Exception:
-                                log.exception(
-                                    "post-aggregation DOWN failed for %s",
-                                    mid,
-                                )
-                                self.metrics.increment("dispatch_down_failures")
+                        self.metrics.increment("up_bundles_ingested")
+                        self._fold_pending(up.mule_id, up_round)
+                    else:
+                        self._note_refused_partial(up, up_round)
                 except Exception:
                     log.exception("ingest_up_bundle / aggregate failed")
                     self.metrics.increment("ingest_failures")
@@ -415,16 +478,205 @@ class ClusterService:
 
         log.info("cluster %s service loop exiting", self.cfg.cluster_id)
 
+    def _fold_pending(
+        self, mule_id: MuleID, up_round: Optional[int], *, stand_in: bool = False,
+    ) -> None:
+        """Run the fold after ``mule_id``'s partial joined the open round.
+
+        ``up_round`` is the mission of that partial. ``stand_in`` marks the
+        empty partial held for a lost upload (:meth:`_hold_lost_upload`); a
+        round it closes names ``mule_id`` on ``cluster_round_closed``, since no
+        ``up_bundle_ingested`` precedes it to say whose upload closed it.
+        Raises what the fold or a DOWN send raises; the caller counts it.
+        """
+        merged = self.cluster.aggregate_pending()
+        outcome = self.cluster.last_outcome
+        if merged is None and outcome in (OUTCOME_DEFERRED, OUTCOME_EXPIRED):
+            # θ is unchanged and the round stays open — agg:fedbuff is still
+            # filling its buffer, or every pending partial was past the cutoff
+            # (or empty) — but the mule is waiting at its inter-pass dock for a
+            # DOWN (after an expiry, so is every mule whose partial was in the
+            # fold). A quorum wait sends none: the merge that meets quorum
+            # answers every waiting mule.
+            self.events.emit(
+                "cluster_merge_deferred" if outcome == OUTCOME_DEFERRED
+                else "cluster_merge_expired",
+                mule_id=str(mule_id),
+                **self._merge_event_fields(up_round),
+            )
+            self._stop_waiting(mule_id)
+            try:
+                self.dock.send_down(self.cluster.dispatch_down_bundle(mule_id))
+                self.metrics.increment("down_bundles_dispatched")
+            finally:
+                # A lost uploader must not strand the others. A FedBuff
+                # deferral leaves nobody else waiting: each buffered mule got
+                # its DOWN when deferred.
+                if outcome == OUTCOME_EXPIRED:
+                    self._release_waiting("post-expiry")
+        if merged is not None:
+            if self.cluster.last_merge is not None:
+                # Age-aware rules only; agg:plain traces unchanged.
+                self.events.emit(
+                    "cluster_merge",
+                    **self._merge_event_fields(up_round),
+                )
+            self.cluster.close_cluster_round()
+            closer = {"mule_id": str(mule_id)} if stand_in else {}
+            self.events.emit(
+                "cluster_round_closed",
+                cluster_round=self.cluster._cluster_round,
+                **closer,
+            )
+            self.metrics.increment("cluster_rounds_closed")
+            # EX-4.1 — convergence point for the just-aggregated θ'.
+            self._emit_model_evaluation(self.cluster._cluster_round)
+            # Answer every mule waiting at the dock with the new θ. A mule
+            # still in flight gets nothing: it reads one DOWN per dock, so a
+            # DOWN sent now would sit in its queue and be read as the answer
+            # to its next upload, a θ behind by every merge since (FeRRy
+            # Phase 2).
+            self._release_waiting("post-aggregation")
+
+    # ---------------------------------------- lost and refused uploads
+
+    def _lost_upload_holds_quorum(self) -> bool:
+        """True when a lost upload must still count toward the quorum.
+
+        A quorum above 1 (FedBuff aside: its K is its own quorum) merges one
+        partial from each of several mules at a time. Answering a lost
+        uploader at once, with nothing in the round, lets it fly its next
+        mission while the others wait, so the mules drift out of step; and
+        once one mule has lost more uploads than another, the other's last
+        partial waits for a partner that has already finished its run, until
+        its ``down_wait_s`` (the whole trial budget under the Exp 4 driver)
+        runs out (FeRRy Phase 2). With a quorum of 1, every recorded run
+        included, a lost upload is answered at once, as it always was.
+        """
+        return (
+            self.aggregation.rule != AGG_FEDBUFF
+            and int(self.cluster.min_participation) > 1
+        )
+
+    def _hold_lost_upload(self, up, up_round: Optional[int]) -> None:
+        """Count a lost upload toward the quorum as an empty partial.
+
+        The mule's update never arrived, but the cluster knows the mule docked
+        (it has always answered a lost upload): it holds an empty partial in
+        the mule's place, which counts toward the quorum and adds nothing to θ,
+        as a ``dock_on_empty`` mission's does, and the mule waits at the dock
+        like any uploader until the fold answers it. Its round report and
+        Pass-2 ledger were lost with it, as before. If the round already holds
+        a partial from this mule (it stopped waiting and flew on), that one
+        keeps its place and the mule simply waits again.
+        """
+        self.events.emit(
+            "backhaul_upload_lost",
+            mule_id=str(up.mule_id),
+            mission_round=up_round,
+            awaits_quorum=True,
+        )
+        self.metrics.increment("backhaul_uploads_lost")
+        try:
+            accepted = self.cluster.ingest_up_bundle(
+                _lost_upload_stand_in(up, up_round, self.aggregation)
+            )
+            self._start_waiting(up.mule_id)
+            if accepted:
+                self._fold_pending(up.mule_id, up_round, stand_in=True)
+        except Exception:
+            log.exception("lost-upload stand-in / aggregate failed for %s", up.mule_id)
+            self.metrics.increment("ingest_failures")
+
+    def _note_refused_partial(self, up, up_round: Optional[int]) -> None:
+        """Trace an upload whose partial the open round refused.
+
+        The round already holds a partial from this mule, the one its quorum
+        counts: the mule stopped waiting for the DOWN (``down_wait_s``) and
+        flew another mission. The bundle's round report and Pass-2 ledger were
+        folded all the same, so it is still logged as ingested, marked
+        ``partial_refused`` with the mission whose partial the round kept, so
+        a trace does not credit its updates as merged. Never happens with one
+        mule: each of its uploads is answered before the next.
+        """
+        self.events.emit(
+            "up_bundle_ingested",
+            mule_id=str(up.mule_id),
+            mission_round=up_round,
+            partial_refused=True,
+            held_mission_round=self.cluster.held_mission_round(up.mule_id),
+        )
+        self.metrics.increment("up_bundles_ingested")
+        self.metrics.increment("up_partials_refused")
+
+    def _merge_event_fields(self, mission_round: Optional[int]) -> dict:
+        """The cluster's ``last_merge``, plus the UP's mission, as event fields.
+
+        ``mission_round`` is the round of the UP bundle whose ingest ran the
+        fold, so a merge line can be joined to the mission that triggered it.
+        It goes last so the existing fields keep their order, and any
+        ``mission_round`` or ``mule_id`` key in ``last_merge`` is dropped so
+        the emit never receives a keyword twice.
+        """
+        fields = dict(self.cluster.last_merge or {})
+        fields.pop("mission_round", None)
+        fields.pop("mule_id", None)
+        fields["mission_round"] = mission_round
+        return fields
+
+    # ---------------------------------------------------- waiting mules
+
+    def _start_waiting(self, mule_id: MuleID) -> None:
+        """``mule_id`` uploaded and now waits at the dock for a DOWN."""
+        if mule_id not in self._awaiting:
+            self._awaiting.append(mule_id)
+
+    def _stop_waiting(self, mule_id: MuleID) -> None:
+        """``mule_id`` is being answered, or has left the dock."""
+        if mule_id in self._awaiting:
+            self._awaiting.remove(mule_id)
+
+    def _release_waiting(self, context: str) -> None:
+        """Send the current θ to every mule waiting at the dock, then forget them.
+
+        After a merge these are the mules whose partials it used (a quorum
+        answers all of them at once), and after an expiry the mules whose
+        partials it dropped: they are still blocked at their inter-pass dock
+        and cannot upload again until answered, so without a DOWN here they
+        would time out. Sends are best-effort: a mule whose send fails is
+        logged, counted and dropped from the list, and a mule no longer
+        docked is skipped, since there is no socket to answer on.
+        """
+        waiting, self._awaiting = list(self._awaiting), []
+        docked = set(self.dock.registered_mules())
+        for mid in waiting:
+            if mid not in docked:
+                continue
+            try:
+                self.dock.send_down(self.cluster.dispatch_down_bundle(mid))
+                self.metrics.increment("down_bundles_dispatched")
+            except Exception:
+                log.exception("%s DOWN failed for %s", context, mid)
+                self.metrics.increment("dispatch_down_failures")
+
     def _dispatch_to_new_mules(self, bootstrapped: set) -> None:
         """L-H2: dispatch a DOWN bundle to any mule we haven't yet.
 
         ``bootstrapped`` is mutated in place so the caller's tracking
-        set stays accurate across iterations.
+        set stays accurate across iterations. A mule that has left the dock
+        is dropped from it, so the same id registering again (the mule
+        restarted) is bootstrapped again instead of waiting for a DOWN that
+        never comes. It is also no longer waiting for an answer: the process
+        that uploaded is gone, and its bootstrap is the DOWN it gets.
         """
-        for mid in self.dock.registered_mules():
+        docked = self.dock.registered_mules()
+        bootstrapped &= set(docked)
+        self._awaiting = [m for m in self._awaiting if m in bootstrapped]
+        for mid in docked:
             if mid in bootstrapped:
                 continue
             try:
+                self._stop_waiting(mid)
                 self.dock.send_down(self.cluster.dispatch_down_bundle(mid))
                 bootstrapped.add(mid)
                 log.info("cluster %s: DOWN dispatched to mule %s",
@@ -472,21 +724,45 @@ class ClusterService:
             )
             self.metrics.increment("tier3_refinement_fold_failures")
 
-    def _backhaul_dropped(self, mission_round=None) -> bool:
+    def _backhaul_dropped(self, mission_round=None, mule_id=None) -> bool:
         """EX-4.2/4.3 — Bernoulli draw for a lost mule->BS backhaul upload.
 
         Uses the per-mission L1 loss schedule (probabilities, index =
-        mission_round-1) when configured; otherwise the flat pct.
+        mission_round-1) when configured; otherwise the flat pct. With
+        several expected mules each mule draws from its own stream
+        (:meth:`_backhaul_rng_for`); with one, from the single stream.
         """
+        rng = self._backhaul_rng_for(mule_id)
         sched = self._backhaul_loss_schedule
         if sched:
             idx = (int(mission_round) - 1) if mission_round else 0
             idx = min(max(idx, 0), len(sched) - 1)
             p = float(sched[idx])
-            return p > 0.0 and float(self._backhaul_rng.random()) < p
+            return p > 0.0 and float(rng.random()) < p
         if self._backhaul_loss_pct <= 0.0:
             return False
-        return float(self._backhaul_rng.random()) < (self._backhaul_loss_pct / 100.0)
+        return float(rng.random()) < (self._backhaul_loss_pct / 100.0)
+
+    def _backhaul_rng_for(self, mule_id) -> np.random.Generator:
+        """The stream ``mule_id``'s backhaul draws come from.
+
+        One mule: the single stream seeded with ``backhaul_rng_seed``, so its
+        draws are the recorded ones. Several: a stream per mule, seeded with
+        (``backhaul_rng_seed``, a stable key of the mule id), so each mule's
+        losses depend only on its own missions, not on the order in which the
+        mules' uploads happen to arrive. An unseeded run stays unseeded.
+        """
+        if not self._backhaul_per_mule or mule_id is None:
+            return self._backhaul_rng
+        key = str(mule_id)
+        rng = self._backhaul_mule_rngs.get(key)
+        if rng is None:
+            seed = getattr(self.cfg, "backhaul_rng_seed", None)
+            rng = np.random.default_rng(
+                None if seed is None else [int(seed), _mule_stream_key(key)]
+            )
+            self._backhaul_mule_rngs[key] = rng
+        return rng
 
     def _emit_model_evaluation(self, cluster_round: int) -> None:
         """EX-4.1 — score the current global θ on the held-out test set.

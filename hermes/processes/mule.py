@@ -30,7 +30,7 @@ import sys
 import threading
 import time
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 from hermes.mule import MuleSupervisor, MuleSupervisorError
 from hermes.observability import (
@@ -44,6 +44,17 @@ from hermes.types import DeviceID, MuleID
 from .config import MuleConfig, mule_config_from_json
 
 log = logging.getLogger("hermes.processes.mule")
+
+#: Exit status of a mule whose mission loop ended on an unrecovered failure
+#: (``mission_failed``), so a driver cannot mistake a truncated run for a
+#: finished one. 1 stays Python's own status for an uncaught exception.
+EXIT_MISSION_FAILED = 3
+#: Exit status of a mule that never received its bootstrap DOWN.
+EXIT_BOOTSTRAP_TIMEOUT = 4
+
+#: Where every mule starts and docks: the origin, the pose ``MuleSupervisor``
+#: starts from. D4's FedEx tour returns here.
+DOCK_POSE = (0.0, 0.0, 0.0)
 
 
 def _build_target_selector(cfg: MuleConfig):
@@ -70,9 +81,31 @@ def _build_target_selector(cfg: MuleConfig):
             log.info("mule %s: Oort statistical-utility baseline policy "
                      "(SOTA comparator; requires --real-model)", cfg.mule_id)
             return OortPolicy()
+        # FeRRy Phase 2 — arms D3-D5, whole schedulers like D1/D2.
+        if policy == "whittle":
+            from hermes.scheduler.policies import WhittlePolicy
+            variant = getattr(cfg, "whittle_variant", "expected")
+            weights = getattr(cfg, "whittle_weights", "uniform")
+            log.info("mule %s: Whittle-index baseline policy (Cui et al.; "
+                     "variant=%s, weights=%s)", cfg.mule_id, variant, weights)
+            return WhittlePolicy(variant=variant, weights=weights)
+        if policy == "fedex":
+            from hermes.scheduler.policies import FedExCarpPolicy
+            # The dock is the mule's start pose, so the tour is the shortest
+            # path from wherever the mule is through every contact and home
+            # (the policy's faithful depot mode, its deviation 13).
+            log.info("mule %s: FedEx-Async/CARP tour baseline policy "
+                     "(visit every contact, depot %s)", cfg.mule_id, DOCK_POSE)
+            return FedExCarpPolicy(depot=DOCK_POSE)
+        if policy == "fedcs":
+            from hermes.scheduler.policies import FedCSDegradedPolicy
+            value = getattr(cfg, "fedcs_value", "unit")
+            log.info("mule %s: FedCS (degraded) greedy baseline policy "
+                     "(value=%s)", cfg.mule_id, value)
+            return FedCSDegradedPolicy(value=value)
         raise ValueError(
-            f"unknown contact_policy {policy!r}; "
-            f"expected 'max_aoi', 'oort' or None"
+            f"unknown contact_policy {policy!r}; expected 'max_aoi', 'oort', "
+            f"'whittle', 'fedex', 'fedcs' or None"
         )
 
     if not getattr(cfg, "use_rl_selector", False):
@@ -92,12 +125,66 @@ def _build_target_selector(cfg: MuleConfig):
     return TargetSelectorRL(epsilon=0.0, rng_seed=0)
 
 
-def _pass_1_plan_payload(pass_1_queue) -> List[dict]:
+def _pass_1_plan_payload(pass_1_queue, device_deadlines=None) -> List[dict]:
     """The committed Pass-1 plan for ``mission_completed``: each contact's
-    devices and the deadline it was admitted under (its tightest member's)."""
+    devices and the deadline it was admitted under (its tightest member's).
+
+    ``device_deadlines`` adds each member's own Deadline(j), so a miss can be
+    scored against the device's deadline rather than its contact's tightest
+    (audit #13). Omitted when the plan did not record them.
+    """
+    out: List[dict] = []
+    for wp in pass_1_queue:
+        entry = {
+            "devices": [str(d) for d in wp.devices],
+            "deadline_ts": float(wp.deadline_ts),
+        }
+        if device_deadlines:
+            own = {
+                str(d): float(device_deadlines[d])
+                for d in wp.devices if d in device_deadlines
+            }
+            if own:
+                entry["device_deadlines"] = own
+        out.append(entry)
+    return out
+
+
+def _pass_1_collected(result) -> Tuple[Optional[int], Optional[List[str]]]:
+    """``(pass_1_updates, pass_1_clean_devices)``: the CLEAN sessions collected.
+
+    A mission whose every update was past its age cutoff has no merge report
+    but kept its ledger (``unmerged_report``): its sessions still completed,
+    so they count as collections here, while the merged fields say nothing
+    reached the model. ``unmerged_report`` is None under agg:plain, whose
+    empty missions stay exactly as recorded (both None).
+    """
+    report = getattr(result, "report", None) or getattr(result, "unmerged_report", None)
+    if report is None:
+        return None, None
+    clean = [str(line.device_id) for line in report.lines if line.outcome.is_on_time()]
+    return report.counts()[0], clean
+
+
+def _pass_1_merged_devices(result) -> Optional[List[str]]:
+    """Pass-1 devices whose update the mule's merge actually used.
+
+    The CLEAN sessions minus the updates the age cutoff excluded; built by
+    subtraction so agg:plain, which excludes nothing, reports exactly its CLEAN
+    list (audit #3). An empty mission merged nothing. None when the mission
+    has no round report and is not empty (a trace field the path never had).
+    """
+    if getattr(result, "empty", False):
+        return []
+    report = getattr(result, "report", None)
+    if report is None:
+        return None
+    agg = getattr(result, "aggregate", None)
+    excluded = {str(d) for d in getattr(agg, "excluded_devices", ())}
     return [
-        {"devices": [str(d) for d in wp.devices], "deadline_ts": float(wp.deadline_ts)}
-        for wp in pass_1_queue
+        str(line.device_id)
+        for line in report.lines
+        if line.outcome.is_on_time() and str(line.device_id) not in excluded
     ]
 
 
@@ -106,9 +193,14 @@ def _pass_1_outcomes_payload(result) -> Optional[List[dict]]:
 
     An empty mission has no round report (nothing reached the mule), so it
     records an empty list rather than None: the trace scorer reads None as
-    "a trace from before these fields existed".
+    "a trace from before these fields existed". The exception is a mission
+    whose sessions completed but whose every update was past its age cutoff:
+    its ledger is kept as ``unmerged_report`` and recorded here, so those
+    on-time sessions are not scored as deadline misses.
     """
     report = getattr(result, "report", None)
+    if report is None:
+        report = getattr(result, "unmerged_report", None)
     if report is None:
         return [] if getattr(result, "empty", False) else None
     return [
@@ -129,7 +221,11 @@ def _pass_1_merge_payload(result) -> Optional[dict]:
     """How the mule merged this mission's updates (FeRRy Phase 1).
 
     The rule, the version of the θ the mule carried, and per merged device its
-    age and normalised weight; ``excluded`` lists updates past their cutoff.
+    age and, under the age-aware rules, its weight share w_i / M_m, where M_m
+    is the staleness-free mass; the shares sum to the mass-weighted mean
+    staleness (1 only when no update is discounted). agg:plain records no
+    shares, so ``weights`` is empty there. ``excluded`` lists updates past
+    their cutoff.
     None for an empty mission.
     """
     agg = getattr(result, "aggregate", None)
@@ -177,6 +273,9 @@ class MuleService:
     ) -> None:
         self.cfg = cfg
         self._stop_event = threading.Event()
+        #: The process exit status ``main`` returns: 0 unless the service loop
+        #: ended on an unrecovered failure (``EXIT_*``).
+        self.exit_code = 0
 
         self.events = events or NullEventEmitter(role="mule", node_id=cfg.mule_id)
         self.metrics = metrics or MetricsRegistry()
@@ -236,6 +335,11 @@ class MuleService:
             getattr(cfg, "deadline_params", None),
         )
         sup_kwargs["miss_priority"] = bool(getattr(cfg, "miss_priority", False))
+        # FeRRy Phase 2 — sharing the cluster with other mules. Both default
+        # off (None / False), the recorded single-mule dock.
+        sup_kwargs["down_wait_s"] = getattr(cfg, "down_wait_s", None)
+        sup_kwargs["dock_on_empty"] = bool(getattr(cfg, "dock_on_empty", False))
+        sup_kwargs["should_stop"] = self._stop_event.is_set
         self.supervisor = MuleSupervisor(
             mule_id=MuleID(cfg.mule_id),
             rf=self.rf,
@@ -246,6 +350,11 @@ class MuleService:
             **sup_kwargs,
         )
 
+        # The settings the supervisor actually runs, read back from it rather
+        # than from the config, so a trace shows what a study arm really ran
+        # (audit #15). Additive fields.
+        sched = self.supervisor.scheduler
+        law = sched.deadline_law
         self.events.emit(
             "mule_ready",
             rf_host=self.cfg.rf_host,
@@ -256,6 +365,15 @@ class MuleService:
             rf_range_m=self.cfg.rf_range_m,
             session_ttl_s=self.cfg.session_ttl_s,
             n_missions=self.cfg.n_missions,
+            aggregation=self.supervisor.aggregation.rule,
+            aggregation_params=self.supervisor.aggregation.to_params(),
+            deadline_law=(law.form if law is not None else "additive"),
+            deadline_params=(law.to_params() if law is not None else None),
+            miss_priority=bool(sched.miss_priority),
+            pass_2_budget=bool(self.supervisor.pass_2_budget),
+            mission_budget_s=sched.mission_budget_s,
+            down_wait_s=self.supervisor.down_wait_s,
+            dock_on_empty=bool(self.supervisor.dock_on_empty),
         )
 
     def request_stop(self) -> None:
@@ -331,6 +449,7 @@ class MuleService:
             )
             self.events.emit("dock_bootstrap_timeout")
             self.metrics.increment("dock_bootstrap_timeouts")
+            self.exit_code = EXIT_BOOTSTRAP_TIMEOUT
             return
 
         self.events.emit("dock_bootstrapped")
@@ -363,10 +482,26 @@ class MuleService:
                 # (zero-update, non-closing) mission_completed below so it
                 # counts as a round in the metrics.
                 if getattr(result, "empty", False):
+                    empty_fields = {}
+                    if self.supervisor.dock_on_empty:
+                        # FeRRy Phase 2, additive: whether this empty mission
+                        # still docked. Absent unless dock_on_empty is set.
+                        empty_fields["docked"] = bool(result.docked_empty)
                     self.events.emit(
                         "mission_empty", mission_round=result.mission_round,
+                        **empty_fields,
                     )
                     self.metrics.increment("missions_empty")
+                if getattr(result, "down_timeout", False):
+                    # FeRRy Phase 2: the upload stands, but no DOWN came within
+                    # down_wait_s, so Pass 2 was skipped and the next mission
+                    # flies this one's θ. Never emitted without down_wait_s.
+                    self.events.emit(
+                        "dock_down_timeout",
+                        mission_round=result.mission_round,
+                        down_wait_s=self.supervisor.down_wait_s,
+                    )
+                    self.metrics.increment("dock_down_timeouts")
                 # EX-4.0 instrumentation — surface the Pass-1 aggregation
                 # ledger so an integrated-experiment consumer can compute
                 # update-yield / round-close-rate from the real event
@@ -376,20 +511,11 @@ class MuleService:
                 # contact membership. All three fields are additive and
                 # optional per the observability schema policy, so adding
                 # them does not break existing consumers.
-                report = getattr(result, "report", None)
-                if report is not None:
-                    pass_1_updates = report.counts()[0]  # CLEAN collections
-                    pass_1_clean_devices = [
-                        str(line.device_id)
-                        for line in report.lines
-                        if line.outcome.is_on_time()
-                    ]
-                else:
-                    pass_1_updates = None
-                    pass_1_clean_devices = None
+                pass_1_updates, pass_1_clean_devices = _pass_1_collected(result)
                 pass_1_scheduled = (
                     sum(len(c.devices) for c in result.pass_1_queue) or None
                 )
+                _merged = _pass_1_merged_devices(result)
                 self.events.emit(
                     "mission_completed",
                     mission_round=result.mission_round,
@@ -413,8 +539,17 @@ class MuleService:
                     # Trace-scorer fields (additive, optional): the plan with
                     # its deadlines and every session's outcome, so the
                     # deadline-miss rate can be scored from the trace alone.
-                    pass_1_plan=_pass_1_plan_payload(result.pass_1_queue),
+                    pass_1_plan=_pass_1_plan_payload(
+                        result.pass_1_queue,
+                        getattr(result, "pass_1_device_deadlines", None),
+                    ),
                     pass_1_outcomes=_pass_1_outcomes_payload(result),
+                    # Audit #3: the devices whose update was merged, as
+                    # distinct from pass_1_clean_devices (sessions completed).
+                    pass_1_merged_devices=_merged,
+                    pass_1_merged_updates=(
+                        None if _merged is None else len(_merged)
+                    ),
                     pass_1_merge=_pass_1_merge_payload(result),
                     pass_2_skipped=_pass_2_skipped(result),
                     deadline_state=_deadline_state_payload(
@@ -425,11 +560,13 @@ class MuleService:
                 log.error("mule %s: supervisor error: %s", self.cfg.mule_id, e)
                 self.events.emit("mission_failed", reason=str(e), kind="supervisor")
                 self.metrics.increment("mission_failures")
+                self.exit_code = EXIT_MISSION_FAILED
                 break
             except Exception as e:
                 log.exception("mule %s: unexpected mission failure", self.cfg.mule_id)
                 self.events.emit("mission_failed", reason=repr(e), kind="unexpected")
                 self.metrics.increment("mission_failures")
+                self.exit_code = EXIT_MISSION_FAILED
                 break
 
         log.info("mule %s service loop exiting", self.cfg.mule_id)
@@ -510,7 +647,9 @@ def main(argv: Optional[List[str]] = None) -> int:
         svc.run()
     finally:
         svc.shutdown()
-    return 0
+    # Non-zero only when the loop ended on a failure it could not recover
+    # from, so the run's driver can tell a truncated trial from a finished one.
+    return svc.exit_code
 
 
 if __name__ == "__main__":  # pragma: no cover

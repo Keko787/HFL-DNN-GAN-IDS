@@ -32,6 +32,7 @@ from enum import Enum
 from typing import Callable, List, Optional
 
 from hermes.transport import DockLink, DockLinkError
+from hermes.transport.dock_link import DockLinkTimeout
 from hermes.types import (
     ClusterAmendment,
     ContactHistory,
@@ -56,6 +57,17 @@ log = logging.getLogger(__name__)
 
 class ClientClusterError(RuntimeError):
     """Raised on unrecoverable dock-cycle failures."""
+
+
+class DownTimeout(ClientClusterError):
+    """No DOWN arrived within the wait, and the dock link is still up.
+
+    Raised only where the caller asked to survive the wait
+    (``recoverable_down_wait``, :meth:`ClientCluster.await_down`, or a bounded
+    bootstrap wait): the cluster may simply not have answered yet, for
+    example while it waits for other mules to reach a quorum. A closed link
+    still raises a plain :class:`ClientClusterError`.
+    """
 
 
 class ClientClusterState(str, Enum):
@@ -118,7 +130,22 @@ class _PendingUp:
 # --------------------------------------------------------------------------- #
 
 class ClientCluster:
-    """Mule-NUC dock handler. One instance per mule."""
+    """Mule-NUC dock handler. One instance per mule.
+
+    ``recoverable_down_wait`` (FeRRy Phase 2, off by default) is for a mule
+    that may outlive a DOWN wait: a timeout while the link is up raises
+    :class:`DownTimeout`, which the caller can survive, and every DOWN already
+    queued when the mule docks is thrown away before it uploads. Those can
+    only be late answers to an upload the mule stopped waiting for — the
+    cluster answers a mule only after ingesting its UP — so reading one as the
+    reply to the new upload would hand the mule a θ that leaves its own update
+    out. Off, a timeout is the plain :class:`ClientClusterError` it always was
+    and nothing is drained.
+
+    Whatever the mode, when several DOWNs are queued at a read the newest (by
+    ``issued_round``) wins and the rest are dropped. A lone mule is answered
+    exactly once per upload, so there is never more than one to choose from.
+    """
 
     def __init__(
         self,
@@ -130,6 +157,7 @@ class ClientCluster:
         up_timeout_s: float = 10.0,
         down_timeout_s: float = 10.0,
         max_retry_attempts: int = 5,
+        recoverable_down_wait: bool = False,
     ) -> None:
         self.mule_id = mule_id
         self.dock = dock
@@ -138,6 +166,10 @@ class ClientCluster:
         self.up_timeout_s = up_timeout_s
         self.down_timeout_s = down_timeout_s
         self.max_retry_attempts = max_retry_attempts
+        self.recoverable_down_wait = bool(recoverable_down_wait)
+        #: DOWNs thrown away: drained before an upload, or superseded by a
+        #: newer one at a read. Introspection only.
+        self.stale_downs_dropped: int = 0
 
         self._lock = threading.RLock()
         self._state: ClientClusterState = ClientClusterState.AWAIT_DOCK
@@ -233,7 +265,9 @@ class ClientCluster:
 
     # ---------------------------------------------- bootstrap dock
 
-    def bootstrap_down_only(self) -> Optional[DownBundle]:
+    def bootstrap_down_only(
+        self, timeout: Optional[float] = None,
+    ) -> Optional[DownBundle]:
         """Initial dock: receive + distribute a DOWN bundle without sending UP.
 
         Used at supervisor startup, before the mule has run any missions
@@ -245,25 +279,57 @@ class ClientCluster:
         dock is unavailable. Raises ``ClientClusterError`` on a verify
         or routing failure (same semantics as the DOWN leg of the full
         cycle).
+
+        ``timeout`` bounds the wait and makes it survivable: if nothing has
+        arrived by then and the link is still up, this returns ``None`` so the
+        caller can try again or give up on its own schedule. Without it the
+        wait is ``down_timeout_s`` and running out raises, as it always has.
         """
         if not self.dock.is_available():
             return None
-        down = self._recv_and_verify_down()
+        if timeout is None:
+            down = self._recv_and_verify_down()
+        else:
+            try:
+                down = self._recv_and_verify_down(timeout, survivable=True)
+            except DownTimeout:
+                return None
+        self._distribute(down)
+        return down
+
+    def await_down(self, timeout: float) -> DownBundle:
+        """Receive, verify and distribute a DOWN without uploading anything.
+
+        For a mule that already uploaded and is still owed an answer: a second
+        :meth:`run_dock_cycle` would find nothing staged. Raises
+        :class:`DownTimeout` if nothing arrives within ``timeout`` while the
+        link is up, and :class:`ClientClusterError` otherwise.
+        """
+        down = self._recv_and_verify_down(timeout, survivable=True)
         self._distribute(down)
         return down
 
     # ---------------------------------------------- full dock cycle
 
-    def run_dock_cycle(self) -> Optional[DownBundle]:
+    def run_dock_cycle(
+        self, *, down_timeout_s: Optional[float] = None,
+    ) -> Optional[DownBundle]:
         """Drive COLLECT -> UP -> DOWN -> VERIFY -> DISTRIBUTE.
 
         Requires a prior ``collect()`` unless the retry queue is non-empty.
         Returns the verified ``DownBundle`` on success, or ``None`` if the
         upload succeeded but the server sent nothing (degenerate case).
-        Raises ``ClientClusterError`` on unrecoverable failure.
+        Raises ``ClientClusterError`` on unrecoverable failure, and
+        :class:`DownTimeout` on a DOWN wait that ran out under
+        ``recoverable_down_wait``. ``down_timeout_s`` overrides the DOWN wait
+        for this cycle (default ``self.down_timeout_s``).
         """
         if not self.dock.is_available():
             raise ClientClusterError("dock not available at run_dock_cycle entry")
+
+        if self.recoverable_down_wait:
+            # Anything queued before this upload answers an older one.
+            self._drop_queued_downs("before UP")
 
         # ---- Build / gather the outbound queue (retries first, then fresh) ----
         bundles_to_send: List[UpBundle] = []
@@ -286,7 +352,9 @@ class ClientCluster:
             return None
 
         # ---- DOWN + VERIFY + DISTRIBUTE ------------------------------------
-        down = self._recv_and_verify_down()
+        down = self._recv_and_verify_down(
+            down_timeout_s, survivable=self.recoverable_down_wait,
+        )
         self._distribute(down)
         return down
 
@@ -377,15 +445,30 @@ class ClientCluster:
                 attempts=1,
             )
 
-    def _recv_and_verify_down(self) -> DownBundle:
+    def _recv_and_verify_down(
+        self, timeout: Optional[float] = None, *, survivable: bool = False,
+    ) -> DownBundle:
+        """Block for this mule's DOWN, keep the newest queued, and verify it.
+
+        ``timeout`` defaults to ``down_timeout_s``. With ``survivable`` a wait
+        that runs out while the link is up raises :class:`DownTimeout`; every
+        other failure, and any timeout without it, raises a plain
+        :class:`ClientClusterError` with the message it always had.
+        """
         with self._lock:
             self._set_state(ClientClusterState.DOWN)
+        wait_s = self.down_timeout_s if timeout is None else timeout
         try:
-            down = self.dock.client_recv_down(
-                self.mule_id, timeout=self.down_timeout_s
-            )
+            down = self.dock.client_recv_down(self.mule_id, timeout=wait_s)
         except DockLinkError as e:
+            if (
+                survivable
+                and isinstance(e, DockLinkTimeout)
+                and self.dock.is_available()
+            ):
+                raise DownTimeout(f"DOWN recv failed: {e}") from e
             raise ClientClusterError(f"DOWN recv failed: {e}") from e
+        down = self._newest_of(down)
 
         with self._lock:
             self._set_state(ClientClusterState.VERIFY)
@@ -410,6 +493,50 @@ class ClientCluster:
         with self._lock:
             self._last_down = down
         return down
+
+    def _queued_downs(self) -> List[DownBundle]:
+        """DOWNs already queued for this mule; a failing drain counts as none."""
+        try:
+            return list(self.dock.client_drain_down(self.mule_id))
+        except DockLinkError:
+            return []
+
+    def _newest_of(self, first: DownBundle) -> DownBundle:
+        """``first`` or a DOWN queued behind it, whichever is newest.
+
+        Newest is the highest ``issued_round``, the later arrival on a tie: a
+        mule acts on one θ per dock, and an older one would carry a basis the
+        cluster has already moved past. A lone mule never has a second DOWN
+        queued, so this returns ``first`` for it.
+        """
+        queued = self._queued_downs()
+        if not queued:
+            return first
+        candidates = [first] + queued
+        best = max(
+            range(len(candidates)),
+            key=lambda i: (int(candidates[i].mission_slice.issued_round), i),
+        )
+        self.stale_downs_dropped += len(candidates) - 1
+        log.info(
+            "DOWN: mule=%s kept round=%d, dropped %d older queued bundle(s)",
+            self.mule_id,
+            candidates[best].mission_slice.issued_round,
+            len(candidates) - 1,
+        )
+        return candidates[best]
+
+    def _drop_queued_downs(self, when: str) -> int:
+        """Throw away every DOWN queued now; returns how many."""
+        stale = self._queued_downs()
+        if stale:
+            self.stale_downs_dropped += len(stale)
+            log.info(
+                "DOWN: mule=%s dropped %d stale bundle(s) %s (rounds %s)",
+                self.mule_id, len(stale), when,
+                [d.mission_slice.issued_round for d in stale],
+            )
+        return len(stale)
 
     def _distribute(self, down: DownBundle) -> None:
         with self._lock:

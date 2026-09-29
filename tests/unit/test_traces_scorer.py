@@ -28,15 +28,21 @@ from experiments.analysis.traces_scorer import (
     age_profile,
     deadline_misses,
     main,
+    merged_devices,
     parse_trial_dir,
     score_trial,
     score_traces,
     tau_reach,
+    trial_provenance,
+    trial_status,
     write_scores_csv,
 )
+from experiments.exp4.driver import PROVENANCE_COLUMNS
 from experiments.exp4.events_consumer import observation_from_rows
 from experiments.exp4.metrics import summarise_observation
+from hermes.mission.aggregation_rules import AggregationSpec
 from hermes.processes.mule import _pass_1_outcomes_payload, _pass_1_plan_payload
+from hermes.scheduler.stages.s3_deadline import DeadlineLaw
 from hermes.types import (
     Bucket,
     ContactWaypoint,
@@ -328,9 +334,17 @@ def test_score_traces_skips_other_directories_and_filters_arms(tmp_path):
     assert [s.key.arm for s in score_traces(tmp_path, arms=["H1"])] == ["H1"]
 
 
-def test_multi_mule_traces_are_refused(tmp_path):
-    with pytest.raises(NotImplementedError, match="single-mule"):
-        score_trial(_write_trial(tmp_path, mules=("m1", "m2")))
+def test_multi_mule_traces_are_scored_per_mule(tmp_path):
+    """Phase 2 lifted the single-mule refusal. Both mules fly rounds 1–4 in
+    the same windows; only m1's round-3 upload was lost, so m2's round 3
+    still closes (tests/unit/test_multi_mule_scoring.py has the details)."""
+    score = score_trial(_write_trial(tmp_path, mules=("m1", "m2")))
+    assert score.n_mules == 2 and score.to_row()["n_mules"] == 2
+    assert score.backhaul_lost_missions == 1
+    # m1 closes 1 and 4 (2 is empty, 3 lost); m2 closes 1, 3 and 4.
+    assert score.summary.round_close_rate_kmin1 == pytest.approx(5 / 8)
+    single = score_trial(_write_trial(tmp_path / "one"))
+    assert single.n_mules == 1 and single.to_row()["n_mules"] == 1
 
 
 def test_csv_and_cli(tmp_path):
@@ -344,3 +358,465 @@ def test_csv_and_cli(tmp_path):
     cli_out = tmp_path / "cli.csv"
     assert main(["--traces", str(root), "--tau", "0.82", "--csv", str(cli_out)]) == 0
     assert cli_out.exists()
+
+
+# --------------------------------------------------------------------------- #
+# 5. FeRRy audit fixes: merged vs collected (#3), the merge ledger (#4),
+#    degenerate trials (#10), status (#11), provenance (#12), per-device
+#    deadlines (#13)
+# --------------------------------------------------------------------------- #
+
+def _obs_with(missions, extra=None, cluster_rows=()):
+    """``_obs`` with extra ``mission_completed`` fields, keyed by mission round."""
+    rows = _mule_rows(missions)
+    for r in rows:
+        if r["event"] == "mission_completed":
+            r.update((extra or {}).get(r["mission_round"], {}))
+    return observation_from_rows(
+        cluster_rows=list(cluster_rows), mule_rows=rows,
+        device_rows=_device_rows(), n_devices=len(DEVICES),
+    )
+
+
+def _cev(ts, event, **kw):
+    return {"ts": ts, "event": event, "role": "cluster", "id": "c1", **kw}
+
+
+def _summary(obs, n_missions=4):
+    return summarise_observation(obs, n_devices=3, rf_range_m=60.0, n_missions_target=n_missions)
+
+
+# ---- #3: an update the mule's merge excluded never reached the model ---- #
+
+def test_an_update_the_merge_excluded_is_never_credited():
+    missions = [dict(rnd=1, start=1000.0, end=1010.0, clean=["a", "b"])]
+    obs = _obs_with(missions, {1: {"pass_1_merged_devices": ["a"], "pass_1_merged_updates": 1}})
+    mission = obs.missions[0]
+    assert mission.pass_1_clean_devices == ("a", "b")
+    assert (mission.pass_1_merged_devices, mission.pass_1_merged_updates) == (("a",), 1)
+    assert merged_devices(obs, mission) == ("a",)
+    assert age_profile(obs, DEVICES).merged_updates == {"a": 1, "b": 0, "c": 0}
+
+    s = _summary(obs, n_missions=1)
+    assert s.update_yield == pytest.approx(1.0)              # merged, not the 2 collected
+    assert s.round_close_rate_kmin2 == pytest.approx(0.0)
+    assert s.mission_completion_rate == pytest.approx(2 / 3)  # b still finished its session
+
+
+def test_traces_without_the_merged_fields_credit_every_clean_update():
+    obs = _obs()
+    assert obs.missions[0].pass_1_merged_devices is None
+    assert merged_devices(obs, obs.missions[0]) == ("a", "b")
+
+
+def test_an_all_excluded_mission_credits_nobody_but_keeps_its_on_time_sessions():
+    missions = [
+        dict(rnd=1, start=1000.0, end=1010.0, clean=["a"]),
+        # Reported as mission_empty: b's update was collected on time, then
+        # excluded past its cutoff.
+        dict(rnd=2, start=1010.0, end=1020.0, clean=[],
+             pass_1_plan=[{"devices": ["b"], "deadline_ts": 1015.0}],
+             pass_1_outcomes=[{"device": "b", "outcome": "clean", "contact_ts": 1014.0}]),
+    ]
+    obs = _obs_with(missions, {
+        1: {"pass_1_merged_devices": ["a"], "pass_1_merged_updates": 1},
+        2: {"pass_1_merged_devices": [], "pass_1_merged_updates": 0},
+    })
+    assert obs.missions_empty == 1 and obs.missions[1].pass_1_updates is None
+    assert merged_devices(obs, obs.missions[1]) == ()
+    assert age_profile(obs, DEVICES).merged_updates == {"a": 1, "b": 0, "c": 0}
+    assert _summary(obs, n_missions=2).round_close_rate_kmin1 == pytest.approx(0.5)
+    misses = deadline_misses(obs)
+    assert (misses.admitted, misses.missed) == (1, 0)          # b was on time
+
+
+# ---- #4: FedBuff deferral and expiry ---- #
+#
+#   mission  Pass-1 CLEAN  cluster
+#   1        a             deferred (buffer 1/2)
+#   2        b             applied: flushes 1 and 2
+#   3        c             deferred, still buffered when the trial ends
+#
+# Ages (a, b, c): (1, 1, 1), (0, 0, 2), (1, 1, 3) -> NAoU 1, 2/3, 5/3; mean 10/9
+
+FEDBUFF_MISSIONS = [
+    dict(rnd=1, start=1000.0, end=1010.0, clean=["a"]),
+    dict(rnd=2, start=1010.0, end=1020.0, clean=["b"]),
+    dict(rnd=3, start=1020.0, end=1030.0, clean=["c"]),
+]
+
+
+def _fedbuff_cluster(recorded=True):
+    rows = [
+        _cev(1005.0, "up_bundle_ingested", mule_id="m1", mission_round=1),
+        _cev(1005.0, "cluster_merge_deferred", mule_id="m1", mission_round=1,
+             rule="agg:fedbuff", applied=False, buffered=1, k=2, partials=[["m1", 1]]),
+        _cev(1015.0, "up_bundle_ingested", mule_id="m1", mission_round=2),
+        _cev(1015.0, "cluster_merge", mission_round=2, rule="agg:fedbuff", applied=True,
+             buffered=2, k=2, partials=[["m1", 1], ["m1", 2]]),
+        _cev(1015.0, "cluster_round_closed", cluster_round=1),
+        _cev(1025.0, "up_bundle_ingested", mule_id="m1", mission_round=3),
+        _cev(1025.0, "cluster_merge_deferred", mule_id="m1", mission_round=3,
+             rule="agg:fedbuff", applied=False, buffered=1, k=2, partials=[["m1", 3]]),
+    ]
+    if not recorded:
+        # Phase 1 traces: no mission round and no partials on the merge events.
+        for r in rows:
+            if r["event"].startswith("cluster_merge"):
+                del r["mission_round"], r["partials"]
+    return rows
+
+
+@pytest.mark.parametrize("recorded", [True, False], ids=["recorded", "placed-by-time"])
+def test_a_fedbuff_deferral_is_credited_at_the_mission_that_flushed_it(recorded):
+    obs = _obs_with(FEDBUFF_MISSIONS, cluster_rows=_fedbuff_cluster(recorded))
+    assert obs.deferred_rounds == {1, 3}
+    assert obs.flush_of == {1: 2}                 # 3 was never flushed
+    assert obs.expired_rounds == set()
+    m1, m2, m3 = obs.missions
+    assert merged_devices(obs, m1) == ()
+    assert merged_devices(obs, m2) == ("b", "a")
+    assert merged_devices(obs, m3) == ()
+
+    ages = age_profile(obs, DEVICES)
+    assert ages.merged_updates == {"a": 1, "b": 1, "c": 0}
+    assert ages.network_aou_mean == pytest.approx(10 / 9)
+    assert ages.network_aou_final == pytest.approx(5 / 3)
+    assert ages.age_max == 3
+    # Only the flushing mission's round closes.
+    assert _summary(obs, n_missions=3).round_close_rate_kmin1 == pytest.approx(1 / 3)
+
+
+def test_without_partials_a_merge_flushes_every_deferral_since_the_last():
+    missions = FEDBUFF_MISSIONS
+    cluster = [
+        _cev(1005.0, "cluster_merge_deferred", mule_id="m1", applied=False),
+        _cev(1015.0, "cluster_merge_deferred", mule_id="m1", applied=False),
+        _cev(1025.0, "cluster_merge", rule="agg:fedbuff", applied=True),
+    ]
+    obs = _obs_with(missions, cluster_rows=cluster)
+    assert obs.deferred_rounds == {1, 2} and obs.flush_of == {1: 3, 2: 3}
+    assert sorted(merged_devices(obs, obs.missions[2])) == ["a", "b", "c"]
+    assert age_profile(obs, DEVICES).network_aou_final == pytest.approx(0.0)
+
+
+@pytest.mark.parametrize("recorded", [True, False], ids=["recorded", "placed-by-time"])
+def test_an_expired_merge_credits_nobody_and_does_not_close(recorded):
+    missions = FEDBUFF_MISSIONS[:2]
+    expired = _cev(1015.0, "cluster_merge_expired", mule_id="m1", mission_round=2)
+    if not recorded:
+        del expired["mission_round"]
+    cluster = [
+        _cev(1005.0, "cluster_merge", mission_round=1, rule="agg:cutoff", applied=True),
+        _cev(1005.0, "cluster_round_closed", cluster_round=1),
+        expired,
+    ]
+    obs = _obs_with(missions, cluster_rows=cluster)
+    assert obs.expired_rounds == {2} and obs.deferred_rounds == set()
+    assert merged_devices(obs, obs.missions[1]) == ()
+    assert age_profile(obs, DEVICES).merged_updates == {"a": 1, "b": 0, "c": 0}
+    assert _summary(obs, n_missions=2).round_close_rate_kmin1 == pytest.approx(0.5)
+
+
+def test_plain_traces_have_an_empty_merge_ledger():
+    obs = _obs()
+    assert (obs.deferred_rounds, obs.expired_rounds, obs.flush_of) == (set(), set(), {})
+
+
+# ---- #10: degenerate trials report blanks, not flattering numbers ---- #
+
+def test_a_trial_that_merged_nothing_has_no_jain_index():
+    missions = [dict(rnd=1, start=1000.0, end=1010.0, clean=[]),
+                dict(rnd=2, start=1010.0, end=1020.0, clean=[])]
+    ages = age_profile(_obs(missions=missions, cluster_rows=[]), DEVICES)
+    assert ages.merged_total == 0 and ages.jain_merged is None
+    assert ages.network_aou_final == pytest.approx(2.0)     # the ages still exist
+
+
+def test_a_trial_without_missions_has_no_ages(tmp_path):
+    ages = age_profile(_obs(missions=[], cluster_rows=[]), DEVICES)
+    assert ages.n_missions == 0
+    assert (ages.network_aou_mean, ages.network_aou_final, ages.age_max,
+            ages.age_p95, ages.jain_merged) == (None, None, None, None, None)
+
+    root = tmp_path / "traces"
+    d = _write_trial(root)
+    (d / "mule-m1.jsonl").write_text(json.dumps(_mule_rows([])[0]) + "\n")
+    row = score_trial(d).to_row()
+    assert (row["network_aou_mean"], row["network_aou_final"], row["age_max"],
+            row["age_p95"], row["jain_merged"], row["merged_total"]) == ("", "", "", "", "", 0)
+    # The summary's means skip the blanks rather than failing on them.
+    _write_trial(root, "N=3-regime=jittery-rrf=60.0__H1__t8__s43")
+    assert main(["--traces", str(root)]) == 0
+
+
+# ---- #13: each member is held to its own Deadline(j) ---- #
+
+def _deadline_mission(rnd, start, *, per_device):
+    contact = {"devices": ["a", "b"], "deadline_ts": start + 5.0}   # a's, the tightest
+    if per_device:
+        contact["device_deadlines"] = {"a": start + 5.0, "b": start + 8.0}
+    return dict(
+        rnd=rnd, start=start, end=start + 10.0, clean=["a", "b"],
+        pass_1_plan=[contact],
+        # b finishes after the contact's deadline but before its own.
+        pass_1_outcomes=[{"device": "a", "outcome": "clean", "contact_ts": start + 4.0},
+                         {"device": "b", "outcome": "clean", "contact_ts": start + 7.0}],
+    )
+
+
+def test_a_later_member_on_time_under_its_own_deadline_is_not_a_miss():
+    obs = _obs(missions=[_deadline_mission(1, 1000.0, per_device=True)])
+    mission = obs.missions[0]
+    assert mission.pass_1_deadlines == (("a", 1005.0), ("b", 1008.0))
+    assert mission.deadline_basis == "device"
+    misses = deadline_misses(obs)
+    assert (misses.missed, misses.basis) == (0, "device")
+
+
+def test_legacy_plans_fall_back_to_the_contact_deadline():
+    obs = _obs(missions=[_deadline_mission(1, 1000.0, per_device=False)])
+    assert obs.missions[0].pass_1_deadlines == (("a", 1005.0), ("b", 1005.0))
+    misses = deadline_misses(obs)
+    assert (misses.missed, misses.basis) == (1, "contact")   # b, late only by a's deadline
+
+
+def test_the_basis_is_mixed_across_missions_and_reaches_the_row(tmp_path):
+    obs = _obs(missions=[_deadline_mission(1, 1000.0, per_device=True),
+                         _deadline_mission(2, 1010.0, per_device=False)])
+    assert deadline_misses(obs).basis == "mixed"
+    assert deadline_misses(_obs()).basis is None                 # no plan at all
+    row = score_trial(_write_trial(tmp_path)).to_row()
+    assert row["deadline_basis"] == ""
+
+
+# ---- #11: trial status ---- #
+
+TRIAL_8 = "N=3-regime=jittery-rrf=60.0__H1__t8__s43"
+
+
+def _mark(trial_dir, status, error="", **timing):
+    (trial_dir / "trial_status.json").write_text(
+        json.dumps({"status": status, "error": error, "n_missions_target": 4, **timing})
+    )
+
+
+def _status_csv(path, rows):
+    """A trial CSV as the runner writes it; the cell id keeps its ``|``."""
+    lines = ["cell_id,arm,trial_index,seed,status,error"]
+    lines += [f"N=3|regime=jittery|rrf=60.0,{arm},{t},{s},{status}," for arm, t, s, status in rows]
+    path.write_text("\n".join(lines) + "\n")
+    return path
+
+
+def test_a_failed_trial_is_left_out_unless_asked_for(tmp_path):
+    _write_trial(tmp_path)
+    _mark(_write_trial(tmp_path, TRIAL_8), "no_eval", "no model_evaluation events")
+    assert [s.key.trial_index for s in score_traces(tmp_path)] == [7]
+    both = score_traces(tmp_path, include_failed=True)
+    assert [(s.key.trial_index, s.status) for s in both] == [(7, "ok"), (8, "no_eval")]
+    assert both[1].to_row()["status"] == "no_eval"
+    assert both[0].to_row()["status"] == "ok"
+
+
+def test_legacy_traces_take_their_status_from_the_trial_csv(tmp_path):
+    root = tmp_path / "traces"
+    _write_trial(root)
+    _write_trial(root, TRIAL_8)
+    trial_csv = _status_csv(tmp_path / "trials.csv", [("H1", 7, 42, "ok"), ("H1", 8, 43, "error")])
+    assert [s.key.trial_index for s in score_traces(root, status_csv=trial_csv)] == [7]
+    assert [s.key.trial_index for s in score_traces(root)] == [7, 8]      # neither: ok
+    status = trial_status(root / TRIAL_8, trial_csv)
+    assert (status.status, status.source) == ("error", "csv")
+    assert trial_status(root / TRIAL_8).source == "default"
+
+
+def test_a_failure_in_the_trial_csv_overrides_an_ok_marker(tmp_path, capsys):
+    """The runner writes the row after the marker, relabelling a late trial
+    ``timeout``: the row's failure is the final word."""
+    root = tmp_path / "traces"
+    _mark(_write_trial(root), "ok")
+    trial_csv = _status_csv(tmp_path / "trials.csv", [("H1", 7, 42, "timeout")])
+    status = trial_status(root / TRIAL, trial_csv)
+    assert (status.status, status.source) == ("timeout", "csv")
+    assert (status.marker_status, status.csv_status) == ("ok", "timeout")
+    assert score_traces(root, status_csv=trial_csv) == []
+    assert main(["--traces", str(root), "--status-csv", str(trial_csv)]) == 1
+    out = capsys.readouterr().out
+    assert "trial CSV says 'timeout'; using the trial CSV" in out
+    assert "excluded (status not ok): H1 1" in out
+
+
+def test_an_ok_in_the_trial_csv_never_clears_a_marked_failure(tmp_path):
+    """The runner never turns a failed trial ok, so such a row is another run's."""
+    root = tmp_path / "traces"
+    _mark(_write_trial(root), "no_eval")
+    trial_csv = _status_csv(tmp_path / "trials.csv", [("H1", 7, 42, "ok")])
+    status = trial_status(root / TRIAL, trial_csv)
+    assert (status.status, status.source) == ("no_eval", "marker")
+    _mark(root / TRIAL, "ok")
+    assert trial_status(root / TRIAL, trial_csv).source == "marker"      # they agree
+
+
+def test_without_the_csv_a_late_ok_marker_is_a_soft_timeout(tmp_path):
+    """The runner's default soft cap is the trial budget the marker records."""
+    root = tmp_path / "traces"
+    d = _write_trial(root)
+    _mark(d, "ok", run_s=121.5, trial_budget_s=120.0)
+    status = trial_status(d)
+    assert (status.status, status.source, status.marker_status) == ("timeout", "soft_cap", "ok")
+    assert score_traces(root) == []
+    assert [s.status for s in score_traces(root, include_failed=True)] == ["timeout"]
+    # A trial CSV row, when given, is the runner's own verdict — e.g. under an
+    # explicit --timeout-s above the budget.
+    ok_csv = _status_csv(tmp_path / "trials.csv", [("H1", 7, 42, "ok")])
+    assert trial_status(d, ok_csv).status == "ok"
+    # In time, or a marker that records no timing: the marker's ok stands.
+    _mark(d, "ok", run_s=119.0, trial_budget_s=120.0)
+    assert trial_status(d).status == "ok"
+    _mark(d, "ok", run_s=None, trial_budget_s=120.0)
+    assert trial_status(d).status == "ok"
+
+
+def test_each_status_csv_is_joined_only_to_its_own_trace_root(tmp_path, capsys):
+    """Paired sweeps share every (arm, trial_index, seed) key; merging their
+    trial CSVs would apply one sweep's statuses to the other's traces."""
+    off, on = tmp_path / "off_traces", tmp_path / "on_traces"
+    _write_trial(off)
+    _write_trial(on)
+    off_csv = _status_csv(tmp_path / "off.csv", [("H1", 7, 42, "ok")])
+    on_csv = _status_csv(tmp_path / "on.csv", [("H1", 7, 42, "no_eval")])
+    out_csv = tmp_path / "scored.csv"
+    assert main(["--traces", str(off), str(on), "--status-csv", str(off_csv), str(on_csv),
+                 "--csv", str(out_csv)]) == 0
+    assert "excluded (status not ok): H1 1" in capsys.readouterr().out
+    rows = list(csv.DictReader(open(out_csv, encoding="utf-8")))
+    assert [r["trace_root"] for r in rows] == [str(off)]
+    # Reversed, the other root's trial is the one kept.
+    assert main(["--traces", str(off), str(on), "--status-csv", str(on_csv), str(off_csv),
+                 "--csv", str(out_csv)]) == 0
+    rows = list(csv.DictReader(open(out_csv, encoding="utf-8")))
+    assert [r["trace_root"] for r in rows] == [str(on)]
+    # '-' stands for a root without a trial CSV.
+    assert main(["--traces", str(off), str(on), "--status-csv", "-", str(on_csv),
+                 "--csv", str(out_csv)]) == 0
+    rows = list(csv.DictReader(open(out_csv, encoding="utf-8")))
+    assert [r["trace_root"] for r in rows] == [str(off)]
+    # One CSV for two roots is refused rather than guessed at.
+    with pytest.raises(SystemExit):
+        main(["--traces", str(off), str(on), "--status-csv", str(off_csv)])
+
+
+def test_the_cli_reports_exclusions_per_arm(tmp_path, capsys):
+    root = tmp_path / "traces"
+    _write_trial(root)
+    _mark(_write_trial(root, TRIAL_8), "no_eval")
+    _write_trial(root, "N=3-regime=jittery-rrf=60.0__D1__t7__s42")
+    assert main(["--traces", str(root)]) == 0
+    assert "excluded (status not ok): D1 0, H1 1" in capsys.readouterr().out
+
+    out = tmp_path / "all.csv"
+    assert main(["--traces", str(root), "--include-failed", "--csv", str(out)]) == 0
+    assert "status not ok" not in capsys.readouterr().out
+    rows = list(csv.DictReader(open(out, encoding="utf-8")))
+    assert sorted(r["status"] for r in rows) == ["no_eval", "ok", "ok"]
+
+
+# ---- #12: provenance ---- #
+
+RECORDED_PROVENANCE = {
+    "mission_budget_s": "", "mission_window_adaptation": 0,
+    "aggregation": "agg:plain", "aggregation_params": "", "fedprox_rho": 0.0,
+    "pass_2_budget": 0, "deadline_law": "additive", "deadline_params": "",
+    "miss_priority": 0,
+    # Phase 2: one mule, a quorum of 1 (blank), the recorded dock and no
+    # policy options.
+    "n_mules": 1, "min_participation": "", "dock_params": "", "policy_params": "",
+}
+
+
+def _configure(trial_dir, *, fedprox_rho=0.0, **mule):
+    """Rewrite a trial's configs the way the topology builder fills them."""
+    cfg = {"rf_range_m": 60.0, "n_missions": 4, **mule}
+    for path in trial_dir.glob("mule-*.json"):
+        path.write_text(json.dumps(cfg))
+    for dev in DEVICES:
+        (trial_dir / f"device-{dev}.json").write_text(
+            json.dumps({"device_id": dev, "fedprox_rho": fedprox_rho})
+        )
+
+
+def test_a_legacy_trace_gets_the_recorded_provenance(tmp_path):
+    score = score_trial(_write_trial(tmp_path))
+    assert score.provenance == RECORDED_PROVENANCE
+    assert set(RECORDED_PROVENANCE) == set(PROVENANCE_COLUMNS)
+
+
+def test_provenance_follows_the_identity_columns(tmp_path):
+    row = score_trial(_write_trial(tmp_path)).to_row()
+    assert list(row)[:6 + len(PROVENANCE_COLUMNS)] == [
+        "cell_id", "arm", "trial_index", "seed", "trace_root", *PROVENANCE_COLUMNS, "status",
+    ]
+    assert row["trace_root"] == str(tmp_path)
+
+
+def test_provenance_is_read_from_the_configs_in_the_drivers_format(tmp_path):
+    spec = AggregationSpec.from_config("agg:fedbuff", {"buffer_k": 2})
+    law = DeadlineLaw.from_config("multiplicative", {"beta_on": 0.7})
+    d = _write_trial(tmp_path)
+    _configure(
+        d, fedprox_rho=0.01,
+        aggregation=spec.rule, aggregation_params=spec.to_params(),
+        deadline_law=law.form, deadline_params=law.to_params(),
+        mission_budget_s=90, mission_window_adaptation=True,
+        pass_2_budget=True, miss_priority=True,
+    )
+    assert trial_provenance(d) == {
+        "mission_budget_s": 90.0, "mission_window_adaptation": 1,
+        "aggregation": "agg:fedbuff",
+        "aggregation_params": json.dumps(spec.to_params(), sort_keys=True),
+        "fedprox_rho": 0.01, "pass_2_budget": 1,
+        "deadline_law": "multiplicative",
+        "deadline_params": json.dumps(law.to_params(), sort_keys=True),
+        "miss_priority": 1,
+        "n_mules": 1, "min_participation": "", "dock_params": "", "policy_params": "",
+    }
+
+
+@pytest.mark.parametrize("policy, options, params", [
+    ("whittle", {"whittle_variant": "literal", "whittle_weights": "oort"},
+     {"variant": "literal", "weights": "oort"}),
+    ("fedcs", {"fedcs_value": "devices"}, {"value": "devices"}),
+    ("max_aoi", {"whittle_variant": "literal"}, None),
+])
+def test_the_fleet_columns_are_read_from_the_configs_in_the_drivers_format(
+    tmp_path, policy, options, params,
+):
+    """Phase 2: the mule count, the cluster's quorum, the dock settings and
+    the D3/D5 options, each formatted as the driver's row formats it."""
+    d = _write_trial(tmp_path, mules=("m1", "m2"))
+    _configure(d, contact_policy=policy, dock_on_empty=True, down_wait_s=120, **options)
+    (d / "cluster.json").write_text(json.dumps(
+        dict(json.loads((d / "cluster.json").read_text()), min_participation=2)
+    ))
+    provenance = trial_provenance(d)
+    assert (provenance["n_mules"], provenance["min_participation"]) == (2, 2)
+    assert provenance["dock_params"] == json.dumps(
+        {"dock_on_empty": True, "down_wait_s": 120.0}, sort_keys=True,
+    )
+    assert provenance["policy_params"] == (
+        "" if params is None else json.dumps(params, sort_keys=True)
+    )
+    # Two mules with a quorum of 1 are not the recorded topology either.
+    (d / "cluster.json").write_text(json.dumps({"min_participation": 1}))
+    assert (trial_provenance(d)["n_mules"], trial_provenance(d)["min_participation"]) == (2, 1)
+
+
+def test_the_cli_groups_by_provenance_and_flags_a_trial_scored_twice(tmp_path, capsys):
+    plain, buffered = tmp_path / "plain", tmp_path / "fedbuff"
+    _write_trial(plain)
+    _configure(_write_trial(buffered), aggregation="agg:fedbuff", aggregation_params={"buffer_k": 2})
+    assert main(["--traces", str(plain), str(buffered)]) == 0
+    out = capsys.readouterr().out
+    assert "aggregation=agg:plain" in out and "aggregation=agg:fedbuff" in out
+    assert "different provenances" in out

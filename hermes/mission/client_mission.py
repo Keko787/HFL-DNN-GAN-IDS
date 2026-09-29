@@ -175,6 +175,10 @@ class ClientMission:
         self._theta_basis_version: Optional[int] = None
         self._prepared_basis: Optional[Weights] = None
         self._prepared_basis_version: Optional[int] = None
+        # One local fit at a time: a train-ahead runs on a background thread
+        # and must not share the local model with a delivery-triggered fit.
+        self._train_lock = threading.Lock()
+        self._train_thread: Optional[threading.Thread] = None
 
         # register self with the loopback (real RF would just listen on addr)
         if hasattr(rf, "register_device"):
@@ -343,30 +347,56 @@ class ClientMission:
         Returns:
             The training result, or ``None`` if no θ basis is available.
         """
-        with self._lock:
-            theta = self._theta_basis
-            theta_version = self._theta_basis_version
-            stashed_synth = list(self._last_synth_batch)
-        if theta is None:
-            log.debug(
-                "device=%s train_offline: no θ basis yet, skipping",
-                self.device_id,
-            )
-            return None
+        with self._train_lock:
+            with self._lock:
+                theta = self._theta_basis
+                theta_version = self._theta_basis_version
+                stashed_synth = list(self._last_synth_batch)
+            if theta is None:
+                log.debug(
+                    "device=%s train_offline: no θ basis yet, skipping",
+                    self.device_id,
+                )
+                return None
 
-        synth = list(synth_batch) if synth_batch is not None else stashed_synth
-        try:
-            result = self.local_train(theta, synth)
-        except Exception:
-            log.exception("device=%s train_offline raised", self.device_id)
-            return None
+            synth = list(synth_batch) if synth_batch is not None else stashed_synth
+            try:
+                result = self.local_train(theta, synth)
+            except Exception:
+                log.exception("device=%s train_offline raised", self.device_id)
+                return None
 
-        with self._lock:
-            self._prepared_delta = result
-            self._prepared_basis = theta
-            self._prepared_basis_version = theta_version
+            with self._lock:
+                if self._theta_basis is not theta:
+                    # A newer basis arrived while this fit ran (a background
+                    # train-ahead overtaken by a delivery): the result is stale.
+                    log.debug(
+                        "device=%s train_offline: basis replaced mid-fit; "
+                        "discarding", self.device_id,
+                    )
+                    return None
+                self._prepared_delta = result
+                self._prepared_basis = theta
+                self._prepared_basis_version = theta_version
         self._update_utility(result, theta_global=theta)
         return result
+
+    def _start_train_ahead(self) -> None:
+        """Train on the current basis on a background thread (FeRRy Phase 1).
+
+        Used when the mule's Pass 2 is budgeted and may not return: the device
+        prepares its next update on the basis it just adopted, between visits,
+        so a device collected in Pass 1 and skipped in Pass 2 later ships an
+        update with that basis's age instead of fitting in session. A delivery
+        that arrives meanwhile replaces the basis, and the stale result is
+        discarded.
+        """
+        t = threading.Thread(
+            target=self.train_offline, name=f"train-ahead-{self.device_id}",
+            daemon=True,
+        )
+        self._train_thread = t
+        t.start()
 
     # ---------------------------------------------- pass-specific helpers
 
@@ -390,6 +420,8 @@ class ClientMission:
                 "device=%s: Pass-1 contact uplink dropped (reliability=%.3f)",
                 self.device_id, self._contact_reliability,
             )
+            if push.train_ahead:
+                self._start_train_ahead()
             return MissionOutcome.TIMEOUT
         # H2 — atomic take-and-clear: read AND null out the prepared
         # slot under a single lock acquisition so a concurrent
@@ -397,7 +429,8 @@ class ClientMission:
         # clear. Without this, train_offline could race in between
         # `prepared = ...` and `self._prepared_delta = None` and have
         # its fresh delta clobbered to None silently.
-        with self._lock:
+        # Wait out a train-ahead still running, so its result is taken here.
+        with self._train_lock, self._lock:
             prepared = self._prepared_delta
             prepared_basis = self._prepared_basis
             prepared_version = self._prepared_basis_version
@@ -419,7 +452,8 @@ class ClientMission:
                 self.device_id,
             )
             try:
-                result = self.local_train(push.theta_disc, push.synth_batch)
+                with self._train_lock:
+                    result = self.local_train(push.theta_disc, push.synth_batch)
             except Exception:
                 log.exception(
                     "device=%s local_train raised in fallback path",
@@ -471,6 +505,8 @@ class ClientMission:
             push.theta_disc, push.synth_batch, version=push.basis_version,
         )
         self._set_last_outcome(MissionOutcome.CLEAN)
+        if push.train_ahead:
+            self._start_train_ahead()
         return MissionOutcome.CLEAN
 
     def _handle_delivery_push(self, push: DiscPush) -> MissionOutcome:

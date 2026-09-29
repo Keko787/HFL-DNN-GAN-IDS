@@ -33,7 +33,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import Dict, Iterable, List, Sequence, Tuple
+from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -71,6 +71,9 @@ class SelectorEnv:
     rf_prior_snr_db: float = 20.0
     beacon_window_s: float = 30.0
     now: float = 0.0
+    #: The mission being planned (1-based), when the mule has told the
+    #: scheduler; None otherwise. Age-based baselines read it (FeRRy Phase 2).
+    mission_round: Optional[int] = None
 
 
 def _distance(a: MulePose, b: MulePose) -> float:

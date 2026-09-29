@@ -118,6 +118,13 @@ class FLScheduler:
         # callers that drive the scheduler without a mule.
         self._mission_start_ts: Optional[float] = None
         self.last_feasibility: Optional[object] = None
+        # Each device's own Deadline(j) from the most recent Pass-1 plan, so
+        # the trace can score a miss against the device's deadline rather than
+        # the tightest one in its contact.
+        self.last_plan_deadlines: Dict[DeviceID, float] = {}
+        # FeRRy Phase 2 — the mission being planned, when the mule says so;
+        # handed to whole-scheduler policies through SelectorEnv.
+        self._mission_round: Optional[int] = None
         # S3c — mission-level window adaptation. ``None`` (the default) means no
         # global widening at all: the scale is 1.0 and every deadline is exactly
         # what the per-device rule produced, which is how every recorded sweep
@@ -180,6 +187,11 @@ class FLScheduler:
     def miss_priority(self) -> bool:
         return self._miss_priority
 
+    @property
+    def target_selector(self):
+        """The S3.5 selector or whole-scheduler policy; None = the placeholder."""
+        return self._target_selector
+
     def _contact_miss_priority(self, wp: ContactWaypoint) -> int:
         """A contact's priority: the longest miss streak among its members."""
         return max(
@@ -213,6 +225,32 @@ class FLScheduler:
         """
         self._mission_start_ts = self._now()
         return self._mission_start_ts
+
+    @property
+    def mission_round(self) -> Optional[int]:
+        """The mission being planned, as the mule last set it; None = unknown."""
+        return self._mission_round
+
+    def set_mission_round(self, mission_round: Optional[int]) -> None:
+        """Record which mission is being planned (FeRRy Phase 2).
+
+        Whole-scheduler policies that age devices in missions (the Whittle
+        baseline, arm D3) read it from ``SelectorEnv.mission_round`` instead of
+        inferring it from the devices' last outcomes. Nothing else reads it.
+        """
+        self._mission_round = None if mission_round is None else int(mission_round)
+
+    def record_merged(self, device_ids, mission_round: int) -> None:
+        """Mark the devices whose update this mission's merge used.
+
+        Sets ``last_merged_round``, the Age-of-Update anchor, for every tracked
+        device given; unknown ids are ignored. A CLEAN whose update the age
+        cutoff excluded is not passed here, so it does not reset the age.
+        """
+        for did in device_ids:
+            st = self._device_states.get(did)
+            if st is not None:
+                st.last_merged_round = int(mission_round)
 
     # ------------------------------------------------------------------ #
     # Slow-phase ingest — dock
@@ -457,6 +495,11 @@ class FLScheduler:
             )
         _now = self._now() if now is None else now
         _wscale = self.window_scale  # S3c; 1.0 unless enabled
+        # Freeze Amendment 8 — this plan's diagnostics only. An early return
+        # below used to leave the previous mission's gate result in place, and
+        # the mule would widen that mission's dropped devices a second time.
+        self.last_feasibility = None
+        self.last_plan_deadlines = {}
 
         eligible_ids = filter_eligible(
             self._device_states, now=_now, beacon_window_s=self._beacon_window_s
@@ -479,6 +522,8 @@ class FLScheduler:
             deadlines[did] = compute_deadline(
                 st, now=_now, window_scale=_wscale, law=self._deadline_law,
             )
+
+        self.last_plan_deadlines = dict(deadlines)
 
         # Filter out anyone S3 couldn't bucket (kept simple — drop them).
         bucketed = [d for d in eligible_ids if self._device_states[d].bucket is not None]
@@ -529,6 +574,7 @@ class FLScheduler:
                     rf_prior_snr_db=rf_prior_snr_db,
                     beacon_window_s=self._beacon_window_s,
                     now=_now,
+                    mission_round=self._mission_round,
                 ),
                 mission_deadline_ts=(
                     None if self._mission_budget_s is None

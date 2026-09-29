@@ -55,7 +55,7 @@ from hermes.scheduler.selector.scope_guard import (
     assert_candidates_admitted,
 )
 
-from .budget_walk import greedy_budget_walk
+from .budget_walk import IN_FLIGHT_BUDGET, greedy_budget_walk
 
 #: Age assigned to a device that has never been served. Any finite age loses to
 #: this, so unvisited devices always sort first.
@@ -91,6 +91,11 @@ class MaxAoIPolicy:
     """
 
     name = "MAXAOI"
+    # Freeze Amendment 8 — what the mule re-checks before each contact in
+    # flight: the mission budget only. The per-device deadline is S3b's rule,
+    # which this arm replaces; applying it in flight refused exactly the stale
+    # devices MAX-AoI puts first.
+    in_flight_check = IN_FLIGHT_BUDGET
 
     def rank_contacts(
         self,

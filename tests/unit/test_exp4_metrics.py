@@ -249,6 +249,111 @@ def test_consume_run_dir_reads_role_globs(tmp_path):
 
 
 # --------------------------------------------------------------------------- #
+# FeRRy audit #3 / #4 — merged updates and the cluster's merge ledger
+# --------------------------------------------------------------------------- #
+
+def test_the_merged_count_drives_yield_and_quorum_but_not_completion():
+    """An update excluded past its age cutoff was collected, not merged."""
+    _, mule_rows, device_rows = _scenario_rows()
+    mule_rows[2] = dict(mule_rows[2], pass_1_merged_devices=["d0", "d1"],
+                        pass_1_merged_updates=2)          # d2, d3 excluded
+    mule_rows[3] = dict(mule_rows[3], pass_1_merged_devices=["d0", "d1", "d2"])
+    obs = observation_from_rows(
+        cluster_rows=[], mule_rows=mule_rows, device_rows=device_rows, n_devices=4,
+    )
+    s = summarise_observation(obs, n_devices=4, rf_range_m=60.0, n_missions_target=3)
+    assert s.update_yield == pytest.approx((2 + 3 + 2) / 3)   # m2 has no merged fields: 2
+    assert s.round_close_rate_kminN == pytest.approx(0.0)      # no round merged all 4
+    assert s.round_close_rate_kmin2 == pytest.approx(1.0)
+    # Completion still counts finished sessions: [3, 3, 2, 1] as before.
+    assert s.mission_completion_rate == pytest.approx(1.0)
+    assert s.completion_fairness == pytest.approx(81.0 / 92.0)
+
+
+def test_deferred_and_expired_rounds_do_not_close():
+    """Mission 0 merges on arrival, 1 is buffered and flushed by 2, 3 expires."""
+    _, mule_rows, device_rows = _scenario_rows()
+    mule_rows.append(_mission_completed(
+        round_=3, contacts=1, updates=1, scheduled=4, clean=["d3"],
+        delivered=1, undelivered=3, dur=1.0,
+    ))
+    cluster_rows = [
+        {"event": "cluster_merge", "role": "cluster", "id": "c", "mission_round": 0,
+         "rule": "agg:fedbuff", "applied": True, "partials": [["exp4-mule", 0]]},
+        {"event": "cluster_merge_deferred", "role": "cluster", "id": "c",
+         "mule_id": "exp4-mule", "mission_round": 1, "applied": False},
+        {"event": "cluster_merge", "role": "cluster", "id": "c", "mission_round": 2,
+         "rule": "agg:fedbuff", "applied": True,
+         "partials": [["exp4-mule", 1], ["exp4-mule", 2]]},
+        {"event": "cluster_merge_expired", "role": "cluster", "id": "c",
+         "mule_id": "exp4-mule", "mission_round": 3},
+    ]
+    obs = observation_from_rows(
+        cluster_rows=cluster_rows, mule_rows=mule_rows, device_rows=device_rows, n_devices=4,
+    )
+    assert obs.deferred_rounds == {1}
+    assert obs.flush_of == {1: 2}
+    assert obs.expired_rounds == {3}
+    s = summarise_observation(obs, n_devices=4, rf_range_m=60.0, n_missions_target=4)
+    assert s.round_close_rate_kmin1 == pytest.approx(0.5)      # rounds 0 and 2
+    assert s.update_yield == pytest.approx((4 + 3 + 2 + 1) / 4)  # yield is per mission
+    # The flush closes round 2 with its own 2 updates plus round 1's 3, so it
+    # meets the full-slice quorum (4) that its own updates alone would miss.
+    assert s.round_close_rate_kminN == pytest.approx(0.5)      # rounds 0 and 2
+    assert s.round_close_rate_kmin2 == pytest.approx(0.5)
+
+
+def test_a_phase_1_trace_recovers_its_exclusions_from_the_merge_record():
+    """Traces from Phase 1 until the merged fields existed record the
+    exclusions only in ``pass_1_merge.excluded``; they are not credited."""
+    _, mule_rows, device_rows = _scenario_rows()
+    mule_rows[2] = dict(mule_rows[2], pass_1_merge={
+        "rule": "agg:cutoff", "devices": ["d0", "d1"], "excluded": ["d2", "d3"],
+    })
+    obs = observation_from_rows(
+        cluster_rows=[], mule_rows=mule_rows, device_rows=device_rows, n_devices=4,
+    )
+    assert obs.missions[0].pass_1_merged_devices == ("d0", "d1")
+    assert obs.missions[0].pass_1_merged_updates == 2
+    assert obs.missions[1].pass_1_merged_devices is None   # no merge record
+    s = summarise_observation(obs, n_devices=4, rf_range_m=60.0, n_missions_target=3)
+    assert s.update_yield == pytest.approx((2 + 3 + 2) / 3)
+    assert s.round_close_rate_kminN == pytest.approx(0.0)
+
+
+def test_an_all_excluded_mission_still_counts_its_completed_sessions():
+    """Every update past its cutoff: nothing merged, but the sessions finished."""
+    _, mule_rows, device_rows = _scenario_rows()
+    mule_rows[4] = dict(mule_rows[4], pass_1_merged_devices=[],
+                        pass_1_merged_updates=0)             # d0, d1 excluded
+    obs = observation_from_rows(
+        cluster_rows=[], mule_rows=mule_rows, device_rows=device_rows, n_devices=4,
+    )
+    s = summarise_observation(obs, n_devices=4, rf_range_m=60.0, n_missions_target=3)
+    assert s.update_yield == pytest.approx((4 + 3 + 0) / 3)
+    assert s.round_close_rate_kmin1 == pytest.approx(2 / 3)
+    # Completions [3, 3, 2, 1] as in the scenario: the excluded sessions count.
+    assert s.mission_completion_rate == pytest.approx(1.0)
+    assert s.completion_fairness == pytest.approx(81.0 / 92.0)
+
+
+def test_a_partial_cut_inside_an_applied_fold_is_expired():
+    """A mixed fold lists its zero-weight partials apart; they never reached θ."""
+    _, mule_rows, device_rows = _scenario_rows()
+    cluster_rows = [
+        {"event": "cluster_merge", "role": "cluster", "id": "c", "mission_round": 2,
+         "rule": "agg:cutoff", "applied": True, "partials": [["exp4-mule", 2]],
+         "expired_partials": [["exp4-mule", 1]]},
+    ]
+    obs = observation_from_rows(
+        cluster_rows=cluster_rows, mule_rows=mule_rows, device_rows=device_rows, n_devices=4,
+    )
+    assert obs.expired_rounds == {1}
+    s = summarise_observation(obs, n_devices=4, rf_range_m=60.0, n_missions_target=3)
+    assert s.round_close_rate_kmin1 == pytest.approx(2 / 3)    # rounds 0 and 2
+
+
+# --------------------------------------------------------------------------- #
 # Helpers
 # --------------------------------------------------------------------------- #
 
