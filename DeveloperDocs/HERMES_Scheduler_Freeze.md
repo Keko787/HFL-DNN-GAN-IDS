@@ -236,10 +236,14 @@ and the `backhaul_upload_lost` event carried no round, so `backhaul_lost_rounds`
 `experiments/exp4/events_consumer.py` was always empty. Fixed with `_up_mission_round(up)`, used for
 the draw and for both events. *Not a frozen file.*
 
-**2. Abandoning a device reset its age for D1 and D2.** `_widen_abandoned()` feeds a synthetic
-TIMEOUT stamped `now`, and the fold writes every outcome into `last_contact_ts` and
-`last_served_round` — the fields MAX-AoI (D1) aged a device from and Oort's staleness term (D2) read
-as `L(i)`. Both now read two new fields that only a CLEAN sets.
+**2. Any non-CLEAN outcome reset a device's age for D1 and D2.** The fold writes every outcome into
+`last_contact_ts` and `last_served_round`, the fields MAX-AoI (D1) aged a device from and Oort's
+staleness term (D2) read as `L(i)`. So a real in-session TIMEOUT or PARTIAL (a lost uplink, a
+refused advert, a failed push, no advert at all) reset the age as surely as a delivered update did,
+and so did the synthetic TIMEOUT `_widen_abandoned()` feeds a device the mule dropped or abandoned.
+Recorded D1 therefore aged a device from its last *attempt*, not its last delivered update. Both
+now read two new fields that only a CLEAN sets. *(Corrected 2026-09-28: this paragraph first
+described the synthetic TIMEOUT as the only source; see the impact table.)*
 
 **Frozen surface touched: `stages/s3_deadline.py` only, in `fold_round_close_delta`** — two
 assignments in the CLEAN branch:
@@ -260,7 +264,7 @@ derives its current round from `last_served_round`), and `processes/cluster.py` 
 |---|---|---|
 | Every `--l1-channel` cell, including the L1 confirmation cells C1 (H3 vs H2, n = 40, jittery, 120 s) and C2 in `HERMES_Matrix_Results.md` | Each arm's mission-1 loss probability was applied to every mission, so H3 vs H2 compared the two arms' mission-1 bands held for the whole trial, not per-mission adaptation | Re-run before citing |
 | `round_close_rate_kmin*` in every run with backhaul loss (`--realism` jittery, or `--l1-channel`) | Backhaul-dropped rounds were counted as closed. Model metrics (AUC, accuracy, `t_at_tau_round`) come from `model_eval` events and are unaffected by this part | Re-score from traces where kept: `experiments/analysis/traces_scorer.py` places each `backhaul_upload_lost` event in the mission window that contains it. On the L1 cell (`C_traces`) closure at k = 1 falls from 0.831 to 0.675 for H2 and from 0.838 to 0.813 for H3; accuracy and yield re-score identically |
-| D1/D2 cells (SOTA pilot, budget axis, `b60`) | Only abandoned devices are affected. D1/D2 never trigger the pre-flight widen (their admission path does not set `last_feasibility`), so only in-flight aborts feed them synthetic TIMEOUTs, and those are rare while the abort check compares wall-clock time with simulated transit. D2's staleness term is about 1e-4 of its utility in Exp 4 (`n·\|loss\|` ≈ 300–2,300 against a bonus ≤ 0.16), so D2's ranking is essentially unchanged. The bonus is that small because, unlike Oort's reference code, the utility is not normalised before the bonus is added, and the bonus is `0.1·log R/√L` rather than Oort's `√(0.1·log R/L)` — an undocumented fidelity deviation, not changed here | Re-run the 60 s cell anyway before citing it |
+| D1/D2 cells (SOTA pilot, budget axis, `b60`) | Every non-CLEAN Pass-1 outcome stopped resetting age, real failed sessions included, not only abandoned devices. Under `--realism` jittery those are most outcomes: in the `b60` D1 traces 126 of 160 missions collected nothing and only 34 of 608 scheduled Pass-1 devices came back CLEAN. Under the recorded code almost every outcome reset age; under the fix a device never delivered stays maximally stale and D1 routes it first. So D1's route order and, under a budget, its admission change in most missions of every `--realism` cell, with or without a budget. D2 barely moves: its staleness term is about 1e-4 of its utility in Exp 4 (`n·\|loss\|` ≈ 300–2,300 against a bonus ≤ 0.16). The bonus is that small because, unlike Oort's reference code, the utility is not normalised before the bonus is added, and the bonus is `0.1·log R/√L` rather than Oort's `√(0.1·log R/L)` — an undocumented fidelity deviation, not changed here. *(Corrected 2026-09-28: this row first said only abandoned devices were affected, and rarely.)* | Re-run every D1/D2 cell before citing it, whatever its budget. The budgeted ones are also invalidated by Amendments 6 and 8 |
 
 **Found in the same check, not fixed here** (fixed by Amendment 6). The mission budget is stamped
 in `ingest_slice`, which runs only on a DOWN bundle. An empty mission skips the dock, so the next
@@ -322,9 +326,14 @@ in legacy mode unless a study sets otherwise. Each switch is recorded here when 
 |---|---|---|---|
 | L3 merge rule (`ClusterConfig`/`MuleConfig.aggregation`) | `agg:plain`, the num_examples mean | `agg:cutoff`, age-weighted with the deadline as cutoff | Phase 1, commit `8f23f02` |
 | FedProx term on devices (`DeviceConfig.fedprox_rho`) | 0 | swept | Phase 1, commit `8f23f02` |
-| Deadline law (`MuleConfig.deadline_law`) | additive: −5 s on time, +10 s on a miss, floor 5 s, no ceiling; cluster overrides sticky | multiplicative and clamped, PARTIAL relaxing less than TIMEOUT, overrides one-shot | Phase 1, commit `8f23f02` |
+| Deadline law (`MuleConfig.deadline_law`) | additive: −5 s on time, +10 s on a miss, floor 5 s, no ceiling; cluster overrides sticky | multiplicative and clamped, a miss by a device that answered relaxing less than one by a device that did not, overrides one-shot | Phase 1, commit `8f23f02`; the reachability split and clamp-before-step in the Phase 1 audit, commit `c417554` (§5h) |
 | Priority key (`MuleConfig.miss_priority`) | off: S3b admits in deadline order | S3b admits by miss streak, then deadline | Phase 1, commit `8f23f02` |
-| Pass-2 budget (`MuleConfig.pass_2_budget`) | off: Pass 2 delivers to the whole slice | on | Phase 1, commit `8f23f02` |
+| Pass-2 budget (`MuleConfig.pass_2_budget`) | off: Pass 2 delivers to the whole slice | on; Pass-1 devices then train ahead on the basis they adopt | Phase 1, commit `8f23f02`; train-ahead in the Phase 1 audit, commit `c417554` (§5h) |
+| Mule count (`n_mules`) | 1 | K ≥ 2 over spatial slices; D4 assigns by CARP | Phase 2, commit `c417554` (§5i) |
+| Cluster quorum (`min_participation`) | 1 | 1 or K (`agg:plain` needs K; in between refused except FedBuff) | Phase 2, commit `c417554` (§5i) |
+| Dock after an empty mission, bounded DOWN wait (`dock_on_empty`, `down_wait_s`) | off; one 10 s wait whose expiry ends the loop | on at K > 1, the wait at the trial budget, survived | Phase 2, commit `c417554` (§5i) |
+| Whole-scheduler arms (`contact_policy`) | our pipeline; D1 `max_aoi`, D2 `oort` | D3 `whittle`, D4 `fedex`, D5 `fedcs` | Phase 2, commit `c417554` (§5i) |
+| L3 merge rule `agg:fedex` | — | FedEx-Async's θ + η·Σ Δθ / N per return | Phase 2, commit `c417554` (§5i) |
 | Mission clock (`now_fn`) | wall clock | simulated seconds (`l1/mission_clock.py`) | Phase 3, planned |
 | Contact band | none: one `rf_range_m` for every stop | band classes with a range and a rate | Phase 3, planned |
 | Response when the remaining queue stops fitting | abort the rest (Amendment 1, A1) | re-plan with 2-OPT under S3b | Phase 3, planned |
@@ -464,6 +473,169 @@ the code never ran:
 on the simulated clock and the seconds-axis channel once Phase 3 lands, so each is re-baselined
 there — the re-run bill the build plan accepts in its decision D2. Legacy defaults keep the Exp 4
 harness runnable as it is. The pre-re-run checklist is re-opened (§1a there).
+
+## 5h. Amendment 8 — baselines are budget-checked in flight; a plan's diagnostics are its own (2026-09-28)
+
+Found in the Phase 0/1 audit and the Phase 2 baseline scout. Landed in commit `c417554`.
+
+**1. The in-flight re-check held D1/D2 routes to our per-device deadline.** Amendment 4 gave the
+whole-scheduler baselines admission authority: they replace S3, S3b and S3.5 and return the route.
+But before every Pass-1 contact `MuleSupervisor._remaining_is_feasible` still ran S3b's
+`filter_feasible` on the next stop, deadline test included, whatever the arm. S3 computes a
+deadline for every device in every arm, and a device idle longer than its window Φ gets one in the
+past. MAX-AoI puts exactly those devices first, so the check refused D1's own first choice and the
+mule aborted the rest of the route. Reproduced with `FLScheduler` + `MaxAoIPolicy`, a 60 s budget
+and a device last served 200 s ago: D1 routes it first with `deadline_ts = now − 140 s`, and the
+in-flight check keeps nothing.
+
+*Fix.* A whole-scheduler policy declares what the mule re-checks in flight, as a class attribute
+`in_flight_check`. `budget` (D1, D2, and the default for any policy with `admit_and_order` that
+declares nothing) tests only that the next contact still fits the mission budget from the mule's
+actual pose and clock, priced like `greedy_budget_walk`. `none` flies the route as planned; it is
+reserved for FedEx-Async's never-skip tour (arm D4). H0–H3 have no `admit_and_order` and keep the
+full S3b check.
+
+**2. A plan's feasibility result outlived the plan.** `FLScheduler.build_contact_queue` set
+`last_feasibility` only when it reached the S3b gate. A plan that returned earlier (no eligible
+device, none bucketable, no contact) left the previous mission's result in place, and the mule
+widened that mission's dropped devices a second time. The plan now resets `last_feasibility`, and
+the new per-device deadline map `last_plan_deadlines`, on entry. This fires only for a plan with no
+eligible or bucketable device, which the Exp 4 topologies do not produce (every device stays in its
+mule's slice), so no recorded cell is expected to move. It is recorded here because it changes
+legacy behaviour.
+
+**Frozen surface touched:** `hermes/mule/mule_main.py` (`_remaining_is_feasible`) and
+`hermes/scheduler/fl_scheduler.py` (a read-only `target_selector` property; the reset). Outside it:
+`in_flight_check` on `MaxAoIPolicy` and `OortPolicy`, and the `IN_FLIGHT_BUDGET` /
+`IN_FLIGHT_NONE` constants in `policies/budget_walk.py`.
+
+**Recorded sweeps affected:** every budgeted D1/D2 cell — the SOTA pilot, the budget axis and
+`b60`. All of them are already due for re-run under Amendments 5 and 6; land this before those
+re-runs. Part 1 leaves H0–H3 unchanged.
+
+**Also landed with this amendment, in ferry mode only.** These sit behind switches whose default is
+the recorded pipeline (Rule 1), so they change no legacy behaviour; the Phase 1 rows of the §5g
+table are updated.
+
+- *Train-ahead* (`pass_2_budget` on). A device collected in Pass 1 and then skipped by the budgeted
+  Pass 2 had nothing prepared, so its next contact trained in session on the new θ and reported
+  age 0: budgeted Pass 2 spread ages only for devices missed in both passes. The Pass-1 push now
+  carries `train_ahead`, and the device trains on the adopted basis on a background thread. A
+  delivery that arrives meanwhile replaces the basis, and the stale result is discarded.
+- *Cutoff snapshot.* The D5 cutoff a_max_j = ⌊Φ_j·s/T⌋ is computed once per mission, right after
+  planning, from the window the device was admitted under. It used to be read at close, after
+  every CLEAN had already tightened Φ_j.
+- *Deadline law.* The factor follows reachability. `RoundCloseDelta.answered` is set when the
+  device's advert arrived, and an answered miss relaxes at β_partial whatever its outcome tag (an
+  Exp 4 uplink drop is a TIMEOUT but the device was reachable). The multiplicative step applies to
+  the clamped window, clamp(β·clamp(Φ)). Synthetic TIMEOUTs are marked `synthetic`.
+- *Age-aware merges* (`agg:cutoff`, `agg:asynchfl`). Staleness now shrinks the step instead of
+  being normalised away. The mule divides by the staleness-free mass Σ n_i·v_i of the admitted
+  updates, and the cluster folds θ + η·Σ M_m·s_m·Δ_m / Σ M_m over live partials.
+  `value='loss'` uses the raw loss, so partials from several mules combine as one merge. A fold
+  whose every partial is past `a_max` takes no step, leaves the round open and still releases every
+  waiting mule with a DOWN (`cluster_merge_expired`). FedBuff skips `min_participation` (K is its
+  own quorum) and defaults K to the slice size of the mule whose partial first opens the buffer
+  (fixed for the run), and the cluster reports a
+  `last_outcome`.
+- *Trace fields.* New additive fields:
+  - `pass_1_merged_devices` on `mission_completed`, and per-device deadlines in `pass_1_plan`;
+  - the round report of a mission whose every update was cut off;
+  - the mule's effective settings in `mule_ready`, and `fedprox_rho` in `device_ready`;
+  - `mission_round` and `partials` (and `expired_partials` for a partial cut inside an applied
+    fold) on the cluster's merge events;
+  - a `trial_status.json` beside each kept trace.
+
+**Also landed: analysis changes that re-score legacy traces.** These are not ferry-mode switches:
+they change how `experiments/analysis/traces_scorer.py` and `experiments/exp4/metrics.py` read
+every trace, recorded ones included, while leaving every run's behaviour alone. The scorer now:
+
+- credits merged updates, not merely collected ones, and follows FedBuff deferrals to their
+  flush (the metrics' quorum thresholds credit a flush with every update it releases);
+- leaves `jain_merged` blank for a trial that merged nothing. 50 of the 600 kept trials change
+  from 1.0 to blank: 43 of the 120 `b60` trials (H1 9, D1 16, D2 18, so the per-arm `b60` Jain
+  means fall by about 0.2–0.35), 3 of the 60 pilot trials and 4 of the 380 `exp4_matrix`
+  trials. All of them are in cells already due for re-run under Amendments 5 and 6. No other
+  recorded column moves;
+- scores misses against each device's own deadline where the trace has it;
+- skips trials whose status is not ok, and carries the provenance columns.
+
+## 5i. Amendment 9 — mule failures fail the trial; bootstrap and reconnects survive (2026-09-28)
+
+Phase 2 makes multi-mule runs real (build plan, Phase 2; commit `c417554`). Almost all of it sits behind the new
+switches in the §5g table and is inert with one mule. Four parts change one-mule behaviour, but
+only on a fault path that no recorded run took.
+
+**1. A mule failure now fails the trial.** A mule whose loop ends on `mission_failed` exits with
+code 3, and one that never gets its bootstrap exits with code 4; both used to exit 0. The driver
+(`Exp4Driver._run_topology`) raises `Exp4MuleFailure` when any mule exits non-zero on its own,
+which includes code 1 from an uncaught exception after the last mission, and the row gets
+`status=error`. Before, the exit code was ignored and a truncated trial was recorded as `ok` (or
+a zeroed row, or `no_eval`). None of the 28 committed Exp 4 CSVs has `mission_failures > 0`; a
+crash after the last mission would not show in a CSV either way.
+
+**2. A slow bootstrap no longer kills the mule.** The bootstrap DOWN wait blocked for 10 s and
+raised, so a mule whose first DOWN came late died with a traceback and exit code 1, and the
+existing `dock_bootstrap_timeout` branch could not fire. `wait_for_initial_dock(timeout)` now
+returns False on a timeout, the mule keeps waiting in 1 s ticks inside its 30 s window, and then
+emits `dock_bootstrap_timeout` (exit code 4). The cluster bootstraps each mule as soon as it
+registers instead of waiting for every expected mule; with one mule that is the same moment.
+
+**3. A mule that reconnects is served again.** The cluster's bootstrapped set only grew, so a
+mule that re-registered under the same id never got a second bootstrap; and the dock server
+overwrote the socket without closing the old one, whose reader then closed the NEW socket when it
+ended. Now the server closes the old socket on re-registration, a reader drops only its own
+socket, and the cluster forgets a mule that left the dock, so a reconnecting mule gets a fresh
+bootstrap DOWN (event `mule_bootstrapped`). No recorded run or single-mule test restarts a mule.
+
+**4. A refused upload keeps its reports.** When the cluster refuses a second partial from a mule
+that already has one in the open round, it now still folds that upload's round report and
+Pass-2 ledger into the registry (a resend of the same mission is still ignored), and the trace
+marks it `partial_refused` with `held_mission_round`. This path needs a quorum above 1, so it is
+unreachable with one mule.
+
+**Files:** `hermes/processes/mule.py`, `hermes/processes/cluster.py`,
+`hermes/transport/tcp_dock_link.py`, `hermes/transport/dock_link.py`,
+`hermes/mule/client_cluster.py`, `hermes/cluster/host_cluster.py`, `experiments/exp4/driver.py`.
+`mule_main.py` changes only behind `dock_on_empty` and `down_wait_s`.
+
+**Recorded sweeps affected: none.** Every recorded run used one mule that neither failed,
+bootstrapped late nor reconnected. Checked by re-running four single-mule configurations
+(plain, cutoff, FedBuff, FedEx; with and without backhaul loss) on the code with and without
+these edits: identical event sequences and fields.
+
+**Also landed with Phase 2, behind switches (Rule 1; rows added to the §5g table):**
+
+- *Several mules* (`n_mules`, default 1 = the old topology, byte for byte). At K > 1 the mules
+  are `exp4-mule-<k>`, the devices are split into K contiguous angular sectors (sizes within
+  one), every mule starts at the dock at the origin, and backhaul loss draws from one stream per
+  mule so paired seeds survive any upload order.
+- *Replies only to waiting mules.* After a merge, deferral or expiry the cluster sends a DOWN
+  only to the mules whose upload it holds; it used to send one to every connected mule, in
+  flight or not, and each mule read the oldest of a growing backlog, so it flew stale θ. The
+  mule keeps the newest DOWN. With one mule the waiting mule is always the uploader.
+- *Quorum* (`min_participation`, default 1). `agg:plain` with several mules must wait for all of
+  them (a quorum of 1 made it last-writer-wins); a quorum strictly between 1 and K is refused
+  (it can strand the last partial) except under FedBuff. Under a quorum above 1 a lost backhaul
+  upload holds its mule's place with an empty partial (`backhaul_upload_lost.awaits_quorum`), so
+  the mules stay in step.
+- *Docking an empty mission* (`dock_on_empty`) and *a bounded DOWN wait* (`down_wait_s`): an
+  empty mission still docks with an empty partial that counts toward the quorum, and a DOWN that
+  does not come in time is survived (`dock_down_timeout`: restage θ, skip Pass 2, fly on). Both
+  default on at K > 1 (the wait at the trial budget) and off at K = 1.
+- *Arms D3–D5* (`contact_policy` `whittle`, `fedex`, `fedcs`), the merge rule `agg:fedex`, and
+  the D4 assignment: `carp_assign` once per trial at K > 1, passed as the slice assignment
+  (static, since each device is wired to one mule). The D4 tour returns to the dock
+  (`FedExCarpPolicy(depot=origin)`), and its in-flight check is `none` (FedEx never skips).
+- *Scheduler state for D3:* `reach_attempts` / `reach_answered` (real attempts only, answered
+  or not) folded in `fold_round_close_delta`, `last_merged_round` set by the mule for the
+  devices its merge used, and `SelectorEnv.mission_round`. Read by nothing but D3.
+- *Analysis at K > 1:* every per-mission set is keyed by (mule, mission round); Pass-2 coverage
+  divides by the mule's own slice; each device ages in its own mule's missions; uploads the
+  cluster never folded (refused duplicates, partials still waiting at the end) are not credited,
+  and the place held for a lost upload counts only as that loss, under every rule (a FedEx or
+  age-aware fold lists every empty partial apart from what it merged).
+  Re-scoring the 600 kept one-mule trials gives zero differences.
 
 ## 6. Unfreezing
 
