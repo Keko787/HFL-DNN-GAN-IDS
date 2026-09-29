@@ -25,10 +25,20 @@ for every completed mission). Real deadline semantics arrive with the
 shaped link in EX-4.2. One mule mission == one FL round (with the
 cluster's ``min_participation=1``, each Pass-1 dock closes exactly one
 cluster round).
+
+With several mules (FeRRy Phase 2) each mission is still one round log, but
+missions are told apart by ``(mule_id, mission_round)``, since every mule
+numbers its own from 1, and a mission's slice-relative figures (Pass-2
+coverage, the quorum target when Pass 1 scheduled nobody) are taken against
+its own mule's slice rather than the whole population. With one mule the
+slice is every device, and nothing changes. ``t_at_tau_round`` still counts
+cluster rounds, about K per mission period with K mules; the trace scorer's
+``missions_to_τ`` is the unit that compares across fleet sizes.
 """
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import Dict, List, Optional
 
@@ -42,7 +52,7 @@ from experiments.exp3.metrics import (
     participation_entropy,
 )
 
-from .events_consumer import Exp4Observation, ModelEvalPoint
+from .events_consumer import Exp4Observation, MissionKey, MissionRecord, ModelEvalPoint
 
 
 @dataclass(frozen=True)
@@ -178,29 +188,79 @@ def summarise_observation(
     """Roll one trial's :class:`Exp4Observation` up to the reportables."""
 
     # ---- Per-round log → update yield + round-close(quorum) rates ---- #
-    rounds: List[Exp3RoundLog] = []
-    for i, m in enumerate(obs.missions):
-        if m.pass_1_updates is not None:
+    # FeRRy audit #3: an update the mule's merge excluded (past its age
+    # cutoff) was collected but never reached the model, so it is not a
+    # yield. Traces without the merged fields merged every CLEAN update.
+    # Keyed by (mule, round): every mule numbers its missions from 1.
+    own_updates: Dict[MissionKey, int] = {}
+    for m in obs.missions:
+        if m.pass_1_merged_updates is not None:
+            n_up = m.pass_1_merged_updates
+        elif m.pass_1_merged_devices is not None:
+            n_up = len(m.pass_1_merged_devices)
+        elif m.pass_1_updates is not None:
             n_up = m.pass_1_updates
         else:
             n_up = len(m.pass_1_clean_devices)
-        n_target = m.pass_1_scheduled if m.pass_1_scheduled else n_devices
+        own_updates[obs.mission_key(m)] = int(n_up)
+
+    def _reached(key: MissionKey) -> bool:
+        return (
+            key not in obs.backhaul_lost_keys
+            and key not in obs.expired_keys
+            and key not in obs.unmerged_keys
+        )
+
+    rounds: List[Exp3RoundLog] = []
+    yields: List[int] = []
+    for i, m in enumerate(obs.missions):
+        key = obs.mission_key(m)
+        n_up = own_updates[key]
+        yields.append(n_up)
+        # Pass 1 scheduled nobody: the whole slice is the target, and with
+        # several mules that is the mission's own mule's slice.
+        n_target = (
+            m.pass_1_scheduled if m.pass_1_scheduled
+            else math.ceil(_slice_size(obs, m, n_devices))
+        )
         # EX-4.2 honesty fix: a round "closes" only if it actually produced
         # a cross-mule aggregate at the cluster — i.e. it had >=1 update AND
         # its mule->BS backhaul upload was not dropped. Empty rounds (no
         # uplink succeeded) and backhaul-dropped rounds do NOT close, so H1's
         # jittery penalty is visible in round_close_rate (previously this was
-        # hard-coded True, masking H1 non-closure).
-        closed = int(n_up) > 0 and m.mission_round not in obs.backhaul_lost_rounds
+        # hard-coded True, masking H1 non-closure). FeRRy audit #4: nor does
+        # an upload the cluster buffered without merging, or one whose merge
+        # expired. A FedBuff flush closes the flushing mission's round with
+        # every update it releases — its own and those of the rounds it
+        # flushed, other mules' included — so the quorum thresholds count
+        # them all there. Under agg:plain nothing is deferred, flushed or
+        # expired. With several mules, nor does an upload the cluster logged
+        # but never folded (refused as a duplicate, or still waiting for its
+        # quorum when the trial ended; see ``Exp4Observation.unmerged_keys``).
+        own = 0 if key in obs.deferred_keys else n_up
+        n_merged = own + sum(
+            own_updates.get(k, 0) for k, at in obs.flush_of_keys.items()
+            if at == key and _reached(k)
+        )
+        closed = (
+            n_merged > 0
+            and _reached(key)
+            and key not in obs.deferred_keys
+        )
         rounds.append(
             Exp3RoundLog(
                 round_index=i,
-                n_updates=int(n_up),
+                n_updates=int(n_merged),
                 n_target=int(n_target),
                 deadline_met=closed,
             )
         )
-    yield_mean, close_by_k = aggregate_round_logs(rounds)
+    _, close_by_k = aggregate_round_logs(rounds)
+    # Yield stays per mission: the updates each mission's merge used,
+    # whether or not the cluster later applied them (a FedBuff buffer still
+    # filling at the end never does; the trace scorer's merged_total counts
+    # only updates that reached θ).
+    yield_mean = (sum(yields) / len(yields)) if yields else 0.0
     n_target_max = max((r.n_target for r in rounds), default=n_devices)
     k_half = max(1, n_target_max // 2)
     k_full = max(1, n_target_max)
@@ -212,6 +272,8 @@ def summarise_observation(
     pe = participation_entropy(visits)
 
     # ---- Completion counts (Pass-1 CLEAN contributions per device) ---- #
+    # Sessions completed, so CLEAN rather than merged: a device that finished
+    # its session did its part even if the merge later excluded the update.
     completions: Dict[str, int] = {}
     for m in obs.missions:
         for did in m.pass_1_clean_devices:
@@ -220,9 +282,13 @@ def summarise_observation(
     cf = completion_fairness(completions, n_devices=n_devices)
 
     # ---- Two-pass / contact structure ---- #
+    # Pass 2 delivers to the mission's own mule's slice, so that is what each
+    # mission's coverage is a share of; against every device it would top out
+    # near 1/K with K mules.
     if obs.missions and n_devices > 0:
         pass2 = sum(
-            min(1.0, (m.delivered or 0) / n_devices) for m in obs.missions
+            min(1.0, (m.delivered or 0) / _slice_size(obs, m, n_devices))
+            for m in obs.missions
         ) / len(obs.missions)
     else:
         pass2 = 0.0
@@ -358,6 +424,19 @@ def _convergence_from_evals(model_evals: List[ModelEvalPoint], tau: float) -> Di
         t_at_tau_round=t_at_tau,
         tau=float(tau),
     )
+
+
+def _slice_size(obs: Exp4Observation, mission: MissionRecord, n_devices: int) -> float:
+    """How many devices the mission's mule serves.
+
+    Every device with one mule. With several, the slice its config lists,
+    else an even share of the devices (the configs name the slices on every
+    trace the orchestrator wrote, so the share only covers hand-built rows).
+    """
+    if obs.n_mules <= 1:
+        return n_devices
+    members = obs.mule_slices.get(obs.mule_key(mission.mule_id))
+    return len(members) if members else n_devices / obs.n_mules
 
 
 def _mean(xs) -> float:

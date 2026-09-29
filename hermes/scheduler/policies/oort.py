@@ -52,7 +52,7 @@ from hermes.scheduler.selector.scope_guard import (
     assert_candidates_admitted,
 )
 
-from .budget_walk import greedy_budget_walk
+from .budget_walk import IN_FLIGHT_BUDGET, greedy_budget_walk
 
 #: Oort's exploration weight on the staleness bonus (paper's Algorithm 1).
 DEFAULT_STALENESS_WEIGHT = 0.1
@@ -114,6 +114,8 @@ class OortPolicy:
     """
 
     name = "OORT"
+    # Freeze Amendment 8 — the mule re-checks the budget only in flight.
+    in_flight_check = IN_FLIGHT_BUDGET
 
     def __init__(self, *, staleness_weight: float = DEFAULT_STALENESS_WEIGHT):
         self.staleness_weight = float(staleness_weight)

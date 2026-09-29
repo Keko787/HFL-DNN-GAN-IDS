@@ -91,8 +91,11 @@ class DeadlineLaw:
         Φ ← min(Φ_max, max(Φ_min, β · Φ)),   β = β_on | β_partial | β_timeout
 
     with β_on < 1 after a CLEAN and 1 ≤ β_partial ≤ β_timeout after a miss.
-    PARTIAL (the device answered but the exchange failed) relaxes Φ less than
-    TIMEOUT (it did not answer), because a PARTIAL device was reachable.
+    A miss by a device that answered (a PARTIAL, or a TIMEOUT after its
+    advert arrived, such as a dropped uplink) relaxes Φ by β_partial, less
+    than β_timeout for a device that never answered, because it was reachable.
+    The step scales the clamped window, so Φ·β holds even when the stored
+    value starts outside [Φ_min, Φ_max].
 
     *Why this form.* The window acts as a per-device service threshold — a
     device is due once its deadline passes — which is the threshold form
@@ -159,19 +162,28 @@ class DeadlineLaw:
             return max(MIN_DEADLINE_FULFILMENT_S, float(phi))
         return min(self.phi_max, max(self.phi_min, float(phi)))
 
-    def next_window(self, phi: float, outcome: MissionOutcome) -> float:
-        """Φ after one outcome."""
+    def next_window(
+        self, phi: float, outcome: MissionOutcome, *, answered: bool = False,
+    ) -> float:
+        """Φ after one outcome.
+
+        Under the multiplicative law a miss relaxes by β_partial when the
+        device was reachable — a PARTIAL, or a TIMEOUT after its advert
+        arrived (``answered``, e.g. an uplink dropped mid-session) — and by
+        β_timeout when it never answered. The step scales the clamped window,
+        the Φ the deadline actually used, not the raw stored value.
+        """
         if self.is_additive:
             if outcome is MissionOutcome.CLEAN:
                 return max(MIN_DEADLINE_FULFILMENT_S, phi - FAST_PHASE_ON_TIME_SHRINK_S)
             return phi + FAST_PHASE_MISSED_WIDEN_S
         if outcome is MissionOutcome.CLEAN:
             beta = self.beta_on
-        elif outcome is MissionOutcome.PARTIAL:
+        elif outcome is MissionOutcome.PARTIAL or answered:
             beta = self.beta_partial
         else:
             beta = self.beta_timeout
-        return self.clamp(beta * phi)
+        return self.clamp(beta * self.clamp(phi))
 
     def break_even_on_time_rate(self) -> float:
         """On-time rate p* at which Φ neither tightens nor relaxes on average.
@@ -362,6 +374,13 @@ def fold_round_close_delta(
     if delta.num_examples:
         state.last_num_examples = delta.num_examples
     state.last_served_round = delta.mission_round
+    # FeRRy Phase 2 — reachability history for the Whittle baseline (D3). A
+    # synthetic TIMEOUT (a device dropped or abandoned without an attempt) is
+    # not an observation of reachability. Read by nothing else.
+    if not getattr(delta, "synthetic", False):
+        state.reach_attempts += 1
+        if delta.outcome is MissionOutcome.CLEAN or getattr(delta, "answered", False):
+            state.reach_answered += 1
 
     if delta.outcome is MissionOutcome.CLEAN:
         state.is_new = False
@@ -393,6 +412,7 @@ def fold_round_close_delta(
         else:
             state.deadline_fulfilment_s = law.next_window(
                 state.deadline_fulfilment_s, delta.outcome,
+                answered=bool(getattr(delta, "answered", False)),
             )
 
     if law is not None and law.expires_overrides:

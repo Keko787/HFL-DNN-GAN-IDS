@@ -10,14 +10,14 @@ Pulled out of ``HFLHostCluster`` so it can be unit-tested against
 hand-computed references without spinning up the whole cluster server.
 
 :func:`apply_weighted_deltas` is the age-aware counterpart (FeRRy Phase 1):
-partials carry updates rather than models, and the cluster adds their weighted
-mean to θ at a server rate η. The rules that feed it live in
-``hermes.mission.aggregation_rules``.
+partials carry updates rather than models, and the cluster adds their
+staleness-weighted sum over the live partials' mass to θ at a server rate η.
+The rules that feed it live in ``hermes.mission.aggregation_rules``.
 """
 
 from __future__ import annotations
 
-from typing import Iterable, List, Sequence
+from typing import Iterable, List, Optional, Sequence
 
 import numpy as np
 
@@ -86,17 +86,23 @@ def apply_weighted_deltas(
     partial_weights: Sequence[float],
     *,
     server_lr: float = 1.0,
+    normalizer: Optional[float] = None,
 ) -> Weights:
-    """θ + η · Σ_m W_m·Δ_m / Σ_m W_m over delta-form partials.
+    """θ + η · Σ_m W_m·Δ_m / N over delta-form partials.
 
     FeRRy Phase 1: the age-aware rules mix the merged update into the global θ
     at a server rate η instead of overwriting it. ``partial_weights`` are the
-    W_m the rule computed (weight mass times partial staleness); a partial with
-    W_m = 0 contributes nothing. With one partial, W > 0 and η = 1 this is
-    θ + Δ_m.
+    W_m the rule computed, M_m·s_m (the partial's staleness-free mass times its
+    staleness); a partial with W_m = 0 contributes nothing to the sum.
+
+    ``normalizer`` is N. The cluster passes Σ M_m over the live partials, so a
+    stale partial's s_m < 1 shrinks the step instead of cancelling out: one
+    partial gives θ + η·s_m·Δ_m. None divides by Σ W_m, the weights' own sum,
+    which gives a weighted mean of the Δ_m and normalises staleness away.
 
     Raises:
-        FedAvgError: every W_m is zero, or shapes disagree with θ.
+        FedAvgError: every W_m is zero, ``normalizer`` is not positive, or
+            shapes disagree with θ.
     """
     if len(partial_weights) != len(partials):
         raise FedAvgError(
@@ -109,6 +115,12 @@ def apply_weighted_deltas(
     total = sum(w for _, w in live)
     if not live or not total > 0.0:
         raise FedAvgError("apply_weighted_deltas: no partial carries weight")
+    if normalizer is not None:
+        if not float(normalizer) > 0.0:
+            raise FedAvgError(
+                f"apply_weighted_deltas: normalizer must be > 0, got {normalizer}"
+            )
+        total = float(normalizer)
 
     layer_shapes = [np.shape(t) for t in theta]
     for p, _ in live:

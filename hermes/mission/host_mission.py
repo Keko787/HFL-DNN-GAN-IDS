@@ -97,6 +97,7 @@ class HFLHostMission:
         session_ttl_s: float = 30.0,
         busy_ttl_s: float = 45.0,
         aggregation: Optional[AggregationSpec] = None,
+        train_ahead: bool = False,
     ) -> None:
         self.mule_id = mule_id
         self.rf = rf
@@ -107,6 +108,12 @@ class HFLHostMission:
         # (full weights for agg:plain, a delta against their basis otherwise)
         # and how close_round merges.
         self.aggregation: AggregationSpec = aggregation or AggregationSpec()
+        # Ask Pass-1 devices to train ahead on the basis they are pushed; the
+        # mule sets this when its Pass 2 is budgeted (FeRRy Phase 1).
+        self.train_ahead = bool(train_ahead)
+        # The ledger of the last round whose merge failed (nothing merged),
+        # kept so the caller can still report its sessions.
+        self.last_unmerged: Optional[Tuple[MissionRoundCloseReport, ContactHistory]] = None
 
         self._lock = threading.RLock()
         self._mission_round: int = 0
@@ -153,6 +160,7 @@ class HFLHostMission:
             self._current_theta = [w.copy() for w in theta_disc]
             self._current_theta_version = theta_version
             self._accepted = []
+            self.last_unmerged = None
             self._round_started_at = time.time()
             self._report = MissionRoundCloseReport(
                 mule_id=self.mule_id,
@@ -211,6 +219,9 @@ class HFLHostMission:
                     self._mission_round,
                     e,
                 )
+                # Keep the ledger: under an age cutoff the round can hold
+                # on-time sessions whose updates were all past their cutoff.
+                self.last_unmerged = (self._report, self._contacts)
                 raise MissionSessionError(str(e)) from e
 
             report = self._report
@@ -299,6 +310,7 @@ class HFLHostMission:
             synth_batch=synth_batch,
             basis_version=theta_version,
             update_form=self.aggregation.update_form,
+            train_ahead=self.train_ahead,
         )
         self.rf.push_disc(adv.device_id, push)
 
@@ -476,6 +488,7 @@ class HFLHostMission:
                     utility=0.0,
                     bytes_received=0,
                     bytes_sent=0,
+                    answered=False,
                 )
                 return
 
@@ -506,6 +519,7 @@ class HFLHostMission:
                 pass_kind=MissionPass.COLLECT,
                 basis_version=theta_version,
                 update_form=self.aggregation.update_form,
+                train_ahead=self.train_ahead,
             )
             try:
                 self.rf.push_disc(adv.device_id, push)
@@ -907,6 +921,9 @@ class HFLHostMission:
         # the values it always had.
         basis_version: Optional[int] = None,
         line_num_examples: Optional[int] = None,
+        # FeRRy: whether the device's advert arrived. Every caller holds the
+        # advert except the one branch that never heard from the device.
+        answered: bool = True,
     ) -> None:
         with self._lock:
             if self._report is None:
@@ -941,6 +958,7 @@ class HFLHostMission:
                     contact_ts=contact_ts,
                     local_loss=local_loss,
                     num_examples=num_examples,
+                    answered=bool(answered),
                 )
             )
         except Exception:  # pragma: no cover — bus faults must not kill the mule

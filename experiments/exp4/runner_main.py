@@ -27,6 +27,11 @@ from typing import Optional, Sequence
 
 from experiments.runner import TrialGrid, TrialRunner
 
+from hermes.mission.aggregation_rules import IMPLEMENTED_RULES
+from hermes.scheduler.policies.fedcs_degraded import VALUE_KINDS as FEDCS_VALUES
+from hermes.scheduler.policies.whittle import VARIANTS as WHITTLE_VARIANTS
+from hermes.scheduler.policies.whittle import WEIGHT_MODES as WHITTLE_WEIGHTS
+
 from .driver import ARMS, PROVENANCE_COLUMNS, Exp4Driver
 from .metrics import Exp4MetricSummary
 
@@ -234,11 +239,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     # FeRRy Phase 1 — L3 merge rules, FedProx, budgeted Pass 2 (mule arms).
     parser.add_argument(
         "--aggregation", default="agg:plain",
-        choices=("agg:plain", "agg:cutoff", "agg:asynchfl", "agg:fedbuff"),
+        choices=IMPLEMENTED_RULES,
         help="L3 merge rule for the cluster and the mule "
              "(hermes/mission/aggregation_rules.py). agg:plain (default) is the "
              "num_examples mean every recorded run used; the others merge "
-             "deltas weighted by age in cluster rounds.",
+             "deltas weighted by age in cluster rounds, except agg:fedex, "
+             "FedEx-Async's unweighted θ + (1/N)·ΣΔθ on each return (arm D4's "
+             "faithful merge).",
     )
     parser.add_argument(
         "--agg-server-lr", type=float, default=None,
@@ -275,7 +282,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser.add_argument(
         "--agg-buffer-k", type=int, default=None,
         help="agg:fedbuff: updates buffered per server step (default: the "
-             "number of registered devices).",
+             "slice size of the mule whose partial first opens the buffer).",
+    )
+    parser.add_argument(
+        "--agg-fedex-n", type=int, default=None,
+        help="agg:fedex: N, the total client count in θ + (1/N)·ΣΔθ "
+             "(default: the devices registered at the cluster).",
     )
     parser.add_argument(
         "--fedprox-rho", type=float, default=0.0,
@@ -324,6 +336,49 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
              "their deadline, so a missed device is not pushed back by the "
              "wider window its miss earned. Off by default.",
     )
+    # FeRRy Phase 2 — several mules, and the options of arms D3/D5.
+    parser.add_argument(
+        "--n-mules", type=int, default=1,
+        help="Mules sharing the cluster (mule arms). The --N devices are split "
+             "between them into disjoint spatial slices (D4: by CARP). 1 "
+             "(default) is the recorded single-mule topology. A driver setting, "
+             "not a grid axis, so K=1 and K=3 runs of the same cell share their "
+             "seeds; write them to separate CSVs.",
+    )
+    parser.add_argument(
+        "--min-participation", type=int, default=1,
+        help="The cluster's quorum: partials a merge waits for, 1 or "
+             "--n-mules (agg:fedbuff ignores it). agg:plain with several mules "
+             "requires --min-participation equal to --n-mules.",
+    )
+    parser.add_argument(
+        "--dock-on-empty", action=argparse.BooleanOptionalAction, default=None,
+        help="Whether a mission that collected nothing still docks, with an "
+             "empty partial that counts toward the quorum. Default: on with "
+             "several mules, off with one (the recorded dock).",
+    )
+    parser.add_argument(
+        "--down-wait-s", type=float, default=None,
+        help="How long a mule waits at its inter-pass dock for the DOWN before "
+             "skipping Pass 2 and flying on its own θ. Default: the trial budget "
+             "with several mules; with one, the recorded 10 s wait whose expiry "
+             "ends the mule's run.",
+    )
+    parser.add_argument(
+        "--whittle-variant", choices=WHITTLE_VARIANTS, default="expected",
+        help="Arm D3: the Whittle index in expectation over the unobserved "
+             "connection state (default) or Cui's literal I(x, 1).",
+    )
+    parser.add_argument(
+        "--whittle-weights", choices=WHITTLE_WEIGHTS, default="uniform",
+        help="Arm D3: ω = 1 for every device (default) or Oort's statistical "
+             "utility (requires --real-model).",
+    )
+    parser.add_argument(
+        "--fedcs-value", choices=FEDCS_VALUES, default="unit",
+        help="Arm D5: FedCS's greedy score, one per contact (default, the "
+             "paper's letter) or the contact's device count.",
+    )
     args = parser.parse_args(argv)
 
     logging.basicConfig(
@@ -354,7 +409,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     if args.pass_2_budget and args.mission_budget_s is None:
         parser.error("--pass-2-budget needs --mission-budget-s")
-    driver = Exp4Driver(
+    driver_kwargs = dict(
         trial_budget_s=float(args.trial_budget_s),
         startup_timeout_s=float(args.startup_timeout_s),
         real_model=bool(args.real_model),
@@ -399,6 +454,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 ("decay", args.agg_decay),
                 ("value", args.agg_value),
                 ("buffer_k", args.agg_buffer_k),
+                ("fedex_n", args.agg_fedex_n),
             )
             if value is not None
         },
@@ -417,7 +473,20 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             if value is not None
         },
         miss_priority=bool(args.miss_priority),
+        n_mules=int(args.n_mules),
+        min_participation=int(args.min_participation),
+        dock_on_empty=args.dock_on_empty,
+        down_wait_s=args.down_wait_s,
+        whittle_variant=args.whittle_variant,
+        whittle_weights=args.whittle_weights,
+        fedcs_value=args.fedcs_value,
     )
+    try:
+        driver = Exp4Driver(**driver_kwargs)
+    except ValueError as e:
+        # A combination the driver refuses (e.g. agg:plain with several mules
+        # and a smaller quorum): say so as a usage error, before any trial.
+        parser.error(str(e))
     if args.real_model:
         log.info(
             "EX-4.1 real-model run: source=%s epochs=%d batch=%d tau=%.2f",

@@ -37,6 +37,7 @@ from hermes.types import (
 from hermes.types.aggregate import Weights
 from hermes.mission.aggregation_rules import (
     AGG_FEDBUFF,
+    AGG_FEDEX,
     AggregationConfigError,
     AggregationSpec,
     FedBuffBuffer,
@@ -49,6 +50,22 @@ from .cross_mule_fedavg import FedAvgError, apply_weighted_deltas, cross_mule_fe
 from .device_registry import DeviceRegistry
 
 log = logging.getLogger(__name__)
+
+# What one ``aggregate_pending`` call did (``HFLHostCluster.last_outcome``).
+# The service reads it to decide whether the uploading mule gets a DOWN now.
+#: θ changed; the caller closes the round.
+OUTCOME_MERGED = "merged"
+#: Fewer partials than ``min_participation``; the round waits for more mules.
+OUTCOME_QUORUM = "quorum"
+#: ``agg:fedbuff`` buffered the partials and has fewer than K updates.
+OUTCOME_DEFERRED = "deferred"
+#: Every pending partial was past the cutoff (or empty): no step, round open.
+OUTCOME_EXPIRED = "expired"
+
+
+def _member_list(members: Iterable[Tuple[MuleID, int]]) -> List[list]:
+    """(mule_id, mission_round) pairs as JSON-ready ``[str, int]`` lists."""
+    return [[str(m), int(r)] for m, r in members]
 
 
 # --------------------------------------------------------------------------- #
@@ -153,7 +170,8 @@ class HFLHostCluster:
     absent mules. Set to ``len(mules)`` for full-FedAvg semantics
     (everyone in lockstep, no aggregation until the slowest mule
     reports). Sprint 2's chunk-L orchestrator surfaces this through
-    ``ClusterConfig.min_participation``.
+    ``ClusterConfig.min_participation``. Under ``agg:fedbuff`` it does not
+    apply: FedBuff's buffer size K is its quorum.
     """
 
     def __init__(
@@ -176,8 +194,11 @@ class HFLHostCluster:
         self.aggregation: AggregationSpec = aggregation or AggregationSpec()
         self._fedbuff: Optional[FedBuffBuffer] = None
         #: What the latest age-aware fold did, for the service's event log.
-        #: None under agg:plain.
+        #: None under agg:plain, and reset by every ``aggregate_pending`` call.
         self.last_merge: Optional[dict] = None
+        #: One of the ``OUTCOME_*`` values for the latest ``aggregate_pending``
+        #: call, or None when it had nothing pending (or raised).
+        self.last_outcome: Optional[str] = None
 
         self._cluster_round: int = 0
         self._pending: Optional[_PendingRound] = None
@@ -203,7 +224,7 @@ class HFLHostCluster:
 
     # ----------------------------------------------------------- dock ingest
 
-    def ingest_up_bundle(self, bundle: UpBundle) -> None:
+    def ingest_up_bundle(self, bundle: UpBundle) -> bool:
         """Accept a mule's mission output. Folds the round-close report
         into per-device counters and parks the partial for cross-mule FedAvg.
 
@@ -214,42 +235,48 @@ class HFLHostCluster:
         resets it on DELIVERED — design §7 principle 13. The
         ``n_undelivered_carryover`` metric is bumped so observability
         can detect Pass-2 coverage degrading.
+
+        Returns True when the partial was parked, False when it was refused
+        because the open round already holds one from this mule. The first
+        partial is the one kept: it is the one the quorum already counts. A
+        refused bundle from a *later* mission (FeRRy Phase 2: a mule that
+        stopped waiting for its quorum's DOWN flew another mission) still has
+        its round report and Pass-2 ledger folded, since those sessions and
+        deliveries happened; a resend of the same mission is ignored whole,
+        as every refusal was before.
         """
         with self._lock:
             self._ensure_pending_round()
             assert self._pending is not None  # for type-checkers
 
             if bundle.mule_id in self._pending.seen_mules:
+                held = self._pending.partials[
+                    self._pending.seen_mules.index(bundle.mule_id)
+                ]
+                if held.mission_round == bundle.partial_aggregate.mission_round:
+                    log.warning(
+                        "duplicate UpBundle from mule=%s in cluster_round=%d "
+                        "(ignoring later submission)",
+                        bundle.mule_id,
+                        self._pending.cluster_round,
+                    )
+                    return False
+                n_undelivered = self._fold_bundle_reports(bundle)
                 log.warning(
-                    "duplicate UpBundle from mule=%s in cluster_round=%d "
-                    "(ignoring later submission)",
+                    "UpBundle from mule=%s for mission %d refused in "
+                    "cluster_round=%d: the round already holds its mission-%d "
+                    "partial (round report and %d undelivered carryover folded)",
                     bundle.mule_id,
+                    bundle.partial_aggregate.mission_round,
                     self._pending.cluster_round,
+                    held.mission_round,
+                    n_undelivered,
                 )
-                return
+                return False
 
             self._pending.partials.append(bundle.partial_aggregate)
             self._pending.seen_mules.append(bundle.mule_id)
-
-            # apply per-device counter updates from the round-close report
-            for line in bundle.round_close_report.lines:
-                self.registry.update_after_round(
-                    device_id=line.device_id,
-                    on_time=line.outcome.is_on_time(),
-                )
-
-            # Sprint 1.5 — fold the previous mission's delivery report.
-            n_undelivered = 0
-            if bundle.prev_mission_delivery_report is not None:
-                for line in bundle.prev_mission_delivery_report.lines:
-                    delivered = line.outcome.is_delivered()
-                    self.registry.update_after_delivery(
-                        device_id=line.device_id,
-                        delivered=delivered,
-                    )
-                    if not delivered:
-                        n_undelivered += 1
-                self._pending.n_undelivered_carryover += n_undelivered
+            n_undelivered = self._fold_bundle_reports(bundle)
 
             log.info(
                 "ingested UpBundle mule=%s round=%d devices=%d "
@@ -260,28 +287,88 @@ class HFLHostCluster:
                 *bundle.round_close_report.counts(),
                 n_undelivered,
             )
+            return True
+
+    def held_mission_round(self, mule_id: MuleID) -> Optional[int]:
+        """Mission round of ``mule_id``'s partial in the open round, or None."""
+        with self._lock:
+            if self._pending is None or mule_id not in self._pending.seen_mules:
+                return None
+            held = self._pending.partials[self._pending.seen_mules.index(mule_id)]
+            return int(held.mission_round)
+
+    def _fold_bundle_reports(self, bundle: UpBundle) -> int:
+        """Fold a bundle's round report and Pass-2 ledger into the registry.
+
+        Caller holds the lock and has an open round. Returns the number of
+        UNDELIVERED rows in the ledger, also added to the round's carryover.
+        """
+        assert self._pending is not None
+        # apply per-device counter updates from the round-close report
+        for line in bundle.round_close_report.lines:
+            self.registry.update_after_round(
+                device_id=line.device_id,
+                on_time=line.outcome.is_on_time(),
+            )
+
+        # Sprint 1.5 — fold the previous mission's delivery report.
+        n_undelivered = 0
+        if bundle.prev_mission_delivery_report is not None:
+            for line in bundle.prev_mission_delivery_report.lines:
+                delivered = line.outcome.is_delivered()
+                self.registry.update_after_delivery(
+                    device_id=line.device_id,
+                    delivered=delivered,
+                )
+                if not delivered:
+                    n_undelivered += 1
+            self._pending.n_undelivered_carryover += n_undelivered
+        return n_undelivered
 
     # ----------------------------------------------- cross-mule aggregation
 
     def aggregate_pending(self) -> Optional[Weights]:
         """Run cross-mule FedAvg if enough partials have arrived.
 
-        Returns the merged weights or ``None`` if the participation
-        threshold is not met. The merged weights are also pushed back into
-        the held generator's global discriminator state.
+        Returns the merged weights, or ``None`` when θ did not change; the
+        merged weights are also pushed back into the held generator's global
+        discriminator state. ``last_outcome`` says which case happened
+        (``OUTCOME_*``) and ``last_merge`` describes an age-aware fold; both
+        are reset on every call, so neither ever reports an earlier call.
         """
         with self._lock:
+            self.last_merge = None
+            self.last_outcome = None
             if self._pending is None:
                 return None
+            if self.aggregation.rule == AGG_FEDBUFF:
+                # K is FedBuff's own quorum. Gating on min_participation too
+                # would hold a partial outside the buffer and refuse the same
+                # mule's next UP as a duplicate, so every partial goes in now.
+                return self._aggregate_age_aware()
             if len(self._pending.partials) < self.min_participation:
                 log.debug(
                     "aggregate_pending: %d partials < min=%d",
                     len(self._pending.partials),
                     self.min_participation,
                 )
+                self.last_outcome = OUTCOME_QUORUM
                 return None
             if not self.aggregation.is_plain:
                 return self._aggregate_age_aware()
+            partials = self._pending.partials
+            if all(p.is_empty() for p in partials):
+                # Only a mule with dock_on_empty (FeRRy Phase 2) uploads an
+                # empty partial: it counts toward the quorum and carries no
+                # model. With nothing to average, the round stays open and the
+                # waiting mules are released with the current θ, as when every
+                # age-aware partial expires. A recorded run never gets here.
+                version = self._cluster_round
+                return self._expire_pending(
+                    [partial_age(p, version) for p in partials],
+                    [0.0] * len(partials),
+                    _member_list((p.mule_id, p.mission_round) for p in partials),
+                )
             try:
                 merged = cross_mule_fedavg(self._pending.partials)
             except FedAvgError:
@@ -289,35 +376,66 @@ class HFLHostCluster:
                 self._reset_pending()
                 raise
             self.generator.update_disc_from_cluster_avg(merged)
+            self.last_outcome = OUTCOME_MERGED
             return merged
 
     @property
     def defers_merges(self) -> bool:
-        """True when an ingested UP may leave θ unchanged (``agg:fedbuff``).
+        """True when the rule buffers partials across UPs (``agg:fedbuff``).
 
-        The service must then still send the uploading mule a DOWN, or the mule
-        waits at the inter-pass dock for a θ that is not coming.
+        Informational only. Whether the uploading mule needs a DOWN before the
+        round closes comes from ``last_outcome`` (``deferred`` or ``expired``):
+        a cutoff rule can also leave θ unchanged, and a FedBuff call can merge.
         """
         return self.aggregation.rule == AGG_FEDBUFF
 
     def _aggregate_age_aware(self) -> Optional[Weights]:
         """Fold pending delta partials into θ under the configured rule.
 
-        Caller holds the lock and has checked min_participation. Returns the
-        new θ, or None when FedBuff is still filling its buffer.
+        Caller holds the lock and has checked min_participation (FedBuff is
+        not gated by it). Returns the new θ, or None with ``last_outcome``
+        ``deferred`` while FedBuff fills its buffer, or ``expired`` when no
+        pending partial is live (all past ``a_max``, or empty). An expired fold
+        takes no step and leaves the round open: raising would drop the round
+        as if the merge were malformed, while it is simply stale.
         """
         assert self._pending is not None
         spec = self.aggregation
         version = self._cluster_round
         partials = list(self._pending.partials)
+        members = _member_list((p.mule_id, p.mission_round) for p in partials)
         try:
             for p in partials:
                 check_partial_form(spec, p)
             theta = self.generator.get_global_disc_weights()
             ages = [partial_age(p, version) for p in partials]
-            if spec.rule == AGG_FEDBUFF:
+            if spec.rule == AGG_FEDEX:
+                # FedEx-Async: θ + η·Σ_m u_m / N, every returning partial at
+                # full weight whatever its age, N the total client count.
+                live = [p for p in partials if not p.is_empty()]
+                if not live:
+                    return self._expire_pending(ages, [0.0] * len(partials), members)
+                n_clients = int(spec.fedex_n or max(1, len(self.registry.all())))
+                merged = apply_weighted_deltas(
+                    theta, partials, [0.0 if p.is_empty() else 1.0 for p in partials],
+                    server_lr=spec.server_lr, normalizer=float(n_clients),
+                )
+                # As in the weighted rules below, ``partials`` names only what
+                # reached θ; an empty partial (a mule that docked with nothing,
+                # or the place held for a lost upload) is listed apart.
+                self.last_merge = {
+                    "rule": spec.rule, "applied": True,
+                    "partial_ages": ages, "n_clients": n_clients,
+                    "n_updates": sum(p.n_updates for p in live),
+                    "partials": [m for p, m in zip(partials, members) if not p.is_empty()],
+                    "expired_partials": [
+                        m for p, m in zip(partials, members) if p.is_empty()
+                    ],
+                }
+            elif spec.rule == AGG_FEDBUFF:
                 if self._fedbuff is None:
-                    self._fedbuff = FedBuffBuffer(spec=spec, k=self._fedbuff_k())
+                    opener = partials[0].mule_id if partials else None
+                    self._fedbuff = FedBuffBuffer(spec=spec, k=self._fedbuff_k(opener))
                 for p in partials:
                     self._fedbuff.add(p, cluster_version=version)
                 # The partials now live in the buffer. Clear them from the open
@@ -325,43 +443,102 @@ class HFLHostCluster:
                 self._pending.partials = []
                 self._pending.seen_mules = []
                 if not self._fedbuff.ready:
+                    self.last_outcome = OUTCOME_DEFERRED
                     self.last_merge = {
                         "rule": spec.rule, "applied": False,
                         "buffered": self._fedbuff.count, "k": self._fedbuff.k,
                         "partial_ages": ages,
+                        "partials": _member_list(self._fedbuff.members),
                     }
                     return None
                 buffered = self._fedbuff.count
+                flushed = _member_list(self._fedbuff.members)
                 merged = self._fedbuff.apply(theta)
                 self.last_merge = {
                     "rule": spec.rule, "applied": True,
                     "buffered": buffered, "k": self._fedbuff.k,
                     "partial_ages": ages,
+                    "partials": flushed,
                 }
             else:
-                weights = [
-                    p.weight_mass * partial_staleness(spec, p, version)
-                    for p in partials
+                stale = [partial_staleness(spec, p, version) for p in partials]
+                weights = [p.weight_mass * s for p, s in zip(partials, stale)]
+                live = [
+                    p for p, s in zip(partials, stale)
+                    if s > 0.0 and not p.is_empty()
                 ]
+                if not live:
+                    return self._expire_pending(ages, weights, members)
+                # Divide by the live partials' staleness-free mass, not by
+                # Σ weights, so a stale partial's s_m < 1 shrinks the step. An
+                # expired partial is left out of both sums.
                 merged = apply_weighted_deltas(
                     theta, partials, weights, server_lr=spec.server_lr,
+                    normalizer=sum(p.weight_mass for p in live),
                 )
+                # ``partials`` names only what reached θ; a partial cut to zero
+                # weight in the same fold is listed apart, so a trace scorer
+                # does not credit its updates as merged.
+                live_ids = {id(p) for p in live}
                 self.last_merge = {
                     "rule": spec.rule, "applied": True,
                     "partial_ages": ages, "partial_weights": weights,
-                    "n_updates": sum(p.n_updates for p in partials),
+                    "n_updates": sum(p.n_updates for p in live),
+                    "partials": [m for p, m in zip(partials, members) if id(p) in live_ids],
+                    "expired_partials": [
+                        m for p, m in zip(partials, members) if id(p) not in live_ids
+                    ],
                 }
         except (FedAvgError, AggregationConfigError):
             log.exception("%s merge failed; dropping cluster round", spec.rule)
             self._reset_pending()
             raise
         self.generator.update_disc_from_cluster_avg(merged)
+        self.last_outcome = OUTCOME_MERGED
         return merged
 
-    def _fedbuff_k(self) -> int:
-        """FedBuff's K: the configured buffer size, else the registered devices."""
+    def _expire_pending(
+        self, ages: List[int], weights: List[float], members: List[list],
+    ) -> None:
+        """Drop pending partials that carry no weight, without a step.
+
+        The round stays open (``cluster_round`` unchanged) so a fresh partial
+        can still close it; the partials and ``seen_mules`` are cleared so the
+        expired mules' next UPs are accepted rather than refused as duplicates.
+        """
+        assert self._pending is not None
+        self._pending.partials = []
+        self._pending.seen_mules = []
+        self.last_outcome = OUTCOME_EXPIRED
+        self.last_merge = {
+            "rule": self.aggregation.rule, "applied": False,
+            "outcome": OUTCOME_EXPIRED,
+            "partial_ages": ages, "partial_weights": weights,
+            "partials": members,
+        }
+        log.info(
+            "%s: all %d pending partial(s) expired (ages %s); no step, "
+            "cluster_round=%d stays open",
+            self.aggregation.rule, len(members), ages, self._cluster_round,
+        )
+        return None
+
+    def _fedbuff_k(self, mule_id: Optional[MuleID] = None) -> int:
+        """FedBuff's K: ``buffer_k`` when set, else the opening mule's slice size.
+
+        The slice size is what ``aggregation_rules`` and ``buffer_k`` document:
+        about one mission's worth of updates from the mule that opens the
+        buffer. With several mules the registered-device count is several
+        missions' worth, so every flush would wait on several missions. Falls
+        back to that count when the slice is empty or the mule unknown. K is
+        fixed when the buffer is created and kept across flushes.
+        """
         if self.aggregation.buffer_k is not None:
             return int(self.aggregation.buffer_k)
+        if mule_id is not None:
+            n_slice = len(self.registry.slice_for(mule_id))
+            if n_slice > 0:
+                return n_slice
         return max(1, len(self.registry.all()))
 
     # ----------------------------------------------- bundle DOWN dispatch

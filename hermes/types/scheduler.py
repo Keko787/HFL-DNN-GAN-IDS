@@ -122,6 +122,19 @@ class DeviceSchedulerState:
     #: Maintained always; nothing reads it otherwise.
     miss_streak: int = 0
 
+    # FeRRy Phase 2 — inputs for the Whittle baseline (arm D3), maintained
+    # always and read by nothing else. ``reach_attempts`` counts real Pass-1
+    # outcomes (the synthetic TIMEOUT for a device the mule dropped or
+    # abandoned is not an attempt); ``reach_answered`` those whose device
+    # answered (its advert arrived), whatever the outcome — so their ratio
+    # estimates reachability, not reliability. ``last_merged_round`` is the
+    # mission whose merge last used this device's update (None = never), the
+    # device's Age-of-Update anchor; a CLEAN whose update the age cutoff
+    # excluded does not move it.
+    reach_attempts: int = 0
+    reach_answered: int = 0
+    last_merged_round: Optional[int] = None
+
     # RF / opportunistic
     last_beacon_ts: float = 0.0
 

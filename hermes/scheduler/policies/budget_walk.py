@@ -33,6 +33,15 @@ from hermes.scheduler.stages.s3b_feasibility import FeasibilityModel
 
 MulePose = Tuple[float, float, float]
 
+#: What the mule re-checks before each contact in flight, declared by a
+#: whole-scheduler policy as ``in_flight_check`` (Freeze Amendment 8).
+#: ``budget``: the next contact must still fit the mission budget from the
+#: mule's actual pose and clock. ``none``: the route is flown as planned.
+#: The per-device deadline test is S3b's rule, so only our own arms get it.
+IN_FLIGHT_BUDGET = "budget"
+IN_FLIGHT_NONE = "none"
+IN_FLIGHT_CHECKS = (IN_FLIGHT_BUDGET, IN_FLIGHT_NONE)
+
 #: Ranking key: lower sorts first. Returning a tuple lets a policy add
 #: deterministic tie-breaks after its primary key.
 RankKey = Callable[[ContactWaypoint], tuple]

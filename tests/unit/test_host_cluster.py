@@ -143,6 +143,23 @@ def test_min_participation_threshold_blocks_aggregation():
     assert cluster.aggregate_pending() is None  # only one partial; threshold=2
 
 
+def test_plain_reports_its_outcome_but_never_a_merge_record():
+    """agg:plain says why aggregate_pending returned what it did (the service
+    keys the DOWN on it) but leaves last_merge None, so its trace is unchanged."""
+    reg = DeviceRegistry()
+    devs = _seed_registry(reg, 4)
+    cluster = _make_cluster(reg, min_part=2)
+    cluster.rebalance_for([MuleID("m1"), MuleID("m2")])
+
+    cluster.ingest_up_bundle(_fake_up_for(MuleID("m1"), devs[:2]))
+    assert cluster.aggregate_pending() is None
+    assert cluster.last_outcome == "quorum" and cluster.last_merge is None
+
+    cluster.ingest_up_bundle(_fake_up_for(MuleID("m2"), devs[2:]))
+    assert cluster.aggregate_pending() is not None
+    assert cluster.last_outcome == "merged" and cluster.last_merge is None
+
+
 def test_close_cluster_round_emits_amendment_and_resets():
     reg = DeviceRegistry()
     devs = _seed_registry(reg, 2)
@@ -186,6 +203,41 @@ def test_duplicate_up_in_same_round_is_ignored():
     cluster.rebalance_for([MuleID("m1")])
 
     up = _fake_up_for(MuleID("m1"), devs)
-    cluster.ingest_up_bundle(up)
-    cluster.ingest_up_bundle(up)  # duplicate
+    assert cluster.ingest_up_bundle(up) is True
+    assert cluster.ingest_up_bundle(up) is False  # duplicate
     assert cluster.pending_partials() == 1
+    # A resend of the same mission is ignored whole: its report is not
+    # counted twice.
+    assert all(reg.get(d).on_time_history == 1 for d in devs)
+
+
+def test_a_refused_later_mission_still_folds_its_reports():
+    """FeRRy Phase 2: a mule that gave up waiting for its quorum's DOWN flies
+    another mission and uploads while its first partial is still pending. The
+    round keeps the first partial (the one the quorum counts), but the later
+    mission's sessions and Pass-2 deliveries happened, so the registry sees
+    them; they used to be dropped with the partial."""
+    from hermes.types import DeliveryOutcome, MissionDeliveryLine, MissionDeliveryReport
+
+    reg = DeviceRegistry()
+    devs = _seed_registry(reg, 3)
+    cluster = _make_cluster(reg, min_part=2)
+    m1 = MuleID("m1")
+    cluster.rebalance_for([m1, MuleID("m2")])
+
+    assert cluster.ingest_up_bundle(_fake_up_for(m1, devs[:1])) is True
+    later = _fake_up_for(m1, devs[1:])
+    later.partial_aggregate.mission_round = 2
+    later.round_close_report.mission_round = 2
+    later.prev_mission_delivery_report = MissionDeliveryReport(
+        mule_id=m1, mission_round=1, started_at=0.0, finished_at=1.0,
+        lines=[MissionDeliveryLine(device_id=devs[0], outcome=DeliveryOutcome.UNDELIVERED,
+                                   contact_ts=0.5)],
+    )
+    assert cluster.ingest_up_bundle(later) is False
+    assert cluster.pending_partials() == 1
+    assert cluster.held_mission_round(m1) == 1           # the first partial stays
+    assert [reg.get(d).on_time_history for d in devs] == [1, 1, 1]
+    assert reg.get(devs[0]).delivery_priority == 1
+    assert cluster.pending_undelivered_carryover() == 1
+    assert cluster.held_mission_round(MuleID("m2")) is None

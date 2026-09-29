@@ -92,7 +92,7 @@ def test_default_spec_is_plain_and_asks_for_full_weights():
     assert AggregationSpec(rule=AGG_CUTOFF).update_form == UPDATE_FORM_DELTA
 
 
-@pytest.mark.parametrize("rule", [AGG_FEDEX, AGG_SEQ])
+@pytest.mark.parametrize("rule", [AGG_SEQ])
 def test_planned_rules_are_refused_with_the_reason(rule):
     with pytest.raises(AggregationConfigError, match="not implemented yet"):
         AggregationSpec(rule=rule)
@@ -186,13 +186,14 @@ def test_fedbuff_weights_ignore_example_counts():
     assert ws[1].weight == pytest.approx(1.0 / math.sqrt(3.0))
 
 
-def test_loss_value_proxy_reweights_without_rescaling():
+def test_loss_value_proxy_is_the_raw_loss():
     spec = AggregationSpec(rule=AGG_CUTOFF, value="loss")
     th = _theta()
     subs = [_sub("a", th, 10, basis=1, loss=0.2), _sub("b", th, 10, basis=1, loss=0.6)]
     ws = update_weights(spec, subs, base_version=1)
-    # losses 0.2 and 0.6 against a mean of 0.4 -> v = 0.5 and 1.5
-    assert [w.weight for w in ws] == pytest.approx([5.0, 15.0])
+    # v_i is the raw loss, not loss over the mean: mass = n_i * loss_i
+    assert [w.mass for w in ws] == pytest.approx([2.0, 6.0])
+    assert [w.weight for w in ws] == pytest.approx([2.0, 6.0])
 
 
 # --------------------------------------------------------------------------- #
@@ -265,11 +266,12 @@ def test_stale_update_is_down_weighted_and_expired_one_excluded():
     assert p.contributing_devices == (DeviceID("fresh"), DeviceID("stale"))
     assert p.excluded_devices == (DeviceID("expired"),)
     assert p.device_ages == (0, 1)
-    # raw weights 10 and 10*1/2 -> normalised 2/3 and 1/3
-    assert p.device_weights == pytest.approx((2 / 3, 1 / 3))
-    assert p.weight_mass == pytest.approx(15.0)
+    # raw weights 10 and 10*1/2 over the staleness-free mass 10 + 10 (the
+    # expired update adds nothing) -> 1/2 and 1/4, summing to the mean staleness
+    assert p.device_weights == pytest.approx((1 / 2, 1 / 4))
+    assert p.weight_mass == pytest.approx(20.0)
     expected = [
-        (2 / 3) * a.astype(np.float64) + (1 / 3) * b.astype(np.float64)
+        (1 / 2) * a.astype(np.float64) + (1 / 4) * b.astype(np.float64)
         for a, b in zip(subs[0].delta_theta, subs[1].delta_theta)
     ]
     for got, exp in zip(p.weights, expected):
@@ -313,6 +315,110 @@ def test_fedbuff_partial_averages_over_the_update_count():
         np.testing.assert_allclose(got, exp, rtol=1e-6, atol=1e-7)
 
 
+def test_update_mass_is_staleness_free():
+    """mass = n_i·v_i whatever the age; weight = mass·s(a_i), 0 past the cap."""
+    spec = AggregationSpec(rule=AGG_CUTOFF, a_max=1, hinge_a=1.0, hinge_b=0.0)
+    th = _theta()
+    subs = [
+        _sub("a", th, 10, basis=5, form=UPDATE_FORM_DELTA),   # age 0
+        _sub("b", th, 30, basis=4, form=UPDATE_FORM_DELTA),   # age 1, s = 1/2
+        _sub("c", th, 20, basis=3, form=UPDATE_FORM_DELTA),   # age 2 > cap
+    ]
+    ws = update_weights(spec, subs, base_version=5, age_caps={DeviceID(d): 1 for d in "abc"})
+    assert [w.mass for w in ws] == [10.0, 30.0, 20.0]
+    assert [w.weight for w in ws] == pytest.approx([10.0, 15.0, 0.0])
+    fb = update_weights(AggregationSpec(rule=AGG_FEDBUFF), subs, base_version=5)
+    assert [w.mass for w in fb] == [1.0, 1.0, 1.0]
+
+
+def test_a_uniformly_stale_mission_shrinks_the_step():
+    """Both updates of age 3 under asynchfl: e^{-1.5} times their mean, not
+    the full mean (dividing by Σ w_i would cancel the common factor)."""
+    theta_v = _theta(5)
+    spec = AggregationSpec(rule=AGG_ASYNCHFL, decay=0.5)
+    subs = [
+        _delta_sub("a", _local(theta_v, 1), theta_v, 10, basis=2),
+        _delta_sub("b", _local(theta_v, 2), theta_v, 30, basis=2),
+    ]
+    p = merge_on_mule(spec, mule_id=MULE, mission_round=ROUND, submissions=subs, base_version=5)
+    s = math.exp(-1.5)
+    assert p.device_ages == (3, 3)
+    assert p.weight_mass == pytest.approx(40.0)
+    assert sum(p.device_weights) == pytest.approx(s)
+    for got, a, b in zip(p.weights, subs[0].delta_theta, subs[1].delta_theta):
+        mean = (10 * a.astype(np.float64) + 30 * b.astype(np.float64)) / 40.0
+        np.testing.assert_allclose(got, s * mean, rtol=1e-6, atol=1e-7)
+
+
+def test_a_mixed_age_mission_divides_by_the_staleness_free_mass():
+    theta_v = _theta(6)
+    spec = AggregationSpec(rule=AGG_ASYNCHFL, decay=0.5)
+    subs = [
+        _delta_sub("fresh", _local(theta_v, 1), theta_v, 10, basis=4),   # age 0
+        _delta_sub("old", _local(theta_v, 2), theta_v, 30, basis=2),     # age 2
+    ]
+    p = merge_on_mule(spec, mule_id=MULE, mission_round=ROUND, submissions=subs, base_version=4)
+    e1 = math.exp(-1.0)
+    assert p.weight_mass == pytest.approx(40.0)
+    assert p.device_weights == pytest.approx((10 / 40, 30 * e1 / 40))
+    for got, a, b in zip(p.weights, subs[0].delta_theta, subs[1].delta_theta):
+        exp = (10 * a.astype(np.float64) + 30 * e1 * b.astype(np.float64)) / 40.0
+        np.testing.assert_allclose(got, exp, rtol=1e-6, atol=1e-7)
+
+
+def test_an_excluded_update_does_not_move_the_admitted_weights():
+    """v_i is formed after the cutoff: an expired high-loss update must not
+    shift the fallback for a missing loss, nor anyone's weight or mass."""
+    theta_v = _theta(8)
+    spec = AggregationSpec(rule=AGG_CUTOFF, a_max=1, value="loss")
+    a = _delta_sub("a", _local(theta_v, 1), theta_v, 10, basis=4, loss=0.2)
+    b = _delta_sub("b", _local(theta_v, 2), theta_v, 10, basis=4, loss=None)
+    expired = _delta_sub("x", _local(theta_v, 3), theta_v, 10, basis=1, loss=5.0)
+    caps = {DeviceID(d): 1 for d in ("a", "b", "x")}
+    with_x = update_weights(spec, [a, b, expired], base_version=4, age_caps=caps)
+    without = update_weights(spec, [a, b], base_version=4, age_caps=caps)
+    assert not with_x[2].admitted
+    # b's missing loss takes the admitted mean, 0.2, so both masses are 10 * 0.2
+    assert [w.mass for w in with_x[:2]] == pytest.approx([2.0, 2.0])
+    assert [(w.weight, w.mass) for w in with_x[:2]] == [(w.weight, w.mass) for w in without]
+    p_x = merge_on_mule(spec, mule_id=MULE, mission_round=ROUND,
+                        submissions=[a, b, expired], base_version=4, age_caps=caps)
+    p = merge_on_mule(spec, mule_id=MULE, mission_round=ROUND,
+                      submissions=[a, b], base_version=4, age_caps=caps)
+    assert p_x.excluded_devices == (DeviceID("x"),)
+    assert p_x.weight_mass == p.weight_mass == pytest.approx(4.0)
+    assert p_x.device_weights == p.device_weights
+    for got, ref in zip(p_x.weights, p.weights):
+        assert np.array_equal(got, ref)
+
+
+def test_loss_partials_from_two_mules_combine_as_one_flat_merge():
+    """M_m = Σ n_i·loss_i, so folding two mules' partials equals merging all
+    their updates at once; a per-mule loss mean would weigh them 1:1."""
+    theta_v = _theta(9)
+    spec = AggregationSpec(rule=AGG_CUTOFF, value="loss")
+    subs1 = [_delta_sub(f"a{k}", _local(theta_v, k), theta_v, 10, basis=2, loss=0.2)
+             for k in (1, 2)]
+    subs2 = [_delta_sub(f"b{k}", _local(theta_v, k + 2), theta_v, 10, basis=2, loss=0.6)
+             for k in (1, 2)]
+    p1 = merge_on_mule(spec, mule_id=MuleID("m1"), mission_round=ROUND,
+                       submissions=subs1, base_version=2)
+    p2 = merge_on_mule(spec, mule_id=MuleID("m2"), mission_round=ROUND,
+                       submissions=subs2, base_version=2)
+    assert (p1.weight_mass, p2.weight_mass) == pytest.approx((4.0, 12.0))   # 1:3
+    two_level = apply_weighted_deltas(
+        theta_v, [p1, p2], [p1.weight_mass, p2.weight_mass],
+        normalizer=p1.weight_mass + p2.weight_mass,
+    )
+    flat = merge_on_mule(spec, mule_id=MULE, mission_round=ROUND,
+                         submissions=subs1 + subs2, base_version=2)
+    one_level = apply_weighted_deltas(
+        theta_v, [flat], [flat.weight_mass], normalizer=flat.weight_mass,
+    )
+    for a, b in zip(two_level, one_level):
+        np.testing.assert_allclose(a, b, rtol=1e-6, atol=1e-6)
+
+
 # --------------------------------------------------------------------------- #
 # Cluster-side fold
 # --------------------------------------------------------------------------- #
@@ -345,6 +451,24 @@ def test_zero_weight_partials_are_ignored_and_all_zero_raises():
         assert np.array_equal(a, b)
     with pytest.raises(FedAvgError, match="no partial carries weight"):
         apply_weighted_deltas(theta, [p1, p2], [0.0, 0.0])
+
+
+def test_an_explicit_normalizer_keeps_the_staleness_in_the_step():
+    """W = M·s over N = M gives θ + η·s·Δ; None keeps dividing by Σ W."""
+    theta = _theta(13)
+    spec = AggregationSpec(rule=AGG_CUTOFF)
+    p = _delta_partial(theta, spec, base=0, seed=1)
+    m, s = p.weight_mass, 0.25
+    shrunk = apply_weighted_deltas(theta, [p], [m * s], server_lr=0.5, normalizer=m)
+    for t, d, got in zip(theta, p.weights, shrunk):
+        np.testing.assert_allclose(got, t + 0.5 * s * d, rtol=1e-6, atol=1e-7)
+    default = apply_weighted_deltas(theta, [p], [m * s], server_lr=0.5)
+    explicit = apply_weighted_deltas(theta, [p], [m * s], server_lr=0.5, normalizer=m * s)
+    for a, b in zip(default, explicit):
+        assert np.array_equal(a, b)
+    for bad in (0.0, -1.0):
+        with pytest.raises(FedAvgError, match="normalizer must be > 0"):
+            apply_weighted_deltas(theta, [p], [m], normalizer=bad)
 
 
 def test_partial_staleness_and_cluster_cutoff():
@@ -386,3 +510,42 @@ def test_fedbuff_buffer_applies_the_mean_once_k_updates_arrive():
         mean = (p1.weights[i].astype(np.float64) + p2.weights[i] + p3.weights[i]) / 3.0
         np.testing.assert_allclose(out[i], t + mean, rtol=1e-6, atol=1e-7)
     assert buf.count == 0 and not buf.ready
+
+
+def test_fedbuff_buffer_remembers_its_members_until_a_flush():
+    theta = _theta(22)
+    spec = AggregationSpec(rule=AGG_FEDBUFF)
+    buf = FedBuffBuffer(spec=spec, k=2)
+    buf.add(_delta_partial(theta, spec, base=0, seed=1), cluster_version=0)
+    assert buf.members == [(MuleID("m1"), ROUND)]
+    buf.add(_delta_partial(theta, spec, base=0, seed=2), cluster_version=0)
+    assert buf.members == [(MuleID("m1"), ROUND), (MuleID("m2"), ROUND)]
+    buf.apply(theta)
+    assert buf.members == []
+
+
+# --------------------------------------------------------------------------- #
+# agg:fedex — FedEx-Async's 1/N server step (arm D4, FeRRy Phase 2)
+# --------------------------------------------------------------------------- #
+
+def test_fedex_mule_sends_the_sum_of_its_updates_unweighted_by_n_or_age():
+    theta = _theta(40)
+    spec = AggregationSpec(rule=AGG_FEDEX)
+    subs = [
+        _delta_sub("a", _local(theta, 1), theta, 5, basis=3),     # age 2
+        _delta_sub("b", _local(theta, 2), theta, 50, basis=5),    # age 0
+    ]
+    p = merge_on_mule(spec, mule_id=MULE, mission_round=ROUND, submissions=subs,
+                      base_version=5, age_caps={DeviceID("a"): 0})
+    expected = [a.astype(np.float64) + b for a, b in zip(subs[0].delta_theta, subs[1].delta_theta)]
+    for got, exp in zip(p.weights, expected):
+        np.testing.assert_allclose(got, exp, rtol=1e-6, atol=1e-7)
+    assert p.weight_mass == 2.0 and p.excluded_devices == ()   # no cutoff under FedEx
+    assert p.device_weights == (0.5, 0.5)
+
+
+def test_fedex_spec_validates_n():
+    assert AggregationSpec(rule=AGG_FEDEX, fedex_n=8).fedex_n == 8
+    with pytest.raises(AggregationConfigError):
+        AggregationSpec(rule=AGG_FEDEX, fedex_n=0)
+    assert staleness(AggregationSpec(rule=AGG_FEDEX), 7) == 1.0

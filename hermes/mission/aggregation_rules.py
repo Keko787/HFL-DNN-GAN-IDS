@@ -16,14 +16,25 @@ The other rules are age-aware and work in delta form. A device answers with
 version b_i of that basis (versions are cluster rounds). With v the version of
 the θ the mule carried, the update's age is a_i = v − b_i. The mule forms::
 
-    Δ_m = Σ_i w_i·Δθ_i / Σ_i w_i,        w_i = n_i · v_i · s(a_i)
+    Δ_m = Σ_i w_i·Δθ_i / M_m,    w_i = n_i·v_i·s(a_i),    M_m = Σ_i n_i·v_i
 
-and the cluster, holding θ at version V, applies::
+with both sums over the updates the rule admits: w_i is exactly 0 past a
+device's cutoff, and an excluded update adds nothing to M_m either. M_m is
+staleness-free, so staleness shrinks the step instead of being normalised
+away — two updates both of age 3 move θ by s(3) times their mean, not by the
+full mean. The cluster, holding θ at version V, applies::
 
-    θ ← θ + η · Σ_m W_m·Δ_m / Σ_m W_m,   W_m = (Σ_i w_i)_m · s(V − v_m)
+    θ ← θ + η · Σ_m M_m·s_m·Δ_m / Σ_{m live} M_m,    s_m = s(V − v_m)
+
+where a partial is live when s_m > 0 and it is not empty. A single partial
+gives θ + η·s_m·Δ_m, the FedAsync / Async-HFL mixing form. When no partial is
+live (all past ``a_max`` at the cluster) the cluster takes no step and keeps
+the round open; the outcome is ``expired``.
 
 With every basis current (all a_i = 0), v_i = 1 and η = 1 this is exactly the
-plain mean: θ_v + Σ (n_i/Σn)(θ_i − θ_v) = Σ (n_i/Σn)·θ_i.
+plain mean: θ_v + Σ (n_i/Σn)(θ_i − θ_v) = Σ (n_i/Σn)·θ_i. With every s_m = 1
+the two levels compose into one flat merge over all the mules' devices, since
+M_m·Δ_m = Σ_i w_i·Δθ_i.
 
 * ``agg:cutoff`` — FeRRy's rule. s is FedAsync's hinge (Xie et al., 2019):
   1 up to age ``hinge_b``, then 1/(``hinge_a``·(a − ``hinge_b``) + 1). The
@@ -36,12 +47,27 @@ plain mean: θ_v + Σ (n_i/Σn)(θ_i − θ_v) = Σ (n_i/Σn)·θ_i.
   again at the cluster, after Async-HFL (Yu et al., IoTDI 2023). Pair it with
   the devices' proximal term (``DeviceConfig.fedprox_rho``).
 * ``agg:fedbuff`` — FedBuff (Nguyen et al., AISTATS 2022). The cluster buffers
-  updates and, once K have arrived (K = slice size unless set), applies their
-  mean, each scaled by 1/√(1 + a). Unweighted by n, as in the paper.
+  updates and, once K have arrived, applies their mean, each scaled by
+  1/√(1 + a). Unweighted by n, as in the paper: at the mule w_i = s(a_i) and
+  M_m is the update count. K is ``buffer_k`` when set, else the slice size of
+  the mule whose partial opens the buffer. K is FedBuff's own quorum, so the
+  cluster's ``min_participation`` does not gate it.
 
-Refused by name until they exist: ``agg:fedex`` (FedEx-Async's 1/N merge,
-which arrives with arm D4 in Phase 2) and ``agg:seq`` (carries the model device
-to device, so each device would train during its contact — a protocol change,
+* ``agg:fedex`` — FedEx-Async's server step (Bian, Shen, Chen, Xu, IEEE TMC
+  24(6), 2025), the merge of arm D4. When a transporter returns, the server
+  applies x ← x − (1/N)·u_k with u_k = Σ_i m_i the cumulative local updates it
+  carries and N the total number of clients; no server rate, no staleness
+  weighting, no cutoff. In delta form (Δθ_i = −m_i) the mule sends the SUM
+  Δ_m = Σ_i Δθ_i (every weight 1, normaliser 1, M_m the update count) and the
+  cluster applies θ ← θ + η·Σ_m Δ_m / N over the pending partials, N =
+  ``fedex_n`` or the registered devices. Faithful at η = 1 and
+  ``min_participation`` = 1 (each return is its own step). Port note: a
+  FedEx client's m_i accumulates every local step since its last visit; ours
+  is the update against the basis it trained from, which is the same thing
+  when the device trains once between visits (principle 14).
+
+Refused by name until it exists: ``agg:seq`` (carries the model device to
+device, so each device would train during its contact — a protocol change,
 since principle 14 keeps sessions exchange-only).
 
 For one mule the two-level form is exact: the mule's θ is always the cluster's
@@ -52,8 +78,8 @@ reading — device staleness at the mule, partial staleness at the cluster.
 from __future__ import annotations
 
 import math
-from dataclasses import asdict, dataclass, replace
-from typing import Dict, List, Mapping, Optional, Sequence
+from dataclasses import asdict, dataclass, field, replace
+from typing import Dict, List, Mapping, Optional, Sequence, Tuple
 
 from hermes.types import (
     DeviceID,
@@ -74,11 +100,10 @@ AGG_FEDEX = "agg:fedex"
 AGG_SEQ = "agg:seq"
 
 #: Rules this module can run.
-IMPLEMENTED_RULES = (AGG_PLAIN, AGG_CUTOFF, AGG_ASYNCHFL, AGG_FEDBUFF)
+IMPLEMENTED_RULES = (AGG_PLAIN, AGG_CUTOFF, AGG_ASYNCHFL, AGG_FEDBUFF, AGG_FEDEX)
 
 #: Rules in the build plan that are not built yet, with the reason.
 PLANNED_RULES: Dict[str, str] = {
-    AGG_FEDEX: "FedEx-Async's merge arrives with arm D4 in FeRRy Phase 2",
     AGG_SEQ: (
         "carrying the model device to device needs in-session training, a "
         "protocol change (principle 14 keeps sessions exchange-only)"
@@ -116,11 +141,19 @@ class AggregationSpec:
     hinge_b: float = 0.0
     #: ``agg:asynchfl`` decay rate λ in s(a) = exp(−λ·a).
     decay: float = 0.5
-    #: v_i: ``uniform`` (1) or ``loss`` (the update's loss over the mean loss
-    #: of the updates being merged, so it re-weights without rescaling).
+    #: v_i: ``uniform`` (1) or ``loss`` (the update's raw local loss, taken
+    #: after the cutoff; a missing or non-positive loss counts as the mean of
+    #: the admitted updates' known losses, 1.0 if none). The mule divides by
+    #: M_m = Σ n_i·v_i, so a loss level shared by one mule's updates cancels
+    #: there, while across mules M_m = Σ n_i·loss_i weighs the partials and
+    #: they combine exactly as one flat merge.
     value: str = VALUE_UNIFORM
-    #: ``agg:fedbuff`` buffer size K; None = the uploading mule's slice size.
+    #: ``agg:fedbuff`` buffer size K; None = the slice size of the mule whose
+    #: partial opens the buffer (all registered devices if that slice is empty).
     buffer_k: Optional[int] = None
+    #: ``agg:fedex`` N, the total number of clients in x ← x + (1/N)·Σ Δθ;
+    #: None = the devices registered at the cluster.
+    fedex_n: Optional[int] = None
 
     def __post_init__(self) -> None:
         self.validate()
@@ -170,6 +203,8 @@ class AggregationSpec:
             raise AggregationConfigError(
                 f"value must be one of {VALUE_PROXIES}, got {self.value!r}"
             )
+        if self.fedex_n is not None and self.fedex_n < 1:
+            raise AggregationConfigError(f"fedex_n must be >= 1, got {self.fedex_n}")
         if self.buffer_k is not None and self.buffer_k < 1:
             raise AggregationConfigError(f"buffer_k must be >= 1, got {self.buffer_k}")
 
@@ -241,28 +276,50 @@ def update_age(base_version: Optional[int], basis_version: Optional[int]) -> Opt
     return max(0, int(base_version) - int(basis_version))
 
 
-def _value_proxies(spec: AggregationSpec, subs: Sequence[GradientSubmission]) -> List[float]:
+def _known_loss(sub: GradientSubmission) -> Optional[float]:
+    """The submission's local loss when it is usable as v_i, else None."""
+    loss = sub.local_loss
+    if loss is None or not math.isfinite(loss) or not loss > 0:
+        return None
+    return float(loss)
+
+
+def _value_proxies(
+    spec: AggregationSpec,
+    subs: Sequence[GradientSubmission],
+    admitted: Sequence[bool],
+) -> List[float]:
+    """v_i per submission: 1, or under ``loss`` the raw local loss.
+
+    The raw loss, not the loss over a mean: the mule divides by
+    M_m = Σ n_i·v_i, so any per-mule rescaling cancels there anyway, and the
+    raw scale is what lets partials from different mules weigh against each
+    other. The fallback for a missing loss is the mean over the ADMITTED
+    updates only, so an update past its cutoff cannot shift anyone's weight.
+    """
     if spec.value != VALUE_LOSS:
         return [1.0] * len(subs)
-    losses = [s.local_loss for s in subs if s.local_loss is not None and s.local_loss > 0]
-    mean = sum(losses) / len(losses) if losses else 0.0
-    if mean <= 0.0:
-        return [1.0] * len(subs)
-    return [
-        (float(s.local_loss) / mean) if (s.local_loss is not None and s.local_loss > 0) else 1.0
-        for s in subs
-    ]
+    losses = [_known_loss(s) for s in subs]
+    known = [loss for loss, ok in zip(losses, admitted) if ok and loss is not None]
+    fallback = sum(known) / len(known) if known else 1.0
+    return [fallback if loss is None else loss for loss in losses]
 
 
 @dataclass(frozen=True)
 class UpdateWeight:
-    """One update's age, cutoff and raw merge weight."""
+    """One update's age, cutoff, staleness-free mass and raw merge weight.
+
+    ``mass`` is n_i·v_i (1.0 under ``agg:fedbuff``): what the update adds to
+    the mule's normaliser M_m. ``weight`` is mass·s(a_i), exactly 0.0 past the
+    cutoff. Keeping them apart is what lets staleness shrink the step.
+    """
 
     device_id: DeviceID
     basis_version: Optional[int]
     age: Optional[int]
     cap: Optional[int]
     weight: float
+    mass: float
 
     @property
     def admitted(self) -> bool:
@@ -276,25 +333,29 @@ def update_weights(
     base_version: Optional[int],
     age_caps: Optional[Mapping[DeviceID, Optional[int]]] = None,
 ) -> List[UpdateWeight]:
-    """Raw weight w_i per submission; exactly 0.0 past the device's cutoff.
+    """Mass n_i·v_i and raw weight w_i = mass·s(a_i) per submission.
 
-    ``agg:fedbuff`` weights are s(a_i) alone (FedBuff does not weight by n);
-    every other rule uses n_i·v_i·s(a_i). An unknown age counts as 0.
+    The weight is exactly 0.0 past the device's cutoff. ``agg:fedbuff`` has
+    mass 1 and weight s(a_i) alone (FedBuff does not weight by n). An unknown
+    age counts as 0. Admission is settled before the value proxies are formed,
+    so an excluded update never moves an admitted one's weight.
     """
     caps = age_caps or {}
-    values = _value_proxies(spec, submissions)
-    out: List[UpdateWeight] = []
-    for sub, v in zip(submissions, values):
+    rows = []
+    for sub in submissions:
         age = update_age(base_version, sub.basis_version)
         a = 0 if age is None else age
         cap = caps.get(sub.device_id) if spec.rule == AGG_CUTOFF else None
-        if cap is not None and a > cap:
-            w = 0.0
-        elif spec.rule == AGG_FEDBUFF:
-            w = staleness(spec, a)
-        else:
-            w = float(sub.num_examples) * v * staleness(spec, a)
-        out.append(UpdateWeight(sub.device_id, sub.basis_version, age, cap, w))
+        s = 0.0 if (cap is not None and a > cap) else staleness(spec, a)
+        rows.append((sub, age, cap, s))
+    values = _value_proxies(
+        spec, submissions, [s > 0.0 and sub.num_examples > 0 for sub, _, _, s in rows],
+    )
+    out: List[UpdateWeight] = []
+    for (sub, age, cap, s), v in zip(rows, values):
+        # FedBuff and FedEx weigh every update alike (neither weights by n).
+        mass = 1.0 if spec.rule in (AGG_FEDBUFF, AGG_FEDEX) else float(sub.num_examples) * v
+        out.append(UpdateWeight(sub.device_id, sub.basis_version, age, cap, mass * s, mass))
     return out
 
 
@@ -314,7 +375,10 @@ def merge_on_mule(
     """Merge one mission's verified submissions into a partial.
 
     ``agg:plain`` runs :func:`partial_fedavg` unchanged and only annotates the
-    result with versions and ages. The age-aware rules merge in delta form.
+    result with versions and ages. The age-aware rules merge in delta form,
+    Δ_m = Σ w_i·Δθ_i / M_m over the admitted updates; the partial carries M_m as
+    ``weight_mass`` and w_i / M_m as ``device_weights``, which sum to the
+    mass-weighted mean staleness (≤ 1, and 1 when no update is discounted).
     Raises :class:`PartialFedAvgError` when nothing carries weight, which the
     mule treats like a mission that collected nothing.
     """
@@ -349,9 +413,15 @@ def merge_on_mule(
             f"{len(effective)} were past their age cutoff"
         )
     raw = [w.weight for _, w in admitted]
-    # FedBuff averages over the COUNT of buffered updates (each already scaled
-    # by its staleness); the weighted rules normalise by the weight mass.
-    normalizer = float(len(raw)) if spec.rule == AGG_FEDBUFF else float(sum(raw))
+    # Divide by the staleness-free mass M_m of the admitted updates, not by
+    # Σ w_i: dividing by the weights' own sum would cancel a common staleness
+    # factor and send a uniformly stale mission's full mean. Under FedBuff
+    # every mass is 1, so M_m is the COUNT of updates, as in the paper.
+    # Excluded updates add nothing, so they do not dilute the step.
+    mass = float(sum(w.mass for _, w in admitted))
+    # FedEx carries the SUM u_k of its clients' updates home; the cluster
+    # divides by the total client count N, not by this mule's count.
+    normalizer = 1.0 if spec.rule == AGG_FEDEX else mass
     agg = partial_fedavg_delta(
         mule_id,
         mission_round,
@@ -363,10 +433,10 @@ def merge_on_mule(
         agg,
         rule=spec.rule,
         base_version=base_version,
-        weight_mass=normalizer,
+        weight_mass=mass,
         device_basis_versions=tuple(w.basis_version for _, w in admitted),
         device_ages=tuple(w.age for _, w in admitted),
-        device_weights=tuple(r / normalizer for r in raw),
+        device_weights=tuple(r / mass for r in raw),
         excluded_devices=excluded,
     )
 
@@ -406,12 +476,18 @@ def check_partial_form(spec: AggregationSpec, partial: PartialAggregate) -> None
 
 @dataclass
 class FedBuffBuffer:
-    """Cluster-side FedBuff buffer: sum of staleness-scaled updates and a count."""
+    """Cluster-side FedBuff buffer: sum of staleness-scaled updates and a count.
+
+    ``members`` names the partials behind the buffered sum as
+    (mule_id, mission_round), so a trace can say which missions a deferred
+    buffer holds and which ones a flush applied.
+    """
 
     spec: AggregationSpec
     k: int
     total: Optional[List] = None
     count: int = 0
+    members: List[Tuple[MuleID, int]] = field(default_factory=list)
 
     def add(self, partial: PartialAggregate, *, cluster_version: int) -> None:
         import numpy as np
@@ -431,13 +507,14 @@ class FedBuffBuffer:
                     raise AggregationConfigError("FedBuff: layer shape mismatch across partials")
                 acc += layer
         self.count += int(round(partial.weight_mass))
+        self.members.append((partial.mule_id, int(partial.mission_round)))
 
     @property
     def ready(self) -> bool:
         return self.total is not None and self.count >= self.k
 
     def apply(self, theta: Weights) -> Weights:
-        """θ + η · (buffered sum / count); empties the buffer."""
+        """θ + η · (buffered sum / count); empties the buffer and its members."""
         import numpy as np
 
         if self.total is None or self.count <= 0:
@@ -450,4 +527,5 @@ class FedBuffBuffer:
         ]
         self.total = None
         self.count = 0
+        self.members = []
         return out

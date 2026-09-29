@@ -62,8 +62,11 @@ def test_exp4_one_trial_runs_real_orchestrator():
 @pytest.mark.slow
 def test_exp4_age_aware_merge_runs_through_the_real_orchestrator(tmp_path):
     """FeRRy Phase 1: agg:cutoff, a deadline-derived cutoff, a budgeted Pass 2,
-    the multiplicative deadline law and the miss-priority key, across
-    processes and TCP; the mule's trace records each merge and each window."""
+    the multiplicative deadline law, the miss-priority key and FedProx, across
+    processes and TCP. Every setting is read back from the processes' own
+    events, not from the driver's row, so a flag dropped between the driver
+    and the process fails here (audit #15)."""
+    import itertools
     import json
 
     from experiments.exp4.driver import trace_dir_name
@@ -76,10 +79,13 @@ def test_exp4_age_aware_merge_runs_through_the_real_orchestrator(tmp_path):
         startup_timeout_s=30.0,
         mission_budget_s=60.0,
         aggregation="agg:cutoff",
-        aggregation_params={"period_s": 20.0, "a_max": 3},
+        # T = 30 s with no fixed a_max: the cap ⌊Φ/T⌋ can only come from
+        # period_s reaching the mule.
+        aggregation_params={"period_s": 30.0},
         pass_2_budget=True,
         deadline_law="multiplicative",
         miss_priority=True,
+        fedprox_rho=0.01,
         trace_root=tmp_path,
     )
     cell = Cell(
@@ -88,25 +94,51 @@ def test_exp4_age_aware_merge_runs_through_the_real_orchestrator(tmp_path):
     )
     row = dict(driver.run_trial(cell))
     assert row["mission_failures"] == 0 and row["rounds_closed"] >= 1
-    assert row["aggregation"] == "agg:cutoff" and row["pass_2_budget"] == 1
-    assert json.loads(row["aggregation_params"])["period_s"] == 20.0
-
-    assert row["deadline_law"] == "multiplicative" and row["miss_priority"] == 1
-    assert json.loads(row["deadline_params"])["beta_on"] == 0.8
 
     trace = tmp_path / trace_dir_name(cell)
+
+    def _events(pattern, name):
+        out = []
+        for path in trace.glob(pattern):
+            for line in path.read_text(encoding="utf-8").splitlines():
+                rec = json.loads(line)
+                if rec.get("event") == name:
+                    out.append(rec)
+        return out
+
+    # What the mule actually runs, reported by the mule process itself.
+    (ready,) = _events("mule-*.jsonl", "mule_ready")
+    assert ready["aggregation"] == "agg:cutoff"
+    assert ready["aggregation_params"]["period_s"] == 30.0
+    assert ready["aggregation_params"]["a_max"] is None
+    assert ready["deadline_law"] == "multiplicative"
+    assert ready["deadline_params"]["beta_on"] == 0.8
+    assert ready["miss_priority"] is True and ready["pass_2_budget"] is True
+    assert ready["mission_budget_s"] == 60.0
+    devices_ready = _events("device-*.jsonl", "device_ready")
+    assert len(devices_ready) == 3
+    assert all(d["fedprox_rho"] == 0.01 for d in devices_ready)
+
     merges, windows = [], []
-    for path in trace.glob("mule-*.jsonl"):
-        for line in path.read_text(encoding="utf-8").splitlines():
-            rec = json.loads(line)
-            if rec.get("event") != "mission_completed":
-                continue
-            if rec.get("pass_1_merge"):
-                merges.append(rec["pass_1_merge"])
-            windows.extend((rec.get("deadline_state") or {}).values())
+    for rec in _events("mule-*.jsonl", "mission_completed"):
+        if rec.get("pass_1_merge"):
+            merges.append(rec["pass_1_merge"])
+        windows.extend((rec.get("deadline_state") or {}).values())
+        # Audit #3/#13 trace fields.
+        assert isinstance(rec.get("pass_1_merged_devices"), list)
+        for contact in rec.get("pass_1_plan") or ():
+            assert set(contact["device_deadlines"]) == set(contact["devices"])
     assert merges, "no mission_completed event carried a merge record"
     assert all(m["rule"] == "agg:cutoff" for m in merges)
     assert merges[0]["base_version"] == 0
     assert all(a is not None and a >= 0 for m in merges for a in m["ages"])
+
+    # The law's trajectory. Two missions give each device at most two folds,
+    # so every window is 60·β₁·β₂ for β in {β_on, β_partial, β_timeout}. The
+    # additive law's ±5/10 s steps reach none of these but 60.
     assert windows, "no mission_completed event carried the deadline state"
-    assert all(5.0 <= w["phi_s"] <= 300.0 and w["miss_streak"] >= 0 for w in windows)
+    betas = (1.0, 0.8, 1.25, 1.5)
+    reachable = {round(60.0 * a * b, 6) for a, b in itertools.product(betas, betas)}
+    assert all(round(w["phi_s"], 6) in reachable for w in windows), windows
+    assert any(round(w["phi_s"], 6) != 60.0 for w in windows)
+    assert all(w["miss_streak"] >= 0 for w in windows)

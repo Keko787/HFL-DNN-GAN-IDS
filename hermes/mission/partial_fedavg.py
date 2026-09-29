@@ -119,11 +119,14 @@ def partial_fedavg_delta(
     FeRRy Phase 1. Each submission carries Δθ_i, its model minus the basis it
     trained from (``update_form == "delta"``); ``weights`` are the rule's raw
     weights w_i, already zero-free (see ``aggregation_rules.merge_on_mule``).
-    ``normalizer`` is Σ w_i for the weighted rules and the update count for
-    FedBuff. The result is an update to add to the global θ, not a model.
+    ``normalizer`` is the staleness-free mass M_m = Σ n_i·v_i of the same
+    updates for the weighted rules and the update count for FedBuff — not
+    Σ w_i, so a common staleness factor shrinks the result instead of
+    cancelling. It is stored as ``weight_mass``. The result is an update to
+    add to the global θ, not a model.
 
     Rejects the same malformed inputs as :func:`partial_fedavg`, plus a
-    submission in full-weights form and a non-positive normalizer (Σ w = 0).
+    submission in full-weights form and a non-positive normalizer.
     """
     if not submissions:
         raise PartialFedAvgError("no submissions to aggregate")

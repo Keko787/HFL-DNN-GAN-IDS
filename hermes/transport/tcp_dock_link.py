@@ -41,10 +41,22 @@ from typing import Dict, List, Optional
 
 from hermes.types import DownBundle, MuleID, UpBundle
 
-from .dock_link import DockLink, DockLinkError
+from .dock_link import DockLink, DockLinkError, DockLinkTimeout, _drain
 from .wire import WireError, recv_message, send_message
 
 log = logging.getLogger(__name__)
+
+
+def _close_socket(sock: socket.socket) -> None:
+    """Shut down and close ``sock``, ignoring a socket that is already gone."""
+    try:
+        sock.shutdown(socket.SHUT_RDWR)
+    except OSError:
+        pass
+    try:
+        sock.close()
+    except OSError:
+        pass
 
 
 # --------------------------------------------------------------------------- #
@@ -175,7 +187,7 @@ class TCPDockLinkServer(DockLink):
         try:
             return self._up_q.get(timeout=timeout)
         except queue.Empty as e:
-            raise DockLinkError(f"recv_up timed out after {timeout}s") from e
+            raise DockLinkTimeout(f"recv_up timed out after {timeout}s") from e
 
     def send_down(self, bundle: DownBundle) -> None:
         self._raise_if_closed()
@@ -183,7 +195,7 @@ class TCPDockLinkServer(DockLink):
         try:
             send_message(sock, bundle)
         except WireError as e:
-            self._drop_mule(bundle.mule_id)
+            self._drop_mule(bundle.mule_id, sock)
             raise DockLinkError(
                 f"send_down to {bundle.mule_id!r} failed: {e}"
             ) from e
@@ -299,6 +311,11 @@ class TCPDockLinkServer(DockLink):
             # fall back to relying on the peer to drain.
             log.debug("SO_SNDTIMEO not honoured on this platform")
         with self._registration_cv:
+            # A mule re-registering under the same id (restarted, re-docked)
+            # replaces its old connection. The old one is closed below, so its
+            # reader ends; that reader then leaves the new entry alone, because
+            # _drop_mule only removes the socket it was given (FeRRy Phase 2).
+            previous = self._sockets.get(mid)
             self._sockets[mid] = conn
             t = threading.Thread(
                 target=self._reader_loop,
@@ -309,6 +326,9 @@ class TCPDockLinkServer(DockLink):
             self._reader_threads[mid] = t
             # S2-M4: wake any wait_for_mules caller blocked on this mule.
             self._registration_cv.notify_all()
+        if previous is not None and previous is not conn:
+            log.info("TCPDockLinkServer: mule %s re-registered; closing its old socket", mid)
+            _close_socket(previous)
         t.start()
         log.info("TCPDockLinkServer registered mule %s", mid)
 
@@ -326,13 +346,24 @@ class TCPDockLinkServer(DockLink):
                     "TCPDockLinkServer ignored unexpected message %s from %s",
                     type(msg).__name__, mule_id,
                 )
-        self._drop_mule(mule_id)
+        self._drop_mule(mule_id, conn)
         log.info("TCPDockLinkServer reader for %s exiting", mule_id)
 
-    def _drop_mule(self, mule_id: MuleID) -> None:
+    def _drop_mule(self, mule_id: MuleID, conn: Optional[socket.socket] = None) -> None:
+        """Forget ``mule_id``'s connection and close it.
+
+        With ``conn``, only that connection is dropped: if the mule has since
+        re-registered on a new socket, the entry is the new one and stays, so
+        an old reader ending late cannot disconnect the mule's new session.
+        ``conn`` itself is closed either way.
+        """
         with self._lock:
-            sock = self._sockets.pop(mule_id, None)
-            self._reader_threads.pop(mule_id, None)
+            current = self._sockets.get(mule_id)
+            if conn is None or current is conn:
+                sock = self._sockets.pop(mule_id, None)
+                self._reader_threads.pop(mule_id, None)
+            else:
+                sock = conn
         if sock is not None:
             try:
                 sock.close()
@@ -428,9 +459,21 @@ class TCPDockLinkClient(DockLink):
         try:
             return self._down_q.get(timeout=timeout)
         except queue.Empty as e:
-            raise DockLinkError(
+            raise DockLinkTimeout(
                 f"client_recv_down for {mule_id!r} timed out after {timeout}s"
             ) from e
+
+    def client_drain_down(self, mule_id: MuleID) -> List[DownBundle]:
+        """Every DOWN the reader thread has queued so far, oldest first.
+
+        Works on a closed link too: bundles that arrived before it closed are
+        still returned, and an empty list means nothing is waiting.
+        """
+        if mule_id != self._mule_id:
+            raise DockLinkError(
+                f"client_drain_down for {mule_id!r} on client {self._mule_id!r}"
+            )
+        return _drain(self._down_q)
 
     # ------------------------------------------------------------------ #
     # Cluster-side methods — not implemented on the client

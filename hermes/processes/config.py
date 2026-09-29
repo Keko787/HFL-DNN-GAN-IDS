@@ -145,7 +145,8 @@ class MuleConfig:
     mission_budget_s: Optional[float] = None
     # SOTA baseline arm. ``None`` = our scheduler. ``"max_aoi"`` swaps the
     # ranking for the Age-of-Information greedy comparator
-    # (hermes/scheduler/policies/max_aoi.py). Mutually exclusive with
+    # (hermes/scheduler/policies/max_aoi.py); ``"oort"``, ``"whittle"``,
+    # ``"fedex"`` and ``"fedcs"`` are arms D2-D5. Mutually exclusive with
     # ``use_rl_selector`` — both occupy the single target-selector slot, so
     # setting both is a configuration error rather than a blend.
     contact_policy: Optional[str] = None
@@ -178,6 +179,26 @@ class MuleConfig:
     deadline_law: str = "additive"
     deadline_params: dict = field(default_factory=dict)
     miss_priority: bool = False
+    # FeRRy Phase 2 — several mules on one cluster. ``down_wait_s`` bounds the
+    # inter-pass dock's wait for its DOWN and makes running out survivable:
+    # the mule emits ``dock_down_timeout``, skips Pass 2 and flies the next
+    # mission on this one's θ. None is the recorded single-mule dock: one
+    # 10 s wait whose expiry ends the mission loop. ``dock_on_empty`` makes a
+    # mission that collected nothing dock anyway with an empty partial, which
+    # counts toward the cluster's quorum and merges nothing; off, an empty
+    # mission skips the dock as every recorded run did.
+    down_wait_s: Optional[float] = None
+    dock_on_empty: bool = False
+    # FeRRy Phase 2 — options of the whole-scheduler baselines, read only by
+    # the policy they belong to (``contact_policy``). Defaults are the
+    # policies' own. D3 ``whittle`` (hermes/scheduler/policies/whittle.py):
+    # ``whittle_variant`` "expected" | "literal", ``whittle_weights``
+    # "uniform" | "oort" (Oort's utility, which needs a real model). D5
+    # ``fedcs`` (policies/fedcs_degraded.py): ``fedcs_value`` "unit" |
+    # "devices".
+    whittle_variant: str = "expected"
+    whittle_weights: str = "uniform"
+    fedcs_value: str = "unit"
 
 
 @dataclass

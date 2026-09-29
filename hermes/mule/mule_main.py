@@ -41,7 +41,7 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Tuple
 
 import numpy as np
 
@@ -49,6 +49,7 @@ from hermes.l1.channel_ddqn import ChannelDDQN, L1_STATE_DIM
 from hermes.mission import HFLHostMission, MissionSessionError
 from hermes.mission.aggregation_rules import AggregationSpec, age_cap
 from hermes.mule import BundleDistributor, ClientCluster
+from hermes.mule.client_cluster import DownTimeout
 from hermes.scheduler import FLScheduler
 from hermes.transport import DockLink, RFLink
 from hermes.types import (
@@ -140,6 +141,32 @@ class MissionRunResult:
     # (0 updates, does not close), but flagged so it isn't mistaken for a
     # productive mission.
     empty: bool = False
+    # An empty mission whose sessions DID complete, but every update was past
+    # its age cutoff (age-aware rules only): the round report, kept so the
+    # trace still shows those on-time sessions instead of scoring them as
+    # misses. None otherwise; ``report`` stays None for every empty mission.
+    unmerged_report: Optional[MissionRoundCloseReport] = None
+    # Each planned device's own Deadline(j) from this mission's Pass-1 plan.
+    pass_1_device_deadlines: Dict[DeviceID, float] = field(default_factory=dict)
+    # FeRRy Phase 2 (``down_wait_s`` set): the inter-pass dock uploaded but no
+    # DOWN came within the wait, so Pass 2 was skipped and the mission's own
+    # θ was restaged for the next one. Always False without ``down_wait_s``,
+    # where a missing DOWN still ends the mission with an error.
+    down_timeout: bool = False
+    # FeRRy Phase 2 (``dock_on_empty`` set): this empty mission still docked,
+    # uploading an empty partial so a quorum can close without it. True once
+    # the upload is sent, whether or not its DOWN then came in time
+    # (``down_timeout`` says which): the cluster holds the partial either way.
+    docked_empty: bool = False
+
+
+def _merged_device_ids(report, agg) -> List[DeviceID]:
+    """CLEAN devices of a round report minus those its merge excluded."""
+    excluded = set(getattr(agg, "excluded_devices", ()) or ())
+    return [
+        line.device_id for line in report.lines
+        if line.outcome.is_on_time() and line.device_id not in excluded
+    ]
 
 
 class MuleSupervisor:
@@ -171,6 +198,9 @@ class MuleSupervisor:
         pass_2_budget: bool = False,
         deadline_law=None,
         miss_priority: bool = False,
+        down_wait_s: Optional[float] = None,
+        dock_on_empty: bool = False,
+        should_stop: Optional[Callable[[], bool]] = None,
     ) -> None:
         self.mule_id = mule_id
         self.mule_pose = mule_pose
@@ -178,6 +208,21 @@ class MuleSupervisor:
         self.rf_prior_snr_db = rf_prior_snr_db
         self.rf_range_m = rf_range_m
         self._now = now_fn
+        # FeRRy Phase 2 — several mules share one cluster. ``down_wait_s``
+        # bounds how long the inter-pass dock waits for its DOWN, and makes
+        # running out survivable (Pass 2 skipped, the mission's θ kept): with a
+        # quorum the answer can take as long as the slowest other mule's
+        # mission. None keeps the recorded single 10 s wait, whose timeout ends
+        # the mission loop. ``dock_on_empty`` makes a mission that collected
+        # nothing dock anyway, with an empty partial, so a quorum that counts
+        # this mule can still close. Both are off for one mule.
+        if down_wait_s is not None and not float(down_wait_s) > 0.0:
+            raise MuleSupervisorError(f"down_wait_s must be > 0, got {down_wait_s}")
+        self.down_wait_s: Optional[float] = (
+            None if down_wait_s is None else float(down_wait_s)
+        )
+        self.dock_on_empty = bool(dock_on_empty)
+        self._should_stop: Callable[[], bool] = should_stop or (lambda: False)
         # FeRRy Phase 1. The merge rule (agg:plain, the recorded merge, by
         # default) and whether Pass 2 is walked against the budget. Off, Pass 2
         # delivers to the whole slice, so every basis is current and ages never
@@ -212,6 +257,9 @@ class MuleSupervisor:
             scheduler_bus=self.scheduler.ingest_round_close_delta,
             session_ttl_s=session_ttl_s,
             aggregation=self.aggregation,
+            # A budgeted Pass 2 may not come back to a device, so Pass 1 asks
+            # it to train ahead on the basis it adopts (audit #0).
+            train_ahead=self.pass_2_budget,
         )
 
         # ClientCluster owns the dock lifecycle. The distributor fans the
@@ -236,6 +284,9 @@ class MuleSupervisor:
             mule_id=mule_id,
             dock=dock,
             distributor=self.distributor,
+            # A DOWN that arrives after a survived wait is stale by the next
+            # dock; only then is there anything to drain before an upload.
+            recoverable_down_wait=self.down_wait_s is not None,
         )
 
         # L1 channel actor — optional. When None, channel choice is not
@@ -285,10 +336,19 @@ class MuleSupervisor:
         Required before the first ``run_one_mission`` call so the mule
         knows what slice it owns. Uses the DOWN-only bootstrap path
         because the mule has no aggregate to upload yet.
+
+        ``timeout`` also bounds the DOWN wait (FeRRy Phase 2): a bootstrap not
+        yet sent returns False rather than raising, so a caller polling in
+        ticks keeps its own window and its timeout branch. The DOWN wait used
+        to be a fixed 10 s whose expiry raised past every caller.
         """
         if not self.client_cluster.wait_for_dock(timeout=timeout):
             return False
-        down = self.client_cluster.bootstrap_down_only()
+        wait_s = (
+            None if timeout is None
+            else min(float(timeout), self.client_cluster.down_timeout_s)
+        )
+        down = self.client_cluster.bootstrap_down_only(timeout=wait_s)
         return down is not None
 
     def run_one_mission(self) -> MissionRunResult:
@@ -334,6 +394,7 @@ class MuleSupervisor:
 
         # 1. Open round on the mission server.
         mission_round = self.mission.open_round(theta, theta_version=theta_version)
+        self.scheduler.set_mission_round(mission_round)
 
         # 2. Build the visit queue from the scheduler.
         queue = self.scheduler.build_target_queue(
@@ -341,6 +402,9 @@ class MuleSupervisor:
             mule_energy=self.mule_energy,
             rf_prior_snr_db=self.rf_prior_snr_db,
         )
+        # The merge cutoff reads the window each device was planned under,
+        # before this mission's sessions fold their outcomes into it.
+        planned_caps = self._age_caps()
         log.info(
             "mule=%s round=%d queue_size=%d",
             self.mule_id, mission_round, len(queue),
@@ -365,7 +429,7 @@ class MuleSupervisor:
         # 4. Close round → partial FedAvg + report + contacts.
         try:
             agg, report, contacts = self.mission.close_round(
-                age_caps=self._age_caps(),
+                age_caps=planned_caps,
             )
         except MissionSessionError as e:
             # No clean gradients — abort the dock cycle and let the
@@ -376,6 +440,10 @@ class MuleSupervisor:
             )
             raise
 
+        self.scheduler.record_merged(
+            _merged_device_ids(report, agg), mission_round,
+        )
+
         # 5. Hand off to ClientCluster, dock cycle (UP + DOWN).
         self.client_cluster.collect(
             partial_aggregate=agg, report=report, contacts=contacts,
@@ -384,7 +452,11 @@ class MuleSupervisor:
             raise MuleSupervisorError("dock did not become available")
         # run_dock_cycle distributes DOWN through the BundleDistributor,
         # which restages _next_theta + _next_synth via the callbacks.
-        self.client_cluster.run_dock_cycle()
+        docked = self._dock_and_await_down()
+        if not docked:
+            # FeRRy Phase 2: no DOWN within down_wait_s. Fly the next mission
+            # on this one's θ rather than stopping.
+            self._restage(theta, synth, theta_version)
 
         return MissionRunResult(
             mission_round=mission_round,
@@ -393,6 +465,7 @@ class MuleSupervisor:
             report=report,
             contacts=contacts,
             channel_choices=channel_choices,
+            down_timeout=not docked,
         )
 
     # ------------------------------------------------------------------ #
@@ -433,11 +506,20 @@ class MuleSupervisor:
         mission_round = self.mission.open_round(
             theta_pass_1, theta_version=version_pass_1,
         )
+        self.scheduler.set_mission_round(mission_round)
         pass_1_queue = self.scheduler.build_contact_queue(
             rf_range_m=rf_range_m,
             mule_pose=self.mule_pose,
             mule_energy=self.mule_energy,
             rf_prior_snr_db=self.rf_prior_snr_db,
+        )
+        # Snapshot what the plan was made with before any session folds its
+        # outcome into Φ or S3c moves its scale: the merge cutoff a_max_j must
+        # read the window the device was admitted under (audit #2), and the
+        # trace scores each device against its own deadline (audit #13).
+        planned_caps = self._age_caps()
+        planned_deadlines = dict(
+            getattr(self.scheduler, "last_plan_deadlines", None) or {}
         )
         log.info(
             "mule=%s round=%d pass=1 contacts=%d devices_total=%d",
@@ -523,7 +605,7 @@ class MuleSupervisor:
 
         try:
             agg, report, contacts = self.mission.close_round(
-                age_caps=self._age_caps(),
+                age_caps=planned_caps,
             )
         except MissionSessionError as e:
             # EX-4.2: no device uplink succeeded this Pass 1 (e.g. under lossy
@@ -538,15 +620,35 @@ class MuleSupervisor:
                 "empty round and continuing: %s",
                 self.mule_id, mission_round, e,
             )
-            self._next_theta = theta_pass_1
-            self._next_synth = synth_pass_1
-            self._next_theta_version = version_pass_1
+            # ``answered``: the DOWN staged the next θ. An upload whose DOWN
+            # did not come in time still docked: the cluster holds its empty
+            # partial, so the trace must say it uploaded.
+            answered = False
+            if self.dock_on_empty:
+                # FeRRy Phase 2: dock anyway. The empty partial counts toward
+                # the cluster's quorum and adds nothing to θ, and the DOWN
+                # brings the θ the other mules have moved on to. Pass 2 is
+                # still skipped: that θ reaches the devices with the next
+                # mission's Pass-1 push.
+                answered = self._dock_empty(mission_round, version_pass_1)
+            if not answered:
+                self._restage(theta_pass_1, synth_pass_1, version_pass_1)
             return MissionRunResult(
                 mission_round=mission_round,
                 pass_1_queue=list(pass_1_queue),
                 pass_1_channel_choices=pass_1_channel_choices,
                 empty=True,
+                unmerged_report=self._excluded_only_report(),
+                pass_1_device_deadlines=planned_deadlines,
+                down_timeout=self.dock_on_empty and not answered,
+                docked_empty=self.dock_on_empty,
             )
+
+        # Age-of-Update anchor for the devices this merge used (FeRRy Phase 2):
+        # the CLEAN sessions minus any update the age cutoff excluded.
+        self.scheduler.record_merged(
+            _merged_device_ids(report, agg), mission_round,
+        )
 
         # ===================== Inter-pass dock =====================
         # H3 — ride the *previous* mission's Pass-2 delivery report up
@@ -563,7 +665,28 @@ class MuleSupervisor:
         self._pending_delivery_report = None
         if not self.client_cluster.wait_for_dock(timeout=None):
             raise MuleSupervisorError("dock did not become available between passes")
-        self.client_cluster.run_dock_cycle()
+        if not self._dock_and_await_down():
+            # FeRRy Phase 2 (down_wait_s set): uploaded, but no DOWN within the
+            # wait. Without θ' there is nothing to deliver, so Pass 2 is
+            # skipped and this mission's θ carries the next one, exactly as an
+            # empty mission does. The upload itself stands.
+            log.warning(
+                "mule=%s round=%d no DOWN within %.1fs of the upload; skipping "
+                "Pass 2 and flying the next mission on this mission's θ",
+                self.mule_id, mission_round, self.down_wait_s,
+            )
+            self._restage(theta_pass_1, synth_pass_1, version_pass_1)
+            return MissionRunResult(
+                mission_round=mission_round,
+                aggregate=agg,
+                report=report,
+                contacts=contacts,
+                channel_choices=list(pass_1_channel_choices),
+                pass_1_queue=list(pass_1_queue),
+                pass_1_channel_choices=pass_1_channel_choices,
+                pass_1_device_deadlines=planned_deadlines,
+                down_timeout=True,
+            )
         # The DOWN-bundle distribution staged self._next_theta /
         # self._next_synth — those are Pass-2's payload.
         if self._next_theta is None:
@@ -648,7 +771,122 @@ class MuleSupervisor:
             delivery_report=delivery_report,
             pass_1_channel_choices=pass_1_channel_choices,
             pass_2_channel_choices=pass_2_channel_choices,
+            pass_1_device_deadlines=planned_deadlines,
         )
+
+    def _excluded_only_report(self) -> Optional[MissionRoundCloseReport]:
+        """The report of a mission whose every collected update was cut off.
+
+        Only the age-aware rules can refuse an update that arrived on time, so
+        only they can leave CLEAN sessions behind an empty round. Returning the
+        report keeps those sessions in the trace, where the deadline scorer
+        would otherwise count them as misses (audit #3). None for agg:plain,
+        whose empty rounds stay exactly as recorded, and for a mission that
+        collected nothing.
+        """
+        if self.aggregation.is_plain:
+            return None
+        unmerged = getattr(self.mission, "last_unmerged", None)
+        if unmerged is None:
+            return None
+        report = unmerged[0]
+        if not any(line.outcome.is_on_time() for line in report.lines):
+            return None
+        return report
+
+    # ------------------------------------------------------------------ #
+    # FeRRy Phase 2 — docking with other mules on the same cluster
+    # ------------------------------------------------------------------ #
+
+    #: Re-arm interval of a ``down_wait_s`` wait: short, so a stop request is
+    #: honoured within about a second even during a long quorum wait.
+    _DOWN_WAIT_TICK_S: float = 1.0
+
+    def _restage(self, theta, synth, version) -> None:
+        """Stage ``theta`` again for the next mission, with its batch and version."""
+        self._next_theta = theta
+        self._next_synth = synth
+        self._next_theta_version = version
+
+    def _dock_and_await_down(self) -> bool:
+        """Upload what is staged and wait for the DOWN; True once one arrived.
+
+        Without ``down_wait_s`` this is the recorded single ``run_dock_cycle``:
+        a 10 s wait whose expiry raises and ends the mission loop. With it the
+        wait is re-armed in ticks until ``down_wait_s`` has passed or a stop is
+        requested, and running out returns False instead of raising: with
+        several mules the answer can wait on another mule's mission. An upload
+        that did not land returns True either way, and the caller's check for
+        a staged θ reports it as before.
+        """
+        if self.down_wait_s is None:
+            self.client_cluster.run_dock_cycle()
+            return True
+        deadline = time.monotonic() + self.down_wait_s
+        tick = min(self._DOWN_WAIT_TICK_S, self.down_wait_s)
+        try:
+            self.client_cluster.run_dock_cycle(down_timeout_s=tick)
+            return True
+        except DownTimeout:
+            pass
+        while not self._should_stop():
+            remaining = deadline - time.monotonic()
+            if remaining <= 0.0:
+                break
+            try:
+                self.client_cluster.await_down(timeout=min(tick, remaining))
+                return True
+            except DownTimeout:
+                continue
+        return False
+
+    def _dock_empty(self, mission_round: int, base_version: Optional[int]) -> bool:
+        """Dock after a mission that collected nothing (``dock_on_empty``).
+
+        Uploads an empty partial, tagged with this mule's rule so the cluster
+        accepts its form, and the mission's round report (its sessions still
+        happened), with the previous mission's Pass-2 ledger riding along as
+        in any upload. The cluster counts the partial toward its quorum and
+        merges nothing from it. Returns True once the DOWN has staged the next
+        mission's θ, False when ``down_wait_s`` ran out first.
+        """
+        unmerged = getattr(self.mission, "last_unmerged", None)
+        if unmerged is not None:
+            report, contacts = unmerged
+        else:
+            now = time.time()
+            report = MissionRoundCloseReport(
+                mule_id=self.mule_id, mission_round=mission_round,
+                started_at=now, finished_at=now,
+            )
+            contacts = ContactHistory(mule_id=self.mule_id, mission_round=mission_round)
+        spec = self.aggregation
+        empty = PartialAggregate(
+            mule_id=self.mule_id,
+            mission_round=mission_round,
+            weights=[],
+            num_examples=0,
+            rule=spec.rule,
+            update_form=spec.update_form,
+            base_version=base_version,
+        )
+        self.client_cluster.collect(
+            partial_aggregate=empty,
+            report=report,
+            contacts=contacts,
+            delivery_report=self._pending_delivery_report,
+        )
+        self._pending_delivery_report = None
+        if not self.client_cluster.wait_for_dock(timeout=None):
+            raise MuleSupervisorError("dock did not become available after an empty mission")
+        if not self._dock_and_await_down():
+            return False
+        if self._next_theta is None:
+            raise MuleSupervisorError(
+                "empty-mission dock did not stage a model — the cluster must "
+                "answer every upload with a DOWN"
+            )
+        return True
 
     # ------------------------------------------------------------------ #
     # L1 channel pick — features per design §2.6 state vector
@@ -686,6 +924,29 @@ class MuleSupervisor:
         if start is None:
             return True
 
+        # Freeze Amendment 8 — a whole-scheduler baseline (D1/D2) replaces S3b,
+        # so its route must not be held to S3b's per-device deadline in flight
+        # either: MAX-AoI puts the most overdue devices first by design, and
+        # the deadline test refused exactly those. Such a policy declares what
+        # it re-checks; the default is the mission budget alone.
+        policy = getattr(self.scheduler, "target_selector", None)
+        if policy is not None and hasattr(policy, "admit_and_order"):
+            from hermes.scheduler.policies.budget_walk import (
+                IN_FLIGHT_BUDGET, IN_FLIGHT_NONE, greedy_budget_walk,
+            )
+
+            rule = getattr(policy, "in_flight_check", IN_FLIGHT_BUDGET)
+            if rule == IN_FLIGHT_NONE:
+                return True
+            return bool(greedy_budget_walk(
+                remaining[:1],
+                key=lambda wp: (0,),
+                mule_pose=self.mule_pose,
+                now=self._now(),
+                mission_deadline_ts=start + budget,
+                model=self.scheduler.feasibility_model,
+            ))
+
         from hermes.scheduler.stages.s3b_feasibility import filter_feasible
 
         feas = filter_feasible(
@@ -703,6 +964,11 @@ class MuleSupervisor:
         Decision D5: a device's deadline window Φ_j, scaled by S3c exactly as
         ``compute_deadline`` scales it, converts to rounds with the mission
         period. None when the rule has no cutoff.
+
+        The mission calls this once, right after planning, and merges with
+        that snapshot: by close time every session has folded its outcome into
+        Φ_j (a CLEAN tightens it) and S3c may have moved its scale, so a later
+        read would cut an update with a window it was never planned under.
         """
         spec = self.aggregation
         if not spec.uses_age_cap:
@@ -773,6 +1039,9 @@ class MuleSupervisor:
                             outcome=MissionOutcome.TIMEOUT,
                             utility=0.0,
                             contact_ts=now,
+                            # Never attempted: not a reachability observation.
+                            answered=False,
+                            synthetic=True,
                         )
                     )
                 except Exception:  # never let bookkeeping kill the sortie

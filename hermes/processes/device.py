@@ -165,6 +165,9 @@ class DeviceService:
             mule_rf_port=self.cfg.mule_rf_port,
             position=list(self.cfg.position),
             n_serves=self.cfg.n_serves,
+            # The proximal coefficient this process received (audit #15), so
+            # a trace shows it reached the device. The stub trainer ignores it.
+            fedprox_rho=float(getattr(self.cfg, "fedprox_rho", 0.0) or 0.0),
         )
 
     def request_stop(self) -> None:
