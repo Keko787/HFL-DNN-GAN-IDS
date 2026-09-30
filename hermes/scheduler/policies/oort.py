@@ -119,6 +119,10 @@ class OortPolicy:
 
     def __init__(self, *, staleness_weight: float = DEFAULT_STALENESS_WEIGHT):
         self.staleness_weight = float(staleness_weight)
+        # FeRRy Phase 3 — (mission round, current round) of the last plan made
+        # in whole-scheduler mode: a re-plan of that mission ranks with the
+        # round the plan used (see ``_whole_scheduler_round``).
+        self._planned_round: Optional[Tuple[int, int]] = None
 
     def rank_contacts(
         self,
@@ -246,6 +250,34 @@ class OortPolicy:
             default=0,
         )
 
+    def _whole_scheduler_round(self, contacts, device_states, env) -> int:
+        """R for the staleness bonus in whole-scheduler mode (arm D2).
+
+        The plan of a mission infers R as it always has: 1 + the latest round
+        in which one of the candidates' devices had an outcome. That is also
+        what every recorded D2 run did, although the scheduler has handed the
+        mule's round in ``SelectorEnv.mission_round`` since Phase 2, so the
+        plan is unchanged.
+
+        FeRRy Phase 3's in-flight re-plan (``FLScheduler.replan_remainder``)
+        calls this method again within the mission, over the remainder only.
+        Inferred from those members alone, R could come out lower than the
+        plan's (none of them may have had an outcome last mission), and the
+        re-plan would rank by a different staleness term than the plan it
+        repairs. So a call for the mission already planned (the same
+        ``env.mission_round``) reuses the plan's R. Without a mission round
+        in ``env`` every call infers, as before.
+        """
+        inferred = self._current_round(contacts, device_states)
+        mission = getattr(env, "mission_round", None)
+        if mission is None:
+            return inferred
+        planned = self._planned_round
+        if planned is not None and planned[0] == int(mission):
+            return planned[1]
+        self._planned_round = (int(mission), inferred)
+        return inferred
+
     def admit_and_order(
         self,
         contacts: Sequence[ContactWaypoint],
@@ -267,7 +299,7 @@ class OortPolicy:
         return greedy_budget_walk(
             contacts,
             key=self._rank_key(device_states,
-                               self._current_round(contacts, device_states)),
+                               self._whole_scheduler_round(contacts, device_states, env)),
             mule_pose=env.mule_pose,
             now=env.now,
             mission_deadline_ts=mission_deadline_ts,

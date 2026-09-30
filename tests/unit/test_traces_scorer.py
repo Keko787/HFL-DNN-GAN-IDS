@@ -732,6 +732,13 @@ RECORDED_PROVENANCE = {
     # Phase 2: one mule, a quorum of 1 (blank), the recorded dock and no
     # policy options.
     "n_mules": 1, "min_participation": "", "dock_params": "", "policy_params": "",
+    # Phase 3: the wall clock and every clock setting at its recorded value;
+    # this hand-built trial has no L1 schedule, device reliability or model
+    # width, so those three are blank too.
+    "mission_clock": "", "contact_band": "", "in_flight_response": "",
+    "backhaul_model": "", "contact_reliability_source": "", "deadline_time_scale": "",
+    "initial_window_s": "", "t_nom_s": "", "session_ttl_s": "", "ferry_params": "",
+    "l1_channel": "", "realism": "", "input_dim": "",
 }
 
 
@@ -780,6 +787,7 @@ def test_provenance_is_read_from_the_configs_in_the_drivers_format(tmp_path):
         "deadline_params": json.dumps(law.to_params(), sort_keys=True),
         "miss_priority": 1,
         "n_mules": 1, "min_participation": "", "dock_params": "", "policy_params": "",
+        **{col: "" for col in PROVENANCE_COLUMNS[-13:]},
     }
 
 

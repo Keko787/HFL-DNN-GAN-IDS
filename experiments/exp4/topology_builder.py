@@ -19,6 +19,18 @@ sectors by angle around the dock at the origin, so each mule tours its own
 part of the field; every mule starts at the dock. ``slice_assignment``
 overrides it (arm D4 passes its CARP assignment). ``n_mules`` = 1 is the
 recorded single-mule topology, built by the same code as before.
+
+FeRRy Phase 3 — ``mission_clock="sim"`` builds a ferry cell (design section
+4.8): the mules and the cluster run on the simulated mission clock with the
+trial seed as their channel salt and ``ferry_settings`` (``MuleConfig`` ferry
+fields: band, response, backhaul, payload, D1-D3 physics); devices answer only
+the newest solicit (``newest_solicit_only``, critic B1); and under
+``contact_reliability_source="channel"`` the devices stop drawing their own
+reliability (``contact_reliability=None``) while each mule receives its
+slice's ground-truth availability ``{device_id: rel_i}`` from
+``device_reliabilities(seed, N)`` for its keyed draw. The positions, the
+legacy reliability formula and the device-id stream are unchanged, and with
+the defaults every config is the recorded one.
 """
 
 from __future__ import annotations
@@ -26,7 +38,7 @@ from __future__ import annotations
 import math
 import random
 from dataclasses import replace
-from typing import Dict, List, Mapping, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from hermes.mission.aggregation_rules import AGG_FEDBUFF, AggregationSpec
 from hermes.processes import (
@@ -35,6 +47,46 @@ from hermes.processes import (
     MuleConfig,
     TopologyConfig,
 )
+from hermes.processes.config import CLOCK_SIM, CLOCK_WALL, FERRY_SPEC_FIELDS, MISSION_CLOCKS
+
+#: The cluster's synthetic batch size in every Exp 4 topology (the builder's
+#: default); the driver prices the pushed batch with it (FeRRy Phase 3).
+SYNTH_BATCH_SIZE = 2
+#: The mule's wall-clock session TTL in every Exp 4 topology unless the
+#: driver sets one (the builder's default); the driver re-costs its wall
+#: budget from it (FeRRy Phase 3, critic B14).
+SESSION_TTL_S = 3.0
+
+
+def device_spread_m(
+    rf_range_m: float, *, spread_m: Optional[float] = None,
+    field_radius_m: Optional[float] = None,
+) -> float:
+    """Half-width of the square the devices are scattered in.
+
+    ``spread_m`` when given; else the realism field radius (EX-4.2, devices
+    spread so S3a forms several contacts); else the tight EX-4.0/4.1 cluster,
+    a fraction of the RF range capped at 25 m.
+    """
+    if spread_m is not None:
+        return spread_m
+    return field_radius_m if field_radius_m is not None else min(rf_range_m * 0.4, 25.0)
+
+
+def device_positions(n_devices: int, seed: int, spread_m: float) -> List[Tuple[float, float]]:
+    """The devices' (x, y), drawn exactly as every recorded trial drew them.
+
+    ``random.Random(seed)``, then x and y per device in index order, each
+    uniform on [-spread_m, spread_m]. The Exp 4 driver draws its T_nom
+    reference layouts with it (FeRRy Phase 3).
+    """
+    rng = random.Random(seed)
+    out: List[Tuple[float, float]] = []
+    for _ in range(n_devices):
+        x = rng.uniform(-spread_m, spread_m)
+        y = rng.uniform(-spread_m, spread_m)
+        out.append((float(x), float(y)))
+    return out
 
 
 def angular_slices(
@@ -142,8 +194,8 @@ def build_exp4_topology(
     n_missions: int,
     seed: int,
     spread_m: Optional[float] = None,
-    session_ttl_s: float = 3.0,
-    synth_batch_size: int = 2,
+    session_ttl_s: float = SESSION_TTL_S,
+    synth_batch_size: int = SYNTH_BATCH_SIZE,
     min_participation: int = 1,
     cluster_id: str = "exp4-cluster",
     mule_id: str = "exp4-mule",
@@ -197,6 +249,15 @@ def build_exp4_topology(
     whittle_variant: str = "expected",
     whittle_weights: str = "uniform",
     fedcs_value: str = "unit",
+    # FeRRy Phase 3 — the mission clock and the contact link. The defaults
+    # build the recorded wall-clock topology.
+    mission_clock: str = CLOCK_WALL,
+    ferry_settings: Optional[Mapping[str, Any]] = None,
+    deadline_time_scale: float = 1.0,
+    initial_window_s: Optional[float] = None,
+    rf_link_token: Optional[str] = None,
+    newest_solicit_only: Optional[bool] = None,
+    rf_prior_schedule_db: Optional[Sequence[float]] = None,
 ) -> TopologyConfig:
     """Return a validated :class:`TopologyConfig` for one H1 trial.
 
@@ -218,7 +279,50 @@ def build_exp4_topology(
     mule, and a quorum above 1 without ``dock_on_empty`` (FedBuff, whose K is
     its own quorum, is exempt from the last two). ``down_wait_s`` and ``dock_on_empty`` go to every mule
     as given, whatever ``n_mules``.
+
+    FeRRy Phase 3. ``mission_clock="sim"`` builds a ferry cell (module
+    docstring): ``ferry_settings`` maps ``MuleConfig`` ferry fields
+    (``hermes.processes.config.FERRY_SPEC_FIELDS``, the ground-truth
+    ``device_availability`` excepted: the builder derives it) to their
+    values; the trial seed becomes every role's ``trial_seed``; the mules
+    carry ``input_dim``. ``deadline_time_scale`` and ``initial_window_s``
+    restate the deadline law's time unit on either clock (1.0 and None are
+    the recorded law). ``rf_link_token`` goes to every mule and device
+    (Amendment 10). ``newest_solicit_only`` None turns it on exactly on the
+    simulated clock. ``rf_prior_schedule_db`` (simulated clock only) is the
+    L1 trace's SNR at each mission's upload, the causal RF prior every mule
+    adopts mission by mission under the recorded ``mission`` backhaul model
+    (critic B4; ``MuleConfig.rf_prior_schedule_db``). The topology's own
+    validation refuses what cannot run (``TopologyConfig.validate``: critic
+    B4 and B16, and an ordered simulated-clock topology without
+    ``down_wait_s``; critic B9's refusal was lifted by unit U9).
     """
+    if mission_clock not in MISSION_CLOCKS:
+        raise ValueError(f"mission_clock must be one of {MISSION_CLOCKS}, got {mission_clock!r}")
+    sim = mission_clock == CLOCK_SIM
+    ferry = dict(ferry_settings or {})
+    unknown = sorted(set(ferry) - set(FERRY_SPEC_FIELDS))
+    if unknown:
+        raise ValueError(
+            f"ferry_settings keys {unknown} are not MuleConfig ferry fields "
+            f"({sorted(FERRY_SPEC_FIELDS)})"
+        )
+    if "device_availability" in ferry:
+        raise ValueError(
+            "ferry_settings must not carry device_availability: the builder derives "
+            "it from the trial's reliability draw"
+        )
+    if ferry and not sim:
+        raise ValueError(
+            f"ferry_settings {sorted(ferry)}: only on the simulated mission clock; "
+            f"pass mission_clock='sim'"
+        )
+    if rf_prior_schedule_db is not None and not sim:
+        raise ValueError(
+            "rf_prior_schedule_db is the causal RF prior of the simulated mission "
+            "clock; pass mission_clock='sim' (the wall clock takes rf_prior_snr_db)"
+        )
+    channel_source = sim and ferry.get("contact_reliability_source", "origin") == "channel"
     if n_devices < 1:
         raise ValueError(f"n_devices must be >= 1, got {n_devices}")
     if n_missions < 1:
@@ -240,24 +344,36 @@ def build_exp4_topology(
     elif slice_assignment is not None and any(int(k) != 0 for k in slice_assignment.values()):
         raise ValueError("slice_assignment names a mule other than 0, but n_mules=1")
 
-    rng = random.Random(seed)
-    if spread_m is None:
-        # field_radius_m (EX-4.2) spreads devices across the field so S3a
-        # forms multiple contacts; otherwise the tight EX-4.0/4.1 cluster.
-        spread_m = field_radius_m if field_radius_m is not None else min(rf_range_m * 0.4, 25.0)
+    # field_radius_m (EX-4.2) spreads devices across the field so S3a forms
+    # multiple contacts; otherwise the tight EX-4.0/4.1 cluster.
+    spread_m = device_spread_m(rf_range_m, spread_m=spread_m, field_radius_m=field_radius_m)
     # Shared per-device reliability draw (same values H0 uses) — set by the
     # driver for a paired comparison; fall back to the canonical draw so the
     # builder is usable standalone.
     if device_reliability and reliabilities is None:
         from .model_task import device_reliabilities as _dr
         reliabilities = _dr(seed, n_devices)
+    # FeRRy Phase 3 (design section 4.8): under the channel reliability
+    # source the same draw is each device's ground-truth availability rel_i,
+    # drawn on its mule; the devices then draw nothing themselves.
+    availability_rel: Optional[List[float]] = None
+    if channel_source:
+        if reliabilities is None:
+            from .model_task import device_reliabilities as _dr
+            reliabilities = _dr(seed, n_devices)
+        availability_rel = [float(r) for r in reliabilities]
+    if newest_solicit_only is None:
+        newest_solicit_only = sim
+    device_extra: Dict[str, Any] = {}
+    if newest_solicit_only:
+        device_extra["newest_solicit_only"] = True
+    if rf_link_token is not None:
+        device_extra["rf_link_token"] = str(rf_link_token)
 
     devices: List[DeviceConfig] = []
-    for i in range(n_devices):
-        x = rng.uniform(-spread_m, spread_m)
-        y = rng.uniform(-spread_m, spread_m)
+    for i, (x, y) in enumerate(device_positions(n_devices, seed, spread_m)):
         contact_reliability: Optional[float] = None
-        if device_reliability:
+        if device_reliability and not channel_source:
             # Short-range device<->mule completion: p = reliability x rf_factor
             # (Exp 3's model). ``reliability`` is the shared per-device draw;
             # rf_factor = max(0.4, 1 - d_eff/(3*world_radius)) with d_eff the
@@ -283,9 +399,22 @@ def build_exp4_topology(
                 local_batch_size=local_batch_size,
                 contact_reliability=contact_reliability,
                 fedprox_rho=float(fedprox_rho),
+                **device_extra,
             )
         )
 
+    classes = ferry.get("contact_band_classes")
+    if classes is not None:
+        classes = [str(c) for c in classes]
+        ferry["contact_band_classes"] = classes
+    cluster_extra: Dict[str, Any] = {}
+    if sim:
+        cluster_extra = dict(
+            mission_clock=CLOCK_SIM,
+            backhaul_model=str(ferry.get("backhaul_model", "mission")),
+            trial_seed=int(seed),
+            contact_band_classes=None if classes is None else list(classes),
+        )
     cluster = ClusterConfig(
         cluster_id=cluster_id,
         dock_host="127.0.0.1",
@@ -300,7 +429,24 @@ def build_exp4_topology(
         backhaul_loss_schedule=backhaul_loss_schedule,
         aggregation=str(aggregation),
         aggregation_params=dict(aggregation_params or {}),
+        **cluster_extra,
     )
+    mule_extra: Dict[str, Any] = {}
+    if sim:
+        mule_extra.update(ferry)
+        mule_extra.update(mission_clock=CLOCK_SIM, trial_seed=int(seed), input_dim=input_dim)
+        if availability_rel is not None:
+            mule_extra["device_availability"] = {
+                dev.device_id: rel for dev, rel in zip(devices, availability_rel)
+            }
+        if rf_prior_schedule_db is not None:
+            mule_extra["rf_prior_schedule_db"] = [float(v) for v in rf_prior_schedule_db]
+    if isinstance(deadline_time_scale, bool) or deadline_time_scale != 1.0:
+        mule_extra["deadline_time_scale"] = float(deadline_time_scale)
+    if initial_window_s is not None:
+        mule_extra["initial_window_s"] = float(initial_window_s)
+    if rf_link_token is not None:
+        mule_extra["rf_link_token"] = str(rf_link_token)
     mule = MuleConfig(
         mule_id=mule_id,
         rf_host="127.0.0.1",
@@ -329,6 +475,7 @@ def build_exp4_topology(
         whittle_variant=str(whittle_variant),
         whittle_weights=str(whittle_weights),
         fedcs_value=str(fedcs_value),
+        **mule_extra,
     )
     if n_mules == 1:
         topo = TopologyConfig(cluster=cluster, mules=[mule], devices=devices)
@@ -374,6 +521,17 @@ def _split_between_mules(
             # Own copies, so no two mule configs share a mutable field.
             aggregation_params=dict(mule.aggregation_params),
             deadline_params=dict(mule.deadline_params),
+            # FeRRy Phase 3: each mule holds only its own slice's ground truth.
+            device_availability={
+                d: a for d, a in mule.device_availability.items() if d in slices[k]
+            },
+            contact_band_classes=(
+                None if mule.contact_band_classes is None else list(mule.contact_band_classes)
+            ),
+            # ... and its own copy of the per-mission RF prior (critic B4).
+            rf_prior_schedule_db=(
+                None if mule.rf_prior_schedule_db is None else list(mule.rf_prior_schedule_db)
+            ),
         )
         for k, mid in enumerate(mule_ids)
     ]

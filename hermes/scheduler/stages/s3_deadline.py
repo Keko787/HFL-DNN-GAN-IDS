@@ -27,13 +27,24 @@ FeRRy Phase 1 adds :class:`DeadlineLaw`: the recorded additive law stays the
 default and runs its original arithmetic; the multiplicative, clamped law, the
 PARTIAL/TIMEOUT split and one-shot cluster overrides are opt-in. Every function
 takes the law as an optional argument, and ``None`` is the recorded behaviour.
+
+FeRRy Phase 3 (spec Q1) adds the law's ``time_scale``. The recorded constants
+(the −5 s / +10 s steps and the 5 s floor, the multiplicative law's 5 s / 300 s
+clamps, the 60 s initial window) were set against missions of about 10 s of
+wall clock; on the simulated mission clock a two-pass mission takes minutes
+(design §0 finding 2), so they all move together by one factor. At the
+recorded value 1.0 every function here computes exactly what it did before.
+Each constant is stated in the recorded unit and multiplied by the factor
+where it is applied; ``FLScheduler(initial_window_s=...)`` states Φ₀ the same
+way, so the recorded 60 s scales whether it is given or left at its default.
+The helpers at the bottom express a window in missions (critic A7).
 """
 
 from __future__ import annotations
 
 import math
-from dataclasses import asdict, dataclass
-from typing import Dict, Mapping, Optional
+from dataclasses import asdict, dataclass, replace
+from typing import Any, Dict, Mapping, Optional, Tuple
 
 from hermes.types import (
     Bucket,
@@ -78,6 +89,20 @@ class DeadlineLawError(ValueError):
     """Raised for an unknown law or an invalid law parameter."""
 
 
+class DeadlineOverrideRefused(ValueError):
+    """A cluster deadline override reached a scheduler that must refuse it.
+
+    Overrides are absolute timestamps stamped on the cluster's wall clock; on
+    the simulated mission clock they would compare a wall stamp with a
+    simulated one (critic B3), so the mule refuses them in that mode.
+    """
+
+
+def _scaled(value: float, scale: float) -> float:
+    """``value`` in the law's time unit; the value itself at the recorded 1.0."""
+    return value if scale == 1.0 else value * scale
+
+
 @dataclass(frozen=True)
 class DeadlineLaw:
     """How the fast phase moves a device's fulfilment window Φ.
@@ -114,6 +139,15 @@ class DeadlineLaw:
     applying once its time has passed or once the device's next outcome
     arrives. None follows the form (on for multiplicative), since the recorded
     law never clears an override (SEC26_Code_Audit.md: "the bypass is sticky").
+
+    ``time_scale`` (FeRRy Phase 3, spec Q1) multiplies every time constant of
+    the law: the additive steps and floor, and the multiplicative law's
+    clamps ``phi_min`` / ``phi_max`` (stated in recorded seconds and applied
+    as ``phi_min * time_scale``, ``phi_max * time_scale``). The factors β are
+    ratios and do not move. 1.0, the default, is the recorded law exactly and
+    is left out of :meth:`to_params`, so recorded configurations, traces and
+    CSV cells are unchanged; :func:`time_scale_for_period` gives the value
+    for a mission period.
     """
 
     form: str = LAW_ADDITIVE
@@ -123,6 +157,7 @@ class DeadlineLaw:
     phi_min: float = MIN_DEADLINE_FULFILMENT_S
     phi_max: float = 300.0
     expire_overrides: Optional[bool] = None
+    time_scale: float = 1.0
 
     def __post_init__(self) -> None:
         if self.form not in DEADLINE_LAWS:
@@ -140,6 +175,14 @@ class DeadlineLaw:
             raise DeadlineLawError(
                 f"need 0 < phi_min <= phi_max, got {self.phi_min} and {self.phi_max}"
             )
+        if (isinstance(self.time_scale, bool)
+                or not isinstance(self.time_scale, (int, float))
+                or not math.isfinite(self.time_scale) or self.time_scale <= 0.0):
+            raise DeadlineLawError(
+                f"time_scale must be a finite number > 0, got {self.time_scale!r}"
+            )
+        # JSON may hand back an int; the law always holds a float.
+        object.__setattr__(self, "time_scale", float(self.time_scale))
 
     @property
     def is_additive(self) -> bool:
@@ -147,8 +190,9 @@ class DeadlineLaw:
 
     @property
     def is_recorded(self) -> bool:
-        """Exactly the law every recorded run used: additive, sticky overrides."""
-        return self.is_additive and not self.expires_overrides
+        """Exactly the law every recorded run used: additive, sticky overrides,
+        recorded time unit."""
+        return self.is_additive and not self.expires_overrides and self.time_scale == 1.0
 
     @property
     def expires_overrides(self) -> bool:
@@ -156,11 +200,39 @@ class DeadlineLaw:
             return self.form == LAW_MULTIPLICATIVE
         return bool(self.expire_overrides)
 
+    # The law's time constants in its own unit (the recorded ones at 1.0).
+
+    @property
+    def floor_s(self) -> float:
+        """The additive law's floor on Φ (5 s recorded)."""
+        return _scaled(MIN_DEADLINE_FULFILMENT_S, self.time_scale)
+
+    @property
+    def on_time_shrink_s(self) -> float:
+        """The additive law's step after a CLEAN (−5 s recorded)."""
+        return _scaled(FAST_PHASE_ON_TIME_SHRINK_S, self.time_scale)
+
+    @property
+    def missed_widen_s(self) -> float:
+        """The additive law's step after a miss (+10 s recorded)."""
+        return _scaled(FAST_PHASE_MISSED_WIDEN_S, self.time_scale)
+
+    @property
+    def phi_bounds(self) -> Tuple[float, float]:
+        """The multiplicative law's clamps as applied: ``(Φ_min, Φ_max) * time_scale``."""
+        return (_scaled(self.phi_min, self.time_scale),
+                _scaled(self.phi_max, self.time_scale))
+
+    def with_time_scale(self, time_scale: float) -> "DeadlineLaw":
+        """This law in another time unit (validated like the constructor)."""
+        return replace(self, time_scale=time_scale)
+
     def clamp(self, phi: float) -> float:
         """Bound a window: the 5 s floor alone under the additive law."""
         if self.is_additive:
-            return max(MIN_DEADLINE_FULFILMENT_S, float(phi))
-        return min(self.phi_max, max(self.phi_min, float(phi)))
+            return max(self.floor_s, float(phi))
+        lo, hi = self.phi_bounds
+        return min(hi, max(lo, float(phi)))
 
     def next_window(
         self, phi: float, outcome: MissionOutcome, *, answered: bool = False,
@@ -175,8 +247,8 @@ class DeadlineLaw:
         """
         if self.is_additive:
             if outcome is MissionOutcome.CLEAN:
-                return max(MIN_DEADLINE_FULFILMENT_S, phi - FAST_PHASE_ON_TIME_SHRINK_S)
-            return phi + FAST_PHASE_MISSED_WIDEN_S
+                return max(self.floor_s, phi - self.on_time_shrink_s)
+            return phi + self.missed_widen_s
         if outcome is MissionOutcome.CLEAN:
             beta = self.beta_on
         elif outcome is MissionOutcome.PARTIAL or answered:
@@ -199,9 +271,15 @@ class DeadlineLaw:
         return up / (up - down)
 
     def to_params(self) -> dict:
-        """Everything but the form, for ``MuleConfig.deadline_params``."""
+        """Everything but the form, for ``MuleConfig.deadline_params``.
+
+        ``time_scale`` appears only when it is not the recorded 1.0, so every
+        recorded configuration, trace and CSV cell keeps its exact form.
+        """
         raw = asdict(self)
         raw.pop("form")
+        if raw.get("time_scale") == 1.0:
+            raw.pop("time_scale")
         return raw
 
     @classmethod
@@ -214,6 +292,22 @@ class DeadlineLaw:
             raise DeadlineLawError(f"unknown deadline parameter(s): {sorted(unknown)}")
         kwargs.pop("form", None)
         return cls(form=form or LAW_ADDITIVE, **kwargs)
+
+
+# The additive law's constants for an optional law: the module constants
+# themselves when there is no law (the recorded behaviour), else the law's,
+# which are the same values at the recorded time scale.
+
+def _floor(law: Optional[DeadlineLaw]) -> float:
+    return MIN_DEADLINE_FULFILMENT_S if law is None else law.floor_s
+
+
+def _shrink(law: Optional[DeadlineLaw]) -> float:
+    return FAST_PHASE_ON_TIME_SHRINK_S if law is None else law.on_time_shrink_s
+
+
+def _widen(law: Optional[DeadlineLaw]) -> float:
+    return FAST_PHASE_MISSED_WIDEN_S if law is None else law.missed_widen_s
 
 
 # --------------------------------------------------------------------------- #
@@ -271,11 +365,12 @@ def effective_window(
     """The fulfilment window Φ the deadline uses, before any S3c scaling.
 
     The recorded 5 s floor under the additive law (or none), the law's clamps
-    under the multiplicative one. The merge cutoff of decision D5 reads the
-    same value, so the deadline and the cutoff never disagree about Φ.
+    under the multiplicative one, both in the law's time unit. The merge
+    cutoff of decision D5 reads the same value, so the deadline and the cutoff
+    never disagree about Φ.
     """
     if law is None or law.is_additive:
-        return max(MIN_DEADLINE_FULFILMENT_S, state.deadline_fulfilment_s)
+        return max(_floor(law), state.deadline_fulfilment_s)
     return law.clamp(state.deadline_fulfilment_s)
 
 
@@ -395,8 +490,8 @@ def fold_round_close_delta(
         state.miss_streak = 0
         if law is None or law.is_additive:
             state.deadline_fulfilment_s = max(
-                MIN_DEADLINE_FULFILMENT_S,
-                state.deadline_fulfilment_s - FAST_PHASE_ON_TIME_SHRINK_S,
+                _floor(law),
+                state.deadline_fulfilment_s - _shrink(law),
             )
         else:
             state.deadline_fulfilment_s = law.next_window(
@@ -407,7 +502,7 @@ def fold_round_close_delta(
         state.miss_streak += 1
         if law is None or law.is_additive:
             state.deadline_fulfilment_s = (
-                state.deadline_fulfilment_s + FAST_PHASE_MISSED_WIDEN_S
+                state.deadline_fulfilment_s + _widen(law)
             )
         else:
             state.deadline_fulfilment_s = law.next_window(
@@ -430,6 +525,7 @@ def fold_cluster_amendment(
     amendment: ClusterAmendment,
     *,
     law: Optional[DeadlineLaw] = None,
+    refuse_overrides: bool = False,
 ) -> None:
     """Apply ``deadline_overrides`` + relevant ``registry_deltas`` to the map.
 
@@ -441,9 +537,25 @@ def fold_cluster_amendment(
         * ``last_known_position`` — tuple[float, float, float]
         * ``deadline_fulfilment_s`` — float override from cluster, clamped
           to the ``law``'s bounds (the 5 s floor alone when it is additive)
+        * ``spectrum_sig`` (FeRRy Phase 3, design §4.7) — the device's latest
+          SNR per contact band class, as a ``SpectrumSig`` carrying
+          ``contact_class_snr_db`` or as that mapping itself; each class it
+          reports updates ``spectrum_snr_db``, the others keep their last
+          value. Legacy DOWNs never carry it.
     Anything else is ignored; the full registry row lives in
     ``HFLHostCluster``, not in scheduler state.
+
+    ``refuse_overrides`` (FeRRy Phase 3, set on the simulated mission clock)
+    raises :class:`DeadlineOverrideRefused` before anything is folded when the
+    amendment carries deadline overrides: they are absolute wall-clock stamps
+    (critic B3). None are issued today.
     """
+    if refuse_overrides and amendment.deadline_overrides:
+        raise DeadlineOverrideRefused(
+            f"cluster deadline overrides for {sorted(map(str, amendment.deadline_overrides))} "
+            "refused: they are wall-clock stamps and this scheduler runs on the "
+            "simulated mission clock"
+        )
     for did, new_ts in amendment.deadline_overrides.items():
         st = device_states.get(did)
         if st is None:
@@ -463,10 +575,18 @@ def fold_cluster_amendment(
             if isinstance(val, (int, float)):
                 if law is None or law.is_additive:
                     st.deadline_fulfilment_s = max(
-                        MIN_DEADLINE_FULFILMENT_S, float(val)
+                        _floor(law), float(val)
                     )
                 else:
                     st.deadline_fulfilment_s = law.clamp(float(val))
+        if "spectrum_sig" in patch:
+            snr = _contact_class_snr(patch["spectrum_sig"])
+            if snr:  # an empty report observes nothing: keep what is known
+                # The latest reading per class: a class this report does not
+                # mention keeps its last known value.
+                merged = dict(st.spectrum_snr_db or {})
+                merged.update(snr)
+                st.spectrum_snr_db = merged
         # Sprint 1.5 H7 — delivery_priority flows cluster→mule via
         # registry_deltas so S3a clustering's tie-breaker reads the
         # current cluster-bumped value. Accept ``int`` and ``float``
@@ -479,3 +599,83 @@ def fold_cluster_amendment(
                 pass  # not a meaningful priority; ignore.
             elif isinstance(val, (int, float)):
                 st.delivery_priority = int(val)
+
+
+def _contact_class_snr(sig: Any) -> Optional[Dict[str, float]]:
+    """``{class: SNR dB}`` from a SpectrumSig-like value, or None if it has none.
+
+    Accepts an object carrying ``contact_class_snr_db`` or that mapping
+    itself; non-numeric entries, booleans and non-finite values are dropped
+    (a NaN would poison every later comparison).
+    """
+    raw = getattr(sig, "contact_class_snr_db", sig)
+    if not isinstance(raw, Mapping):
+        return None
+    return {
+        str(k): float(v) for k, v in raw.items()
+        if isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
+    }
+
+
+# --------------------------------------------------------------------------- #
+# Windows in missions (FeRRy Phase 3, spec Q1, critic A7)
+# --------------------------------------------------------------------------- #
+
+#: The mission length, in seconds, that the recorded time constants were set
+#: against: Exp 4's unbudgeted cells run about 10 s of wall clock per mission
+#: (design §0 finding 2; budgeted cells run 3-7 s, critic A7).
+LEGACY_MISSION_PERIOD_S: float = 10.0
+
+
+def time_scale_for_period(
+    t_nom_s: float, legacy_period_s: float = LEGACY_MISSION_PERIOD_S,
+) -> float:
+    """The ``time_scale`` that stretches the recorded constants to ``t_nom_s``.
+
+    Design Q1: ``deadline_time_scale = T_nom / 10 s``, where ``T_nom`` is the
+    cell's nominal two-pass mission period on the simulated clock. The same
+    number of missions then fits in a window as did on the wall clock.
+    """
+    t = float(t_nom_s)
+    ref = float(legacy_period_s)
+    if not (math.isfinite(t) and t > 0.0 and math.isfinite(ref) and ref > 0.0):
+        raise ValueError(
+            f"need finite periods > 0, got t_nom_s={t_nom_s!r}, "
+            f"legacy_period_s={legacy_period_s!r}"
+        )
+    return t / ref
+
+
+def initial_window_for_missions(
+    missions: float, t_nom_s: float, *, time_scale: float,
+) -> float:
+    """``FLScheduler(initial_window_s=...)`` for a Φ₀ of ``missions`` periods.
+
+    Critic A7: Φ₀ = 60 s was a placeholder, so Phase 3 sweeps it in missions,
+    the unit that means the same on either clock. The window itself is
+    ``missions * t_nom_s`` seconds on the scheduler's clock; the scheduler
+    states Φ₀ in the deadline law's recorded unit and multiplies it by its
+    ``deadline_time_scale``, like every other constant of the law (spec Q1),
+    so this returns ``missions * t_nom_s / time_scale``. ``time_scale`` must
+    be the scheduler's own ``deadline_time_scale`` and has no default on
+    purpose: a window in clock seconds handed over unscaled would be
+    stretched a second time. At the Q1 value ``time_scale = T_nom / 10 s``
+    the result is ``10 * missions``, so the recorded 60 s is six missions.
+    """
+    m, t, s = float(missions), float(t_nom_s), float(time_scale)
+    if not (math.isfinite(m) and m > 0.0 and math.isfinite(t) and t > 0.0
+            and math.isfinite(s) and s > 0.0):
+        raise ValueError(
+            f"need missions, t_nom_s and time_scale > 0, got {missions!r}, "
+            f"{t_nom_s!r} and {time_scale!r}"
+        )
+    return m * t / s
+
+
+def window_in_missions(window_s: float, t_nom_s: float) -> float:
+    """A window in seconds on the scheduler's clock as a number of nominal
+    mission periods (e.g. ``FLScheduler.effective_initial_window_s``)."""
+    t = float(t_nom_s)
+    if not (math.isfinite(t) and t > 0.0):
+        raise ValueError(f"t_nom_s must be finite and > 0, got {t_nom_s!r}")
+    return float(window_s) / t

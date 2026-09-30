@@ -18,17 +18,61 @@ When AERPAW returns, the only thing that changes is the host strings
 (localhost → AVN routable IPs); the rest of the wiring stays.
 
 Schema is plain dataclasses with JSON helpers — no extra deps.
+
+FeRRy Phase 3 — the mission clock and the contact link (design sections 1,
+2.2 and 5.1). ``MuleConfig.mission_clock`` / ``ClusterConfig.mission_clock``
+"wall" (the default) is every recorded run. "sim" flies every mission on a
+simulated clock configured by the ferry fields of :class:`MuleConfig`, which
+the mule turns into a ``hermes.mule.ferry.FerrySpec``
+(:meth:`MuleConfig.ferry_spec_kwargs`), and puts the cluster's simulated-time
+bookkeeping on (``ClusterConfig``). Every new field defaults to the recorded
+behaviour, so old per-role JSON loads unchanged. Combinations that cannot run,
+or would silently measure something else, are refused by
+:func:`mule_config_errors`, :func:`cluster_config_errors` and
+:meth:`TopologyConfig.validate` (critic B16). Several mules on the simulated
+clock below a full quorum are served in simulated-time order by the cluster
+(critic B9, unit U9: ``hermes.processes.cluster.SimOrderGate``).
 """
 
 from __future__ import annotations
 
 import json
-from dataclasses import asdict, dataclass, field
+import math
+from dataclasses import MISSING, asdict, dataclass, field, fields
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 
 Position = Tuple[float, float, float]
+
+#: ``mission_clock`` values: "wall" (every recorded run) and "sim".
+CLOCK_WALL = "wall"
+CLOCK_SIM = "sim"
+MISSION_CLOCKS: Tuple[str, ...] = (CLOCK_WALL, CLOCK_SIM)
+
+#: ``backhaul_model`` values (hermes/mule/ferry.py): "mission" is the recorded
+#: per-mission loss schedule or flat percentage the cluster draws from a
+#: stream; "seconds" is the seconds-axis channel with a keyed draw.
+BACKHAUL_MISSION = "mission"
+BACKHAUL_SECONDS = "seconds"
+BACKHAUL_MODELS: Tuple[str, ...] = (BACKHAUL_MISSION, BACKHAUL_SECONDS)
+
+
+def mission_schedule_index(mission_round, length: int) -> int:
+    """The entry of a per-mission schedule that mission ``mission_round`` reads.
+
+    ``mission_round - 1``, clamped to the schedule: a missing or zero round
+    reads the first entry, a round past the end the last. This is the rule
+    the cluster's backhaul loss draw has used since EX-4.3
+    (``ClusterService._backhaul_dropped``), kept in one place so the draw, the
+    loss probability a sim-clock event reports and the mule's causal RF prior
+    (``MuleConfig.rf_prior_schedule_db``) always read the same entry.
+    """
+    idx = (int(mission_round) - 1) if mission_round else 0
+    return min(max(idx, 0), int(length) - 1)
+
+#: The merge rule whose buffer, not the quorum, decides when θ moves.
+_AGG_FEDBUFF = "agg:fedbuff"
 
 
 @dataclass
@@ -100,6 +144,29 @@ class ClusterConfig:
     # must run the same rule; the driver sets both from one flag.
     aggregation: str = "agg:plain"
     aggregation_params: dict = field(default_factory=dict)
+    # FeRRy Phase 3 — the cluster on the simulated mission clock. The cluster
+    # keeps no clock: "sim" makes it track the latest ``UpBundle.sim_upload_ts``
+    # it has ingested and echo it on every DOWN (``cluster_sim_ts``, the
+    # mules' Lamport sync), add simulated-time fields to its events, refuse
+    # wall-clock deadline overrides, and forward each device's contact SNR per
+    # band class (SpectrumSig, design section 4.7). "wall" is every recorded
+    # run. Must match the mules' ``mission_clock``.
+    mission_clock: str = CLOCK_WALL
+    # How a backhaul upload is lost. "mission" (the recorded model): the flat
+    # ``backhaul_loss_pct`` or the per-mission ``backhaul_loss_schedule``,
+    # drawn from a stream. "seconds" (sim clock only, critic B16): the UP's
+    # own loss probability (``UpBundle.backhaul.p_loss``, the seconds-axis
+    # SNR at the mule's upload), drawn keyed by (trial seed, mule, mission
+    # round), so a mission's outcome is paired across arms. Must match the
+    # mules'.
+    backhaul_model: str = BACKHAUL_MISSION
+    # The trial seed the keyed draws are salted with (``ferry_salt``). Needed
+    # for the seconds model; the mules carry the same value.
+    trial_seed: Optional[int] = None
+    # Names of the contact link's band classes in index order, to read the
+    # ``band`` index on a report line; None is the D1 default (wide, medium,
+    # narrow). Must match the mules'.
+    contact_band_classes: Optional[List[str]] = None
 
 
 @dataclass
@@ -200,6 +267,284 @@ class MuleConfig:
     whittle_weights: str = "uniform"
     fedcs_value: str = "unit"
 
+    # ---------------- FeRRy Phase 3: the mission clock and contact link ------
+    # ``mission_clock`` "wall" is every recorded run: ``time.time`` stamps
+    # every mission-time read. "sim" flies every mission on one simulated
+    # MissionClock per mule process (hermes/l1/mission_clock.py), priced by a
+    # FerrySpec built from the fields below (``ferry_spec_kwargs``;
+    # hermes/mule/ferry.py documents each). On the wall clock every field of
+    # this block except the deadline time unit must keep its default
+    # (``mule_config_errors``). Defaults are the design's (Phase 3 design
+    # section 1, decisions D1-D3 as accepted on 2026-09-29).
+    mission_clock: str = CLOCK_WALL
+    # The trial seed: the contact channel, the backhaul and the availability
+    # draw are salted with it, so every arm of a trial sees the same channel.
+    trial_seed: Optional[int] = None
+    # D1 — the band class every stop flies ("wide", "medium", "narrow"), or
+    # None: the mission clock without a contact link (the channel-free
+    # control, critic A1). ``contact_band_classes`` names the link's classes
+    # (None: wide, medium, narrow; the 10 MHz option adds "medium_wide").
+    contact_band: Optional[str] = None
+    contact_band_classes: Optional[List[str]] = None
+    # What the mule does when the rest of a pass stops fitting: "abort"
+    # (Amendment 8's rule, the recorded one) or "replan"; and the re-plan's
+    # fallback for our arms, "reorder" or "trim" (unit U4). Chosen at the
+    # pilot (critic B5).
+    in_flight_response: str = "abort"
+    replan_fallback: str = "reorder"
+    # D2 — the backhaul. "mission": the cluster's recorded loss schedule (the
+    # upload is still timed on the clock at the fixed carrier's mean SNR);
+    # "seconds": the seconds-axis channel, with ``backhaul_policy`` "fixed"
+    # (argmax g_c) or "adaptive" (arm H3's controller at every upload),
+    # ``backhaul_regime`` its "clean" / "jittery" constants, and its period
+    # P_bh given directly or as ``n_missions * t_nom_s``.
+    backhaul_model: str = BACKHAUL_MISSION
+    backhaul_policy: str = "fixed"
+    backhaul_regime: str = "clean"
+    backhaul_period_s: Optional[float] = None
+    t_nom_s: Optional[float] = None
+    # Spec Q8 — "origin": the device's own draw of rel x rf_factor (the
+    # recorded model); "channel": the SNR gate at the stop plus the
+    # availability rel_i drawn on the mule, keyed by (seed, device, round).
+    # ``device_availability`` is that ground truth {device_id: rel_i}, used
+    # only by the mule's keyed draw and never shown to the scheduler, the
+    # policies or the L1 state (critic B16); empty unless "channel".
+    contact_reliability_source: str = "origin"
+    device_availability: Dict[str, float] = field(default_factory=dict)
+    # D3 — the bytes each direction is priced for (None: measured) and what
+    # Deadline(j) bounds ("collection", spec Q2, or "delivery": per stop, that
+    # stop's own return plus the upload, not the route's actual delivery).
+    payload_bytes: Optional[int] = None
+    deadline_bounds: str = "collection"
+    # D1 — the contact link: SNR floor (CQI 1), altitude, path-loss exponent,
+    # shadowing sigma and the edge-availability quantile of the margin.
+    snr_floor_db: float = -6.7
+    altitude_m: float = 25.0
+    n_pl: float = 2.2
+    shadow_sigma_db: float = 4.0
+    margin_quantile: float = 0.9
+    # D2 — the contact channel: interference regime (clean by default, for
+    # every cell; "jittery" is test (c)), its period P_c, the noise bin, and
+    # the shadowing correlation time and keying ("time" or "position").
+    contact_regime: str = "clean"
+    interference_period_s: float = 60.0
+    noise_bin_s: float = 1.0
+    shadow_corr_s: float = 7.4
+    shadow_keying: str = "time"
+    # D3 — flight and SIMULATED energy (Zeng-Xu-Zhang 2019 at the cruise
+    # speed unless the powers are given; capacity None = no energy clause).
+    cruise_speed_m_s: float = 5.0
+    turnaround_s: float = 30.0
+    listen_s: float = 1.0
+    energy_capacity_j: Optional[float] = None
+    p_move_w: Optional[float] = None
+    p_hover_w: Optional[float] = None
+    # Spec Q1 — the deadline law's time unit (valid on either clock): the
+    # law's constants are multiplied by ``deadline_time_scale``, and
+    # ``initial_window_s`` sets Φ₀ in the law's recorded unit (None: 60 s).
+    # 1.0 and None are the recorded law.
+    deadline_time_scale: float = 1.0
+    initial_window_s: Optional[float] = None
+    # The model's input width, for ``mule_ready`` on the mission clock (the
+    # payload's provenance, design R8). None on the stub.
+    input_dim: Optional[int] = None
+    # Freeze Amendment 10 — the token this mule's RF server requires of every
+    # registration (``TCPRFLinkServer(link_token=...)``). None (every recorded
+    # run) accepts any; one value per trial across its mules and devices.
+    rf_link_token: Optional[str] = None
+    # Critic B4 — the causal RF prior under the recorded ``mission`` backhaul
+    # model with the L1 channel (``--l1-channel``). Entry r - 1 is the SNR
+    # (dB) the L1 trace gives the carrier chosen for mission round r's upload
+    # (``mission_schedule_index``): the trace the cluster's
+    # ``backhaul_loss_schedule`` is ``loss_from_snr`` of, entry for entry.
+    # After each mission that uploaded, the mule process sets the planner's
+    # ``rf_prior_snr_db`` to that mission's entry, so a Pass-1 plan only ever
+    # sees uploads already made, as the seconds model's producer does
+    # (hermes/l1/rf_prior.py): the non-causal mean over the whole trial is not
+    # handed to a ferry cell. None, every recorded run: the prior stays
+    # ``rf_prior_snr_db`` (20 dB by default). Simulated clock only, and not
+    # with the seconds model, which observes its own channel.
+    rf_prior_schedule_db: Optional[List[float]] = None
+
+    def ferry_spec_kwargs(self) -> Dict[str, Any]:
+        """The keyword arguments of ``FerrySpec.from_config`` this config gives.
+
+        One mapping, used by the mule process and by the driver (which prices
+        T_nom and the D4 CARP split with the same physics). Pure data: this
+        module imports nothing from the mule.
+        """
+        out: Dict[str, Any] = {
+            "rf_range_m": self.rf_range_m,
+            "seed": self.trial_seed,
+            "n_missions": self.n_missions,
+        }
+        for name, kwarg in FERRY_SPEC_FIELDS.items():
+            value = getattr(self, name)
+            if name == "device_availability":
+                value = dict(value or {})
+            elif name == "contact_band_classes":
+                value = None if value is None else list(value)
+            out[kwarg] = value
+        return out
+
+
+#: ``MuleConfig`` fields that configure the ferry mode, and the keyword of
+#: ``hermes.mule.ferry.FerrySpec.from_config`` each one feeds. Their defaults
+#: are ``from_config``'s (a unit test keeps them equal).
+FERRY_SPEC_FIELDS: Dict[str, str] = {
+    "contact_band": "contact_band",
+    "contact_band_classes": "band_classes",
+    "in_flight_response": "in_flight_response",
+    "replan_fallback": "replan_fallback",
+    "backhaul_model": "backhaul_model",
+    "backhaul_policy": "backhaul_policy",
+    "backhaul_regime": "backhaul_regime",
+    "backhaul_period_s": "backhaul_period",
+    "t_nom_s": "t_nom_s",
+    "contact_reliability_source": "contact_reliability_source",
+    "device_availability": "device_availability",
+    "payload_bytes": "payload_bytes",
+    "deadline_bounds": "deadline_bounds",
+    "snr_floor_db": "snr_floor_db",
+    "altitude_m": "altitude_m",
+    "n_pl": "n_pl",
+    "shadow_sigma_db": "shadow_sigma_db",
+    "margin_quantile": "margin_quantile",
+    "contact_regime": "contact_regime",
+    "interference_period_s": "interference_period_s",
+    "noise_bin_s": "noise_bin_s",
+    "shadow_corr_s": "shadow_corr_s",
+    "shadow_keying": "shadow_keying",
+    "cruise_speed_m_s": "cruise_speed_m_s",
+    "turnaround_s": "turnaround_s",
+    "listen_s": "listen_s",
+    "energy_capacity_j": "energy_capacity_j",
+    "p_move_w": "p_move_w",
+    "p_hover_w": "p_hover_w",
+}
+
+#: ``MuleConfig`` fields that only mean something on the simulated clock:
+#: the ferry fields, the trial seed, the input width and the causal RF prior
+#: schedule. On the wall clock each must keep its default. The deadline time
+#: unit is not among them: it is a law parameter on either clock.
+SIM_ONLY_MULE_FIELDS: Tuple[str, ...] = tuple(FERRY_SPEC_FIELDS) + (
+    "trial_seed", "input_dim", "rf_prior_schedule_db",
+)
+
+
+def _field_default(cls, name: str) -> Any:
+    fld = {f.name: f for f in fields(cls)}[name]
+    if fld.default_factory is not MISSING:  # type: ignore[misc]
+        return fld.default_factory()  # type: ignore[misc]
+    return fld.default
+
+
+def _positive_number(value: Any) -> bool:
+    return (isinstance(value, (int, float)) and not isinstance(value, bool)
+            and math.isfinite(float(value)) and float(value) > 0.0)
+
+
+def _finite_number(value: Any) -> bool:
+    return (isinstance(value, (int, float)) and not isinstance(value, bool)
+            and math.isfinite(float(value)))
+
+
+def mule_config_errors(cfg: "MuleConfig") -> List[str]:
+    """What is wrong with ``cfg``'s clock settings; empty when it can run.
+
+    Cheap, import-free checks (the mule builds its ``FerrySpec`` at start,
+    which validates every value in full):
+
+    * ``mission_clock`` is "wall" or "sim";
+    * on the wall clock every sim-only field is at its default: a contact
+      band, ``replan``, the seconds-axis backhaul (critic B16), the channel
+      reliability source, a declared payload... need the mission clock;
+    * on the sim clock: the two-pass path (``rf_range_m``), a trial seed,
+      the channel reliability source only with a band (critic B16), the
+      ground-truth availability only under that source, a backhaul period
+      for the seconds model, and the causal RF prior schedule only under the
+      ``mission`` model, as finite SNRs (critic B4).
+    """
+    errors: List[str] = []
+    clock = getattr(cfg, "mission_clock", CLOCK_WALL)
+    if clock not in MISSION_CLOCKS:
+        return [f"mission_clock must be one of {MISSION_CLOCKS}, got {clock!r}"]
+    if clock == CLOCK_WALL:
+        changed = [
+            name for name in SIM_ONLY_MULE_FIELDS
+            if getattr(cfg, name, _field_default(MuleConfig, name))
+            != _field_default(MuleConfig, name)
+        ]
+        if changed:
+            errors.append(
+                f"{', '.join(changed)}: only on the simulated mission clock; set "
+                f"mission_clock='sim' or leave the default"
+            )
+        return errors
+    if cfg.rf_range_m is None:
+        errors.append("mission_clock='sim' runs the two-pass contact path: set rf_range_m")
+    if cfg.trial_seed is None:
+        errors.append("mission_clock='sim' needs trial_seed (the channel's salts)")
+    if cfg.backhaul_model not in BACKHAUL_MODELS:
+        errors.append(f"backhaul_model must be one of {BACKHAUL_MODELS}, got {cfg.backhaul_model!r}")
+    if cfg.contact_reliability_source == "channel" and cfg.contact_band is None:
+        errors.append(
+            "contact_reliability_source='channel' needs a contact_band: the reliability "
+            "is then the SNR gate at the stop (critic B16)"
+        )
+    if cfg.device_availability and cfg.contact_reliability_source != "channel":
+        errors.append(
+            "device_availability is the ground truth of contact_reliability_source="
+            "'channel'; under 'origin' the devices draw their own reliability"
+        )
+    if (cfg.backhaul_model == BACKHAUL_SECONDS and cfg.backhaul_period_s is None
+            and (cfg.t_nom_s is None or cfg.n_missions is None)):
+        errors.append(
+            "backhaul_model='seconds' needs its period: backhaul_period_s, or t_nom_s "
+            "with n_missions (P_bh = n_missions * T_nom)"
+        )
+    for name in ("t_nom_s", "backhaul_period_s"):
+        value = getattr(cfg, name)
+        if value is not None and not _positive_number(value):
+            errors.append(f"{name} must be finite and > 0, got {value!r}")
+    schedule = getattr(cfg, "rf_prior_schedule_db", None)
+    if schedule is not None:
+        if cfg.backhaul_model == BACKHAUL_SECONDS:
+            errors.append(
+                "rf_prior_schedule_db feeds the RF prior under the recorded 'mission' "
+                "backhaul model; the seconds model feeds it from its own channel (critic B4)"
+            )
+        if (not isinstance(schedule, (list, tuple)) or not schedule
+                or not all(_finite_number(v) for v in schedule)):
+            errors.append(
+                f"rf_prior_schedule_db must be a non-empty list of finite SNRs (dB), "
+                f"got {schedule!r}"
+            )
+    return errors
+
+
+def cluster_config_errors(cfg: "ClusterConfig") -> List[str]:
+    """What is wrong with the cluster's clock settings; empty when it can run."""
+    errors: List[str] = []
+    clock = getattr(cfg, "mission_clock", CLOCK_WALL)
+    if clock not in MISSION_CLOCKS:
+        return [f"mission_clock must be one of {MISSION_CLOCKS}, got {clock!r}"]
+    model = getattr(cfg, "backhaul_model", BACKHAUL_MISSION)
+    if model not in BACKHAUL_MODELS:
+        errors.append(f"backhaul_model must be one of {BACKHAUL_MODELS}, got {model!r}")
+    if clock == CLOCK_WALL:
+        if model == BACKHAUL_SECONDS:
+            errors.append(
+                "backhaul_model='seconds' prices the upload at its simulated time: it "
+                "needs mission_clock='sim' (critic B16)"
+            )
+        if getattr(cfg, "contact_band_classes", None) is not None:
+            errors.append("contact_band_classes configures the simulated mission clock")
+        return errors
+    if model == BACKHAUL_SECONDS and getattr(cfg, "trial_seed", None) is None:
+        errors.append("backhaul_model='seconds' needs trial_seed (the keyed loss draw's salt)")
+    return errors
+
 
 @dataclass
 class DeviceConfig:
@@ -230,6 +575,22 @@ class DeviceConfig:
     # FeRRy Phase 1 — FedProx proximal weight ρ: local training minimises
     # loss + (ρ/2)·‖θ − θ_received‖². 0 keeps the plain Keras fit.
     fedprox_rho: float = 0.0
+    # FeRRy Phase 3 (critic B1) — answer only the newest queued solicit and
+    # drop older ones (TCPRFLinkClient ``newest_solicit_only``). Off, solicits
+    # are answered in arrival order, as in every recorded run. The ferry
+    # topology turns it on: its mule matches adverts to the solicit it is
+    # gathering for, so a stale one would be discarded and cost the device
+    # its push wait through the next gather too.
+    newest_solicit_only: bool = False
+    # Freeze Amendment 10 — the token this device's RF registrations carry
+    # (TCPRFLinkClient ``link_token``). A mule whose RF server was started
+    # with a token (``TCPRFLinkServer(link_token=...)``) refuses a
+    # registration carrying any other, so a device whose mule has exited
+    # cannot re-dial into a mule of another trial that later binds the same
+    # port and evict its device of the same id. All mules and devices of one
+    # trial share one value. None (every recorded run) sends no token; a mule
+    # without one accepts any.
+    rf_link_token: Optional[str] = None
 
 
 class TopologyValidationError(ValueError):
@@ -315,6 +676,115 @@ class TopologyConfig:
             assignment[did] = self.mules[i % len(self.mules)].mule_id
 
         self.device_to_mule = assignment
+        self._validate_clock(assignment)
+
+    def _validate_clock(self, assignment: Dict[str, str]) -> None:
+        """FeRRy Phase 3: refuse clock settings that cannot run or would mis-measure.
+
+        Every check fires only on a non-default setting, so a recorded
+        topology validates as it always did.
+
+        * Each role's own settings (:func:`mule_config_errors`,
+          :func:`cluster_config_errors`).
+        * The cluster and every mule on one clock, one backhaul model, one
+          trial seed and one set of band classes.
+        * Several mules on the simulated clock below a quorum of every mule,
+          or under ``agg:fedbuff``, run (critic B9's refusal is lifted: the
+          cluster folds their uploads in simulated-time order, unit U9,
+          ``hermes.processes.cluster.SimOrderGate``), but only with a
+          ``down_wait_s`` on every mule: the cluster may hold an upload until
+          the other mules pass it in simulated time, and the recorded 10 s
+          DOWN wait's expiry would end the mule's run.
+        * The channel reliability source with devices that still draw their
+          own reliability: the failure would be drawn twice.
+        * A mule's causal RF prior schedule without the cluster's per-mission
+          loss schedule of the same length: the prior and the losses must
+          come from one L1 trace (critic B4).
+        * One RF link token per mule and its devices (Amendment 10): a mule
+          with a token refuses a device registering without it.
+        """
+        errors: List[str] = []
+        for m in self.mules:
+            errors += [f"mule {m.mule_id!r}: {e}" for e in mule_config_errors(m)]
+        errors += [f"cluster: {e}" for e in cluster_config_errors(self.cluster)]
+        if errors:
+            raise TopologyValidationError("; ".join(errors))
+
+        c = self.cluster
+        clock = getattr(c, "mission_clock", CLOCK_WALL)
+        for m in self.mules:
+            if m.mission_clock != clock:
+                raise TopologyValidationError(
+                    f"mule {m.mule_id!r} runs mission_clock={m.mission_clock!r} but the "
+                    f"cluster runs {clock!r}: one trial runs on one clock"
+                )
+            if m.backhaul_model != getattr(c, "backhaul_model", BACKHAUL_MISSION):
+                raise TopologyValidationError(
+                    f"mule {m.mule_id!r} prices backhaul_model={m.backhaul_model!r} but the "
+                    f"cluster draws losses under {c.backhaul_model!r}"
+                )
+        if clock == CLOCK_SIM:
+            if c.backhaul_model == BACKHAUL_SECONDS and any(
+                m.trial_seed != c.trial_seed for m in self.mules
+            ):
+                raise TopologyValidationError(
+                    "the mules and the cluster must share one trial_seed: the keyed "
+                    "backhaul draw and the channel are salted with it"
+                )
+            if any(m.contact_band_classes != c.contact_band_classes for m in self.mules):
+                raise TopologyValidationError(
+                    "the mules and the cluster must name the same contact_band_classes: "
+                    "the cluster reads each report line's band index with them"
+                )
+            k = len(self.mules)
+            ordered = k > 1 and (
+                int(c.min_participation) < k or c.aggregation == _AGG_FEDBUFF
+            )
+            waitless = [m.mule_id for m in self.mules if ordered and m.down_wait_s is None]
+            if waitless:
+                raise TopologyValidationError(
+                    f"mules {waitless} have no down_wait_s: with {k} mules on the "
+                    f"simulated clock below a full quorum (min_participation="
+                    f"{c.min_participation}, {c.aggregation}) the cluster holds each upload "
+                    f"until the other mules pass it in simulated time (unit U9), and the "
+                    f"recorded 10 s DOWN wait's expiry would end the mule's run"
+                )
+            channel_mules = {
+                m.mule_id for m in self.mules if m.contact_reliability_source == "channel"
+            }
+            doubled = [
+                d.device_id for d in self.devices
+                if assignment.get(d.device_id) in channel_mules
+                and d.contact_reliability is not None
+            ]
+            if doubled:
+                raise TopologyValidationError(
+                    f"devices {doubled} draw their own contact_reliability, but their "
+                    f"mule's contact_reliability_source is 'channel': the failure would "
+                    f"be drawn twice; build them with contact_reliability=None"
+                )
+            n_losses = len(c.backhaul_loss_schedule or ())
+            unmatched = [
+                m.mule_id for m in self.mules
+                if m.rf_prior_schedule_db is not None
+                and len(m.rf_prior_schedule_db) != n_losses
+            ]
+            if unmatched:
+                raise TopologyValidationError(
+                    f"mules {unmatched} carry an rf_prior_schedule_db but the cluster's "
+                    f"backhaul_loss_schedule has {n_losses} entries: the RF prior and the "
+                    f"losses must come from one L1 trace (critic B4)"
+                )
+        tokens = {m.mule_id: m.rf_link_token for m in self.mules}
+        mismatched = [
+            d.device_id for d in self.devices
+            if getattr(d, "rf_link_token", None) != tokens.get(assignment.get(d.device_id))
+        ]
+        if mismatched:
+            raise TopologyValidationError(
+                f"devices {mismatched} carry an rf_link_token other than their mule's: "
+                f"the mule would refuse their registrations (Amendment 10)"
+            )
 
     def mule_for(self, device_id: str) -> str:
         """Return the mule assigned to ``device_id`` post-:meth:`validate`."""

@@ -28,6 +28,34 @@ gave up waiting for its quorum's DOWN uploads again while its first partial
 still sits in the open round, and the cluster refuses the second as a
 duplicate, though it logs its ingest like any other. The ledger replays the
 cluster's open round to find those (see :func:`_unmerged_uploads`).
+
+FeRRy Phase 3 — the simulated mission clock. A mule on it says so in
+``mule_ready.mission_clock`` ("sim"); the field is absent on the wall clock,
+so every trace recorded before Phase 3 reads as wall-clock. The envelope
+``ts`` stays wall time on either clock, so it still places cluster events in
+the missions' (wall) windows exactly as before. On the simulated clock each
+``mission_completed`` also carries the mission's simulated record — its start
+and end (``sim_start_s``, ``sim_end_s``), the clock's per-kind ledger, the
+SIMULATED energy, the budget overrun, and the re-plans, aborts and beacon
+inserts — and each ``model_eval`` the cluster's simulated time (``sim_ts``,
+the latest simulated upload it has ingested). The Pass-1 plan's deadlines and
+the sessions' ``contact_ts`` keep their names and switch to simulated seconds
+together. A trace whose clocks disagree is refused with
+:class:`ClockDomainError` rather than scored (:func:`trace_clock_domain`): a
+simulated ``contact_ts`` held to a wall-clock deadline would score every
+device on time, and the reverse every device late. The boundary is the
+mission clock's ceiling, ``SIM_CEILING_S`` = 1e9 s, which no simulated clock
+reaches and every wall stamp since 2001 exceeds.
+
+Targeted solicits and the device-side counts (critic B13). ``per_device_serves``
+counts ``device_served`` events, one per solicit a device answered and then
+saw through to an outcome. On the wall clock every solicit is a broadcast:
+every eligible device answers it, and one that is not a member of the contact
+times out waiting for a push, which still counts as a serve. On the
+simulated clock the mule solicits only the contact's members, so those
+non-member timeouts never happen, and the serve counts (and the coverage and
+Jain's index computed from them) count member contacts only. Ferry and
+wall-clock rows do not compare on those figures.
 """
 
 from __future__ import annotations
@@ -37,11 +65,23 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Dict, List, Mapping, Optional, Sequence, Set, Tuple
 
+from hermes.l1.mission_clock import SIM_CEILING_S
+from hermes.processes.config import CLOCK_SIM, CLOCK_WALL
+
 
 #: A mission's identity in a trial: ``(mule_id, mission_round)``. The mule half
 #: is normalised by :meth:`Exp4Observation.mule_key`, so with one mule every
 #: key carries the same id (or None) whatever a row called it.
 MissionKey = Tuple[Optional[str], int]
+
+
+class ClockDomainError(ValueError):
+    """A trace whose mission-time stamps come from two clocks (FeRRy Phase 3).
+
+    Raised instead of scoring it: every comparison of a simulated stamp with a
+    wall one (a contact against its deadline, a mission against another) is
+    meaningless, and would read as 0 % or 100 % rather than as an error.
+    """
 
 
 # --------------------------------------------------------------------------- #
@@ -98,6 +138,25 @@ class MissionRecord:
     #: ``device_deadlines`` existed are. None without a plan, or with a plan
     #: that admitted nobody.
     deadline_basis: Optional[str] = None
+    # FeRRy Phase 3 — the mission on the simulated mission clock, from
+    # ``mission_completed``'s simulated fields (design section 2.5). All None
+    # on a wall-clock trace. Times are simulated seconds; the energy is
+    # SIMULATED (the Zeng-Xu-Zhang 2019 rotary-wing model, not a measurement).
+    sim_start_s: Optional[float] = None
+    sim_end_s: Optional[float] = None
+    #: The clock's charges for this mission, ``(kind, seconds)`` in the order
+    #: the trace lists them (transit, dwell, listen, return, upload,
+    #: turnaround, dock_wait); they sum to ``sim_end_s - sim_start_s``.
+    sim_ledger: Optional[Tuple[Tuple[str, float], ...]] = None
+    energy_j: Optional[float] = None
+    #: How far the Pass-1 upload (or the landing, when nothing was uploaded)
+    #: ended past the mission budget; 0 within it, None without a budget.
+    budget_overrun_s: Optional[float] = None
+    #: How many in-flight re-plans and aborts the mission made, and how many
+    #: beacon offers it inserted.
+    replans: Optional[int] = None
+    aborts: Optional[int] = None
+    inserts: Optional[int] = None
 
     def contains(self, ts: Optional[float]) -> bool:
         """Whether ``ts`` falls inside this mission's time window."""
@@ -107,6 +166,17 @@ class MissionRecord:
             and self.completed_ts is not None
             and self.started_ts <= ts <= self.completed_ts
         )
+
+    @property
+    def sim_duration_s(self) -> Optional[float]:
+        """The mission's simulated duration, takeoff to the Pass-2 landing."""
+        if self.sim_start_s is None or self.sim_end_s is None:
+            return None
+        return self.sim_end_s - self.sim_start_s
+
+    def ledger(self) -> Optional[Dict[str, float]]:
+        """``sim_ledger`` as a dict, kind -> seconds; None off the mission clock."""
+        return None if self.sim_ledger is None else dict(self.sim_ledger)
 
 
 @dataclass(frozen=True)
@@ -123,6 +193,10 @@ class ModelEvalPoint:
     loss: float
     n_test: int
     ts: Optional[float] = None
+    #: FeRRy Phase 3: the cluster's simulated time at the evaluation, the
+    #: latest simulated upload it had ingested (None on the wall clock, and
+    #: for the seed model, evaluated before any upload).
+    sim_ts: Optional[float] = None
 
 
 @dataclass
@@ -156,7 +230,9 @@ class Exp4Observation:
     model_evals: List[ModelEvalPoint] = field(default_factory=list)
     # Per-device Pass-1+Pass-2 serve counts, padded to every device that
     # announced itself (``device_ready``) so zero-serve devices still
-    # count toward fairness / entropy denominators.
+    # count toward fairness / entropy denominators. On the simulated clock
+    # they count member contacts only: solicits are targeted, so no
+    # non-member times out on a broadcast (module docstring, critic B13).
     per_device_serves: Dict[str, int] = field(default_factory=dict)
     device_serve_failures: int = 0
     # Sanity flags harvested from the streams, surfaced for debugging.
@@ -189,6 +265,10 @@ class Exp4Observation:
     #: quorum when the trial ended. Only several mules produce them; with one,
     #: every ingest is answered at once and this stays empty.
     unmerged_keys: Set[MissionKey] = field(default_factory=set)
+    #: FeRRy Phase 3: the clock the trial's mission time ran on, "wall" or
+    #: "sim" (:func:`trace_clock_domain`; "wall" for every recorded trace).
+    #: On "sim" the missions complete in the order of their simulated ends.
+    mission_clock: str = CLOCK_WALL
 
     def __post_init__(self) -> None:
         # Whichever half of the ledger the caller gave, the other follows, so
@@ -240,6 +320,11 @@ class Exp4Observation:
     def mission_key(self, mission: MissionRecord) -> MissionKey:
         return (self.mule_key(mission.mule_id), mission.mission_round)
 
+    def ordered_missions(self) -> List[MissionRecord]:
+        """The missions in completion order on the trial's own clock
+        (:func:`completion_order`)."""
+        return completion_order(self.missions, self.mission_clock)
+
 
 # --------------------------------------------------------------------------- #
 # Parsing
@@ -265,7 +350,12 @@ def observation_from_rows(
     a role). ``mule_slices`` maps each configured mule to the devices its
     config assigns it (empty where the config names none); without it the
     trial's mules are the ones its mule rows name.
+
+    Raises :class:`ClockDomainError` for a trace whose clocks disagree
+    (:func:`trace_clock_domain`); no recorded trace does.
     """
+    mission_clock = trace_clock_domain(cluster_rows, mule_rows)
+
     # ------------------------------- mule -------------------------------- #
     # Parsed first so the cluster section can place its events in a
     # mission's time window. Rows are walked in order per mule: each
@@ -313,6 +403,14 @@ def observation_from_rows(
                 ),
                 pass_1_merged_updates=merged_n,
                 deadline_basis=deadline_basis,
+                sim_start_s=_opt_float(r.get("sim_start_s")),
+                sim_end_s=_opt_float(r.get("sim_end_s")),
+                sim_ledger=_sim_ledger(r.get("sim_ledger")),
+                energy_j=_opt_float(r.get("energy_j")),
+                budget_overrun_s=_opt_float(r.get("budget_overrun_s")),
+                replans=_opt_len(r.get("replans")),
+                aborts=_opt_len(r.get("aborts")),
+                inserts=_opt_len(r.get("inserts")),
             )
         )
 
@@ -379,6 +477,7 @@ def observation_from_rows(
                 loss=float(r.get("loss", 0.0) or 0.0),
                 n_test=int(r.get("n_test", 0) or 0),
                 ts=_opt_float(r.get("ts")),
+                sim_ts=_opt_float(r.get("sim_ts")),
             )
         )
     model_evals.sort(key=lambda p: p.cluster_round)
@@ -433,7 +532,144 @@ def observation_from_rows(
         flush_of_keys=flush_of_keys,
         closed_by_mule=_round_closers(cluster_rows),
         unmerged_keys=unmerged_keys,
+        mission_clock=mission_clock,
     )
+
+
+def completion_order(
+    missions: Sequence[MissionRecord], clock: str = CLOCK_WALL,
+) -> List[MissionRecord]:
+    """``missions`` in completion order on ``clock``.
+
+    On the wall clock by the envelope time of each ``mission_completed``, as
+    always. On the simulated clock by the simulated end (``sim_end_s``): the
+    envelope time stays wall, and with several mules the order in which their
+    processes happen to finish is not the order in which their missions end
+    (FeRRy Phase 3). Either way, the recorded order when any mission lacks
+    the stamp, and ties keep it (the sort is stable). With one mule both
+    orders are its mission rounds.
+    """
+    key = (
+        (lambda m: m.sim_end_s) if clock == CLOCK_SIM
+        else (lambda m: m.completed_ts)
+    )
+    if all(key(m) is not None for m in missions):
+        return sorted(missions, key=key)
+    return list(missions)
+
+
+def trace_clock_domain(cluster_rows: Sequence[dict], mule_rows: Sequence[dict]) -> str:
+    """The clock a trace's mission time ran on, "wall" or "sim" (FeRRy Phase 3).
+
+    Read from the mules' ``mule_ready.mission_clock``, else the cluster's
+    ``cluster_ready.mission_clock``; absent means "wall", so every trace
+    recorded before Phase 3 is wall-clock. Raises :class:`ClockDomainError`
+    when the trace's clocks disagree:
+
+    * the mules disagree with each other, or the cluster with them, or one
+      names a clock that does not exist;
+    * the domain is "sim", and a ``mission_completed`` lacks its simulated
+      start or end, or a mission-time stamp is a wall one (at or above
+      ``SIM_CEILING_S``): a Pass-1 plan deadline, a session's ``contact_ts``,
+      a mission's simulated start or end, or the cluster's simulated times;
+    * the domain is "wall", and the trace carries simulated fields (a
+      mission's ``sim_start_s`` / ``sim_end_s``, the cluster's ``sim_ts`` /
+      ``sim_upload_ts``), or its Pass-1 stamps lie on both sides of the
+      ceiling. The wall clock is held to one side rather than to wall time:
+      hand-built traces stamp everything in small numbers.
+
+    Only the stamps the analysis compares or orders by are checked.
+    """
+    mule_tags = _clock_tags(mule_rows, "mule_ready", "mule")
+    cluster_tags = _clock_tags(cluster_rows, "cluster_ready", "cluster")
+    for tag, who in mule_tags + cluster_tags:
+        if tag not in (CLOCK_WALL, CLOCK_SIM):
+            raise ClockDomainError(
+                f"{who} names mission clock {tag!r}; a trace's clock is "
+                f"{CLOCK_WALL!r} or {CLOCK_SIM!r}"
+            )
+    for tags, role in ((mule_tags, "mules"), (cluster_tags, "cluster")):
+        if len({tag for tag, _ in tags}) > 1:
+            raise ClockDomainError(
+                f"clock domains disagree: the {role} ran on different clocks ("
+                + ", ".join(f"{who}: {tag!r}" for tag, who in tags) + ")"
+            )
+    domain = (mule_tags or cluster_tags or [(CLOCK_WALL, "")])[0][0]
+    if cluster_tags and cluster_tags[0][0] != domain:
+        raise ClockDomainError(
+            f"clock domains disagree: the mules ran on the {domain!r} clock and "
+            f"the cluster on the {cluster_tags[0][0]!r} one"
+        )
+
+    stamps: List[Tuple[str, float]] = []        # Pass-1 deadlines and contacts
+    sim_fields: List[Tuple[str, float]] = []    # fields only the sim clock writes
+    for r in mule_rows:
+        event = r.get("event")
+        if event == "mission_started":
+            v = _opt_float(r.get("sim_start_s"))
+            if v is not None:
+                sim_fields.append((f"mission_started (mule {r.get('id')}) sim_start_s", v))
+            continue
+        if event != "mission_completed":
+            continue
+        where = f"mission_completed (mule {r.get('id')}, round {r.get('mission_round')})"
+        for name in ("sim_start_s", "sim_end_s"):
+            v = _opt_float(r.get(name))
+            if v is not None:
+                sim_fields.append((f"{where} {name}", v))
+            elif domain == CLOCK_SIM:
+                raise ClockDomainError(
+                    f"{where} has no {name}, but the trace is on the simulated "
+                    f"clock, where every mission records its simulated start and end"
+                )
+        for i, contact in enumerate(r.get("pass_1_plan") or ()):
+            if not isinstance(contact, dict):
+                continue
+            v = _opt_float(contact.get("deadline_ts"))
+            if v is not None:
+                stamps.append((f"{where} pass_1_plan[{i}].deadline_ts", v))
+            own = contact.get("device_deadlines")
+            for device, raw in (own.items() if isinstance(own, dict) else ()):
+                v = _opt_float(raw)
+                if v is not None:
+                    stamps.append((f"{where} pass_1_plan[{i}].device_deadlines[{device}]", v))
+        for s in r.get("pass_1_outcomes") or ():
+            v = _opt_float(s.get("contact_ts")) if isinstance(s, dict) else None
+            if v is not None:
+                stamps.append((f"{where} pass_1_outcomes[{s.get('device')}].contact_ts", v))
+    for r in cluster_rows:
+        for name in ("sim_ts", "sim_upload_ts"):
+            v = _opt_float(r.get(name))
+            if v is not None:
+                sim_fields.append((f"cluster {r.get('event')} {name}", v))
+
+    if domain == CLOCK_SIM:
+        for where, v in stamps + sim_fields:
+            if not v < SIM_CEILING_S:
+                raise ClockDomainError(
+                    f"clock domains disagree: the trace is on the simulated mission "
+                    f"clock (mission_clock {CLOCK_SIM!r}), but {where} = {v!r} is not "
+                    f"a simulated time (simulated stamps stay below "
+                    f"{SIM_CEILING_S:g} s; wall ones are above it)"
+                )
+        return domain
+    if sim_fields:
+        where, v = sim_fields[0]
+        raise ClockDomainError(
+            f"clock domains disagree: the trace is on the wall clock (no "
+            f"mule_ready or cluster_ready names mission_clock {CLOCK_SIM!r}), but "
+            f"{where} = {v!r} is a field only the simulated clock writes"
+        )
+    wall = next(((w, v) for w, v in stamps if not v < SIM_CEILING_S), None)
+    sim = next(((w, v) for w, v in stamps if v < SIM_CEILING_S), None)
+    if wall is not None and sim is not None:
+        raise ClockDomainError(
+            f"clock domains disagree: {wall[0]} = {wall[1]!r} is a wall-clock "
+            f"stamp and {sim[0]} = {sim[1]!r} a simulated one (the domains meet "
+            f"at {SIM_CEILING_S:g} s); a deadline miss compares the two and would "
+            f"read 0 % or 100 %"
+        )
+    return domain
 
 
 def consume_run_dir(run_dir, *, n_devices: int) -> Exp4Observation:
@@ -532,6 +768,34 @@ def _opt_float(v) -> Optional[float]:
 
 def _opt_str(v) -> Optional[str]:
     return None if v is None else str(v)
+
+
+def _opt_len(v) -> Optional[int]:
+    """How many entries a recorded list has; None when the field is absent."""
+    return len(v) if isinstance(v, (list, tuple)) else None
+
+
+def _sim_ledger(raw) -> Optional[Tuple[Tuple[str, float], ...]]:
+    """``mission_completed.sim_ledger`` ({kind: seconds}) as ``(kind, seconds)``
+    pairs in the recorded order; None when absent (a wall-clock mission)."""
+    if not isinstance(raw, dict):
+        return None
+    pairs: List[Tuple[str, float]] = []
+    for kind, seconds in raw.items():
+        v = _opt_float(seconds)
+        if v is not None:
+            pairs.append((str(kind), v))
+    return tuple(pairs)
+
+
+def _clock_tags(rows: Sequence[dict], event: str, role: str) -> List[Tuple[str, str]]:
+    """``(mission_clock, who)`` of every ``event`` row, "wall" where the row
+    names none (every row written before FeRRy Phase 3, and every wall-clock
+    one since)."""
+    return [
+        (str(r.get("mission_clock") or CLOCK_WALL), f"{role} {r.get('id')}")
+        for r in rows if r.get("event") == event
+    ]
 
 
 def _mule_key(mule_ids: Sequence[str], mule_id: Optional[str]) -> Optional[str]:

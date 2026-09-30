@@ -20,9 +20,11 @@ Design refs:
 
 from __future__ import annotations
 
+import dataclasses
 import logging
+import math
 import time
-from typing import Dict, Iterable, List, Optional, Tuple
+from typing import Collection, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
 from hermes.types import (
     BUCKET_PRIORITY,
@@ -36,9 +38,11 @@ from hermes.types import (
     FLReadyAdv,
     MissionPass,
     MissionSlice,
+    MuleID,
     RoundCloseDelta,
     TargetWaypoint,
 )
+from hermes.types.scheduler import DEFAULT_FULFILMENT_WINDOW_S
 
 from .stages import (
     classify_bucket,
@@ -85,8 +89,73 @@ class FLScheduler:
         mission_window_adapter=None,
         deadline_law: Optional[DeadlineLaw] = None,
         miss_priority: bool = False,
+        deadline_time_scale: float = 1.0,
+        initial_window_s: Optional[float] = None,
+        refuse_deadline_overrides: bool = False,
+        validate_flown_order: bool = False,
+        replan_fallback: str = "reorder",
     ):
         self._device_states: Dict[DeviceID, DeviceSchedulerState] = {}
+        # FeRRy Phase 3 (spec Q1) — the deadline law's time unit. 1.0 is the
+        # recorded unit and leaves ``deadline_law`` exactly as given (None
+        # stays None). Any other value is folded into the law as its
+        # ``time_scale``, so every reader of ``deadline_law`` (the mule's merge
+        # cutoff included) sees the same scaled Φ.
+        if isinstance(deadline_time_scale, bool):
+            raise FLSchedulerError(
+                f"deadline_time_scale must be a number, got {deadline_time_scale!r}"
+            )
+        scale = float(deadline_time_scale)
+        if not (math.isfinite(scale) and scale > 0.0):
+            raise FLSchedulerError(
+                f"deadline_time_scale must be finite and > 0, got {deadline_time_scale!r}"
+            )
+        if scale != 1.0:
+            if (deadline_law is not None and deadline_law.time_scale != 1.0
+                    and deadline_law.time_scale != scale):
+                raise FLSchedulerError(
+                    f"deadline_time_scale={scale} conflicts with the law's own "
+                    f"time_scale={deadline_law.time_scale}; set one of them"
+                )
+            deadline_law = (deadline_law or DeadlineLaw()).with_time_scale(scale)
+        # FeRRy Phase 3 (spec Q1) — a new device's window Φ₀, stated like every
+        # other constant of the deadline law: in the law's recorded unit, and
+        # multiplied by ``deadline_time_scale`` when a row is created. None is
+        # the recorded 60 s, so None and an explicit 60 are the same Φ₀ at any
+        # time scale (60 * scale s on the scheduler's clock); at the recorded
+        # unit new rows are built exactly as before. For a Φ₀ counted in
+        # missions (critic A7) pass what s3_deadline.initial_window_for_missions
+        # returns: it divides this scale back out. A window already in clock
+        # seconds must not be passed here unless the scale is 1.0.
+        if initial_window_s is not None:
+            phi0 = float(initial_window_s)
+            if not (math.isfinite(phi0) and phi0 > 0.0):
+                raise FLSchedulerError(
+                    f"initial_window_s must be finite and > 0, got {initial_window_s!r}"
+                )
+            initial_window_s = phi0
+        self._initial_window_s = initial_window_s
+        # FeRRy Phase 3 — on the simulated mission clock the mule refuses the
+        # cluster's absolute (wall-clock) deadline overrides (critic B3).
+        self._refuse_deadline_overrides = bool(refuse_deadline_overrides)
+        # FeRRy Phase 3 (design §3.3) — under the ``replan`` response, check
+        # the order our arms will actually fly before takeoff. Needs the ferry
+        # model and a budget; inert otherwise.
+        self._validate_flown_order = bool(validate_flown_order)
+        # FeRRy Phase 3 — what our arms' Pass-1 re-plans (the pre-flight check
+        # included) do when the arm's own order over the admitted stops does
+        # not fit: ``reorder`` (design §3.4 with critic C3: 2-OPT, then the
+        # admission order) or ``trim`` (keep the arm's order, drop what it
+        # cannot serve). See routing/replan.py for why the choice matters
+        # before takeoff; it is made at the pilot (critic B5). Inert unless
+        # the mule re-plans.
+        from .routing.replan import FALLBACKS  # noqa: WPS433
+
+        if replan_fallback not in FALLBACKS:
+            raise FLSchedulerError(
+                f"replan_fallback must be one of {FALLBACKS}, got {replan_fallback!r}"
+            )
+        self._replan_fallback = replan_fallback
         # FeRRy Phase 1. ``deadline_law`` None is the recorded additive law,
         # run with its original arithmetic; see stages/s3_deadline.py. With
         # ``miss_priority`` S3b admits contacts by their members' miss streak
@@ -112,12 +181,24 @@ class FLScheduler:
         self._mission_budget_s = (
             None if mission_budget_s is None else float(mission_budget_s)
         )
+        # FeRRy Phase 3 — a ferry model prices each contact's dwell from its
+        # members' positions (critic B11); unless the caller bound its own map,
+        # the model looks them up in this scheduler's device states, a live
+        # view. A legacy model is kept as the very object passed.
+        ferry = getattr(feasibility_model, "ferry", None)
+        if ferry is not None and ferry.device_states is None:
+            feasibility_model = dataclasses.replace(
+                feasibility_model, ferry=ferry.bind(self._device_states),
+            )
         self._feasibility_model = feasibility_model
         # The budget is measured from this stamp. The mule sets it at the start
         # of every mission (start_mission); ingest_slice also sets it, for
         # callers that drive the scheduler without a mule.
         self._mission_start_ts: Optional[float] = None
         self.last_feasibility: Optional[object] = None
+        # FeRRy Phase 3 — the pre-flight order check of the latest Pass-1
+        # plan (a routing.replan.ReplanResult), or None when it did not run.
+        self.last_order_check: Optional[object] = None
         # Each device's own Deadline(j) from the most recent Pass-1 plan, so
         # the trace can score a miss against the device's deadline rather than
         # the tightest one in its contact.
@@ -182,6 +263,56 @@ class FLScheduler:
     def deadline_law(self) -> Optional[DeadlineLaw]:
         """The fast-phase law; None = the recorded additive law."""
         return self._deadline_law
+
+    @property
+    def deadline_time_scale(self) -> float:
+        """The deadline law's time unit (FeRRy Phase 3); 1.0 = recorded."""
+        return 1.0 if self._deadline_law is None else self._deadline_law.time_scale
+
+    @property
+    def initial_window_s(self) -> float:
+        """Φ₀ as configured, in the deadline law's recorded unit (60 s recorded).
+
+        :attr:`effective_initial_window_s` is what a new row starts with.
+        """
+        if self._initial_window_s is not None:
+            return self._initial_window_s
+        return DEFAULT_FULFILMENT_WINDOW_S
+
+    @property
+    def effective_initial_window_s(self) -> float:
+        """Φ₀ on the scheduler's clock: ``initial_window_s * deadline_time_scale``.
+
+        The window, in seconds, a newly tracked device starts with (exactly
+        the configured value at the recorded time unit).
+        """
+        scale = self.deadline_time_scale
+        phi0 = self.initial_window_s
+        return phi0 if scale == 1.0 else phi0 * scale
+
+    @property
+    def refuses_deadline_overrides(self) -> bool:
+        return self._refuse_deadline_overrides
+
+    @property
+    def validates_flown_order(self) -> bool:
+        return self._validate_flown_order
+
+    @property
+    def replan_fallback(self) -> str:
+        """``reorder`` or ``trim``: see the constructor and routing/replan.py."""
+        return self._replan_fallback
+
+    def _new_state(self, device_id: DeviceID, **fields) -> DeviceSchedulerState:
+        """A state row for a newly tracked device, starting at Φ₀.
+
+        At the recorded settings (no ``initial_window_s``, time scale 1.0) the
+        row is built exactly as before, with the dataclass's own 60 s.
+        """
+        st = DeviceSchedulerState(device_id=device_id, **fields)
+        if self._initial_window_s is not None or self.deadline_time_scale != 1.0:
+            st.deadline_fulfilment_s = self.effective_initial_window_s
+        return st
 
     @property
     def miss_priority(self) -> bool:
@@ -271,7 +402,18 @@ class FLScheduler:
           registry records so the first round after dock can bucket and
           sort without waiting for a beacon.
         * Folds the amendment (deadline overrides + registry_deltas).
+
+        With ``refuse_deadline_overrides`` (the simulated mission clock) an
+        amendment carrying deadline overrides is refused before anything is
+        ingested: they are wall-clock stamps (critic B3).
         """
+        if (self._refuse_deadline_overrides and amendment is not None
+                and amendment.deadline_overrides):
+            raise FLSchedulerError(
+                f"ingest_slice: {len(amendment.deadline_overrides)} cluster deadline "
+                "override(s) refused: they are wall-clock stamps and this "
+                "scheduler runs on the simulated mission clock"
+            )
         self._current_slice = mission_slice
         # Fallback budget stamp for callers that drive the scheduler without a
         # mule. The mule re-stamps at the start of every mission
@@ -290,8 +432,8 @@ class FLScheduler:
             for rec in registry_records:
                 st = self._device_states.get(rec.device_id)
                 if st is None:
-                    st = DeviceSchedulerState(
-                        device_id=rec.device_id,
+                    st = self._new_state(
+                        rec.device_id,
                         is_new=rec.is_new,
                         last_known_position=rec.last_known_position,
                         delivery_priority=rec.delivery_priority,
@@ -304,13 +446,14 @@ class FLScheduler:
         # Admit every slice member that isn't already tracked.
         for did in mission_slice.device_ids:
             if did not in self._device_states:
-                self._device_states[did] = DeviceSchedulerState(device_id=did)
+                self._device_states[did] = self._new_state(did)
 
         # Refresh slice membership flags.
         for did, st in self._device_states.items():
             st.is_in_slice = did in slice_ids
 
-        # Slow-phase deadline fold.
+        # Slow-phase deadline fold. (Overrides were refused above, before
+        # anything was ingested, when this scheduler must refuse them.)
         if amendment is not None:
             fold_cluster_amendment(
                 self._device_states, amendment, law=self._deadline_law,
@@ -347,7 +490,7 @@ class FLScheduler:
         """
         st = self._device_states.get(obs.device_id)
         if st is None:
-            st = DeviceSchedulerState(device_id=obs.device_id, is_new=True)
+            st = self._new_state(obs.device_id, is_new=True)
             self._device_states[obs.device_id] = st
         st.last_beacon_ts = obs.observed_at
 
@@ -500,6 +643,7 @@ class FLScheduler:
         # the mule would widen that mission's dropped devices a second time.
         self.last_feasibility = None
         self.last_plan_deadlines = {}
+        self.last_order_check = None
 
         eligible_ids = filter_eligible(
             self._device_states, now=_now, beacon_window_s=self._beacon_window_s
@@ -673,7 +817,284 @@ class FLScheduler:
                 ordered = sorted(members, key=_dist_key)
             queue.extend(ordered)
 
+        # FeRRy Phase 3 (design §3.3) — S3b admitted the contacts in EDF order,
+        # but the H arms fly them in bucket/distance or learned order, which
+        # the predicate never saw (probe P1: a 70 s walk flown as 150 s). Under
+        # the ``replan`` response, fold the order about to be flown and repair
+        # it if it fails; drops join ``last_feasibility`` by reason, so the
+        # mule's pre-flight widening covers them. Needs the ferry model and a
+        # budget: no budget, no gate (the opt-in contract).
+        if (self._validate_flown_order and self._mission_budget_s is not None
+                and queue
+                and getattr(self._feasibility_model, "ferry", None) is not None):
+            queue = self._validate_order(queue, now=_now, mule_pose=mule_pose)
+
         return queue
+
+    def _validate_order(
+        self, queue: List[ContactWaypoint], *, now: float, mule_pose: MulePose,
+    ) -> List[ContactWaypoint]:
+        """The pre-flight order check (design §3.3): keep, repair or trim ``queue``.
+
+        ``queue`` is S3b's kept set in the order the arm will fly it, and the
+        re-plan starts from the very state and budget S3b just walked, so S3b
+        re-admits every stop and the arm's own order over them is ``queue``
+        itself. What happens when that order does not fit therefore depends
+        only on :attr:`replan_fallback`:
+
+        * ``reorder`` (default): the route becomes 2-OPT's path or S3b's EDF
+          order, both functions of the kept *set*. Arms that differ only in
+          their order (H1, H2, H3) fly the same route whenever this check
+          fires, and the check never drops a stop (the EDF order passes by
+          construction), so ``last_feasibility`` keeps S3b's drops;
+        * ``trim``: the arm's order is kept and the stops it cannot serve in
+          that order are dropped; they join ``last_feasibility`` under their
+          reason (energy included, critic B10), so the mule's pre-flight
+          widening covers them.
+
+        Critic C3 asked that the H arms not collapse onto one route; under
+        ``reorder`` they still do here. The alternatives (``trim``, or the
+        ``abort`` response for the H arms) are chosen at the pilot.
+        """
+        from .routing.replan import ORDER_CURRENT  # noqa: WPS433
+        from .stages.s3b_feasibility import (  # noqa: WPS433
+            REASON_BUDGET,
+            REASON_ENERGY,
+            REASON_OVERDUE,
+            FeasibilityResult,
+            FlightState,
+        )
+
+        start = self._mission_start_ts if self._mission_start_ts is not None else now
+        res = self.replan_remainder(
+            queue,
+            state=FlightState(tuple(mule_pose), float(now)),  # type: ignore[arg-type]
+            budget_end=start + self._mission_budget_s,  # type: ignore[operator]
+            pass_kind=MissionPass.COLLECT,
+        )
+        self.last_order_check = res
+        if res.order_used == ORDER_CURRENT:
+            return queue
+        log.info(
+            "flown-order check: %s order, %d/%d contacts kept (%d dropped)",
+            res.order_used, len(res.route), len(queue), len(res.dropped),
+        )
+        feas = self.last_feasibility
+        self.last_feasibility = FeasibilityResult(
+            list(res.route),
+            list(getattr(feas, "dropped_overdue", ())) + res.dropped_by(REASON_OVERDUE),
+            list(getattr(feas, "dropped_budget", ())) + res.dropped_by(REASON_BUDGET),
+            list(getattr(feas, "dropped_energy", ())) + res.dropped_by(REASON_ENERGY),
+        )
+        return list(res.route)
+
+    # ------------------------------------------------------------------ #
+    # FeRRy Phase 3 — the in-flight rule and the re-plan (design §3.4)
+    # ------------------------------------------------------------------ #
+
+    def in_flight_rule(self, pass_kind: MissionPass = MissionPass.COLLECT) -> str:
+        """The predicate rule this mule's remainder is held to in flight.
+
+        Pass 2 is walked the same way by every arm: the budget only. In
+        Pass 1 our arms keep S3b's deadline and budget; a whole-scheduler
+        baseline gets what it declares as ``in_flight_check`` (Freeze
+        Amendment 8): the budget only, or no check at all (D4).
+        """
+        from .stages.s3b_feasibility import (  # noqa: WPS433
+            RULE_BUDGET,
+            RULE_DEADLINE_BUDGET,
+            RULE_NONE,
+        )
+
+        if MissionPass(pass_kind) is MissionPass.DELIVER:
+            return RULE_BUDGET
+        policy = self._target_selector
+        if policy is not None and hasattr(policy, "admit_and_order"):
+            from .policies.budget_walk import (  # noqa: WPS433
+                IN_FLIGHT_BUDGET,
+                IN_FLIGHT_NONE,
+            )
+
+            check = getattr(policy, "in_flight_check", IN_FLIGHT_BUDGET)
+            return RULE_NONE if check == IN_FLIGHT_NONE else RULE_BUDGET
+        return RULE_DEADLINE_BUDGET
+
+    def fold_remainder(
+        self,
+        remainder: Sequence[ContactWaypoint],
+        *,
+        state,
+        budget_end: Optional[float],
+        pass_kind: MissionPass = MissionPass.COLLECT,
+        protected: Collection[ContactWaypoint] = (),
+        snr_offset_db: float = 0.0,
+    ):
+        """The whole-remainder check at a departure (design §3.4).
+
+        ``remainder`` folded as it would be flown, without skipping, from
+        ``state`` (an ``s3b_feasibility.FlightState``) under this arm's
+        :meth:`in_flight_rule`, priced with the scheduler's model. Returns the
+        ``s3b_feasibility.FoldResult``: ``ok`` says whether the rest of the
+        pass still fits, ``rejected`` which stops do not and why, and ``home``
+        when the mule would be back at the dock (D4's overrun: its rule never
+        rejects but still reports it). The mule calls this, and
+        :meth:`replan_remainder` when it fails, rather than re-implementing
+        S3b (design principle 1). ``budget_end`` None: no gate, so it passes.
+        """
+        from .stages.s3b_feasibility import FeasibilityModel  # noqa: WPS433
+
+        pass_kind = MissionPass(pass_kind)
+        model = self._feasibility_model or FeasibilityModel()
+        return model.fold(
+            list(remainder), state, rule=self.in_flight_rule(pass_kind),
+            budget_end=budget_end, pass_kind=pass_kind, skip=False,
+            protected=protected, snr_offset_db=snr_offset_db,
+        )
+
+    def replan_remainder(
+        self,
+        remainder: Sequence[ContactWaypoint],
+        *,
+        state,
+        budget_end: Optional[float],
+        pass_kind: MissionPass = MissionPass.COLLECT,
+        protected: Collection[ContactWaypoint] = (),
+        snr_offset_db: float = 0.0,
+        two_opt_fallback: Optional[bool] = None,
+    ):
+        """Re-plan the rest of a pass from a flight state (design §3.4, critic C3).
+
+        ``state`` is an ``s3b_feasibility.FlightState`` (pose, clock, energy
+        spent); ``budget_end`` the absolute end of this pass's budget (None:
+        no gate, so the remainder is kept). Returns a
+        ``routing.replan.ReplanResult``. The arm decides admission and keeps
+        its own order when that passes:
+
+        * our arms (no whole-scheduler policy): S3b's ``filter_feasible`` from
+          ``state``, by miss priority when that is on, else EDF; when their
+          own order over the admitted stops does not fit, the 2-OPT path to
+          the dock and then the admission order (``replan_fallback`` =
+          ``reorder``), or their own order with what it cannot serve dropped
+          (``trim``);
+        * D1-D3 and D5: the policy's own ``admit_and_order`` with
+          ``SelectorEnv(mule_pose=pose, now=clock, mission_round=...)`` and
+          the model's capacity reduced by the energy spent; no 2-OPT (the
+          baseline keeps its own order);
+        * D4 (``IN_FLIGHT_NONE``): no re-plan; the remainder is flown as is;
+        * Pass 2, every arm: a nearest-first budget walk, 2-OPT fallback.
+
+        Drops are final for the mission (spec Q10). ``protected`` stops are
+        admitted first and dropped only if they cannot all fit on their own
+        (empty in Phase 3). ``snr_offset_db`` is δ_obs (0 by default, spec);
+        a baseline's own admission cannot take it and prices at 0 dB, and the
+        final fold still holds its route to δ_obs. ``two_opt_fallback``
+        overrides the per-arm default above (None keeps it): 2-OPT would give
+        a baseline a FeRRy mechanism (critic B5), so it is off for D1-D3/D5
+        unless asked for. It has no effect under ``trim``, which never
+        re-orders.
+
+        A baseline's re-admission is a call to its own ``admit_and_order``
+        over the remainder, so what that call does to the policy happens
+        here too: Whittle (D3) overwrites ``last_device_inputs`` with the
+        re-plan's inputs, and Oort (D2) infers its current round from the
+        remainder's members only. A baseline's drop is labelled with the
+        clause that refuses the stop on its own from ``state``, else
+        ``budget`` (the policy's walk does not report which clause bound).
+        """
+        from .routing.replan import (  # noqa: WPS433
+            FALLBACK_REORDER,
+            ORDER_NONE,
+            ReplanResult,
+            replan_route,
+        )
+        from .stages.s3b_feasibility import (  # noqa: WPS433
+            REASON_BUDGET,
+            REASON_ENERGY,
+            REASON_OVERDUE,
+            RULE_BUDGET,
+            RULE_NONE,
+            FeasibilityModel,
+            filter_feasible,
+        )
+
+        pass_kind = MissionPass(pass_kind)
+        stops = list(remainder)
+        rule = self.in_flight_rule(pass_kind)
+        if rule == RULE_NONE:
+            return ReplanResult(tuple(stops), (), ORDER_NONE)
+        model = self._feasibility_model or FeasibilityModel()
+        ferry = getattr(model, "ferry", None)
+        dock = None if ferry is None else ferry.dock
+        policy = self._target_selector
+        two_opt = True
+        # ``replan_fallback`` is for our arms' Pass 1 only: a baseline's
+        # admission order is already its own policy's order, and every arm
+        # flies the same nearest-first Pass 2, so neither can collapse there.
+        fallback = FALLBACK_REORDER
+
+        if pass_kind is MissionPass.DELIVER:
+            def admission(contacts, st):
+                chain = order_pass_2_greedy(contacts, mule_pose=st.pose)
+                walk = model.fold(
+                    chain, st, rule=RULE_BUDGET, budget_end=budget_end,
+                    pass_kind=MissionPass.DELIVER, skip=True,
+                    snr_offset_db=snr_offset_db,
+                )
+                return list(walk.route), list(walk.rejected)
+        elif policy is not None and hasattr(policy, "admit_and_order"):
+            two_opt = False
+            from .selector import SelectorEnv  # noqa: WPS433
+
+            def admission(contacts, st):
+                route = policy.admit_and_order(
+                    list(contacts),
+                    self._device_states,
+                    SelectorEnv(
+                        mule_pose=tuple(st.pose),
+                        beacon_window_s=self._beacon_window_s,
+                        now=st.clock,
+                        mission_round=self._mission_round,
+                    ),
+                    mission_deadline_ts=budget_end,
+                    feasibility_model=model.with_energy_spent(st.energy_j),
+                )
+                kept = {id(wp) for wp in route}
+                reasons = []
+                for wp in contacts:
+                    if id(wp) in kept:
+                        continue
+                    # The clause that refuses the stop on its own from here;
+                    # otherwise the budget the policy's higher-ranked stops
+                    # took (the policy's walk does not say which).
+                    v = model.admit(st, wp, rule=rule, budget_end=budget_end,
+                                    pass_kind=pass_kind, snr_offset_db=snr_offset_db)
+                    reasons.append((wp, v.reason if not v.ok else REASON_BUDGET))
+                return route, reasons
+        else:
+            priority = self._contact_miss_priority if self._miss_priority else None
+            fallback = self._replan_fallback
+
+            def admission(contacts, st):
+                feas = filter_feasible(
+                    contacts, now=st.clock, mule_pose=st.pose,
+                    mission_deadline_ts=budget_end, model=model, priority=priority,
+                    state=st, snr_offset_db=snr_offset_db,
+                )
+                reasons = (
+                    [(wp, REASON_OVERDUE) for wp in feas.dropped_overdue]
+                    + [(wp, REASON_BUDGET) for wp in feas.dropped_budget]
+                    + [(wp, REASON_ENERGY) for wp in feas.dropped_energy]
+                )
+                return feas.kept, reasons
+
+        if two_opt_fallback is not None:
+            two_opt = bool(two_opt_fallback)
+        return replan_route(
+            stops, state=state, model=model, rule=rule, budget_end=budget_end,
+            pass_kind=pass_kind, admission=admission, protected=protected,
+            dock=dock, two_opt_fallback=two_opt, snr_offset_db=snr_offset_db,
+            fallback=fallback,
+        )
 
     def build_pass_2_queue(
         self,
@@ -757,3 +1178,103 @@ class FLScheduler:
         )
 
         return order_pass_2_greedy(contacts, mule_pose=mule_pose)
+
+
+# --------------------------------------------------------------------------- #
+# FeRRy Phase 3 — the nominal mission period T_nom (spec Q1)
+# --------------------------------------------------------------------------- #
+
+def nominal_mission_period_s(
+    device_positions: Mapping[DeviceID, Sequence[float]],
+    *,
+    rf_range_m: float,
+    feasibility_model,
+    turnaround_s: float,
+) -> float:
+    """One layout's nominal two-pass mission period on the mission clock.
+
+    Spec Q1: the recorded deadline constants were set against missions of
+    about 10 s of wall clock, and a two-pass mission on the simulated clock
+    runs minutes (design §0 finding 2), so Phase 3 restates them in units of
+    ``T_nom``, the cell's median of this period over its layouts
+    (:func:`median_nominal_mission_period_s`): ``deadline_time_scale = T_nom
+    / 10 s`` (``s3_deadline.time_scale_for_period``), Φ₀ in missions
+    (``s3_deadline.initial_window_for_missions``), D5's ``period_s`` and the
+    backhaul period ``P_bh = n_missions * T_nom``.
+
+    "Nominal" means every slice device is served and nothing fails (no
+    listen charge), priced with the physics ``feasibility_model`` carries
+    (the wide class in Phase 3, the declared payload, the predicted upload),
+    and one plan for every arm: the scheduler's own plan with no budget and
+    no selector, from the ferry dock (S1, S3, S3a with ``rf_range_m``, bucket
+    then distance order; Pass 2 nearest-first). The period therefore does
+    not depend on the arm being run, and it is a pure function of the layout.
+
+    It is Pass 1 (each leg's transit and predicted dwell, the return leg and
+    the upload) + ``turnaround_s`` + Pass 2 (each leg's transit and Pass-2
+    dwell, the return leg): the design §0 probe's sum, with the ferry model's
+    dwell and upload in place of its fixed 0.03 s per device.
+    ``feasibility_model`` must carry the ferry physics; its members are looked
+    up in this layout, whatever device map it was bound to.
+    """
+    from .stages.s3b_feasibility import RULE_NONE, FlightState  # noqa: WPS433
+
+    ferry = getattr(feasibility_model, "ferry", None)
+    if ferry is None:
+        raise FLSchedulerError(
+            "nominal_mission_period_s prices the mission on the mission clock: it "
+            "needs a FeasibilityModel carrying the ferry physics"
+        )
+    turn = float(turnaround_s)
+    if not (math.isfinite(turn) and turn >= 0.0):
+        raise FLSchedulerError(f"turnaround_s must be finite and >= 0, got {turnaround_s!r}")
+    positions = {}
+    for did, pos in device_positions.items():
+        pose = tuple(float(c) for c in pos)
+        if len(pose) != 3:
+            raise FLSchedulerError(f"position of {did!r} must be (x, y, z), got {pos!r}")
+        positions[did] = pose
+
+    planner = FLScheduler(now_fn=lambda: 0.0)
+    planner.ingest_slice(MissionSlice(
+        mule_id=MuleID("t_nom"), device_ids=tuple(positions),
+        issued_round=0, issued_at=0.0,
+    ))
+    for did, pose in positions.items():
+        planner.device_states[did].last_known_position = pose  # type: ignore[assignment]
+    model = dataclasses.replace(feasibility_model, ferry=ferry.bind(planner.device_states))
+    dock = model.ferry.dock
+    pass_1 = planner.build_contact_queue(rf_range_m=rf_range_m, mule_pose=dock)
+    pass_2 = planner.build_pass_2_queue(rf_range_m=rf_range_m, mule_pose=dock)
+    t_1 = model.fold(pass_1, FlightState(dock, 0.0), rule=RULE_NONE, budget_end=None,
+                     pass_kind=MissionPass.COLLECT, skip=False).home
+    t_2 = model.fold(pass_2, FlightState(dock, 0.0), rule=RULE_NONE, budget_end=None,
+                     pass_kind=MissionPass.DELIVER, skip=False).home
+    return t_1 + turn + t_2
+
+
+def median_nominal_mission_period_s(
+    layouts: Iterable[Mapping[DeviceID, Sequence[float]]],
+    *,
+    rf_range_m: float,
+    feasibility_model,
+    turnaround_s: float,
+) -> float:
+    """T_nom: the median of :func:`nominal_mission_period_s` over a cell's layouts.
+
+    One value per cell, the same for every arm (spec Q1). Deterministic: the
+    layouts come from the cell's seeds, and the period is a pure function of
+    each layout.
+    """
+    import statistics  # noqa: WPS433
+
+    periods = [
+        nominal_mission_period_s(
+            layout, rf_range_m=rf_range_m, feasibility_model=feasibility_model,
+            turnaround_s=turnaround_s,
+        )
+        for layout in layouts
+    ]
+    if not periods:
+        raise FLSchedulerError("median_nominal_mission_period_s needs at least one layout")
+    return float(statistics.median(periods))

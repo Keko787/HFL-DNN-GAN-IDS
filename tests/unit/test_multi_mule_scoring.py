@@ -42,7 +42,7 @@ from experiments.exp4.events_consumer import (
     consume_run_dir,
     observation_from_rows,
 )
-from experiments.exp4.metrics import summarise_observation
+from experiments.exp4.metrics import SIM_COLUMNS, summarise_observation
 
 A, B = "exp4-mule-0", "exp4-mule-1"
 SLICES = {A: ("a1", "a2"), B: ("b1", "b2")}
@@ -1082,13 +1082,19 @@ def test_the_recorded_cell_scores_as_it_did_with_one_mule(trial):
     want = RECORDED_ROWS[trial]
     assert score.n_mules == 1
     # Columns added since: the Phase 2 fleet provenance (one mule, the rest
-    # blank at their recorded values) and the count of uploads the cluster
-    # never folded, which one mule never has.
+    # blank at their recorded values), the count of uploads the cluster
+    # never folded, which one mule never has, and FeRRy Phase 3's: its
+    # provenance (blank at the recorded settings, bar the three this L1 cell
+    # ran that no CSV recorded before), the mission-clock metrics and the
+    # simulated time to τ, all blank on the wall clock.
+    phase_3 = set(SIM_COLUMNS) | {f"sim_s_to_tau{t:g}" for t in RECORDED_TAUS}
     added = set(row) - set(want) - {"trace_root"}
-    assert "n_mules" in added and added <= set(PROVENANCE_COLUMNS) | {"unmerged_missions"}
+    assert "n_mules" in added
+    assert added <= set(PROVENANCE_COLUMNS) | {"unmerged_missions"} | phase_3
     assert row["unmerged_missions"] == 0
+    recorded = {"n_mules": 1, "l1_channel": 1, "realism": 1, "input_dim": 21}
     assert {c: row[c] for c in added - {"unmerged_missions"}} == {
-        c: 1 if c == "n_mules" else "" for c in added - {"unmerged_missions"}
+        c: recorded.get(c, "") for c in added - {"unmerged_missions"}
     }
     for col, value in want.items():
         if isinstance(value, float):

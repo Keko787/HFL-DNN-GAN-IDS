@@ -1,5 +1,22 @@
 """EX-4.3 — RF channel environment for the L1 experiment (arm H3).
 
+FeRRy Phase 3 (unit U2): this module is now a re-export shim. ``ChannelModel``,
+``loss_from_snr``, ``BackhaulPlan`` and ``backhaul_plan`` moved verbatim to
+:mod:`hermes.l1.channel_model`: ``hermes`` must not import ``experiments``
+(finding A-01), and the ferry code that needs them lives in ``hermes``. The
+names below are the same objects, so every existing import (the driver's
+``--l1-channel`` path, the tests, the re-derivation of recorded traces) keeps
+working and computes the same numbers; ``tests/golden/test_golden_channel.py``
+pins them at afa9526. The model is maintained there, together with the
+seconds-axis channels of Phase 3, which use other names (``ContactChannel``,
+``BackhaulChannel``).
+
+The names are re-exported, not wrapped. ``backhaul_plan`` looks up
+``loss_from_snr``, ``best_average_band`` and ``AdaptiveChannelController`` in
+:mod:`hermes.l1.channel_model`, so a test that patches one of them must patch
+it there. Rebinding it on this module no longer reaches ``backhaul_plan``, as
+it did before the move; nothing in the repo relied on that.
+
 Models the mule->base-station backhaul as a set of RF channels whose
 effective SNR varies over the mission sequence, and turns a channel choice
 into a per-mission backhaul-loss probability. This is what lets adaptive
@@ -28,118 +45,20 @@ so no cross-process channel coordination is needed.
 
 from __future__ import annotations
 
-import math
-import random
-from dataclasses import dataclass
-from typing import List, Optional, Tuple
-
+from hermes.l1.channel_model import (
+    BackhaulPlan,
+    ChannelModel,
+    backhaul_plan,
+    loss_from_snr,
+)
+# The model's own imports were importable from here before the move; keep them.
 from hermes.l1.channel_utility import AdaptiveChannelController, best_average_band
 
-
-@dataclass
-class ChannelModel:
-    """Per-band effective SNR (dB) over the mission sequence.
-
-    ``snr(m, c) = base + g[c] + amplitude * sin(2*pi*(m/period + phase[c])) + noise``.
-    Jittery lowers the base and raises the amplitude/noise, so bands dip into
-    lossy troughs at different times.
-    """
-
-    n_bands: int = 3
-    n_missions: int = 4
-    seed: int = 0
-    jittery: bool = False
-
-    def __post_init__(self) -> None:
-        rng = random.Random((self.seed ^ 0x0C0FFEE) & 0x7FFFFFFF)
-        # Per-band static gain g(c) — modest spread so no band dominates.
-        self._g = [rng.uniform(0.0, 3.0) for _ in range(self.n_bands)]
-        # Distinct phases -> bands peak at different times (crossover).
-        self._phase = [i / self.n_bands for i in range(self.n_bands)]
-        rng.shuffle(self._phase)
-        self._noise = [
-            [rng.gauss(0.0, 1.5 if self.jittery else 0.4) for _ in range(self.n_bands)]
-            for _ in range(self.n_missions)
-        ]
-        self._base = 6.0 if self.jittery else 12.0
-        self._amp = 5.0 if self.jittery else 1.0
-        self._period = max(2, self.n_missions)
-
-    def snr(self, mission: int, band: int) -> float:
-        wave = self._amp * math.sin(
-            2.0 * math.pi * (mission / self._period + self._phase[band])
-        )
-        return self._base + self._g[band] + wave + self._noise[mission][band]
-
-    def snr_by_mission(self) -> List[List[float]]:
-        return [
-            [self.snr(m, b) for b in range(self.n_bands)]
-            for m in range(self.n_missions)
-        ]
-
-
-def loss_from_snr(snr_db: float, *, mid: float = 3.0, scale: float = 2.0) -> float:
-    """Backhaul upload-loss probability from effective SNR (logistic).
-
-    High SNR -> ~0 loss; SNR below ~``mid`` -> loss climbs toward 1. Tuned so
-    a healthy channel (~12 dB) loses ~1% and a deep trough (~1 dB) loses
-    ~70%+.
-    """
-    x = (snr_db - mid) / scale
-    return 1.0 / (1.0 + math.exp(x))
-
-
-@dataclass(frozen=True)
-class BackhaulPlan:
-    """Per-mission backhaul-loss schedule + the L1 trace behind it."""
-
-    loss_schedule: List[float]
-    chosen_bands: List[int]
-    mean_chosen_snr_db: float
-    adaptive: bool
-
-
-def backhaul_plan(
-    model: ChannelModel,
-    *,
-    adaptive: bool,
-    switch_cost: float = 0.5,
-    channel_use_cost: Optional[Tuple[float, ...]] = None,
-) -> BackhaulPlan:
-    """Turn the channel trace into a per-mission loss schedule.
-
-    ``adaptive=True`` (arm H3) runs the ``U(c,t)`` controller, tracking the
-    best band each mission; ``adaptive=False`` (arms H1/H2) holds the single
-    best-average band. Both read the same SNR trace.
-    """
-    snr_by_m = model.snr_by_mission()
-    chosen: List[int] = []
-    losses: List[float] = []
-    snrs: List[float] = []
-
-    if adaptive:
-        ctrl = AdaptiveChannelController(
-            channel_use_cost=channel_use_cost or tuple(0.0 for _ in range(model.n_bands)),
-            switch_cost=switch_cost,
-        )
-        current = -1
-        for snr_per_band in snr_by_m:
-            band = ctrl.select(snr_per_band, current)
-            current = band
-            chosen.append(band)
-            snrs.append(snr_per_band[band])
-            losses.append(loss_from_snr(snr_per_band[band]))
-    else:
-        fixed = best_average_band(snr_by_m)
-        for snr_per_band in snr_by_m:
-            chosen.append(fixed)
-            snrs.append(snr_per_band[fixed])
-            losses.append(loss_from_snr(snr_per_band[fixed]))
-
-    mean_snr = sum(snrs) / len(snrs) if snrs else 0.0
-    return BackhaulPlan(
-        loss_schedule=losses,
-        chosen_bands=chosen,
-        mean_chosen_snr_db=mean_snr,
-        adaptive=adaptive,
-    )
+__all__ = [
+    "AdaptiveChannelController",
+    "BackhaulPlan",
+    "ChannelModel",
+    "backhaul_plan",
+    "best_average_band",
+    "loss_from_snr",
+]

@@ -11,15 +11,26 @@ Per Design §2.5 / §6.7 this program owns:
 θ_gen never leaves Tier 2 (Design §7 principle 9). The generator object
 is injected, not constructed here, so the cluster stays decoupled from
 the GAN training stack and remains testable with a stub.
+
+FeRRy Phase 3 (``sim_clock=True``, design sections 2.2, 2.5 and 4.7). The
+cluster keeps no clock of its own: it receives simulated time only as data.
+It tracks :attr:`HFLHostCluster.sim_ts`, the latest ``UpBundle.sim_upload_ts``
+it has ingested (an upload's simulated COMPLETION time, critic B8), and every
+DOWN carries it as ``cluster_sim_ts`` so the mule can make its Lamport sync
+at the dock. It refuses wall-clock deadline overrides (critic B3), and
+forwards each device's latest contact SNR per band class, read off the Pass-1
+report lines, as ``registry_deltas[did]["spectrum_sig"]``. Without it (the
+default) nothing of this runs and every DOWN is the recorded one.
 """
 
 from __future__ import annotations
 
 import logging
+import math
 import threading
 import time
 from dataclasses import dataclass, field
-from typing import Callable, Dict, Iterable, List, Optional, Protocol, Tuple
+from typing import Callable, Dict, Iterable, List, Optional, Protocol, Sequence, Tuple
 
 import numpy as np
 
@@ -172,6 +183,12 @@ class HFLHostCluster:
     reports). Sprint 2's chunk-L orchestrator surfaces this through
     ``ClusterConfig.min_participation``. Under ``agg:fedbuff`` it does not
     apply: FedBuff's buffer size K is its quorum.
+
+    ``sim_clock`` (FeRRy Phase 3; off by default, as in every recorded run)
+    puts the simulated-time bookkeeping on: see the module docstring.
+    ``contact_band_classes`` names the contact link's band classes in index
+    order, to read a report line's ``band``; None is the D1 set (wide,
+    medium, narrow, and the optional 10 MHz class after them).
     """
 
     def __init__(
@@ -183,11 +200,22 @@ class HFLHostCluster:
         synth_batch_size: int = 32,
         min_participation: int = 1,
         aggregation: Optional[AggregationSpec] = None,
+        sim_clock: bool = False,
+        contact_band_classes: Optional[Sequence[str]] = None,
     ) -> None:
         self.registry = registry
         self.generator = generator
         self.dock = dock
         self.synth_batch_size = synth_batch_size
+        # FeRRy Phase 3 — simulated time as data (module docstring). Off, no
+        # attribute below is read, so the recorded paths are untouched.
+        self._sim_clock = bool(sim_clock)
+        self._sim_ts: Optional[float] = None
+        if contact_band_classes is None and self._sim_clock:
+            from hermes.l1.contact_link import CLASSES_WITH_10MHZ
+
+            contact_band_classes = CLASSES_WITH_10MHZ
+        self._band_names: Tuple[str, ...] = tuple(contact_band_classes or ())
         self.min_participation = min_participation
         # FeRRy Phase 1 — the L3 merge rule. The default, agg:plain, is the
         # merge every recorded run used and keeps its original code path.
@@ -207,6 +235,89 @@ class HFLHostCluster:
         # last amendment we shipped — kept so a re-docking mule can see what
         # it last acknowledged.
         self._last_amendment: ClusterAmendment = ClusterAmendment(cluster_round=0)
+
+    # ------------------------------------------------ simulated time (Phase 3)
+
+    @property
+    def sim_clock(self) -> bool:
+        """True when the cluster keeps the simulated-time bookkeeping."""
+        return self._sim_clock
+
+    @property
+    def sim_ts(self) -> Optional[float]:
+        """The latest simulated upload time ingested (None before any, or off).
+
+        An upload's ``sim_upload_ts`` is when it COMPLETED on the mule's
+        mission clock. Every bundle that reaches the open round counts: an
+        accepted partial, a refused one whose reports were still folded, and
+        the empty stand-in held for a lost upload (it keeps the lost UP's
+        time, critic B8). A duplicate resend, ignored whole, does not.
+        """
+        with self._lock:
+            return self._sim_ts
+
+    def _note_sim_upload(self, bundle: UpBundle) -> None:
+        """Advance :attr:`sim_ts` to ``bundle``'s upload time (caller holds the lock).
+
+        A stamp at or past the mission clock's ceiling is a wall-clock time,
+        never simulated time: it is logged and ignored, so the cluster never
+        echoes one (the mule would refuse the DOWN carrying it).
+        """
+        if not self._sim_clock:
+            return
+        ts = getattr(bundle, "sim_upload_ts", None)
+        if ts is None:
+            return
+        from hermes.l1.mission_clock import SIM_CEILING_S
+
+        if not ts < SIM_CEILING_S:
+            log.error(
+                "UpBundle from mule=%s carries sim_upload_ts=%r, a wall-clock stamp; "
+                "not taken as simulated time", bundle.mule_id, ts,
+            )
+            return
+        if self._sim_ts is None or ts > self._sim_ts:
+            self._sim_ts = float(ts)
+
+    def _note_contact_snr(self, bundle: UpBundle) -> None:
+        """Fold the report lines' ``(band, snr_db)`` into each device's SpectrumSig.
+
+        Design section 4.7, plumbing only: the latest reading per band class
+        wins. A line without a band or an SNR (a contact without a band, a
+        channel-free control) carries nothing; an unknown band index is
+        skipped. Caller holds the lock.
+        """
+        if not self._sim_clock:
+            return
+        for line in bundle.round_close_report.lines:
+            band = getattr(line, "band", None)
+            snr = getattr(line, "snr_db", None)
+            if band is None or snr is None:
+                continue
+            try:
+                name = self._band_names[int(band)]
+            except (IndexError, TypeError, ValueError):
+                log.debug("line of %s carries unknown band %r; skipped", line.device_id, band)
+                continue
+            if not isinstance(snr, (int, float)) or not math.isfinite(float(snr)):
+                continue
+            rec = self.registry.get(line.device_id)
+            if rec is None:
+                continue
+            rec.spectrum_sig = rec.spectrum_sig.with_contact_class_snr({name: float(snr)})
+
+    def _refuse_overrides(self, overrides, where: str) -> None:
+        """On the simulated clock, deadline overrides are refused (critic B3).
+
+        They are absolute wall-clock stamps, and a sim-mode mule refuses the
+        whole DOWN that carries them (a fatal ``MuleSupervisorError``).
+        """
+        if self._sim_clock and overrides:
+            raise ValueError(
+                f"{where}: deadline overrides for "
+                f"{sorted(map(str, overrides))} refused on the simulated mission clock: "
+                "they are wall-clock stamps"
+            )
 
     # -------------------------------------------------------------- registry
 
@@ -261,6 +372,7 @@ class HFLHostCluster:
                         self._pending.cluster_round,
                     )
                     return False
+                self._note_sim_upload(bundle)
                 n_undelivered = self._fold_bundle_reports(bundle)
                 log.warning(
                     "UpBundle from mule=%s for mission %d refused in "
@@ -276,6 +388,7 @@ class HFLHostCluster:
 
             self._pending.partials.append(bundle.partial_aggregate)
             self._pending.seen_mules.append(bundle.mule_id)
+            self._note_sim_upload(bundle)
             n_undelivered = self._fold_bundle_reports(bundle)
 
             log.info(
@@ -310,6 +423,8 @@ class HFLHostCluster:
                 device_id=line.device_id,
                 on_time=line.outcome.is_on_time(),
             )
+        # FeRRy Phase 3: the contact SNR per band class (sim clock only).
+        self._note_contact_snr(bundle)
 
         # Sprint 1.5 — fold the previous mission's delivery report.
         n_undelivered = 0
@@ -586,10 +701,18 @@ class HFLHostCluster:
         ``DeviceSchedulerState.last_known_position`` stays at the
         dataclass default ``(0, 0, 0)`` and every device clusters into
         one contact at origin.
+
+        FeRRy Phase 3, with ``sim_clock`` only: the bundle carries
+        ``cluster_sim_ts`` (:attr:`sim_ts`; None before any upload), each
+        slice member whose contact SNR is known gets
+        ``registry_deltas[did]["spectrum_sig"]``, and an amendment carrying
+        deadline overrides is refused (``ValueError``). The bundle signature
+        covers none of these, so a legacy DOWN signs as it always did.
         """
         with self._lock:
             mission_slice = self.make_mission_slice(mule_id)
             base_amendment = amendment or self._last_amendment
+            self._refuse_overrides(base_amendment.deadline_overrides, "dispatch_down_bundle")
             # Build a fresh amendment that carries the positions + priorities
             # for *this mule's* slice members, layered on top of any
             # amendment fields (deadline overrides, notes) the caller passed.
@@ -601,6 +724,8 @@ class HFLHostCluster:
                 patch = dict(registry_deltas.get(did, {}))
                 patch["last_known_position"] = rec.last_known_position
                 patch["delivery_priority"] = rec.delivery_priority
+                if self._sim_clock and rec.spectrum_sig.contact_class_snr_db:
+                    patch["spectrum_sig"] = rec.spectrum_sig
                 registry_deltas[did] = patch
             enriched_amendment = ClusterAmendment(
                 cluster_round=base_amendment.cluster_round,
@@ -608,12 +733,14 @@ class HFLHostCluster:
                 registry_deltas=registry_deltas,
                 notes=base_amendment.notes,
             )
+            sim_fields = {"cluster_sim_ts": self._sim_ts} if self._sim_clock else {}
             bundle = DownBundle(
                 mule_id=mule_id,
                 mission_slice=mission_slice,
                 theta_disc=self.generator.get_global_disc_weights(),
                 synth_batch=self.generator.make_synth_batch(self.synth_batch_size),
                 cluster_amendments=enriched_amendment,
+                **sim_fields,
             )
             sign_down_bundle(bundle)
             return bundle
@@ -630,8 +757,12 @@ class HFLHostCluster:
 
         Increments ``cluster_round``, clears pending state, and stores the
         amendment so future ``dispatch_down_bundle`` calls can reuse it.
+        On the simulated clock (``sim_clock``) deadline overrides are
+        refused (``ValueError``, before anything changes): they are
+        wall-clock stamps (critic B3).
         """
         with self._lock:
+            self._refuse_overrides(deadline_overrides, "close_cluster_round")
             self._cluster_round += 1
             amendment = ClusterAmendment(
                 cluster_round=self._cluster_round,

@@ -11,8 +11,10 @@ Design refs:
 
 from __future__ import annotations
 
+import dataclasses
+import math
 from dataclasses import dataclass, field
-from typing import Optional, Tuple
+from typing import Dict, Mapping, Optional, Tuple
 
 from .ids import DeviceID, MuleID
 
@@ -23,10 +25,42 @@ class SpectrumSig:
 
     ``last_good_snr_per_band`` keys are RF-band indices (matching whatever the
     radio runner uses — currently 0/1/2 for 3.32/3.34/3.90 GHz per slide 26).
+
+    FeRRy Phase 3 (design section 4.7, plumbing only): ``contact_class_snr_db``
+    is the device's latest contact SNR per band class of the contact link
+    (``"wide"``, ``"medium"``, ``"narrow"``), in dB. A cluster on the
+    simulated mission clock fills it from the ``(band, snr_db)`` of the Pass-1
+    lines it ingests and forwards it to the mule's scheduler as
+    ``registry_deltas[did]["spectrum_sig"]``; nothing in Phase 3 decides on
+    it. ``bands`` keeps its meaning (backhaul carrier indices). None, the
+    default and every legacy record, means nothing observed. It is left out
+    of equality and hashing, so signatures compare and hash as they always
+    did, and it is a plain dict so a DOWN bundle carrying it still crosses the
+    dock link's wire format: treat it as read-only and use
+    :meth:`with_contact_class_snr` to change it.
     """
 
     bands: Tuple[int, ...]
     last_good_snr_per_band: Tuple[float, ...]
+    contact_class_snr_db: Optional[Dict[str, float]] = field(default=None, compare=False)
+
+    def with_contact_class_snr(self, readings: Mapping[str, float]) -> "SpectrumSig":
+        """A copy whose ``contact_class_snr_db`` holds ``readings`` on top of the old ones.
+
+        The latest reading per class wins; a class not in ``readings`` keeps
+        its value. Booleans and non-finite readings are dropped (a NaN would
+        poison every later comparison). ``self`` is returned unchanged when
+        nothing usable is given.
+        """
+        clean = {
+            str(k): float(v) for k, v in readings.items()
+            if isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
+        }
+        if not clean:
+            return self
+        merged = dict(self.contact_class_snr_db or {})
+        merged.update(clean)
+        return dataclasses.replace(self, contact_class_snr_db=merged)
 
 
 @dataclass

@@ -206,8 +206,13 @@ class ClientMission:
 
     # ---------------------------------------------- advertisement
 
-    def build_ready_adv(self) -> FLReadyAdv:
-        """Build the next ``FLReadyAdv`` from the most recent round's metrics."""
+    def build_ready_adv(self, *, in_reply_to: int = 0) -> FLReadyAdv:
+        """Build the next ``FLReadyAdv`` from the most recent round's metrics.
+
+        ``in_reply_to`` is the ``solicit_id`` of the solicit being answered
+        (FeRRy Phase 3): the ferry mule only takes adverts that carry its own
+        contact's number. 0, the default, is an unnumbered solicit or a beacon.
+        """
         with self._lock:
             return FLReadyAdv(
                 device_id=self.device_id,
@@ -219,6 +224,7 @@ class ClientMission:
                 issued_at=time.time(),
                 local_loss=self._last_loss,
                 num_examples=self._last_num_examples,
+                in_reply_to=in_reply_to,
             )
 
     def emit_beacon(self) -> FLReadyAdv:
@@ -258,9 +264,12 @@ class ClientMission:
             )
         except RFLinkError:
             return None
+        # FeRRy Phase 3: echo the solicit's number in the advert and in the
+        # reply to the push that follows (0 for the legacy broadcast).
+        solicit_id = int(getattr(solicit, "solicit_id", 0) or 0)
 
         # Always reply so the mule sees our current state
-        adv = self.build_ready_adv()
+        adv = self.build_ready_adv(in_reply_to=solicit_id)
         self.rf.send_ready_adv(adv)
 
         if not adv.is_eligible() or adv.utility < self.fl_threshold:
@@ -285,9 +294,9 @@ class ClientMission:
         self.last_push_pass = push.pass_kind.value
 
         if push.pass_kind is MissionPass.DELIVER:
-            return self._handle_delivery_push(push)
+            return self._handle_delivery_push(push, in_reply_to=solicit_id)
 
-        return self._handle_collect_push(push)
+        return self._handle_collect_push(push, in_reply_to=solicit_id)
 
     def serve_delivery(self) -> Optional[MissionOutcome]:
         """Pass-2 explicit handler — same as :meth:`serve_once` but only
@@ -310,8 +319,9 @@ class ClientMission:
                 self.device_id, solicit.pass_kind.value,
             )
             return None
+        solicit_id = int(getattr(solicit, "solicit_id", 0) or 0)
 
-        adv = self.build_ready_adv()
+        adv = self.build_ready_adv(in_reply_to=solicit_id)
         self.rf.send_ready_adv(adv)
 
         try:
@@ -328,7 +338,7 @@ class ClientMission:
             )
             return MissionOutcome.PARTIAL
 
-        return self._handle_delivery_push(push)
+        return self._handle_delivery_push(push, in_reply_to=solicit_id)
 
     def train_offline(
         self, *, synth_batch: Optional[List[np.ndarray]] = None
@@ -400,8 +410,32 @@ class ClientMission:
 
     # ---------------------------------------------- pass-specific helpers
 
-    def _handle_collect_push(self, push: DiscPush) -> MissionOutcome:
-        """Pass-1 path — ship the prepared Δθ (or fall back to inline training)."""
+    def _handle_collect_push(
+        self, push: DiscPush, *, in_reply_to: int = 0,
+    ) -> MissionOutcome:
+        """Pass-1 path — ship the prepared Δθ (or fall back to inline training).
+
+        ``in_reply_to`` is the number of the solicit this contact answered; the
+        update carries it back so the mule can tell it from a late update of an
+        earlier contact (FeRRy Phase 3, critic B2). 0 when unnumbered.
+        """
+        # FeRRy Phase 3 — the mule's availability draw failed this contact's
+        # uplink (``DiscPush.uplink_drop``). As under EX-4.2 below, the device
+        # still received θ: it adopts the basis, trains ahead if asked, and
+        # keeps its prepared update for the next contact; nothing is sent. No
+        # local draw is made, so the device's own stream is not consumed.
+        if push.uplink_drop:
+            self._set_theta_basis(
+                push.theta_disc, push.synth_batch, version=push.basis_version,
+            )
+            self._set_last_outcome(MissionOutcome.TIMEOUT)
+            log.info(
+                "device=%s: Pass-1 contact uplink dropped by the mule's "
+                "availability draw", self.device_id,
+            )
+            if push.train_ahead:
+                self._start_train_ahead()
+            return MissionOutcome.TIMEOUT
         # EX-4.2 — short-range contact reliability. With prob
         # (1 - contact_reliability) this device's Δθ does not reach the mule
         # this contact (a failed short-range uplink, modelling Exp 3's
@@ -493,6 +527,7 @@ class ClientMission:
             local_loss=float(result.loss),
             basis_version=basis_version,
             update_form=form,
+            in_reply_to=in_reply_to,
         )
         self.rf.send_gradient(grad)
 
@@ -509,8 +544,13 @@ class ClientMission:
             self._start_train_ahead()
         return MissionOutcome.CLEAN
 
-    def _handle_delivery_push(self, push: DiscPush) -> MissionOutcome:
+    def _handle_delivery_push(
+        self, push: DiscPush, *, in_reply_to: int = 0,
+    ) -> MissionOutcome:
         """Pass-2 path — store θ' as new basis, ack receipt, train ahead.
+
+        ``in_reply_to`` (FeRRy Phase 3) is the number of the solicit this
+        delivery answered, echoed on the ack; 0 when unnumbered.
 
         H6 — design §7 principle 13 says the device "starts fresh local
         training immediately" after Pass-2 receipt. We honour that
@@ -531,6 +571,7 @@ class ClientMission:
             mission_round=push.mission_round,
             weights_sig=push.weights_sig,
             received_at=time.time(),
+            in_reply_to=in_reply_to,
         )
         self.rf.send_delivery_ack(ack)
 

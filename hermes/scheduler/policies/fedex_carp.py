@@ -175,6 +175,23 @@ gap the paper leaves open; each must be stated wherever D4 is reported.
     Either way, ``last_return_leg_s``, ``last_fits_without_return`` and
     ``last_overrun_without_return_s`` report the route as the simulator
     flies it until Phase 3 (no return leg), next to the FedEx view.
+
+    **On the mission clock (FeRRy Phase 3).** With the ferry model
+    (``FeasibilityModel.ferry`` set) the mule's pose is reset to the dock
+    before every mission and the return leg is flown and charged. The tour
+    is routed to the ferry dock in either mode, so at takeoff it is the
+    closed tour from the dock, the same route both legacy modes plan for a
+    mule at its dock; a ``depot`` other than the ferry dock is refused. The
+    diagnostics price the route with the shared predicate's legs
+    (``FeasibilityModel.leg``: transit plus the predicted dwell at rate) and
+    the return leg to the ferry dock, and the tour fits iff ``now + outbound
+    + return + upload <= mission deadline``: the Pass-1 upload at the dock
+    counts, as it does in every other arm's budget clause, and
+    ``last_upload_s`` reports it. ``last_tour_cost_s`` is then the time from
+    takeoff until the updates are at the dock. The ``*_without_return``
+    fields keep their legacy meaning (``now + outbound``), and the tour is
+    still never truncated (deviation 11): D4 has no in-flight check, so the
+    mule flies on and the overrun is recorded.
 14. **Local work.** A FedEx client trains continuously between visits
     (Delta_k local steps); a HERMES device trains a fixed amount per contact.
     That is a fidelity deviation of the FL process, outside this module, and
@@ -748,11 +765,20 @@ def _tour_parts_s(
     model: FeasibilityModel,
 ) -> Tuple[float, float]:
     """(outbound, return leg) seconds: every stop's transit + session from
-    ``start``, then the transit from the last stop to ``end``."""
+    ``start``, then the transit from the last stop to ``end``.
+
+    With the ferry model each stop costs its leg's marginal time instead,
+    transit plus the predicted dwell at rate (FeRRy Phase 3); the return leg
+    is transit only either way.
+    """
     outbound = 0.0
     pose: Sequence[float] = start
+    ferry = getattr(model, "ferry", None) is not None
     for wp in route:
-        _transit, leg = model.cost(tuple(pose), wp.position)
+        if ferry:
+            leg = model.leg(tuple(pose), wp).total_s
+        else:
+            _transit, leg = model.cost(tuple(pose), wp.position)
         outbound += leg
         pose = wp.position
     back = 0.0
@@ -771,10 +797,12 @@ def tour_time_s(
     """Time to fly ``route`` from ``start`` and home, priced with S3b's model.
 
     Home is ``end`` (the depot) when given, else ``start``. Each stop costs
-    ``model.cost``'s total (transit + session); the return leg costs its
+    ``model.cost``'s total (transit + session), or with the ferry model its
+    leg's transit + predicted dwell (FeRRy Phase 3); the return leg costs its
     transit only, since there is no session at the depot and eq. (9) counts
     no server-side time. An empty route costs 0: with nothing to visit the
-    mule does not take off.
+    mule does not take off. The Pass-1 upload is not flight time and is not
+    included (the policy's ferry diagnostics add it).
     """
     outbound, back = _tour_parts_s(route, start, start if end is None else end, model)
     return outbound + back
@@ -831,6 +859,9 @@ class FedExCarpPolicy:
         self.last_return_leg_s: Optional[float] = None
         self.last_fits_without_return: Optional[bool] = None
         self.last_overrun_without_return_s: Optional[float] = None
+        #: FeRRy Phase 3 (ferry model only): the predicted Pass-1 upload at
+        #: the dock included in ``last_tour_cost_s``; None in legacy mode.
+        self.last_upload_s: Optional[float] = None
 
     def admit_and_order(
         self,
@@ -854,8 +885,14 @@ class FedExCarpPolicy:
         self.last_return_leg_s = None
         self.last_fits_without_return = None
         self.last_overrun_without_return_s = None
+        self.last_upload_s = None
 
         start = env.mule_pose
+        ferry = getattr(feasibility_model, "ferry", None)
+        if ferry is not None:
+            return self._admit_on_the_mission_clock(
+                contacts, env, ferry, feasibility_model, mission_deadline_ts,
+            )
         if self.depot is None:
             home = start
             route = order_contacts(contacts, start, closed=True,
@@ -874,6 +911,51 @@ class FedExCarpPolicy:
             finish = env.now + self.last_tour_cost_s
             self.last_tour_fits = finish <= mission_deadline_ts
             self.last_tour_overrun_s = max(0.0, finish - mission_deadline_ts)
+            flown = env.now + outbound
+            self.last_fits_without_return = flown <= mission_deadline_ts
+            self.last_overrun_without_return_s = max(0.0, flown - mission_deadline_ts)
+        return route
+
+    def _admit_on_the_mission_clock(
+        self,
+        contacts: Sequence[ContactWaypoint],
+        env: SelectorEnv,
+        ferry,
+        model: FeasibilityModel,
+        mission_deadline_ts: Optional[float],
+    ) -> List[ContactWaypoint]:
+        """The ferry-model plan (FeRRy Phase 3, deviation 13's last paragraph).
+
+        The mule takes off from the ferry dock and flies home to it, so the
+        tour is the shortest path from ``env.mule_pose`` through every contact
+        to ``ferry.dock``: the closed tour from the dock whenever the mule is
+        there, as it is at every takeoff on the mission clock, and then the
+        very route the legacy branch plans. A ``depot`` other than the ferry
+        dock would plan a tour the mule does not fly, so it is refused.
+
+        Each stop is priced with the shared predicate's leg (transit plus the
+        predicted dwell at rate), the return leg to the dock is flown, and the
+        Pass-1 upload at the dock counts in the tour time, as it does in every
+        arm's budget clause. The tour is still never truncated (deviation 11).
+        """
+        dock = ferry.dock
+        if self.depot is not None and self.depot != tuple(dock):
+            raise ValueError(
+                f"FedExCarpPolicy depot {self.depot} is not the ferry dock {tuple(dock)}: "
+                "on the mission clock the mule flies home to the ferry dock"
+            )
+        route = order_contacts(contacts, env.mule_pose, end=dock,
+                               restarts=self.restarts, seed=self.seed)
+        outbound, back = _tour_parts_s(route, env.mule_pose, dock, model)
+        upload = ferry.upload_time_s() if route else 0.0
+        self.last_upload_s = upload
+        self.last_tour_cost_s = outbound + back + upload
+        self.last_return_leg_s = back
+        if mission_deadline_ts is not None:
+            finish = env.now + self.last_tour_cost_s
+            self.last_tour_fits = finish <= mission_deadline_ts
+            self.last_tour_overrun_s = max(0.0, finish - mission_deadline_ts)
+            # The legacy meaning (deviation 13): now + outbound, no return leg.
             flown = env.now + outbound
             self.last_fits_without_return = flown <= mission_deadline_ts
             self.last_overrun_without_return_s = max(0.0, flown - mission_deadline_ts)

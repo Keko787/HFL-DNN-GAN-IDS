@@ -34,6 +34,26 @@ its own mule's slice rather than the whole population. With one mule the
 slice is every device, and nothing changes. ``t_at_tau_round`` still counts
 cluster rounds, about K per mission period with K mules; the trace scorer's
 ``missions_to_τ`` is the unit that compares across fleet sizes.
+
+FeRRy Phase 3 — the simulated mission clock (``Exp4Observation.mission_clock
+== "sim"``, critic B13). ``mission_duration_s_mean`` stays what it always
+was, the wall time of a mission, which on the mission clock measures host
+compute and TTL waits, not flight. Its simulated equivalent is
+``sim_mission_duration_s_mean``, takeoff to the Pass-2 landing on the clock;
+beside it, the clock's ledger per mission (transit, dwell, listen, return,
+upload, turnaround, dock_wait; they sum to the duration), the SIMULATED
+energy (``energy_status``; the Zeng-Xu-Zhang 2019 model, a labelled
+simulation, not a measurement), the budget overrun (its mean, and the share
+of budgeted missions that overran: the overrun rate the build plan's
+deviation 11 asks to report) and the trial's re-plans, aborts and beacon
+inserts. All of these are blank on the wall clock, and every column above
+keeps its meaning there. The simulated time to τ is the trace scorer's
+(``sim_s_to_τ``). On the mission clock solicits are targeted at a contact's
+members, so ``coverage``, ``jains_fairness`` and ``participation_entropy``
+(from the devices' serve counts) count member contacts only, where on the
+wall clock they also count every non-member timing out on a broadcast (see
+:mod:`experiments.exp4.events_consumer`): ferry and wall-clock rows do not
+compare on those three.
 """
 
 from __future__ import annotations
@@ -51,8 +71,24 @@ from experiments.exp3.metrics import (
     mission_completion_rate,
     participation_entropy,
 )
+from hermes.processes.config import CLOCK_SIM
 
 from .events_consumer import Exp4Observation, MissionKey, MissionRecord, ModelEvalPoint
+
+#: The mission clock's ledger kinds (``hermes.l1.mission_clock.LEDGER_KINDS``)
+#: and the column each one's per-mission mean goes to.
+SIM_LEDGER_COLUMNS = (
+    ("transit", "sim_transit_s_mean"),
+    ("dwell", "sim_dwell_s_mean"),
+    ("listen", "sim_listen_s_mean"),
+    ("return", "sim_return_s_mean"),
+    ("upload", "sim_upload_s_mean"),
+    ("turnaround", "sim_turnaround_s_mean"),
+    ("dock_wait", "sim_dock_wait_s_mean"),
+)
+
+#: What ``energy_status`` says on the mission clock: the energy is modelled.
+ENERGY_SIMULATED = "simulated"
 
 
 @dataclass(frozen=True)
@@ -103,6 +139,26 @@ class Exp4MetricSummary:
     t_at_tau_round: Optional[int] = None
     tau: Optional[float] = None
 
+    # FeRRy Phase 3 — the mission clock (module docstring). None (blank) on
+    # the wall clock. Per-mission means over the trial's missions, in
+    # simulated seconds; the counts are the trial's totals.
+    sim_mission_duration_s_mean: Optional[float] = None
+    sim_transit_s_mean: Optional[float] = None
+    sim_dwell_s_mean: Optional[float] = None
+    sim_listen_s_mean: Optional[float] = None
+    sim_return_s_mean: Optional[float] = None
+    sim_upload_s_mean: Optional[float] = None
+    sim_turnaround_s_mean: Optional[float] = None
+    sim_dock_wait_s_mean: Optional[float] = None
+    sim_energy_j_mean: Optional[float] = None       # SIMULATED (energy_status)
+    energy_status: Optional[str] = None
+    #: Over the missions flown with a budget; blank without one.
+    sim_budget_overrun_s_mean: Optional[float] = None
+    sim_budget_overrun_rate: Optional[float] = None
+    sim_replans: Optional[int] = None
+    sim_aborts: Optional[int] = None
+    sim_inserts: Optional[int] = None
+
     def to_row(self) -> Dict[str, object]:
         return {
             "update_yield": self.update_yield,
@@ -137,6 +193,7 @@ class Exp4MetricSummary:
             "rounds_evaluated": self.rounds_evaluated,
             "t_at_tau_round": _blank(self.t_at_tau_round),
             "tau": _blank(self.tau),
+            **{col: _blank(getattr(self, col)) for col in SIM_COLUMNS},
         }
 
     @staticmethod
@@ -174,7 +231,23 @@ class Exp4MetricSummary:
             "rounds_evaluated",
             "t_at_tau_round",
             "tau",
+            *SIM_COLUMNS,
         ]
+
+
+#: The FeRRy Phase 3 columns, in row order, after every earlier one (so each
+#: earlier column keeps its place relative to the others).
+SIM_COLUMNS = (
+    "sim_mission_duration_s_mean",
+    *(col for _kind, col in SIM_LEDGER_COLUMNS),
+    "sim_energy_j_mean",
+    "energy_status",
+    "sim_budget_overrun_s_mean",
+    "sim_budget_overrun_rate",
+    "sim_replans",
+    "sim_aborts",
+    "sim_inserts",
+)
 
 
 def summarise_observation(
@@ -328,7 +401,44 @@ def summarise_observation(
         rf_range_m=float(rf_range_m),
         n_missions_target=int(n_missions_target),
         **conv,
+        **_sim_summary(obs),
     )
+
+
+def _sim_summary(obs: Exp4Observation) -> Dict[str, object]:
+    """The FeRRy Phase 3 columns of a trial on the mission clock; {} on the wall clock.
+
+    Means are per mission, over the missions that record the figure (on the
+    mission clock every one does, empty missions included: an empty mission
+    still flies, returns and turns around). The budget overrun counts only
+    missions flown under a budget, and a mission overran when it ended past
+    it by any amount. Re-plans, aborts and inserts are the trial's totals.
+    """
+    if obs.mission_clock != CLOCK_SIM:
+        return {}
+    missions = obs.missions
+
+    def mean(values) -> Optional[float]:
+        values = [float(v) for v in values if v is not None]
+        return sum(values) / len(values) if values else None
+
+    ledgers = [m.ledger() for m in missions if m.sim_ledger is not None]
+    overruns = [m.budget_overrun_s for m in missions if m.budget_overrun_s is not None]
+    out: Dict[str, object] = {
+        "sim_mission_duration_s_mean": mean(m.sim_duration_s for m in missions),
+        "sim_energy_j_mean": mean(m.energy_j for m in missions),
+        "energy_status": ENERGY_SIMULATED,
+        "sim_budget_overrun_s_mean": mean(overruns),
+        "sim_budget_overrun_rate": (
+            sum(1 for v in overruns if v > 0.0) / len(overruns) if overruns else None
+        ),
+        "sim_replans": sum(m.replans or 0 for m in missions),
+        "sim_aborts": sum(m.aborts or 0 for m in missions),
+        "sim_inserts": sum(m.inserts or 0 for m in missions),
+    }
+    for kind, col in SIM_LEDGER_COLUMNS:
+        out[col] = mean(ledger.get(kind, 0.0) for ledger in ledgers)
+    return out
 
 
 def summarise_flat_fl(

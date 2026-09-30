@@ -61,6 +61,18 @@ Term mapping, paper -> mule:
   scheduler may plan after the mission started, so it is not
   ``mission_budget_s`` itself (deviation 6).
 
+**Under the ferry predicate (FeRRy Phase 3).** The mapping above is the legacy
+model's (``FeasibilityModel.ferry`` None). With the ferry model the arm is
+priced with the same physics as every other arm (design §3.2): the selection
+key's ``total_c`` becomes the leg's marginal time ``transit_c + dwell_c``,
+where t^UL_k is the predicted dwell ``Σ bytes / rate`` over the contact's
+reachable members rather than a constant, and admission is S3b's single
+predicate under the budget rule, which also requires the mule to fly home
+from the contact and upload before the budget ends. That return leg plus the
+upload plays the part of T_agg (bringing the updates to the server), so
+"T_cs = T_agg = 0 (S3b has no return leg)" holds for the legacy model only,
+and the energy clause applies when a capacity is set.
+
 Deviations from the paper, each with its reason:
 
 1. **No Resource Request; last-known state instead.** A mule cannot poll a
@@ -114,14 +126,18 @@ Deviations from the paper, each with its reason:
     IN_FLIGHT_BUDGET``).
 
 **Skip versus stop.** Line 4 removes the pick whether or not it is admitted,
-and the loop continues; this port does the same. For the ``unit`` key it makes
-no difference: the pick has the smallest ``total`` of all remaining contacts,
-and a rejection leaves pose and clock unchanged, so every remaining contact
-costs at least as much and fails too. Skip then returns the same route as
-stopping at the first miss, consistent with the paper's stated O(|K'||S|).
-For the ``devices`` key a rejected dense far contact can be
-followed by a sparse near one that fits, so skipping matters there. The loop
-is O(|K'|^2) cost evaluations, trivial at our contact counts.
+and the loop continues; this port does the same. For the ``unit`` key under
+the legacy model it makes no difference: the pick has the smallest ``total``
+of all remaining contacts, and a rejection leaves pose and clock unchanged, so
+every remaining contact costs at least as much and fails too. Skip then
+returns the same route as stopping at the first miss, consistent with the
+paper's stated O(|K'||S|). For the ``devices`` key a rejected dense far
+contact can be followed by a sparse near one that fits, so skipping matters
+there. Under the ferry predicate the equivalence no longer holds for either
+key: admission tests the time back home, not the marginal time the key ranks
+on, so a contact with a larger ``total`` that lies nearer the dock can fit
+after a nearer-to-the-mule one fails. The loop is O(|K'|^2) cost evaluations,
+trivial at our contact counts.
 
 **What it reduces to, stated honestly.** Under S3b's cost model the arm sees
 no per-device resource signal except position and device count. With
@@ -148,7 +164,11 @@ from hermes.scheduler.selector.scope_guard import (
     SelectorScopeViolation,
     assert_candidates_admitted,
 )
-from hermes.scheduler.stages.s3b_feasibility import FeasibilityModel
+from hermes.scheduler.stages.s3b_feasibility import (
+    RULE_BUDGET,
+    FeasibilityModel,
+    FlightState,
+)
 
 from .budget_walk import IN_FLIGHT_BUDGET
 
@@ -187,6 +207,7 @@ def fedcs_greedy_select(
     now: float,
     mission_deadline_ts: Optional[float],
     model: Optional[FeasibilityModel] = None,
+    state: Optional[FlightState] = None,
 ) -> List[ContactWaypoint]:
     """Algorithm 3 on the mule's cost model; returns the ordered route.
 
@@ -194,33 +215,40 @@ def fedcs_greedy_select(
     each pick whether or not it fits (skip, not stop), and advances pose and
     clock only on admission. ``mission_deadline_ts=None`` admits every contact
     in the same greedy order.
+
+    The pick ranks on the leg's marginal time (``FeasibilityModel.leg``) and
+    the admission test is S3b's single predicate under the budget rule
+    (``FeasibilityModel.admit``); in legacy mode those are exactly
+    ``cost()``'s total and ``clock + total <= mission_deadline_ts``.
+    ``state`` (FeRRy Phase 3) starts from a flight state, energy spent
+    included, instead of ``(mule_pose, now)``.
     """
     if value not in VALUE_KINDS:
         raise ValueError(f"value must be one of {VALUE_KINDS}, got {value!r}")
     m = model or FeasibilityModel()
     remaining: List[ContactWaypoint] = list(contacts)
     route: List[ContactWaypoint] = []
-    pose: MulePose = tuple(mule_pose)  # type: ignore[assignment]
-    clock = float(now)
+    cur = state if state is not None else FlightState(
+        tuple(mule_pose), float(now))  # type: ignore[arg-type]
 
     while remaining:
         # Line 3: price every candidate from where the route currently ends.
         best_i = 0
         best_key: Optional[tuple] = None
-        best_total = 0.0
         for i, wp in enumerate(remaining):
-            _transit, total = m.cost(pose, wp.position)
+            total = m.leg(cur.pose, wp).total_s
             key = _selection_key(wp, total, value)
             if best_key is None or key < best_key:
-                best_i, best_key, best_total = i, key, total
+                best_i, best_key = i, key
         # Line 4: removed unconditionally, before the admission test.
         x = remaining.pop(best_i)
-        # Lines 6-7, with <= (deviation 5) and T_cs = T_agg = 0.
-        if mission_deadline_ts is not None and clock + best_total > mission_deadline_ts:
+        # Lines 6-7, with <= (deviation 5): the shared predicate, budget rule
+        # (no gate without a deadline). T_cs = T_agg = 0 in legacy mode.
+        verdict = m.admit(cur, x, rule=RULE_BUDGET, budget_end=mission_deadline_ts)
+        if not verdict.ok:
             continue
         # Lines 8-9.
-        clock += best_total
-        pose = tuple(x.position)  # type: ignore[assignment]
+        cur = verdict.next_state
         route.append(x)
     return route
 
