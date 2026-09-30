@@ -337,13 +337,13 @@ in legacy mode unless a study sets otherwise. Each switch is recorded here when 
 | L3 merge rule `agg:fedex` | — | FedEx-Async's θ + η·Σ Δθ / N per return | Phase 2, commit `c417554` (§5i) |
 | Mission clock (`MuleConfig`/`ClusterConfig.mission_clock`, `--mission-clock`) | `wall`: `time.time` stamps every mission-time read (plans, deadlines, the budget, contact outcomes); the pose carries over between missions | `sim`: one `MissionClock` per mule process (`l1/mission_clock.py`; epoch 1e6 s, refused at 1e9 s so simulated and wall stamps never mix), charged by transit, dwell, listen, return, upload, turnaround and dock wait and never paced; every mission-time stamp from it; the pose reset to the dock at each takeoff; the budget stamped at takeoff, Pass 2's at its own takeoff; the cluster echoes the latest simulated upload it ingested (`cluster_sim_ts`), and the mule syncs to it at the dock. H0 is refused on it (critic A5) | Phase 3, commit `ef1faa1` (§5j) |
 | Contact band (`MuleConfig.contact_band`, `contact_band_classes`, `--contact-band`) | none: one `rf_range_m` for every stop; a broadcast solicit (on the wall clock); 1 s per contact in the cost model | `wide`, `medium` or `narrow` (decision D1; the re-baselines fly `wide`): S3a radius R_planar(b); numbered solicits to the stop's members only, gated at arrival by range and the SNR floor; dwell = 8·bytes / rate(b, SNR) charged to the clock and priced by S3b; band and SNR on the report lines. On the mission clock without a band (the channel-free control) solicits are targeted too, and a contact costs 1 s plus the listen window when a reply is missing | Phase 3, commit `ef1faa1` (§5j) |
-| Response when the remaining queue stops fitting (`MuleConfig.in_flight_response`, `replan_fallback`) | `abort` the rest (Amendment 1, A1; the per-policy rule of Amendment 8) | `replan`: the whole remainder checked at every departure and repaired by `FLScheduler.replan_remainder`. Our arms keep their own order over what S3b re-admits when it fits; otherwise `replan_fallback` decides: `reorder` (2-OPT, then S3b's admission order; whenever the pre-flight check fires, H1, H2 and H3 fly the same route) or `trim` (each arm keeps its order and drops the stops that order cannot serve, so it serves fewer). D1–D3 and D5 re-admit through their own `admit_and_order`, D4 flies on and records its overrun, Pass 2 is a nearest-first budget walk. Drops are final for the mission and widened at the simulated drop time. The pilot chooses the H arms' setting (critics B5, C3) | Phase 3, commit `ef1faa1` (§5j) |
+| Response when the remaining queue stops fitting (`MuleConfig.in_flight_response`, `replan_fallback`) | `abort` the rest (Amendment 1, A1; the per-policy rule of Amendment 8) | `replan`: the whole remainder checked at every departure and repaired by `FLScheduler.replan_remainder`. Our arms keep their own order over what S3b re-admits when it fits; otherwise `replan_fallback` decides: `reorder` (2-OPT, then S3b's admission order; whenever the pre-flight check fires, H1, H2 and H3 fly the same route) or `trim` (each arm keeps its order and drops the stops that order cannot serve, so it serves fewer). D1–D3 and D5 re-admit through their own `admit_and_order`, D4 flies on and records its overrun, Pass 2 is a nearest-first budget walk. Drops are final for the mission and widened at the simulated drop time. The pilot plan, decided 2026-09-29, flies `replan` with `trim`, so each arm keeps its own order, as the D arms do (critics B5, C3; Run Guide §2.6) | Phase 3, commit `ef1faa1` (§5j) |
 | Pre-flight order check (`FLScheduler(validate_flown_order=...)`) | off | on under `replan`, set by the mule: the order the arm will fly is folded before takeoff and repaired as above; needs the ferry model and a budget (no budget, no gate) | Phase 3, commit `ef1faa1` (§5j) |
 | Backhaul model (`MuleConfig`/`ClusterConfig.backhaul_model`, `backhaul_policy`, `backhaul_regime`, `--backhaul-model`) | `mission`: the cluster's recorded loss (the flat `--realism` percentage, or the `--l1-channel` schedule by mission round, Amendment 5), drawn from a stream; on the mission clock the upload is still charged, timed at the fixed carrier's noise-free mean SNR | `seconds` (mission clock only): three carriers' SNR at the simulated upload start, period P_bh = `n_missions` × T_nom; the fixed carrier argmax g_c for every arm but H3, whose U(c, t) controller picks at every upload; p_loss = `loss_from_snr` (1.0 below the SNR floor, charged the floor-rate time); the loss drawn keyed by (trial seed, mule, mission round), so every arm faces the same uniform for a mission (common random numbers), though each arm's p_loss is its own, read at its own upload start and on its own carrier; the flat percentage set to 0. About 16 % of uploads lost when jittery at the fixed carrier, against today's flat 2 % (critic A4). Refused with `--l1-channel`; chosen per study | Phase 3, commit `ef1faa1` (§5j) |
 | Contact reliability (`MuleConfig.contact_reliability_source`, `device_availability`) | `origin`: each device draws rel × rf_factor (distance to the origin) from its own stream | `channel` (needs a band): the SNR gate at the stop, and the availability rel_i drawn on the mule keyed by (trial seed, device, mission round); the devices are built with `contact_reliability=None`. The ground-truth map reaches no scheduler, policy, L1 state or event, only its size does; it lives in the mule's configuration alone (critic B16). Pass 2 faces the SNR gate only | Phase 3, commit `ef1faa1` (§5j) |
-| Deadline time unit (`MuleConfig.deadline_time_scale`, `initial_window_s`) | 1.0 and None (Φ₀ = 60 s) | every time constant of the law (the additive −5 s / +10 s steps and 5 s floor, the multiplicative clamps, Φ₀) times the scale. Φ₀ is stated in the law's recorded unit and scaled, so None and 60 are the same Φ₀ at any scale. A numeric scale and Φ₀ in seconds are valid on either clock; the driver's `t_nom` (T_nom / 10 s) and `--initial-window-missions` (Φ₀ in missions, critic A7) need the mission clock. Values set at the pilot | Phase 3, commit `ef1faa1` (§5j) |
+| Deadline time unit (`MuleConfig.deadline_time_scale`, `initial_window_s`) | 1.0 and None (Φ₀ = 60 s) | every time constant of the law (the additive −5 s / +10 s steps and 5 s floor, the multiplicative clamps, Φ₀) times the scale. Φ₀ is stated in the law's recorded unit and scaled, so None and 60 are the same Φ₀ at any scale. A numeric scale and Φ₀ in seconds are valid on either clock; the driver's `t_nom` (T_nom / 10 s) and `--initial-window-missions` (Φ₀ in missions, critic A7) need the mission clock. The pilot plan, decided 2026-09-29, sets `t_nom`, so with the default Φ₀ each device starts with about six missions' worth of window, as in the recorded runs | Phase 3, commit `ef1faa1` (§5j) |
 | Payload (`MuleConfig.payload_bytes`) | None: on the wall clock nothing is priced by bytes; on the mission clock the measured bytes (θ 18,756 B at 21 inputs; a Pass-1 session 37,576 B) | bytes per direction, declared (decision D3: 1 MB and 10 MB); they price the dwell and the upload while the real θ still crosses the link | Phase 3, commit `ef1faa1` (§5j) |
-| What Deadline(j) bounds (`MuleConfig.deadline_bounds`) | the arrival: clock + transit ≤ Deadline(j) | `collection` (spec Q2): arrival + dwell ≤ Deadline(j); or `delivery`: per stop, the finish plus that stop's own return plus the upload ≤ its Deadline(j) (the plan's single-contact predicate; it bounds the actual delivery, the route's landing plus the upload, only for the last stop) | Phase 3, commit `ef1faa1` (§5j) |
+| What Deadline(j) bounds (`MuleConfig.deadline_bounds`) | the arrival: clock + transit ≤ Deadline(j) | `collection` (spec Q2): arrival + dwell ≤ Deadline(j); `delivery_per_stop`: per stop, the finish plus that stop's own return plus the upload ≤ its Deadline(j) (the plan's single-contact predicate; it bounds the actual delivery, the route's landing plus the upload, only for the last stop; `delivery` at `ef1faa1`); or `delivery`: route-level, each admitted stop's home ≤ min(its own Deadline(j), `deliver_by`), so the priced landing plus the upload meets every collected deadline (drop reason `delivery`; an overrun at the stop where Pass 1 ends is recorded as `delivery_overrun_s`). Only our arms' deadline rule reads either delivery value | Phase 3, commit `ef1faa1`; the three values in commit `d175afa` (§5j, clock F1) |
 | Deadline overrides (`FLScheduler(refuse_deadline_overrides=...)`) | folded as sent (the cluster sends none) | refused on the mission clock, since they are wall-clock stamps (critic B3): the cluster will not issue one, and a mule that receives one fails, with `dock_bootstrap_failed` (exit 5) at the bootstrap or `mission_failed` (exit 3) at a later dock | Phase 3, commit `ef1faa1` (§5j) |
 | RF link token (`MuleConfig`/`DeviceConfig.rf_link_token`, `--rf-link-token`) | None: any registration accepted | one token per trial, derived from cell, arm, trial and seed, on by default exactly on the mission clock: a mule refuses a registration that carries another (Amendment 10) | Phase 3, commit `ef1faa1` (§5j) |
 | Newest solicit only (`DeviceConfig.newest_solicit_only`) | off: solicits answered in arrival order | on in every mission-clock cell: a device answers only its newest queued solicit, since the mule accepts only adverts that name the solicit it is gathering for (critic B1) | Phase 3, commit `ef1faa1` (§5j) |
@@ -352,7 +352,7 @@ in legacy mode unless a study sets otherwise. Each switch is recorded here when 
 | Simulated-order ingest (derived: mission clock, K > 1, and a quorum below K or `agg:fedbuff`; `TCPDockLinkServer(sim_markers=...)`) | off: UPs folded in arrival order, the recorded loop | the cluster holds each UP until no other mule can still send one that completed earlier (`SimOrderGate`) and folds in (`sim_upload_ts`, mule id) order; the dock queues registration, departure and clock markers with the UPs, and a mule whose dock connection ends counts as done. Needs `down_wait_s` on every mule (refused otherwise) | Phase 3, commit `ef1faa1` (§5j) |
 | D4's CARP split (rides `mission_clock`) | 1 s per client at the cost model's cruise speed | the predicted Pass-1 airtime of one client at R_planar(b)/2 (1 s without a band), at the cell's cruise speed | Phase 3, commit `ef1faa1` (§5j) |
 | Beacon inserts (`MuleSupervisor.offer_contact`) | none (decision D6) | mission clock only: an offered stop is inserted at its cheapest place only if the whole edited remainder passes the predicate, and never evicts a planned stop. Inert: nothing offers one in Phase 3 | Phase 3, commit `ef1faa1` (§5j) |
-| Driver wall budget (`--session-ttl-s`; the trial's hard kill) | a 3 s session TTL; the kill at `--trial-budget-s` (120 s); `down_wait_s` = that budget at K > 1 | the TTL set from the measured real-model fit time (at least 2×, a pilot); on the mission clock the kill is the larger of the budget and a bound built from the waits the code caps (562 s at a 3 s TTL, N = 6, one mule, 4 missions; K missions' worth per mission when the cluster orders uploads), and `down_wait_s` follows it | Phase 3, commit `ef1faa1` (§5j) |
+| Driver wall budget (`--session-ttl-s`; the trial's hard kill) | a 3 s session TTL; the kill at `--trial-budget-s` (120 s); `down_wait_s` = that budget at K > 1 | the TTL at least 2× the 95th percentile of the real model's `train_offline` time, measured with N devices training at once (the exit gate's concurrency; the pilot plan of 2026-09-29); on the mission clock the kill is the larger of the budget and a bound built from the waits the code caps (562 s at a 3 s TTL, N = 6, one mule, 4 missions; K missions' worth per mission when the cluster orders uploads), and `down_wait_s` follows it | Phase 3, commit `ef1faa1` (§5j) |
 | Analysis on simulated time (consumer and scorer) | the wall clock | the clock read from `mule_ready.mission_clock` (absent: wall, every recorded trace); missions ordered by their simulated ends; `sim_s_to_τ` beside `wall_s_to_τ`; 15 simulated columns; a trace whose clocks disagree is refused (`ClockDomainError`); without a trial CSV, a mission-clock marker's `ok` is relabelled `timeout` against the soft cap the runner applied (`soft_cap_s` in `trial_status.json`, written when `runner_main` ran the trial), not against the trial's own re-costed budget | Phase 3, commit `ef1faa1` (§5j) |
 | `plan_mode` | `legacy` | `ferry` | Phase 4, planned |
 | `band_class_policy` | — | `search`; `fixed:<class>` is Path B+ | Phase 4, planned |
@@ -769,7 +769,10 @@ afa9526's modules.
   and driver (a builder grid, stub trials, and every re-derivable kept trace in `results/`).
   Dataclasses are compared on their afa9526 fields only, so a default field added later passes and
   a removed or renamed one fails (critic A3). `pytest_baseline.txt` records the full suite at
-  afa9526: 6 failures, a baseline that awaits sign-off.
+  afa9526: 6 failures, a baseline the user signed off on 2026-09-29. The sixth, the real-model
+  smoke test (`test_exp4_real_model_synthetic_converges`), fails with `rounds_closed` 0 under load
+  and passes on an idle host. Open follow-up: fix it if the session-TTL pilot shows the cause is a
+  device's fit outrunning the 3 s TTL under load.
 - *The mission clock* (unit U1, `hermes/l1/mission_clock.py`): `MissionClock`, a zero-argument
   callable usable as `now_fn`, with `advance(dt, kind)`, the monotone `advance_to` and a
   per-mission ledger of seven kinds; negative, infinite and NaN charges are refused. `FlightModel`
@@ -809,7 +812,9 @@ afa9526's modules.
   re-plan within the mission reuses its plan's round, so recorded D2 planning is unchanged.
 - *Processes, driver, cluster and topology* (unit U7): the configuration fields and their guards;
   the simulated fields of `mule_ready`, `mission_started` and `mission_completed` (wall-clock
-  events at the defaults keep their recorded key sets), among them `pass_1_preflight_drops`, the
+  events at the defaults keep their recorded key sets; `delivery_overrun_s`, added in commit
+  `d175afa`, joins the simulated `mission_completed` only under `deadline_bounds = delivery`, so every
+  other value keeps its simulated key set as well), among them `pass_1_preflight_drops`, the
   Pass-1 pre-flight drops with their reasons, so an empty plan's trace says what emptied it (final
   check, E2E1-01); the cluster's simulated time and SpectrumSig forwarding; the ferry topology; 13
   provenance columns; T_nom per cell; the input-width pin (design R8: a real-model ferry cell must
@@ -884,18 +889,60 @@ below. None changes legacy behaviour, so none is an amendment.
   `dict()` accepts, so the unit cannot bypass the recorded `deadline_time_scale` column. afa9526
   refused the same configurations with the same exception type, so no recorded configuration
   changes.
-- *What `delivery` bounds (clock F1).* As built, the variant is the plan's single-contact
-  predicate, checked per stop (the §5g row; the deviations below), and a two-stop test in
-  `test_p3_feasibility_predicate.py` pins that reading. Keeping it, or making it a route-level
-  bound (a spec change: a `deliver_by` running minimum on `FlightState`), awaits the user's
-  decision. The default, `collection`, is unaffected.
+- *What `delivery` bounds (clock F1), decided 2026-09-29: keep both readings.* Landed in commit
+  `d175afa`, behind the switch (Rule 1; the §5g row). As `ef1faa1` built it, `delivery` was
+  the plan's single-contact predicate, checked per stop. That reading is now `delivery_per_stop`,
+  with the same arithmetic; the renamed two-stop test in `test_p3_feasibility_predicate.py` pins
+  it. `delivery` is now route-level: every update collected on the route must reach the cluster,
+  the route's landing plus the upload, by its own Deadline(j). It changed meaning with no rename
+  shim: the setting is sim-only and new in Phase 3, and no recorded run or committed trace used it.
+
+  *The predicate.* `FlightState` carries `deliver_by`, the earliest Deadline(j) of the updates on
+  board: ∞ at takeoff, and read or lowered only under `delivery`. Under `delivery` a stop's
+  clauses are tested in this order: its own deadline, home ≤ Deadline(j) as under
+  `delivery_per_stop` (`overdue`); the updates on board, home ≤ `deliver_by` (`delivery`); the
+  budget; the energy. Like the own-deadline clause, the on-board clause needs a budget and our
+  arms' deadline rule. An admitted stop that is not protected lowers `deliver_by` to its own
+  Deadline(j). A protected stop is still held to the updates on board but adds nothing, and a
+  rejected stop adds nothing either. Home never decreases along a route, so the priced landing plus
+  the upload meets every collected deadline.
+
+  *In flight* (Pass 1), the mule's departure state carries the minimum own Deadline(j) over every
+  member whose update was collected CLEAN at a stop already flown: the plan's Deadline(j), or an
+  inserted member's from its insertion. This equals S3b's pre-flight assumption when every planned
+  member answers and is never tighter. The departure check (`abort` or `replan`), the re-plan and
+  the beacon hook all start from that state. Tests pin a silent member's deadline staying off
+  board, alone or sharing a stop, an inserted member keeping its own deadline, and the beacon hook
+  refusing an insert that would land an update already on board late. The bound is checked at
+  departures only. A contact that runs longer than priced at the stop where Pass 1 ends (a silent
+  member's listen window, a noisy band) is not re-checked: the updates are on board and the only
+  way left is home, so an update can still land late, as the budget can be overrun.
+  `MissionRunResult.delivery_overrun_s` records by how much. It is in `mission_completed` under
+  `delivery` only, so every other value keeps its trace, and
+  `test_delivery_cannot_recheck_a_contact_that_overruns_where_the_flight_ends` pins the case.
+
+  Pass 2 and the whole-scheduler baselines have no deadline clause (D1–D3 and D5 check the budget,
+  D4 nothing), so `delivery` changes nothing they fly, and on their missions `delivery_overrun_s`
+  only measures. A `delivery` drop is widened like a budget drop, since the device was not late
+  itself, counts in S3c's planned, and is recorded with reason `delivery`
+  (`FeasibilityResult.dropped_delivery`, additive, listed after the other reasons). Before takeoff
+  the arm's own order can fail the on-board clause where S3b's admission order passed: `trim` then
+  drops the stop as `delivery`, and `reorder` repairs the order
+  (`test_delivery_drops_before_takeoff_join_last_feasibility`). No study has run `delivery`; the
+  scorer's deadline misses still measure the collection, and no CSV column reads
+  `delivery_overrun_s`. The default, `collection`, is unaffected: the goldens give 144 passed
+  before and after. Files: `stages/s3b_feasibility.py`, `routing/replan.py`, `fl_scheduler.py`,
+  `mule_main.py` and `mule/ferry.py`; `processes/config.py` and `processes/mule.py`; the Exp 4
+  `driver.py` and `runner_main.py`; 36 more test cases in seven existing test files.
 - *Known interaction (E2E1-01, no Phase 3 change).* On narrow, S3a forms one field-wide contact in
   about 98 % of realism layouts, and every gate admits contacts whole. Under a budget below that
   contact's predicted home time every gated arm flies empty missions. At the default deadline unit
   1.0 the deadline clause can bind first: H1–H3 then drop the contact as `overdue` at any budget,
   until missed missions widen its window past its predicted finish, and only the budget-only walks
   (D1–D3, D5) show the budget cliff. Phase 4's member-subset admission is the fix for the cliff
-  (Configuration Reference §17.1).
+  (Configuration Reference §17.1). *Decided 2026-09-29:* the fix is deferred to Phase 4, and
+  narrow and medium cells are not compared under budgets below the cliff until then; their budget
+  knees wait for Study 5.4.
 - *The hard kill's bound* (`ferry_wall_bound_s`) takes ceil(N/K) devices per slice. Angular or
   CARP slices can be unbalanced, so at K ≥ 3, when the cluster does not order the uploads (a full
   quorum, not FedBuff), an all-timeouts worst case can exceed it (slices of 7, 1 and 1 devices at a
@@ -914,11 +961,13 @@ below. None changes legacy behaviour, so none is an amendment.
   and is not a configuration field);
 - R(b) is the range with 90 % link availability at the edge (mean SNR 5.13 dB above the floor),
   not the floor-rate range, which for wide is about 111 m slant, 1.71× longer (critic A8-i);
-- Deadline(j) bounds the collection by default, arrival + dwell ≤ Deadline(j) (spec Q2): the
-  plan's single-contact min(Deadline(j), budget) on the time back at the dock is the
-  `deadline_bounds = delivery` variant, applied per stop to that stop's own return and upload, so
-  it bounds when an update is actually delivered only for a route's last stop; by default only the
-  budget bounds that time;
+- Deadline(j) bounds the collection by default, arrival + dwell ≤ Deadline(j) (spec Q2). The
+  plan's single-contact min(Deadline(j), budget) on the time back at the dock, applied per stop to
+  that stop's own return and upload, is `deadline_bounds = delivery_per_stop`; it bounds when an
+  update is actually delivered only for a route's last stop. `deadline_bounds = delivery` bounds
+  the priced delivery of every collected update (the route's landing plus the upload), and records
+  any in-flight overrun at the stop where Pass 1 ends as `delivery_overrun_s` (commit `d175afa`;
+  clock F1 above). By default only the budget bounds that time;
 - FedCS's "skip = stop" and its "no return leg" deviation hold only for the legacy model: under
   the ferry predicate admission tests the time back at the dock (docstring updated, critic B15);
 - H0 is excluded from the simulated clock (critic A5, §5g);
@@ -941,7 +990,23 @@ below. None changes legacy behaviour, so none is an amendment.
 **Re-run bill** (decision D2): every mule arm re-runs on the new clock: H1–H3, D1–D5 and, later,
 F. The Phase 3 exit gate re-baselines H1, D1, D2, D3 and D4 once the pilots have set the session
 TTL, T_nom per cell, the deadline time unit, the budget knee and the H arms' `replan_fallback`; it
-waits for the go-ahead.
+waits for the go-ahead. The pilot plan was decided on 2026-09-29 (Run Guide §2.6); no pilot has
+run yet:
+
+- the deadline unit is `--deadline-time-scale t_nom` (T_nom / 10 s), so with the default Φ₀ each
+  device starts with about six missions' worth of window, as in the recorded runs;
+- the ferry session TTL is at least 2× the 95th percentile of the real model's `train_offline`
+  time, measured at the exit gate's concurrency (N devices training at once);
+- the budget knee comes from an H1 sweep of `--mission-budget-s` on `wide`, with the measured
+  payload and the `t_nom` unit, for each N of the gate's grid: the knee is where the served
+  fraction stops rising. Narrow and medium knees wait for Study 5.4 (the cliff above);
+- the cells fly `--in-flight-response replan`, and the H arms' fallback is `--replan-fallback
+  trim`: each arm keeps its own order, as the D arms do, where `reorder` would make H1–H3 fly the
+  same route whenever the pre-flight check fires.
+
+A later pilot could run the knee sweep under both `trim` and `reorder` and choose by how often
+the pre-flight check fires and what each costs in coverage; that is an idea on record, not part of
+the plan.
 
 ## 6. Unfreezing
 
