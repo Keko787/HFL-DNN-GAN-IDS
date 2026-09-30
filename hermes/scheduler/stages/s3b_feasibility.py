@@ -54,8 +54,10 @@ the mission is priced on the simulated mission clock: a contact's dwell is
 ``Σ bytes / rate`` over the members predicted reachable, the mule must still
 fly home and upload inside the budget, and an energy clause, labelled
 simulated, can bind; it needs both a capacity and a budget (no budget, no
-gate). ``cost()`` is unchanged in both modes, because the D4 CARP split and
-the probes call it directly.
+gate). What ``Deadline(j)`` bounds there is a switch (:data:`DEADLINE_BOUNDS`):
+the collection (the default), each stop's own hypothetical return, or the
+route's actual delivery. ``cost()`` is unchanged in both modes, because the
+D4 CARP split and the probes call it directly.
 
 ``pass_kind`` may be given as a :class:`MissionPass` or as its string value
 (``"collect"``, ``"deliver"``); the predicate normalises it before pricing,
@@ -89,25 +91,57 @@ RULE_BUDGET = "budget"
 RULE_NONE = "none"
 RULES: Tuple[str, ...] = (RULE_DEADLINE_BUDGET, RULE_BUDGET, RULE_NONE)
 
-#: Why the predicate rejected a contact.
+#: Why the predicate rejected a contact. ``delivery`` (route-level
+#: ``deadline_bounds="delivery"`` only): serving the contact would deliver an
+#: update already on board after its deadline; the contact itself was not
+#: late. Appended last, so the order of the other three is unchanged.
 REASON_OVERDUE = "overdue"
 REASON_BUDGET = "budget"
 REASON_ENERGY = "energy"
-REASONS: Tuple[str, ...] = (REASON_OVERDUE, REASON_BUDGET, REASON_ENERGY)
+REASON_DELIVERY = "delivery"
+REASONS: Tuple[str, ...] = (REASON_OVERDUE, REASON_BUDGET, REASON_ENERGY, REASON_DELIVERY)
 
-#: What ``Deadline(j)`` bounds in ferry mode (spec Q2). ``collection``, the
-#: default: the mule must have finished the contact, ``arrival + dwell <=
-#: Deadline(j)`` — what the scorer tests and what "participate by" means.
-#: ``delivery``: the plan's single-contact formula, ``finish`` + the return
-#: from THIS stop + the upload ``<= Deadline(j)`` (:attr:`Verdict.home`): the
-#: update could have been delivered in time had the mule flown home right
-#: after the contact. It is checked per stop and does not bound when the
-#: update actually reaches the cluster, the route's landing plus the upload
-#: (:attr:`FoldResult.home` of the route), which is later for every stop but
-#: the last; a route-level bound would be a spec change.
+#: What ``Deadline(j)`` bounds in ferry mode (spec Q2; the user kept both
+#: delivery readings on 2026-09-29, final check clock F1).
+#:
+#: * ``collection``, the default: the mule must have finished the contact,
+#:   ``arrival + dwell <= Deadline(j)`` — what the scorer tests and what
+#:   "participate by" means.
+#: * ``delivery_per_stop``: the plan's single-contact formula, ``finish`` +
+#:   the return from THIS stop + the upload ``<= Deadline(j)``
+#:   (:attr:`Verdict.home`): the update could have been delivered in time had
+#:   the mule flown home right after the contact. Checked per stop, it does
+#:   not bound when the update actually reaches the cluster, the route's
+#:   landing plus the upload (:attr:`FoldResult.home` of the route), which is
+#:   later for every stop but the last. This is what ``delivery`` meant at
+#:   ef1faa1, renamed, with the same arithmetic.
+#: * ``delivery``: route-level. Every update collected on the route must
+#:   reach the cluster by its own ``Deadline(j)``. The stop's own clause is
+#:   the per-stop one, and a second clause holds its ``home`` to
+#:   :attr:`FlightState.deliver_by`, the earliest deadline of the updates
+#:   already on board (refused as :data:`REASON_DELIVERY`). ``home`` never
+#:   decreases along a route (the triangle inequality; dwell and upload are
+#:   >= 0), and the last stop's ``home`` is the route's landing plus the
+#:   upload, so holding every admitted stop to both clauses is exactly
+#:   holding the route's delivery, as priced, to every collected deadline.
+#:   The bound is on the priced route, like the budget clause: the mule
+#:   re-checks it at every departure (hermes/mule/mule_main.py), but a
+#:   contact that runs longer than priced (a silent member's listen window,
+#:   a noisy band) at the stop where Pass 1 ends is never re-checked, since
+#:   the updates are on board and the only way left is home, so the landing
+#:   can slip past ``deliver_by``. The mission records by how much
+#:   (``MissionRunResult.delivery_overrun_s``), as it records the budget's
+#:   overrun.
+#:
+#: ``delivery`` changed meaning after ef1faa1 with no rename shim: the setting
+#: is sim-only and new in Phase 3, and no recorded run or committed trace used
+#: it.
 DEADLINE_BOUNDS_COLLECTION = "collection"
+DEADLINE_BOUNDS_DELIVERY_PER_STOP = "delivery_per_stop"
 DEADLINE_BOUNDS_DELIVERY = "delivery"
-DEADLINE_BOUNDS: Tuple[str, ...] = (DEADLINE_BOUNDS_COLLECTION, DEADLINE_BOUNDS_DELIVERY)
+DEADLINE_BOUNDS: Tuple[str, ...] = (
+    DEADLINE_BOUNDS_COLLECTION, DEADLINE_BOUNDS_DELIVERY_PER_STOP, DEADLINE_BOUNDS_DELIVERY,
+)
 
 
 def _check_rule(rule: str) -> None:
@@ -128,11 +162,22 @@ class FlightState:
     simulated energy spent since takeoff (0 at the dock); only the ferry
     energy clause reads it, and the walks carry it forward so a re-plan does
     not restart from an empty tank (critic B10).
+
+    ``deliver_by`` is the earliest ``Deadline(j)`` of the updates on board:
+    the time by which the route must be back at the dock with the upload
+    done. Only the route-level ``deadline_bounds="delivery"`` clause reads
+    it, and only that mode lowers it (:meth:`FeasibilityModel.admit`); every
+    other mode, and the legacy model, carries it through untouched. The
+    default ``inf`` (nothing on board, as at takeoff) keeps every caller that
+    does not set it exactly where it was. A walk that starts mid-flight must
+    be given it, as it is given the energy spent, or it would forget the
+    updates it already carries.
     """
 
     pose: MulePose
     clock: float
     energy_j: float = 0.0
+    deliver_by: float = math.inf
 
 
 @dataclass(frozen=True)
@@ -247,9 +292,11 @@ class FerryPhysics:
       only describes the simulated battery (e.g. as ``E_ref`` for the L1
       state, design §4.6); a caller that means it as a limit must also set
       the budget.
-    * ``deadline_bounds``: :data:`DEADLINE_BOUNDS_COLLECTION` (default) or
-      :data:`DEADLINE_BOUNDS_DELIVERY` (spec Q2); both bound each stop on
-      its own, the latter by that stop's own return and upload.
+    * ``deadline_bounds``: :data:`DEADLINE_BOUNDS_COLLECTION` (default),
+      :data:`DEADLINE_BOUNDS_DELIVERY_PER_STOP` (each stop by its own
+      return and upload) or :data:`DEADLINE_BOUNDS_DELIVERY` (the route's
+      actual delivery by every collected deadline); see
+      :data:`DEADLINE_BOUNDS`.
     * ``range_m``: the stop's planar range R_planar(b). A member farther away
       is not solicited and costs no dwell; None skips the test (S3a already
       clusters within the range, so it only matters for stale positions).
@@ -473,25 +520,50 @@ class FeasibilityModel:
         ``budget_end`` is the absolute end of the budget; None switches every
         clause off, the energy clause included (the opt-in contract: no
         budget, no gate — in ferry mode too, so a ferry cell without a budget
-        stays a control). ``protected`` exempts the contact from the deadline
-        clause (Phase 4's capped devices).
+        stays a control). ``protected`` exempts the contact from its own
+        deadline clause (Phase 4's capped devices).
 
         Legacy (``ferry`` None) reproduces today's comparisons in today's
         order: overdue iff ``clock + transit > deadline_ts`` (deadline rule
         only), then over budget iff ``clock + total > budget_end``; the next
-        state is ``(wp.position, clock + total)``.
+        state is ``(wp.position, clock + total)``, the energy and
+        ``deliver_by`` carried through.
 
         Ferry: ``arrival = clock + transit``, ``finish = arrival + dwell``,
         ``home = finish + return + upload`` (the upload after Pass 1 only).
-        The deadline clause (deadline rule, not protected) is ``finish <=
-        deadline_ts``, or ``home <= deadline_ts`` under ``delivery`` (this
-        stop's own return: in a fold only the last stop's ``home`` is when
-        the route actually delivers); the budget clause (deadline and budget
-        rules) is ``home <= budget_end``; the energy clause (only with a
-        capacity, and like every clause only with a budget) is ``energy +
-        P_move * (transit + return) + P_hover * dwell <= capacity``. The next
-        state is ``(wp.position, finish, energy + P_move * transit + P_hover *
-        dwell)``. :data:`RULE_NONE` always admits and still reports ``home``.
+        The clauses, in the order they are tested (the first that fails is
+        the reason):
+
+        1. own deadline (deadline rule, not protected): ``finish <=
+           deadline_ts`` under ``collection``, ``home <= deadline_ts`` under
+           ``delivery_per_stop`` and ``delivery`` (this stop's own return);
+           ``overdue``;
+        2. on board (deadline rule, ``delivery`` only, protected or not):
+           ``home <= state.deliver_by``, so no update already carried would
+           land late as priced; ``delivery``;
+        3. budget (deadline and budget rules): ``home <= budget_end``;
+        4. energy (only with a capacity, and like every clause only with a
+           budget): ``energy + P_move * (transit + return) + P_hover * dwell
+           <= capacity``.
+
+        The two deadline clauses come first, as ``overdue`` always has: they
+        are the rule's own half, and a contact that fails a deadline is
+        reported so even when the budget would refuse it too. Of the two,
+        the stop's own is first: a contact that cannot make its own deadline
+        is refused for that whatever is on board. A protected contact is
+        exempt from its own deadline only: it is still held to the updates
+        on board, since serving it would make THEM late, and its own
+        deadline, which it may miss, does not lower ``deliver_by`` (it would
+        otherwise refuse every later stop for an update that is late
+        anyway).
+
+        The next state is ``(wp.position, finish, energy + P_move * transit +
+        P_hover * dwell, deliver_by)``, where ``deliver_by`` becomes
+        ``min(state.deliver_by, deadline_ts)`` for an admitted contact under
+        ``delivery`` whose own clause applied, and is carried through
+        unchanged otherwise (every other mode and rule, and a rejected
+        contact). :data:`RULE_NONE` always admits and still reports
+        ``home``.
         """
         _check_rule(rule)
         pass_kind = MissionPass(pass_kind)
@@ -510,18 +582,22 @@ class FeasibilityModel:
             return Verdict(
                 ok=reason is None, reason=reason, arrival=arrival, finish=finish,
                 home=finish,
-                next_state=FlightState(wp.position, finish, state.energy_j),
+                next_state=FlightState(wp.position, finish, state.energy_j, state.deliver_by),
             )
 
         leg = self.leg(state.pose, wp, pass_kind=pass_kind, snr_offset_db=snr_offset_db)
         arrival = state.clock + leg.transit_s
         finish = arrival + leg.dwell_s
         home = finish + leg.return_s + leg.upload_s
+        route_level = ferry.deadline_bounds == DEADLINE_BOUNDS_DELIVERY
         reason = None
         if check_deadline:
             bound = finish if ferry.deadline_bounds == DEADLINE_BOUNDS_COLLECTION else home
             if bound > wp.deadline_ts:
                 reason = REASON_OVERDUE
+        if (reason is None and route_level and gated and rule == RULE_DEADLINE_BUDGET
+                and home > state.deliver_by):
+            reason = REASON_DELIVERY
         if reason is None and gated and home > budget_end:
             reason = REASON_BUDGET
         if reason is None and gated and ferry.energy_capacity_j is not None:
@@ -530,9 +606,12 @@ class FeasibilityModel:
             if need > ferry.energy_capacity_j:
                 reason = REASON_ENERGY
         spent = state.energy_j + ferry.p_move_w * leg.transit_s + ferry.p_hover_w * leg.dwell_s
+        deliver_by = state.deliver_by
+        if route_level and check_deadline and reason is None:
+            deliver_by = min(deliver_by, wp.deadline_ts)
         return Verdict(
             ok=reason is None, reason=reason, arrival=arrival, finish=finish, home=home,
-            next_state=FlightState(wp.position, finish, spent),
+            next_state=FlightState(wp.position, finish, spent, deliver_by),
         )
 
     def fold(
@@ -553,7 +632,10 @@ class FeasibilityModel:
         contact is left out and the state does not move. ``skip=False`` asks
         whether the route passes *as flown*: every contact is flown, a
         rejected one is reported, and :attr:`FoldResult.ok` is the answer.
-        A contact in ``protected`` skips the deadline clause.
+        A contact in ``protected`` skips its own deadline clause. Each
+        contact is priced from the state the previous one left, so under
+        ``deadline_bounds="delivery"`` the deadlines of the admitted
+        contacts ride along in :attr:`FlightState.deliver_by`.
         """
         _check_rule(rule)
         pass_kind = MissionPass(pass_kind)
@@ -619,15 +701,26 @@ class FeasibilityResult:
     #: empty in legacy mode and without a capacity. Counted in ``n_dropped``;
     #: a reader that widens the dropped devices must include it (critic B10).
     dropped_energy: List[ContactWaypoint] = field(default_factory=list)
+    #: Contacts the route-level on-board clause refused
+    #: (:data:`REASON_DELIVERY`): serving them would have delivered an update
+    #: already on board late. Always empty unless ``deadline_bounds`` is
+    #: ``delivery``. Counted in ``n_dropped``; a reader that widens the
+    #: dropped devices must include it, as it includes ``dropped_budget``
+    #: (the device was not late itself either).
+    dropped_delivery: List[ContactWaypoint] = field(default_factory=list)
 
     @property
     def n_dropped(self) -> int:
-        return len(self.dropped_overdue) + len(self.dropped_budget) + len(self.dropped_energy)
+        return (len(self.dropped_overdue) + len(self.dropped_budget) + len(self.dropped_energy)
+                + len(self.dropped_delivery))
 
     @property
     def dropped(self) -> List[ContactWaypoint]:
-        """Every dropped contact: overdue, then over budget, then energy."""
-        return list(self.dropped_overdue) + list(self.dropped_budget) + list(self.dropped_energy)
+        """Every dropped contact: overdue, then over budget, then energy, then
+        on-board delivery (the last is empty in every mode but ``delivery``,
+        so the others keep their order)."""
+        return (list(self.dropped_overdue) + list(self.dropped_budget)
+                + list(self.dropped_energy) + list(self.dropped_delivery))
 
 
 def filter_feasible(
@@ -655,8 +748,10 @@ def filter_feasible(
 
     ``state`` (FeRRy Phase 3) starts the walk from a flight state instead of
     ``(mule_pose, now)`` with no energy spent — the mid-mission re-admission,
-    which must carry the energy already spent (critic B10). ``snr_offset_db``
-    is the observed-rate adjustment for ferry pricing (0 by default).
+    which must carry the energy already spent (critic B10) and, under
+    ``deadline_bounds="delivery"``, the earliest deadline of the updates
+    already on board (``deliver_by``). ``snr_offset_db`` is the observed-rate
+    adjustment for ferry pricing (0 by default).
 
     The walk is a fold, skipping what fails, over
     :meth:`FeasibilityModel.admit` with :data:`RULE_DEADLINE_BUDGET`.
@@ -688,4 +783,5 @@ def filter_feasible(
         walk.rejected_by(REASON_OVERDUE),
         walk.rejected_by(REASON_BUDGET),
         walk.rejected_by(REASON_ENERGY),
+        walk.rejected_by(REASON_DELIVERY),
     )

@@ -849,8 +849,8 @@ class FLScheduler:
           construction), so ``last_feasibility`` keeps S3b's drops;
         * ``trim``: the arm's order is kept and the stops it cannot serve in
           that order are dropped; they join ``last_feasibility`` under their
-          reason (energy included, critic B10), so the mule's pre-flight
-          widening covers them.
+          reason (energy included, critic B10, and the on-board ``delivery``
+          clause), so the mule's pre-flight widening covers them.
 
         Critic C3 asked that the H arms not collapse onto one route; under
         ``reorder`` they still do here. The alternatives (``trim``, or the
@@ -859,6 +859,7 @@ class FLScheduler:
         from .routing.replan import ORDER_CURRENT  # noqa: WPS433
         from .stages.s3b_feasibility import (  # noqa: WPS433
             REASON_BUDGET,
+            REASON_DELIVERY,
             REASON_ENERGY,
             REASON_OVERDUE,
             FeasibilityResult,
@@ -885,6 +886,7 @@ class FLScheduler:
             list(getattr(feas, "dropped_overdue", ())) + res.dropped_by(REASON_OVERDUE),
             list(getattr(feas, "dropped_budget", ())) + res.dropped_by(REASON_BUDGET),
             list(getattr(feas, "dropped_energy", ())) + res.dropped_by(REASON_ENERGY),
+            list(getattr(feas, "dropped_delivery", ())) + res.dropped_by(REASON_DELIVERY),
         )
         return list(res.route)
 
@@ -1009,6 +1011,7 @@ class FLScheduler:
         )
         from .stages.s3b_feasibility import (  # noqa: WPS433
             REASON_BUDGET,
+            REASON_DELIVERY,
             REASON_ENERGY,
             REASON_OVERDUE,
             RULE_BUDGET,
@@ -1084,6 +1087,7 @@ class FLScheduler:
                     [(wp, REASON_OVERDUE) for wp in feas.dropped_overdue]
                     + [(wp, REASON_BUDGET) for wp in feas.dropped_budget]
                     + [(wp, REASON_ENERGY) for wp in feas.dropped_energy]
+                    + [(wp, REASON_DELIVERY) for wp in feas.dropped_delivery]
                 )
                 return feas.kept, reasons
 

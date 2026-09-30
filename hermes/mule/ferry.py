@@ -249,10 +249,15 @@ class FerrySpec:
       band (critic B16) and ``availability_salt``.
     * ``availability``: the ground-truth ``{device_id: rel_i}``, for the
       keyed draw only (see the module docstring).
-    * ``deadline_bounds``: ``collection`` (spec Q2) or ``delivery``, the
-      plan's per-stop, single-contact predicate (each stop's own return and
-      upload must meet its deadline; see
-      :data:`~hermes.scheduler.stages.s3b_feasibility.DEADLINE_BOUNDS_DELIVERY`).
+    * ``deadline_bounds``: what Deadline(j) bounds (spec Q2; see
+      :data:`~hermes.scheduler.stages.s3b_feasibility.DEADLINE_BOUNDS`):
+      ``collection`` (the default: arrival + dwell), ``delivery_per_stop``
+      (the plan's single-contact predicate: each stop's own return and
+      upload must meet its deadline; ``delivery`` at ef1faa1, renamed) or
+      ``delivery`` (route-level: every update collected must reach the
+      cluster, the route's landing plus the upload, by its own deadline).
+      ``delivery`` changed meaning after ef1faa1 with no shim, as no
+      recorded run or committed trace used it.
     """
 
     band: Optional[str] = None

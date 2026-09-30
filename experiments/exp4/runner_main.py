@@ -31,6 +31,7 @@ from hermes.mission.aggregation_rules import IMPLEMENTED_RULES
 from hermes.scheduler.policies.fedcs_degraded import VALUE_KINDS as FEDCS_VALUES
 from hermes.scheduler.policies.whittle import VARIANTS as WHITTLE_VARIANTS
 from hermes.scheduler.policies.whittle import WEIGHT_MODES as WHITTLE_WEIGHTS
+from hermes.scheduler.stages.s3b_feasibility import DEADLINE_BOUNDS
 
 from .driver import ARMS, PROVENANCE_COLUMNS, Exp4Driver
 from .metrics import Exp4MetricSummary
@@ -132,12 +133,17 @@ def _add_phase_3_flags(parser: argparse.ArgumentParser) -> None:
                         "(needs --contact-band).")
     g.add_argument("--payload-bytes", type=int, default=None,
                    help="Declared payload per direction (bytes); omit for measured.")
-    g.add_argument("--deadline-bounds", choices=("collection", "delivery"),
+    g.add_argument("--deadline-bounds", choices=DEADLINE_BOUNDS,
                    default="collection",
                    help="What Deadline(j) bounds (spec Q2): the collection, arrival + "
-                        "dwell (default), or 'delivery': per stop, that stop's own "
-                        "return to the dock plus the upload (it does not bound when "
-                        "the earlier stops' updates actually reach the cluster).")
+                        "dwell (default); 'delivery_per_stop': per stop, that stop's "
+                        "own return to the dock plus the upload (it does not bound "
+                        "when the earlier stops' updates actually reach the cluster; "
+                        "'delivery' before the route-level variant existed); or "
+                        "'delivery': route-level, the route's landing plus the upload "
+                        "meets the deadline of every update collected on it (a stop "
+                        "that would make an update on board late is refused as "
+                        "'delivery').")
     g.add_argument("--backhaul-period-s", type=float, default=None,
                    help="Seconds backhaul period P_bh (s); default n_missions x T_nom.")
     g.add_argument("--t-nom-s", type=float, default=None,

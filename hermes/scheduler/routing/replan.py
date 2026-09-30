@@ -38,9 +38,10 @@ over the admitted stops" is the flown order that just failed. Under
 both functions of the admitted *set* alone: arms that differ only in their
 order (H1, H2, H3) fly the same repaired route whenever the check fires, and
 the check never drops a stop. ``trim`` is the alternative that keeps each
-arm's order at the price of serving fewer stops; which one the exit-gate arms
-use (or whether they run ``abort``, critic C3's other option) is chosen at the
-pilot, not here (critic B5).
+arm's order at the price of serving fewer stops. Which one the exit-gate arms
+use is a run setting, not a code default (critic B5): the pilot plan the user
+accepted on 2026-09-29 runs ``replan`` with ``trim``, so each arm keeps its
+order as the D arms do, while the code default stays ``reorder``.
 
 **Invariants** (``tests/unit/test_p3_replan.py`` checks them on random
 instances): the returned route passes the predicate's fold without skipping
@@ -51,6 +52,14 @@ only if the protected-only route fails.
 
 Drops are final for the mission (spec Q10): the mule widens every dropped
 Pass-1 device and records every dropped Pass-2 device as a skipped delivery.
+
+**Updates on board** (``deadline_bounds="delivery"``). The flight state
+carries ``deliver_by``, the earliest deadline of the updates already
+collected, and every fold here starts from ``state`` or from a state a fold
+left, so the current order, the admission, the arm's order, ``trim``, 2-OPT
+and the guard fold all hold the new route to it; the admission order still
+passes by construction. A stop refused for it is dropped with the reason
+``delivery``.
 """
 
 from __future__ import annotations
@@ -111,8 +120,9 @@ class ReplanResult:
 
     ``route`` is the new remainder, in flying order; ``dropped`` the stops of
     the old remainder that are not in it, in their old order, each with the
-    predicate's reason (``overdue``, ``budget`` or ``energy``);
-    ``order_used`` one of :data:`ORDERS`.
+    predicate's reason (``overdue``, ``budget``, ``energy`` or, under
+    ``deadline_bounds="delivery"``, ``delivery``); ``order_used`` one of
+    :data:`ORDERS`.
     """
 
     route: Tuple[ContactWaypoint, ...]

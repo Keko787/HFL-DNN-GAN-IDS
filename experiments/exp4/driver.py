@@ -442,7 +442,9 @@ class Exp4Driver:
     # ``backhaul_model`` ("mission" | "seconds"; H3 runs the adaptive carrier
     # policy, every other arm the fixed one), ``contact_reliability_source``
     # ("origin" | "channel"), ``payload_bytes`` (None = measured) and
-    # ``deadline_bounds``. ``ferry_physics`` overrides D1-D3 parameters by
+    # ``deadline_bounds`` ("collection" | "delivery_per_stop" | "delivery";
+    # validated by building the FerrySpec, recorded in ``ferry_params``).
+    # ``ferry_physics`` overrides D1-D3 parameters by
     # ``MuleConfig`` field name (``FERRY_PHYSICS_FIELDS``). The exit-gate
     # configuration is chosen at the pilot, not here (critic B5).
     mission_clock: str = "wall"

@@ -185,6 +185,27 @@ def test_the_driver_refuses_what_cannot_run_or_would_mis_measure(kw, match):
         Exp4Driver(**kw)
 
 
+def test_the_driver_takes_the_three_deadline_bounds_and_refuses_others():
+    for bounds in ("collection", "delivery_per_stop", "delivery"):
+        driver = _sim(deadline_bounds=bounds)
+        assert driver.ferry_settings(arm="H1", regime="clean")["deadline_bounds"] == bounds
+    for bad in ("landing", "delivery-per-stop"):
+        with pytest.raises(ValueError, match="deadline_bounds"):
+            _sim(deadline_bounds=bad)
+    # On the wall clock only the default runs (every recorded run).
+    assert Exp4Driver().deadline_bounds == "collection"
+    for bounds in ("delivery_per_stop", "delivery"):
+        with pytest.raises(ValueError, match="mission_clock='sim'"):
+            Exp4Driver(deadline_bounds=bounds)
+
+
+@pytest.mark.parametrize("bounds", ["delivery_per_stop", "delivery"])
+def test_a_ferry_row_records_its_deadline_bounds(bounds):
+    row, topo = T.run_stub_trial(_sim(deadline_bounds=bounds), _cell("H1"))
+    assert json.loads(row["ferry_params"])["deadline_bounds"] == bounds
+    assert all(m.deadline_bounds == bounds for m in topo.mules)
+
+
 def test_a_full_quorum_of_several_mules_runs_on_the_clock():
     row, topo = T.run_stub_trial(_sim(n_mules=2, min_participation=2), _cell("H1", N=8))
     assert len(topo.mules) == 2 and topo.cluster.min_participation == 2
@@ -628,6 +649,23 @@ def test_the_runner_passes_the_phase_3_flags(monkeypatch, tmp_path):
     assert kwargs["ferry_physics"] == {"n_pl": 3.0, "shadow_keying": "position", "turnaround_s": 20.0}
     assert kwargs["rf_link_token"] is False and kwargs["t_nom_layouts"] == 7
     assert runner["timeout_s"] == 90.0 + 4 * (2 * 6 * 90.0 + 10.0)
+
+
+def test_the_runner_takes_the_three_deadline_bounds(monkeypatch, tmp_path):
+    from experiments.exp4 import runner_main
+    from hermes.scheduler.stages.s3b_feasibility import DEADLINE_BOUNDS
+
+    kwargs, _ = _runner(monkeypatch, ["--csv", str(tmp_path / "t.csv")])
+    assert kwargs["deadline_bounds"] == "collection"
+    for bounds in DEADLINE_BOUNDS:
+        kwargs, _ = _runner(monkeypatch, ["--csv", str(tmp_path / "t.csv"), "--mission-clock",
+                                          "sim", "--deadline-bounds", bounds])
+        assert kwargs["deadline_bounds"] == bounds
+    for bad in ("landing", "delivery-per-stop"):
+        with pytest.raises(SystemExit):
+            _runner(monkeypatch, ["--csv", str(tmp_path / "t.csv"), "--mission-clock", "sim",
+                                  "--deadline-bounds", bad])
+    assert runner_main.DEADLINE_BOUNDS == ("collection", "delivery_per_stop", "delivery")
 
 
 def test_the_runner_refuses_an_explicit_h0_on_the_clock(monkeypatch, tmp_path):

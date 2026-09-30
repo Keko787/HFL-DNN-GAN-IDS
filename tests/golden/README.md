@@ -21,8 +21,9 @@ afa9526 on this host, and for each failure its signature (failing line,
 exception, first `assert` line, quoted exceptions). "The full suite passes" for
 Phase 3 means: the same outcome per node id and the same signature per known
 failure, new tests allowed. Six tests failed at afa9526, one more than the unit
-spec expected (see the file's header); that baseline awaits the user's
-sign-off. Compare a later run with
+spec expected (see the file's header); the user signed that baseline off on
+2026-09-29 (the sixth, the real-model smoke test, is flaky under load; its fix
+waits for the session-TTL pilot). Compare a later run with
 
     py -3.11 -m pytest tests -p no:cacheprovider -q -rfE --junitxml=run.xml
     py -3.11 tests/golden/make_baseline.py compare run.xml

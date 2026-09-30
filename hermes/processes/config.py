@@ -57,6 +57,11 @@ BACKHAUL_MISSION = "mission"
 BACKHAUL_SECONDS = "seconds"
 BACKHAUL_MODELS: Tuple[str, ...] = (BACKHAUL_MISSION, BACKHAUL_SECONDS)
 
+#: ``deadline_bounds`` values: the scheduler's
+#: ``hermes.scheduler.stages.s3b_feasibility.DEADLINE_BOUNDS``, restated so
+#: this module stays import-free (a unit test keeps the two equal).
+DEADLINE_BOUNDS: Tuple[str, ...] = ("collection", "delivery_per_stop", "delivery")
+
 
 def mission_schedule_index(mission_round, length: int) -> int:
     """The entry of a per-mission schedule that mission ``mission_round`` reads.
@@ -312,8 +317,11 @@ class MuleConfig:
     contact_reliability_source: str = "origin"
     device_availability: Dict[str, float] = field(default_factory=dict)
     # D3 — the bytes each direction is priced for (None: measured) and what
-    # Deadline(j) bounds ("collection", spec Q2, or "delivery": per stop, that
-    # stop's own return plus the upload, not the route's actual delivery).
+    # Deadline(j) bounds (spec Q2, ``DEADLINE_BOUNDS``): "collection" (the
+    # default, arrival + dwell), "delivery_per_stop" (per stop, that stop's
+    # own return plus the upload, not the route's actual delivery; what
+    # "delivery" meant at ef1faa1) or "delivery" (route-level: the route's
+    # landing plus the upload meets the deadline of every update collected).
     payload_bytes: Optional[int] = None
     deadline_bounds: str = "collection"
     # D1 — the contact link: SNR floor (CQI 1), altitude, path-loss exponent,
@@ -460,6 +468,7 @@ def mule_config_errors(cfg: "MuleConfig") -> List[str]:
       band, ``replan``, the seconds-axis backhaul (critic B16), the channel
       reliability source, a declared payload... need the mission clock;
     * on the sim clock: the two-pass path (``rf_range_m``), a trial seed,
+      a known backhaul model and ``deadline_bounds`` (:data:`DEADLINE_BOUNDS`),
       the channel reliability source only with a band (critic B16), the
       ground-truth availability only under that source, a backhaul period
       for the seconds model, and the causal RF prior schedule only under the
@@ -487,6 +496,10 @@ def mule_config_errors(cfg: "MuleConfig") -> List[str]:
         errors.append("mission_clock='sim' needs trial_seed (the channel's salts)")
     if cfg.backhaul_model not in BACKHAUL_MODELS:
         errors.append(f"backhaul_model must be one of {BACKHAUL_MODELS}, got {cfg.backhaul_model!r}")
+    if cfg.deadline_bounds not in DEADLINE_BOUNDS:
+        errors.append(
+            f"deadline_bounds must be one of {DEADLINE_BOUNDS}, got {cfg.deadline_bounds!r}"
+        )
     if cfg.contact_reliability_source == "channel" and cfg.contact_band is None:
         errors.append(
             "contact_reliability_source='channel' needs a contact_band: the reliability "

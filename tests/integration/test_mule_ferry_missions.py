@@ -519,6 +519,290 @@ def _check_departures(sup, r, budget):
         assert verdict.home <= budget_end
 
 
+# --------------------------------------------------------------------------- #
+# What Deadline(j) bounds: the route-level delivery bound (clock F1)
+# --------------------------------------------------------------------------- #
+
+#: The final check's two-stop line: dev-a at 10 m, dev-b at 40 m.
+F1_LINE = (("dev-a", (10.0, 0.0, 0.0)), ("dev-b", (40.0, 0.0, 0.0)))
+
+
+def _cut(**windows):
+    def before(w, sup, m):
+        for did, phi in windows.items():
+            sup.scheduler.device_states[DeviceID(did)].deadline_fulfilment_s = phi
+    return before
+
+
+def _fly_bounds(bounds, response, *, layout, windows, silent=()):
+    """One noise-free mission (no band, no upload time) with S3c on."""
+    w, sup, (rec,) = fly(layout=layout, flaky={}, rf_range_m=5.0, silent=silent,
+                         before=_cut(**windows),
+                         ferry=FerrySpec(deadline_bounds=bounds, in_flight_response=response),
+                         mission_budget_s=100.0,
+                         mission_window_adapter=MissionWindowAdapter(enabled=True, window=2))
+    (up,) = w.server.ups
+    return sup, rec, up
+
+
+def _clean_delivery_margins(r, up):
+    """For every CLEAN line: its Deadline(j) minus when its update reached the
+    cluster (the UP's ``sim_upload_ts``); negative is late."""
+    deadlines = r.pass_1_device_deadlines
+    return {str(l.device_id): deadlines[l.device_id] - up.sim_upload_ts
+            for l in r.report.lines if l.outcome is MissionOutcome.CLEAN}
+
+
+def _check_departures_on_board(sup, r):
+    """The predicate held at every actual Pass-1 departure from the state the
+    mule was in, the updates it then carried included: ``deliver_by``
+    rebuilt from the CLEAN members of the stops already flown."""
+    model = sup.scheduler.feasibility_model
+    outcomes = {str(l.device_id): l.outcome for l in r.report.lines}
+    on_board = math.inf
+    for s in r.pass_1_flown:
+        state = FlightState(tuple(s["depart_pose"]), s["depart_s"], s["depart_energy_j"],
+                            on_board)
+        verdict = model.admit(state, _stop_wp(s), rule=sup.scheduler.in_flight_rule(COLLECT),
+                              budget_end=r.sim_start_s + 100.0, pass_kind=COLLECT)
+        assert verdict.ok, (s, verdict)
+        for d in s["devices"]:
+            if outcomes[d] is MissionOutcome.CLEAN:
+                on_board = min(on_board, r.pass_1_device_deadlines[DeviceID(d)])
+    return on_board
+
+
+@pytest.mark.parametrize("response", ["abort", "replan"])
+def test_delivery_drops_a_stop_that_would_land_an_update_late_before_takeoff(response):
+    """Clock F1 end to end. dev-a (10 m) is due 6 s after takeoff; channel-
+    free, no upload time. ``delivery_per_stop`` admits a (its own return is
+    home at 5 s) and b, and lands a's update at 18 s, 12 s late.
+    ``delivery`` admits a, then refuses b before takeoff with the reason
+    ``delivery`` (b's own home, 18 s, meets b's own deadline): b is widened
+    at takeoff and counted in S3c's planned, and the mission lands a's
+    update at 5 s."""
+    sup, rec, up = _fly_bounds("delivery_per_stop", response, layout=F1_LINE,
+                               windows={"dev-a": 6.0})
+    r = rec.result
+    t0, due_a = r.sim_start_s, r.pass_1_device_deadlines[DeviceID("dev-a")]
+    assert due_a == t0 + 6.0
+    assert [s["devices"] for s in r.pass_1_flown] == [["dev-a"], ["dev-b"]]
+    assert up.sim_upload_ts == t0 + 18.0 and _clean_delivery_margins(r, up)["dev-a"] == -12.0
+    assert r.pass_1_preflight_drops == []
+    assert r.delivery_overrun_s is None              # recorded under "delivery" only
+
+    sup, rec, up = _fly_bounds("delivery", response, layout=F1_LINE, windows={"dev-a": 6.0})
+    r = rec.result
+    t0, deadlines = r.sim_start_s, r.pass_1_device_deadlines
+    assert [s["devices"] for s in r.pass_1_flown] == [["dev-a"]]
+    (drop,) = r.pass_1_preflight_drops
+    assert (drop["devices"], drop["position"], drop["reason"]) == (
+        ["dev-b"], [40.0, 0.0, 0.0], "delivery")
+    assert drop["deadline_ts"] == deadlines[DeviceID("dev-b")] >= t0 + 18.0   # not late itself
+    assert r.aborts == [] and r.replans == []
+    widened = _widened(rec)
+    assert set(widened) == {"dev-b"} and widened["dev-b"].contact_ts == t0
+    assert sup.scheduler._window_adapter._history[-1] == (1, 2)
+    assert up.sim_upload_ts == t0 + 5.0
+    margins = _clean_delivery_margins(r, up)
+    assert margins == {"dev-a": 1.0}
+    assert _check_departures_on_board(sup, r) == deadlines[DeviceID("dev-a")]
+    assert r.delivery_overrun_s == 0.0
+
+
+@pytest.mark.parametrize("response", ["abort", "replan"])
+def test_delivery_holds_the_rest_of_a_flight_to_the_updates_on_board(response):
+    """In flight. LINE, dev-e due 21 s after takeoff, dev-a silent. The plan
+    (e, a, b, c, d; 1 s per contact) lands at 21 s, so S3b and the flown
+    order keep all five. a's listen window costs 1 s: from then on d would
+    land e's update (on board, CLEAN) at 22 s. ``abort`` finds out when d
+    is next, at c; ``replan`` folds the whole remainder and drops d at a.
+    Either way d is refused as ``delivery`` and widened at the drop time,
+    and the mission lands at 17 s: every CLEAN update is on time. a's own
+    update never came, so its deadline never goes on board.
+    ``delivery_per_stop`` flies d and lands e's update 1 s late."""
+    layout_kw = dict(layout=LINE, windows={"dev-e": 21.0}, silent=("dev-a",))
+    sup, rec, up = _fly_bounds("delivery_per_stop", response, **layout_kw)
+    r = rec.result
+    assert len(r.pass_1_flown) == 5 and r.aborts == [] and r.replans == []
+    assert up.sim_upload_ts == r.sim_start_s + 22.0
+    assert _clean_delivery_margins(r, up)["dev-e"] == -1.0
+    assert r.delivery_overrun_s is None
+
+    sup, rec, up = _fly_bounds("delivery", response, **layout_kw)
+    r = rec.result
+    t0, deadlines = r.sim_start_s, r.pass_1_device_deadlines
+    assert deadlines[DeviceID("dev-e")] == t0 + 21.0
+    assert all(deadlines[DeviceID(d)] >= t0 + 22.0 for d in ("dev-a", "dev-b", "dev-c", "dev-d"))
+    assert r.pass_1_preflight_drops == []
+    assert [s["devices"] for s in r.pass_1_flown] == [["dev-e"], ["dev-a"], ["dev-b"], ["dev-c"]]
+    if response == "abort":
+        (abort,) = r.aborts
+        assert abort["t_s"] == pytest.approx(t0 + 11.0)
+        assert (abort["reason"], abort["abandoned"]) == ("delivery", [["dev-d"]])
+        dropped_at = abort["t_s"]
+    else:
+        (event,) = r.replans
+        assert event["t_s"] == pytest.approx(t0 + 5.0) and event["order_used"] == "arm"
+        assert event["rejected"] == [{"devices": ["dev-d"], "reason": "delivery"}]
+        assert event["dropped"] == [{"devices": ["dev-d"], "reason": "delivery"}]
+        assert event["route"] == [["dev-b"], ["dev-c"]]
+        assert sup.scheduler.last_order_check.order_used == "current"
+        dropped_at = event["t_s"]
+    widened = _widened(rec)
+    assert set(widened) == {"dev-d"} and widened["dev-d"].contact_ts == dropped_at
+    assert sup.scheduler._window_adapter._history[-1] == (4, 5)
+    assert up.sim_upload_ts == pytest.approx(t0 + 17.0)
+    margins = _clean_delivery_margins(r, up)
+    assert set(margins) == {"dev-e", "dev-b", "dev-c"} and min(margins.values()) >= 0.0
+    assert margins["dev-e"] == pytest.approx(4.0)
+    assert _check_departures_on_board(sup, r) == t0 + 21.0
+    assert r.delivery_overrun_s == 0.0
+
+
+@pytest.mark.parametrize("response", ["abort", "replan"])
+def test_delivery_cannot_recheck_a_contact_that_overruns_where_the_flight_ends(response):
+    """The limit of the route-level bound. LINE, dev-e due 21 s after
+    takeoff, dev-d silent. The plan lands at 21 s and every departure check
+    passes: d's listen window, the 1 s nobody priced, comes after the last
+    one. With e's update on board and nothing left to decide, the mule
+    flies home and lands it 1 s late. ``delivery_overrun_s`` records that,
+    as ``budget_overrun_s`` records a budget overrun; it is 0 in the
+    missions above."""
+    sup, rec, up = _fly_bounds("delivery", response, layout=LINE, windows={"dev-e": 21.0},
+                               silent=("dev-d",))
+    r = rec.result
+    t0 = r.sim_start_s
+    assert [s["devices"] for s in r.pass_1_flown] == [[d] for d, _ in LINE]
+    assert [s["listen_s"] for s in r.pass_1_flown] == [0.0, 0.0, 0.0, 0.0, 1.0]
+    assert r.aborts == [] and r.replans == [] and r.pass_1_preflight_drops == []
+    assert _check_departures_on_board(sup, r) == t0 + 21.0       # every departure passed
+    assert up.sim_upload_ts == t0 + 22.0
+    assert _clean_delivery_margins(r, up)["dev-e"] == -1.0
+    assert r.delivery_overrun_s == 1.0
+
+
+#: LINE with its first stop shared: dev-f and dev-e 1 m either side of the
+#: line at 3 m, so S3a's stop (their centroid) is LINE's first and the flight
+#: times are LINE's.
+SHARED = (("dev-f", (3.0, 1.0, 0.0)), ("dev-e", (3.0, -1.0, 0.0))) + LINE[1:]
+
+
+@pytest.mark.parametrize("response", ["abort", "replan"])
+@pytest.mark.parametrize("layout, silent", [(LINE, "dev-e"), (SHARED, "dev-f")],
+                         ids=["alone", "shared"])
+def test_a_silent_members_deadline_never_goes_on_board(response, layout, silent):
+    """Only an update actually collected is on board. The silent member is
+    due 21 s after takeoff, the tightest deadline, at the first stop: alone
+    (LINE's dev-e), or sharing it with dev-e, which answers and keeps the
+    default window (the stop's ``deadline_ts`` is the pair's minimum). S3b
+    folds the stop's deadline before takeoff, as it assumes every planned
+    member answers, and the plan lands at 21 s. In flight the silent
+    member's listen window costs 1 s, and its deadline, whose update never
+    came, stays off board: every stop is flown and the mission lands at
+    22 s, after that deadline, with every collected update on time. Held
+    to the silent member's deadline, or to the stop's, d would be refused."""
+    sup, rec, up = _fly_bounds("delivery", response, layout=layout, windows={silent: 21.0},
+                               silent=(silent,))
+    r = rec.result
+    t0, deadlines = r.sim_start_s, r.pass_1_device_deadlines
+    first = r.pass_1_flown[0]
+    assert silent in first["devices"] and first["listen_s"] == 1.0
+    assert first["deadline_ts"] == deadlines[DeviceID(silent)] == t0 + 21.0
+    assert [s["devices"] for s in r.pass_1_flown[1:]] == [[d] for d, _ in LINE[1:]]
+    assert r.aborts == [] and r.replans == [] and r.pass_1_preflight_drops == []
+    outcomes = {str(l.device_id): l.outcome for l in r.report.lines}
+    assert outcomes.pop(silent) is MissionOutcome.TIMEOUT
+    assert set(outcomes.values()) == {MissionOutcome.CLEAN}
+    assert up.sim_upload_ts == t0 + 22.0 > deadlines[DeviceID(silent)]
+    margins = _clean_delivery_margins(r, up)
+    assert set(margins) == set(outcomes) and min(margins.values()) >= 0.0
+    assert r.delivery_overrun_s == 0.0
+    assert _check_departures_on_board(sup, r) == min(deadlines[DeviceID(d)] for d in outcomes)
+
+
+@pytest.mark.parametrize("response", ["abort", "replan"])
+def test_the_beacon_hook_holds_an_insert_to_the_updates_on_board(response):
+    """dev-x (50 m) is offered while the mule serves dev-e, due 21 s after
+    takeoff, so at the next departure e's update is on board. Under
+    ``delivery_per_stop`` the offer fits and is inserted, and the mission
+    lands e's update 5 s late. Under ``delivery`` the hook folds the edited
+    remainder from the departure state, e's deadline included, and refuses
+    the offer; the plan's five stops land e's update at 21 s. From a state
+    that carried nothing every place would pass: only the update on board
+    stood in the way."""
+    def hook(w, sup, m):
+        sup.scheduler.device_states[DeviceID("dev-e")].deadline_fulfilment_s = 21.0
+        _offer_during(sup, "run_contact", ["dev-x"])
+
+    def run(bounds):
+        w, sup, (rec,) = _beacon_world([], budget=100.0, hook=hook, ferry=FerrySpec(
+            deadline_bounds=bounds, in_flight_response=response))
+        (up,) = w.server.ups
+        return sup, rec.result, up
+
+    _, r, up = run("delivery_per_stop")
+    (insert,) = r.inserts
+    assert insert["devices"] == ["dev-x"] and insert["t_s"] == r.pass_1_flown[1]["depart_s"]
+    assert up.sim_upload_ts == r.sim_start_s + 26.0
+    assert r.pass_1_device_deadlines[DeviceID("dev-e")] - up.sim_upload_ts == -5.0
+
+    sup, r, up = run("delivery")
+    t0, depart = r.sim_start_s, r.pass_1_flown[1]
+    assert r.inserts == []
+    assert r.offers_refused == [
+        {"t_s": depart["depart_s"], "devices": ["dev-x"], "reason": "does not fit"}]
+    assert [s["devices"] for s in r.pass_1_flown] == [[d] for d, _ in LINE]
+    assert up.sim_upload_ts == t0 + 21.0 and r.delivery_overrun_s == 0.0
+    x = ContactWaypoint(position=(50.0, 0.0, 0.0), devices=(DeviceID("dev-x"),),
+                        bucket=Bucket.BEACON_ACTIVE, deadline_ts=math.inf)
+    rest = [_stop_wp(s) for s in r.pass_1_flown[1:]]
+    free = FlightState(tuple(depart["depart_pose"]), depart["depart_s"],
+                       depart["depart_energy_j"])
+    carrying = dataclasses.replace(free, deliver_by=t0 + 21.0)
+    for i in range(len(rest) + 1):
+        edited = rest[:i] + [x] + rest[i:]
+        assert sup.scheduler.fold_remainder(edited, state=free, budget_end=t0 + 100.0).ok
+        assert not sup.scheduler.fold_remainder(edited, state=carrying,
+                                                budget_end=t0 + 100.0).ok
+
+
+@pytest.mark.parametrize("response", ["abort", "replan"])
+def test_an_inserted_members_own_deadline_goes_on_board_not_its_stops(response):
+    """A beacon insert keeps each member's own Deadline(j) for the on-board
+    bound. The offer (dev-x, dev-w) is taken at takeoff: a stop 5 m behind
+    the dock, at dev-x, with dev-w 2 m off and due 24.5 s after takeoff
+    (dev-x keeps the default window), so the stop's ``deadline_ts`` is
+    dev-w's. It fits first, and the edited plan lands at 24 s. dev-w is
+    silent: its listen window costs 1 s, and dev-x's update, on board, is
+    held to dev-x's own deadline, not the stop's, so every stop is flown and
+    the mission lands at 25 s, after dev-w's deadline, with nothing late.
+    Held to the stop's deadline, d would be refused."""
+    def hook(w, sup, m):
+        sup.scheduler.device_states[DeviceID("dev-w")].deadline_fulfilment_s = 24.5
+
+    w, sup, (rec,) = _beacon_world(
+        [("dev-x", "dev-w")], budget=100.0, hook=hook, silent=("dev-w",),
+        known=(("dev-x", (-5.0, 0.0, 0.0)), ("dev-w", (-5.0, 2.0, 0.0))),
+        extra={"dev-w": (-5.0, 2.0, 0.0)},
+        ferry=FerrySpec(deadline_bounds="delivery", in_flight_response=response))
+    (up,) = w.server.ups
+    r = rec.result
+    t0 = r.sim_start_s
+    (insert,) = r.inserts
+    assert (insert["devices"], insert["index"], insert["t_s"]) == (["dev-x", "dev-w"], 0, t0)
+    assert insert["home_s"] == pytest.approx(t0 + 24.0)
+    first = r.pass_1_flown[0]
+    assert first["deadline_ts"] == t0 + 24.5 and first["listen_s"] == 1.0
+    assert [s["devices"] for s in r.pass_1_flown[1:]] == [[d] for d, _ in LINE]
+    assert r.aborts == [] and r.replans == []
+    outcomes = {str(l.device_id): l.outcome for l in r.report.lines}
+    assert outcomes.pop("dev-w") is MissionOutcome.TIMEOUT
+    assert set(outcomes.values()) == {MissionOutcome.CLEAN}
+    assert up.sim_upload_ts == pytest.approx(t0 + 25.0)
+    assert r.delivery_overrun_s == 0.0
+
+
 def test_replan_repairs_pass_2_when_its_budget_is_on():
     """Pass 2 in flight: a silent device's listen window makes the tail miss
     the Pass-2 budget; replan drops what no longer fits as SKIPPED lines."""
@@ -587,9 +871,10 @@ def _offer(*devices):
 
 
 def _beacon_world(offers, *, budget=None, known=(("dev-x", (50.0, 0.0, 0.0)),),
-                  state_kw=None, hook=None, missions=1, **sup_kw):
+                  state_kw=None, hook=None, missions=1, extra=None, **sup_kw):
     """LINE plus devices outside the slice; ``offers`` are queued before each
-    mission's takeoff, ``hook(w, sup, m)`` runs after that."""
+    mission's takeoff, ``hook(w, sup, m)`` runs after that. ``extra`` adds
+    devices to the link besides dev-x and dev-y."""
     def setup(w, sup, m):
         for did, pos in known:
             sup.scheduler.device_states[DeviceID(did)] = DeviceSchedulerState(
@@ -599,7 +884,7 @@ def _beacon_world(offers, *, budget=None, known=(("dev-x", (50.0, 0.0, 0.0)),),
         if hook is not None:
             hook(w, sup, m)
 
-    extra = {"dev-x": (50.0, 0.0, 0.0), "dev-y": (15.0, 30.0, 0.0)}
+    extra = {"dev-x": (50.0, 0.0, 0.0), "dev-y": (15.0, 30.0, 0.0), **(extra or {})}
     kw = {} if budget is None else {"mission_budget_s": budget}
     return fly(layout=LINE, flaky={}, rf_range_m=5.0, before=setup, missions=missions,
                world_kw={"extra_devices": extra},
