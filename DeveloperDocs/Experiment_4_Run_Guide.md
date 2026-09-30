@@ -279,17 +279,17 @@ rows now carry 13 more provenance columns and 15 simulated ones, so an older CSV
 | `--contact-band` | none | `wide` (the Phase 3 re-baselines), `medium` or `narrow`. Omit it for the channel-free control: every contact then costs 1 s, plus 1 s when a reply is missing. |
 | `--contact-band-classes` | `wide medium narrow` | Add `medium_wide` for the optional 10 MHz class. |
 | `--in-flight-response` | `abort` | `replan`: re-check the whole remainder at every departure and repair it instead of abandoning it. |
-| `--replan-fallback` | `reorder` | For our arms under `replan`. `reorder` flies H1, H2 and H3 the same route whenever the pre-flight check fires; `trim` keeps each arm's own order and serves fewer stops. Chosen at the pilot. |
+| `--replan-fallback` | `reorder` | For our arms under `replan`. `reorder` flies H1, H2 and H3 the same route whenever the pre-flight check fires; `trim` keeps each arm's own order and serves fewer stops. The pilot plan flies `trim` (below). |
 | `--backhaul-model` | `mission` | `seconds`: the seconds-axis backhaul (H3 adaptive, every other arm the fixed carrier), with a loss draw keyed by seed, mule and mission. Jittery cells then lose about 16 % of uploads at the fixed carrier, against `--realism`'s flat 2 %. Not with `--l1-channel`. |
 | `--contact-reliability-source` | `origin` | `channel`: the SNR gate at the stop plus the device's availability drawn on the mule. Needs `--contact-band`. |
 | `--payload-bytes` | measured | Bytes per direction for the dwell and upload charge, e.g. `1000000` or `10000000` (decision D3). |
-| `--deadline-bounds` | `collection` | What Deadline(j) bounds: the collection (default), or `delivery`: each stop's own return to the dock plus the upload, checked per stop. It does not bound when the earlier stops' updates actually reach the cluster (the route's landing plus the upload). |
+| `--deadline-bounds` | `collection` | What Deadline(j) bounds: `collection` (default), the collection, arrival + dwell; `delivery_per_stop`, each stop's own return to the dock plus the upload, checked per stop (it does not bound when the earlier stops' updates actually reach the cluster; this was `delivery` at `ef1faa1`); or `delivery`, route-level: the route's landing plus the upload meets the Deadline(j) of every update collected on it, and a stop that would land an update already on board late is refused as `delivery`. The bound is on the priced route: a contact that overruns its priced time at the stop where Pass 1 ends is not re-checked, and `mission_completed.delivery_overrun_s` records any late landing. Only H1–H3 are held to either delivery value (D1–D5 have no deadline clause). |
 | `--deadline-time-scale` | `1.0` | The deadline law's time unit: a number on either clock, or `t_nom`, T_nom / 10 s, on the mission clock only (spec Q1). |
 | `--initial-window-s`, `--initial-window-missions` | 60 s | Φ₀ in the law's recorded unit (either clock), or in nominal mission periods (mission clock only). |
 | `--t-nom-s`, `--t-nom-layouts` | computed, 20 | T_nom, the cell's median nominal mission period, computed only when a setting needs it. |
 | `--backhaul-period-s` | `n_missions` × T_nom | The seconds backhaul's period. |
 | `--agg-period-t-nom` | off | `agg:cutoff`: set D5's `period_s` to T_nom. |
-| `--session-ttl-s` | 3 s | The mule's wall-clock session TTL. A fit that outlasts it becomes a missed reply, so ferry cells set it to at least twice the measured real-model fit time. |
+| `--session-ttl-s` | 3 s | The mule's wall-clock session TTL. A fit that outlasts it becomes a missed reply, so ferry cells set it to at least twice the measured real-model fit time (the pilot plan below takes its 95th percentile with N devices training at once). |
 | `--rf-link-token` / `--no-rf-link-token` | on exactly with `--mission-clock sim` | One RF link token per trial (Freeze Amendment 10). |
 | `--expected-input-dim` | 21 on the canonical data | A real-model ferry cell whose model has another input width is refused. |
 | `--snr-floor-db`, `--altitude-m`, `--n-pl`, `--shadow-sigma-db`, `--margin-quantile`, `--contact-regime`, `--interference-period-s`, `--noise-bin-s`, `--shadow-corr-s`, `--shadow-keying`, `--cruise-speed-m-s`, `--turnaround-s`, `--listen-s`, `--energy-capacity-j`, `--p-move-w`, `--p-hover-w` | the design's | The D1–D3 physics (configuration reference §17.1–17.3). Energy figures are SIMULATED. |
@@ -314,9 +314,15 @@ contacts only, so they do not compare with wall-clock rows.
 **Reading a mission-clock trace.**
 
 - `mission_completed.pass_1_preflight_drops` lists each contact that H1–H3 dropped before takeoff,
-  with its reason (`overdue`, `budget` or `energy`). It is always [] for D1–D5, whose walks report no
-  drops. A `mission_empty` means only that Pass 1 aggregated no update: either the plan was empty,
-  or its contacts were flown and answered nothing. `mission_empty` carries only `mission_round`
+  with its reason (`overdue`, `budget`, `energy` or, under `--deadline-bounds delivery`,
+  `delivery`, listed in that order). It is always [] for D1–D5, whose walks report no drops. Under
+  `--deadline-bounds delivery` the in-flight records can also read `delivery`: `aborts[].reason`,
+  and `replans[].rejected[].reason` and `replans[].dropped[].reason`, for a stop that would land an
+  update already on board after its Deadline(j), and `mission_completed.delivery_overrun_s` says
+  how far the Pass-1 upload, or the landing when nothing was uploaded, ended past the earliest
+  deadline of the updates on board; no CSV column reads it. A `mission_empty` means only that
+  Pass 1 aggregated no update: either the plan was empty, or its contacts were flown and answered
+  nothing. `mission_empty` carries only `mission_round`
   (and, under `--dock-on-empty`, `docked`); the plan fields are on the same round's
   `mission_completed`. If that `mission_completed` has `pass_1_contacts` 0 (an empty
   `pass_1_plan`) and a non-empty `pass_1_preflight_drops` whose entries all read `budget`, no
@@ -326,6 +332,25 @@ contacts only, so they do not compare with wall-clock rows.
 - A flown stop's `snr_db` and `rate_bps` are read at arrival, while its `dwell_s` is priced at each
   target's own session start (critic C2), so they do not reproduce `dwell_s`.
 
+**The pilot plan** (decided by the user on 2026-09-29; no pilot has run yet).
+
+- *Deadline unit:* `--deadline-time-scale t_nom` (T_nom / 10 s). With the default Φ₀ each device
+  then starts with about six missions' worth of window, as in the recorded runs (spec Q1).
+- *Session TTL:* `--session-ttl-s` at least 2× the 95th percentile of the real model's
+  `train_offline` time, measured at the exit gate's concurrency (N devices training at once).
+- *Budget knee:* an H1 sweep of `--mission-budget-s` on `--contact-band wide` with the measured
+  payload and the `t_nom` unit, for each N of the gate's grid. The knee is where the served fraction
+  stops rising. Narrow and medium knees wait for Study 5.4 (the cliff, below).
+- *In-flight response:* `--in-flight-response replan --replan-fallback trim`. Each arm keeps its own
+  order, as the D arms do; `reorder` would make H1–H3 fly the same route whenever the pre-flight
+  check fires.
+- *An idea on record, not in the plan:* a pilot that runs the knee sweep under both `trim` and
+  `reorder` and chooses by how often the pre-flight check fires and what each costs in coverage.
+- *Open follow-up:* the real-model smoke test (`test_exp4_real_model_synthetic_converges`) fails
+  with `rounds_closed` 0 under load and passes on an idle host; the user signed off the baseline
+  that records it on 2026-09-29. If the session-TTL pilot shows the cause is a device's fit
+  outrunning the 3 s TTL under load, the test is fixed then.
+
 **Pilot notes** (final cross-cutting check, Freeze §5j).
 
 - *Set the deadline unit.* At the default `--deadline-time-scale 1.0` the law's constants (Φ₀ =
@@ -333,7 +358,7 @@ contacts only, so they do not compare with wall-clock rows.
   mission lasts minutes. In a 14-mission probe (narrow, 1 MB, N = 8, a 200 s budget) H1 served the
   field-wide contact once and then found it overdue at every later takeoff, by 20 s more each
   mission: the +10 s widening per miss never catches up with the clock. Set the unit on
-  simulated-clock cells (`t_nom`, as in the example below); the pilot chooses the value (spec Q1).
+  simulated-clock cells; the pilot plan sets `t_nom`, as the example below does (spec Q1).
 - *The narrow-band cliff.* With `--contact-band narrow` (or medium), `--payload-bytes` set and a
   `--mission-budget-s` below the field-wide contact's predicted home time, every gated arm flies
   empty missions (30 s turnarounds, `rounds_closed` 0). For H1–H3, `pass_1_preflight_drops` shows
@@ -343,7 +368,8 @@ contacts only, so they do not compare with wall-clock rows.
   knee too, until missed missions widen its window past that finish, while D1–D3 and D5 keep the
   budget cliff. With `--deadline-time-scale t_nom` (Φ₀ = 6 × T_nom, 1500 s in trial T2) the
   budget binds first. Measure the knee per band, payload, N and deadline unit (Configuration
-  Reference §17.1).
+  Reference §17.1). Decided 2026-09-29: the cliff waits for Phase 4's member-subset admission, and
+  until then narrow and medium cells are not compared under budgets below it.
 - *Missions run longer than planned.* The planner prices the mean SNR and dwell is convex in it,
   so realized missions ran longer than predicted by +0.8 % on average on wide at 1 MB, +7.1 % on
   wide at 10 MB and +19.2 % on narrow at 1 MB. Budgets bind in flight more often on narrow bands
@@ -358,14 +384,15 @@ contacts only, so they do not compare with wall-clock rows.
 A Phase 3 exit-gate cell (H1 on the simulated clock, wide band, a budget; repeat it for D1, D2, D3
 and D4 with the same seeds, and at a stress budget). The pilots come first: they re-measure the
 budget knee with the ferry model and the real-model fit time, so set `KNEE_S` and `TTL_S` from
-them. The cell keeps the defaults the pilot has not overridden (`abort`, the `mission` backhaul, the
-`origin` reliability source, the measured payload); add `--in-flight-response replan
---replan-fallback ...`, `--backhaul-model seconds` or `--contact-reliability-source channel` as the
-pilot decides. No Phase 3 result has been recorded yet.
+them. The cell flies the pilot plan's `--in-flight-response replan --replan-fallback trim` and
+keeps the other defaults (the `mission` backhaul, the `origin` reliability source, the measured
+payload, `--deadline-bounds collection`); add `--backhaul-model seconds` or
+`--contact-reliability-source channel` where a study chooses them (the pilot plan sets neither).
+No Phase 3 result has been recorded yet.
 
 ```bash
-# KNEE_S: the budget knee the Phase 3 pilot re-measures; TTL_S: at least 2x the measured real-model fit time.
-python -m experiments.exp4.runner_main --csv results/exp5_p3/h1_sim_wide_knee.csv --arms H1 --N 6 --n-missions 4 --regime jittery --n-trials 40 --real-model --realism --mission-budget-s "$KNEE_S" --mission-clock sim --contact-band wide --deadline-time-scale t_nom --session-ttl-s "$TTL_S" --keep-event-traces
+# KNEE_S: the budget knee from the Phase 3 pilot's H1 sweep; TTL_S: at least 2x the 95th-percentile real-model fit time with N devices training at once.
+python -m experiments.exp4.runner_main --csv results/exp5_p3/h1_sim_wide_knee.csv --arms H1 --N 6 --n-missions 4 --regime jittery --n-trials 40 --real-model --realism --mission-budget-s "$KNEE_S" --mission-clock sim --contact-band wide --deadline-time-scale t_nom --in-flight-response replan --replan-fallback trim --session-ttl-s "$TTL_S" --keep-event-traces
 ```
 
 ## 3. Smoke run (one trial, no dataset)

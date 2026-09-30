@@ -44,8 +44,15 @@ hold. The status of 2026-08-13 follows it, kept for the record.
 >   the pilots, which set the ferry session TTL from the measured real-model fit time (at least
 >   2×), T_nom per cell, the deadline time unit (at the default 1.0 the law cannot keep up with
 >   simulated missions; Configuration Reference §17.4), the budget knee re-measured with the ferry model, and the H
->   arms' `replan_fallback`; (2) the commit that lands Phase 3, recorded with the rows; (3) fresh CSV
->   paths, since the 13 provenance and 15 simulated columns change every header; (4) the exit gate
+>   arms' `replan_fallback`. The user decided their plan on 2026-09-29 (Run Guide §2.6; no pilot
+>   has run yet): the unit `t_nom`; a TTL of at least 2× the 95th percentile of the real model's
+>   `train_offline` time with N devices training at once; the knee from an H1 sweep of
+>   `--mission-budget-s` on wide, per N of the gate's grid (narrow and medium knees wait for Study
+>   5.4); and `replan` with `trim`; (2) the commit that lands Phase 3, recorded with the rows. The
+>   route-level `--deadline-bounds delivery` lands in commit `d175afa`; at `ef1faa1` that name
+>   was the per-stop check, now `delivery_per_stop`, so a row that uses either needs `d175afa`
+>   or a later commit; (3) fresh CSV paths, since the 13 provenance and 15 simulated columns
+>   change every header; (4) the exit gate
 >   (H1, D1, D2, D3 and D4 re-baselined on the new clock, then the Phase 1–2 studies re-run) only
 >   on the user's go-ahead.
 
@@ -132,7 +139,7 @@ The single most useful distinction here. Most open items do **not** need new tri
 | Run with several mules, D3–D5 or `agg:fedex` (FeRRy Phase 2) | **Yes** (new arms) | New cells; one mule and the recorded arms are unchanged |
 | Turn a FeRRy switch on (Amendment 7) | **Yes** (new arm) | Changes what the scheduler decides |
 | Simulated mission clock for the mule arms (FeRRy Phase 3, `--mission-clock sim`) | **Yes**, every mule arm | The re-run bill of build-plan decision D2: H1–H3 and D1–D5 (later F) re-run on the new clock, and the Phase 1–2 studies are re-run, not re-scored, since legacy traces carry no simulated stamps. H0 is not re-run there: its simulated round time is outside Phase 3, and the driver refuses it on the simulated clock (critic A5). *(Corrected 2026-09-29; this row first listed H0–H3, D1 and D2, and put every arm on the seconds-axis channel, whose backhaul is now a per-study choice.)* |
-| Turn on another Phase 3 switch: a contact band, `replan`, the seconds-axis backhaul, the channel reliability source, a declared payload, a deadline time unit | **Yes** (new cells) | Each changes what the mule decides or what a contact costs, so each is a study setting on the new clock. The seconds backhaul alone moves every exit-gate number: about 16 % of uploads lost when jittery at a fixed carrier, against today's flat 2 % (critic A4) |
+| Turn on another Phase 3 switch: a contact band, `replan`, the seconds-axis backhaul, the channel reliability source, a declared payload, a deadline time unit, a `--deadline-bounds` other than `collection` | **Yes** (new cells) | Each changes what the mule decides or what a contact costs, so each is a study setting on the new clock. The seconds backhaul alone moves every exit-gate number: about 16 % of uploads lost when jittery at a fixed carrier, against today's flat 2 % (critic A4) |
 | — | — | — |
 | P-02 transport fix (Freeze Amendment 10) | **No** for any recorded run | It changes legacy behaviour only where a device is silent for more than 30 s of wall time (a quorum wait with several mules, a long fit, a slow startup), where the cluster's dock send on Windows blocks for more than 60 ms (the dock link's bound, meant as 60 s), or where a device's link drops for another reason (the device now re-dials and re-registers instead of spinning). None is expected in the recorded runs: the longest silence in the 600 kept traces is 23.3 s, and K = 2 and real-model trials before and after it are identical. Every multi-mule run must use the fixed code |
 | Land a FeRRy switch at its legacy default (Amendment 7) | **No** | Legacy behaviour unchanged; each switch lands with a test that pins its default to the frozen pipeline. Phase 3's are also pinned by the afa9526 golden fixtures (`tests/golden/`, 144 tests) |
