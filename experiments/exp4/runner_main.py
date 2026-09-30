@@ -65,6 +65,148 @@ def _build_grid(
     )
 
 
+#: FeRRy Phase 3 physics flags -> ``Exp4Driver.ferry_physics`` keys
+#: (``MuleConfig`` fields). Only the flags given are passed; the rest keep the
+#: design's defaults (Phase 3 design section 1, decisions D1-D3).
+_PHYSICS_FLAGS = (
+    ("snr_floor_db", float, "D1: the SNR floor, CQI 1 (dB; default -6.7)."),
+    ("altitude_m", float, "D1: the mule's altitude (m; default 25)."),
+    ("n_pl", float, "D1: path-loss exponent (default 2.2; 3.0 is the sensitivity case)."),
+    ("shadow_sigma_db", float, "D1/D2: shadowing sigma (dB; default 4)."),
+    ("margin_quantile", float, "D1: edge-availability quantile of R(b) (default 0.9)."),
+    ("contact_regime", str, "D2: contact interference regime, clean (default) or "
+                            "jittery (test (c))."),
+    ("interference_period_s", float, "D2: interference period P_c (s; default 60)."),
+    ("noise_bin_s", float, "D2: noise bin (s; default 1)."),
+    ("shadow_corr_s", float, "D2: shadowing correlation time (s; default 7.4)."),
+    ("shadow_keying", str, "D2: shadowing keyed by 'time' (default) or 'position'."),
+    ("cruise_speed_m_s", float, "D3: cruise speed (m/s; default 5)."),
+    ("turnaround_s", float, "D3: dock turnaround once per mission (s; default 30)."),
+    ("listen_s", float, "D3: listen window per contact with a missing reply (s; default 1)."),
+    ("energy_capacity_j", float, "D3: SIMULATED battery capacity; switches the energy "
+                                 "clause on (binds only with a budget; default off)."),
+    ("p_move_w", float, "D3: SIMULATED flight power (W; default Zeng 2019 at the speed)."),
+    ("p_hover_w", float, "D3: SIMULATED hover power (W; default Zeng 2019, 168.5)."),
+)
+
+
+def _add_phase_3_flags(parser: argparse.ArgumentParser) -> None:
+    """FeRRy Phase 3 — the mission clock and the contact link (mule arms).
+
+    Every flag defaults to the recorded run. On the wall clock the driver
+    accepts only a numeric ``--deadline-time-scale``, ``--initial-window-s``,
+    ``--session-ttl-s`` and the RF token (``--t-nom-layouts`` is accepted but
+    unused); every other flag, the ``t_nom`` time unit and Φ₀ in missions
+    included, needs ``--mission-clock sim``.
+    """
+    g = parser.add_argument_group("FeRRy Phase 3: mission clock and contact link")
+    g.add_argument(
+        "--mission-clock", choices=("wall", "sim"), default="wall",
+        help="'sim' flies every mule arm on the simulated mission clock with the "
+             "contact link (hermes/mule/ferry.py); 'wall' (default) is every "
+             "recorded run. H0 has no simulated round time and is refused (or "
+             "dropped from the default arm list). Write to a fresh CSV: the "
+             "Phase 3 provenance columns change the header.",
+    )
+    g.add_argument("--contact-band", default=None,
+                   help="Band class every stop flies (wide, medium, narrow; the "
+                        "Phase 3 re-baselines fly wide). Omit for the channel-free "
+                        "control.")
+    g.add_argument("--contact-band-classes", nargs="+", default=None,
+                   help="The link's band classes (default wide medium narrow; add "
+                        "medium_wide for the 10 MHz option).")
+    g.add_argument("--in-flight-response", choices=("abort", "replan"), default="abort",
+                   help="When the rest of a pass stops fitting: abort (Amendment 8, "
+                        "default) or replan.")
+    g.add_argument("--replan-fallback", choices=("reorder", "trim"), default="reorder",
+                   help="The re-plan's fallback for our arms (unit U4).")
+    g.add_argument("--backhaul-model", choices=("mission", "seconds"), default="mission",
+                   help="mission (default): the recorded loss schedule / flat pct; "
+                        "seconds: the seconds-axis channel, H3 adaptive, keyed loss "
+                        "draw. Losses per upload are ~16%% jittery at a fixed carrier "
+                        "(critic A4).")
+    g.add_argument("--contact-reliability-source", choices=("origin", "channel"),
+                   default="origin",
+                   help="origin (default): the devices' own rel x rf_factor draw; "
+                        "channel: the SNR gate plus the availability drawn on the mule "
+                        "(needs --contact-band).")
+    g.add_argument("--payload-bytes", type=int, default=None,
+                   help="Declared payload per direction (bytes); omit for measured.")
+    g.add_argument("--deadline-bounds", choices=("collection", "delivery"),
+                   default="collection",
+                   help="What Deadline(j) bounds (spec Q2): the collection, arrival + "
+                        "dwell (default), or 'delivery': per stop, that stop's own "
+                        "return to the dock plus the upload (it does not bound when "
+                        "the earlier stops' updates actually reach the cluster).")
+    g.add_argument("--backhaul-period-s", type=float, default=None,
+                   help="Seconds backhaul period P_bh (s); default n_missions x T_nom.")
+    g.add_argument("--t-nom-s", type=float, default=None,
+                   help="T_nom (s) for every cell; default: computed per cell when a "
+                        "setting needs it.")
+    g.add_argument("--t-nom-layouts", type=int, default=20,
+                   help="Reference layouts T_nom is the median over (default 20).")
+    g.add_argument("--deadline-time-scale", default="1.0",
+                   help="The deadline law's time unit: a number (1.0 = recorded, "
+                        "either clock) or 't_nom' for T_nom / 10 s.")
+    g.add_argument("--initial-window-s", type=float, default=None,
+                   help="Φ₀ in the law's recorded unit (default 60 s).")
+    g.add_argument("--initial-window-missions", type=float, default=None,
+                   help="Φ₀ as a number of nominal mission periods (critic A7).")
+    g.add_argument("--agg-period-t-nom", action="store_true",
+                   help="agg:cutoff: set the D5 period_s to the cell's T_nom.")
+    g.add_argument("--session-ttl-s", type=float, default=None,
+                   help="The mule's wall-clock session TTL (default 3 s); ferry cells "
+                        "set it from the measured real-model fit time (>= 2x).")
+    g.add_argument("--rf-link-token", action=argparse.BooleanOptionalAction, default=None,
+                   help="Give each trial one RF link token (Amendment 10). Default: on "
+                        "exactly with --mission-clock sim.")
+    g.add_argument("--expected-input-dim", type=int, default=None,
+                   help="The input width a ferry cell's real model must have (design "
+                        "R8); default 21 on the canonical data.")
+    for name, kind, text in _PHYSICS_FLAGS:
+        g.add_argument(f"--{name.replace('_', '-')}", dest=f"phys_{name}", type=kind,
+                       default=None, help=text)
+
+
+def _phase_3_driver_kwargs(args, parser: argparse.ArgumentParser) -> dict:
+    """The ``Exp4Driver`` keywords of the Phase 3 flags."""
+    scale = args.deadline_time_scale
+    if scale != "t_nom":
+        try:
+            scale = float(scale)
+        except ValueError:
+            parser.error(f"--deadline-time-scale must be a number or 't_nom', got {scale!r}")
+    physics = {
+        name: getattr(args, f"phys_{name}")
+        for name, _kind, _text in _PHYSICS_FLAGS
+        if getattr(args, f"phys_{name}") is not None
+    }
+    return dict(
+        mission_clock=args.mission_clock,
+        contact_band=args.contact_band,
+        contact_band_classes=(
+            None if args.contact_band_classes is None else list(args.contact_band_classes)
+        ),
+        in_flight_response=args.in_flight_response,
+        replan_fallback=args.replan_fallback,
+        backhaul_model=args.backhaul_model,
+        contact_reliability_source=args.contact_reliability_source,
+        payload_bytes=args.payload_bytes,
+        deadline_bounds=args.deadline_bounds,
+        ferry_physics=physics,
+        backhaul_period_s=args.backhaul_period_s,
+        t_nom_s=args.t_nom_s,
+        t_nom_layouts=int(args.t_nom_layouts),
+        deadline_time_scale=scale,
+        initial_window_s=args.initial_window_s,
+        initial_window_missions=args.initial_window_missions,
+        agg_period_t_nom=bool(args.agg_period_t_nom),
+        session_ttl_s=args.session_ttl_s,
+        rf_link_token=args.rf_link_token,
+        expected_input_dim=args.expected_input_dim,
+    )
+
+
 def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = argparse.ArgumentParser(prog="experiments.exp4.runner_main")
     parser.add_argument("--csv", required=True, type=Path,
@@ -72,8 +214,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser.add_argument("--n-trials", type=int, default=1,
                         help="Trials per cell (paired across arms).")
     parser.add_argument("--base-seed", type=int, default=42)
-    parser.add_argument("--arms", nargs="+", default=list(ARMS),
-                        help=f"Which arms to run; EX-4.0 ships {list(ARMS)}.")
+    parser.add_argument("--arms", nargs="+", default=None,
+                        help=f"Which arms to run (default: all of {list(ARMS)}).")
     parser.add_argument("--N", nargs="+", type=int, default=[2],
                         help="Device-population sweep.")
     parser.add_argument("--rrf", nargs="+", type=float, default=[60.0],
@@ -100,7 +242,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser.add_argument(
         "--timeout-s", type=float, default=None,
         help="Soft harness timeout (warning-only label). Defaults to "
-             "trial-budget-s so a killed trial is also labelled.",
+             "trial-budget-s so a killed trial is also labelled; on the "
+             "mission clock, to the largest re-costed trial budget over the grid.",
     )
     # ---- EX-4.1 real-model flags ---- #
     parser.add_argument(
@@ -179,7 +322,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
              "fixed band; H3 runs the U(c,t) controller that re-selects the "
              "band per mission. Under 'jittery' this gives H3 lower backhaul "
              "loss (the paper's L1-adaptivity claim); under 'clean' the "
-             "effect is ~null by construction. Use with --realism.",
+             "effect is ~null by construction. Use with --realism. With "
+             "--mission-clock sim (--backhaul-model mission only) the "
+             "selector's RF prior is the chosen band's SNR at the last "
+             "upload made, not the trial's mean SNR (critic B4).",
     )
     parser.add_argument(
         "--mission-budget-s", type=float, default=None,
@@ -379,6 +525,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         help="Arm D5: FedCS's greedy score, one per contact (default, the "
              "paper's letter) or the contact's device count.",
     )
+    _add_phase_3_flags(parser)
     args = parser.parse_args(argv)
 
     logging.basicConfig(
@@ -388,7 +535,18 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     # H0 (traditional flat FL) is a real-model convergence baseline; drop it
     # from a stub run rather than erroring every H0 trial.
-    arms = list(args.arms)
+    explicit_arms = args.arms is not None
+    arms = list(args.arms) if explicit_arms else list(ARMS)
+    if args.mission_clock == "sim" and "H0" in arms:
+        # FeRRy Phase 3 (critic A5): H0 has no simulated round time.
+        if explicit_arms:
+            parser.error(
+                "H0 has no simulated round time (critic A5): run it with "
+                "--mission-clock wall, in a CSV of its own"
+            )
+        log.warning("H0 has no simulated round time; dropping it from this "
+                    "--mission-clock sim run")
+        arms = [a for a in arms if a != "H0"]
     if not args.real_model and "H0" in arms:
         log.warning("H0 requires --real-model; dropping it from this stub run")
         arms = [a for a in arms if a != "H0"]
@@ -481,6 +639,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         whittle_weights=args.whittle_weights,
         fedcs_value=args.fedcs_value,
     )
+    driver_kwargs.update(_phase_3_driver_kwargs(args, parser))
     try:
         driver = Exp4Driver(**driver_kwargs)
     except ValueError as e:
@@ -492,11 +651,25 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             "EX-4.1 real-model run: source=%s epochs=%d batch=%d tau=%.2f",
             args.data_source, args.local_epochs, args.local_batch_size, args.tau,
         )
+    # The soft cap labels a trial that returned past it. On the mission clock
+    # each cell's hard kill is re-costed for the session TTL (critic B14), so
+    # the default cap is the largest of them over the grid; on the wall clock
+    # it is --trial-budget-s, as recorded.
+    soft_cap = args.timeout_s
+    if soft_cap is None:
+        soft_cap = max(
+            driver.trial_wall_budget_s(n_devices=int(n), n_missions=int(m))
+            for n in args.N for m in args.n_missions
+        )
+    # A mission-clock trial's own budget can be below that cap, so its status
+    # marker records the cap as well: a trace scored without this CSV then
+    # applies the cap the runner applied. Wall markers leave it out.
+    driver.soft_cap_s = float(soft_cap)
     runner = TrialRunner(
         grid=grid,
         log_path=args.csv,
         metric_columns=list(Exp4MetricSummary.csv_columns()) + list(PROVENANCE_COLUMNS),
-        timeout_s=(args.timeout_s if args.timeout_s is not None else args.trial_budget_s),
+        timeout_s=soft_cap,
     )
     log.info(
         "exp4 grid: arms=%s N=%s rrf=%s n_missions=%s regime=%s trials=%d (%d cells)",

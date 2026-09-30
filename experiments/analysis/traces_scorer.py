@@ -13,9 +13,10 @@ change to the trial CSV's schema. Per trial it reports:
   upload the cluster deferred (``agg:fedbuff``) or expired does not close its
   round either.
 * **Time to τ** for any list of thresholds: the mission, the cluster round
-  and the wall-clock seconds at which accuracy first reached τ. Wall-clock
-  time is dominated by local training, not flight, until the Phase 3 mission
-  clock exists; missions are the fairer unit for comparing arms. The mission
+  and the wall-clock seconds at which accuracy first reached τ, and on the
+  simulated mission clock the simulated seconds too. Wall-clock time is
+  dominated by local training, not flight; missions, and on the mission
+  clock simulated seconds, are the fairer units for comparing arms. The mission
   count is the reaching mule's: how many missions the mule whose upload
   closed the reaching round had flown, that mission included. Mules fly in
   parallel, so this counts mission periods and compares across fleet sizes,
@@ -62,6 +63,20 @@ the cluster's fold lists it with them. Every recorded Exp 4 trial used one
 mule, and on those every column is what it was before multi-mule scoring
 existed; ``unmerged_missions`` is 0 on all of them.
 
+Traces on the simulated mission clock (FeRRy Phase 3; ``mule_ready`` says
+``mission_clock: "sim"``, and a trace that does not say so is wall-clock, as
+every recorded one is) are scored in simulated time where time matters. Their
+missions complete, and so are ordered for the ages and Network AoU, by their
+simulated ends (``mission_completed.sim_end_s``); the envelope timestamps
+stay wall time and still place cluster events in the missions' windows. Time
+to τ adds the simulated seconds (``sim_s_to_τ``, from ``model_eval.sim_ts``)
+beside the wall ones, and the deadline misses compare simulated contact
+times with simulated deadlines. The summary adds the simulated mission
+duration, the clock's ledger, the SIMULATED energy, the budget overrun and
+the re-plans, aborts and inserts (:mod:`experiments.exp4.metrics`), and the
+provenance the Phase 3 driver columns. A trace whose clocks disagree is
+refused, never scored (:class:`~experiments.exp4.events_consumer.ClockDomainError`).
+
 Usage::
 
     python -m experiments.analysis.traces_scorer \\
@@ -77,7 +92,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
-from dataclasses import dataclass, field
+from dataclasses import MISSING, dataclass, field, fields
 from pathlib import Path
 from typing import Dict, Iterable, List, Mapping, Optional, Sequence, Tuple, Union
 
@@ -86,14 +101,24 @@ import numpy as np
 from experiments.exp3.metrics import jains_fairness
 from experiments.exp4.driver import PROVENANCE_COLUMNS, TRIAL_STATUS_FILE
 from experiments.exp4.events_consumer import (
+    ClockDomainError,
     Exp4Observation,
     MissionKey,
     MissionRecord,
+    completion_order,
     consume_run_dir,
 )
 from experiments.exp4.metrics import Exp4MetricSummary, summarise_observation
+from experiments.exp4.topology_builder import SESSION_TTL_S, device_positions, device_spread_m
 from hermes.mission.aggregation_rules import AGG_PLAIN, AggregationSpec
-from hermes.scheduler.stages.s3_deadline import LAW_ADDITIVE, DeadlineLaw
+from hermes.processes.config import (
+    BACKHAUL_SECONDS,
+    CLOCK_SIM,
+    CLOCK_WALL,
+    FERRY_SPEC_FIELDS,
+    MuleConfig,
+)
+from hermes.scheduler.stages.s3_deadline import LAW_ADDITIVE, DeadlineLaw, time_scale_for_period
 
 
 # --------------------------------------------------------------------------- #
@@ -177,9 +202,13 @@ def trial_status(trace_dir, status_csv: StatusSource = None) -> TrialStatus:
 
     * a CSV row that records a failure is the final word;
     * without a CSV row, a marker's ``ok`` past the cap is relabelled
-      ``timeout`` (source ``soft_cap``) by the runner's default rule — the
-      cap is the trial budget unless ``--timeout-s`` overrode it, and then
-      only the CSV knows;
+      ``timeout`` (source ``soft_cap``) by the runner's rule. The cap is the
+      marker's ``soft_cap_s`` when it records one: a mission-clock trial run
+      by ``runner_main`` records the cap the runner applied (the largest
+      re-costed budget over the grid, or ``--timeout-s``), which can exceed
+      the trial's own budget. Otherwise it is the marker's ``trial_budget_s``,
+      the trial's own budget and, on the wall clock, the runner's default
+      cap; a ``--timeout-s`` that overrode it there is known only to the CSV;
     * a CSV ``ok`` never clears a marker's failure: the runner never turns a
       failed trial ok, so that row is some other run's.
 
@@ -236,6 +265,10 @@ def trial_provenance(trace_dir) -> Dict[str, object]:
     a legacy config lacks takes the recorded default. The fleet columns
     (Phase 2) come from the number of mule configs and the cluster's config;
     the quorum is blank for the recorded topology, one mule with a quorum of 1.
+    The clock columns (Phase 3) are :func:`_clock_provenance`'s; on a trace
+    recorded before them every one is blank at the recorded settings, as the
+    driver's are, but the L1 channel, realism and the model width, which are
+    read off the configs as the trial ran them.
     """
     trace_dir = Path(trace_dir)
     mule = _first_json(trace_dir, "mule-*.json")
@@ -265,7 +298,169 @@ def trial_provenance(trace_dir) -> Dict[str, object]:
     quorum = int(cluster.get("min_participation") or 1)
     provenance["n_mules"] = n_mules
     provenance["min_participation"] = "" if (n_mules, quorum) == (1, 1) else quorum
+    provenance.update(_clock_provenance(
+        mule, cluster,
+        devices=[_read_json(p) for p in sorted(trace_dir.glob("device-*.json"))],
+        marker=_read_json(trace_dir / TRIAL_STATUS_FILE),
+        seed=_trial_seed(trace_dir, mule),
+    ))
     return {col: provenance.get(col, "") for col in PROVENANCE_COLUMNS}
+
+
+#: ``MuleConfig`` ferry fields ``ferry_params`` leaves out, as the driver does:
+#: those with a column of their own, and the ground-truth availability, which
+#: no record shows (critic B16).
+_FERRY_PARAMS_OMITTED = (
+    "contact_band", "in_flight_response", "backhaul_model",
+    "contact_reliability_source", "device_availability", "t_nom_s",
+)
+
+
+def _clock_provenance(
+    mule: Mapping[str, object],
+    cluster: Mapping[str, object],
+    *,
+    devices: Sequence[Mapping[str, object]],
+    marker: Mapping[str, object],
+    seed: Optional[int],
+) -> Dict[str, object]:
+    """The FeRRy Phase 3 provenance columns, as ``Exp4Driver._clock_provenance``
+    writes them, from the trace's own configs.
+
+    Each is blank at its recorded value. The switches, the deadline time
+    unit, Φ₀, T_nom and the session TTL are the mule config's fields;
+    ``ferry_params`` (simulated clock only) is every other ferry field of the
+    mule config, as :func:`_format_ferry_params` writes it. Three settings no
+    CSV recorded before are read off the other configs: ``l1_channel`` from
+    the cluster's per-mission loss schedule, ``input_dim`` from the cluster's
+    model width, and ``realism`` from the devices' own contact reliability
+    (:func:`_realism`). On a trace recorded before Phase 3 (every kept one)
+    that leaves ``l1_channel``, ``realism`` and ``input_dim`` as recorded and
+    the other ten blank: all of them ran the recorded 3 s TTL.
+    """
+    sim = mule.get("mission_clock") == CLOCK_SIM
+
+    def unless(value, recorded):
+        return "" if value is None or value == recorded else value
+
+    return {
+        "mission_clock": CLOCK_SIM if sim else "",
+        "contact_band": mule.get("contact_band") or "",
+        "in_flight_response": unless(mule.get("in_flight_response"), "abort"),
+        "backhaul_model": unless(mule.get("backhaul_model"), "mission"),
+        "contact_reliability_source": unless(mule.get("contact_reliability_source"), "origin"),
+        "deadline_time_scale": unless(_float_or_none(mule.get("deadline_time_scale")), 1.0),
+        "initial_window_s": _blank(_float_or_none(mule.get("initial_window_s"))),
+        "t_nom_s": _blank(_float_or_none(mule.get("t_nom_s"))),
+        "session_ttl_s": unless(_float_or_none(mule.get("session_ttl_s")), float(SESSION_TTL_S)),
+        "ferry_params": _format_ferry_params(mule, marker) if sim else "",
+        "l1_channel": 1 if cluster.get("backhaul_loss_schedule") is not None else "",
+        "realism": 1 if _realism(mule, devices, seed) else "",
+        "input_dim": "" if cluster.get("input_dim") is None else int(cluster["input_dim"]),
+    }
+
+
+def _format_ferry_params(mule: Mapping[str, object], marker: Mapping[str, object]) -> str:
+    """``ferry_params`` as the driver writes it: JSON (sorted keys) of every
+    ferry field of the mule config but those :data:`_FERRY_PARAMS_OMITTED`
+    (a field the config lacks takes ``MuleConfig``'s default), the backhaul
+    period resolved to ``n_missions * T_nom`` when the seconds model computes
+    it, and ``t_nom_computed`` (:func:`_t_nom_computed`)."""
+    from hermes.l1.channel_model import backhaul_period_s
+
+    defaults = {f.name: f for f in fields(MuleConfig)}
+    shown: Dict[str, object] = {}
+    for name in FERRY_SPEC_FIELDS:
+        if name in _FERRY_PARAMS_OMITTED:
+            continue
+        if name in mule:
+            shown[name] = mule[name]
+        else:
+            default = defaults[name]
+            shown[name] = (default.default_factory() if default.default_factory is not MISSING
+                           else default.default)
+    t_nom = _float_or_none(mule.get("t_nom_s"))
+    if (mule.get("backhaul_model") == BACKHAUL_SECONDS and mule.get("backhaul_period_s") is None
+            and t_nom is not None):
+        shown["backhaul_period_s"] = backhaul_period_s(int(mule.get("n_missions") or 0), t_nom)
+    shown["t_nom_computed"] = _t_nom_computed(mule, marker)
+    return json.dumps(shown, sort_keys=True, default=str)
+
+
+def _t_nom_computed(mule: Mapping[str, object], marker: Mapping[str, object]) -> bool:
+    """Whether the driver computed the trial's T_nom rather than being given it.
+
+    The per-role configs record T_nom (``t_nom_s``) but not where it came
+    from, so the trial's status marker is read first, should it record
+    ``t_nom_computed``. Otherwise it is inferred. The driver computes T_nom
+    exactly when a setting needs one and none was given (``--t-nom-s``), and
+    the configs show each such setting: the seconds backhaul without a
+    period, the deadline time unit at T_nom / 10 s, D5's merge period at
+    T_nom, and Φ₀ in missions, which they record as its window in seconds
+    (``initial_window_s``). A T_nom recorded with none of them was given; one
+    recorded with any of them is taken as computed. Without ``--t-nom-s``
+    the driver records a T_nom only when it computed one, so that is exact
+    for every such trial. A T_nom given beside one of those settings reads
+    as computed, and so does one given beside a Φ₀ given in seconds, which
+    the configs record as they record a Φ₀ given in missions.
+    """
+    recorded = marker.get("t_nom_computed")
+    if isinstance(recorded, bool):
+        return recorded
+    t_nom = _float_or_none(mule.get("t_nom_s"))
+    if t_nom is None or not t_nom > 0.0:
+        return False
+    params = mule.get("aggregation_params")
+    period = _float_or_none(params.get("period_s")) if isinstance(params, Mapping) else None
+    return (
+        (mule.get("backhaul_model") == BACKHAUL_SECONDS and mule.get("backhaul_period_s") is None)
+        or _float_or_none(mule.get("deadline_time_scale")) == time_scale_for_period(t_nom)
+        or period == t_nom
+        or _float_or_none(mule.get("initial_window_s")) is not None
+    )
+
+
+def _realism(
+    mule: Mapping[str, object], devices: Sequence[Mapping[str, object]], seed: Optional[int],
+) -> bool:
+    """Whether the trial ran with the driver's ``realism`` (EX-4.2).
+
+    Realism gives every device its own contact reliability, so a device config
+    that carries one says so; that decides every trace recorded before Phase 3.
+    Under the channel reliability source (simulated clock) the devices carry
+    none, the draw being the mule's ground-truth availability, and the
+    topology builder fills that availability with or without realism. There
+    the layout decides: realism spreads the devices over its field, and
+    without it they are drawn from the trial seed inside the tight cluster
+    (``device_spread_m`` of the RF range), which is reproduced exactly.
+    """
+    if any(d.get("contact_reliability") is not None for d in devices):
+        return True
+    if mule.get("mission_clock") != CLOCK_SIM or not mule.get("device_availability"):
+        return False
+    xy = sorted(
+        (float(d["position"][0]), float(d["position"][1])) for d in devices
+        if isinstance(d.get("position"), (list, tuple)) and len(d["position"]) >= 2
+    )
+    if not xy or len(xy) != len(devices) or seed is None:
+        return False
+    tight = sorted(device_positions(len(xy), int(seed), device_spread_m(
+        float(mule.get("rf_range_m") or 0.0),
+    )))
+    return not all(
+        abs(a - c) <= 1e-9 and abs(b - d) <= 1e-9 for (a, b), (c, d) in zip(xy, tight)
+    )
+
+
+def _trial_seed(trace_dir: Path, mule: Mapping[str, object]) -> Optional[int]:
+    """The trial's seed: the mule config's ``trial_seed`` (simulated clock),
+    else the trace directory's name."""
+    if mule.get("trial_seed") is not None:
+        return int(mule["trial_seed"])
+    try:
+        return parse_trial_dir(trace_dir.name).seed
+    except ValueError:
+        return None
 
 
 def _format_aggregation(rule, params) -> Tuple[str, str]:
@@ -330,6 +525,10 @@ class TauReach:
     cluster_round: Optional[int] = None
     wall_s: Optional[float] = None       # from the first mission's start
     mule_id: Optional[str] = None        # the reaching mission's mule
+    #: On the simulated mission clock (FeRRy Phase 3): simulated seconds from
+    #: the fleet's first takeoff to the evaluated model's simulated time; None
+    #: on the wall clock.
+    sim_s: Optional[float] = None
 
 
 def tau_reach(obs: Exp4Observation, tau: float) -> TauReach:
@@ -345,6 +544,13 @@ def tau_reach(obs: Exp4Observation, tau: float) -> TauReach:
     trace does not say whose it was), and ``mission`` is the reaching
     mission's place among its own mule's missions (see the module
     docstring). Wall-clock time runs from the fleet's first mission start.
+
+    On the simulated mission clock, ``sim_s`` is the same span on that clock:
+    from the fleet's first simulated takeoff (``sim_start_s``) to the
+    evaluation's ``model_eval.sim_ts``, the simulated completion of the latest
+    upload the cluster had ingested, which with one mule is the reaching
+    mission's own upload. The windows that place the evaluation stay wall
+    ones, as the event envelopes are.
     """
     first = next(
         (e for e in obs.model_evals if e.cluster_round > 0 and e.accuracy >= tau),
@@ -352,7 +558,7 @@ def tau_reach(obs: Exp4Observation, tau: float) -> TauReach:
     )
     if first is None:
         return TauReach(tau=float(tau), reached=False)
-    missions = _ordered(obs.missions)
+    missions = _ordered(obs.missions, obs.mission_clock)
     start = _fleet_start(obs, missions)
     candidates = missions
     closer = obs.closed_by_mule.get(first.cluster_round)
@@ -375,10 +581,16 @@ def tau_reach(obs: Exp4Observation, tau: float) -> TauReach:
             ) if m is reaching
         )
     wall_s = (first.ts - start) if (first.ts is not None and start is not None) else None
+    sim_s = None
+    if obs.mission_clock == CLOCK_SIM and first.sim_ts is not None:
+        sim_start = _fleet_sim_start(obs, missions)
+        if sim_start is not None:
+            sim_s = first.sim_ts - sim_start
     return TauReach(
         tau=float(tau), reached=True, mission=mission,
         cluster_round=first.cluster_round, wall_s=wall_s,
         mule_id=None if reaching is None else reaching.mule_id,
+        sim_s=sim_s,
     )
 
 
@@ -424,7 +636,7 @@ def merged_devices(obs: Exp4Observation, mission: MissionRecord) -> Tuple[str, .
     credited: List[str] = []
     if _merged_on_arrival(obs, key):
         credited.extend(_kept_by_mule(mission))
-    for other in _ordered(obs.missions):
+    for other in _ordered(obs.missions, obs.mission_clock):
         other_key = obs.mission_key(other)
         if (
             other_key in obs.deferred_keys
@@ -454,6 +666,9 @@ def age_profile(
     ``i``'s own mule (see :func:`_home_mules`), and every mule's missions are
     the sampling points, in completion order. An update merged at another
     mule's mission — a FedBuff flush — resets the device's age to 0 there.
+    On the simulated mission clock the completion order is that of the
+    missions' simulated ends (FeRRy Phase 3); with one mule either order is
+    the mission rounds'.
     """
     devices = list(dict.fromkeys(str(d) for d in devices))
     if not devices:
@@ -472,7 +687,7 @@ def age_profile(
     merged_counts = {d: 0 for d in devices}
     network_aou: List[float] = []
     ages_seen: List[int] = []
-    missions = _ordered(obs.missions)
+    missions = _ordered(obs.missions, obs.mission_clock)
     for mission in missions:
         fleet += 1
         mule = obs.mule_key(mission.mule_id)
@@ -540,6 +755,11 @@ def deadline_misses(obs: Exp4Observation) -> DeadlineMisses:
     deadline holds every member to its contact's deadline — the tightest
     member's — so a later member can count late there that is on time under
     its own; ``basis`` reports which was used.
+
+    On the simulated mission clock the deadlines and the contact times are
+    both simulated seconds: the two switch clocks together, and the consumer
+    refuses a trace in which they do not
+    (:class:`~experiments.exp4.events_consumer.ClockDomainError`).
     """
     with_plan = admitted = missed = 0
     bases = set()
@@ -632,6 +852,8 @@ class TrialScore:
             row[f"missions_to_{tag}"] = _blank(reach.mission)
             row[f"rounds_to_{tag}"] = _blank(reach.cluster_round)
             row[f"wall_s_to_{tag}"] = _blank(reach.wall_s)
+            # FeRRy Phase 3: simulated seconds, on the mission clock only.
+            row[f"sim_s_to_{tag}"] = _blank(reach.sim_s)
         return row
 
 
@@ -647,13 +869,21 @@ def score_trial(
     ``status_csv`` (a trial CSV's path, or :func:`load_status_csv` of one)
     supplies the status of a trace that carries no marker, and overrides the
     marker's ``ok`` when it records a failure (see :func:`trial_status`).
+
+    Raises :class:`~experiments.exp4.events_consumer.ClockDomainError`,
+    naming the trial, for a trace whose clocks disagree: in its events (see
+    :func:`~experiments.exp4.events_consumer.trace_clock_domain`), or between
+    the clock its mules announced and the one their configs set.
     """
     trace_dir = Path(trace_dir)
     if not taus:
         raise ValueError("score_trial needs at least one tau")
     key = parse_trial_dir(trace_dir.name)
     devices = _device_ids(trace_dir)
-    obs = consume_run_dir(trace_dir, n_devices=len(devices))
+    try:
+        obs = consume_run_dir(trace_dir, n_devices=len(devices))
+    except ClockDomainError as e:
+        raise ClockDomainError(f"{trace_dir.name}: {e}") from e
     if not devices:
         devices = sorted(obs.per_device_serves)
         obs.n_devices = len(devices)
@@ -661,6 +891,13 @@ def score_trial(
     # Every mule of a trial runs the same scheduler settings, so the first
     # config speaks for the fleet, as it does for the provenance.
     mule_cfg = _first_json(trace_dir, "mule-*.json")
+    configured = str(mule_cfg.get("mission_clock") or CLOCK_WALL)
+    if obs.mule_ready and configured != obs.mission_clock:
+        raise ClockDomainError(
+            f"{trace_dir.name}: clock domains disagree: the mule config sets "
+            f"mission_clock {configured!r}, but its mule_ready announced "
+            f"{obs.mission_clock!r}"
+        )
     summary = summarise_observation(
         obs,
         n_devices=len(devices),
@@ -862,7 +1099,7 @@ def _home_mules(obs: Exp4Observation, devices: Sequence[str]) -> Dict[str, Optio
     for mule_id, members in obs.mule_slices.items():
         for d in members:
             home.setdefault(d, obs.mule_key(mule_id))
-    for m in _ordered(obs.missions):
+    for m in _ordered(obs.missions, obs.mission_clock):
         named = [
             *m.pass_1_clean_devices,
             *(m.pass_1_merged_devices or ()),
@@ -878,11 +1115,25 @@ def _fleet_start(obs: Exp4Observation, missions: Sequence[MissionRecord]) -> Opt
     """When the fleet began flying: the earliest start among each mule's first
     completed mission (``missions`` in completion order). With one mule, its
     first mission's start, None if that has none."""
+    starts = [m.started_ts for m in _first_missions(obs, missions) if m.started_ts is not None]
+    return min(starts) if starts else None
+
+
+def _fleet_sim_start(obs: Exp4Observation, missions: Sequence[MissionRecord]) -> Optional[float]:
+    """:func:`_fleet_start` on the simulated mission clock: the earliest
+    simulated takeoff among each mule's first mission."""
+    starts = [m.sim_start_s for m in _first_missions(obs, missions) if m.sim_start_s is not None]
+    return min(starts) if starts else None
+
+
+def _first_missions(
+    obs: Exp4Observation, missions: Sequence[MissionRecord],
+) -> List[MissionRecord]:
+    """Each mule's first mission of ``missions`` (in completion order)."""
     firsts: Dict[Optional[str], MissionRecord] = {}
     for m in missions:
         firsts.setdefault(obs.mule_key(m.mule_id), m)
-    starts = [m.started_ts for m in firsts.values() if m.started_ts is not None]
-    return min(starts) if starts else None
+    return list(firsts.values())
 
 
 def _kept_by_mule(mission: MissionRecord) -> Tuple[str, ...]:
@@ -919,19 +1170,24 @@ def _status_index(status_csv: StatusSource) -> Optional[StatusIndex]:
 
 
 def _past_soft_cap(marker: Mapping[str, object]) -> bool:
-    """Whether the marker's run time exceeds its trial budget, the runner's
-    default soft cap. False for a marker that records neither."""
+    """Whether the marker's run time exceeds the runner's soft cap: the
+    ``soft_cap_s`` it records (mission-clock trials run by ``runner_main``),
+    else its trial budget, the runner's default cap on the wall clock. False
+    for a marker that records no run time or no cap."""
     try:
-        return float(marker["run_s"]) > float(marker["trial_budget_s"])
+        cap = marker["soft_cap_s"] if "soft_cap_s" in marker else marker["trial_budget_s"]
+        return float(marker["run_s"]) > float(cap)
     except (KeyError, TypeError, ValueError):
         return False
 
 
-def _ordered(missions: Sequence[MissionRecord]) -> List[MissionRecord]:
-    """Missions in completion order; the recorded order when timestamps are absent."""
-    if all(m.completed_ts is not None for m in missions):
-        return sorted(missions, key=lambda m: m.completed_ts)
-    return list(missions)
+def _ordered(
+    missions: Sequence[MissionRecord], clock: str = CLOCK_WALL,
+) -> List[MissionRecord]:
+    """Missions in completion order on ``clock``; the recorded order when
+    timestamps are absent (:func:`~experiments.exp4.events_consumer.completion_order`:
+    on the simulated clock, the missions' simulated ends)."""
+    return completion_order(missions, clock)
 
 
 def _normalised_weights(
@@ -993,6 +1249,16 @@ def _tau_tag(tau: float) -> str:
 
 def _blank(v):
     return "" if v is None else v
+
+
+def _float_or_none(v) -> Optional[float]:
+    """A config value as a float; None when it is absent, null or not a number."""
+    if v is None or isinstance(v, bool):
+        return None
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return None
 
 
 if __name__ == "__main__":

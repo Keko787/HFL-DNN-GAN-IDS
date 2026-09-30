@@ -21,19 +21,56 @@ The cluster process:
 6. Exits cleanly on SIGTERM / SIGINT.
 
 Logs go to stderr in plain text. Chunk M wraps these in structured JSON.
+
+FeRRy Phase 3 (``ClusterConfig.mission_clock == "sim"``). The cluster keeps
+no clock: it reads simulated time off the UP bundles (``sim_upload_ts``, the
+upload's completion) and echoes the latest one it has ingested on every DOWN
+(``cluster_sim_ts``, the mules' Lamport sync), and its events gain the
+simulated fields of design section 2.5: ``up_bundle_ingested`` and
+``backhaul_upload_lost`` carry ``sim_upload_ts``, ``carrier``, ``snr_db`` and
+``p_loss``; ``cluster_round_closed`` and ``model_eval`` carry ``sim_ts``.
+Under ``backhaul_model == "seconds"`` an upload is lost with the probability
+the mule priced it at (``UpBundle.backhaul.p_loss``, the seconds-axis SNR at
+the upload; 1.0 below the SNR floor), drawn KEYED by (trial seed, mule,
+mission round) rather than from a stream, so the same mission of two arms is
+decided by the same uniform. The draw applies to every UP, an empty partial's
+included. On the wall clock every event and draw is the recorded one.
+
+Several mules on the simulated clock below a full quorum (FeRRy Phase 3, unit
+U9; :func:`needs_sim_order`). A mule spends about 10 wall seconds per
+mission against 120-280 simulated ones, so the order in which UPs arrive over
+the dock is not the order in which the uploads happened, and an asynchronous
+merge (a quorum below the mule count, ``agg:fedbuff``) folded in arrival
+order would merge them out of simulated order and drag each answered mule's
+clock to another mule's later upload (critic B9, design risk R2). The cluster
+then folds in simulated-time order instead: :class:`SimOrderGate` holds each
+UP until no other mule can still send one that completed earlier, and every
+released UP goes through exactly the steps an arriving one always did
+(:meth:`ClusterService._process_up`). The dock queues what it knows of each
+mule's time with the UPs (``TCPDockLinkServer(sim_markers=True)``:
+registrations, departures, and any ``clock``/``done`` marker a mule sends).
+``cluster_ready`` names the rule (``sim_order``), each released UP's event
+carries its place in that order and the wall time it was held, and
+``mule_departed`` marks a mule the cluster stops waiting for. A quorum of
+every mule is served as before: each merge waits for one partial from every
+mule, and the Lamport sync at the dock already puts every mule at the merge's
+time.
 """
 
 from __future__ import annotations
 
 import argparse
+import collections
 import hashlib
 import logging
+import math
 import signal
 import sys
 import threading
 import time
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Collection, Deque, Dict, List, Optional, Tuple
 
 import numpy as np
 
@@ -52,6 +89,11 @@ from hermes.transport import (
     HTTPCloudLink,
     TCPDockLinkServer,
 )
+from hermes.transport.dock_link import (
+    MARKER_CLOCK,
+    MARKER_REGISTERED,
+    DockClockMarker,
+)
 from hermes.mission.aggregation_rules import AGG_FEDBUFF
 from hermes.types import (
     ContactHistory,
@@ -63,7 +105,16 @@ from hermes.types import (
     UpBundle,
 )
 
-from .config import ClusterConfig, cluster_config_from_json
+from .config import (
+    BACKHAUL_MISSION,
+    BACKHAUL_SECONDS,
+    CLOCK_SIM,
+    CLOCK_WALL,
+    ClusterConfig,
+    cluster_config_errors,
+    cluster_config_from_json,
+    mission_schedule_index,
+)
 
 log = logging.getLogger("hermes.processes.cluster")
 
@@ -106,6 +157,11 @@ def _lost_upload_stand_in(up, mission_round: Optional[int], spec) -> UpBundle:
     lost partial held, and with the lost partial's mission and base version so
     the fold's event fields name the right mission and age. Nothing else of the
     bundle is used: its model, round report and Pass-2 ledger were lost.
+
+    FeRRy Phase 3 (critic B8): it keeps the lost UP's ``sim_upload_ts`` and
+    ``backhaul``. The upload did happen at that simulated time, and the mule
+    waits at the dock for the quorum like any uploader, so the time the
+    cluster echoes must not fall behind it. Both are None on the wall clock.
     """
     lost = up.partial_aggregate
     rnd = int(mission_round) if mission_round is not None else 0
@@ -124,7 +180,21 @@ def _lost_upload_stand_in(up, mission_round: Optional[int], spec) -> UpBundle:
             mule_id=up.mule_id, mission_round=rnd, started_at=0.0, finished_at=0.0,
         ),
         contact_history=ContactHistory(mule_id=up.mule_id, mission_round=rnd),
+        sim_upload_ts=getattr(up, "sim_upload_ts", None),
+        backhaul=getattr(up, "backhaul", None),
     )
+
+
+def stub_disc_weights() -> List[np.ndarray]:
+    """The 13-parameter stub global model the cluster seeds without a real θ.
+
+    Exposed so the Exp 4 driver can measure the stub payload (52 B) it prices
+    T_nom and the D4 split with (FeRRy Phase 3) from the same arrays.
+    """
+    return [
+        np.zeros((4,), dtype=np.float32),
+        np.ones((3, 3), dtype=np.float32) * 0.01,
+    ]
 
 
 def _mule_stream_key(mule_id) -> int:
@@ -135,6 +205,352 @@ def _mule_stream_key(mule_id) -> int:
     """
     digest = hashlib.sha256(str(mule_id).encode("utf-8")).digest()
     return int.from_bytes(digest[:4], "big")
+
+
+# --------------------------------------------------------------------------- #
+# FeRRy Phase 3, unit U9 — folding several mules' uploads in simulated order
+# --------------------------------------------------------------------------- #
+
+#: ``cluster_ready.sim_order``: the cluster folds uploads in simulated-time
+#: order under the conservative rule of :class:`SimOrderGate`.
+SIM_ORDER_CONSERVATIVE = "conservative"
+
+
+def needs_sim_order(cfg: ClusterConfig) -> bool:
+    """True when the cluster must fold uploads in simulated-time order (unit U9).
+
+    On the simulated clock with several mules whenever a merge can take
+    fewer partials than there are mules: a quorum below the mule count, or
+    ``agg:fedbuff``, whose buffer, not the quorum, times each merge. Arrival
+    order over the dock is then not simulated order (module docstring). A
+    quorum of every mule needs no gate and keeps its recorded service: each
+    merge waits for one partial from every mule, and the Lamport sync at the
+    dock puts every mule at the merge's time. One mule, or the wall clock,
+    never needs one.
+    """
+    if getattr(cfg, "mission_clock", CLOCK_WALL) != CLOCK_SIM:
+        return False
+    k = len(cfg.expected_mules)
+    if k <= 1:
+        return False
+    from hermes.mission.aggregation_rules import AggregationSpec
+
+    spec = AggregationSpec.from_config(
+        getattr(cfg, "aggregation", None), getattr(cfg, "aggregation_params", None),
+    )
+    return spec.rule == AGG_FEDBUFF or int(cfg.min_participation) < k
+
+
+@dataclass
+class _HeldUp:
+    """One UP waiting in :class:`SimOrderGate`."""
+
+    up: UpBundle
+    mule: str
+    #: The upload's simulated completion (``sim_upload_ts``); None when it
+    #: carries no simulated time (or a wall stamp), which cannot be ordered.
+    ts: Optional[float]
+    #: Arrival number: the last tie-breaker, and a mule's FIFO order.
+    arrival: int
+    #: ``time.monotonic()`` when it arrived, for the wall time it was held.
+    held_at: float
+
+
+@dataclass(frozen=True)
+class ReleasedUp:
+    """An upload :class:`SimOrderGate` hands to the fold."""
+
+    up: UpBundle
+    #: Its place in the cluster's simulated order, from 1.
+    seq: int
+    #: Wall seconds it was held (a measurement, like ``duration_s``).
+    held_s: float
+    #: It was released after an upload that completed strictly later: the
+    #: order could not be kept. A mule that broke the waiting rule can send
+    #: one (see :class:`SimOrderGate`), and so can a mule that joins (its
+    #: bootstrap, or a restart) behind an upload lost at a quorum of 1 or
+    #: under FedBuff, whose time the cluster does not echo, or a restarted
+    #: mule behind an UP of its crashed session, read after the restart or
+    #: still held at it (:class:`SimOrderGate`, sessions). An upload that
+    #: ties the latest one released is not late: equal times are
+    #: simultaneous.
+    late: bool = False
+    #: It carries no usable simulated time, so it was not ordered at all.
+    unordered: bool = False
+
+
+class SimOrderGate:
+    """Hold each mule's UPs until no other mule can still send an earlier one (FeRRy Phase 3, U9).
+
+    **The rule.** An upload's simulated time is its ``sim_upload_ts`` (its
+    completion, critic B8); uploads are folded in the order of ``(sim time,
+    mule id)``, ties broken by mule id so the order is deterministic. A mule
+    synced to an upload already folded (the DOWN that answered or
+    bootstrapped it carried that time) can tie it and sort before it; its
+    upload happened after that fold, and follows it (see exempt mules). For
+    every mule it tracks, the gate keeps a lower bound on the simulated time
+    of every UP that mule may still send: the latest time the mule reported,
+    by an UP (a mule's clock never goes back, so its next upload completes no
+    earlier) or by a ``clock`` marker, and minus infinity before its first
+    report. A held UP ``(t, m)`` is released when, for every other tracked
+    mule ``m'`` that is not exempt, ``(bound(m'), m') > (t, m)``: no mule can
+    still send an upload that sorts before it. This is the conservative
+    synchronisation of parallel discrete-event simulation (Chandy and Misra
+    1979), with UPs as the time-stamped messages and the bounds as the
+    channel clocks. A mule stops being tracked when it departs (its dock
+    connection ended, or it said ``done``), so nobody waits for a mule that has
+    exited; each mule's own UPs are released in their arrival order.
+
+    **Sessions.** The dock numbers each connection (its session,
+    ``TCPDockLinkServer.session_of``) in the order the connections register,
+    stamps every marker of the connection with it, and queues its
+    ``registered`` marker before any of its UPs. The gate tracks a mule
+    under the latest session it knows of, from that marker or from the
+    mule's bootstrap DOWN, which can come first (:meth:`register`). A newer
+    session (the mule registered again) starts the mule over at minus
+    infinity, since a restarted mule's clock starts at the epoch. A marker
+    of a session older than the tracked one is stale and changes nothing, a
+    departure included: a mule restarted before the cluster read its
+    crashed session's markers (during the startup wait, say) is tracked
+    under its live session from its bootstrap on, and stays tracked. Two
+    gaps remain, both because an UP carries no session. An UP the crashed
+    session sent, read only after the live session is tracked, raises the
+    live mule's bound to its time: the gate may then fold other mules'
+    later uploads before the live mule's next one, which is folded ``late``
+    and answered with a later time than its own. And an UP the crashed
+    session left held stays at the head of the mule's queue (a mule's own
+    UPs leave in arrival order), where the mule's own bound never holds it
+    back. It may be folded before the restarted mule's first uploads, which
+    are then ``late``. Otherwise those uploads, which complete earlier,
+    queue behind it and set the mule's bound below it. Another mule's
+    upload that falls between the two times then waits for the restarted
+    mule, while the crashed UP waits for that other mule: nothing is
+    released until a waiting mule's ``down_wait_s`` (the whole trial's wall
+    budget under the Exp 4 driver) runs out. That stall is the one
+    exception to why the gate cannot deadlock (below). The Exp 4
+    orchestrator spawns each mule once and never restarts one, so only a
+    manual or fault-injected restart reaches either gap.
+
+    **Exempt mules.** A mule whose UP the cluster has folded and not yet
+    answered (the service's ``_awaiting``) is blocked at its dock until a DOWN
+    comes, and syncs its clock to that DOWN's ``cluster_sim_ts``, the latest
+    upload folded before it (MissionClock ``advance_to``). So no upload it
+    sends later can complete before anything folded while it waits, and it
+    blocks nothing. It can tie the latest one, when its next mission takes no
+    simulated time, and then sort before it by mule id; equal times are
+    simultaneous, so such an upload is ordered as usual and never flagged
+    (``late`` compares simulated time alone). Without the exemption a quorum
+    above 1 below every mule would deadlock: the waiting mules' bounds would
+    hold back the very uploads that complete their quorum. A mule that stops
+    waiting (its ``down_wait_s``, the whole trial's wall budget under the
+    Exp 4 driver, ran out) breaks this; its next upload may then complete
+    before one already folded, is ``late``, and is folded at once and
+    flagged, since holding it cannot restore the order.
+
+    **Why it cannot deadlock** (any K, any quorum; a mule restarted with an
+    UP of its crashed session still held is the one exception, see
+    sessions). While an UP is held, each tracked mule is in one of three
+    states: *held* (its own UP is held; it waits at its dock), *exempt* (see
+    above) or *flying* (it has its DOWN and is flying, or has not uploaded
+    yet). Take the held UP with the smallest ``(t, m)``. A held mule ``m'``
+    has ``bound(m') >= t'`` for its own held ``(t', m') > (t, m)`` (a mule's
+    UPs arrive in the order of their times, except across a restart), and
+    exempt mules are skipped, so the smallest UP can wait only for flying
+    mules. A flying mule does not depend on the cluster: its Pass 2 and next
+    Pass 1 need no DOWN, so within one mission of wall time it either
+    uploads (it becomes held, and its bound rises) or finishes its run and
+    departs. Every report therefore moves a flying mule
+    to held or gone, a mule becomes flying again only after one of its UPs
+    was released and answered, and when no mule is flying the smallest held
+    UP is released at once. So every held UP is released within a finite
+    number of reports, whether one mule is fast in simulated time, another
+    slow, or one finishes early. The price is wall time: at worst the mules
+    run one at a time, which the driver's hard kill allows for
+    (``Exp4Driver.ferry_wall_bound_s``). A mule that hangs without leaving
+    the dock stalls the others until that kill, as a hung process would stall
+    any conservative simulation.
+
+    Pure bookkeeping: no clock of its own, no I/O, and not thread-safe (the
+    service's single loop drives it).
+    """
+
+    def __init__(self) -> None:
+        from hermes.l1.mission_clock import SIM_CEILING_S
+
+        self._ceiling = float(SIM_CEILING_S)
+        self._held: Dict[str, Deque[_HeldUp]] = {}
+        #: Tracked mules: the lower bound of their future uploads' times.
+        self._bound: Dict[str, float] = {}
+        #: The dock session each tracked mule registered with (None: unknown).
+        self._session: Dict[str, Optional[int]] = {}
+        self._arrivals = 0
+        self._released = 0
+        #: ``(sim time, mule)`` of the latest ordered upload released.
+        self._frontier: Optional[Tuple[float, str]] = None
+
+    # ------------------------------------------------ what the dock reports
+
+    def register(self, mule: str, session: Optional[int] = None) -> None:
+        """Track ``mule``: a new connection of it, or its bootstrap DOWN.
+
+        A mule's clock starts at the epoch and syncs to its bootstrap DOWN, so
+        nothing is known yet of its time: its bound is minus infinity. The
+        service calls this for the ``registered`` marker the dock queues, and
+        again when it bootstraps the mule, which can come first (the marker
+        may sit behind other mules' UPs in the queue while the mule, already
+        bootstrapped, can upload any time after the epoch). Already tracked
+        under the same session, or with no session given, nothing changes:
+        the marker precedes all of the session's UPs, so no report is lost. A
+        newer session (the mule registered again) starts over; UPs of the
+        older one still held stay at the head of the mule's queue (class
+        docstring, sessions). An older one
+        changes nothing: the dock numbers sessions in the order they
+        register, so it is a leftover of a connection the mule has replaced,
+        read only after the service bootstrapped the restarted mule under its
+        live session (class docstring, sessions); :meth:`depart` then ignores
+        that session's departure too.
+        """
+        mule = str(mule)
+        tracked = self._session.get(mule)
+        if mule in self._bound and (
+            session is None or session == tracked
+            or (tracked is not None and session < tracked)
+        ):
+            return
+        self._bound[mule] = float("-inf")
+        self._session[mule] = session
+
+    def depart(self, mule: str, session: Optional[int] = None) -> bool:
+        """Stop tracking ``mule``: it will send no more UPs. True if it was tracked.
+
+        A departure of an older session (the mule has registered again since)
+        is ignored. UPs of the mule still held stay held and are folded in
+        order: they happened.
+        """
+        mule = str(mule)
+        if mule not in self._bound:
+            return False
+        tracked = self._session.get(mule)
+        if session is not None and tracked is not None and session != tracked:
+            return False
+        del self._bound[mule]
+        self._session.pop(mule, None)
+        return True
+
+    def clock(self, mule: str, sim_ts: Optional[float], session: Optional[int] = None) -> None:
+        """``mule`` reports that its later UPs complete at or after ``sim_ts``.
+
+        A report of an older session (the mule has registered again since) is
+        ignored, as its departure is: a crashed session's clock says nothing
+        of the restarted mule's (class docstring, sessions).
+        """
+        mule = str(mule)
+        tracked = self._session.get(mule)
+        if session is not None and tracked is not None and session != tracked:
+            return
+        ts = self._simulated(sim_ts)
+        if mule in self._bound and ts is not None and ts > self._bound[mule]:
+            self._bound[mule] = ts
+
+    def hold(self, up: UpBundle, *, now: float) -> None:
+        """Hold an arriving UP; it also reports its mule's time.
+
+        An UP from a mule the gate does not track (it never registered with
+        markers, or said ``done`` and uploaded anyway) tracks it again, bound
+        at the UP's time, until it departs.
+        """
+        mule = str(up.mule_id)
+        ts = self._simulated(getattr(up, "sim_upload_ts", None))
+        self._arrivals += 1
+        self._held.setdefault(mule, collections.deque()).append(
+            _HeldUp(up=up, mule=mule, ts=ts, arrival=self._arrivals, held_at=float(now))
+        )
+        if ts is None:
+            return
+        if mule not in self._bound:
+            self._bound[mule] = ts
+            self._session[mule] = None
+        elif ts > self._bound[mule]:
+            self._bound[mule] = ts
+
+    # ------------------------------------------------ release
+
+    def blockers(self, mule: str, sim_ts: float, exempt: Collection[str] = ()) -> List[str]:
+        """The mules that could still send an upload sorting before ``(sim_ts, mule)``."""
+        mule = str(mule)
+        return sorted(
+            m for m, b in self._bound.items()
+            if m != mule and m not in exempt and not (b > sim_ts or (b == sim_ts and m > mule))
+        )
+
+    def pop_ready(self, *, exempt: Collection[str] = (), now: float) -> Optional[ReleasedUp]:
+        """The next upload in simulated order, if no mule can still precede it; else None.
+
+        ``exempt``: the mules waiting at their dock for the answer to an UP
+        already folded (class docstring). An UP without simulated time cannot
+        be ordered and goes at once; so does one that completed strictly
+        before an upload already released (``late``). One that ties the
+        latest upload released, even sorting before it by mule id, is
+        ordered as usual (class docstring, exempt mules).
+        """
+        exempt = {str(m) for m in exempt}
+        heads = [(m, q[0]) for m, q in sorted(self._held.items()) if q]
+        if not heads:
+            return None
+        for mule, head in heads:
+            if head.ts is None:
+                return self._release(mule, now, unordered=True)
+        mule, head = min(heads, key=lambda mh: (mh[1].ts, mh[0], mh[1].arrival))
+        late = self._frontier is not None and head.ts < self._frontier[0]
+        if not late and self.blockers(mule, head.ts, exempt):
+            return None
+        return self._release(mule, now, late=late)
+
+    def _release(self, mule: str, now: float, *, late: bool = False,
+                 unordered: bool = False) -> ReleasedUp:
+        entry = self._held[mule].popleft()
+        self._released += 1
+        if entry.ts is not None:
+            key = (entry.ts, mule)
+            if self._frontier is None or key > self._frontier:
+                self._frontier = key
+        return ReleasedUp(
+            up=entry.up, seq=self._released, held_s=max(0.0, float(now) - entry.held_at),
+            late=late, unordered=unordered,
+        )
+
+    # ------------------------------------------------ introspection
+
+    def tracked(self) -> List[str]:
+        """The mules the gate waits for (not yet departed), sorted."""
+        return sorted(self._bound)
+
+    def bound(self, mule: str) -> Optional[float]:
+        """``mule``'s lower bound (-inf before any report), or None when untracked."""
+        return self._bound.get(str(mule))
+
+    def held_count(self, mule: Optional[str] = None) -> int:
+        """How many UPs are held, of ``mule`` or of every mule."""
+        if mule is not None:
+            return len(self._held.get(str(mule), ()))
+        return sum(len(q) for q in self._held.values())
+
+    @property
+    def frontier(self) -> Optional[float]:
+        """Simulated time of the latest ordered upload released (None before any)."""
+        return None if self._frontier is None else self._frontier[0]
+
+    def _simulated(self, ts) -> Optional[float]:
+        """``ts`` as a simulated time, or None (absent, not finite, or a wall stamp)."""
+        if ts is None or isinstance(ts, bool):
+            return None
+        try:
+            value = float(ts)
+        except (TypeError, ValueError):
+            return None
+        if not math.isfinite(value) or not value < self._ceiling:
+            return None
+        return value
 
 
 class ClusterService:
@@ -149,6 +565,28 @@ class ClusterService:
     ) -> None:
         self.cfg = cfg
         self._stop_event = threading.Event()
+        # FeRRy Phase 3 — refuse clock settings that cannot run (critic B16)
+        # before binding anything; the recorded defaults pass.
+        errors = cluster_config_errors(cfg)
+        if errors:
+            raise ValueError("cluster config: " + "; ".join(errors))
+        self._sim = getattr(cfg, "mission_clock", CLOCK_WALL) == CLOCK_SIM
+        self._backhaul_model = getattr(cfg, "backhaul_model", BACKHAUL_MISSION)
+        #: Salt of the seconds model's keyed loss draw (None otherwise).
+        self._loss_salt: Optional[int] = None
+        if self._backhaul_model == BACKHAUL_SECONDS:
+            from hermes.l1.channel_model import SALT_BACKHAUL_LOSS, ferry_salt
+
+            self._loss_salt = ferry_salt(int(cfg.trial_seed), SALT_BACKHAUL_LOSS)
+        # FeRRy Phase 3, unit U9: several mules on the simulated clock below a
+        # full quorum fold their uploads in simulated order (module
+        # docstring); the dock then queues the mules' time markers with the
+        # UPs. Otherwise None, and the recorded dock and loop run.
+        self._sim_order: Optional[SimOrderGate] = (
+            SimOrderGate() if self._sim and needs_sim_order(cfg) else None
+        )
+        #: The upload being folded out of the gate (its event fields).
+        self._releasing: Optional[ReleasedUp] = None
 
         # Chunk M observability — null defaults so tests can construct the
         # service without setting up a JSONL file. The CLI entry point
@@ -156,7 +594,8 @@ class ClusterService:
         self.events = events or NullEventEmitter(role="cluster", node_id=cfg.cluster_id)
         self.metrics = metrics or MetricsRegistry()
 
-        self.dock = TCPDockLinkServer(host=cfg.dock_host, port=cfg.dock_port)
+        dock_kwargs = {"sim_markers": True} if self._sim_order is not None else {}
+        self.dock = TCPDockLinkServer(host=cfg.dock_host, port=cfg.dock_port, **dock_kwargs)
         self.dock.start()
         # Read back the actual port — the orchestrator may have asked
         # for ephemeral.
@@ -183,10 +622,7 @@ class ClusterService:
                 cfg.cluster_id, cfg.init_theta_path, len(disc_weights),
             )
         else:
-            disc_weights = [
-                np.zeros((4,), dtype=np.float32),
-                np.ones((3, 3), dtype=np.float32) * 0.01,
-            ]
+            disc_weights = stub_disc_weights()
         self.generator = StubGeneratorHost(disc_weights=disc_weights)
 
         # EX-4.1 — held-out eval set for per-round convergence (``model_eval``).
@@ -229,6 +665,15 @@ class ClusterService:
             getattr(cfg, "aggregation", None),
             getattr(cfg, "aggregation_params", None),
         )
+        # FeRRy Phase 3: on the simulated clock the cluster tracks the latest
+        # simulated upload, echoes it on DOWNs and forwards contact SNRs; the
+        # recorded cluster is built with exactly its old arguments.
+        sim_kwargs: Dict[str, Any] = {}
+        if self._sim:
+            sim_kwargs = dict(
+                sim_clock=True,
+                contact_band_classes=getattr(cfg, "contact_band_classes", None),
+            )
         self.cluster = HFLHostCluster(
             registry=self.registry,
             generator=self.generator,
@@ -236,6 +681,7 @@ class ClusterService:
             synth_batch_size=cfg.synth_batch_size,
             min_participation=cfg.min_participation,
             aggregation=self.aggregation,
+            **sim_kwargs,
         )
 
         # Optional Tier-3 outbound link.
@@ -243,6 +689,15 @@ class ClusterService:
         if self.cfg.tier3_url:
             self.cloud = HTTPCloudLink(base_url=self.cfg.tier3_url)
 
+        # FeRRy Phase 3, additive and on the simulated clock only: which
+        # clock and backhaul model the cluster runs, and (unit U9) the rule
+        # it folds several mules' uploads by when it orders them.
+        ready_sim = (
+            dict(mission_clock=CLOCK_SIM, backhaul_model=self._backhaul_model)
+            if self._sim else {}
+        )
+        if self._sim_order is not None:
+            ready_sim["sim_order"] = SIM_ORDER_CONSERVATIVE
         self.events.emit(
             "cluster_ready",
             dock_host=self.cfg.dock_host,
@@ -252,6 +707,7 @@ class ClusterService:
             synth_batch_size=self.cfg.synth_batch_size,
             min_participation=self.cfg.min_participation,
             tier3_wired=self.cloud is not None,
+            **ready_sim,
         )
 
     def _seed_registry_from_config(self) -> None:
@@ -365,6 +821,10 @@ class ClusterService:
 
         With one mule every DOWN still goes where it always went: that mule
         is the only uploader, the only mule waiting, and the only one docked.
+
+        FeRRy Phase 3, unit U9: with several mules on the simulated clock
+        below a full quorum, step 2 is :meth:`_run_in_sim_order`: the same
+        steps, with each UP held until the simulated order allows it.
         """
         expected_mules = [MuleID(m) for m in self.cfg.expected_mules]
         log.info(
@@ -407,6 +867,11 @@ class ClusterService:
                 )
         self._dispatch_to_new_mules(bootstrapped)
 
+        if getattr(self, "_sim_order", None) is not None:
+            self._run_in_sim_order(bootstrapped)
+            log.info("cluster %s service loop exiting", self.cfg.cluster_id)
+            return
+
         last_tier3_poll = 0.0
 
         # Service loop.
@@ -428,48 +893,8 @@ class ClusterService:
             self._dispatch_to_new_mules(bootstrapped)
 
             up_round = _up_mission_round(up) if up is not None else None
-            if up is not None and self._backhaul_dropped(up_round, up.mule_id):
-                if self._lost_upload_holds_quorum():
-                    self._hold_lost_upload(up, up_round)
-                else:
-                    # EX-4.2: model long-range mule->BS backhaul upload loss.
-                    # Drop this mule's aggregate (the round does not close) but
-                    # still send DOWN with the current θ so the mule can finish
-                    # its two-pass mission — the update is carried, not lost
-                    # (reconciled at a later dock, unlike H0's permanent loss).
-                    self.events.emit(
-                        "backhaul_upload_lost",
-                        mule_id=str(up.mule_id),
-                        mission_round=up_round,
-                    )
-                    self.metrics.increment("backhaul_uploads_lost")
-                    self._stop_waiting(up.mule_id)
-                    try:
-                        self.dock.send_down(self.cluster.dispatch_down_bundle(up.mule_id))
-                    except Exception:
-                        log.exception("post-loss DOWN failed for %s", up.mule_id)
-                up = None  # consumed as lost; skip the ingest path below
-
             if up is not None:
-                try:
-                    accepted = self.cluster.ingest_up_bundle(up)
-                    # Waiting from here until a DOWN answers it, whether or not
-                    # its partial was kept: either way the mule is blocked at
-                    # its inter-pass dock.
-                    self._start_waiting(up.mule_id)
-                    if accepted:
-                        self.events.emit(
-                            "up_bundle_ingested",
-                            mule_id=str(up.mule_id),
-                            mission_round=up_round,
-                        )
-                        self.metrics.increment("up_bundles_ingested")
-                        self._fold_pending(up.mule_id, up_round)
-                    else:
-                        self._note_refused_partial(up, up_round)
-                except Exception:
-                    log.exception("ingest_up_bundle / aggregate failed")
-                    self.metrics.increment("ingest_failures")
+                self._process_up(up, up_round)
 
             now = time.time()
             if now - last_tier3_poll >= self._TIER3_POLL_INTERVAL_S:
@@ -477,6 +902,195 @@ class ClusterService:
                 last_tier3_poll = now
 
         log.info("cluster %s service loop exiting", self.cfg.cluster_id)
+
+    def _process_up(self, up, up_round: Optional[int]) -> None:
+        """Everything one UP bundle sets off: the loss draw, the ingest, the
+        fold, the event and the DOWN(s). Step 2c of :meth:`run`, unchanged;
+        ``up_round`` is the mission its partial closes. Under the simulated
+        order (unit U9) it runs for each UP as the gate releases it."""
+        if self._upload_lost(up, up_round):
+            if self._lost_upload_holds_quorum():
+                self._hold_lost_upload(up, up_round)
+            else:
+                # EX-4.2: model long-range mule->BS backhaul upload loss.
+                # Drop this mule's aggregate (the round does not close) but
+                # still send DOWN with the current θ so the mule can finish
+                # its two-pass mission — the update is carried, not lost
+                # (reconciled at a later dock, unlike H0's permanent loss).
+                self.events.emit(
+                    "backhaul_upload_lost",
+                    mule_id=str(up.mule_id),
+                    mission_round=up_round,
+                    **self._sim_up_fields(up, up_round),
+                )
+                self.metrics.increment("backhaul_uploads_lost")
+                self._stop_waiting(up.mule_id)
+                try:
+                    self.dock.send_down(self.cluster.dispatch_down_bundle(up.mule_id))
+                except Exception:
+                    log.exception("post-loss DOWN failed for %s", up.mule_id)
+            return  # consumed as lost; skip the ingest path below
+
+        try:
+            accepted = self.cluster.ingest_up_bundle(up)
+            # Waiting from here until a DOWN answers it, whether or not
+            # its partial was kept: either way the mule is blocked at
+            # its inter-pass dock.
+            self._start_waiting(up.mule_id)
+            if accepted:
+                self.events.emit(
+                    "up_bundle_ingested",
+                    mule_id=str(up.mule_id),
+                    mission_round=up_round,
+                    **self._sim_up_fields(up, up_round),
+                )
+                self.metrics.increment("up_bundles_ingested")
+                self._fold_pending(up.mule_id, up_round)
+            else:
+                self._note_refused_partial(up, up_round)
+        except Exception:
+            log.exception("ingest_up_bundle / aggregate failed")
+            self.metrics.increment("ingest_failures")
+
+    # ------------------------------ FeRRy Phase 3, unit U9: simulated order
+
+    def _run_in_sim_order(self, bootstrapped: set) -> None:
+        """Step 2 of :meth:`run` with the uploads folded in simulated order.
+
+        Each pass reads the next dock event (an UP, or a mule's registration,
+        time report or departure; ``TCPDockLinkServer.recv_dock_event``),
+        bootstraps newly docked mules as always, feeds the event to the gate,
+        and then folds every UP the gate releases, in simulated order, each
+        through :meth:`_process_up` exactly as an arriving UP is on the
+        recorded loop. Tier-3 is polled on the same cadence.
+
+        The gate tracks every mule from its bootstrap DOWN on (those of the
+        startup wait first): from then on the mule can upload, and its
+        ``registered`` marker may still sit behind other mules' UPs. It
+        tracks the mule under its live dock session, so the markers an
+        earlier, crashed session left unread in the queue (the mule was
+        restarted during the startup wait) change nothing
+        (:class:`SimOrderGate`, sessions).
+        """
+        self._track_bootstrapped(bootstrapped)
+        last_tier3_poll = 0.0
+        while not self._stop_event.is_set():
+            try:
+                item = self.dock.recv_dock_event(timeout=1.0)
+            except Exception:
+                item = None
+
+            # L-M1, as on the recorded loop.
+            if self._stop_event.is_set():
+                break
+
+            # L-H2, as on the recorded loop.
+            before = set(bootstrapped)
+            self._dispatch_to_new_mules(bootstrapped)
+            self._track_bootstrapped(bootstrapped - before)
+
+            if item is not None:
+                self._note_dock_event(item)
+            self._release_in_sim_order()
+
+            now = time.time()
+            if now - last_tier3_poll >= self._TIER3_POLL_INTERVAL_S:
+                self._poll_tier3_if_wired()
+                last_tier3_poll = now
+
+    def _track_bootstrapped(self, mules) -> None:
+        """Have the gate track ``mules``, just bootstrapped, under their dock session."""
+        session_of = getattr(self.dock, "session_of", None)
+        for mid in sorted(mules, key=str):
+            self._sim_order.register(
+                str(mid), None if session_of is None else session_of(mid),
+            )
+
+    def _note_dock_event(self, item) -> None:
+        """Feed one dock event to the gate: hold an UP, or apply a marker.
+
+        A departure (the mule's connection ended) or a ``done`` from the mule
+        stops the gate waiting for it, and is traced as ``mule_departed``
+        with what it knew: the reason, the mule's final clock when it said
+        one, and how many of its UPs are still held (they are folded in order
+        all the same). A marker of an older dock session changes nothing and
+        is not traced (:class:`SimOrderGate`, sessions).
+
+        The ``mules_departed`` counter counts the same departures. Like every
+        registry metric it reaches a trace only in the end-of-run
+        ``metrics_snapshot`` (:meth:`shutdown`), which a cluster stopped with
+        ``TerminateProcess`` (the Exp 4 orchestrator, on Windows) never
+        writes; its per-event equivalent is the count of ``mule_departed``.
+        """
+        gate = self._sim_order
+        if isinstance(item, DockClockMarker):
+            mule = str(item.mule_id)
+            if item.kind == MARKER_REGISTERED:
+                gate.register(mule, item.session)
+            elif item.kind == MARKER_CLOCK:
+                gate.clock(mule, item.sim_ts, item.session)
+            elif gate.depart(mule, item.session):
+                self.events.emit(
+                    "mule_departed",
+                    mule_id=mule,
+                    reason=item.kind,
+                    sim_ts=item.sim_ts,
+                    held=gate.held_count(mule),
+                )
+                self.metrics.increment("mules_departed")
+            return
+        if not isinstance(item, UpBundle):
+            log.warning("cluster %s: ignored a dock event of type %s",
+                        self.cfg.cluster_id, type(item).__name__)
+            return
+        gate.hold(item, now=time.monotonic())
+
+    def _release_in_sim_order(self) -> None:
+        """Fold every UP the gate releases now, in simulated order.
+
+        The mules waiting at their dock for an answer (``_awaiting``) are
+        exempt from the gate's wait (:class:`SimOrderGate`), and each fold can
+        change who waits, so the gate is asked again after every one. An UP
+        the gate could not order (``late``, or without simulated time) is
+        logged and counted, and folded like any other.
+
+        The counters ``sim_order_late_uploads`` and
+        ``sim_order_unordered_uploads`` and the timer ``sim_order_held_s``
+        reach a trace only in the end-of-run ``metrics_snapshot``
+        (:meth:`shutdown`), which a cluster stopped with ``TerminateProcess``
+        (the Exp 4 orchestrator, on Windows) never writes. Each released UP's
+        fold event (``up_bundle_ingested`` or ``backhaul_upload_lost``,
+        :meth:`_sim_up_fields`) carries the same facts: the late count is the
+        fold events with ``sim_order_late`` true, the unordered count those
+        with a ``sim_order_seq`` whose ``sim_upload_ts`` is null or at least
+        ``SIM_CEILING_S`` (1e9), and the timer's samples are their
+        ``held_wall_s``. The one exception is an UP whose ingest raised: it is
+        counted and timed but has no fold event (``ingest_failures``).
+        """
+        gate = self._sim_order
+        while not self._stop_event.is_set():
+            released = gate.pop_ready(
+                exempt={str(m) for m in self._awaiting}, now=time.monotonic(),
+            )
+            if released is None:
+                return
+            if released.late or released.unordered:
+                log.warning(
+                    "cluster %s: UP from %s (sim_upload_ts=%r) %s; folded at once",
+                    self.cfg.cluster_id, released.up.mule_id,
+                    getattr(released.up, "sim_upload_ts", None),
+                    "arrived behind a later upload already folded" if released.late
+                    else "carries no simulated time",
+                )
+                self.metrics.increment(
+                    "sim_order_late_uploads" if released.late else "sim_order_unordered_uploads"
+                )
+            self.metrics.observe("sim_order_held_s", float(released.held_s))
+            self._releasing = released
+            try:
+                self._process_up(released.up, _up_mission_round(released.up))
+            finally:
+                self._releasing = None
 
     def _fold_pending(
         self, mule_id: MuleID, up_round: Optional[int], *, stand_in: bool = False,
@@ -527,6 +1141,7 @@ class ClusterService:
                 "cluster_round_closed",
                 cluster_round=self.cluster._cluster_round,
                 **closer,
+                **self._sim_ts_fields(),
             )
             self.metrics.increment("cluster_rounds_closed")
             # EX-4.1 — convergence point for the just-aggregated θ'.
@@ -575,6 +1190,7 @@ class ClusterService:
             mule_id=str(up.mule_id),
             mission_round=up_round,
             awaits_quorum=True,
+            **self._sim_up_fields(up, up_round),
         )
         self.metrics.increment("backhaul_uploads_lost")
         try:
@@ -605,6 +1221,7 @@ class ClusterService:
             mission_round=up_round,
             partial_refused=True,
             held_mission_round=self.cluster.held_mission_round(up.mule_id),
+            **self._sim_up_fields(up, up_round),
         )
         self.metrics.increment("up_bundles_ingested")
         self.metrics.increment("up_partials_refused")
@@ -724,24 +1341,135 @@ class ClusterService:
             )
             self.metrics.increment("tier3_refinement_fold_failures")
 
+    def _upload_lost(self, up, mission_round) -> bool:
+        """Whether ``up``'s backhaul upload is lost, under the configured model.
+
+        The recorded ``mission`` model is :meth:`_backhaul_dropped`, called
+        exactly as it always was; ``seconds`` (FeRRy Phase 3) is the keyed
+        draw of :meth:`_seconds_backhaul_dropped`, which touches no stream.
+        """
+        if self._backhaul_model == BACKHAUL_SECONDS:
+            return self._seconds_backhaul_dropped(up, mission_round, up.mule_id)
+        return self._backhaul_dropped(mission_round, up.mule_id)
+
     def _backhaul_dropped(self, mission_round=None, mule_id=None) -> bool:
         """EX-4.2/4.3 — Bernoulli draw for a lost mule->BS backhaul upload.
 
         Uses the per-mission L1 loss schedule (probabilities, index =
-        mission_round-1) when configured; otherwise the flat pct. With
-        several expected mules each mule draws from its own stream
-        (:meth:`_backhaul_rng_for`); with one, from the single stream.
+        mission_round-1, clamped: ``mission_schedule_index``) when configured;
+        otherwise the flat pct. With several expected mules each mule draws
+        from its own stream (:meth:`_backhaul_rng_for`); with one, from the
+        single stream.
         """
         rng = self._backhaul_rng_for(mule_id)
         sched = self._backhaul_loss_schedule
         if sched:
-            idx = (int(mission_round) - 1) if mission_round else 0
-            idx = min(max(idx, 0), len(sched) - 1)
-            p = float(sched[idx])
+            p = float(sched[mission_schedule_index(mission_round, len(sched))])
             return p > 0.0 and float(rng.random()) < p
         if self._backhaul_loss_pct <= 0.0:
             return False
         return float(rng.random()) < (self._backhaul_loss_pct / 100.0)
+
+    # ------------------------------------ FeRRy Phase 3: the seconds model
+
+    @staticmethod
+    def _priced_loss(up) -> Optional[float]:
+        """The loss probability the mule priced ``up``'s upload at, or None.
+
+        ``UpBundle.backhaul.p_loss``: ``loss_from_snr`` of the seconds-axis SNR
+        of the carrier the mule held (H3: its controller's pick) when the
+        upload started, and 1.0 when that SNR was below the floor (critic
+        B12). None when the UP carries no pricing.
+        """
+        bh = getattr(up, "backhaul", None)
+        return None if bh is None else float(bh.p_loss)
+
+    def _seconds_backhaul_dropped(self, up, mission_round, mule_id) -> bool:
+        """The keyed loss draw of the seconds model (design section 1 D2).
+
+        Lost when ``keyed_uniform(ferry_salt(seed, "backhaul_loss"), mule,
+        mission_round) < p``, with ``p`` the UP's own :meth:`_priced_loss`. The
+        uniform is a pure function of (trial seed, mule id, mission round):
+        two arms' same mission face the same uniform (common random numbers,
+        paired by mission, not by upload count), and no earlier upload or
+        arrival order moves it. Applied to every UP, an empty partial's too.
+        An UP the mule did not price (it is not on the seconds model) is never
+        lost: it is counted as ``backhaul_unpriced_uploads`` and logged. That
+        counter reaches a trace only in the end-of-run ``metrics_snapshot``
+        (:meth:`shutdown`), which a cluster stopped with ``TerminateProcess``
+        (the Exp 4 orchestrator, on Windows) never writes. Its per-event
+        equivalent is the count of fold events with ``p_loss`` null (each an
+        ``up_bundle_ingested``, as such an UP is never lost) in a trace whose
+        ``cluster_ready.backhaul_model`` is ``"seconds"``, bar an UP whose
+        ingest raised (``ingest_failures``).
+        """
+        from hermes.l1.channel_model import keyed_uniform
+
+        p = self._priced_loss(up)
+        if p is None:
+            log.error(
+                "cluster %s: UP from %s carries no backhaul pricing under the "
+                "seconds model; not drawing a loss for it",
+                self.cfg.cluster_id, getattr(up, "mule_id", mule_id),
+            )
+            self.metrics.increment("backhaul_unpriced_uploads")
+            return False
+        key = str(mule_id if mule_id is not None else up.mule_id)
+        u = keyed_uniform(self._loss_salt, key, int(mission_round or 0))
+        return u < p
+
+    def _loss_probability(self, up, mission_round) -> Optional[float]:
+        """The probability the loss draw of ``up`` used (no draw is made).
+
+        The seconds model: the UP's :meth:`_priced_loss`. The recorded model:
+        the schedule's entry for the mission, read through the same
+        ``mission_schedule_index`` as the draw, or the flat percentage over 100.
+        """
+        if self._backhaul_model == BACKHAUL_SECONDS:
+            return self._priced_loss(up)
+        sched = self._backhaul_loss_schedule
+        if sched:
+            return float(sched[mission_schedule_index(mission_round, len(sched))])
+        return self._backhaul_loss_pct / 100.0
+
+    def _sim_up_fields(self, up, mission_round) -> Dict[str, Any]:
+        """The simulated fields of an UP's event (design section 2.5); {} on the wall clock.
+
+        ``sim_upload_ts`` is the upload's simulated completion; ``carrier`` and
+        ``snr_db`` the mule's pricing (None under the recorded model, where
+        the mule prices none); ``p_loss`` the probability the loss draw used.
+
+        Under the simulated order (unit U9) an UP the gate released adds
+        ``sim_order_seq`` (its place in the cluster's simulated order, from
+        1), ``held_wall_s`` (the wall seconds it was held; a measurement, like
+        ``duration_s``) and ``sim_order_late`` (it arrived behind an upload
+        already folded that completed strictly later, so the order could not
+        be kept; a tie is not late).
+        """
+        if not self._sim:
+            return {}
+        bh = getattr(up, "backhaul", None)
+        fields = {
+            "sim_upload_ts": getattr(up, "sim_upload_ts", None),
+            "carrier": None if bh is None else int(bh.carrier),
+            "snr_db": None if bh is None else float(bh.snr_db),
+            "p_loss": self._loss_probability(up, mission_round),
+        }
+        released = getattr(self, "_releasing", None)
+        if released is not None and released.up is up:
+            fields.update(
+                sim_order_seq=int(released.seq),
+                held_wall_s=float(released.held_s),
+                sim_order_late=bool(released.late),
+            )
+        return fields
+
+    def _sim_ts_fields(self) -> Dict[str, Any]:
+        """``{"sim_ts": ...}`` on the simulated clock: the latest simulated upload
+        ingested, None before any (the epoch); {} on the wall clock."""
+        if not self._sim:
+            return {}
+        return {"sim_ts": self.cluster.sim_ts}
 
     def _backhaul_rng_for(self, mule_id) -> np.random.Generator:
         """The stream ``mule_id``'s backhaul draws come from.
@@ -788,6 +1516,7 @@ class ClusterService:
                 auc=float(m["auc"]),
                 loss=float(m["loss"]),
                 n_test=int(len(self._eval_y)),
+                **self._sim_ts_fields(),
             )
             self.metrics.observe("model_auc", float(m["auc"]))
             log.info(

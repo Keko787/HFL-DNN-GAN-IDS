@@ -25,20 +25,39 @@ held-out set, so the trial emits accuracy/AUC-over-rounds + T@τ.
 Only arm **H1** exists so far (mule + gated scheduler + two-pass HFL,
 deterministic ranking, no RL selector, no L1). H0/H2/H3 arrive in later
 chunks; an unknown arm is rejected loudly.
+
+**FeRRy Phase 3 (``mission_clock="sim"``): ferry cells.** The mule arms fly on
+the simulated mission clock with the contact link and seconds-axis channel
+(hermes/mule/ferry.py). The driver builds the cell's ferry settings
+(:meth:`Exp4Driver.ferry_settings`), computes the cell's nominal mission
+period T_nom when a setting needs it (:meth:`Exp4Driver.nominal_period_s`:
+``deadline_time_scale = T_nom / 10 s``, Φ₀ in missions, D5's ``period_s`` and
+the backhaul period ``P_bh = n_missions * T_nom``), gives every trial one RF
+link token (Amendment 10), pins the model's input width (design R8), prices
+the D4 CARP split with the predicted per-client dwell, and re-costs its wall
+budget for the mission clock's session TTL (critic B14). Under ``l1_channel``
+a ferry cell keeps the recorded per-mission loss schedule, and its mule
+adopts the chosen carrier's SNR mission by mission as the selector's RF prior
+instead of the trial's mean (critic B4, :func:`chosen_snr_schedule`). H0 is
+refused on the simulated clock (critic A5: its simulated round time is
+outside Phase 3). With the defaults every trial is the recorded wall-clock one.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
+import math
 import shutil
+import statistics
 import subprocess
 import tempfile
 import time
 import traceback
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, Mapping, Optional
+from typing import Any, Dict, Mapping, Optional, Sequence, Tuple
 
 from experiments.runner import Cell
 
@@ -47,7 +66,14 @@ from hermes.processes import MultiProcessOrchestrator
 from .events_consumer import consume_run_dir
 from .metrics import Exp4MetricSummary, summarise_observation
 from .prep import prepare_trial
-from .topology_builder import build_exp4_topology
+from .topology_builder import (
+    SESSION_TTL_S,
+    SYNTH_BATCH_SIZE,
+    angular_slices,
+    build_exp4_topology,
+    device_positions,
+    device_spread_m,
+)
 
 log = logging.getLogger("experiments.exp4.driver")
 
@@ -92,11 +118,45 @@ PROVENANCE_COLUMNS = (
     # (JSON; blank for every other arm). New columns only: the ones above keep
     # their values, so a single-mule row differs by n_mules=1 and three blanks.
     "n_mules", "min_participation", "dock_params", "policy_params",
+    # FeRRy Phase 3: the clock and contact-link switches, the deadline time
+    # unit, T_nom, the session TTL, the ferry parameters (JSON; blank on the
+    # wall clock), and three settings no CSV recorded before: the L1 channel,
+    # realism and the model's input width. New columns only, so a recorded
+    # row reads the same in the columns above. The exact formats, and how
+    # each is derived from a kept trace that predates them, are in
+    # ``Exp4Driver._clock_provenance`` (critic B13, D3: every CSV header
+    # changes, so a Phase 3 run needs a fresh CSV path).
+    "mission_clock", "contact_band", "in_flight_response", "backhaul_model",
+    "contact_reliability_source", "deadline_time_scale", "initial_window_s",
+    "t_nom_s", "session_ttl_s", "ferry_params", "l1_channel", "realism", "input_dim",
+)
+
+#: The width of the canonical CICIoT model's input: the 46 raw features minus
+#: the 25 the canonical loader drops (``model_task.load_ciciot_task_canonical``;
+#: Phase 3 design section 0, finding 1: θ is then 18,756 B). A ferry cell on
+#: the canonical data that gets another width (the loader's silent synthetic
+#: fallback builds a 46-input model) is refused (design R8).
+CANONICAL_INPUT_DIM = 21
+
+#: FeRRy Phase 3 (critic B14): the mule's wall-clock startup waits, device
+#: registration (60 s) and bootstrap DOWN (30 s), and the recorded DOWN wait at
+#: a single mule's dock (10 s, ``ClientCluster.down_timeout_s``). Used by
+#: :meth:`Exp4Driver.ferry_wall_bound_s`.
+_STARTUP_WALL_S = 90.0
+_DOCK_WAIT_S = 10.0
+
+#: ``MuleConfig`` physics fields a ferry cell may override (``ferry_physics``).
+FERRY_PHYSICS_FIELDS = (
+    "snr_floor_db", "altitude_m", "n_pl", "shadow_sigma_db", "margin_quantile",
+    "contact_regime", "interference_period_s", "noise_bin_s", "shadow_corr_s",
+    "shadow_keying", "cruise_speed_m_s", "turnaround_s", "listen_s",
+    "energy_capacity_j", "p_move_w", "p_hover_w",
 )
 
 #: Marker written next to every kept trace: the ``status`` and ``error`` the
 #: driver hands the runner, the mission target, and the trial's run time and
-#: budget — the runner relabels a trial that returned past its soft cap
+#: budget (on the mission clock, also the runner's soft cap when the driver is
+#: told it) — the runner relabels a trial that returned past its soft cap
 #: ``timeout`` only after the marker is written, so the marker keeps what that
 #: decision is made from. A trace outlives its CSV row's context (it is
 #: re-scored from the directory alone), and without this the trace scorer
@@ -131,6 +191,21 @@ def trace_dir_name(cell) -> str:
     return safe
 
 
+def chosen_snr_schedule(model, plan) -> list:
+    """The SNR (dB) of the carrier ``plan`` chose at each mission, in mission order.
+
+    ``model`` is the trial's legacy ``ChannelModel`` and ``plan`` its
+    ``backhaul_plan``: entry m is ``model.snr(m, plan.chosen_bands[m])``, the
+    value ``plan.loss_schedule[m]`` is ``loss_from_snr`` of. Under
+    ``--l1-channel`` on the mission clock (recorded ``mission`` backhaul
+    model) this is the mule's causal RF prior, adopted entry by entry as the
+    missions upload (``MuleConfig.rf_prior_schedule_db``, critic B4), in place
+    of ``plan.mean_chosen_snr_db``, the mean over every mission, later ones
+    included.
+    """
+    return [float(model.snr(m, band)) for m, band in enumerate(plan.chosen_bands)]
+
+
 class Exp4TrialTimeout(RuntimeError):
     """Raised when a trial blows its hard wall-clock budget.
 
@@ -149,7 +224,14 @@ class Exp4MuleFailure(RuntimeError):
     """
 
 
-def d4_slice_assignment(devices, n_mules: int, seed: int) -> Dict[int, int]:
+def d4_slice_assignment(
+    devices,
+    n_mules: int,
+    seed: int,
+    *,
+    t_trans_s: Optional[float] = None,
+    cruise_speed_m_s: Optional[float] = None,
+) -> Dict[int, int]:
     """Arm D4's device-to-mule split: CARP over the trial's seeded positions.
 
     FedEx-Async's Gibbs-sampled assignment (``carp_assign``, objective
@@ -160,6 +242,11 @@ def d4_slice_assignment(devices, n_mules: int, seed: int) -> Dict[int, int]:
     identically. Computed once per trial: devices are wired to one mule's RF
     link at launch, so the split cannot change while the trial runs. Returns
     device index -> mule index.
+
+    FeRRy Phase 3: a ferry cell passes ``t_trans_s``, the predicted Pass-1
+    airtime of one client at half the contact range R_planar(b)/2
+    (:meth:`Exp4Driver.carp_t_trans_s`), and its flight model's
+    ``cruise_speed_m_s``. None keeps the recorded values.
     """
     from hermes.processes.mule import DOCK_POSE
     from hermes.scheduler.policies import carp_assign
@@ -169,6 +256,8 @@ def d4_slice_assignment(devices, n_mules: int, seed: int) -> Dict[int, int]:
     from .model_task import _u32
 
     model = FeasibilityModel()
+    speed = model.cruise_speed_m_s if cruise_speed_m_s is None else float(cruise_speed_m_s)
+    t_trans = model.session_time_s if t_trans_s is None else float(t_trans_s)
     positions = {
         DeviceID(d.device_id): tuple(float(c) for c in d.position) for d in devices
     }
@@ -176,11 +265,35 @@ def d4_slice_assignment(devices, n_mules: int, seed: int) -> Dict[int, int]:
         positions,
         n_transporters=int(n_mules),
         depot=DOCK_POSE,
-        speeds=[model.cruise_speed_m_s] * int(n_mules),
-        t_trans=model.session_time_s,
+        speeds=[speed] * int(n_mules),
+        t_trans=t_trans,
         seed=_u32(seed, "d4_carp"),
     )
     return {i: int(by_id[DeviceID(d.device_id)]) for i, d in enumerate(devices)}
+
+
+@dataclass
+class _TrialClock:
+    """One trial's clock settings as the driver resolved them (FeRRy Phase 3).
+
+    ``settings`` are the ``MuleConfig`` ferry fields handed to the builder
+    (empty on the wall clock); the rest are the per-cell values the driver
+    derived: T_nom and whether it computed it, the deadline time unit, Φ₀,
+    the merge spec (D5's period may be T_nom), the wall budget and DOWN wait,
+    the model's input width and the RF link token.
+    """
+
+    sim: bool = False
+    settings: Dict[str, Any] = field(default_factory=dict)
+    t_nom_s: Optional[float] = None
+    t_nom_computed: bool = False
+    deadline_time_scale: float = 1.0
+    initial_window_s: Optional[float] = None
+    aggregation_spec: Any = None
+    budget_s: Optional[float] = None
+    down_wait_s: Optional[float] = None
+    input_dim: Optional[int] = None
+    rf_link_token: Optional[str] = None
 
 
 @dataclass
@@ -319,19 +432,91 @@ class Exp4Driver:
     whittle_variant: str = "expected"
     whittle_weights: str = "uniform"
     fedcs_value: str = "unit"
+    # ---- FeRRy Phase 3: the mission clock and the contact link ---- #
+    # ``mission_clock="sim"`` runs every mule arm on the simulated mission
+    # clock (hermes/mule/ferry.py); "wall" is every recorded run, and every
+    # field below except the deadline time unit, the session TTL and the RF
+    # token then keeps its default. The switches (design section 5.1):
+    # ``contact_band`` (None = the channel-free control), ``in_flight_response``
+    # ("abort" | "replan") with ``replan_fallback`` ("reorder" | "trim"),
+    # ``backhaul_model`` ("mission" | "seconds"; H3 runs the adaptive carrier
+    # policy, every other arm the fixed one), ``contact_reliability_source``
+    # ("origin" | "channel"), ``payload_bytes`` (None = measured) and
+    # ``deadline_bounds``. ``ferry_physics`` overrides D1-D3 parameters by
+    # ``MuleConfig`` field name (``FERRY_PHYSICS_FIELDS``). The exit-gate
+    # configuration is chosen at the pilot, not here (critic B5).
+    mission_clock: str = "wall"
+    contact_band: Optional[str] = None
+    contact_band_classes: Optional[Sequence[str]] = None
+    in_flight_response: str = "abort"
+    replan_fallback: str = "reorder"
+    backhaul_model: str = "mission"
+    contact_reliability_source: str = "origin"
+    payload_bytes: Optional[int] = None
+    deadline_bounds: str = "collection"
+    ferry_physics: Dict[str, Any] = field(default_factory=dict)
+    # The seconds-axis backhaul period P_bh; None = n_missions * T_nom.
+    backhaul_period_s: Optional[float] = None
+    # T_nom (spec Q1): given, or None to compute it per cell when a setting
+    # needs it (:meth:`nominal_period_s`) over ``t_nom_layouts`` reference
+    # layouts.
+    t_nom_s: Optional[float] = None
+    t_nom_layouts: int = 20
+    # The deadline law's time unit, on either clock: a number (1.0 is the
+    # recorded law) or "t_nom" for T_nom / 10 s. Φ₀ as ``initial_window_s``
+    # (the law's recorded unit) or as ``initial_window_missions`` nominal
+    # mission periods (critic A7); ``agg_period_t_nom`` sets agg:cutoff's
+    # D5 ``period_s`` to T_nom. The values are chosen at the pilot.
+    deadline_time_scale: Any = 1.0
+    initial_window_s: Optional[float] = None
+    initial_window_missions: Optional[float] = None
+    agg_period_t_nom: bool = False
+    # The mule's wall-clock session TTL; None = the builder's recorded 3 s.
+    # Ferry cells set it from the measured real-model fit time (>= 2x, spec
+    # Q12); the pilot measures it.
+    session_ttl_s: Optional[float] = None
+    # Amendment 10: one RF link token per trial, derived from the trial's
+    # identity (:func:`trial_link_token`). None = on exactly on the simulated
+    # clock; True / False force it.
+    rf_link_token: Optional[bool] = None
+    # Design R8: the input width a ferry cell's real model must have; None =
+    # the data source's own (21 canonical, the synthetic task's otherwise).
+    expected_input_dim: Optional[int] = None
+    # The runner's soft cap on a trial's run time, as the caller applies it
+    # (runner_main sets it to the cap it hands TrialRunner: --timeout-s, else
+    # the largest wall budget over the grid). On the mission clock a trial's
+    # own budget is re-costed per cell and can be below that cap, so its status
+    # marker records the cap as ``soft_cap_s`` for a trace scored without its
+    # trial CSV. None = not told: no such key. Wall markers never carry it.
+    soft_cap_s: Optional[float] = None
 
     def __post_init__(self) -> None:
         from hermes.mission.aggregation_rules import AggregationSpec
         from hermes.scheduler.policies.fedcs_degraded import VALUE_KINDS
         from hermes.scheduler.policies.whittle import VARIANTS, WEIGHT_MODES
-        from hermes.scheduler.stages.s3_deadline import DeadlineLaw
+        from hermes.scheduler.stages.s3_deadline import DeadlineLaw, DeadlineLawError
 
         # Fail on a bad rule or law before any process is spawned.
         self._aggregation_spec = AggregationSpec.from_config(
             self.aggregation, self.aggregation_params,
         )
+        # Normalised as from_config normalises it, and only once, so a pairs
+        # list is checked like a mapping and a one-shot iterable still reaches
+        # the law whole.
+        deadline_params = dict(self.deadline_params or {})
+        if "time_scale" in deadline_params:
+            # FeRRy Phase 3 gave the law a time_scale, which from_config now
+            # accepts (afa9526 refused the key, with DeadlineLawError).
+            # Through deadline_params the scheduler would run that unit while
+            # the deadline_time_scale column stays blank, and beside
+            # deadline_time_scale the mule would refuse the pair only at start.
+            raise DeadlineLawError(
+                "deadline_params cannot set the deadline law's time_scale: give "
+                "the time unit as deadline_time_scale (--deadline-time-scale), "
+                "which the row records"
+            )
         self._deadline_law = DeadlineLaw.from_config(
-            self.deadline_law, self.deadline_params,
+            self.deadline_law, deadline_params,
         )
         if self.fedprox_rho < 0.0:
             raise ValueError(f"fedprox_rho must be >= 0, got {self.fedprox_rho}")
@@ -354,6 +539,161 @@ class Exp4Driver:
                 f"fedcs_value must be one of {VALUE_KINDS}, got {self.fedcs_value!r}"
             )
         self._check_multi_mule()
+        #: T_nom per cell, computed once (:meth:`nominal_period_s`).
+        self._t_nom_cache: Dict[str, float] = {}
+        self._check_clock()
+
+    @property
+    def sim(self) -> bool:
+        """True when the mule arms run on the simulated mission clock."""
+        return self.mission_clock == "sim"
+
+    def _check_clock(self) -> None:
+        """Refuse clock settings that cannot run or would mis-measure (FeRRy Phase 3).
+
+        On the wall clock every ferry-only setting must keep its default. On
+        the simulated clock: a known backhaul model, not both backhaul loss
+        models (``l1_channel``'s recorded schedule with the seconds model;
+        under the ``mission`` model ``l1_channel`` keeps its loss schedule and
+        the mule's RF prior is fed from past uploads, critic B4:
+        :func:`chosen_snr_schedule`), the channel reliability source only
+        with a band (critic B16), one way of stating Φ₀, and D5's T_nom
+        period only on agg:cutoff. Every value the ferry spec takes is checked
+        by building one. Several mules below a quorum of every mule, or under
+        FedBuff, run as on the wall clock (:meth:`_check_multi_mule`): the
+        cluster folds their uploads in simulated-time order (critic B9, unit
+        U9; ``hermes.processes.cluster.SimOrderGate``).
+        """
+        from hermes.processes.config import MISSION_CLOCKS
+
+        if self.mission_clock not in MISSION_CLOCKS:
+            raise ValueError(
+                f"mission_clock must be one of {MISSION_CLOCKS}, got {self.mission_clock!r}"
+            )
+        scale = self.deadline_time_scale
+        if isinstance(scale, str):
+            if scale != "t_nom":
+                raise ValueError(
+                    f"deadline_time_scale must be a number or 't_nom', got {scale!r}"
+                )
+        elif isinstance(scale, bool) or not (
+            isinstance(scale, (int, float)) and math.isfinite(scale) and scale > 0.0
+        ):
+            raise ValueError(f"deadline_time_scale must be finite and > 0, got {scale!r}")
+        if self.initial_window_s is not None and self.initial_window_missions is not None:
+            raise ValueError("give Φ₀ as initial_window_s or initial_window_missions, not both")
+        if self.session_ttl_s is not None and not float(self.session_ttl_s) > 0.0:
+            raise ValueError(f"session_ttl_s must be > 0, got {self.session_ttl_s}")
+        unknown = sorted(set(self.ferry_physics) - set(FERRY_PHYSICS_FIELDS))
+        if unknown:
+            raise ValueError(
+                f"ferry_physics keys {unknown} are not ferry physics fields "
+                f"({list(FERRY_PHYSICS_FIELDS)})"
+            )
+        if not self.sim:
+            ferry_only = {
+                "contact_band": self.contact_band is not None,
+                "contact_band_classes": self.contact_band_classes is not None,
+                "in_flight_response": self.in_flight_response != "abort",
+                "replan_fallback": self.replan_fallback != "reorder",
+                "backhaul_model": self.backhaul_model != "mission",
+                "contact_reliability_source": self.contact_reliability_source != "origin",
+                "payload_bytes": self.payload_bytes is not None,
+                "deadline_bounds": self.deadline_bounds != "collection",
+                "ferry_physics": bool(self.ferry_physics),
+                "backhaul_period_s": self.backhaul_period_s is not None,
+                "t_nom_s": self.t_nom_s is not None,
+                "deadline_time_scale='t_nom'": isinstance(scale, str),
+                "initial_window_missions": self.initial_window_missions is not None,
+                "agg_period_t_nom": bool(self.agg_period_t_nom),
+                "expected_input_dim": self.expected_input_dim is not None,
+            }
+            changed = [k for k, v in ferry_only.items() if v]
+            if changed:
+                raise ValueError(
+                    f"{', '.join(changed)}: only on the simulated mission clock; set "
+                    f"mission_clock='sim' (--mission-clock sim) or leave the default"
+                )
+            return
+        if self.backhaul_model not in ("mission", "seconds"):
+            raise ValueError(
+                f"backhaul_model must be 'mission' or 'seconds', got {self.backhaul_model!r}"
+            )
+        if self.l1_channel and self.backhaul_model == "seconds":
+            raise ValueError(
+                "l1_channel's per-mission loss schedule and backhaul_model='seconds' are "
+                "two backhaul loss models: the seconds model already runs H3's adaptive "
+                "carrier; drop --l1-channel"
+            )
+        if self.contact_reliability_source == "channel" and self.contact_band is None:
+            raise ValueError(
+                "contact_reliability_source='channel' needs a contact_band: the "
+                "reliability is then the SNR gate at the stop (critic B16)"
+            )
+        from hermes.mission.aggregation_rules import AGG_CUTOFF
+
+        if self.agg_period_t_nom:
+            if self._aggregation_spec.rule != AGG_CUTOFF:
+                raise ValueError("agg_period_t_nom sets agg:cutoff's period_s; use --aggregation agg:cutoff")
+            if "period_s" in (self.aggregation_params or {}):
+                raise ValueError("agg_period_t_nom and aggregation_params['period_s'] are exclusive")
+        if self.t_nom_s is not None and not (math.isfinite(float(self.t_nom_s))
+                                             and float(self.t_nom_s) > 0.0):
+            raise ValueError(f"t_nom_s must be finite and > 0, got {self.t_nom_s}")
+        if int(self.t_nom_layouts) < 1:
+            raise ValueError(f"t_nom_layouts must be >= 1, got {self.t_nom_layouts}")
+        # Every value the ferry spec takes, checked by building one now (a
+        # placeholder seed and backhaul period: neither is validated).
+        from hermes.mule.ferry import FerrySpec
+
+        probe = self.ferry_settings(arm="H1", regime="clean")
+        if probe.get("backhaul_model") == "seconds":
+            probe["backhaul_period_s"] = probe.get("backhaul_period_s") or 1.0
+        FerrySpec.from_config(**self._spec_kwargs(
+            probe, rf_range_m=float(self.default_rf_range_m), seed=0,
+            n_missions=int(self.default_n_missions),
+        ))
+
+    def ferry_settings(self, *, arm: str, regime: str) -> Dict[str, Any]:
+        """The ``MuleConfig`` ferry fields of a trial of ``arm`` in ``regime``.
+
+        The switches as configured; H3 runs the adaptive backhaul carrier
+        policy (its L1 controller at every upload), every other arm the fixed
+        one; the backhaul regime is the cell's; the ferry physics overrides
+        on top. T_nom is added per cell by :meth:`run_trial` when known.
+        """
+        out: Dict[str, Any] = {
+            "contact_band": self.contact_band,
+            "contact_band_classes": (
+                None if self.contact_band_classes is None else list(self.contact_band_classes)
+            ),
+            "in_flight_response": self.in_flight_response,
+            "replan_fallback": self.replan_fallback,
+            "backhaul_model": self.backhaul_model,
+            "backhaul_policy": "adaptive" if arm == "H3" else "fixed",
+            "backhaul_regime": "jittery" if regime == "jittery" else "clean",
+            "backhaul_period_s": self.backhaul_period_s,
+            "contact_reliability_source": self.contact_reliability_source,
+            "payload_bytes": self.payload_bytes,
+            "deadline_bounds": self.deadline_bounds,
+        }
+        out.update(self.ferry_physics)
+        return out
+
+    @staticmethod
+    def _spec_kwargs(
+        settings: Mapping[str, Any], *, rf_range_m: float, seed: int, n_missions: int,
+    ) -> Dict[str, Any]:
+        """``FerrySpec.from_config`` keywords for ``settings``, through the
+        mule's own mapping (``MuleConfig.ferry_spec_kwargs``), so the driver
+        prices with exactly the spec the mule process will build."""
+        from hermes.processes.config import MuleConfig
+
+        cfg = MuleConfig(
+            mule_id="t_nom", rf_range_m=float(rf_range_m), n_missions=int(n_missions),
+            mission_clock="sim", trial_seed=int(seed), **dict(settings),
+        )
+        return cfg.ferry_spec_kwargs()
 
     def _check_multi_mule(self) -> None:
         """Refuse a mule count and quorum that cannot run or would mis-measure."""
@@ -430,6 +770,287 @@ class Exp4Driver:
             return {"value": self.fedcs_value}
         return {}
 
+    # ------------------------------------------------------------------ #
+    # FeRRy Phase 3 — per-cell clock settings
+    # ------------------------------------------------------------------ #
+
+    @property
+    def effective_session_ttl_s(self) -> float:
+        """The mule's wall-clock session TTL: the configured one or the recorded 3 s."""
+        return float(SESSION_TTL_S if self.session_ttl_s is None else self.session_ttl_s)
+
+    def ferry_wall_bound_s(self, *, n_devices: int, n_missions: int) -> float:
+        """The longest wall time a healthy trial on the mission clock can take (critic B14).
+
+        Built from the waits the code bounds, not from a typical run: the
+        mule's startup waits (devices 60 s, bootstrap DOWN 30 s); per mission,
+        two passes of at most one contact per device of the largest slice,
+        each contact at most one TTL gathering adverts and a 2 x TTL join
+        (the ferry contact routine's caps), plus the recorded 10 s DOWN wait;
+        with several mules, a quorum wait of up to one more such mission. When
+        the cluster folds the uploads in simulated order (several mules below
+        a full quorum, or FedBuff: unit U9) a mule's upload can wait for every
+        other mule to pass it in simulated time, and at worst the K mules run
+        one at a time: K such missions per mission. The mission clock's flight
+        costs no wall time at all. At the recorded 3 s TTL, N = 6, one mule
+        and 4 missions that is 562 s; at a 30 s TTL, 4,450 s. A trial that
+        runs past it is hung, not slow.
+        """
+        ttl = self.effective_session_ttl_s
+        k = max(1, int(self.n_mules))
+        slice_n = math.ceil(int(n_devices) / k)
+        mission = 2 * slice_n * 3.0 * ttl + _DOCK_WAIT_S
+        if k > 1:
+            mission *= max(2.0, float(k)) if self._sim_ordered else 2.0
+        return _STARTUP_WALL_S + int(n_missions) * mission
+
+    @property
+    def _sim_ordered(self) -> bool:
+        """True when the cluster folds the uploads in simulated-time order (unit U9).
+
+        Several mules on the simulated clock, below a quorum of every mule or
+        under FedBuff: ``hermes.processes.cluster.needs_sim_order`` of the
+        cluster this driver configures.
+        """
+        from hermes.mission.aggregation_rules import AGG_FEDBUFF
+
+        return self.sim and int(self.n_mules) > 1 and (
+            int(self.min_participation) < int(self.n_mules)
+            or self._aggregation_spec.rule == AGG_FEDBUFF
+        )
+
+    def trial_wall_budget_s(self, *, n_devices: int, n_missions: int) -> float:
+        """The trial's hard wall-clock kill: ``trial_budget_s``, raised on the
+        mission clock to :meth:`ferry_wall_bound_s` (critic B14), so a larger
+        session TTL cannot kill a healthy trial. Wall-clock trials keep
+        ``trial_budget_s`` exactly."""
+        if not self.sim:
+            return float(self.trial_budget_s)
+        return max(float(self.trial_budget_s),
+                   self.ferry_wall_bound_s(n_devices=n_devices, n_missions=n_missions))
+
+    def _down_wait_for(self, budget_s: float) -> Optional[float]:
+        """``down_wait_s``, or the trial's wall budget when there are several mules."""
+        if self.down_wait_s is not None:
+            return float(self.down_wait_s)
+        return float(budget_s) if int(self.n_mules) > 1 else None
+
+    @staticmethod
+    def trial_link_token(cell) -> str:
+        """The trial's RF link token (Amendment 10): one value per trial,
+        shared by its mules and devices, derived from the trial's identity
+        (cell, arm, trial index, seed) so the per-role JSON reproduces and no
+        two trials, arms included, share one."""
+        raw = f"{cell.cell_id}|{cell.arm}|{cell.trial_index}|{cell.seed}"
+        return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
+
+    def _use_link_token(self) -> bool:
+        return self.sim if self.rf_link_token is None else bool(self.rf_link_token)
+
+    def declared_input_dim(self) -> int:
+        """The input width a ferry cell's real model must have (design R8)."""
+        if self.expected_input_dim is not None:
+            return int(self.expected_input_dim)
+        if self.data_source == "canonical":
+            return CANONICAL_INPUT_DIM
+        from .model_task import INPUT_DIM
+
+        return int(INPUT_DIM)
+
+    def _payload_bytes(self, init_theta_path: Optional[str]) -> Tuple[int, int]:
+        """(θ bytes, synthetic batch bytes) the mule will push: the real seed
+        weights when the trial has them, else the cluster's stub model, with
+        the cluster's synthetic batch (``SYNTH_BATCH_SIZE`` stub samples)."""
+        from hermes.cluster.host_cluster import StubGeneratorHost
+        from hermes.processes.cluster import stub_disc_weights
+        from hermes.types import weights_byte_count
+
+        if init_theta_path is not None:
+            from .model_task import load_weights
+
+            theta = load_weights(init_theta_path)
+        else:
+            theta = stub_disc_weights()
+        synth = StubGeneratorHost(disc_weights=[]).make_synth_batch(SYNTH_BATCH_SIZE)
+        return weights_byte_count(theta), int(sum(int(a.nbytes) for a in synth))
+
+    def _needs_t_nom(self) -> bool:
+        return self.sim and (
+            (self.backhaul_model == "seconds" and self.backhaul_period_s is None)
+            or self.deadline_time_scale == "t_nom"
+            or self.initial_window_missions is not None
+            or bool(self.agg_period_t_nom)
+        )
+
+    def nominal_period_s(
+        self,
+        *,
+        n_devices: int,
+        rf_range_m: float,
+        regime: str,
+        settings: Mapping[str, Any],
+        theta_bytes: int,
+        synth_bytes: int,
+    ) -> float:
+        """T_nom (spec Q1): the cell's median nominal two-pass mission period.
+
+        One value per cell, the same for every arm and every trial of it:
+        over ``t_nom_layouts`` reference layouts drawn as a trial's are (the
+        builder's positions, the cell's device count and spread) from the
+        seeds ``_u32(n_devices, "t_nom", k)``, each priced by unit U4's
+        ``nominal_mission_period_s`` with a spec built as the mule's is but on
+        the wide band (``R_planar(wide) == rf_range_m``), the reference
+        seed's channel, a placeholder backhaul period (the planner never reads
+        it) and this trial's payload. With several mules each layout is split
+        into the default angular slices and priced as its slowest slice (a
+        quorum of every mule waits for the slowest). The reference layouts do
+        not depend on the grid's base seed or trial count, so extending or
+        resuming a CSV never moves T_nom. Cached per cell.
+        """
+        from hermes.mule.ferry import FerrySpec
+        from hermes.scheduler.fl_scheduler import nominal_mission_period_s
+        from hermes.types import DeviceID
+
+        from .model_task import _u32
+
+        key = json.dumps({
+            "n": int(n_devices), "rrf": float(rf_range_m), "regime": regime,
+            "settings": dict(settings), "theta": int(theta_bytes), "synth": int(synth_bytes),
+            "k": int(self.n_mules), "layouts": int(self.t_nom_layouts),
+            "realism": bool(self.realism), "field": float(self.h1_field_radius_m),
+        }, sort_keys=True, default=str)
+        cached = self._t_nom_cache.get(key)
+        if cached is not None:
+            return cached
+        spread = device_spread_m(
+            rf_range_m, field_radius_m=(self.h1_field_radius_m if self.realism else None),
+        )
+        base = dict(settings)
+        base.update(contact_band="wide", backhaul_regime=regime)
+        base.pop("t_nom_s", None)
+        if base.get("backhaul_model") == "seconds":
+            base["backhaul_period_s"] = 1.0          # placeholder: never read
+        periods = []
+        for k in range(int(self.t_nom_layouts)):
+            ref_seed = _u32(int(n_devices), "t_nom", k)
+            xy = device_positions(int(n_devices), ref_seed, spread)
+            spec = FerrySpec.from_config(**self._spec_kwargs(
+                base, rf_range_m=rf_range_m, seed=ref_seed, n_missions=1,
+            ))
+            model = spec.feasibility_model(
+                rf_range_m=float(rf_range_m), theta_bytes=int(theta_bytes),
+                synth_bytes=int(synth_bytes),
+            )
+            if int(self.n_mules) > 1:
+                assign = angular_slices(xy, int(self.n_mules))
+                slices = [[i for i in range(len(xy)) if assign[i] == m]
+                          for m in range(int(self.n_mules))]
+            else:
+                slices = [list(range(len(xy)))]
+            periods.append(max(
+                nominal_mission_period_s(
+                    {DeviceID(f"exp4-dev-{i:03d}"): (xy[i][0], xy[i][1], 0.0) for i in members},
+                    rf_range_m=float(rf_range_m), feasibility_model=model,
+                    turnaround_s=spec.flight.turnaround_s,
+                )
+                for members in slices
+            ))
+        t_nom = float(statistics.median(periods))
+        self._t_nom_cache[key] = t_nom
+        return t_nom
+
+    def carp_t_trans_s(
+        self, settings: Mapping[str, Any], *, rf_range_m: float, seed: int,
+        theta_bytes: int, synth_bytes: int,
+    ) -> float:
+        """Arm D4's per-client time for the CARP split in a ferry cell.
+
+        The predicted Pass-1 airtime of one client at half the contact range,
+        R_planar(b)/2, at the band's mean SNR there (design section 3.2), with
+        this trial's payload; without a band (the channel-free control) the
+        cost model's per-contact session time, the recorded value.
+        """
+        from hermes.mule.ferry import FerryRuntime, FerrySpec
+        from hermes.types import MissionPass
+
+        spec_settings = dict(settings)
+        if spec_settings.get("backhaul_model") == "seconds":
+            spec_settings["backhaul_period_s"] = spec_settings.get("backhaul_period_s") or 1.0
+        spec = FerrySpec.from_config(**self._spec_kwargs(
+            spec_settings, rf_range_m=rf_range_m, seed=seed, n_missions=1,
+        ))
+        rt = FerryRuntime(spec, None, rf_range_m=float(rf_range_m))
+        if not rt.banded:
+            return float(rt.session_time_s)
+        rt.set_payload(theta_bytes=int(theta_bytes), synth_bytes=int(synth_bytes))
+        dwell = rt.member_dwell_s(rt.range_planar_m / 2.0, MissionPass.COLLECT, 0.0)
+        return float(rt.session_time_s if dwell is None else dwell)
+
+    def _resolve_clock(
+        self,
+        cell,
+        *,
+        arm: str,
+        regime: str,
+        n_devices: int,
+        rf_range_m: float,
+        n_missions: int,
+        init_theta_path: Optional[str],
+        input_dim: Optional[int],
+    ) -> _TrialClock:
+        """One trial's clock settings (FeRRy Phase 3); the recorded ones on the wall clock."""
+        scale = self.deadline_time_scale
+        budget = self.trial_wall_budget_s(n_devices=n_devices, n_missions=n_missions)
+        token = self.trial_link_token(cell) if self._use_link_token() else None
+        if not self.sim:
+            return _TrialClock(
+                deadline_time_scale=float(scale), initial_window_s=self.initial_window_s,
+                aggregation_spec=self._aggregation_spec, budget_s=budget,
+                down_wait_s=self._down_wait_for(budget), input_dim=input_dim,
+                rf_link_token=token,
+            )
+        if self.real_model and input_dim is not None and int(input_dim) != self.declared_input_dim():
+            raise ValueError(
+                f"ferry cell refused: the model's input_dim is {input_dim}, not the declared "
+                f"{self.declared_input_dim()} (design R8: a missing CICIoT dataset silently "
+                f"builds the synthetic 46-input model, whose payload is 25,156 B, not 18,756 B)"
+            )
+        settings = self.ferry_settings(arm=arm, regime=regime)
+        t_nom = None if self.t_nom_s is None else float(self.t_nom_s)
+        computed = False
+        if t_nom is None and self._needs_t_nom():
+            theta_b, synth_b = self._payload_bytes(init_theta_path)
+            t_nom = self.nominal_period_s(
+                n_devices=n_devices, rf_range_m=rf_range_m, regime=settings["backhaul_regime"],
+                settings=settings, theta_bytes=theta_b, synth_bytes=synth_b,
+            )
+            computed = True
+        if t_nom is not None:
+            settings["t_nom_s"] = t_nom
+        from hermes.mission.aggregation_rules import AggregationSpec
+        from hermes.scheduler.stages.s3_deadline import (
+            initial_window_for_missions,
+            time_scale_for_period,
+        )
+
+        scale_value = time_scale_for_period(t_nom) if scale == "t_nom" else float(scale)
+        phi0 = self.initial_window_s
+        if self.initial_window_missions is not None:
+            phi0 = initial_window_for_missions(
+                self.initial_window_missions, t_nom, time_scale=scale_value,
+            )
+        agg = self._aggregation_spec
+        if self.agg_period_t_nom:
+            agg = AggregationSpec.from_config(
+                agg.rule, {**agg.to_params(), "period_s": float(t_nom)},
+            )
+        return _TrialClock(
+            sim=True, settings=settings, t_nom_s=t_nom, t_nom_computed=computed,
+            deadline_time_scale=scale_value, initial_window_s=phi0,
+            aggregation_spec=agg, budget_s=budget, down_wait_s=self._down_wait_for(budget),
+            input_dim=input_dim, rf_link_token=token,
+        )
+
     def run_trial(self, cell: Cell) -> Mapping[str, Any]:
         # Only the trial-status marker reads this: the runner's soft cap is
         # applied to the whole call, data preparation included.
@@ -447,6 +1068,13 @@ class Exp4Driver:
         n_missions = int(params.get("n_missions", self.default_n_missions))
         regime = str(params.get("regime", "clean"))
 
+        if arm == "H0" and self.sim:
+            # Critic A5: H0 (in-process flat FL) has no simulated round time
+            # and no seconds-axis link; that is outside Phase 3.
+            raise ValueError(
+                "arm H0 has no simulated round time (critic A5, outside Phase 3): run "
+                "it on the wall clock, in a CSV of its own"
+            )
         if arm == "H0":
             if not self.real_model:
                 raise ValueError(
@@ -477,6 +1105,11 @@ class Exp4Driver:
                 ),
                 backhaul_rng_seed=(cell.seed ^ 0x0BACC0DE),
             )
+            if self.sim and self.backhaul_model == "seconds":
+                # FeRRy Phase 3 (spec Q7): the seconds-axis channel replaces
+                # the flat realism percentage; the cluster draws against each
+                # upload's own loss probability.
+                realism_kwargs["backhaul_loss_pct"] = 0.0
 
         # EX-4.2/4.3 arms: H1 deterministic ranking; H2 = H1 + RL selector;
         # H3 = H2 + adaptive L1 channel.
@@ -546,8 +1179,8 @@ class Exp4Driver:
             )
         if self.effective_dock_on_empty:
             selector_kwargs["dock_on_empty"] = True
-        if self.effective_down_wait_s is not None:
-            selector_kwargs["down_wait_s"] = self.effective_down_wait_s
+        # ``down_wait_s`` (and the merge spec above) are set per trial below,
+        # once the trial's wall budget is known (FeRRy Phase 3).
 
         # EX-4.3 arm H3 — L1 adaptive channel. H1/H2 hold the best-average
         # fixed band; H3 runs the U(c,t) controller. The per-mission loss
@@ -561,7 +1194,16 @@ class Exp4Driver:
             )
             plan = backhaul_plan(model, adaptive=(arm == "H3"))
             realism_kwargs["backhaul_loss_schedule"] = plan.loss_schedule
-            realism_kwargs["rf_prior_snr_db"] = plan.mean_chosen_snr_db
+            if not self.sim:
+                realism_kwargs["rf_prior_snr_db"] = plan.mean_chosen_snr_db
+            else:
+                # FeRRy Phase 3 (critic B4): the mean over the realized trace
+                # uses the future, so a ferry cell's mule is not handed it. It
+                # gets the chosen carrier's SNR at each mission instead and
+                # adopts one entry per upload already made, so each Pass-1
+                # plan sees only past uploads (the seconds model, which
+                # _check_clock refuses with --l1-channel, has its own producer).
+                realism_kwargs["rf_prior_schedule_db"] = chosen_snr_schedule(model, plan)
             # The schedule drives the cluster's per-mission Bernoulli draw; seed
             # it off the paired seed so H1/H2/H3 share the identical draw
             # sequence (paired comparison holds even without --realism).
@@ -598,6 +1240,34 @@ class Exp4Driver:
             else:
                 model_kwargs = {}
 
+            # FeRRy Phase 3 — this trial's clock settings: on the wall clock
+            # the recorded merge spec, DOWN wait and budget; on the simulated
+            # one the ferry settings, T_nom and what derives from it.
+            clock = self._resolve_clock(
+                cell, arm=arm, regime=regime, n_devices=n_devices,
+                rf_range_m=rf_range_m, n_missions=n_missions,
+                init_theta_path=model_kwargs.get("init_theta_path"),
+                input_dim=model_kwargs.get("input_dim"),
+            )
+            selector_kwargs.update(
+                aggregation=clock.aggregation_spec.rule,
+                aggregation_params=clock.aggregation_spec.to_params(),
+            )
+            selector_kwargs.pop("down_wait_s", None)
+            if clock.down_wait_s is not None:
+                selector_kwargs["down_wait_s"] = clock.down_wait_s
+            clock_kwargs: Dict[str, Any] = {}
+            if clock.sim:
+                clock_kwargs.update(mission_clock="sim", ferry_settings=clock.settings)
+            if clock.deadline_time_scale != 1.0:
+                clock_kwargs["deadline_time_scale"] = clock.deadline_time_scale
+            if clock.initial_window_s is not None:
+                clock_kwargs["initial_window_s"] = clock.initial_window_s
+            if clock.rf_link_token is not None:
+                clock_kwargs["rf_link_token"] = clock.rf_link_token
+            if self.session_ttl_s is not None:
+                clock_kwargs["session_ttl_s"] = float(self.session_ttl_s)
+
             def _build(**extra):
                 return build_exp4_topology(
                     n_devices=n_devices,
@@ -607,6 +1277,7 @@ class Exp4Driver:
                     **model_kwargs,
                     **realism_kwargs,
                     **selector_kwargs,
+                    **clock_kwargs,
                     **extra,
                 )
 
@@ -614,13 +1285,26 @@ class Exp4Driver:
             if arm == "D4" and int(self.n_mules) > 1:
                 # FedEx's CARP split, once per trial, over the positions this
                 # seed lays out (the same ones the default split was built on).
+                # FeRRy Phase 3: a ferry cell prices each client at its
+                # predicted Pass-1 airtime and flies at its own cruise speed.
+                carp_kwargs: Dict[str, Any] = {}
+                if clock.sim:
+                    theta_b, synth_b = self._payload_bytes(model_kwargs.get("init_theta_path"))
+                    carp_kwargs = dict(
+                        t_trans_s=self.carp_t_trans_s(
+                            clock.settings, rf_range_m=rf_range_m, seed=cell.seed,
+                            theta_bytes=theta_b, synth_bytes=synth_b,
+                        ),
+                        cruise_speed_m_s=float(topo.mules[0].cruise_speed_m_s),
+                    )
                 topo = _build(slice_assignment=d4_slice_assignment(
-                    topo.devices, int(self.n_mules), cell.seed,
+                    topo.devices, int(self.n_mules), cell.seed, **carp_kwargs,
                 ))
 
             return self._run_topology(
                 topo, cell=cell, n_devices=n_devices,
                 rf_range_m=rf_range_m, n_missions=n_missions, started=started,
+                clock=clock,
             )
         finally:
             if prep_dir is not None:
@@ -843,7 +1527,8 @@ class Exp4Driver:
             )
 
     def _write_trial_status(
-        self, cell, *, status, error, n_missions, started=None,
+        self, cell, *, status, error, n_missions, started=None, budget_s=None,
+        t_nom_computed: Optional[bool] = None, soft_cap_s: Optional[float] = None,
     ) -> None:
         """Label this trial's kept trace with the status its CSV row records.
 
@@ -851,14 +1536,25 @@ class Exp4Driver:
         or ``error`` with the exception's last line when the trial raises —
         which is what the runner writes for a raise, an
         :class:`Exp4TrialTimeout` included. The runner's own soft timeout is
-        decided after this returns, against the caller's cap, which the driver
-        is never told. So the marker records what it is decided from instead:
-        ``run_s``, the seconds since ``run_trial`` began (``started``; None
-        when the trial was not started through it), and ``trial_budget_s``,
-        which is the runner's cap unless ``--timeout-s`` overrode it. ``run_s``
-        leaves out the teardown still to come (removing the run and prep
+        decided after this returns, against the caller's cap. So the marker
+        records what it is decided from instead: ``run_s``, the seconds since
+        ``run_trial`` began (``started``; None when the trial was not started
+        through it), and ``trial_budget_s``, the trial's own wall budget
+        (``budget_s``, re-costed on the mission clock in FeRRy Phase 3; None
+        records the driver's ``trial_budget_s``). On the wall clock that
+        budget is the runner's default cap; a ``--timeout-s`` that overrides
+        it is known only to the trial CSV. On the mission clock the runner's
+        cap is one number for the whole grid (the largest budget, or
+        ``--timeout-s``) and can exceed the trial's own budget, so
+        ``soft_cap_s`` records it when the caller has told the driver (the
+        driver's ``soft_cap_s``, which ``runner_main`` sets). ``run_s`` leaves
+        out the teardown still to come (removing the run and prep
         directories), so it can fall a fraction of a second short of the
-        runner's duration.
+        runner's duration. ``t_nom_computed`` records whether the driver
+        computed T_nom itself, which no trace file says otherwise: the scorer
+        reads it here before inferring it. ``t_nom_computed`` and
+        ``soft_cap_s`` are passed for simulated-clock trials only, and None
+        leaves each key out, so wall markers keep their key set.
 
         Never raises, and writes nothing when there is no kept trace to label.
         """
@@ -876,7 +1572,13 @@ class Exp4Driver:
                         "error": str(error or ""),
                         "n_missions_target": int(n_missions),
                         "run_s": run_s,
-                        "trial_budget_s": float(self.trial_budget_s),
+                        "trial_budget_s": float(
+                            self.trial_budget_s if budget_s is None else budget_s
+                        ),
+                        **({} if t_nom_computed is None
+                           else {"t_nom_computed": bool(t_nom_computed)}),
+                        **({} if soft_cap_s is None
+                           else {"soft_cap_s": float(soft_cap_s)}),
                     },
                     f,
                 )
@@ -890,12 +1592,23 @@ class Exp4Driver:
 
     def _run_topology(
         self, topo, *, cell, n_devices, rf_range_m, n_missions, started=None,
+        clock: Optional[_TrialClock] = None,
     ):
+        # FeRRy Phase 3: ``clock`` is the trial's resolved clock settings
+        # (``_resolve_clock``); None, as for a caller that builds its own
+        # topology, is the recorded wall-clock trial.
+        if clock is None:
+            clock = _TrialClock(
+                aggregation_spec=self._aggregation_spec,
+                budget_s=float(self.trial_budget_s),
+                down_wait_s=self.effective_down_wait_s,
+            )
+        budget_s = float(self.trial_budget_s if clock.budget_s is None else clock.budget_s)
         orch = MultiProcessOrchestrator(topo, capture_output=True)
         captured = False
         try:
             orch.start_all(timeout=self.startup_timeout_s)
-            timed_out = not self._await_mules(orch, self.trial_budget_s)
+            timed_out = not self._await_mules(orch, budget_s)
             # Read before shutdown, which would give any mule still running a
             # non-zero status of its own making.
             failed = {} if timed_out else self._failed_mules(orch)
@@ -910,7 +1623,7 @@ class Exp4Driver:
             captured = True
             if timed_out:
                 raise Exp4TrialTimeout(
-                    f"exp4 trial exceeded {self.trial_budget_s:.0f}s budget "
+                    f"exp4 trial exceeded {budget_s:.0f}s budget "
                     f"(cell={cell.cell_id}, trial={cell.trial_index}); "
                     f"orchestrator killed"
                 )
@@ -948,7 +1661,7 @@ class Exp4Driver:
                 "" if self.mission_budget_s is None else float(self.mission_budget_s)
             )
             row["mission_window_adaptation"] = int(bool(self.mission_window_adaptation))
-            spec = self._aggregation_spec
+            spec = clock.aggregation_spec or self._aggregation_spec
             row["aggregation"] = spec.rule
             row["aggregation_params"] = (
                 "" if spec.is_plain else json.dumps(spec.to_params(), sort_keys=True)
@@ -962,7 +1675,10 @@ class Exp4Driver:
                 else json.dumps(law.to_params(), sort_keys=True)
             )
             row["miss_priority"] = int(bool(self.miss_priority))
-            row.update(self._multi_mule_provenance(getattr(cell, "arm", "")))
+            row.update(self._multi_mule_provenance(
+                getattr(cell, "arm", ""), down_wait_s=clock.down_wait_s,
+            ))
+            row.update(self._clock_provenance(topo, clock))
             # A trial that produced NO model evaluation at all never trained a
             # model — its convergence columns are blank while its federation
             # columns are hard zeros. Recorded as `ok`, that asymmetry biases
@@ -986,7 +1702,11 @@ class Exp4Driver:
                 )
             self._write_trial_status(
                 cell, status=row.get("status", "ok"), error=row.get("error", ""),
-                n_missions=n_missions, started=started,
+                n_missions=n_missions, started=started, budget_s=budget_s,
+                t_nom_computed=(clock.t_nom_computed
+                                if clock is not None and clock.sim else None),
+                soft_cap_s=(self.soft_cap_s
+                            if clock is not None and clock.sim else None),
             )
             return row
         except Exception as exc:
@@ -997,23 +1717,32 @@ class Exp4Driver:
                 self._write_trial_status(
                     cell, status="error",
                     error=traceback.format_exception_only(type(exc), exc)[-1].strip(),
-                    n_missions=n_missions, started=started,
+                    n_missions=n_missions, started=started, budget_s=budget_s,
+                    t_nom_computed=(clock.t_nom_computed
+                                    if clock is not None and clock.sim else None),
+                    soft_cap_s=(self.soft_cap_s
+                                if clock is not None and clock.sim else None),
                 )
             raise
         finally:
             orch.cleanup()
 
-    def _multi_mule_provenance(self, arm: str) -> Dict[str, Any]:
+    def _multi_mule_provenance(
+        self, arm: str, *, down_wait_s: Any = "default",
+    ) -> Dict[str, Any]:
         """The FeRRy Phase 2 provenance columns for a row of ``arm``.
 
         ``n_mules`` is always the count, as the trace scorer reports it. The
         others are blank at their recorded value — a quorum of 1 with one
         mule, the recorded dock, no policy options — so a single-mule row
-        reads as it always did.
+        reads as it always did. ``down_wait_s`` is the trial's own DOWN wait
+        (FeRRy Phase 3: the re-costed wall budget with several mules on the
+        mission clock); by default the driver's.
         """
         recorded_topology = int(self.n_mules) == 1 and int(self.min_participation) == 1
         dock_on_empty = self.effective_dock_on_empty
-        down_wait_s = self.effective_down_wait_s
+        if down_wait_s == "default":
+            down_wait_s = self.effective_down_wait_s
         policy = self._policy_params(arm)
         return {
             "n_mules": int(self.n_mules),
@@ -1027,6 +1756,91 @@ class Exp4Driver:
             ),
             "policy_params": json.dumps(policy, sort_keys=True) if policy else "",
         }
+
+    def _clock_provenance(self, topo, clock: _TrialClock) -> Dict[str, Any]:
+        """The FeRRy Phase 3 provenance columns (``PROVENANCE_COLUMNS``' last 13).
+
+        Like the Phase 2 columns, each is BLANK at the driver's defaults, so a
+        row at the default settings reads as it always did plus blanks, and
+        a trace kept before these columns existed derives each one (critic
+        B13; such traces are all wall-clock). The clock does not blank them:
+        ``l1_channel``, ``realism`` and ``input_dim`` describe the recorded
+        cells too (a re-run of a recorded real-model cell writes realism 1
+        and input_dim 21), and a numeric time unit, Φ₀ or TTL fills its column
+        on either clock. Formats, and the derivation from an old trace:
+
+        * ``mission_clock``: "sim", "" on the wall clock. Old: "".
+        * ``contact_band``: the class name, "" without a band. Old: "".
+        * ``in_flight_response``: "replan", "" for "abort". Old: "".
+        * ``backhaul_model``: "seconds", "" for "mission". Old: "".
+        * ``contact_reliability_source``: "channel", "" for "origin". Old: "".
+        * ``deadline_time_scale``: the float the scheduler ran (T_nom / 10 s
+          resolved), "" at 1.0. Old: "".
+        * ``initial_window_s``: Φ₀ in the law's recorded unit as the mule got
+          it (float), "" when unset. Old: "".
+        * ``t_nom_s``: the cell's T_nom in simulated seconds (float), "" when
+          none was given or needed. Old: "".
+        * ``session_ttl_s``: the mule's wall TTL (float), "" at the recorded
+          3.0 s. Old: "" when the mule JSON's ``session_ttl_s`` is 3.0 (every
+          kept Exp 4 trace), else that value.
+        * ``ferry_params``: JSON (sorted keys) of every other ferry setting the
+          mules ran, as ``MuleConfig`` fields, resolved (``backhaul_period_s``
+          is P_bh when the seconds model computes it from T_nom), plus
+          ``t_nom_computed``; "" on the wall clock. Old: "".
+        * ``l1_channel``: 1, "" when off. Old: 1 iff the cluster JSON has a
+          non-null ``backhaul_loss_schedule``.
+        * ``realism``: 1, "" when off. Old: 1 iff a device JSON has a non-null
+          ``contact_reliability``. (A ferry trace under the channel source
+          keeps the draw in the mule JSON's ``device_availability`` instead.)
+        * ``input_dim``: the model's input width (int), "" on the stub. Old:
+          the cluster JSON's ``input_dim`` ("" when null).
+        """
+        switches = dict(clock.settings)
+        mule = topo.mules[0] if topo.mules else None
+
+        def _unless(value, recorded):
+            return "" if value is None or value == recorded else value
+
+        ttl = float(mule.session_ttl_s if mule is not None else self.effective_session_ttl_s)
+        row: Dict[str, Any] = {
+            "mission_clock": "sim" if clock.sim else "",
+            "contact_band": switches.get("contact_band") or "",
+            "in_flight_response": _unless(switches.get("in_flight_response"), "abort"),
+            "backhaul_model": _unless(switches.get("backhaul_model"), "mission"),
+            "contact_reliability_source": _unless(
+                switches.get("contact_reliability_source"), "origin",
+            ),
+            "deadline_time_scale": _unless(float(clock.deadline_time_scale), 1.0),
+            "initial_window_s": (
+                "" if clock.initial_window_s is None else float(clock.initial_window_s)
+            ),
+            "t_nom_s": "" if clock.t_nom_s is None else float(clock.t_nom_s),
+            "session_ttl_s": _unless(ttl, float(SESSION_TTL_S)),
+            "ferry_params": "",
+            "l1_channel": 1 if self.l1_channel else "",
+            "realism": 1 if self.realism else "",
+            "input_dim": "" if clock.input_dim is None else int(clock.input_dim),
+        }
+        if clock.sim and mule is not None:
+            from hermes.processes.config import FERRY_SPEC_FIELDS
+
+            shown = {
+                name: getattr(mule, name) for name in FERRY_SPEC_FIELDS
+                if name not in ("contact_band", "in_flight_response", "backhaul_model",
+                                "contact_reliability_source", "device_availability",
+                                "t_nom_s")
+            }
+            if (mule.backhaul_model == "seconds" and mule.backhaul_period_s is None
+                    and clock.t_nom_s is not None):
+                from hermes.l1.channel_model import backhaul_period_s
+
+                # P_bh as the mule's spec computes it: n_missions * T_nom.
+                shown["backhaul_period_s"] = backhaul_period_s(
+                    int(mule.n_missions), float(clock.t_nom_s),
+                )
+            shown["t_nom_computed"] = bool(clock.t_nom_computed)
+            row["ferry_params"] = json.dumps(shown, sort_keys=True, default=str)
+        return row
 
     @staticmethod
     def _failed_mules(orch: MultiProcessOrchestrator) -> Dict[str, int]:

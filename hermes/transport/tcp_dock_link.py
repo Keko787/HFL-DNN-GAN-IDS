@@ -27,28 +27,60 @@ Compared to :class:`TCPRFLinkServer`:
 * Bundles can be very large (hundreds of MB for a real model). The
   framing in :mod:`wire` handles up to 256 MiB, which is enough for
   the Sprint 2 demos; larger bundles want a streaming variant later.
+
+FeRRy Phase 3, unit U9 (``TCPDockLinkServer(sim_markers=True)``, off by
+default). The server also queues :class:`~hermes.transport.dock_link.DockClockMarker`
+records, in the queue the UPs go through: ``registered`` when a mule's
+connection registers, the ``clock`` and ``done`` markers a mule sends
+(``TCPDockLinkClient.client_send_clock``), and ``departed`` when a mule's
+connection ends without a newer one replacing it. Each is queued by the
+thread that orders it against the mule's UPs (the accept thread under the
+registration lock, or the mule's own reader), so the cluster reads a mule's
+registration, UPs, markers and departure in the order they happened, and can
+never take a mule for gone while one of its UPs is still queued. Off, no
+marker is made, and a marker a mule sends is ignored like any unexpected
+frame, as before.
 """
 
 from __future__ import annotations
 
 import logging
+import math
 import queue
 import socket
 import struct
+import sys
 import threading
+import time
 from dataclasses import dataclass
 from typing import Dict, List, Optional
 
 from hermes.types import DownBundle, MuleID, UpBundle
 
-from .dock_link import DockLink, DockLinkError, DockLinkTimeout, _drain
+from .dock_link import (
+    MARKER_CLOCK,
+    MARKER_DEPARTED,
+    MARKER_DONE,
+    MARKER_REGISTERED,
+    MULE_MARKER_KINDS,
+    DockClockMarker,
+    DockLink,
+    DockLinkError,
+    DockLinkTimeout,
+    _drain,
+)
 from .wire import WireError, recv_message, send_message
 
 log = logging.getLogger(__name__)
 
 
 def _close_socket(sock: socket.socket) -> None:
-    """Shut down and close ``sock``, ignoring a socket that is already gone."""
+    """Shut down and close ``sock``, ignoring a socket that is already gone.
+
+    The shutdown matters for a socket another thread is blocked reading with
+    no timeout: on Linux, ``close`` alone does not wake that ``recv``;
+    ``shutdown`` does, on every platform.
+    """
     try:
         sock.shutdown(socket.SHUT_RDWR)
     except OSError:
@@ -57,6 +89,71 @@ def _close_socket(sock: socket.socket) -> None:
         sock.close()
     except OSError:
         pass
+
+
+# Largest SO_SNDTIMEO Winsock accepts: a DWORD of milliseconds (~49.7 days).
+_WINSOCK_MAX_MS = 0xFFFFFFFF
+
+
+def sndtimeo_optval(timeout_s: Optional[float], *, platform: Optional[str] = None) -> bytes:
+    """The ``SO_SNDTIMEO`` option value that bounds one blocking send.
+
+    The option's type differs by OS. Winsock reads a DWORD of milliseconds
+    (Microsoft, "SOL_SOCKET socket options"); POSIX reads a ``struct
+    timeval`` of seconds and microseconds (socket(7)), whose layout two
+    native longs match on Linux and 64-bit macOS. The dock link used to pack
+    a timeval everywhere, so Windows read ``tv_sec`` as milliseconds: its
+    60 s bound was 60 ms, and a bound under 1 s packed ``tv_sec = 0``, which
+    Winsock reads as no bound at all (Freeze Amendment 10).
+
+    ``None`` or 0 packs 0, which both APIs read as "block forever". A
+    positive bound is rounded to the API's unit but never below one unit,
+    so it never packs as 0. ``platform`` defaults to ``sys.platform``;
+    tests pass it to check both encodings on one host.
+    """
+    plat = sys.platform if platform is None else platform
+    t = 0.0 if timeout_s is None else float(timeout_s)
+    if math.isnan(t) or t < 0.0 or math.isinf(t):
+        raise ValueError(f"send timeout must be a finite value >= 0, got {timeout_s!r}")
+    if plat.startswith("win"):
+        ms = min(int(round(t * 1000.0)), _WINSOCK_MAX_MS)
+        if t > 0.0 and ms == 0:
+            ms = 1
+        return struct.pack("=I", ms)
+    sec = int(t)
+    usec = int(round((t - sec) * 1_000_000))
+    if usec >= 1_000_000:
+        sec, usec = sec + 1, 0
+    if t > 0.0 and sec == 0 and usec == 0:
+        usec = 1
+    return struct.pack("ll", sec, usec)
+
+
+def set_send_timeout(sock: socket.socket, timeout_s: Optional[float]) -> bool:
+    """Bound every blocking send on ``sock`` to ``timeout_s`` (SO_SNDTIMEO).
+
+    Used on sockets whose reads block with no timeout (``settimeout(None)``),
+    so a reader can sit idle indefinitely while a send to a stuck peer still
+    fails, with an ``OSError`` that ``wire.send_message`` turns into a
+    ``WireError``. The option does nothing on a socket with a Python-level
+    timeout, which is non-blocking underneath.
+
+    The bound is per send call, not per ``sendall``: Winsock fails a call
+    that has not finished in time, while Linux returns the bytes a call got
+    out and ``sendall`` carries on, so there only a peer that takes nothing
+    for ``timeout_s`` fails the frame. Either way a stuck peer cannot hold a
+    sender for long; a slow one is not cut off mid-frame on Linux.
+
+    Returns False when the platform refuses the option; the send is then
+    bounded only by the peer draining it, as before.
+    """
+    try:
+        sock.setsockopt(
+            socket.SOL_SOCKET, socket.SO_SNDTIMEO, sndtimeo_optval(timeout_s),
+        )
+    except OSError:
+        return False
+    return True
 
 
 # --------------------------------------------------------------------------- #
@@ -90,6 +187,11 @@ class TCPDockLinkServer(DockLink):
     3. ``recv_up`` blocks on the shared queue. ``send_down`` looks up
        the registered socket for the bundle's mule_id and writes.
     4. ``close()`` shuts down the listener + every mule socket.
+
+    ``sim_markers`` (FeRRy Phase 3, unit U9; off by default): queue the
+    mules' :class:`DockClockMarker` records with their UPs (module
+    docstring); read them with :meth:`recv_dock_event`. :meth:`recv_up` still
+    returns UP bundles only, skipping any marker.
     """
 
     def __init__(
@@ -99,6 +201,7 @@ class TCPDockLinkServer(DockLink):
         *,
         accept_timeout_s: float = 0.25,
         send_timeout_s: float = 60.0,
+        sim_markers: bool = False,
     ) -> None:
         self._host = host
         self._listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -123,6 +226,26 @@ class TCPDockLinkServer(DockLink):
         # S2-M4 / S2-H3 — same pattern as TCPRFLinkServer.
         self._registration_cv = threading.Condition(self._lock)
         self._last_accept_error: Optional[BaseException] = None
+
+        # FeRRy Phase 3, unit U9: the in-band markers. Each registration is a
+        # numbered session; ``_sessions`` holds each mule's latest, so the end
+        # of an older connection is not taken for the mule's departure.
+        self._sim_markers = bool(sim_markers)
+        self._session_seq = 0
+        self._sessions: Dict[MuleID, int] = {}
+
+    @property
+    def sim_markers(self) -> bool:
+        """True when the server queues :class:`DockClockMarker` records (FeRRy Phase 3, U9)."""
+        return self._sim_markers
+
+    def session_of(self, mule_id: MuleID) -> Optional[int]:
+        """The session number of ``mule_id``'s current connection (FeRRy Phase 3, U9).
+
+        None without ``sim_markers``, or when the mule has no connection.
+        """
+        with self._lock:
+            return self._sessions.get(mule_id)
 
     @property
     def host(self) -> str:
@@ -184,10 +307,43 @@ class TCPDockLinkServer(DockLink):
 
     def recv_up(self, timeout: Optional[float] = None) -> UpBundle:
         self._raise_if_closed()
+        if self._sim_markers:
+            return self._recv_up_past_markers(timeout)
         try:
             return self._up_q.get(timeout=timeout)
         except queue.Empty as e:
             raise DockLinkTimeout(f"recv_up timed out after {timeout}s") from e
+
+    def recv_dock_event(self, timeout: Optional[float] = None):
+        """The next UP bundle or :class:`DockClockMarker`, in the order queued (FeRRy Phase 3, U9).
+
+        Without ``sim_markers`` the queue holds UPs only, so this is
+        :meth:`recv_up`.
+        """
+        self._raise_if_closed()
+        try:
+            return self._up_q.get(timeout=timeout)
+        except queue.Empty as e:
+            raise DockLinkTimeout(f"recv_dock_event timed out after {timeout}s") from e
+
+    def _recv_up_past_markers(self, timeout: Optional[float]) -> UpBundle:
+        """:meth:`recv_up` on a server that queues markers: the next UP, markers dropped.
+
+        A caller of ``recv_up`` asked for bundles only; the markers belong to
+        :meth:`recv_dock_event`'s caller, so one reading them here has picked
+        the wrong call, and they are dropped with a debug line. ``timeout``
+        bounds the whole wait, markers included.
+        """
+        deadline = None if timeout is None else time.monotonic() + float(timeout)
+        while True:
+            remaining = None if deadline is None else max(0.0, deadline - time.monotonic())
+            try:
+                item = self._up_q.get(timeout=remaining)
+            except queue.Empty as e:
+                raise DockLinkTimeout(f"recv_up timed out after {timeout}s") from e
+            if isinstance(item, UpBundle):
+                return item
+            log.debug("recv_up skipped a dock marker: %r", item)
 
     def send_down(self, bundle: DownBundle) -> None:
         self._raise_if_closed()
@@ -296,17 +452,11 @@ class TCPDockLinkServer(DockLink):
         # surfaces via WireError on the next frame.
         conn.settimeout(None)
         # S2-M3: bound the dock SEND-timeout via SO_SNDTIMEO so a
-        # stuck recipient doesn't hang the cluster's send_down. Linux
-        # uses SO_SNDTIMEO seconds; Windows uses milliseconds — we set
-        # a struct-format value compatible with both via socket.timeval.
-        try:
-            tv = struct.pack(
-                "ll",
-                int(self._send_timeout_s),
-                int((self._send_timeout_s % 1) * 1_000_000),
-            )
-            conn.setsockopt(socket.SOL_SOCKET, socket.SO_SNDTIMEO, tv)
-        except OSError:
+        # stuck recipient doesn't hang the cluster's send_down. Amendment
+        # 10: packed per OS by sndtimeo_optval (Windows reads a DWORD of
+        # milliseconds, POSIX a struct timeval); the timeval packed here
+        # before gave Windows a 60 ms bound instead of 60 s.
+        if not set_send_timeout(conn, self._send_timeout_s):
             # SO_SNDTIMEO can fail on platforms that ignore the option;
             # fall back to relying on the peer to drain.
             log.debug("SO_SNDTIMEO not honoured on this platform")
@@ -317,9 +467,15 @@ class TCPDockLinkServer(DockLink):
             # _drop_mule only removes the socket it was given (FeRRy Phase 2).
             previous = self._sockets.get(mid)
             self._sockets[mid] = conn
+            # FeRRy Phase 3, U9: number the session and queue its
+            # ``registered`` marker before its reader can queue any UP.
+            reader_kwargs = {}
+            if self._sim_markers:
+                reader_kwargs["session"] = self._open_session(mid)
             t = threading.Thread(
                 target=self._reader_loop,
                 args=(mid, conn),
+                kwargs=reader_kwargs,
                 name=f"TCPDockLinkServer-reader-{mid}",
                 daemon=True,
             )
@@ -332,7 +488,9 @@ class TCPDockLinkServer(DockLink):
         t.start()
         log.info("TCPDockLinkServer registered mule %s", mid)
 
-    def _reader_loop(self, mule_id: MuleID, conn: socket.socket) -> None:
+    def _reader_loop(
+        self, mule_id: MuleID, conn: socket.socket, session: Optional[int] = None,
+    ) -> None:
         while not self._closed.is_set():
             try:
                 msg = recv_message(conn)
@@ -341,13 +499,67 @@ class TCPDockLinkServer(DockLink):
 
             if isinstance(msg, UpBundle):
                 self._up_q.put(msg)
+            elif self._sim_markers and isinstance(msg, DockClockMarker):
+                self._queue_mule_marker(mule_id, msg, session)
             else:
                 log.warning(
                     "TCPDockLinkServer ignored unexpected message %s from %s",
                     type(msg).__name__, mule_id,
                 )
         self._drop_mule(mule_id, conn)
+        if self._sim_markers:
+            self._close_session(mule_id, session)
         log.info("TCPDockLinkServer reader for %s exiting", mule_id)
+
+    # ------------------------------------------------------------------ #
+    # FeRRy Phase 3, unit U9 — the in-band markers (``sim_markers``)
+    # ------------------------------------------------------------------ #
+
+    def _open_session(self, mule_id: MuleID) -> int:
+        """Number a new connection of ``mule_id`` and queue its ``registered`` marker.
+
+        The caller holds the lock, so the marker is queued in the order the
+        registrations happened and before the session's reader starts.
+        """
+        self._session_seq += 1
+        session = self._session_seq
+        self._sessions[mule_id] = session
+        self._up_q.put(DockClockMarker(mule_id=mule_id, kind=MARKER_REGISTERED, session=session))
+        return session
+
+    def _queue_mule_marker(
+        self, mule_id: MuleID, marker: DockClockMarker, session: Optional[int],
+    ) -> None:
+        """Queue a marker a mule sent, stamped with its connection's session.
+
+        Only ``clock`` and ``done`` come from a mule, and only for itself: a
+        ``registered``/``departed`` marker or one naming another mule is
+        dropped with a warning, so a mule cannot report for another one.
+        """
+        if marker.kind not in MULE_MARKER_KINDS or marker.mule_id != mule_id:
+            log.warning(
+                "TCPDockLinkServer refused a %r marker for %s on %s's connection",
+                marker.kind, marker.mule_id, mule_id,
+            )
+            return
+        self._up_q.put(DockClockMarker(
+            mule_id=mule_id, kind=marker.kind, sim_ts=marker.sim_ts, session=session,
+        ))
+
+    def _close_session(self, mule_id: MuleID, session: Optional[int]) -> None:
+        """Queue ``departed`` for a connection that ended, unless a newer one replaced it.
+
+        Called by the session's own reader after its last UP is queued, so the
+        departure can never overtake one of the mule's UPs. Under the lock, so
+        it is ordered against a concurrent registration of the same id: either
+        it is queued first, or the newer session is already the mule's and the
+        old connection's end is no departure.
+        """
+        with self._lock:
+            if session is None or self._sessions.get(mule_id) != session:
+                return
+            del self._sessions[mule_id]
+            self._up_q.put(DockClockMarker(mule_id=mule_id, kind=MARKER_DEPARTED, session=session))
 
     def _drop_mule(self, mule_id: MuleID, conn: Optional[socket.socket] = None) -> None:
         """Forget ``mule_id``'s connection and close it.
@@ -447,6 +659,34 @@ class TCPDockLinkClient(DockLink):
         except WireError as e:
             self._closed.set()
             raise DockLinkError(f"client_send_up failed: {e}") from e
+
+    def client_send_clock(
+        self, mule_id: MuleID, sim_ts: Optional[float], *, done: bool = False,
+    ) -> bool:
+        """Report this mule's simulated time without a bundle (FeRRy Phase 3, U9).
+
+        Sends a ``clock`` marker (every later UP of this mule completes at or
+        after ``sim_ts``) or, with ``done``, a ``done`` marker (no more UPs;
+        ``sim_ts`` optional). A cluster server built with ``sim_markers``
+        queues it with this mule's UPs; any other server ignores it. Call it
+        from the thread that sends the UPs: sends on the one socket are not
+        interleaved otherwise. Raises :class:`DockLinkError` like
+        :meth:`client_send_up`; returns True once sent.
+        """
+        self._raise_if_closed()
+        if mule_id != self._mule_id:
+            raise DockLinkError(
+                f"client_send_clock for {mule_id!r} on client {self._mule_id!r}"
+            )
+        marker = DockClockMarker(
+            mule_id=mule_id, kind=MARKER_DONE if done else MARKER_CLOCK, sim_ts=sim_ts,
+        )
+        try:
+            send_message(self._sock, marker)
+        except WireError as e:
+            self._closed.set()
+            raise DockLinkError(f"client_send_clock failed: {e}") from e
+        return True
 
     def client_recv_down(
         self, mule_id: MuleID, timeout: Optional[float] = None

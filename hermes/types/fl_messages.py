@@ -48,6 +48,12 @@ class FLOpenSolicit:
     mission_round: int
     issued_at: float
     pass_kind: MissionPass = MissionPass.COLLECT
+    # FeRRy Phase 3 (design section 4.3): the ferry path numbers each targeted
+    # solicit (1, 2, ... per mule server) and devices echo the number in
+    # ``FLReadyAdv.in_reply_to``, so the mule accepts only adverts that answer
+    # the contact it is gathering for (critic B1). 0 means "not numbered": the
+    # legacy broadcast, whose adverts carry no reference to their solicit.
+    solicit_id: int = 0
 
 
 @dataclass(frozen=True)
@@ -78,6 +84,10 @@ class FLReadyAdv:
     # advertisement stays wire-compatible and H0-H3 behaviour is unchanged.
     local_loss: Optional[float] = None
     num_examples: int = 0
+    # FeRRy Phase 3: the ``FLOpenSolicit.solicit_id`` this advert answers (0 for
+    # an unnumbered solicit, and for a beacon). The ferry path discards any
+    # advert whose number is not its own contact's, instead of stashing it.
+    in_reply_to: int = 0
 
     def is_eligible(self) -> bool:
         return self.state.can_open_session()
@@ -126,6 +136,14 @@ class DiscPush:
     # back: the device then trains ahead on the basis this push gives it, in
     # the background, instead of waiting for a delivery (principle 14).
     train_ahead: bool = False
+    # FeRRy Phase 3 (contact reliability from the channel, design section 4.8):
+    # the mule's keyed availability draw failed this device's uplink for this
+    # contact. The device adopts the basis (and trains ahead if asked) but sends
+    # no update, exactly as a failed uplink under ``contact_reliability`` does;
+    # the mule records the session as timed out without waiting for it. The
+    # draw is made on the mule so the device's ground-truth availability never
+    # reaches the mule's decision code (critic B16), only its outcome does.
+    uplink_drop: bool = False
 
     def __post_init__(self) -> None:
         if not self.weights_sig:
@@ -162,6 +180,14 @@ class GradientSubmission:
     # means the sender did not know the version.
     basis_version: Optional[int] = None
     update_form: str = UPDATE_FORM_WEIGHTS
+    # FeRRy Phase 3 (critic B2): the solicit number of the contact this update
+    # answers, echoed from ``FLOpenSolicit.solicit_id`` (0 when unnumbered). A
+    # device's gradient queue on the mule outlives the contact that filled it,
+    # so without it a gradient that came after its own contact gave up would be
+    # taken as the reply to the device's next contact. ``basis_version`` cannot
+    # serve: a prepared update carries the basis it was trained on, which is
+    # older than the push it answers.
+    in_reply_to: int = 0
 
     def __post_init__(self) -> None:
         if self.byte_count == 0:
@@ -189,6 +215,10 @@ class DeliveryAck:
     mission_round: int
     weights_sig: str
     received_at: float
+    # FeRRy Phase 3 (critic B2): the solicit number of the delivery this ack
+    # answers (0 when unnumbered). The ferry path counts an ack as DELIVERED
+    # only if its round, signature and number are those of its own push.
+    in_reply_to: int = 0
 
 
 # --------------------------------------------------------------------------- #

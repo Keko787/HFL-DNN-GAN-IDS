@@ -21,15 +21,26 @@ budget is a form of orienteering problem and is NP-hard; no cited baseline solve
 it exactly either. Greedy-by-rank is what the literature's "highest AoI first,
 nearest predecessor" describes, and solving it optimally for one arm while the
 others act greedily would be a different unfairness.
+
+**FeRRy Phase 3.** The walk is a fold, skipping what fails, over S3b's one
+predicate (:meth:`FeasibilityModel.admit`) under the budget-only rule. In
+legacy mode that is exactly the arithmetic above. With the ferry model every
+arm is priced with the same physics as S3b: dwell at rate, the return leg to
+the dock, the upload after Pass 1 and, if a capacity is set, the simulated
+energy clause.
 """
 
 from __future__ import annotations
 
 from typing import Callable, List, Optional, Sequence, Tuple
 
-from hermes.types import ContactWaypoint
+from hermes.types import ContactWaypoint, MissionPass
 
-from hermes.scheduler.stages.s3b_feasibility import FeasibilityModel
+from hermes.scheduler.stages.s3b_feasibility import (
+    RULE_BUDGET,
+    FeasibilityModel,
+    FlightState,
+)
 
 MulePose = Tuple[float, float, float]
 
@@ -55,6 +66,8 @@ def greedy_budget_walk(
     now: float,
     mission_deadline_ts: Optional[float],
     model: Optional[FeasibilityModel] = None,
+    state: Optional[FlightState] = None,
+    pass_kind: MissionPass = MissionPass.COLLECT,
 ) -> List[ContactWaypoint]:
     """Admit contacts in ``key`` order while the budget allows; return the route.
 
@@ -68,20 +81,22 @@ def greedy_budget_walk(
     With ``mission_deadline_ts=None`` there is no budget, so every contact is
     admitted in ranked order — which keeps the no-enforcement path meaningful
     rather than degenerate.
+
+    ``state`` (FeRRy Phase 3) starts the walk from a flight state, energy
+    spent included, instead of ``(mule_pose, now)``; ``pass_kind`` (the enum
+    or its string value) picks the ferry payload and whether the Pass-1
+    upload tail applies (the budgeted Pass 2 walks with ``DELIVER``). Both
+    are inert in legacy mode.
     """
     ordered = sorted(contacts, key=key)
     if mission_deadline_ts is None:
         return ordered
 
     m = model or FeasibilityModel()
-    route: List[ContactWaypoint] = []
-    pose = mule_pose
-    clock = now
-    for wp in ordered:
-        _transit, total = m.cost(pose, wp.position)
-        if clock + total > mission_deadline_ts:
-            continue                      # does not fit; try the next one
-        clock += total
-        pose = wp.position
-        route.append(wp)
-    return route
+    start = state if state is not None else FlightState(mule_pose, now)
+    # Skip, not stop: a contact that does not fit is left out and the walk
+    # tries the next one from the same pose and clock.
+    return list(m.fold(
+        ordered, start, rule=RULE_BUDGET, budget_end=mission_deadline_ts,
+        pass_kind=pass_kind, skip=True,
+    ).route)

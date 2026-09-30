@@ -19,6 +19,25 @@ The mule process:
    iterations (or until shutdown).
 
 Logs go to stderr in plain text (chunk M wraps them in JSON later).
+
+FeRRy Phase 3 (``MuleConfig.mission_clock == "sim"``, design section 2.2).
+The process builds one ``MissionClock`` and the ``FerrySpec`` its config
+describes (:func:`ferry_spec_from_config`) and hands both to the supervisor,
+which then flies every mission on simulated time. Its events gain the
+simulated fields of design section 2.5, and only on that clock:
+``mule_ready`` the clock and every ferry setting (``FerrySpec.describe``),
+``mission_started`` ``sim_start_s`` and the RF prior the mission plans with,
+and ``mission_completed`` the mission's simulated record
+(``MissionRunResult``'s ``sim_*`` fields, the stops flown, re-plans, the
+simulated energy, the backhaul upload and the Pass-1 pre-flight drops).
+Under the recorded ``mission`` backhaul model with the L1 channel, the process
+feeds the planner's RF prior causally from the missions already uploaded
+(``MuleConfig.rf_prior_schedule_db``, critic B4). A bootstrap DOWN the mule
+must refuse there (its slice carries wall-clock deadline overrides) ends the
+process with ``EXIT_BOOTSTRAP_FAILED``.
+On the wall clock every build step and event is the recorded one; a deadline
+time unit other than the recorded one (valid on either clock) adds its three
+fields to ``mule_ready``.
 """
 
 from __future__ import annotations
@@ -40,8 +59,15 @@ from hermes.observability import (
 )
 from hermes.transport import TCPDockLinkClient, TCPRFLinkServer
 from hermes.types import DeviceID, MuleID
+from hermes.types.scheduler import DEFAULT_FULFILMENT_WINDOW_S
 
-from .config import MuleConfig, mule_config_from_json
+from .config import (
+    CLOCK_SIM,
+    MuleConfig,
+    mission_schedule_index,
+    mule_config_errors,
+    mule_config_from_json,
+)
 
 log = logging.getLogger("hermes.processes.mule")
 
@@ -51,10 +77,16 @@ log = logging.getLogger("hermes.processes.mule")
 EXIT_MISSION_FAILED = 3
 #: Exit status of a mule that never received its bootstrap DOWN.
 EXIT_BOOTSTRAP_TIMEOUT = 4
+#: Exit status of a mule on the simulated clock that refused its bootstrap
+#: DOWN (FeRRy Phase 3: a slice carrying wall-clock deadline overrides, or a
+#: ``cluster_sim_ts`` that is no simulated time). Fatal: the mule would fly
+#: with no slice.
+EXIT_BOOTSTRAP_FAILED = 5
 
 #: Where every mule starts and docks: the origin, the pose ``MuleSupervisor``
-#: starts from. D4's FedEx tour returns here.
-DOCK_POSE = (0.0, 0.0, 0.0)
+#: starts from. D4's FedEx tour returns here. FeRRy Phase 3: re-exported from
+#: the mission clock's module, the one definition (design section 2.1).
+from hermes.l1.mission_clock import DOCK_POSE  # noqa: E402
 
 
 def _build_target_selector(cfg: MuleConfig):
@@ -261,6 +293,80 @@ def _pass_2_skipped(result) -> Optional[int]:
     return sum(1 for line in report.lines if line.outcome.value == "skipped")
 
 
+# --------------------------------------------------------------------------- #
+# FeRRy Phase 3 — the mission clock
+# --------------------------------------------------------------------------- #
+
+def ferry_spec_from_config(cfg: MuleConfig):
+    """The ``FerrySpec`` a sim-clock mule flies with (hermes/mule/ferry.py).
+
+    Built from :meth:`MuleConfig.ferry_spec_kwargs`, the one mapping the Exp 4
+    driver also uses, so the process prices exactly what the driver planned
+    T_nom and the D4 split with. Raises ``ValueError``/``TypeError`` on a
+    value the spec refuses.
+    """
+    from hermes.mule.ferry import FerrySpec
+
+    return FerrySpec.from_config(**cfg.ferry_spec_kwargs())
+
+
+#: ``mule_ready.rf_prior_source`` on the mission clock: where the planner's
+#: RF prior (the S3.5 selector's ``rf_prior_snr_db``) comes from (critic B4).
+#: ``seconds_backhaul``: the SNR last observed on the held carrier at an
+#: upload (the seconds model's producer, hermes/l1/rf_prior.py);
+#: ``mission_schedule``: the L1 trace's SNR at each past upload under the
+#: recorded ``mission`` model (``MuleConfig.rf_prior_schedule_db``);
+#: ``constant``: neither, the configured ``rf_prior_snr_db`` (20 dB default)
+#: throughout. The non-causal trial mean is never one of them.
+RF_PRIOR_SECONDS_BACKHAUL = "seconds_backhaul"
+RF_PRIOR_MISSION_SCHEDULE = "mission_schedule"
+RF_PRIOR_CONSTANT = "constant"
+
+#: ``MissionRunResult`` fields ``mission_completed`` carries on the mission
+#: clock (design section 2.5), in this order; all None on the wall clock.
+#: ``pass_1_preflight_drops`` is the diagnostic of finding E2E1-01.
+SIM_MISSION_FIELDS = (
+    "sim_start_s", "sim_end_s", "sim_ledger", "sim_pass_2_start_s",
+    "pass_1_flown", "pass_2_flown", "replans", "aborts", "inserts",
+    "offers_refused", "budget_overrun_s", "pass_2_budget_overrun_s",
+    "energy_j", "band", "backhaul", "pass_1_preflight_drops",
+)
+
+
+def _jsonable(value):
+    """``value`` with every container a JSON list/dict and every number a Python one.
+
+    The emitter serialises outside its own error handling, so one numpy
+    scalar in a nested record would raise into the mission loop.
+    """
+    if value is None or isinstance(value, (bool, str)):
+        return value
+    if isinstance(value, dict) or hasattr(value, "items"):
+        return {str(k): _jsonable(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple, set, frozenset)):
+        return [_jsonable(v) for v in value]
+    if isinstance(value, int):
+        return int(value)
+    if isinstance(value, float):
+        return float(value)
+    if hasattr(value, "item"):          # numpy scalars
+        return _jsonable(value.item())
+    return value
+
+
+def _sim_mission_fields(result) -> dict:
+    """``mission_completed``'s simulated fields from a sim-clock ``MissionRunResult``.
+
+    Times are simulated seconds; ``energy_j`` is SIMULATED (the Zeng 2019
+    model, ``energy_status``). ``pass_1_plan[].deadline_ts`` and
+    ``pass_1_outcomes[].contact_ts`` keep their names and are simulated too,
+    as ``mule_ready.mission_clock`` says.
+    """
+    out = {name: _jsonable(getattr(result, name, None)) for name in SIM_MISSION_FIELDS}
+    out["energy_status"] = "simulated"
+    return out
+
+
 class MuleService:
     """Lifecycle holder for a mule-process service loop."""
 
@@ -280,8 +386,28 @@ class MuleService:
         self.events = events or NullEventEmitter(role="mule", node_id=cfg.mule_id)
         self.metrics = metrics or MetricsRegistry()
 
-        # 1. Mule's RF server — devices connect here.
-        self.rf = TCPRFLinkServer(host=cfg.rf_host, port=cfg.rf_port)
+        # FeRRy Phase 3 — refuse clock settings that cannot run (critic B16)
+        # before binding anything; the recorded defaults pass. On the
+        # simulated clock the FerrySpec is built (and so fully validated) here.
+        errors = mule_config_errors(cfg)
+        if errors:
+            raise ValueError(f"mule {cfg.mule_id} config: " + "; ".join(errors))
+        self._sim = getattr(cfg, "mission_clock", "wall") == CLOCK_SIM
+        ferry_spec = ferry_spec_from_config(cfg) if self._sim else None
+        #: Critic B4: the recorded ``mission`` backhaul model's causal RF prior,
+        #: one SNR per mission round (:meth:`_feed_rf_prior`); None without one.
+        schedule = getattr(cfg, "rf_prior_schedule_db", None)
+        self._rf_prior_schedule: Optional[List[float]] = (
+            [float(v) for v in schedule] if self._sim and schedule is not None else None
+        )
+
+        # 1. Mule's RF server — devices connect here. Amendment 10: with a
+        # token (one per trial) it refuses registrations carrying another.
+        rf_kwargs = {}
+        token = getattr(cfg, "rf_link_token", None)
+        if token is not None:
+            rf_kwargs["link_token"] = str(token)
+        self.rf = TCPRFLinkServer(host=cfg.rf_host, port=cfg.rf_port, **rf_kwargs)
         self.rf.start()
         self.actual_rf_port = self.rf.port
 
@@ -340,6 +466,22 @@ class MuleService:
         sup_kwargs["down_wait_s"] = getattr(cfg, "down_wait_s", None)
         sup_kwargs["dock_on_empty"] = bool(getattr(cfg, "dock_on_empty", False))
         sup_kwargs["should_stop"] = self._stop_event.is_set
+        # FeRRy Phase 3 (spec Q1) — the deadline law's time unit, on either
+        # clock; passed only when it is not the recorded one.
+        scale = getattr(cfg, "deadline_time_scale", 1.0)
+        if isinstance(scale, bool) or scale != 1.0:
+            sup_kwargs["deadline_time_scale"] = scale
+        phi0 = getattr(cfg, "initial_window_s", None)
+        if phi0 is not None:
+            sup_kwargs["initial_window_s"] = float(phi0)
+        # FeRRy Phase 3 — one mission clock per mule process and the ferry
+        # spec (design section 2.2). Never with a now_fn: every mission-time
+        # read then comes from the clock.
+        if self._sim:
+            from hermes.l1.mission_clock import MissionClock
+
+            sup_kwargs["mission_clock"] = MissionClock()
+            sup_kwargs["ferry"] = ferry_spec
         self.supervisor = MuleSupervisor(
             mule_id=MuleID(cfg.mule_id),
             rf=self.rf,
@@ -374,7 +516,108 @@ class MuleService:
             mission_budget_s=sched.mission_budget_s,
             down_wait_s=self.supervisor.down_wait_s,
             dock_on_empty=bool(self.supervisor.dock_on_empty),
+            **self._sim_ready_fields(),
+            **self._wall_time_unit_fields(),
         )
+
+    def _time_unit_fields(self) -> dict:
+        """The deadline law's time unit as the scheduler runs it (spec Q1).
+
+        Read back from the scheduler (audit #15): the scale, Φ₀ as configured
+        in the law's recorded unit, and Φ₀ in the scheduler's clock seconds,
+        the window a newly tracked device starts with.
+        """
+        sched = self.supervisor.scheduler
+        return dict(
+            deadline_time_scale=float(sched.deadline_time_scale),
+            initial_window_s=float(sched.initial_window_s),
+            effective_initial_window_s=float(sched.effective_initial_window_s),
+        )
+
+    def _wall_time_unit_fields(self) -> dict:
+        """``mule_ready``'s time-unit fields on the wall clock (spec Q1).
+
+        The time unit is valid on either clock, but ``deadline_params`` shows
+        only the scale, never Φ₀. So a wall-clock mule whose unit is not the
+        recorded one (scale 1.0, Φ₀ 60 s) reports all three fields of
+        :meth:`_time_unit_fields`, as the simulated clock always does; at the
+        recorded unit it adds nothing, so every recorded ``mule_ready`` keeps
+        its key set. {} on the simulated clock, whose own fields carry them.
+        """
+        if self._sim:
+            return {}
+        unit = self._time_unit_fields()
+        if (unit["deadline_time_scale"] == 1.0
+                and unit["effective_initial_window_s"] == DEFAULT_FULFILMENT_WINDOW_S):
+            return {}
+        return unit
+
+    def _sim_ready_fields(self) -> dict:
+        """``mule_ready``'s simulated-clock fields (design section 2.5); {} on the wall clock.
+
+        Read back from the supervisor and its scheduler, like the fields
+        above (audit #15): the clock and its epoch, every ferry setting
+        (``FerrySpec.describe``: band classes with their slant and planar
+        ranges, channel parameters, backhaul model and policy, response,
+        reliability source, payload, SIMULATED energy parameters with the
+        speed, turnaround, listen window, deadline bounds), the deadline time
+        unit (:meth:`_time_unit_fields`), T_nom, the trial seed, the model's
+        input width and where the planner's RF prior comes from
+        (``rf_prior_source``, critic B4). The ground-truth availability map is
+        never emitted (critic B16), only its size (``device_availability_n``).
+        """
+        if not self._sim:
+            return {}
+        from hermes.l1.mission_clock import SIM_EPOCH_S
+
+        sup = self.supervisor
+        spec = sup.ferry
+        fields = {"mission_clock": CLOCK_SIM, "clock_epoch_s": SIM_EPOCH_S}
+        fields.update(_jsonable(spec.describe()))
+        if spec.backhaul is not None:
+            rf_prior_source = RF_PRIOR_SECONDS_BACKHAUL
+        elif self._rf_prior_schedule is not None:
+            rf_prior_source = RF_PRIOR_MISSION_SCHEDULE
+        else:
+            rf_prior_source = RF_PRIOR_CONSTANT
+        fields.update(
+            payload_bytes=spec.payload.payload_bytes,
+            **self._time_unit_fields(),
+            t_nom_s=self.cfg.t_nom_s,
+            trial_seed=self.cfg.trial_seed,
+            input_dim=self.cfg.input_dim,
+            rf_link_token_set=self.cfg.rf_link_token is not None,
+            rf_prior_source=rf_prior_source,
+        )
+        return fields
+
+    def _feed_rf_prior(self, result) -> None:
+        """The causal RF prior under the recorded ``mission`` backhaul model (critic B4).
+
+        With ``--l1-channel`` a ferry cell is not handed the driver's mean
+        SNR over the whole trial (it uses the future); it gets the SNR its
+        chosen carrier has at each mission's upload instead
+        (``MuleConfig.rf_prior_schedule_db``). Once mission round r has
+        uploaded (its partial, or the empty one a ``dock_on_empty`` mission
+        docks with), the mule has observed entry ``mission_schedule_index(r)``
+        and the planner's ``rf_prior_snr_db`` becomes it: the last SNR seen on
+        the carrier used, as the seconds model's producer sets it at each
+        upload. A mission that did not dock observed nothing, and the prior
+        keeps its value (the configured 20 dB until the first upload).
+
+        The update runs between missions. The only reader of the prior in a
+        mule process is the next mission's Pass-1 plan
+        (``build_contact_queue``; the selector's feature 10; no L1 channel
+        actor is wired in processes), so every plan gets the prior an update
+        at the dock would give it. No-op without a schedule.
+        """
+        schedule = self._rf_prior_schedule
+        if not schedule:
+            return
+        if getattr(result, "empty", False) and not getattr(result, "docked_empty", False):
+            return
+        idx = mission_schedule_index(getattr(result, "mission_round", None), len(schedule))
+        self.supervisor.rf_prior_snr_db = float(schedule[idx])
 
     def request_stop(self) -> None:
         self._stop_event.set()
@@ -435,10 +678,23 @@ class MuleService:
                 return
 
         # Bootstrap dock — wait for the cluster's initial DOWN bundle.
-        ok = self._wait_with_stop(
-            self.supervisor.wait_for_initial_dock,
-            total_timeout=30.0,
-        )
+        try:
+            ok = self._wait_with_stop(
+                self.supervisor.wait_for_initial_dock,
+                total_timeout=30.0,
+            )
+        except MuleSupervisorError as e:
+            if not self._sim:
+                raise
+            # FeRRy Phase 3: on the simulated clock the mule refuses a
+            # bootstrap DOWN whose slice carries wall-clock deadline overrides
+            # (or whose cluster_sim_ts is no simulated time). Fatal: flying on
+            # would mean flying with no slice.
+            log.error("mule %s: bootstrap DOWN refused: %s", self.cfg.mule_id, e)
+            self.events.emit("dock_bootstrap_failed", reason=str(e))
+            self.metrics.increment("dock_bootstrap_failures")
+            self.exit_code = EXIT_BOOTSTRAP_FAILED
+            return
         if self._stop_event.is_set():
             log.info("mule %s: stop signalled during dock bootstrap", self.cfg.mule_id)
             return
@@ -465,10 +721,20 @@ class MuleService:
                 )
                 break
             mission_started_at = time.time()
-            self.events.emit("mission_started", mission_index=completed)
+            # FeRRy Phase 3: the simulated takeoff time, read just before the
+            # mission, and the RF prior its Pass-1 plan is handed (critic B4;
+            # additive, on the simulated clock only).
+            started_sim = (
+                {"sim_start_s": float(self.supervisor.mission_clock()),
+                 "rf_prior_snr_db": float(self.supervisor.rf_prior_snr_db)}
+                if self._sim else {}
+            )
+            self.events.emit("mission_started", mission_index=completed, **started_sim)
             try:
                 result = self.supervisor.run_one_mission()
                 completed += 1
+                if self._sim:
+                    self._feed_rf_prior(result)
                 duration_s = time.time() - mission_started_at
                 self.metrics.observe("mission_duration_s", duration_s)
                 self.metrics.increment("missions_completed")
@@ -555,6 +821,10 @@ class MuleService:
                     deadline_state=_deadline_state_payload(
                         self.supervisor.scheduler.device_states
                     ),
+                    # FeRRy Phase 3 (design section 2.5): the mission's
+                    # simulated record, on the simulated clock only; a
+                    # wall-clock mission_completed is exactly the recorded one.
+                    **(_sim_mission_fields(result) if self._sim else {}),
                 )
             except MuleSupervisorError as e:
                 log.error("mule %s: supervisor error: %s", self.cfg.mule_id, e)

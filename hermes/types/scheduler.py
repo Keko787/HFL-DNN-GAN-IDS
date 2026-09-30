@@ -14,10 +14,19 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Optional, Tuple
+from typing import Dict, Optional, Tuple
 
 from .ids import DeviceID
 from .round_report import MissionOutcome
+
+
+#: A new device's fulfilment window Φ₀ in seconds: the default of
+#: ``DeviceSchedulerState.deadline_fulfilment_s``. A placeholder, not a tuned
+#: constant (design §9 Q1, critic A7). FeRRy Phase 3 lets the scheduler restate
+#: it (``FLScheduler(initial_window_s=...)``, in this same recorded unit) and
+#: multiplies it by ``FLScheduler(deadline_time_scale=...)`` like every other
+#: constant of the deadline law.
+DEFAULT_FULFILMENT_WINDOW_S: float = 60.0
 
 
 class Bucket(str, Enum):
@@ -92,7 +101,7 @@ class DeviceSchedulerState:
     delivery_priority: int = 0
 
     # Deadline machinery (see Design §6.2 formula)
-    deadline_fulfilment_s: float = 60.0   # default window (design §9 Q1 open)
+    deadline_fulfilment_s: float = DEFAULT_FULFILMENT_WINDOW_S   # default window (design §9 Q1 open)
     idle_time_ref_ts: float = 0.0         # last on-time participation ts
     deadline_override_ts: Optional[float] = None  # from ClusterAmendment
 
@@ -144,6 +153,13 @@ class DeviceSchedulerState:
     # Last-known position for S3.5 placeholder ordering (from DeviceRecord)
     last_known_position: Tuple[float, float, float] = (0.0, 0.0, 0.0)
 
+    #: FeRRy Phase 3 (design §4.7, plumbing only): the latest SNR the cluster
+    #: saw for this device per contact band class (``"wide"``, ``"medium"``,
+    #: ``"narrow"``), folded from ``registry_deltas[did]["spectrum_sig"]`` at
+    #: dock. None = never reported, which is every legacy run: legacy DOWNs
+    #: never carry the key. Nothing in Phase 3 decides on it.
+    spectrum_snr_db: Optional[Dict[str, float]] = None
+
 
 @dataclass(frozen=True)
 class BeaconObservation:
@@ -190,12 +206,24 @@ class ContactWaypoint:
     treated as NEW, drained first). ``deadline_ts`` is the *tightest*
     deadline among the members — if any member's deadline is overdue,
     the contact inherits that pressure.
+
+    FeRRy Phase 3 (design §4.5) adds three annotations the mule fills with
+    ``dataclasses.replace`` right after planning: the contact ``band`` class,
+    its planar ``range_m`` R_planar(b), and each member's predicted SNR
+    ``pred_snr_db`` (in ``devices`` order). They describe the stop; they do
+    not identify it, so all three are left out of equality and hashing
+    (``compare=False``): a waypoint annotated or not is the same dictionary
+    key and set member, which the walks and ``MuleSupervisor._budget_pass_2``
+    rely on.
     """
 
     position: Tuple[float, float, float]
     devices: Tuple[DeviceID, ...]
     bucket: Bucket
     deadline_ts: float
+    band: Optional[str] = field(default=None, compare=False)
+    range_m: Optional[float] = field(default=None, compare=False)
+    pred_snr_db: Optional[Tuple[float, ...]] = field(default=None, compare=False)
 
     def __post_init__(self) -> None:
         if not self.devices:

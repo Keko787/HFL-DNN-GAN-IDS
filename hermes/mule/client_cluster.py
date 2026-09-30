@@ -33,6 +33,7 @@ from typing import Callable, List, Optional
 
 from hermes.transport import DockLink, DockLinkError
 from hermes.transport.dock_link import DockLinkTimeout
+from hermes.types.bundles import BackhaulUpload
 from hermes.types import (
     ClusterAmendment,
     ContactHistory,
@@ -184,6 +185,10 @@ class ClientCluster:
         # so the cluster can bump DeviceRecord.delivery_priority on
         # undelivered devices. Cleared after a successful UP send.
         self._staged_delivery_report: Optional[MissionDeliveryReport] = None
+        # FeRRy Phase 3 — the staged upload's simulated completion time and
+        # its backhaul pricing (the mission clock only; None otherwise).
+        self._staged_sim_upload_ts: Optional[float] = None
+        self._staged_backhaul: Optional[BackhaulUpload] = None
 
         # Retry queue — oldest first, drained on each successful dock.
         self._retry_queue: List[_PendingUp] = []
@@ -206,6 +211,16 @@ class ClientCluster:
         with self._lock:
             return self._last_down
 
+    def last_cluster_sim_ts(self) -> Optional[float]:
+        """The latest DOWN's ``cluster_sim_ts`` (FeRRy Phase 3), or None.
+
+        None before any DOWN and for every DOWN that does not carry one (the
+        cluster echoes its simulated time only in sim mode): the mule then
+        makes no Lamport sync.
+        """
+        with self._lock:
+            return getattr(self._last_down, "cluster_sim_ts", None)
+
     # ---------------------------------------------- COLLECT
 
     def collect(
@@ -215,6 +230,8 @@ class ClientCluster:
         report: MissionRoundCloseReport,
         contacts: ContactHistory,
         delivery_report: Optional[MissionDeliveryReport] = None,
+        sim_upload_ts: Optional[float] = None,
+        backhaul: Optional[BackhaulUpload] = None,
     ) -> None:
         """Stage the latest mission output. Overwrites any prior stage.
 
@@ -226,6 +243,11 @@ class ClientCluster:
         the cluster can carry over undelivered devices into the next
         slice. ``None`` for the very first mission (or for legacy
         single-pass missions).
+
+        FeRRy Phase 3: ``sim_upload_ts`` (the upload's simulated completion
+        time, critic B8) and ``backhaul`` (how the mule priced it) ride the UP
+        built from this stage, and stay with it if it has to be retried.
+        None, the default, is every wall-clock mule.
         """
         if partial_aggregate.mule_id != self.mule_id:
             raise ClientClusterError(
@@ -237,6 +259,8 @@ class ClientCluster:
             self._staged_report = report
             self._staged_contacts = contacts
             self._staged_delivery_report = delivery_report
+            self._staged_sim_upload_ts = sim_upload_ts
+            self._staged_backhaul = backhaul
             self._set_state(ClientClusterState.COLLECT)
             log.info(
                 "collect: mule=%s mission_round=%d accepted=%d lines=%d "
@@ -372,6 +396,8 @@ class ClientCluster:
             round_close_report=self._staged_report,
             contact_history=self._staged_contacts,
             prev_mission_delivery_report=self._staged_delivery_report,
+            sim_upload_ts=self._staged_sim_upload_ts,
+            backhaul=self._staged_backhaul,
         )
         sign_up_bundle(bundle)
 
@@ -380,6 +406,8 @@ class ClientCluster:
         self._staged_report = None
         self._staged_contacts = None
         self._staged_delivery_report = None
+        self._staged_sim_upload_ts = None
+        self._staged_backhaul = None
         return bundle
 
     def _send_bundles(self, bundles: List[UpBundle]) -> bool:

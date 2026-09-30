@@ -58,6 +58,14 @@ class MissionRoundCloseLine:
     collected: the version of the θ it was trained from, and how many cluster
     rounds older that is than the θ the mule carried. ``band`` is the contact
     band once the contact link has one (FeRRy Phase 3); None until then.
+
+    FeRRy Phase 3: on the mission clock, ``contact_ts`` is simulated seconds
+    (the contact's arrival plus the airtime committed before this session
+    ended), and ``band`` is the band class index (``hermes.l1.contact_link
+    .CLASSES``: 0 wide, 1 medium, 2 narrow) with ``snr_db`` the contact SNR
+    the session was priced at: at the session's own start for a device that
+    answered, at arrival for one that did not (design section 4.3). Both stay
+    None on the wall clock and on the mission clock without a band.
     """
 
     device_id: DeviceID
@@ -69,6 +77,7 @@ class MissionRoundCloseLine:
     basis_version: Optional[int] = None
     age: Optional[int] = None
     band: Optional[int] = None
+    snr_db: Optional[float] = None
 
 
 @dataclass
@@ -103,6 +112,10 @@ class ContactRecord:
 
     Includes opportunistic beacons that did not result in an FL session, so
     the cluster sees beacon coverage even when no gradient was collected.
+
+    FeRRy Phase 3: the ferry path stamps ``contact_ts`` from the mission clock
+    (never the device's advert time) and fills ``snr_at_contact`` with the
+    line's ``snr_db`` when the contact has a band; 0.0 otherwise, as before.
     """
 
     device_id: DeviceID
@@ -125,11 +138,19 @@ class ContactHistory:
 
 @dataclass(frozen=True)
 class MissionDeliveryLine:
-    """One device's row in the Pass-2 delivery ledger."""
+    """One device's row in the Pass-2 delivery ledger.
+
+    FeRRy Phase 3: ``band`` is the contact band class index (as on
+    :class:`MissionRoundCloseLine`; None without a band) and ``bytes_sent`` the
+    bytes of θ' pushed to the device, 0 when no push went out. Only the ferry
+    path fills them; ``contact_ts`` is then simulated seconds.
+    """
 
     device_id: DeviceID
     outcome: DeliveryOutcome
     contact_ts: float
+    band: Optional[int] = None
+    bytes_sent: int = 0
 
 
 @dataclass

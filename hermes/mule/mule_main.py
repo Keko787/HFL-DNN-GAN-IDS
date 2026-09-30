@@ -34,14 +34,25 @@ Sprint 1 scope (in-process loopback only):
 The supervisor is deliberately framework-free: no Flower, no asyncio,
 no docker. Sprint 2 wraps it in a process boundary; the supervisor's
 contract doesn't change.
+
+FeRRy Phase 3 (the mission clock, design sections 2.2-2.3 and 3.3-3.7): with
+``mission_clock=MissionClock()`` the supervisor flies every mission on
+simulated time. Flight legs, contact airtime, missed replies, the backhaul
+upload and the dock turnaround are charged to the clock; the pose returns to
+the dock after each pass; plans, deadlines, the S3b budget and every contact
+outcome are stamped from the clock; the in-flight check is priced on it
+(``abort``) or checks and repairs the whole remainder (``replan``); a beacon
+hook can insert contacts that fit. The glue lives in ``mule/ferry.py``.
+Without a clock every path is exactly the recorded one (Freeze Rule 1).
 """
 
 from __future__ import annotations
 
 import logging
+import threading
 import time
 from dataclasses import dataclass, field
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import numpy as np
 
@@ -73,6 +84,10 @@ log = logging.getLogger(__name__)
 
 MulePose = Tuple[float, float, float]
 
+#: The default ``now_fn``: the wall clock, as bound when this module loads.
+#: A supervisor on the mission clock refuses any other ``now_fn``.
+_WALL_NOW = time.time
+
 
 class MuleSupervisorError(RuntimeError):
     """Raised when the supervisor's invariants are violated."""
@@ -90,11 +105,16 @@ def mission_planned_devices(queue, feasibility=None) -> int:
     only the surviving queue would let the gate flatter itself: drop nine
     contacts, serve the tenth, report 100 % success, and never widen — the
     starvation loop, hidden inside its own success metric.
+
+    FeRRy Phase 3 (critic B10): the drops of the simulated energy clause count
+    too. ``dropped_energy`` is empty in every legacy plan, so nothing recorded
+    moves.
     """
     planned = sum(len(c.devices) for c in queue)
     for wp in (
         list(getattr(feasibility, "dropped_overdue", ()))
         + list(getattr(feasibility, "dropped_budget", ()))
+        + list(getattr(feasibility, "dropped_energy", ()))
     ):
         planned += len(getattr(wp, "devices", ()))
     return planned
@@ -159,6 +179,52 @@ class MissionRunResult:
     # (``down_timeout`` says which): the cluster holds the partial either way.
     docked_empty: bool = False
 
+    # FeRRy Phase 3 — the mission on the simulated mission clock (design
+    # section 2.5, ``mission_completed`` sim fields). Every field is None on a
+    # wall-clock mission, so legacy results are unchanged. Values are
+    # JSON-ready (device ids as str, poses as lists). Times are simulated
+    # seconds; energy is SIMULATED (the Zeng 2019 model, not a measurement).
+    #
+    # ``sim_ledger`` is the clock's per-kind charges for this mission and sums
+    # to ``sim_end_s - sim_start_s``. ``pass_1_flown`` / ``pass_2_flown`` hold
+    # one entry per stop flown: position, devices, the departure state
+    # (``depart_s``, ``depart_pose``, ``depart_energy_j``), ``transit_s``,
+    # ``arrival_s``, ``end_s``, ``band``, ``targets``, ``unreachable``,
+    # ``snr_db`` and ``rate_bps`` per member at arrival (None without a band),
+    # the contact's ``dwell_s`` and ``listen_s``, ``missing``,
+    # ``uplink_dropped`` and ``l1_choice``. ``replans`` and ``aborts`` record
+    # the in-flight responses, ``inserts`` / ``offers_refused`` the beacon
+    # hook. ``budget_overrun_s`` is how far the Pass-1 upload (or the landing,
+    # with nothing uploaded) ended past the budget, None without one;
+    # ``pass_2_budget_overrun_s`` the same for a budgeted Pass 2. ``backhaul``
+    # is the upload (carrier, snr_db, p_loss, t_upload_s = its completion,
+    # upload_s, ...), None when nothing was priced — and under the recorded
+    # ``mission`` backhaul model, whose upload is still charged to the clock
+    # (at the fixed carrier's noise-free mean SNR) but reports no outcome.
+    # ``pass_1_preflight_drops`` is a diagnostic: the contacts S3b (and the
+    # pre-flight order check) refused before takeoff, which the mule widened
+    # then, one entry each with ``position``, ``devices``, ``deadline_ts``
+    # and ``reason`` (``overdue``, ``budget`` or ``energy``, in that order),
+    # so a trace shows what emptied or shrank a mission (finding E2E1-01).
+    # No predicted home: S3b keeps none, and the record never re-prices.
+    # Empty for the whole-scheduler baselines, whose walks report no drops.
+    sim_start_s: Optional[float] = None
+    sim_end_s: Optional[float] = None
+    sim_ledger: Optional[Dict[str, float]] = None
+    sim_pass_2_start_s: Optional[float] = None
+    pass_1_flown: Optional[List[Dict[str, Any]]] = None
+    pass_2_flown: Optional[List[Dict[str, Any]]] = None
+    replans: Optional[List[Dict[str, Any]]] = None
+    aborts: Optional[List[Dict[str, Any]]] = None
+    inserts: Optional[List[Dict[str, Any]]] = None
+    offers_refused: Optional[List[Dict[str, Any]]] = None
+    budget_overrun_s: Optional[float] = None
+    pass_2_budget_overrun_s: Optional[float] = None
+    energy_j: Optional[float] = None
+    band: Optional[str] = None
+    backhaul: Optional[Dict[str, Any]] = None
+    pass_1_preflight_drops: Optional[List[Dict[str, Any]]] = None
+
 
 def _merged_device_ids(report, agg) -> List[DeviceID]:
     """CLEAN devices of a round report minus those its merge excluded."""
@@ -169,12 +235,57 @@ def _merged_device_ids(report, agg) -> List[DeviceID]:
     ]
 
 
+def _ids(devices) -> List[str]:
+    return [str(d) for d in devices]
+
+
+class _FerryLog:
+    """What one mission on the mission clock did, gathered for its result."""
+
+    def __init__(self) -> None:
+        self.flown: Dict[MissionPass, List[Dict[str, Any]]] = {
+            MissionPass.COLLECT: [], MissionPass.DELIVER: [],
+        }
+        self.choices: Dict[MissionPass, List[int]] = {
+            MissionPass.COLLECT: [], MissionPass.DELIVER: [],
+        }
+        self.replans: List[Dict[str, Any]] = []
+        self.aborts: List[Dict[str, Any]] = []
+        self.inserts: List[Dict[str, Any]] = []
+        self.offers_refused: List[Dict[str, Any]] = []
+        #: What S3b refused before takeoff (``pass_1_preflight_drops``).
+        self.preflight_drops: List[Dict[str, Any]] = []
+        #: Devices of accepted inserts: they count in S3c's ``planned``.
+        self.inserted_devices: int = 0
+        #: Devices the beacon hook must not insert this mission: the Pass-1
+        #: plan, its pre-flight drops and everything inserted since.
+        self.no_insert: set = set()
+
+
 class MuleSupervisor:
     """Per-mule supervisor: one instance per mobile AVN.
 
     The supervisor doesn't own the cluster — it speaks to ``DockLink``.
     In Sprint 1 the cluster runs in-process and shares the link; in
     Sprint 2 they're separate processes and the link is a TCP socket.
+
+    FeRRy Phase 3 (design section 2.2). ``mission_clock`` (a
+    ``hermes.l1.mission_clock.MissionClock``) puts the mule on simulated
+    mission time, configured by ``ferry`` (a ``hermes.mule.ferry.FerrySpec``;
+    None is the channel-free control, critic A1). The clock becomes ``_now``
+    (the attribute keeps its name, and nothing is stored as ``_clock``: tests
+    bind supervisor methods onto stand-ins that carry their own ``_clock``,
+    critic B7), the scheduler's ``now_fn`` and the mission server's
+    ``now_fn``; the scheduler prices with the ferry model, refuses the
+    cluster's wall-clock deadline overrides, and validates the flown order
+    under ``replan``. ``feasibility_model`` gives the planner's cruise speed
+    and session time (the defaults when None); in sim mode its cruise speed
+    must be the flight model's. ``deadline_time_scale`` and
+    ``initial_window_s`` restate the deadline law's time unit (spec Q1; 1.0
+    and None are the recorded law). Refused: a clock together with a
+    ``now_fn``, a ``FerrySpec`` (or a ferry-physics model) without the clock,
+    and the clock without ``rf_range_m`` (the single-pass path is not ported).
+    Without a clock every path is the recorded one.
     """
 
     def __init__(
@@ -201,12 +312,59 @@ class MuleSupervisor:
         down_wait_s: Optional[float] = None,
         dock_on_empty: bool = False,
         should_stop: Optional[Callable[[], bool]] = None,
+        deadline_time_scale: float = 1.0,
+        initial_window_s: Optional[float] = None,
+        feasibility_model=None,
+        mission_clock=None,
+        ferry=None,
     ) -> None:
         self.mule_id = mule_id
         self.mule_pose = mule_pose
         self.mule_energy = mule_energy
         self.rf_prior_snr_db = rf_prior_snr_db
         self.rf_range_m = rf_range_m
+        # FeRRy Phase 3 — the mission clock (design section 2.2). ``ferry`` is
+        # the FerrySpec and ``_ferry_run`` its runtime; both stay None on the
+        # wall clock, and every legacy branch reads them with getattr, since
+        # tests bind supervisor methods onto stand-ins (critic B7).
+        self.ferry = None
+        self._ferry_run = None
+        # A DOWN whose slice the sim-mode scheduler refused (see
+        # _on_slice_and_amendment); raised once the dock returns.
+        self._ferry_slice_error: Optional[BaseException] = None
+        # The beacon hook's queued offers (design section 3.6); inert unless
+        # something calls offer_contact.
+        self._offers: List[ContactWaypoint] = []
+        self._offers_lock = threading.Lock()
+        sched_extra: Dict[str, Any] = {}
+        # FeRRy Phase 3 (spec Q1) — the deadline law's time unit. Passed only
+        # when it is not the recorded one, so a recorded mule builds its
+        # scheduler with exactly the arguments it always did.
+        if isinstance(deadline_time_scale, bool) or deadline_time_scale != 1.0:
+            sched_extra["deadline_time_scale"] = deadline_time_scale
+        if initial_window_s is not None:
+            sched_extra["initial_window_s"] = initial_window_s
+        host_now = None
+        if mission_clock is None:
+            if ferry is not None:
+                raise MuleSupervisorError(
+                    "a FerrySpec (contact band, replan, ...) runs on the mission "
+                    "clock: pass mission_clock=MissionClock() as well"
+                )
+            if getattr(feasibility_model, "ferry", None) is not None:
+                raise MuleSupervisorError(
+                    "a feasibility model with ferry physics prices simulated seconds; "
+                    "it needs the mission clock"
+                )
+            if feasibility_model is not None:
+                sched_extra["feasibility_model"] = feasibility_model
+        else:
+            self._init_ferry(
+                mission_clock, ferry, feasibility_model,
+                now_fn=now_fn, rf_range_m=rf_range_m, sched_extra=sched_extra,
+            )
+            now_fn = mission_clock
+            host_now = mission_clock
         self._now = now_fn
         # FeRRy Phase 2 — several mules share one cluster. ``down_wait_s``
         # bounds how long the inter-pass dock waits for its DOWN, and makes
@@ -247,6 +405,10 @@ class MuleSupervisor:
             # law) and the miss-streak priority key in S3b.
             deadline_law=deadline_law,
             miss_priority=miss_priority,
+            # FeRRy Phase 3 — a time unit other than the recorded one, and on
+            # the mission clock the ferry model, the override refusal and the
+            # flown-order check (see _init_ferry). Empty for a recorded mule.
+            **sched_extra,
         )
 
         # Mission server — emits one RoundCloseDelta per session into the
@@ -260,6 +422,10 @@ class MuleSupervisor:
             # A budgeted Pass 2 may not come back to a device, so Pass 1 asks
             # it to train ahead on the basis it adopts (audit #0).
             train_ahead=self.pass_2_budget,
+            # FeRRy Phase 3 — None keeps the host's wall stamps; on the
+            # mission clock it stamps its reports, and every contact needs a
+            # ContactPlan on the same clock (critic A1).
+            now_fn=host_now,
         )
 
         # ClientCluster owns the dock lifecycle. The distributor fans the
@@ -293,6 +459,69 @@ class MuleSupervisor:
         # logged at all (no actuation in loopback either way).
         self.channel_actor = channel_actor
 
+    def _init_ferry(
+        self,
+        mission_clock,
+        ferry,
+        feasibility_model,
+        *,
+        now_fn,
+        rf_range_m: Optional[float],
+        sched_extra: Dict[str, Any],
+    ) -> None:
+        """Wire the mission clock and the ferry runtime (design section 2.2)."""
+        from hermes.mule.ferry import RESPONSE_REPLAN, FerryRuntime, FerrySpec
+        from hermes.scheduler.stages.s3b_feasibility import FeasibilityModel
+
+        if now_fn is not _WALL_NOW:
+            raise MuleSupervisorError(
+                "mission_clock and now_fn are exclusive: on the mission clock every "
+                "mission-time read comes from the clock"
+            )
+        if rf_range_m is None:
+            raise MuleSupervisorError(
+                "the mission clock runs the two-pass contact path: set rf_range_m "
+                "(the single-pass path is not ported)"
+            )
+        if not callable(mission_clock) or not all(
+            callable(getattr(mission_clock, attr, None))
+            for attr in ("advance", "advance_to", "ledger", "reset_ledger")
+        ):
+            raise MuleSupervisorError(
+                "mission_clock must be a MissionClock (callable, with advance, "
+                f"advance_to, ledger and reset_ledger), got {type(mission_clock).__name__}"
+            )
+        spec = FerrySpec() if ferry is None else ferry
+        if not isinstance(spec, FerrySpec):
+            raise MuleSupervisorError(f"ferry must be a FerrySpec, got {type(spec).__name__}")
+        base = (feasibility_model if feasibility_model is not None
+                else FeasibilityModel(cruise_speed_m_s=spec.flight.cruise_speed_m_s))
+        try:
+            run = FerryRuntime(spec, mission_clock, rf_range_m=float(rf_range_m),
+                               session_time_s=base.session_time_s)
+            model = run.feasibility_model(base)
+        except ValueError as e:
+            raise MuleSupervisorError(str(e)) from e
+        if tuple(float(c) for c in self.mule_pose) != spec.flight.dock:
+            raise MuleSupervisorError(
+                f"a mule on the mission clock starts at the dock {spec.flight.dock!r}, "
+                f"not at {tuple(self.mule_pose)!r}"
+            )
+        self.mule_pose = spec.flight.dock
+        self.ferry = spec
+        self._ferry_run = run
+        sched_extra.update(
+            feasibility_model=model,
+            validate_flown_order=spec.in_flight_response == RESPONSE_REPLAN,
+            refuse_deadline_overrides=True,
+            replan_fallback=spec.replan_fallback,
+        )
+
+    @property
+    def mission_clock(self):
+        """The mission clock on a sim-mode mule, None on the wall clock."""
+        return self._now if getattr(self, "_ferry_run", None) is not None else None
+
     # ------------------------------------------------------------------ #
     # Distribution callbacks
     # ------------------------------------------------------------------ #
@@ -312,7 +541,20 @@ class MuleSupervisor:
         # cluster-side fold, position resets to (0,0,0) and S3a clusters
         # everything at the origin — which the two-pass test would catch
         # but only at the integration level.
-        self.scheduler.ingest_slice(mission_slice, amendment=amendment)
+        if getattr(self, "_ferry_run", None) is None:
+            self.scheduler.ingest_slice(mission_slice, amendment=amendment)
+            return
+        # FeRRy Phase 3 (critic A1/B3): on the mission clock the scheduler
+        # refuses a DOWN whose amendment carries deadline overrides (they are
+        # wall-clock stamps), and with it the whole slice. ClientCluster logs a
+        # failing sink and still stages θ, so the mule would fly on without
+        # its slice; the failure is kept and raised by the supervisor once the
+        # dock returns (_ferry_check_slice).
+        try:
+            self.scheduler.ingest_slice(mission_slice, amendment=amendment)
+        except Exception as e:
+            self._ferry_slice_error = e
+            raise
 
     def _on_model_version(self, version: int) -> None:
         # Arrives just before the model itself, from the same DOWN bundle.
@@ -349,6 +591,14 @@ class MuleSupervisor:
             else min(float(timeout), self.client_cluster.down_timeout_s)
         )
         down = self.client_cluster.bootstrap_down_only(timeout=wait_s)
+        if down is not None and getattr(self, "_ferry_run", None) is not None:
+            # FeRRy Phase 3: a slice the scheduler refused ends the bootstrap
+            # (MuleSupervisorError) rather than leaving the mule with none.
+            # Critic B8: a mule that joins a running cluster, or was restarted
+            # with a fresh clock at the epoch, adopts the cluster's simulated
+            # time from its bootstrap DOWN.
+            self._ferry_check_slice()
+            self._ferry_sync(down)
         return down is not None
 
     def run_one_mission(self) -> MissionRunResult:
@@ -370,6 +620,12 @@ class MuleSupervisor:
                 "run_one_mission called without a next-round model staged; "
                 "did you call wait_for_initial_dock first?"
             )
+
+        # FeRRy Phase 3 — on the mission clock the takeoff itself stamps the
+        # budget, after the pose check and the ledger reset.
+        ferry_run = getattr(self, "_ferry_run", None)
+        if ferry_run is not None:
+            return self._run_ferry_mission(ferry_run)
 
         # Freeze Amendment 6 — each mission's budget runs from its own start.
         # The scheduler also stamps on every DOWN bundle, but a DOWN arrives
@@ -795,6 +1051,746 @@ class MuleSupervisor:
         return report
 
     # ------------------------------------------------------------------ #
+    # FeRRy Phase 3 — one mission on the mission clock
+    # ------------------------------------------------------------------ #
+
+    def _run_ferry_mission(self, fx) -> MissionRunResult:
+        """One two-pass mission on the mission clock (design section 2.3).
+
+        1. **Takeoff.** The mule is at the dock (checked); the clock's ledger,
+           and with it the mission's simulated energy, restarts; the S3b
+           budget is stamped now (``start_mission``).
+        2. **Plan** from the dock with S3a's radius R_planar(b); annotate the
+           plan; widen every pre-flight drop, energy drops included (critic
+           B10), at the simulated takeoff time, and record each with its
+           reason (``pass_1_preflight_drops``).
+        3. **Each stop:** the departure check (``abort``: the next stop with
+           its return-and-upload tail, priced on the clock, today's rule;
+           ``replan``: the whole remainder, re-planned when it fails), the
+           beacon hook, the leg (transit), the contact plan at arrival, the
+           contact.
+        4. **Return, close and dock:** the return leg (also after an abort, a
+           re-plan to nothing or no stops), S3c from the contacts flown,
+           ``close_round``, the upload charge, the dock (a wall wait), the
+           turnaround, and the Lamport sync to the DOWN's ``cluster_sim_ts``.
+        5. **Pass 2** from ``t2 = clock()``, its budget origin: plan from the
+           dock, the budgeted fold when ``pass_2_budget`` is on (skips become
+           SKIPPED lines), fly it with ``deliver_contact`` (checked in flight
+           only under ``replan``), return, close.
+
+        The mission's result carries the sim fields of design section 2.5.
+        Nothing sleeps for simulated time.
+        """
+        from hermes.mule.ferry import RESPONSE_REPLAN
+        from hermes.scheduler.stages.s3b_feasibility import (
+            REASON_BUDGET,
+            REASON_ENERGY,
+            REASON_OVERDUE,
+            RULE_BUDGET,
+            FlightState,
+        )
+        from hermes.types import weights_byte_count
+
+        clock = self._now
+        dock = fx.spec.flight.dock
+        collect_pass, deliver_pass = MissionPass.COLLECT, MissionPass.DELIVER
+
+        # ---------------------------------------------------------- takeoff
+        if tuple(float(c) for c in self.mule_pose) != dock:
+            raise MuleSupervisorError(
+                f"takeoff away from the dock: pose {tuple(self.mule_pose)!r}, dock {dock!r}"
+            )
+        clock.reset_ledger()
+        sim_start = clock()
+        self.scheduler.start_mission()
+        rec = _FerryLog()
+
+        theta_pass_1 = self._next_theta
+        synth_pass_1 = self._next_synth
+        version_pass_1 = self._next_theta_version
+        self._next_theta = None
+        self._next_synth = None
+        self._next_theta_version = None
+        fx.observe_payload(theta_pass_1, synth_pass_1)
+
+        # ============================ Pass 1 ============================
+        mission_round = self.mission.open_round(theta_pass_1, theta_version=version_pass_1)
+        self.scheduler.set_mission_round(mission_round)
+        pass_1_queue = self.scheduler.build_contact_queue(
+            rf_range_m=fx.range_planar_m,
+            mule_pose=dock,
+            mule_energy=self.mule_energy,
+            rf_prior_snr_db=self.rf_prior_snr_db,
+        )
+        pass_1_queue = fx.annotate(pass_1_queue, self._ferry_positions(pass_1_queue))
+        planned_caps = self._age_caps()
+        planned_deadlines = dict(
+            getattr(self.scheduler, "last_plan_deadlines", None) or {}
+        )
+        log.info(
+            "mule=%s round=%d pass=1 contacts=%d devices_total=%d sim_t=%.3f band=%s",
+            self.mule_id, mission_round, len(pass_1_queue),
+            sum(len(c.devices) for c in pass_1_queue), sim_start, fx.spec.band,
+        )
+        _feas = getattr(self.scheduler, "last_feasibility", None)
+        dropped_pre = (
+            list(getattr(_feas, "dropped_overdue", ()))
+            + list(getattr(_feas, "dropped_budget", ()))
+            + list(getattr(_feas, "dropped_energy", ()))
+        )
+        if dropped_pre:
+            self._widen_abandoned(dropped_pre, mission_round=mission_round)
+        # Finding E2E1-01: without this record an empty mission's trace does
+        # not say what emptied it (e.g. one field-wide contact over budget).
+        rec.preflight_drops = [
+            {"position": [float(c) for c in wp.position], "devices": _ids(wp.devices),
+             "deadline_ts": float(wp.deadline_ts), "reason": reason}
+            for reason, name in ((REASON_OVERDUE, "dropped_overdue"),
+                                 (REASON_BUDGET, "dropped_budget"),
+                                 (REASON_ENERGY, "dropped_energy"))
+            for wp in getattr(_feas, name, ())
+        ]
+        planned_devices = mission_planned_devices(pass_1_queue, _feas)
+        rec.no_insert = {d for wp in list(pass_1_queue) + dropped_pre for d in wp.devices}
+        budget = self.scheduler.mission_budget_s
+        start = self.scheduler.mission_start_ts
+        budget_end_1 = None if budget is None else float(start) + float(budget)
+
+        flown_1 = self._ferry_fly_pass(
+            fx, pass_1_queue, pass_kind=collect_pass, mission_round=mission_round,
+            synth=synth_pass_1, budget_end=budget_end_1, check=True,
+            energy_origin_j=0.0, rec=rec,
+        )
+        self._ferry_home(fx)
+
+        # S3c — served counts the devices of the contacts flown (design
+        # section 3.4); planned is the committed plan, its pre-flight drops
+        # and the beacon hook's inserts.
+        planned_devices += rec.inserted_devices
+        served_devices = sum(len(wp.devices) for wp in flown_1)
+        self.scheduler.record_mission_outcome(
+            served=served_devices, planned=planned_devices,
+        )
+        if getattr(self.scheduler, "_window_adapter", None) is not None:
+            log.info(
+                "mule=%s round=%d S3c mission outcome served=%d/%d -> %s",
+                self.mule_id, mission_round, served_devices, planned_devices,
+                self.scheduler._window_adapter.describe(),
+            )
+
+        common = dict(
+            fx=fx, rec=rec, mission_round=mission_round, sim_start=sim_start,
+            pass_1_queue=pass_1_queue, planned_deadlines=planned_deadlines,
+            budget_end_1=budget_end_1,
+        )
+        try:
+            agg, report, contacts = self.mission.close_round(age_caps=planned_caps)
+        except MissionSessionError as e:
+            # EX-4.2 on the mission clock: a recoverable empty round. The
+            # clock still charges the return (above), the turnaround and, if
+            # the mule docks, the upload of its empty partial.
+            log.warning(
+                "mule=%s round=%d Pass 1 collected no updates; recording an "
+                "empty round and continuing: %s",
+                self.mule_id, mission_round, e,
+            )
+            answered = False
+            up = None
+            before = self.client_cluster.last_down()
+            if self.dock_on_empty:
+                up = fx.charge_upload(0)
+                self._ferry_observed_upload(fx, up)
+                answered = self._dock_empty(
+                    mission_round, version_pass_1, sim_upload_ts=clock(), backhaul=up,
+                )
+            t_pass_1_end = clock()
+            self._ferry_turnaround(fx)
+            if answered:
+                self._ferry_sync_after(before)
+            else:
+                self._restage(theta_pass_1, synth_pass_1, version_pass_1)
+            return self._ferry_result(
+                **common, t_pass_1_end=t_pass_1_end, up=up,
+                pass_1_channel_choices=list(rec.choices[collect_pass]),
+                empty=True,
+                unmerged_report=self._excluded_only_report(),
+                down_timeout=self.dock_on_empty and not answered,
+                docked_empty=self.dock_on_empty,
+            )
+
+        self.scheduler.record_merged(
+            _merged_device_ids(report, agg), mission_round,
+        )
+
+        # ===================== Inter-pass dock =====================
+        up = fx.charge_upload(weights_byte_count(agg.weights))
+        self._ferry_observed_upload(fx, up)
+        t_pass_1_end = clock()
+        self.client_cluster.collect(
+            partial_aggregate=agg,
+            report=report,
+            contacts=contacts,
+            delivery_report=self._pending_delivery_report,
+            sim_upload_ts=t_pass_1_end,
+            backhaul=up,
+        )
+        self._pending_delivery_report = None
+        if not self.client_cluster.wait_for_dock(timeout=None):
+            raise MuleSupervisorError("dock did not become available between passes")
+        before = self.client_cluster.last_down()
+        docked = self._dock_and_await_down()
+        self._ferry_turnaround(fx)
+        if not docked:
+            log.warning(
+                "mule=%s round=%d no DOWN within %.1fs of the upload; skipping "
+                "Pass 2 and flying the next mission on this mission's θ",
+                self.mule_id, mission_round, self.down_wait_s,
+            )
+            self._restage(theta_pass_1, synth_pass_1, version_pass_1)
+            return self._ferry_result(
+                **common, t_pass_1_end=t_pass_1_end, up=up,
+                aggregate=agg, report=report, contacts=contacts,
+                channel_choices=list(rec.choices[collect_pass]),
+                pass_1_channel_choices=list(rec.choices[collect_pass]),
+                down_timeout=True,
+            )
+        self._ferry_sync_after(before)
+        if self._next_theta is None:
+            raise MuleSupervisorError(
+                "inter-pass dock did not stage a Pass-2 model — cluster "
+                "must dispatch a fresh θ' after ingesting Pass-1's UP"
+            )
+        theta_pass_2 = self._next_theta
+        synth_pass_2 = self._next_synth
+        version_pass_2 = self._next_theta_version
+        # As in the recorded path, Pass 2's θ stays staged: it is the next
+        # mission's basis.
+
+        # ============================ Pass 2 ============================
+        t2 = clock()
+        energy_at_t2 = fx.energy_j()
+        self.mission.open_pass_2(theta_pass_2, theta_version=version_pass_2)
+        fx.observe_payload(theta_pass_2, synth_pass_2)
+        pass_2_queue = self.scheduler.build_pass_2_queue(
+            rf_range_m=fx.range_planar_m, mule_pose=dock,
+        )
+        pass_2_queue = fx.annotate(pass_2_queue, self._ferry_positions(pass_2_queue))
+        budget_end_2 = (
+            t2 + float(budget) if (self.pass_2_budget and budget is not None) else None
+        )
+        skipped_pass_2: List[ContactWaypoint] = []
+        if budget_end_2 is not None and pass_2_queue:
+            # Design section 3.5: the Pass-2 walk from (dock, t2), DELIVER
+            # bytes and no upload tail; what it skips keeps its older basis.
+            walk = self.scheduler.feasibility_model.fold(
+                pass_2_queue, FlightState(dock, t2), rule=RULE_BUDGET,
+                budget_end=budget_end_2, pass_kind=deliver_pass, skip=True,
+            )
+            pass_2_queue = list(walk.route)
+            skipped_pass_2 = [wp for wp, _ in walk.rejected]
+            if skipped_pass_2:
+                self.mission.record_skipped_delivery(
+                    [d for wp in skipped_pass_2 for d in wp.devices]
+                )
+        log.info(
+            "mule=%s round=%d pass=2 contacts=%d devices_total=%d skipped=%d sim_t=%.3f",
+            self.mule_id, mission_round, len(pass_2_queue),
+            sum(len(c.devices) for c in pass_2_queue),
+            sum(len(c.devices) for c in skipped_pass_2), t2,
+        )
+        self._ferry_fly_pass(
+            fx, pass_2_queue, pass_kind=deliver_pass, mission_round=mission_round,
+            synth=synth_pass_2, budget_end=budget_end_2,
+            check=(fx.spec.in_flight_response == RESPONSE_REPLAN
+                   and budget_end_2 is not None),
+            energy_origin_j=energy_at_t2, rec=rec,
+        )
+        self._ferry_home(fx)
+        delivery_report = self.mission.close_pass_2()
+        delivered, undelivered = delivery_report.counts()
+        log.info(
+            "mule=%s round=%d Pass 2 closed delivered=%d undelivered=%d sim_t=%.3f",
+            self.mule_id, mission_round, delivered, undelivered, clock(),
+        )
+        # H3 — the next mission's Pass-1 dock rides it up.
+        self._pending_delivery_report = delivery_report
+        return self._ferry_result(
+            **common, t_pass_1_end=t_pass_1_end, up=up,
+            aggregate=agg, report=report, contacts=contacts,
+            channel_choices=list(rec.choices[collect_pass]) + list(rec.choices[deliver_pass]),
+            pass_2_queue=list(pass_2_queue),
+            delivery_report=delivery_report,
+            pass_1_channel_choices=list(rec.choices[collect_pass]),
+            pass_2_channel_choices=list(rec.choices[deliver_pass]),
+            t2=t2, budget_end_2=budget_end_2,
+        )
+
+    def _ferry_fly_pass(
+        self,
+        fx,
+        queue: List[ContactWaypoint],
+        *,
+        pass_kind: MissionPass,
+        mission_round: int,
+        synth,
+        budget_end: Optional[float],
+        check: bool,
+        energy_origin_j: float,
+        rec: _FerryLog,
+    ) -> List[ContactWaypoint]:
+        """Fly one pass stop by stop; return the stops flown, in order.
+
+        At every departure, takeoff included, the mule holds its flight state
+        ``(pose, clock(), energy spent this pass)``; with ``check`` it runs
+        the departure check (:meth:`_ferry_departure`), and in Pass 1 the
+        beacon hook may insert an offered contact. The pass ends when nothing
+        is left or an abort gave up the rest.
+        """
+        from hermes.scheduler.stages.s3b_feasibility import FlightState
+
+        clock = self._now
+        remainder = list(queue)
+        flown: List[ContactWaypoint] = []
+        collect = pass_kind is MissionPass.COLLECT
+        while True:
+            state = FlightState(
+                tuple(self.mule_pose), clock(), fx.energy_j() - energy_origin_j,
+            )
+            if remainder and check:
+                kept = self._ferry_departure(
+                    fx, remainder, state, pass_kind=pass_kind,
+                    mission_round=mission_round, budget_end=budget_end, rec=rec,
+                )
+                if kept is None:
+                    break
+                remainder = kept
+            if collect:
+                remainder = self._take_offers(fx, remainder, state, budget_end=budget_end, rec=rec)
+            if not remainder:
+                break
+            wp = remainder.pop(0)
+            self._ferry_stop(
+                fx, wp, state, pass_kind=pass_kind, mission_round=mission_round,
+                synth=synth, energy_origin_j=energy_origin_j, rec=rec,
+            )
+            flown.append(wp)
+        return flown
+
+    def _ferry_departure(
+        self,
+        fx,
+        remainder: List[ContactWaypoint],
+        state,
+        *,
+        pass_kind: MissionPass,
+        mission_round: int,
+        budget_end: Optional[float],
+        rec: _FerryLog,
+    ) -> Optional[List[ContactWaypoint]]:
+        """The in-flight check at a departure (design section 3.4); None = abort.
+
+        ``abort``: today's rule (Freeze Amendment 8) on the mission clock: the
+        next stop is admitted from the current state under the arm's in-flight
+        rule, its return leg and (Pass 1) upload included; if it is not, the
+        rest of the pass is abandoned and, in Pass 1, widened at the abort
+        time. ``replan``: the whole remainder is folded as it would be flown;
+        if any stop fails, ``FLScheduler.replan_remainder`` repairs it (any
+        ``order_used``, ``arm_trimmed`` included), and every stop it drops is
+        final for the mission: widened in Pass 1, a SKIPPED delivery in Pass 2,
+        stamped at the drop time. δ_obs is 0 (critic C1). Both price with the
+        scheduler's model, so the mule never re-implements S3b.
+        """
+        from hermes.mule.ferry import RESPONSE_ABORT
+
+        collect = pass_kind is MissionPass.COLLECT
+        if fx.spec.in_flight_response == RESPONSE_ABORT:
+            head = self.scheduler.fold_remainder(
+                remainder[:1], state=state, budget_end=budget_end, pass_kind=pass_kind,
+            )
+            if head.ok:
+                return remainder
+            abandoned = list(remainder)
+            log.info(
+                "mule=%s round=%d Pass %d ABORTING at sim t=%.3f: the next contact "
+                "is no longer reachable in time (%s); abandoning %d contact(s)",
+                self.mule_id, mission_round, 1 if collect else 2, state.clock,
+                head.rejected[0][1], len(abandoned),
+            )
+            if collect:
+                self._widen_abandoned(abandoned, mission_round=mission_round)
+            else:
+                self.mission.record_skipped_delivery(
+                    [d for wp in abandoned for d in wp.devices]
+                )
+            rec.aborts.append({
+                "t_s": state.clock,
+                "pass": pass_kind.value,
+                "reason": head.rejected[0][1],
+                "abandoned": [_ids(wp.devices) for wp in abandoned],
+            })
+            return None
+
+        fold = self.scheduler.fold_remainder(
+            remainder, state=state, budget_end=budget_end, pass_kind=pass_kind,
+        )
+        if fold.ok:
+            return remainder
+        res = self.scheduler.replan_remainder(
+            remainder, state=state, budget_end=budget_end, pass_kind=pass_kind,
+        )
+        dropped = res.dropped_contacts
+        rec.replans.append({
+            "t_s": state.clock,
+            "pass": pass_kind.value,
+            "order_used": res.order_used,
+            "rejected": [{"devices": _ids(wp.devices), "reason": why}
+                         for wp, why in fold.rejected],
+            "before": [_ids(wp.devices) for wp in remainder],
+            "route": [_ids(wp.devices) for wp in res.route],
+            "dropped": [{"devices": _ids(wp.devices), "reason": why}
+                        for wp, why in res.dropped],
+            "delta_obs_db": 0.0,
+        })
+        log.info(
+            "mule=%s round=%d Pass %d re-plan at sim t=%.3f: %s order, %d/%d "
+            "contacts kept (%d dropped)",
+            self.mule_id, mission_round, 1 if collect else 2, state.clock,
+            res.order_used, len(res.route), len(remainder), len(dropped),
+        )
+        if dropped:
+            if collect:
+                self._widen_abandoned(dropped, mission_round=mission_round)
+            else:
+                self.mission.record_skipped_delivery(
+                    [d for wp in dropped for d in wp.devices]
+                )
+        return list(res.route)
+
+    def _ferry_stop(
+        self,
+        fx,
+        wp: ContactWaypoint,
+        state,
+        *,
+        pass_kind: MissionPass,
+        mission_round: int,
+        synth,
+        energy_origin_j: float,
+        rec: _FerryLog,
+    ) -> None:
+        """Fly to ``wp`` and serve it: the leg, the contact plan, the contact.
+
+        The leg is charged as ``transit`` and the pose jumps to the stop; the
+        contact plan is built on arrival, and the host's commit charges the
+        contact's airtime and listen window. With a channel actor wired, the
+        L1 choice is recorded, not acted on: from the state observed at
+        arrival with a band (design section 4.6), from the recorded state
+        before the leg without one. The observed state's energy is this
+        sortie's, counted from ``energy_origin_j`` (the pass's takeoff) as
+        the departure state and the energy clause count it: Pass 2 restarts
+        at 0, so the L1 state and the energy clause agree on the battery.
+        """
+        clock = self._now
+        collect = pass_kind is MissionPass.COLLECT
+        positions = self._ferry_positions([wp])
+        l1_choice: Optional[int] = None
+        if self.channel_actor is not None and not fx.banded:
+            l1_choice = self._pick_channel_contact(wp)
+        transit = fx.spec.flight.leg_s(self.mule_pose, wp.position)
+        clock.advance(transit, "transit")
+        self.mule_pose = wp.position
+        if self.channel_actor is not None and fx.banded:
+            obs = fx.observe(wp, positions, clock())
+            l1_choice = int(self.channel_actor.argmax(fx.l1_state(
+                obs, pose=self.mule_pose, energy_j=fx.energy_j() - energy_origin_j,
+                budget_s=self.scheduler.mission_budget_s,
+            )))
+        plan = fx.contact_plan(wp, positions, pass_kind=pass_kind, mission_round=mission_round)
+        before = self.mission.last_contact
+        try:
+            if collect:
+                self.mission.run_contact(list(wp.devices), synth, plan=plan)
+            else:
+                self.mission.deliver_contact(list(wp.devices), synth, plan=plan)
+        except MissionSessionError as e:
+            log.warning(
+                "mule=%s round=%d Pass %d %s failed pos=%s: %s",
+                self.mule_id, mission_round, 1 if collect else 2,
+                "run_contact" if collect else "deliver_contact", wp.position, e,
+            )
+        commit = self.mission.last_contact
+        if commit is before:
+            commit = None
+        snr = rate = None
+        if fx.banded:
+            arrival_snr = [float(plan.snr_db[d]) for d in wp.devices]
+            snr = {str(d): s for d, s in zip(wp.devices, arrival_snr)}
+            rate = {str(d): r for d, r in zip(wp.devices, fx.rates_bps(arrival_snr))}
+        rec.flown[pass_kind].append({
+            "position": [float(c) for c in wp.position],
+            "devices": _ids(wp.devices),
+            "deadline_ts": float(wp.deadline_ts),
+            "depart_s": state.clock,
+            "depart_pose": [float(c) for c in state.pose],
+            "depart_energy_j": state.energy_j,
+            "transit_s": transit,
+            "arrival_s": plan.arrival_ts,
+            "end_s": commit.end_ts if commit is not None else clock(),
+            "band": fx.spec.band,
+            "targets": _ids(plan.targets),
+            "unreachable": _ids(plan.unreachable),
+            "snr_db": snr,
+            "rate_bps": rate,
+            "dwell_s": commit.dwell_s if commit is not None else 0.0,
+            "listen_s": commit.listen_s if commit is not None else 0.0,
+            "missing": _ids(commit.missing) if commit is not None else [],
+            "uplink_dropped": _ids(commit.uplink_dropped) if commit is not None else [],
+            "l1_choice": l1_choice,
+        })
+        if l1_choice is not None:
+            rec.choices[pass_kind].append(l1_choice)
+
+    def _ferry_home(self, fx) -> None:
+        """The return leg to the dock, charged as ``return``; the pose is the dock."""
+        dock = fx.spec.flight.dock
+        self._now.advance(fx.spec.flight.leg_s(self.mule_pose, dock), "return")
+        self.mule_pose = dock
+
+    def _ferry_turnaround(self, fx) -> None:
+        """The dock turnaround, once per mission, upload or not (design section 2.3)."""
+        self._now.advance(fx.spec.flight.turnaround_s, "turnaround")
+
+    def _ferry_observed_upload(self, fx, up) -> None:
+        """Feed the causal RF prior (critic B4) from the upload just priced.
+
+        With a seconds-axis backhaul the planner's ``rf_prior_snr_db`` becomes
+        the SNR the mule last observed on the carrier it holds; before the
+        first upload it keeps its configured value (20 dB by default).
+        """
+        if up is not None and fx.rf_prior is not None:
+            self.rf_prior_snr_db = fx.rf_prior.prior_snr_db(carrier=up.carrier)
+
+    def _ferry_sync(self, down) -> None:
+        """The Lamport sync at the dock (design section 2.3, critic B8).
+
+        The mule adopts the cluster's simulated time when the cluster is ahead
+        (``advance_to`` is a max, charged as ``dock_wait``); a DOWN without
+        ``cluster_sim_ts`` makes no sync.
+        """
+        ts = getattr(down, "cluster_sim_ts", None)
+        if ts is None:
+            return
+        try:
+            self._now.advance_to(float(ts), "dock_wait")
+        except ValueError as e:
+            raise MuleSupervisorError(f"cannot sync to the DOWN's cluster_sim_ts: {e}") from e
+
+    def _ferry_sync_after(self, before) -> None:
+        """Take the DOWN the dock just delivered, if one came: check its slice
+        was ingested (:meth:`_ferry_check_slice`), then sync to it."""
+        down = self.client_cluster.last_down()
+        if down is not None and down is not before:
+            self._ferry_check_slice()
+            self._ferry_sync(down)
+
+    def _ferry_check_slice(self) -> None:
+        """Raise if the scheduler refused the slice of the DOWN just distributed.
+
+        On the mission clock the scheduler refuses an amendment carrying the
+        cluster's ``deadline_overrides``, wall-clock stamps (critic A1/B3), and
+        with it the slice. ``ClientCluster`` only logs a failing sink and
+        stages θ anyway, so without this check the mule would report the dock
+        as a success and fly on a stale slice (or, at the bootstrap, none).
+        """
+        err = getattr(self, "_ferry_slice_error", None)
+        if err is None:
+            return
+        self._ferry_slice_error = None
+        raise MuleSupervisorError(
+            f"the DOWN's slice was not ingested on the mission clock: {err}"
+        ) from err
+
+    def _ferry_positions(self, queue) -> Dict[DeviceID, Tuple[float, ...]]:
+        """Each member's last-known position: the ones S3a clustered with."""
+        states = self.scheduler.device_states
+        return {
+            d: tuple(float(c) for c in states[d].last_known_position)
+            for wp in queue for d in wp.devices
+        }
+
+    def _ferry_result(
+        self,
+        *,
+        fx,
+        rec: _FerryLog,
+        mission_round: int,
+        sim_start: float,
+        pass_1_queue: List[ContactWaypoint],
+        planned_deadlines: Dict[DeviceID, float],
+        budget_end_1: Optional[float],
+        t_pass_1_end: float,
+        up,
+        t2: Optional[float] = None,
+        budget_end_2: Optional[float] = None,
+        **legacy,
+    ) -> MissionRunResult:
+        """The mission's result: the recorded fields as the legacy path fills
+        them, plus the sim fields (design section 2.5)."""
+        from hermes.mule.ferry import backhaul_record
+
+        clock = self._now
+        sim_end = clock()
+        ledger = clock.ledger()
+        return MissionRunResult(
+            mission_round=mission_round,
+            pass_1_queue=list(pass_1_queue),
+            pass_1_device_deadlines=planned_deadlines,
+            sim_start_s=sim_start,
+            sim_end_s=sim_end,
+            sim_ledger=ledger,
+            sim_pass_2_start_s=t2,
+            pass_1_flown=list(rec.flown[MissionPass.COLLECT]),
+            pass_2_flown=list(rec.flown[MissionPass.DELIVER]),
+            replans=list(rec.replans),
+            aborts=list(rec.aborts),
+            inserts=list(rec.inserts),
+            offers_refused=list(rec.offers_refused),
+            budget_overrun_s=(None if budget_end_1 is None
+                              else max(0.0, t_pass_1_end - budget_end_1)),
+            pass_2_budget_overrun_s=(None if budget_end_2 is None
+                                     else max(0.0, sim_end - budget_end_2)),
+            energy_j=fx.spec.flight.energy.energy_j(ledger),
+            band=fx.spec.band,
+            backhaul=backhaul_record(up),
+            pass_1_preflight_drops=list(rec.preflight_drops),
+            **legacy,
+        )
+
+    # ------------------------------------------------------------------ #
+    # FeRRy Phase 3 — the beacon hook (design section 3.6)
+    # ------------------------------------------------------------------ #
+
+    def offer_contact(self, wp: ContactWaypoint) -> None:
+        """Offer an opportunistic contact; it is considered at the next Pass-1 departure.
+
+        The offer names the devices (``wp.devices``, with ``wp.bucket``);
+        the mule rebuilds the stop itself: at its first member's last-known
+        position, with the members' tightest deadline. At the next departure
+        it is inserted at its cheapest place in the remainder, and accepted
+        only if the fold of the edited remainder passes without skipping
+        under the arm's in-flight rule; it never evicts a planned stop. Only
+        devices the scheduler already tracks, not already planned (or
+        dropped) this mission, whose members lie within R_planar(b) of the
+        first, can be inserted; the hook never touches ``is_in_slice``.
+        Accepted inserts are recorded (``MissionRunResult.inserts``) and count
+        in S3c's planned and served; refused ones are recorded with a reason
+        (an offer that names a device twice among them). Offers queued during
+        Pass 2 wait for the next mission's first departure. Thread-safe; inert
+        with no source. Needs the mission clock.
+        """
+        if getattr(self, "_ferry_run", None) is None:
+            raise MuleSupervisorError(
+                "the beacon hook runs on the mission clock (mission_clock=...)"
+            )
+        if not isinstance(wp, ContactWaypoint):
+            raise TypeError(f"offer_contact takes a ContactWaypoint, got {type(wp).__name__}")
+        with self._offers_lock:
+            self._offers.append(wp)
+
+    def _take_offers(
+        self,
+        fx,
+        remainder: List[ContactWaypoint],
+        state,
+        *,
+        budget_end: Optional[float],
+        rec: _FerryLog,
+    ) -> List[ContactWaypoint]:
+        """Try every queued offer against the remainder; return the new remainder."""
+        with self._offers_lock:
+            offers, self._offers = list(self._offers), []
+        for offer in offers:
+            remainder = self._ferry_try_insert(
+                fx, offer, remainder, state, budget_end=budget_end, rec=rec,
+            )
+        return remainder
+
+    def _ferry_try_insert(
+        self,
+        fx,
+        offer: ContactWaypoint,
+        remainder: List[ContactWaypoint],
+        state,
+        *,
+        budget_end: Optional[float],
+        rec: _FerryLog,
+    ) -> List[ContactWaypoint]:
+        """One offer: the edited remainder if it fits, else the remainder unchanged."""
+        from hermes.mission.contact_plan import planar_distance_m
+        from hermes.scheduler.stages.s3_deadline import compute_deadline
+
+        states = self.scheduler.device_states
+        devices = tuple(offer.devices)
+        t = state.clock
+
+        def refuse(reason: str) -> List[ContactWaypoint]:
+            rec.offers_refused.append({"t_s": t, "devices": _ids(devices), "reason": reason})
+            log.info("mule=%s beacon offer %s refused: %s", self.mule_id, _ids(devices), reason)
+            return remainder
+
+        if len(set(devices)) != len(devices):
+            # A stop solicits each member once: its contact plan refuses
+            # repeats, and by then the leg to it has been charged, so the
+            # mission would end away from the dock.
+            return refuse("members repeat")
+        if any(d not in states for d in devices):
+            return refuse("unknown device")
+        if any(d in rec.no_insert for d in devices):
+            return refuse("already planned this mission")
+        positions = {d: tuple(float(c) for c in states[d].last_known_position) for d in devices}
+        if any(not states[d].is_in_slice and positions[d] == (0.0, 0.0, 0.0) for d in devices):
+            # A device outside the slice whose position the cluster never
+            # sent still holds the state's (0, 0, 0) default: pricing it
+            # there would plan a stop at the dock (design section 3.6).
+            return refuse("position unknown")
+        anchor = positions[devices[0]]
+        if any(planar_distance_m(anchor, positions[d]) > fx.range_planar_m for d in devices):
+            return refuse("members not within range of one stop")
+        deadline = min(
+            compute_deadline(states[d], t, self.scheduler.window_scale,
+                             law=self.scheduler.deadline_law)
+            for d in devices
+        )
+        stop = fx.annotate([ContactWaypoint(
+            position=anchor, devices=devices, bucket=offer.bucket, deadline_ts=deadline,
+        )], positions)[0]
+        best = None
+        for i in range(len(remainder) + 1):
+            edited = list(remainder[:i]) + [stop] + list(remainder[i:])
+            fold = self.scheduler.fold_remainder(
+                edited, state=state, budget_end=budget_end, pass_kind=MissionPass.COLLECT,
+            )
+            if fold.ok and (best is None or fold.home < best[0]):
+                best = (fold.home, i, edited)
+        if best is None:
+            return refuse("does not fit")
+        home, index, edited = best
+        rec.inserts.append({
+            "t_s": t,
+            "devices": _ids(devices),
+            "position": list(anchor),
+            "index": index,
+            "home_s": home,
+        })
+        rec.inserted_devices += len(devices)
+        rec.no_insert.update(devices)
+        log.info(
+            "mule=%s beacon offer %s inserted at %d/%d (predicted home %.3f)",
+            self.mule_id, _ids(devices), index, len(remainder), home,
+        )
+        return edited
+
+    # ------------------------------------------------------------------ #
     # FeRRy Phase 2 — docking with other mules on the same cluster
     # ------------------------------------------------------------------ #
 
@@ -840,7 +1836,14 @@ class MuleSupervisor:
                 continue
         return False
 
-    def _dock_empty(self, mission_round: int, base_version: Optional[int]) -> bool:
+    def _dock_empty(
+        self,
+        mission_round: int,
+        base_version: Optional[int],
+        *,
+        sim_upload_ts: Optional[float] = None,
+        backhaul=None,
+    ) -> bool:
         """Dock after a mission that collected nothing (``dock_on_empty``).
 
         Uploads an empty partial, tagged with this mule's rule so the cluster
@@ -849,12 +1852,17 @@ class MuleSupervisor:
         in any upload. The cluster counts the partial toward its quorum and
         merges nothing from it. Returns True once the DOWN has staged the next
         mission's θ, False when ``down_wait_s`` ran out first.
+
+        FeRRy Phase 3: on the mission clock the UP carries the upload's
+        simulated completion time and backhaul pricing, and a report built
+        here is stamped from the clock (critic B3); both None otherwise.
         """
         unmerged = getattr(self.mission, "last_unmerged", None)
         if unmerged is not None:
             report, contacts = unmerged
         else:
-            now = time.time()
+            now = (time.time() if getattr(self, "_ferry_run", None) is None
+                   else self._now())
             report = MissionRoundCloseReport(
                 mule_id=self.mule_id, mission_round=mission_round,
                 started_at=now, finished_at=now,
@@ -875,6 +1883,8 @@ class MuleSupervisor:
             report=report,
             contacts=contacts,
             delivery_report=self._pending_delivery_report,
+            sim_upload_ts=sim_upload_ts,
+            backhaul=backhaul,
         )
         self._pending_delivery_report = None
         if not self.client_cluster.wait_for_dock(timeout=None):
