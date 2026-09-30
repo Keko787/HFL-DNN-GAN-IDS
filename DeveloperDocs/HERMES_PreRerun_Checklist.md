@@ -11,8 +11,9 @@ hold. The status of 2026-08-13 follows it, kept for the record.
 > recorded cells measured: the backhaul loss schedule was read only at mission 1, any failed contact
 > (not only an abandoned device) reset its age for D1 and D2, and a mission's budget ran from the
 > last DOWN bundle instead of its own start. Amendment 7 opens the frozen surface for the FeRRy
-> build. Amendment 8 stops the in-flight re-check holding D1/D2 routes to our per-device deadline. Freeze §6 says to re-open this
-> checklist after any amendment.
+> build. Amendment 8 stops the in-flight re-check holding D1/D2 routes to our per-device deadline.
+> Amendment 9 (Phase 2) makes a mule failure fail its trial, and Amendment 10 (Phase 3) keeps a
+> silent device's RF link. Freeze §6 says to re-open this checklist after any amendment.
 >
 > - **What the fixes mean for the results below.** The L1 confirmation ("L1 is now CONFIRMED")
 >   compared each arm's mission-1 backhaul band held for the whole trial, not adaptation from mission
@@ -36,8 +37,17 @@ hold. The status of 2026-08-13 follows it, kept for the record.
 >   `experiments/analysis/stats.py`) instead of reporting the metric that hit.
 > - **The FeRRy build (Amendment 7)** lands behind switches whose defaults keep the frozen pipeline,
 >   so a change confined to ferry mode forces no legacy re-run. Its Phase 3 (simulated clock,
->   seconds-axis channel) re-baselines every arm for Exp 5, the bill the build plan accepts in its
->   decision D2. New ledger rows are in §1, the amendments in §1a.
+>   contact link, seconds-axis backhaul) re-baselines every mule arm for Exp 5, the bill the build
+>   plan accepts in its decision D2; H0 stays on the wall clock (critic A5). New ledger rows are in
+>   §1, the amendments in §1a.
+> - **Phase 3 has landed behind its switches (commit `ef1faa1`; Freeze §5j, 2026-09-29).** Before its re-runs: (1)
+>   the pilots, which set the ferry session TTL from the measured real-model fit time (at least
+>   2×), T_nom per cell, the deadline time unit (at the default 1.0 the law cannot keep up with
+>   simulated missions; Configuration Reference §17.4), the budget knee re-measured with the ferry model, and the H
+>   arms' `replan_fallback`; (2) the commit that lands Phase 3, recorded with the rows; (3) fresh CSV
+>   paths, since the 13 provenance and 15 simulated columns change every header; (4) the exit gate
+>   (H1, D1, D2, D3 and D4 re-baselined on the new clock, then the Phase 1–2 studies re-run) only
+>   on the user's go-ahead.
 
 **Status on 2026-08-13:** ✅ **GATE OPEN.** All six exit criteria met; the matrix in §5.1 is cleared
 to run.
@@ -121,9 +131,12 @@ The single most useful distinction here. Most open items do **not** need new tri
 | Mule failures fail the trial; bootstrap and reconnects survive (Amendment 9) | **No** | Fault paths only; no recorded run failed, bootstrapped late or reconnected. A trial whose mule fails is now `status=error` instead of a truncated `ok` |
 | Run with several mules, D3–D5 or `agg:fedex` (FeRRy Phase 2) | **Yes** (new arms) | New cells; one mule and the recorded arms are unchanged |
 | Turn a FeRRy switch on (Amendment 7) | **Yes** (new arm) | Changes what the scheduler decides |
-| Simulated mission clock and seconds-axis channel for every arm (FeRRy Phase 3) | **Yes**, every arm | Build-plan decision D2: Exp 5 re-baselines H0–H3, D1 and D2 on the new clock |
+| Simulated mission clock for the mule arms (FeRRy Phase 3, `--mission-clock sim`) | **Yes**, every mule arm | The re-run bill of build-plan decision D2: H1–H3 and D1–D5 (later F) re-run on the new clock, and the Phase 1–2 studies are re-run, not re-scored, since legacy traces carry no simulated stamps. H0 is not re-run there: its simulated round time is outside Phase 3, and the driver refuses it on the simulated clock (critic A5). *(Corrected 2026-09-29; this row first listed H0–H3, D1 and D2, and put every arm on the seconds-axis channel, whose backhaul is now a per-study choice.)* |
+| Turn on another Phase 3 switch: a contact band, `replan`, the seconds-axis backhaul, the channel reliability source, a declared payload, a deadline time unit | **Yes** (new cells) | Each changes what the mule decides or what a contact costs, so each is a study setting on the new clock. The seconds backhaul alone moves every exit-gate number: about 16 % of uploads lost when jittery at a fixed carrier, against today's flat 2 % (critic A4) |
 | — | — | — |
-| Land a FeRRy switch at its legacy default (Amendment 7) | **No** | Legacy behaviour unchanged; each switch lands with a test that pins its default to the frozen pipeline |
+| P-02 transport fix (Freeze Amendment 10) | **No** for any recorded run | It changes legacy behaviour only where a device is silent for more than 30 s of wall time (a quorum wait with several mules, a long fit, a slow startup), where the cluster's dock send on Windows blocks for more than 60 ms (the dock link's bound, meant as 60 s), or where a device's link drops for another reason (the device now re-dials and re-registers instead of spinning). None is expected in the recorded runs: the longest silence in the 600 kept traces is 23.3 s, and K = 2 and real-model trials before and after it are identical. Every multi-mule run must use the fixed code |
+| Land a FeRRy switch at its legacy default (Amendment 7) | **No** | Legacy behaviour unchanged; each switch lands with a test that pins its default to the frozen pipeline. Phase 3's are also pinned by the afa9526 golden fixtures (`tests/golden/`, 144 tests) |
+| Phase 3's new CSV columns (13 provenance, 15 simulated) | **No**, but start a new CSV | Additive, but they change every header, so the runner refuses to append to an older file. The 15 simulated columns are blank on the wall clock. The provenance columns are blank at the driver's defaults, but `realism`, `l1_channel` and `input_dim` are filled whenever set, on either clock (a wall-clock re-run of a recorded real-model `--realism` cell gets `realism` 1 and `input_dim` 21), as are a deadline time scale other than 1.0, an `initial_window_s` and a session TTL other than 3 s |
 | Re-score retained traces with `traces_scorer.py` | **No** | Re-analysis of kept JSONL; possible only where `--keep-event-traces` was on |
 | `ε_prop` calibration | **No** | Energy is a post-hoc function of recorded columns |
 | Manuscript deadline-sign correction | **No** | Prose/algorithm text only |
@@ -163,7 +176,7 @@ means **an existing CSV cannot be resumed** by a newer runner: it fails loudly w
 recorded with these mechanisms active must never be pooled with historical rows, so being forced
 into a new file is the correct outcome. Start a new CSV; do not override.
 
-### Amendments 4–9 (2026-08-17 to 2026-09-28) — and what they did cost
+### Amendments 4–10 (2026-08-17 to 2026-09-29) — and what they did cost
 
 The title of this section held through Amendment 4. It no longer holds: Amendments 5 and 6 are
 defect fixes, so their default *is* the corrected behaviour, and they change recorded results.
@@ -176,6 +189,7 @@ defect fixes, so their default *is* the corrected behaviour, and they change rec
 | 5g, Amendment 7 | The FeRRy build opens the frozen surface | one switch per mechanism, legacy by default | None by itself |
 | 5h, Amendment 8 | D1/D2 budget-checked in flight; a plan's diagnostics reset per plan; the Phase 1 audit fixes (ferry mode only) | none for parts 1–2 (fixes) | Every budgeted D1/D2 cell (already owed) |
 | 5i, Amendment 9 | Mule failures fail the trial; bootstrap and reconnects survive; Phase 2 multi-mule runtime and arms D3–D5 behind switches | none for parts 1–4 (fault paths) | None |
+| 5j, Amendment 10 | The P-02 transport fix: RF reads without a timeout, send bounds packed per OS (the dock link's 60 s bound was 60 ms on Windows), a re-registering device replaces its socket, and devices re-dial (acknowledged, with an optional per-trial token); FeRRy Phase 3 (mission clock, contact link, re-plan, seconds-axis backhaul) behind switches | none for the fix; one switch per Phase 3 mechanism, legacy by default | None expected from the fix (no kept trace has a device silent for more than 23.3 s); every mule arm re-runs on the mission clock |
 
 The caveat above now applies to the numbers as well as the files: `main` does not reproduce the
 recorded budgeted, `--l1-channel` or D1/D2 rows. Re-derive a recorded number from the tag
