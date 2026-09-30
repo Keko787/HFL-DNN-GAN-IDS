@@ -8,10 +8,11 @@ the files listed in §5 after this point invalidates recorded sweeps** and must 
 State at freeze: working tree clean for `hermes/scheduler/` and `hermes/mule/`; **153 scheduler
 tests passing**.
 
-**Amendments** (§5a–5g): 1–4 landed before or alongside the recorded sweeps. 5 and 6 (2026-09-27
+**Amendments** (§5a–5j): 1–4 landed before or alongside the recorded sweeps. 5 and 6 (2026-09-27
 and 09-28) fix defects and change what the budgeted, `--l1-channel` and D1/D2 cells measure. 7
 (2026-09-28) opens this surface for the FeRRy build, behind switches whose defaults keep this
-pipeline. The code behind every recorded result is the tag `exp4-recorded`.
+pipeline. 8 and 9 (2026-09-28) land with the Phase 0/1 audit and Phase 2, and 10 (2026-09-29, the
+RF transport fix) with Phase 3. The code behind every recorded result is the tag `exp4-recorded`.
 
 ---
 
@@ -334,13 +335,35 @@ in legacy mode unless a study sets otherwise. Each switch is recorded here when 
 | Dock after an empty mission, bounded DOWN wait (`dock_on_empty`, `down_wait_s`) | off; one 10 s wait whose expiry ends the loop | on at K > 1, the wait at the trial budget, survived | Phase 2, commit `c417554` (§5i) |
 | Whole-scheduler arms (`contact_policy`) | our pipeline; D1 `max_aoi`, D2 `oort` | D3 `whittle`, D4 `fedex`, D5 `fedcs` | Phase 2, commit `c417554` (§5i) |
 | L3 merge rule `agg:fedex` | — | FedEx-Async's θ + η·Σ Δθ / N per return | Phase 2, commit `c417554` (§5i) |
-| Mission clock (`now_fn`) | wall clock | simulated seconds (`l1/mission_clock.py`) | Phase 3, planned |
-| Contact band | none: one `rf_range_m` for every stop | band classes with a range and a rate | Phase 3, planned |
-| Response when the remaining queue stops fitting | abort the rest (Amendment 1, A1) | re-plan with 2-OPT under S3b | Phase 3, planned |
+| Mission clock (`MuleConfig`/`ClusterConfig.mission_clock`, `--mission-clock`) | `wall`: `time.time` stamps every mission-time read (plans, deadlines, the budget, contact outcomes); the pose carries over between missions | `sim`: one `MissionClock` per mule process (`l1/mission_clock.py`; epoch 1e6 s, refused at 1e9 s so simulated and wall stamps never mix), charged by transit, dwell, listen, return, upload, turnaround and dock wait and never paced; every mission-time stamp from it; the pose reset to the dock at each takeoff; the budget stamped at takeoff, Pass 2's at its own takeoff; the cluster echoes the latest simulated upload it ingested (`cluster_sim_ts`), and the mule syncs to it at the dock. H0 is refused on it (critic A5) | Phase 3, commit `ef1faa1` (§5j) |
+| Contact band (`MuleConfig.contact_band`, `contact_band_classes`, `--contact-band`) | none: one `rf_range_m` for every stop; a broadcast solicit (on the wall clock); 1 s per contact in the cost model | `wide`, `medium` or `narrow` (decision D1; the re-baselines fly `wide`): S3a radius R_planar(b); numbered solicits to the stop's members only, gated at arrival by range and the SNR floor; dwell = 8·bytes / rate(b, SNR) charged to the clock and priced by S3b; band and SNR on the report lines. On the mission clock without a band (the channel-free control) solicits are targeted too, and a contact costs 1 s plus the listen window when a reply is missing | Phase 3, commit `ef1faa1` (§5j) |
+| Response when the remaining queue stops fitting (`MuleConfig.in_flight_response`, `replan_fallback`) | `abort` the rest (Amendment 1, A1; the per-policy rule of Amendment 8) | `replan`: the whole remainder checked at every departure and repaired by `FLScheduler.replan_remainder`. Our arms keep their own order over what S3b re-admits when it fits; otherwise `replan_fallback` decides: `reorder` (2-OPT, then S3b's admission order; whenever the pre-flight check fires, H1, H2 and H3 fly the same route) or `trim` (each arm keeps its order and drops the stops that order cannot serve, so it serves fewer). D1–D3 and D5 re-admit through their own `admit_and_order`, D4 flies on and records its overrun, Pass 2 is a nearest-first budget walk. Drops are final for the mission and widened at the simulated drop time. The pilot chooses the H arms' setting (critics B5, C3) | Phase 3, commit `ef1faa1` (§5j) |
+| Pre-flight order check (`FLScheduler(validate_flown_order=...)`) | off | on under `replan`, set by the mule: the order the arm will fly is folded before takeoff and repaired as above; needs the ferry model and a budget (no budget, no gate) | Phase 3, commit `ef1faa1` (§5j) |
+| Backhaul model (`MuleConfig`/`ClusterConfig.backhaul_model`, `backhaul_policy`, `backhaul_regime`, `--backhaul-model`) | `mission`: the cluster's recorded loss (the flat `--realism` percentage, or the `--l1-channel` schedule by mission round, Amendment 5), drawn from a stream; on the mission clock the upload is still charged, timed at the fixed carrier's noise-free mean SNR | `seconds` (mission clock only): three carriers' SNR at the simulated upload start, period P_bh = `n_missions` × T_nom; the fixed carrier argmax g_c for every arm but H3, whose U(c, t) controller picks at every upload; p_loss = `loss_from_snr` (1.0 below the SNR floor, charged the floor-rate time); the loss drawn keyed by (trial seed, mule, mission round), so every arm faces the same uniform for a mission (common random numbers), though each arm's p_loss is its own, read at its own upload start and on its own carrier; the flat percentage set to 0. About 16 % of uploads lost when jittery at the fixed carrier, against today's flat 2 % (critic A4). Refused with `--l1-channel`; chosen per study | Phase 3, commit `ef1faa1` (§5j) |
+| Contact reliability (`MuleConfig.contact_reliability_source`, `device_availability`) | `origin`: each device draws rel × rf_factor (distance to the origin) from its own stream | `channel` (needs a band): the SNR gate at the stop, and the availability rel_i drawn on the mule keyed by (trial seed, device, mission round); the devices are built with `contact_reliability=None`. The ground-truth map reaches no scheduler, policy, L1 state or event, only its size does; it lives in the mule's configuration alone (critic B16). Pass 2 faces the SNR gate only | Phase 3, commit `ef1faa1` (§5j) |
+| Deadline time unit (`MuleConfig.deadline_time_scale`, `initial_window_s`) | 1.0 and None (Φ₀ = 60 s) | every time constant of the law (the additive −5 s / +10 s steps and 5 s floor, the multiplicative clamps, Φ₀) times the scale. Φ₀ is stated in the law's recorded unit and scaled, so None and 60 are the same Φ₀ at any scale. A numeric scale and Φ₀ in seconds are valid on either clock; the driver's `t_nom` (T_nom / 10 s) and `--initial-window-missions` (Φ₀ in missions, critic A7) need the mission clock. Values set at the pilot | Phase 3, commit `ef1faa1` (§5j) |
+| Payload (`MuleConfig.payload_bytes`) | None: on the wall clock nothing is priced by bytes; on the mission clock the measured bytes (θ 18,756 B at 21 inputs; a Pass-1 session 37,576 B) | bytes per direction, declared (decision D3: 1 MB and 10 MB); they price the dwell and the upload while the real θ still crosses the link | Phase 3, commit `ef1faa1` (§5j) |
+| What Deadline(j) bounds (`MuleConfig.deadline_bounds`) | the arrival: clock + transit ≤ Deadline(j) | `collection` (spec Q2): arrival + dwell ≤ Deadline(j); or `delivery`: per stop, the finish plus that stop's own return plus the upload ≤ its Deadline(j) (the plan's single-contact predicate; it bounds the actual delivery, the route's landing plus the upload, only for the last stop) | Phase 3, commit `ef1faa1` (§5j) |
+| Deadline overrides (`FLScheduler(refuse_deadline_overrides=...)`) | folded as sent (the cluster sends none) | refused on the mission clock, since they are wall-clock stamps (critic B3): the cluster will not issue one, and a mule that receives one fails, with `dock_bootstrap_failed` (exit 5) at the bootstrap or `mission_failed` (exit 3) at a later dock | Phase 3, commit `ef1faa1` (§5j) |
+| RF link token (`MuleConfig`/`DeviceConfig.rf_link_token`, `--rf-link-token`) | None: any registration accepted | one token per trial, derived from cell, arm, trial and seed, on by default exactly on the mission clock: a mule refuses a registration that carries another (Amendment 10) | Phase 3, commit `ef1faa1` (§5j) |
+| Newest solicit only (`DeviceConfig.newest_solicit_only`) | off: solicits answered in arrival order | on in every mission-clock cell: a device answers only its newest queued solicit, since the mule accepts only adverts that name the solicit it is gathering for (critic B1) | Phase 3, commit `ef1faa1` (§5j) |
+| SpectrumSig forwarding (`SpectrumSig.contact_class_snr_db`) | none: no DOWN carries a `spectrum_sig` delta | on the mission clock the cluster reads each Pass-1 line's (band, SNR), keeps the latest per class and sends it in `registry_deltas[did]["spectrum_sig"]`; the mule folds it into `DeviceSchedulerState.spectrum_snr_db`. Nothing decides on it in Phase 3 | Phase 3, commit `ef1faa1` (§5j) |
+| Causal RF prior (`MuleConfig.rf_prior_schedule_db`; the seconds model's `RFPriorProducer`) | the driver's `rf_prior_snr_db`: under `--l1-channel` the chosen band's mean SNR over the whole trial, later missions included; 20 dB otherwise | on the mission clock never the trial mean (critic B4): under `seconds` the SNR last observed at an upload on the carrier used; under `mission` with `--l1-channel` the L1 trace's SNR at each upload already made, adopted after each mission that docked; 20 dB before the first upload | Phase 3, commit `ef1faa1` (§5j) |
+| Simulated-order ingest (derived: mission clock, K > 1, and a quorum below K or `agg:fedbuff`; `TCPDockLinkServer(sim_markers=...)`) | off: UPs folded in arrival order, the recorded loop | the cluster holds each UP until no other mule can still send one that completed earlier (`SimOrderGate`) and folds in (`sim_upload_ts`, mule id) order; the dock queues registration, departure and clock markers with the UPs, and a mule whose dock connection ends counts as done. Needs `down_wait_s` on every mule (refused otherwise) | Phase 3, commit `ef1faa1` (§5j) |
+| D4's CARP split (rides `mission_clock`) | 1 s per client at the cost model's cruise speed | the predicted Pass-1 airtime of one client at R_planar(b)/2 (1 s without a band), at the cell's cruise speed | Phase 3, commit `ef1faa1` (§5j) |
+| Beacon inserts (`MuleSupervisor.offer_contact`) | none (decision D6) | mission clock only: an offered stop is inserted at its cheapest place only if the whole edited remainder passes the predicate, and never evicts a planned stop. Inert: nothing offers one in Phase 3 | Phase 3, commit `ef1faa1` (§5j) |
+| Driver wall budget (`--session-ttl-s`; the trial's hard kill) | a 3 s session TTL; the kill at `--trial-budget-s` (120 s); `down_wait_s` = that budget at K > 1 | the TTL set from the measured real-model fit time (at least 2×, a pilot); on the mission clock the kill is the larger of the budget and a bound built from the waits the code caps (562 s at a 3 s TTL, N = 6, one mule, 4 missions; K missions' worth per mission when the cluster orders uploads), and `down_wait_s` follows it | Phase 3, commit `ef1faa1` (§5j) |
+| Analysis on simulated time (consumer and scorer) | the wall clock | the clock read from `mule_ready.mission_clock` (absent: wall, every recorded trace); missions ordered by their simulated ends; `sim_s_to_τ` beside `wall_s_to_τ`; 15 simulated columns; a trace whose clocks disagree is refused (`ClockDomainError`); without a trial CSV, a mission-clock marker's `ok` is relabelled `timeout` against the soft cap the runner applied (`soft_cap_s` in `trial_status.json`, written when `runner_main` ran the trial), not against the trial's own re-costed budget | Phase 3, commit `ef1faa1` (§5j) |
 | `plan_mode` | `legacy` | `ferry` | Phase 4, planned |
 | `band_class_policy` | — | `search`; `fixed:<class>` is Path B+ | Phase 4, planned |
 | Age cap `S` | off | set by build-plan decision D4 | Phase 4, planned |
 | Flight-clock choice | distance order, or `TargetSelectorRL` within a bucket | masked pair score, or the cross-heuristic | Phase 5, planned |
+
+The Phase 3 physics values are parameters, not switches: the SNR floor, altitude, path-loss
+exponent, shadowing σ and margin quantile (D1); the interference regime and period, the noise bin,
+the shadowing correlation and keying (D2); the cruise speed, turnaround, listen window and the
+SIMULATED energy powers and capacity (D3). Each sits in `MuleConfig`, is written to `mule_ready`
+and to the `ferry_params` provenance column, and is listed in the Configuration Reference, §17.
 
 **Rule 2 — legacy mode is the corrected pipeline, not the recorded code.** Amendments 5 and 6
 changed legacy behaviour on purpose, because it was wrong, so legacy mode no longer reproduces the
@@ -357,10 +380,14 @@ the table above, updated from "planned" to the commit that lands it.
 
 ```
 hermes/scheduler/fl_scheduler.py        Phase 3 (public accessors for the budget, the mission start
-                                          and the feasibility model), Phase 4 (plan mode, clustering
-                                          per band class, commit, a visited set per mission)
+                                          and the feasibility model; as landed also the deadline
+                                          time unit, the override refusal, the pre-flight order
+                                          check, fold_remainder / replan_remainder and the T_nom
+                                          helper, §5j), Phase 4 (plan mode, clustering per band
+                                          class, commit, a visited set per mission)
 hermes/scheduler/stages/s3_deadline.py  Phase 1 (law, priority key, PARTIAL vs TIMEOUT, overrides
-                                          that expire)
+                                          that expire), Phase 3 (the law's time unit, the override
+                                          refusal, the SpectrumSig fold, §5j)
 hermes/scheduler/stages/s3a_cluster.py  Phase 4 (radius from the band class, once per class)
 hermes/scheduler/stages/s3b_feasibility.py  Phase 1 (priority key in the walk), Phase 3 (one
                                           FeasibilityModel; single-contact predicate)
@@ -392,9 +419,10 @@ cell and the four `test_mode_switch` subprocess tests). Legacy traces gain addit
 
 `s1_eligibility.py`, `s3c_mission_window.py` and `s35_selector.py` stay as they are; FeRRy does
 not plan to touch them. The clock needs no scheduler change: `FLScheduler` already takes
-`now_fn`. New modules (`scheduler/plan/`, `scheduler/routing/`, `stages/s3d_age_cap.py`,
-`l1/contact_link.py`, `l1/channel_model.py`, `l1/mission_clock.py`) sit outside the old frozen
-surface but follow the same three rules.
+`now_fn`. (The clock's time unit did need one: the deadline constants were set against missions
+of about 10 s of wall clock, and Phase 3 scales them, §5j.) New modules (`scheduler/plan/`,
+`scheduler/routing/`, `stages/s3d_age_cap.py`, `l1/contact_link.py`, `l1/channel_model.py`,
+`l1/mission_clock.py`) sit outside the old frozen surface but follow the same three rules.
 
 **Design principles restated** (numbering from `HERMES_FL_Scheduler_Design.md` §7):
 
@@ -435,7 +463,7 @@ say.
 
 | # | At freeze | In ferry mode |
 |---|---|---|
-| D1 | S3b mechanism frozen; the budget is a matrix parameter | One FeasibilityModel — transit + bytes/rate + return + upload, energy clause declared simulated. The budget stays a study parameter (60 s knee, 30 s stress). |
+| D1 | S3b mechanism frozen; the budget is a matrix parameter | One FeasibilityModel — transit + bytes/rate + return + upload, energy clause declared simulated. The budget stays a study parameter: a knee re-measured with the ferry model at the Phase 3 pilot, and a stress budget below it (the plan's 60 s and 30 s were priced without the return leg and the upload; §5j). |
 | D2 | 5 m/s cruise, 1 s session | Session time from bytes / rate(band). Cruise speed stays 5 m/s and still needs a platform citation. |
 | D3 | S2A/S2B out of the claims | Unchanged. |
 | D4 | Exp 4 makes no RL claim | Unchanged for Exp 4. Exp 5 claims learning only through tests (b) and (c) and the learned-vs-cross-heuristic comparison, with trained checkpoints committed beside their seeds. No random-init arm. |
@@ -469,10 +497,15 @@ the code never ran:
   seeds by default, so the reported model was selected and evaluated on the same fixed episode
   (see the README there).
 
-**Invalidated sweeps: none by this amendment.** Exp 5 runs every arm, H0–H3, D1 and D2 included,
-on the simulated clock and the seconds-axis channel once Phase 3 lands, so each is re-baselined
-there — the re-run bill the build plan accepts in its decision D2. Legacy defaults keep the Exp 4
-harness runnable as it is. The pre-re-run checklist is re-opened (§1a there).
+**Invalidated sweeps: none by this amendment.** Exp 5 runs every mule arm (H1–H3 and D1–D5, later
+F) on the simulated clock once Phase 3 lands, with the seconds-axis backhaul where a study chooses
+it, so each is re-baselined there — the re-run bill the build plan accepts in its decision D2. H0
+is not among them. *(Corrected 2026-09-29: this sentence first included H0 (critic A5) and put
+every arm on the seconds-axis channel, whose backhaul is now a per-study choice (spec Q7); D3–D5
+and F are added.)* H0 runs in process with no mule, and its simulated round time is outside
+Phase 3, so the driver refuses H0 on the simulated clock (§5j); it stays a wall-clock reference in
+a CSV of its own. Legacy defaults keep the Exp 4 harness runnable as it is. The pre-re-run
+checklist is re-opened (§1a there).
 
 ## 5h. Amendment 8 — baselines are budget-checked in flight; a plan's diagnostics are its own (2026-09-28)
 
@@ -636,6 +669,279 @@ these edits: identical event sequences and fields.
   and the place held for a lost upload counts only as that loss, under every rule (a FedEx or
   age-aware fold lists every empty partial apart from what it merged).
   Re-scoring the 600 kept one-mule trials gives zero differences.
+
+## 5j. Amendment 10 — a silent device keeps its RF link (finding P-02); Phase 3 behind switches (2026-09-29)
+
+Lands with FeRRy Phase 3 (build plan, Phase 3; commit `ef1faa1`). It is the
+one change to legacy behaviour in Phase 3 (Rule 3). Everything else in the phase sits behind the
+Phase 3 switches of the §5g table and is listed after it.
+
+**The defect (finding P-02).** Both ends of the RF link set a socket timeout that bounded reads as
+well as sends: 30 s on the mule's reader for each device, 60 s on the device. A device that sent
+nothing for 30 s of wall time was dropped by the mule and never came back, and its service loop
+then spun: `serve_once` returned None at once, forever (353,202 calls in 0.2 s in the P-02 probe).
+What kept devices registered was an accident: every solicit was a broadcast that reached every
+device, and every device replied. Phase 3's targeted solicits remove that keepalive, so this fix
+lands first (build spec, Q3).
+
+**What changed:**
+
+1. *RF reads have no timeout* on either side, as the dock link's reader already had. A reader
+   ends when its socket is shut down and closed. Sends stay bounded, by `SO_SNDTIMEO` (30 s on
+   the mule, 60 s on the device), packed per OS by `sndtimeo_optval`
+   (`hermes/transport/tcp_dock_link.py`): Winsock reads a DWORD of milliseconds, POSIX a
+   `timeval`. The bound applies to each send call.
+2. *The dock link's own send bound.* It packed a `timeval` on every OS, so Windows read its 60 s
+   bound as 60 ms, and a bound under 1 s packed as no bound at all. The same helper fixes it. A
+   POSIX host packed it correctly before and is unchanged.
+3. *A device that registers again replaces its socket.* The old socket is shut down and closed.
+   A reader that ends late, or a send that fails on the old socket, drops only its own socket,
+   never the new entry (the dock server's pattern from Amendment 9). A failed send on the device
+   now closes its socket, and a failed broadcast send drops its device under the lock.
+4. *The device re-dials.* `DeviceService.run` no longer spins on a dead link, whatever took it
+   down (the mule dropping the device or exiting, a failed send). It re-dials with backoff: 0.5 s,
+   doubling to 10 s; a link that drops again within 30 s of a re-dial resumes from twice its last
+   wait. A re-dial counts only when the mule acknowledges the registration within
+   `connect_timeout_s`. The first registration asks for no acknowledgement and gets none, as
+   before. A successful re-dial emits `device_reconnected` (`attempts`, `down_s`) and counts
+   `rf_reconnects`. A failed one records nothing, so the link dropping at the end of every trial,
+   when the mule exits, leaves the device's trace as it was.
+5. *An optional link token* (`MuleConfig`/`DeviceConfig.rf_link_token`; None, unchecked, by
+   default). A mule started with one refuses a registration that carries another. A device whose
+   mule has exited therefore cannot re-dial into another trial's mule that later took the same
+   port and evict that mule's device of the same id. The Exp 4 driver gives each mission-clock
+   trial one token (a hash of cell, arm, trial index and seed); `--rf-link-token` forces it on or
+   off.
+
+The registration frame and the device's per-role JSON gain fields at their defaults, which critic
+A3 allows.
+
+**Not only fault paths (critic D2).** Before the fix, any 30 s of silence dropped a device,
+whatever caused it: a quorum wait at the dock with several mules (up to `down_wait_s`, which is
+the 120 s trial budget), a synchronous fit longer than 30 s, or a device that registered early and
+waited through the mule's startup; with Phase 3's targeted solicits, also the stops a device is not
+solicited at. Unit U0 built a K = 2 case in which one mule holds a contact open for 36 s. At
+afa9526 all six devices were dropped exactly 30.0 s after their last frame: Pass 2 delivered to 0
+of 3 devices on each mule, mission 2 had no submissions to aggregate, and one cluster round closed.
+With the fix Pass 2 delivered to 3 of 3 each time, and two rounds closed.
+
+**Verification.**
+
+- The P-02 probe: at afa9526 the device is dropped and spins; with the fix it stays registered,
+  makes one call, and its advert comes back.
+- Before and after, on afa9526 plus only these files: K = 2 stub trials through `Exp4Driver`
+  (quorum 2, `agg:plain`, `dock_on_empty`, 4 missions, N = 6, seeds 3, 7, 11 and 29) and the
+  real-model trial of `test_exp4_realmodel_smoke.py`. Every CSV row matched apart from its
+  wall-clock column, every role's trace had the same events once timestamps were masked, and no
+  link dropped or re-dialled. The real-model trial closed 2 rounds (AUC 0.488 initial, 1.0 best)
+  both ways.
+- The recorded runs: across the 600 kept Exp 4 traces (all one mule) the longest device silence,
+  an upper bound read from the event timestamps, is 23.3 s, and the longest startup gap 3.0 s.
+  Both stay under the 30 s that dropped a device, so no recorded run is expected to move. Process
+  stderr is not kept, so a drop cannot be read from the logs directly.
+- 95 tests in `tests/unit/test_rf_link_targeted.py`, `test_sndtimeo.py`,
+  `tests/integration/test_device_service_reconnect.py` and `test_rf_link_amendment10.py`. Run
+  against afa9526, their first version failed (35 failed, 3 passed, and `test_sndtimeo.py` did
+  not import).
+
+**Files:** `hermes/transport/tcp_rf_link.py`, `rf_link.py` and `tcp_dock_link.py`,
+`hermes/processes/device.py`, and two `DeviceConfig` fields in `config.py`; the token is wired in
+`hermes/processes/mule.py`, `experiments/exp4/topology_builder.py` and `driver.py`. None of them
+is in the frozen surface.
+
+**Recorded sweeps affected: none expected** (see the verification). What moves is a run in which
+a device is silent for more than 30 s (item 1: a quorum wait with several mules, a long fit, a slow
+startup), the cluster's dock send on Windows blocks for more than 60 ms (item 2), or a device's link
+drops for another reason, since the device now re-dials and re-registers (items 3 and 4). None is
+expected in the recorded runs, and no run with several mules has been recorded.
+
+**Also landed with Phase 3, behind switches** (Rule 1; the rows are in the §5g table). None of
+these changes legacy behaviour: with every switch at its default the golden fixtures below pass
+unchanged, and the mule and cluster processes' events and DOWNs were checked byte for byte against
+afa9526's modules.
+
+- *Golden fixtures* (`tests/golden/`, 144 tests; see its `README.md`). Oracles captured at
+  afa9526 before any Phase 3 edit: the Exp 4 backhaul channel (the 120 recorded C1/C2 trials
+  re-derived), the feasibility walks (2,400 seeded instances and the exact-boundary cases),
+  `HFLHostMission` (the contact map's 28 scenarios with synchronous and real threads, 12
+  `run_session` scenarios, critic A2's late writer, the sequential joins of both passes),
+  `MuleSupervisor` (scripted loopback missions, K = 2 cases included, critic B6), and the topology
+  and driver (a builder grid, stub trials, and every re-derivable kept trace in `results/`).
+  Dataclasses are compared on their afa9526 fields only, so a default field added later passes and
+  a removed or renamed one fails (critic A3). `pytest_baseline.txt` records the full suite at
+  afa9526: 6 failures, a baseline that awaits sign-off.
+- *The mission clock* (unit U1, `hermes/l1/mission_clock.py`): `MissionClock`, a zero-argument
+  callable usable as `now_fn`, with `advance(dt, kind)`, the monotone `advance_to` and a
+  per-mission ledger of seven kinds; negative, infinite and NaN charges are refused. `FlightModel`
+  (5 m/s, one dock at the origin, 30 s turnaround, 1 s listen) and `EnergyModel` (Zeng–Xu–Zhang
+  2019, SIMULATED; the energy is a function of the ledger).
+- *The channel* (unit U2, `hermes/l1/channel_model.py`). The legacy `ChannelModel`,
+  `loss_from_snr`, `BackhaulPlan` and `backhaul_plan` moved verbatim, and
+  `experiments/exp4/channel.py` re-exports them (the channel golden pins them). New: the
+  seconds-axis `ContactChannel` and `BackhaulChannel`, whose noise is a pure hashed function of
+  time and whose outcome draws are keyed by (salt, key, round), and the causal `RFPriorProducer`
+  in `hermes/l1/rf_prior.py` (critic B4).
+- *The contact link* (unit U3, `hermes/l1/contact_link.py`): decision D1's band classes, ranges,
+  rates and dwell (Configuration Reference, §17).
+- *One predicate and the re-plan* (unit U4). `FeasibilityModel(ferry=FerryPhysics(...))` with
+  `leg`, `admit` and `fold` under three rules; S3b, the D-arm budget walk, FedCS and the FedEx
+  diagnostics are folds over it; `routing/replan.py` behind `FLScheduler.fold_remainder` and
+  `replan_remainder`; the pre-flight order check; `ContactWaypoint.band`, `range_m` and
+  `pred_snr_db` (all `compare=False`); the deadline time unit; the T_nom helper. With `ferry` None
+  every walk reproduces the 2,400 golden instances.
+- *One contact routine for both passes* (unit U5, finding D-01). `run_contact` and
+  `deliver_contact` are thin wrappers over one `_serve_contact`. Its legacy path is statement for
+  statement afa9526's, P-01 defects 2 and 3 included, and its sink reads `_accepted` when it
+  appends, so a late gradient still lands in the next round as before (critic A2); the host
+  goldens pin it. Given a `ContactPlan`, the ferry path sends numbered solicits to the targets
+  only, drains stale adverts, gradients and acks and matches replies by solicit id (critics B1 and
+  B2), does not wait for uplink-dropped pushes, joins once at 2 × TTL, and commits in device order
+  with stamps from the clock, which closes P-01 defects 2 and 3 in ferry mode only. No wall stamp
+  reaches a line, a delta or a contact record (critic B3); the receipt TTL and the busy flags stay
+  on the wall clock.
+- *The supervisor on the clock* (unit U6, `hermes/mule/ferry.py` and `mule_main.py`). Whole
+  missions on the clock, the legacy mission bodies textually unchanged. The clock is `_now`, and
+  nothing is stored as `_clock` (critic B7). δ_obs is fixed at 0 (critic C1). Pass 2's energy
+  counts from its own takeoff (a recharge or swap during the turnaround). So does the L1 state's
+  energy slot 7 (1 − E/E_ref): design §4.6's E_mission is read as the sortie's energy, so in Pass 2
+  the L1 state and the energy clause agree on the battery (final check, clock F2; recorded only, as
+  no process wires a channel actor). Oort (D2) plans with its recorded round inference, and a
+  re-plan within the mission reuses its plan's round, so recorded D2 planning is unchanged.
+- *Processes, driver, cluster and topology* (unit U7): the configuration fields and their guards;
+  the simulated fields of `mule_ready`, `mission_started` and `mission_completed` (wall-clock
+  events at the defaults keep their recorded key sets), among them `pass_1_preflight_drops`, the
+  Pass-1 pre-flight drops with their reasons, so an empty plan's trace says what emptied it (final
+  check, E2E1-01); the cluster's simulated time and SpectrumSig forwarding; the ferry topology; 13
+  provenance columns; T_nom per cell; the input-width pin (design R8: a real-model ferry cell must
+  have 21 inputs on the canonical data); the re-costed wall budget; the runner's soft cap in the
+  mission-clock status marker (`soft_cap_s`); and the refusal of `time_scale` in the driver's own
+  `deadline_params` (both from the final check, below).
+- *Analysis on simulated time* (unit U8). The 600 kept one-mule trials re-score with zero
+  differences on every existing column.
+- *Several mules in simulated order* (unit U9): `SimOrderGate` in `hermes/processes/cluster.py`
+  and the dock markers. Critic B9's refusal of the simulated clock with several mules below a full
+  quorum is lifted. The gate cannot deadlock (argued in its docstring, tested at K = 3), with the
+  one exception below. A restarted mule is tracked under its live dock session once the cluster
+  knows of it (its new bootstrap or its `registered` marker); from then on its older session's
+  markers change nothing, whenever the cluster reads them (final check, protocol F1). Two gaps
+  remain, both because UPs carry no session:
+  - an upload the crashed process sent that the cluster reads after the restart raises the live
+    mule's bound and can make its next upload fold late;
+  - an upload the crashed process left held stays ahead of the restarted mule's uploads. It can
+    make them fold late or, when another mule's upload falls between the two, stall the fold until
+    a mule's `down_wait_s` runs out: the one exception to the no-deadlock argument.
+
+  `test_p3_sim_order.py` pins the second gap. Only a manual or fault-injected restart reaches
+  either: the orchestrator spawns each mule once. The gate's counters (`mules_departed`,
+  `sim_order_late_uploads`, `sim_order_unordered_uploads` and the timer `sim_order_held_s`) and the
+  seconds model's `backhaul_unpriced_uploads` are in-process registry metrics, written only in the
+  end-of-run `metrics_snapshot`, which the orchestrator's Windows stop never lets the cluster
+  write. Kept traces carry the same facts per event (`mule_departed`, `sim_order_late`,
+  `sim_order_seq`, `sim_upload_ts`, `held_wall_s`, `p_loss`; Configuration Reference §17.6), and
+  `test_p3_sim_order.py` pins the equivalence against the registry, with a wall clock that moves
+  on every read so the held-time samples are compared by sum, minimum and maximum, not only
+  counted. No stop behaviour changes: a graceful stop would add rows to every legacy Windows trace
+  (final check, E2E2-1).
+
+The Phase 3 tests pass (2026-09-29): 1,238 new tests in 36 new files, the 144 golden tests among
+them. The full suite (2,798 tests) matches the afa9526 baseline test for test
+(`tests/golden/make_baseline.py compare`): no outcome changed, no known failure changed its
+signature, every baseline test ran and none of the new tests fails. Its 6 failures are the baseline's own.
+
+**Frozen surface touched,** all behind the switches: `fl_scheduler.py`, beyond the accessors
+Amendment 7 planned (the deadline time unit, the override refusal, the pre-flight order check,
+`fold_remainder` and `replan_remainder`, the T_nom helper); `stages/s3_deadline.py` (the law's
+`time_scale`, `DeadlineOverrideRefused`, the SpectrumSig fold, windows in missions);
+`stages/s3b_feasibility.py` (the one predicate); `mule_main.py` (the clock). `s1_eligibility.py`,
+`s3a_cluster.py`, `s3c_mission_window.py`, `s35_selector.py` and `selector/` are untouched.
+
+**Visible at the defaults, additive only** (so not Rule 3 changes): wire frames carry the new
+fields at their defaults and grow slightly (critic D4); per-role JSON gains keys at their defaults;
+every trial row gains 15 simulated columns, blank on the wall clock, and 13 provenance columns,
+blank at the driver's defaults. Wall-clock rows fill some provenance columns too: `realism`,
+`l1_channel` and `input_dim` whenever set (a wall-clock re-run of a recorded real-model `--realism`
+cell gets `realism` 1 and `input_dim` 21), and a deadline time scale other than 1.0, an
+`initial_window_s` or a session TTL other than 3 s. The CSV header therefore changes, and the
+runner refuses to append to a CSV written before (critic D3): write every run from now on to a
+fresh path.
+
+**Final cross-cutting check (2026-09-29).** Four review dimensions (spec fidelity, clock
+accounting, the multi-process protocol, legacy identity) and two end-to-end replays of real
+simulated-clock trials (one mule, several mules). Every physics quantity matched an independent
+reading of the spec exactly, bar the deviations the unit reports disclose. Six findings, all low
+severity, each fixed or documented: the notes on U6, U7 and U9 above, the §5g rows, and the items
+below. None changes legacy behaviour, so none is an amendment.
+
+- *Driver (not visible at the defaults).* `trial_status.json` gains `soft_cap_s` only on
+  mission-clock trials run by `runner_main`, just as `t_nom_computed` appears only on
+  mission-clock trials. On a grid with several N or mission counts the runner's cap (the largest
+  budget over the grid) can exceed a trial's own budget, and a trace scored without its CSV was
+  relabelled `timeout` where the runner recorded `ok` (legacy F1). Wall-clock markers keep the
+  afa9526 key set on both the ok and the error path, and the scorer's rule for a marker without
+  `soft_cap_s` is unchanged. A `time_scale` key in the driver's own `deadline_params` is refused
+  with `DeadlineLawError`, as at afa9526. Phase 3's `DeadlineLaw` carries the time unit as a field,
+  so `from_config` now accepts the key, which afa9526 refused; the driver refuses it in any form
+  `dict()` accepts, so the unit cannot bypass the recorded `deadline_time_scale` column. afa9526
+  refused the same configurations with the same exception type, so no recorded configuration
+  changes.
+- *What `delivery` bounds (clock F1).* As built, the variant is the plan's single-contact
+  predicate, checked per stop (the §5g row; the deviations below), and a two-stop test in
+  `test_p3_feasibility_predicate.py` pins that reading. Keeping it, or making it a route-level
+  bound (a spec change: a `deliver_by` running minimum on `FlightState`), awaits the user's
+  decision. The default, `collection`, is unaffected.
+- *Known interaction (E2E1-01, no Phase 3 change).* On narrow, S3a forms one field-wide contact in
+  about 98 % of realism layouts, and every gate admits contacts whole. Under a budget below that
+  contact's predicted home time every gated arm flies empty missions. At the default deadline unit
+  1.0 the deadline clause can bind first: H1–H3 then drop the contact as `overdue` at any budget,
+  until missed missions widen its window past its predicted finish, and only the budget-only walks
+  (D1–D3, D5) show the budget cliff. Phase 4's member-subset admission is the fix for the cliff
+  (Configuration Reference §17.1).
+- *The hard kill's bound* (`ferry_wall_bound_s`) takes ceil(N/K) devices per slice. Angular or
+  CARP slices can be unbalanced, so at K ≥ 3, when the cluster does not order the uploads (a full
+  quorum, not FedBuff), an all-timeouts worst case can exceed it (slices of 7, 1 and 1 devices at a
+  3 s TTL: 136 s per mission against the bound's 128 s). In simulated order the K× factor covers
+  any split. A healthy trial never comes near it.
+
+**Deviations from the build plan** (also in `FeRRy_Build_Plan.html`, Phase 3):
+
+- the exit gate *re-runs* the Phase 1–2 studies on the simulated clock instead of re-scoring them:
+  legacy traces carry no simulated stamps;
+- the fixed 60 s and 30 s budgets become a knee re-measured with the ferry model, plus a stress
+  budget below it: the 60 s and 30 s were priced without the return leg and the upload;
+- decision D2's "period and gain per band" becomes one interference period for every class (60 s)
+  with a seeded phase per class and no random class gain: the classes share one carrier and differ
+  structurally, through R(b) (a per-class period multiplier exists on `ContactChannel`, default 1,
+  and is not a configuration field);
+- R(b) is the range with 90 % link availability at the edge (mean SNR 5.13 dB above the floor),
+  not the floor-rate range, which for wide is about 111 m slant, 1.71× longer (critic A8-i);
+- Deadline(j) bounds the collection by default, arrival + dwell ≤ Deadline(j) (spec Q2): the
+  plan's single-contact min(Deadline(j), budget) on the time back at the dock is the
+  `deadline_bounds = delivery` variant, applied per stop to that stop's own return and upload, so
+  it bounds when an update is actually delivered only for a route's last stop; by default only the
+  budget bounds that time;
+- FedCS's "skip = stop" and its "no return leg" deviation hold only for the legacy model: under
+  the ferry predicate admission tests the time back at the dock (docstring updated, critic B15);
+- H0 is excluded from the simulated clock (critic A5, §5g);
+- T_nom is the median over 20 reference layouts drawn from their own seeds (`_u32(N, "t_nom", k)`),
+  independent of the grid's seeds and trial count, so resuming a CSV never moves it; with several
+  mules each layout is priced as its slowest slice;
+- the seconds model's loss probability is read at the upload's start, not at `sim_upload_ts`; the
+  two differ by at most the upload's duration;
+- `--l1-channel` is refused together with the seconds model: that would be two backhaul loss
+  models;
+- with several mules, a mule whose dock connection ends counts as done: the mule-sent `done`
+  marker exists and is tested but is not wired;
+- the arm's own order cannot act in the pre-flight check, because S3b has just admitted the whole
+  queue, so `replan_fallback` decides what the H arms fly there (critic C3);
+- on the mission clock without a band, solicits are targeted, not broadcast, so device-side counts
+  differ from the recorded ones (in the clock-injection suite one device is TIMEOUT as recorded
+  and PARTIAL on the clock);
+- fresh CSV paths (above).
+
+**Re-run bill** (decision D2): every mule arm re-runs on the new clock: H1–H3, D1–D5 and, later,
+F. The Phase 3 exit gate re-baselines H1, D1, D2, D3 and D4 once the pilots have set the session
+TTL, T_nom per cell, the deadline time unit, the budget knee and the H arms' `replan_fallback`; it
+waits for the go-ahead.
 
 ## 6. Unfreezing
 

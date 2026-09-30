@@ -229,7 +229,8 @@ cluster events carrying the uploading `mission_round` and the `partials` involve
 `cluster_merge` for a step, `cluster_merge_deferred` while FedBuff fills, and
 `cluster_merge_expired` when every pending partial was past `a_max` (no step, round left open).
 With `--keep-event-traces`, each kept trace also gets a `trial_status.json` (status, error,
-run time), which `experiments/analysis/traces_scorer.py` uses to leave failed trials out.
+run time, the trial's budget and, on the mission clock, the runner's soft cap), which
+`experiments/analysis/traces_scorer.py` uses to leave failed trials out.
 
 A Study 5.1 cell (H1 routes, budgeted Pass 2 so ages spread; repeat per rule with the same seeds):
 
@@ -261,6 +262,110 @@ sound):
 
 ```bash
 python -m experiments.exp4.runner_main --csv results/exp5_s53/k3_b60_d4.csv --arms D4 --N 18 --n-mules 3 --n-missions 4 --regime clean --n-trials 40 --real-model --mission-budget-s 60 --aggregation agg:fedex --keep-event-traces
+```
+
+### 2.6 The mission clock and the contact link (FeRRy Phase 3)
+
+Every default is the recorded wall-clock run; see `HERMES_Configuration_Reference.md` §17 for each
+value and Freeze §5j for what changed. Every flag below needs `--mission-clock sim` except a numeric
+`--deadline-time-scale`, `--initial-window-s`, `--session-ttl-s` and `--rf-link-token`, which the
+wall clock takes too (`--t-nom-layouts` is accepted there and unused); `--deadline-time-scale t_nom`
+and `--initial-window-missions` need `--mission-clock sim`. Write every Phase 3 run to a fresh CSV:
+rows now carry 13 more provenance columns and 15 simulated ones, so an older CSV cannot be resumed.
+
+| Flag | Default | Meaning |
+|---|---|---|
+| `--mission-clock` | `wall` | `sim` flies every mule arm on the simulated mission clock: flight, airtime, missed replies, the upload and the dock turnaround are charged to it, and nothing waits for them in wall time. H0 has no simulated round time: named, it is refused; in the default arm list it is dropped. |
+| `--contact-band` | none | `wide` (the Phase 3 re-baselines), `medium` or `narrow`. Omit it for the channel-free control: every contact then costs 1 s, plus 1 s when a reply is missing. |
+| `--contact-band-classes` | `wide medium narrow` | Add `medium_wide` for the optional 10 MHz class. |
+| `--in-flight-response` | `abort` | `replan`: re-check the whole remainder at every departure and repair it instead of abandoning it. |
+| `--replan-fallback` | `reorder` | For our arms under `replan`. `reorder` flies H1, H2 and H3 the same route whenever the pre-flight check fires; `trim` keeps each arm's own order and serves fewer stops. Chosen at the pilot. |
+| `--backhaul-model` | `mission` | `seconds`: the seconds-axis backhaul (H3 adaptive, every other arm the fixed carrier), with a loss draw keyed by seed, mule and mission. Jittery cells then lose about 16 % of uploads at the fixed carrier, against `--realism`'s flat 2 %. Not with `--l1-channel`. |
+| `--contact-reliability-source` | `origin` | `channel`: the SNR gate at the stop plus the device's availability drawn on the mule. Needs `--contact-band`. |
+| `--payload-bytes` | measured | Bytes per direction for the dwell and upload charge, e.g. `1000000` or `10000000` (decision D3). |
+| `--deadline-bounds` | `collection` | What Deadline(j) bounds: the collection (default), or `delivery`: each stop's own return to the dock plus the upload, checked per stop. It does not bound when the earlier stops' updates actually reach the cluster (the route's landing plus the upload). |
+| `--deadline-time-scale` | `1.0` | The deadline law's time unit: a number on either clock, or `t_nom`, T_nom / 10 s, on the mission clock only (spec Q1). |
+| `--initial-window-s`, `--initial-window-missions` | 60 s | Φ₀ in the law's recorded unit (either clock), or in nominal mission periods (mission clock only). |
+| `--t-nom-s`, `--t-nom-layouts` | computed, 20 | T_nom, the cell's median nominal mission period, computed only when a setting needs it. |
+| `--backhaul-period-s` | `n_missions` × T_nom | The seconds backhaul's period. |
+| `--agg-period-t-nom` | off | `agg:cutoff`: set D5's `period_s` to T_nom. |
+| `--session-ttl-s` | 3 s | The mule's wall-clock session TTL. A fit that outlasts it becomes a missed reply, so ferry cells set it to at least twice the measured real-model fit time. |
+| `--rf-link-token` / `--no-rf-link-token` | on exactly with `--mission-clock sim` | One RF link token per trial (Freeze Amendment 10). |
+| `--expected-input-dim` | 21 on the canonical data | A real-model ferry cell whose model has another input width is refused. |
+| `--snr-floor-db`, `--altitude-m`, `--n-pl`, `--shadow-sigma-db`, `--margin-quantile`, `--contact-regime`, `--interference-period-s`, `--noise-bin-s`, `--shadow-corr-s`, `--shadow-keying`, `--cruise-speed-m-s`, `--turnaround-s`, `--listen-s`, `--energy-capacity-j`, `--p-move-w`, `--p-hover-w` | the design's | The D1–D3 physics (configuration reference §17.1–17.3). Energy figures are SIMULATED. |
+
+On the mission clock the trial's hard kill is re-costed from the session TTL (562 s at the default
+3 s with N = 6 and 4 missions), so `--trial-budget-s` no longer kills a slow but healthy ferry
+trial, and the `--timeout-s` label follows it. That label is one cap for the whole run: the
+largest re-costed budget over the grid, unless `--timeout-s` is given, so a trial can run past its
+own budget and still be `ok`. Each mission-clock `trial_status.json` records the cap as
+`soft_cap_s`, and `traces_scorer.py` without `--status-csv` applies it, so it gives the runner's
+verdict. On the wall clock, pass `--status-csv` when the run used `--timeout-s`, as before.
+Mission-clock traces kept before this change have no `soft_cap_s`, so score them with
+`--status-csv` too.
+
+Each `mission_completed` carries the mission's simulated record (start and end, the clock's
+ledger, the stops flown, re-plans, the SIMULATED energy, the backhaul upload), and rows gain the 15
+`sim_*` columns. `traces_scorer.py` scores a mission-clock trace in simulated seconds
+(`sim_s_to_τ`), and refuses one whose clocks disagree. `mission_duration_s_mean` and `wall_s_to_τ`
+stay wall time. On the mission clock the serve counts, coverage and Jain's index count member
+contacts only, so they do not compare with wall-clock rows.
+
+**Reading a mission-clock trace.**
+
+- `mission_completed.pass_1_preflight_drops` lists each contact that H1–H3 dropped before takeoff,
+  with its reason (`overdue`, `budget` or `energy`). It is always [] for D1–D5, whose walks report no
+  drops. A `mission_empty` means only that Pass 1 aggregated no update: either the plan was empty,
+  or its contacts were flown and answered nothing. `mission_empty` carries only `mission_round`
+  (and, under `--dock-on-empty`, `docked`); the plan fields are on the same round's
+  `mission_completed`. If that `mission_completed` has `pass_1_contacts` 0 (an empty
+  `pass_1_plan`) and a non-empty `pass_1_preflight_drops` whose entries all read `budget`, no
+  contact fits the budget on its own: each was priced from the dock at takeoff, and the budget is
+  below each contact's predicted home time. With `pass_1_contacts` above 0, the drops say nothing
+  about the contacts that were flown.
+- A flown stop's `snr_db` and `rate_bps` are read at arrival, while its `dwell_s` is priced at each
+  target's own session start (critic C2), so they do not reproduce `dwell_s`.
+
+**Pilot notes** (final cross-cutting check, Freeze §5j).
+
+- *Set the deadline unit.* At the default `--deadline-time-scale 1.0` the law's constants (Φ₀ =
+  60 s, −5 s / +10 s steps) are sized for missions of about 10 s of wall clock, while a simulated
+  mission lasts minutes. In a 14-mission probe (narrow, 1 MB, N = 8, a 200 s budget) H1 served the
+  field-wide contact once and then found it overdue at every later takeoff, by 20 s more each
+  mission: the +10 s widening per miss never catches up with the clock. Set the unit on
+  simulated-clock cells (`t_nom`, as in the example below); the pilot chooses the value (spec Q1).
+- *The narrow-band cliff.* With `--contact-band narrow` (or medium), `--payload-bytes` set and a
+  `--mission-budget-s` below the field-wide contact's predicted home time, every gated arm flies
+  empty missions (30 s turnarounds, `rounds_closed` 0). For H1–H3, `pass_1_preflight_drops` shows
+  the budget drop; D1–D5 record []. The budget is not the only clause that can empty them. At
+  `--deadline-time-scale 1.0` (Φ₀ = 60 s) the contact's predicted finish (94.9 s after takeoff at
+  N = 8, 1 MB) can be past Deadline(j): H1–H3 then drop it as `overdue` at any budget, above the
+  knee too, until missed missions widen its window past that finish, while D1–D3 and D5 keep the
+  budget cliff. With `--deadline-time-scale t_nom` (Φ₀ = 6 × T_nom, 1500 s in trial T2) the
+  budget binds first. Measure the knee per band, payload, N and deadline unit (Configuration
+  Reference §17.1).
+- *Missions run longer than planned.* The planner prices the mean SNR and dwell is convex in it,
+  so realized missions ran longer than predicted by +0.8 % on average on wide at 1 MB, +7.1 % on
+  wide at 10 MB and +19.2 % on narrow at 1 MB. Budgets bind in flight more often on narrow bands
+  and large payloads.
+- *Do not restart a mule by hand during an ordered trial* (several mules on `--mission-clock sim`
+  below a full quorum, or under `agg:fedbuff`). The cluster ignores the restarted mule's stale
+  dock markers, but an upload the crashed mule sent can still make the restarted mule's uploads
+  fold late (`sim_order_late`), and an upload it left held can stall the trial until a mule's DOWN
+  wait runs out, which under the driver is the whole trial's wall budget. The driver never
+  restarts a mule.
+
+A Phase 3 exit-gate cell (H1 on the simulated clock, wide band, a budget; repeat it for D1, D2, D3
+and D4 with the same seeds, and at a stress budget). The pilots come first: they re-measure the
+budget knee with the ferry model and the real-model fit time, so set `KNEE_S` and `TTL_S` from
+them. The cell keeps the defaults the pilot has not overridden (`abort`, the `mission` backhaul, the
+`origin` reliability source, the measured payload); add `--in-flight-response replan
+--replan-fallback ...`, `--backhaul-model seconds` or `--contact-reliability-source channel` as the
+pilot decides. No Phase 3 result has been recorded yet.
+
+```bash
+# KNEE_S: the budget knee the Phase 3 pilot re-measures; TTL_S: at least 2x the measured real-model fit time.
+python -m experiments.exp4.runner_main --csv results/exp5_p3/h1_sim_wide_knee.csv --arms H1 --N 6 --n-missions 4 --regime jittery --n-trials 40 --real-model --realism --mission-budget-s "$KNEE_S" --mission-clock sim --contact-band wide --deadline-time-scale t_nom --session-ttl-s "$TTL_S" --keep-event-traces
 ```
 
 ## 3. Smoke run (one trial, no dataset)
@@ -406,8 +511,12 @@ concurrent shards can trip `--startup-timeout-s`. Bump it (the parallel script u
 pair; the analysis tolerates it.
 
 **Shards look stalled.** Each trial spawns a real subprocess tree (1 cluster + 1 mule
-+ N devices). On Windows always use finite `--n-missions` and let the tree exit
-naturally — `terminate()` can skip the final metrics snapshot.
++ N devices). On Windows always use finite `--n-missions`. The mules exit on their own and
+keep their final `metrics_snapshot`. The driver stops the cluster and the devices with
+`terminate()` (TerminateProcess), so their kept traces never hold `metrics_snapshot` or
+`service_stopped`. Registry counters such as `sim_order_late_uploads`, `backhaul_unpriced_uploads`
+or `rf_reconnects` are therefore absent from them: read their per-event equivalents instead
+(Configuration Reference §17.6).
 
 **Analysis prints `(no paired results)`.** Fewer than 2 paired seeds for that
 regime/cell, or the treatment/baseline arms aren't both present in the CSV.
