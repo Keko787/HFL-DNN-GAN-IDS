@@ -205,6 +205,29 @@ def test_sim_settings_that_cannot_run_are_refused(kw, match):
     assert any(match in e for e in errors), errors
 
 
+def test_the_three_deadline_bounds_and_nothing_else():
+    """``collection`` (default), ``delivery_per_stop`` and the route-level
+    ``delivery``: each runs on the clock and builds its spec; anything else
+    is refused before the mule starts; on the wall clock only the default."""
+    from hermes.processes.config import DEADLINE_BOUNDS
+    from hermes.scheduler.stages.s3b_feasibility import DEADLINE_BOUNDS as SCHEDULER_BOUNDS
+
+    assert DEADLINE_BOUNDS == SCHEDULER_BOUNDS == ("collection", "delivery_per_stop", "delivery")
+    assert MuleConfig(mule_id="m").deadline_bounds == "collection"
+    for bounds in DEADLINE_BOUNDS:
+        cfg = _sim_mule(rf_range_m=60.0, deadline_bounds=bounds)
+        assert mule_config_errors(cfg) == []
+        assert FerrySpec.from_config(**cfg.ferry_spec_kwargs()).deadline_bounds == bounds
+        assert mule_config_from_json(mule_config_to_json(cfg)) == cfg
+    for bad in ("landing", "delivery-per-stop", "per_stop", ""):
+        errors = mule_config_errors(_sim_mule(rf_range_m=60.0, deadline_bounds=bad))
+        assert any("deadline_bounds must be one of" in e for e in errors), (bad, errors)
+    for bounds in ("delivery_per_stop", "delivery"):
+        errors = mule_config_errors(MuleConfig(mule_id="m", deadline_bounds=bounds))
+        assert errors and "deadline_bounds" in errors[0] and "mission_clock='sim'" in errors[0]
+    assert mule_config_errors(MuleConfig(mule_id="m")) == []
+
+
 def test_the_mission_models_rf_prior_schedule_is_allowed_on_the_clock():
     cfg = _sim_mule(rf_range_m=60.0, rf_prior_schedule_db=[9.0, 11.5, 3.25, 12.0])
     assert mule_config_errors(cfg) == []

@@ -2,18 +2,20 @@
 
 Pins, by hand arithmetic, what the ferry-mode predicate prices (design §3.1):
 arrival, finish = arrival + dwell, home = finish + return + upload (Pass 1
-only), the deadline clause on collection (or on delivery), the budget clause on
-home, the energy clause only with a capacity, RULE_NONE admitting while still
-reporting home, and the opt-in contract (no budget, no gate, ferry mode
-included). Also: member dwell looked up from device states (critic B11),
-members out of range or below the floor never charged (critic B12), the walks
-built as folds of the one predicate (FedCS and FedEx included), and the legacy
-predicate's exact boundary behaviour.
+only), the deadline clause on collection (or on each stop's own delivery, or
+on the route's actual delivery: the on-board clause and ``deliver_by``), the
+budget clause on home, the energy clause only with a capacity, RULE_NONE
+admitting while still reporting home, and the opt-in contract (no budget, no
+gate, ferry mode included). Also: member dwell looked up from device states
+(critic B11), members out of range or below the floor never charged (critic
+B12), the walks built as folds of the one predicate (FedCS and FedEx
+included), and the legacy predicate's exact boundary behaviour.
 """
 
 from __future__ import annotations
 
 import math
+import random
 from collections import defaultdict
 
 import pytest
@@ -29,10 +31,15 @@ from hermes.scheduler.policies.fedex_carp import FedExCarpPolicy
 from hermes.scheduler.routing.two_opt import order_contacts
 from hermes.scheduler.selector.features import SelectorEnv
 from hermes.scheduler.stages.s3b_feasibility import (
+    DEADLINE_BOUNDS,
+    DEADLINE_BOUNDS_COLLECTION,
     DEADLINE_BOUNDS_DELIVERY,
+    DEADLINE_BOUNDS_DELIVERY_PER_STOP,
     REASON_BUDGET,
+    REASON_DELIVERY,
     REASON_ENERGY,
     REASON_OVERDUE,
+    REASONS,
     RULE_BUDGET,
     RULE_DEADLINE_BUDGET,
     RULE_NONE,
@@ -130,30 +137,52 @@ def test_deadline_bounds_collection_by_default():
     assert v.arrival < late.deadline_ts
 
 
-def test_deadline_bounds_delivery_variant():
-    m = ferry_model(deadline_bounds=DEADLINE_BOUNDS_DELIVERY)
+@pytest.mark.parametrize("bounds", [DEADLINE_BOUNDS_DELIVERY_PER_STOP, DEADLINE_BOUNDS_DELIVERY])
+def test_deadline_bounds_delivery_variant(bounds):
+    """With nothing on board (the takeoff state) both delivery readings are
+    the stop's own home against its own deadline."""
+    m = ferry_model(deadline_bounds=bounds)
     v = m.admit(T0, A, rule=RULE_DEADLINE_BUDGET, budget_end=1e9)      # home 1028 > 1015
     assert (v.ok, v.reason) == (False, REASON_OVERDUE)
     ok = _wp(30.0, 40.0, "a1", "a2", "a3", deadline=1028.0)
     assert m.admit(T0, ok, rule=RULE_DEADLINE_BUDGET, budget_end=1e9).ok
 
 
-def test_delivery_bounds_each_stop_by_its_own_return_not_the_routes_landing():
-    """``delivery`` is the plan's per-stop, single-contact predicate (final
-    check, clock F1): each stop's own return and upload must meet ITS
-    deadline. It does not bound when the update is actually delivered, the
-    route's landing plus the upload, which is later for every stop but the
-    last. Channel-free (one 1 s session per contact), no upload, 5 m/s: a
-    at 10 m with D_a = t0 + 6 is flown first (EDF); its own return is home
-    at t0 + 5 <= D_a, so it is admitted, and so is b at 40 m. The route
-    lands at t0 + 18, so a's update reaches the cluster 12 s after D_a.
-    Pinned as designed; a route-level bound (every flown stop's deadline on
-    the landing) would be a spec change, and would refuse b here."""
+def test_the_three_deadline_bounds_and_the_new_reason():
+    """``delivery_per_stop`` is ef1faa1's ``delivery`` renamed; ``delivery``
+    is the route-level bound. ``delivery`` is appended to the reasons, so
+    the other three keep their places."""
+    assert DEADLINE_BOUNDS == ("collection", "delivery_per_stop", "delivery")
+    assert REASONS == ("overdue", "budget", "energy", "delivery")
+    assert REASON_DELIVERY == "delivery"
+    for bounds in DEADLINE_BOUNDS:
+        assert physics(POS, deadline_bounds=bounds).deadline_bounds == bounds
+    for bad in ("delivery-per-stop", "landing", "Delivery", ""):
+        with pytest.raises(ValueError, match="deadline_bounds"):
+            physics(POS, deadline_bounds=bad)
+
+
+def _line_model_5ms(bounds, *, upload=0.0):
+    """Channel-free (one 1 s session per contact), 5 m/s, dock at 0."""
+    phys = FerryPhysics(dock=DOCK, member_dwell_s=None, upload_s=lambda: upload,
+                        p_move_w=1.0, p_hover_w=1.0, deadline_bounds=bounds)
+    return FeasibilityModel(cruise_speed_m_s=5.0, session_time_s=1.0, ferry=phys)
+
+
+def test_delivery_per_stop_bounds_each_stop_by_its_own_return_not_the_routes_landing():
+    """``delivery_per_stop`` is the plan's per-stop, single-contact predicate
+    (final check, clock F1; ``delivery`` at ef1faa1): each stop's own return
+    and upload must meet ITS deadline. It does not bound when the update is
+    actually delivered, the route's landing plus the upload, which is later
+    for every stop but the last. Channel-free (one 1 s session per contact),
+    no upload, 5 m/s: a at 10 m with D_a = t0 + 6 is flown first (EDF); its
+    own return is home at t0 + 5 <= D_a, so it is admitted, and so is b at
+    40 m. The route lands at t0 + 18, so a's update reaches the cluster 12 s
+    after D_a. Pinned as designed; the route-level ``delivery`` refuses b
+    (next test)."""
     t0 = 1000.0
     a, b = _wp(10.0, 0.0, "a", deadline=t0 + 6.0), _wp(40.0, 0.0, "b")
-    phys = FerryPhysics(dock=DOCK, member_dwell_s=None, upload_s=lambda: 0.0,
-                        p_move_w=1.0, p_hover_w=1.0, deadline_bounds=DEADLINE_BOUNDS_DELIVERY)
-    m = FeasibilityModel(cruise_speed_m_s=5.0, session_time_s=1.0, ferry=phys)
+    m = _line_model_5ms(DEADLINE_BOUNDS_DELIVERY_PER_STOP)
     res = filter_feasible([b, a], now=t0, mission_deadline_ts=t0 + 100.0, model=m)
     assert res.kept == [a, b] and res.n_dropped == 0
     walk = m.fold(res.kept, FlightState(DOCK, t0), rule=RULE_DEADLINE_BUDGET,
@@ -163,11 +192,276 @@ def test_delivery_bounds_each_stop_by_its_own_return_not_the_routes_landing():
     assert (vb.finish, vb.home) == (t0 + 10.0, t0 + 18.0)
     # The route's landing (no upload here) is the last stop's own home.
     assert walk.home == vb.home == t0 + 18.0 > a.deadline_ts
+    # Nothing on board is tracked: the state carries no deadline.
+    assert va.next_state.deliver_by == vb.next_state.deliver_by == math.inf
     # The per-stop clause itself binds: a stop whose own return misses its
     # deadline is refused.
     tight = _wp(10.0, 0.0, "a", deadline=down(t0 + 5.0))
     assert m.admit(FlightState(DOCK, t0), tight, rule=RULE_DEADLINE_BUDGET,
                    budget_end=t0 + 100.0).reason == REASON_OVERDUE
+
+
+def test_delivery_bounds_the_routes_landing_by_every_collected_deadline():
+    """The route-level ``delivery`` (the user's decision of 2026-09-29, clock
+    F1) on the same two-stop line: a is admitted (home t0 + 5 <= D_a =
+    t0 + 6) and its deadline goes on board; b's own clause passes (home
+    t0 + 18 <= D_b) but it would land a's update 12 s late, so it is refused
+    with the new reason, and the route lands at t0 + 5 <= D_a."""
+    t0 = 1000.0
+    a, b = _wp(10.0, 0.0, "a", deadline=t0 + 6.0), _wp(40.0, 0.0, "b")
+    m = _line_model_5ms(DEADLINE_BOUNDS_DELIVERY)
+    res = filter_feasible([b, a], now=t0, mission_deadline_ts=t0 + 100.0, model=m)
+    assert res.kept == [a]
+    assert res.dropped_delivery == [b] and res.dropped == [b] and res.n_dropped == 1
+    assert res.dropped_overdue == res.dropped_budget == res.dropped_energy == []
+    walk = m.fold([a, b], FlightState(DOCK, t0), rule=RULE_DEADLINE_BUDGET,
+                  budget_end=t0 + 100.0, skip=True)
+    va, vb = walk.verdicts
+    assert (va.ok, va.home, va.next_state.deliver_by) == (True, t0 + 5.0, a.deadline_ts)
+    assert (vb.ok, vb.reason, vb.home) == (False, REASON_DELIVERY, t0 + 18.0)
+    assert vb.home <= b.deadline_ts                      # b itself was not late
+    assert walk.route == (a,) and walk.rejected == ((b, REASON_DELIVERY),)
+    assert walk.rejected_by(REASON_DELIVERY) == [b]
+    assert walk.home == t0 + 5.0 <= a.deadline_ts
+    # As flown (no skip) the pair fails on b, for the same reason.
+    flown = m.fold([a, b], FlightState(DOCK, t0), rule=RULE_DEADLINE_BUDGET,
+                   budget_end=t0 + 100.0, skip=False)
+    assert not flown.ok and flown.rejected == ((b, REASON_DELIVERY),)
+    # With a window just wide enough for the landing, b is admitted.
+    wide = _wp(10.0, 0.0, "a", deadline=t0 + 18.0)
+    assert filter_feasible([b, wide], now=t0, mission_deadline_ts=t0 + 100.0,
+                           model=m).kept == [wide, b]
+    narrow = _wp(10.0, 0.0, "a", deadline=down(t0 + 18.0))
+    assert filter_feasible([b, narrow], now=t0, mission_deadline_ts=t0 + 100.0,
+                           model=m).dropped_delivery == [b]
+
+
+def test_delivery_counts_the_upload_in_the_landing():
+    """Every Pass-1 update reaches the cluster with the upload, so the
+    on-board clause bounds home = landing + upload. With a 2 s upload a's
+    own home is t0 + 7 = D_a (admitted); a stop at the dock itself, served
+    next, finishes at t0 + 6 but delivers at t0 + 8 and is refused. Pass 2
+    has no upload tail."""
+    t0 = 1000.0
+    a = _wp(10.0, 0.0, "a", deadline=t0 + 7.0)
+    near = _wp(0.0, 0.0, "n")                            # at the dock: home = finish + 2
+    m = _line_model_5ms(DEADLINE_BOUNDS_DELIVERY, upload=2.0)
+    v = m.admit(FlightState(DOCK, t0), a, rule=RULE_DEADLINE_BUDGET, budget_end=t0 + 100.0)
+    assert (v.ok, v.home, v.next_state.deliver_by) == (True, t0 + 7.0, t0 + 7.0)
+    # From a (at t0 + 3) the stop at the dock finishes at t0 + 6, home t0 + 8.
+    w = m.admit(v.next_state, near, rule=RULE_DEADLINE_BUDGET, budget_end=t0 + 100.0)
+    assert (w.ok, w.reason, w.home) == (False, REASON_DELIVERY, t0 + 8.0)
+    assert m.admit(v.next_state, near, rule=RULE_DEADLINE_BUDGET, budget_end=t0 + 100.0,
+                   pass_kind=DELIVER).ok               # Pass 2 has no upload tail
+
+
+def test_delivery_clause_order_is_own_deadline_on_board_budget_energy():
+    """The two deadline clauses first (the rule's own half, as ``overdue``
+    always was), the stop's own before the on-board one, then budget, then
+    energy."""
+    m = ferry_model(deadline_bounds=DEADLINE_BOUNDS_DELIVERY, energy_capacity_j=1.0)
+    # A: home 1028. On board: an update due at 1020.
+    carrying = FlightState(DOCK, 1000.0, 0.0, 1020.0)
+    late = _wp(30.0, 40.0, "a1", "a2", "a3", deadline=1000.0)
+    fine = _wp(30.0, 40.0, "a1", "a2", "a3", deadline=1e9)
+    assert m.admit(carrying, late, rule=RULE_DEADLINE_BUDGET, budget_end=0.0).reason == REASON_OVERDUE
+    assert m.admit(carrying, fine, rule=RULE_DEADLINE_BUDGET, budget_end=0.0).reason == REASON_DELIVERY
+    free = FlightState(DOCK, 1000.0)
+    assert m.admit(free, fine, rule=RULE_DEADLINE_BUDGET, budget_end=0.0).reason == REASON_BUDGET
+    assert m.admit(free, fine, rule=RULE_DEADLINE_BUDGET, budget_end=1e9).reason == REASON_ENERGY
+    # The boundary is inclusive: home == deliver_by is on time.
+    roomy = ferry_model(deadline_bounds=DEADLINE_BOUNDS_DELIVERY)
+    assert roomy.admit(FlightState(DOCK, 1000.0, 0.0, 1028.0), fine,
+                       rule=RULE_DEADLINE_BUDGET, budget_end=1e9).ok
+    v = roomy.admit(FlightState(DOCK, 1000.0, 0.0, down(1028.0)), fine,
+                    rule=RULE_DEADLINE_BUDGET, budget_end=1e9)
+    assert (v.ok, v.reason) == (False, REASON_DELIVERY)
+
+
+def test_deliver_by_goes_on_board_only_from_an_admitted_unprotected_stop():
+    m = ferry_model(deadline_bounds=DEADLINE_BOUNDS_DELIVERY)
+    due = _wp(30.0, 40.0, "a1", "a2", "a3", deadline=1040.0)            # home 1028
+    # Admitted: its deadline joins the minimum (and never raises it).
+    assert m.admit(T0, due, rule=RULE_DEADLINE_BUDGET, budget_end=1e9).next_state.deliver_by == 1040.0
+    held = FlightState(DOCK, 1000.0, 0.0, 1030.0)
+    assert m.admit(held, due, rule=RULE_DEADLINE_BUDGET, budget_end=1e9).next_state.deliver_by == 1030.0
+    # Rejected (here over budget): the state it would leave carries nothing
+    # new, although the stop's own deadline (1029) is below the held 1030 and
+    # both of its deadline clauses pass (home 1028).
+    below = _wp(30.0, 40.0, "a1", "a2", "a3", deadline=1029.0)
+    assert m.admit(held, below, rule=RULE_DEADLINE_BUDGET,
+                   budget_end=1e9).next_state.deliver_by == 1029.0
+    v = m.admit(held, below, rule=RULE_DEADLINE_BUDGET, budget_end=1000.0)
+    assert v.reason == REASON_BUDGET and v.next_state.deliver_by == 1030.0
+    # So in a fold that flies a rejected stop anyway (skip=False, the
+    # in-flight check's), the next stop is judged by its own reason, not by
+    # the rejected stop's deadline: both are over budget, neither "delivery".
+    after = _wp(30.0, 40.0, "a1", deadline=1e9)
+    flown = m.fold([below, after], FlightState(DOCK, 1000.0), rule=RULE_DEADLINE_BUDGET,
+                   budget_end=1000.0, skip=False)
+    assert flown.rejected == ((below, REASON_BUDGET), (after, REASON_BUDGET))
+    assert [v.next_state.deliver_by for v in flown.verdicts] == [math.inf, math.inf]
+    # Protected: exempt from its own deadline, still held to the updates on
+    # board (it would make THEM late), and its own deadline, which it may
+    # miss, does not go on board.
+    overdue = _wp(30.0, 40.0, "a1", "a2", "a3", deadline=1001.0)
+    p = m.admit(held, overdue, rule=RULE_DEADLINE_BUDGET, budget_end=1e9, protected=True)
+    assert p.ok and p.next_state.deliver_by == 1030.0
+    tight = FlightState(DOCK, 1000.0, 0.0, 1027.0)
+    p = m.admit(tight, overdue, rule=RULE_DEADLINE_BUDGET, budget_end=1e9, protected=True)
+    assert (p.ok, p.reason) == (False, REASON_DELIVERY)
+    # A fold carries it from stop to stop; the protected stop adds nothing.
+    first = _wp(30.0, 40.0, "a1", deadline=1100.0)                      # home 1025
+    walk = m.fold([first, overdue], FlightState(DOCK, 1000.0), rule=RULE_DEADLINE_BUDGET,
+                  budget_end=1e9, skip=True, protected=(overdue,))
+    assert walk.route == (first, overdue) and walk.state.deliver_by == 1100.0
+    assert [v.next_state.deliver_by for v in walk.verdicts] == [1100.0, 1100.0]
+
+
+@pytest.mark.parametrize("bounds", [DEADLINE_BOUNDS_COLLECTION, DEADLINE_BOUNDS_DELIVERY_PER_STOP])
+def test_the_other_bounds_neither_read_nor_lower_deliver_by(bounds):
+    """``collection`` and ``delivery_per_stop`` carry ``deliver_by`` through
+    untouched and never test it: a state that says an update is due before
+    home changes nothing."""
+    m = ferry_model(deadline_bounds=bounds)
+    ok = _wp(30.0, 40.0, "a1", "a2", "a3", deadline=1028.0)
+    for deliver_by in (math.inf, 1001.0):
+        s = FlightState(DOCK, 1000.0, 0.0, deliver_by)
+        v = m.admit(s, ok, rule=RULE_DEADLINE_BUDGET, budget_end=1e9)
+        assert v.ok and v.next_state.deliver_by == deliver_by
+        base = m.admit(T0, ok, rule=RULE_DEADLINE_BUDGET, budget_end=1e9)
+        assert (v.reason, v.arrival, v.finish, v.home) == (
+            base.reason, base.arrival, base.finish, base.home)
+
+
+def test_rules_without_a_deadline_clause_ignore_the_updates_on_board():
+    """The budget rule (D1-D3, D5, Pass 2), RULE_NONE (D4), no budget at all,
+    and the legacy model: no on-board clause, ``deliver_by`` carried as is."""
+    m = ferry_model(deadline_bounds=DEADLINE_BOUNDS_DELIVERY)
+    s = FlightState(DOCK, 1000.0, 0.0, 1001.0)                          # A is home at 1028
+    for rule, budget in ((RULE_BUDGET, 1e9), (RULE_NONE, 0.0), (RULE_DEADLINE_BUDGET, None)):
+        v = m.admit(s, A, rule=rule, budget_end=budget)
+        assert v.ok and v.next_state.deliver_by == 1001.0, rule
+    assert m.admit(s, A, rule=RULE_BUDGET, budget_end=1e9, pass_kind=DELIVER).ok
+    legacy = FeasibilityModel().admit(s, A, rule=RULE_DEADLINE_BUDGET, budget_end=1e9)
+    assert legacy.ok and legacy.next_state == FlightState(A.position, legacy.finish, 0.0, 1001.0)
+
+
+def test_filter_feasible_from_a_state_carries_the_updates_on_board():
+    """The mid-flight re-admission starts from the mule's state: what it
+    already carries bounds every stop it may still admit."""
+    t0 = 1000.0
+    b = _wp(40.0, 0.0, "b")
+    m = _line_model_5ms(DEADLINE_BOUNDS_DELIVERY)
+    at_a = FlightState((10.0, 0.0, 0.0), t0 + 3.0, 0.0, t0 + 6.0)
+    res = filter_feasible([b], now=t0 + 3.0, mission_deadline_ts=t0 + 100.0, model=m,
+                          state=at_a)
+    assert res.kept == [] and res.dropped_delivery == [b]
+    empty = FlightState((10.0, 0.0, 0.0), t0 + 3.0)
+    assert filter_feasible([b], now=t0 + 3.0, mission_deadline_ts=t0 + 100.0, model=m,
+                           state=empty).kept == [b]
+
+
+# --------------------------------------------------------------------------- #
+# The delivery bounds on random EDF instances
+# --------------------------------------------------------------------------- #
+
+N_EDF = 3000
+
+
+def _edf_instance(seed):
+    """2-6 single-device stops in a 150 m disc, EDF order as S3b walks them;
+    a random member dwell (or the clock without a band), upload, speed,
+    budget and, sometimes, a battery. Returns (model kwargs, stops, t0, budget_end)."""
+    rng = random.Random(7919 * seed + 3)
+    t0 = rng.choice((0.0, 1000.0, 1e6))
+    stops = []
+    for k in range(rng.randint(2, 6)):
+        r, th = 150.0 * math.sqrt(rng.random()), rng.uniform(0.0, 2.0 * math.pi)
+        stops.append(_wp(r * math.cos(th), r * math.sin(th), f"d{k}",
+                         deadline=t0 + rng.uniform(5.0, 250.0)))
+    dwell = rng.uniform(0.0, 8.0)
+    kw = dict(
+        member_dwell_s=None if rng.random() < 0.2 else (lambda d, p, o, _t=dwell: _t),
+        upload_s=(lambda _u=rng.uniform(0.0, 5.0): _u),
+        energy_capacity_j=None if rng.random() < 0.7 else rng.uniform(1_000.0, 60_000.0),
+        speed=rng.choice((2.0, 5.0, 12.0)),
+    )
+    budget_end = t0 + (1e6 if rng.random() < 0.5 else rng.uniform(30.0, 400.0))
+    ordered = sorted(stops, key=lambda c: (c.deadline_ts, c.position, c.devices))
+    return kw, ordered, t0, budget_end
+
+
+def _edf_model(kw, bounds):
+    phys = FerryPhysics(dock=DOCK, member_dwell_s=kw["member_dwell_s"], upload_s=kw["upload_s"],
+                        p_move_w=143.6, p_hover_w=168.5,
+                        energy_capacity_j=kw["energy_capacity_j"], deadline_bounds=bounds)
+    return FeasibilityModel(cruise_speed_m_s=kw["speed"], session_time_s=1.0, ferry=phys)
+
+
+def _per_stop_reference(m, stops, t0, budget_end):
+    """ef1faa1's ``delivery`` walk, restated from the plan's formula: the
+    stop's own home (finish + its return + the upload) against its
+    deadline, then the budget, then the energy; a refused stop is skipped.
+    Returns [(stop, reason or None)]."""
+    phys = m.ferry
+    pose, clock, energy = DOCK, t0, 0.0
+    out = []
+    for wp in stops:
+        leg = m.leg(pose, wp)
+        finish = clock + leg.transit_s + leg.dwell_s
+        home = finish + leg.return_s + leg.upload_s
+        need = (energy + phys.p_move_w * (leg.transit_s + leg.return_s)
+                + phys.p_hover_w * leg.dwell_s)
+        if home > wp.deadline_ts:
+            out.append((wp, REASON_OVERDUE))
+        elif home > budget_end:
+            out.append((wp, REASON_BUDGET))
+        elif phys.energy_capacity_j is not None and need > phys.energy_capacity_j:
+            out.append((wp, REASON_ENERGY))
+        else:
+            out.append((wp, None))
+            pose, clock = wp.position, finish
+            energy = energy + phys.p_move_w * leg.transit_s + phys.p_hover_w * leg.dwell_s
+    return out
+
+
+def test_delivery_meets_every_collected_deadline_on_random_edf_instances():
+    """Under ``delivery`` the admitted route's actual delivery (its landing
+    plus the upload: the last admitted stop's home, ``FoldResult.home``) is
+    at or before the deadline of every admitted stop, and every prefix of it
+    too. Under ``delivery_per_stop`` the walk is ef1faa1's per-stop walk,
+    reproduced verdict by verdict from the plan's formula, and it does land
+    updates late (the finding the route-level bound fixes)."""
+    admitted = per_stop_late = delivery_drops = 0
+    for seed in range(N_EDF):
+        kw, stops, t0, budget_end = _edf_instance(seed)
+        start = FlightState(DOCK, t0)
+        m = _edf_model(kw, DEADLINE_BOUNDS_DELIVERY)
+        walk = m.fold(stops, start, rule=RULE_DEADLINE_BUDGET, budget_end=budget_end, skip=True)
+        res = filter_feasible(stops, now=t0, mission_deadline_ts=budget_end, model=m)
+        assert res.kept == list(walk.route), seed
+        assert res.dropped_delivery == walk.rejected_by(REASON_DELIVERY), seed
+        delivery_drops += len(res.dropped_delivery)
+        if walk.route:
+            landing = walk.home
+            assert all(landing <= wp.deadline_ts for wp in walk.route), seed
+            homes = [v.home for v in walk.verdicts if v.ok]
+            assert homes[-1] == landing, seed
+            for k, h in enumerate(homes):
+                assert all(h <= wp.deadline_ts for wp in walk.route[: k + 1]), seed
+            assert walk.state.deliver_by == min(wp.deadline_ts for wp in walk.route), seed
+            admitted += len(walk.route)
+        # ``delivery_per_stop``: the per-stop walk, reproduced exactly.
+        p = _edf_model(kw, DEADLINE_BOUNDS_DELIVERY_PER_STOP)
+        old = p.fold(stops, start, rule=RULE_DEADLINE_BUDGET, budget_end=budget_end, skip=True)
+        ref = _per_stop_reference(p, stops, t0, budget_end)
+        assert [(wp, v.reason) for wp, v in zip(stops, old.verdicts)] == ref, seed
+        assert old.state.deliver_by == math.inf, seed
+        if old.route:
+            per_stop_late += sum(old.home > wp.deadline_ts for wp in old.route)
+    # The instances reach the clause and the case it fixes.
+    assert admitted > 1000 and delivery_drops > 500 and per_stop_late > 500
 
 
 def test_budget_clause_bounds_home():

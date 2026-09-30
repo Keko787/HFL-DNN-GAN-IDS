@@ -30,6 +30,7 @@ from __future__ import annotations
 import math
 import random
 from collections import defaultdict
+from dataclasses import replace
 from typing import Dict, List, Tuple
 
 import pytest
@@ -59,8 +60,11 @@ from hermes.scheduler.routing.replan import (
 )
 from hermes.scheduler.routing.two_opt import order_contacts
 from hermes.scheduler.stages.s3b_feasibility import (
-    DEADLINE_BOUNDS,
+    DEADLINE_BOUNDS_COLLECTION,
+    DEADLINE_BOUNDS_DELIVERY,
+    DEADLINE_BOUNDS_DELIVERY_PER_STOP,
     REASON_BUDGET,
+    REASON_DELIVERY,
     REASON_ENERGY,
     REASON_OVERDUE,
     REASONS,
@@ -124,6 +128,7 @@ def make_case(seed: int) -> Dict:
     positions: Dict[DeviceID, Tuple[float, float, float]] = {}
     contacts: List[ContactWaypoint] = []
     deadlines: List[float] = []
+    deliver_by = math.inf
     for i in range(n):
         if contacts and rng.random() < 0.1:
             stop = contacts[rng.randrange(len(contacts))].position
@@ -162,9 +167,20 @@ def make_case(seed: int) -> Dict:
             p_move_w=143.6, p_hover_w=168.5,
             energy_capacity_j=(None if rng.random() < 0.6
                                else rng.uniform(0.0, 300.0 * scale / speed + 3000.0)),
-            deadline_bounds=rng.choice(DEADLINE_BOUNDS),
+            # The two values ef1faa1 drew from ("delivery" then was today's
+            # "delivery_per_stop"), so these instances are ef1faa1's.
+            deadline_bounds=rng.choice(
+                (DEADLINE_BOUNDS_COLLECTION, DEADLINE_BOUNDS_DELIVERY_PER_STOP)),
             range_m=rng.choice((None, None, 40.0, 30.0)),
         )
+        # The route-level bound on some instances, and then, on some, a
+        # state that already carries updates (a mid-flight re-plan); drawn
+        # apart so the other draws of an instance do not move.
+        board = random.Random(41 * seed + 11)
+        if board.random() < 0.3:
+            physics = replace(physics, deadline_bounds=DEADLINE_BOUNDS_DELIVERY)
+            if board.random() < 0.5:
+                deliver_by = now + board.uniform(0.0, 3.0 * scale / speed + 150.0)
         model = FeasibilityModel(cruise_speed_m_s=speed, session_time_s=1.0, ferry=physics)
     if rng.random() < 0.4:
         pose = DOCK
@@ -172,7 +188,7 @@ def make_case(seed: int) -> Dict:
         pose = (rng.uniform(-scale, scale), rng.uniform(-scale, scale), 0.0)
     clock = now + rng.uniform(0.0, 60.0)
     energy = 0.0 if rng.random() < 0.5 else rng.uniform(0.0, 2000.0)
-    state = FlightState(pose, clock, energy)
+    state = FlightState(pose, clock, energy, deliver_by)
     if rng.random() < 0.1:
         budget_end = None
     else:
@@ -353,7 +369,8 @@ def test_replan_invariants_on_random_instances(arm):
 
 
 def test_the_random_instances_drop_for_every_reason():
-    """Guards the generator: overdue, budget and energy drops all occur."""
+    """Guards the generator: overdue, budget, energy and (under the
+    route-level ``delivery`` bound) on-board delivery drops all occur."""
     seen = set()
     for seed in range(N_CASES):
         case = make_case(seed)
@@ -428,6 +445,32 @@ def test_a_passing_order_is_kept():
     res = _sched().replan_remainder([B, A], state=FlightState(DOCK, 0.0), budget_end=1e9)
     assert res.order_used == ORDER_CURRENT and res.route == (B, A) and not res.dropped
     assert not res.changed
+
+
+def test_a_replan_from_a_state_with_updates_on_board_drops_for_delivery():
+    """Mid-flight under the route-level bound: the mule at 10 m, t = 10,
+    carries an update due at 30. X at 15 lands it at 30 (on time); Y at 25
+    would land it at 50, so Y is dropped with the reason ``delivery`` and the
+    arm's own order over the rest is flown. With nothing on board, or under
+    ``delivery_per_stop``, both stops fit as they are."""
+    X, Y = _wp(15, 0, "x"), _wp(25, 0, "y")
+    here = ((10.0, 0.0, 0.0), 10.0)
+    sch = _sched(line_model(deadline_bounds=DEADLINE_BOUNDS_DELIVERY))
+    res = sch.replan_remainder([X, Y], state=FlightState(*here, 0.0, 30.0), budget_end=1e9)
+    assert res.order_used == ORDER_ARM and res.route == (X,)
+    assert res.dropped == ((Y, REASON_DELIVERY),) and res.dropped_by(REASON_DELIVERY) == [Y]
+    check = sch.fold_remainder([X, Y], state=FlightState(*here, 0.0, 30.0), budget_end=1e9)
+    assert check.rejected == ((Y, REASON_DELIVERY),)
+    assert sch.replan_remainder([X, Y], state=FlightState(*here), budget_end=1e9).order_used == (
+        ORDER_CURRENT)
+    per_stop = _sched(line_model(deadline_bounds=DEADLINE_BOUNDS_DELIVERY_PER_STOP))
+    assert per_stop.replan_remainder([X, Y], state=FlightState(*here, 0.0, 30.0),
+                                     budget_end=1e9).order_used == ORDER_CURRENT
+    # The whole-scheduler baselines and Pass 2 have no deadline clause.
+    d1 = _sched(line_model(deadline_bounds=DEADLINE_BOUNDS_DELIVERY), selector=MaxAoIPolicy())
+    assert d1.fold_remainder([X, Y], state=FlightState(*here, 0.0, 30.0), budget_end=1e9).ok
+    assert sch.fold_remainder([X, Y], state=FlightState(*here, 0.0, 30.0), budget_end=1e9,
+                              pass_kind=DELIVER).ok
 
 
 def test_the_arm_order_is_kept_over_a_shorter_2opt_route():
@@ -873,6 +916,51 @@ def test_trim_before_takeoff_keeps_the_flown_order_and_widens_its_drops():
     feas = sch.last_feasibility
     assert _devices(feas.dropped_overdue) == ["far"] and feas.n_dropped == 1
     assert feas.kept == queue
+
+
+def _zigzag_plan(fallback):
+    """H1 under the route-level ``delivery`` bound, 1 s per member, 5 m/s,
+    no upload. T at 3 m is due at now + 16 s; P, Q, R, S at -10, 10, -12
+    and 12 m are due much later. S3b's EDF walk (T, R, P, Q, S) lands at
+    now + 15.8, so it keeps all five; H1's distance order (T, P, Q, R, S)
+    zigzags, and R would land T's update at now + 18."""
+    now = 1000.0
+    sch = FLScheduler(
+        now_fn=lambda: now, mission_budget_s=100.0, validate_flown_order=True,
+        replan_fallback=fallback,
+        feasibility_model=FeasibilityModel(ferry=FerryPhysics(
+            dock=DOCK, member_dwell_s=_one_s_dwell, upload_s=_no_dwell,
+            p_move_w=143.6, p_hover_w=168.5, deadline_bounds=DEADLINE_BOUNDS_DELIVERY)),
+    )
+    layout = {"T": (3.0, 0.0, 0.0), "P": (-10.0, 0.0, 0.0), "Q": (10.0, 0.0, 0.0),
+              "R": (-12.0, 0.0, 0.0), "S": (12.0, 0.0, 0.0)}
+    ids = tuple(DeviceID(d) for d in layout)
+    sch.ingest_slice(MissionSlice(mule_id=MuleID("m"), device_ids=ids,
+                                  issued_round=0, issued_at=0.0))
+    for did in ids:
+        sch.device_states[did].last_known_position = layout[str(did)]
+        sch.device_states[did].deadline_fulfilment_s = 16.0 if did == "T" else 100.0
+    sch.start_mission()
+    return sch, sch.build_contact_queue(rf_range_m=1.0, mule_pose=DOCK)
+
+
+def test_delivery_drops_before_takeoff_join_last_feasibility():
+    """``trim`` keeps H1's order and drops R, which would land the update
+    already on board (T's) late: it joins ``last_feasibility`` as a
+    ``delivery`` drop, so the mule widens it and S3c counts it. ``reorder``
+    repairs the order instead (2-OPT) and drops nothing."""
+    sch, queue = _zigzag_plan(FALLBACK_TRIM)
+    assert _devices(queue) == ["T", "P", "Q", "S"]
+    check = sch.last_order_check
+    assert check.order_used == ORDER_ARM_TRIMMED
+    assert [(_devices([wp]), why) for wp, why in check.dropped] == [(["R"], REASON_DELIVERY)]
+    feas = sch.last_feasibility
+    assert _devices(feas.dropped_delivery) == ["R"] and _devices(feas.dropped) == ["R"]
+    assert feas.n_dropped == 1 and feas.kept == queue
+    sch, queue = _zigzag_plan(FALLBACK_REORDER)
+    assert sch.last_order_check.order_used == ORDER_TWO_OPT and not sch.last_order_check.dropped
+    assert sorted(_devices(queue)) == ["P", "Q", "R", "S", "T"]
+    assert sch.last_feasibility.n_dropped == 0
 
 
 class _Farthest:

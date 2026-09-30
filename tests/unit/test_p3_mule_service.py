@@ -21,6 +21,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import json
 
 import numpy as np
@@ -230,6 +231,28 @@ def test_sim_mission_events_carry_the_simulated_record(service):
     assert done["sim_ledger"]["transit"] == 10.0 and done["band"] == "wide"
     assert done["pass_1_flown"][0]["l1_choice"] == 1 and done["pass_1_flown"][0]["targets"] == ["d0"]
     assert type(done["energy_j"]) is float
+
+
+def test_the_delivery_overrun_is_carried_only_when_the_mission_sets_it(service):
+    """``delivery_overrun_s`` is set only under the route-level
+    ``deadline_bounds="delivery"`` (0.0 when on time), and only then is it
+    in ``mission_completed``; a mission that leaves it None keeps the key
+    set of the test above, byte for byte (Freeze Rule 1)."""
+    svc, events = service(**_sim_kwargs(n_missions=3, deadline_bounds="delivery"))
+    clock = svc.supervisor.mission_clock
+    results = iter([_sim_result(clock),
+                    dataclasses.replace(_sim_result(clock), delivery_overrun_s=np.float64(1.0)),
+                    dataclasses.replace(_sim_result(clock), delivery_overrun_s=0.0)])
+    svc.supervisor.run_one_mission = lambda: next(results)
+    svc.run()
+    assert svc.exit_code == 0
+    plain, late, on_time = events.named("mission_completed")
+    keys = AFA9526_COMPLETED | set(mule_process.SIM_MISSION_FIELDS) | {"energy_status"}
+    assert set(plain) == keys and "delivery_overrun_s" not in plain
+    assert set(late) == set(on_time) == keys | {"delivery_overrun_s"}
+    assert late["delivery_overrun_s"] == 1.0 and type(late["delivery_overrun_s"]) is float
+    assert on_time["delivery_overrun_s"] == 0.0
+    assert list(late)[-2:] == ["delivery_overrun_s", "energy_status"]
 
 
 def test_a_refused_bootstrap_is_fatal_on_the_clock(service):

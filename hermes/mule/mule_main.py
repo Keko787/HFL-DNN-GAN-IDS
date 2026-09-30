@@ -49,6 +49,7 @@ Without a clock every path is exactly the recorded one (Freeze Rule 1).
 from __future__ import annotations
 
 import logging
+import math
 import threading
 import time
 from dataclasses import dataclass, field
@@ -107,7 +108,9 @@ def mission_planned_devices(queue, feasibility=None) -> int:
     starvation loop, hidden inside its own success metric.
 
     FeRRy Phase 3 (critic B10): the drops of the simulated energy clause count
-    too. ``dropped_energy`` is empty in every legacy plan, so nothing recorded
+    too, and so do the drops of the route-level on-board clause
+    (``deadline_bounds="delivery"``). ``dropped_energy`` and
+    ``dropped_delivery`` are empty in every legacy plan, so nothing recorded
     moves.
     """
     planned = sum(len(c.devices) for c in queue)
@@ -115,6 +118,7 @@ def mission_planned_devices(queue, feasibility=None) -> int:
         list(getattr(feasibility, "dropped_overdue", ()))
         + list(getattr(feasibility, "dropped_budget", ()))
         + list(getattr(feasibility, "dropped_energy", ()))
+        + list(getattr(feasibility, "dropped_delivery", ()))
     ):
         planned += len(getattr(wp, "devices", ()))
     return planned
@@ -204,10 +208,19 @@ class MissionRunResult:
     # ``pass_1_preflight_drops`` is a diagnostic: the contacts S3b (and the
     # pre-flight order check) refused before takeoff, which the mule widened
     # then, one entry each with ``position``, ``devices``, ``deadline_ts``
-    # and ``reason`` (``overdue``, ``budget`` or ``energy``, in that order),
-    # so a trace shows what emptied or shrank a mission (finding E2E1-01).
+    # and ``reason`` (``overdue``, ``budget``, ``energy`` or, under
+    # ``deadline_bounds="delivery"``, ``delivery``, in that order), so a
+    # trace shows what emptied or shrank a mission (finding E2E1-01).
     # No predicted home: S3b keeps none, and the record never re-prices.
     # Empty for the whole-scheduler baselines, whose walks report no drops.
+    # ``delivery_overrun_s`` (``deadline_bounds="delivery"`` only, None in
+    # every other mode) is how far the Pass-1 upload (or the landing, with
+    # nothing uploaded) ended past ``deliver_by``, the earliest Deadline(j)
+    # of the updates on board as the in-flight check counted them; 0 when
+    # every one was on time or nothing was on board. The route-level bound is
+    # re-checked at departures only, so a contact that runs longer than priced
+    # at the stop where Pass 1 ends can still land an update late; this says
+    # by how much, as ``budget_overrun_s`` does for the budget.
     sim_start_s: Optional[float] = None
     sim_end_s: Optional[float] = None
     sim_ledger: Optional[Dict[str, float]] = None
@@ -224,6 +237,7 @@ class MissionRunResult:
     band: Optional[str] = None
     backhaul: Optional[Dict[str, Any]] = None
     pass_1_preflight_drops: Optional[List[Dict[str, Any]]] = None
+    delivery_overrun_s: Optional[float] = None
 
 
 def _merged_device_ids(report, agg) -> List[DeviceID]:
@@ -260,6 +274,14 @@ class _FerryLog:
         #: Devices the beacon hook must not insert this mission: the Pass-1
         #: plan, its pre-flight drops and everything inserted since.
         self.no_insert: set = set()
+        #: Each Pass-1 member's own Deadline(j), as its stop's ``deadline_ts``
+        #: was the minimum of: the plan's (``last_plan_deadlines``), and an
+        #: inserted member's from its insertion. Read only for the in-flight
+        #: ``deliver_by`` of ``deadline_bounds="delivery"``.
+        self.deadlines: Dict[DeviceID, float] = {}
+        #: The Pass-1 ``deliver_by`` when the mule turned home (``inf``:
+        #: nothing on board, or not ``delivery``): ``delivery_overrun_s``.
+        self.deliver_by: float = math.inf
 
 
 class MuleSupervisor:
@@ -1061,9 +1083,9 @@ class MuleSupervisor:
            and with it the mission's simulated energy, restarts; the S3b
            budget is stamped now (``start_mission``).
         2. **Plan** from the dock with S3a's radius R_planar(b); annotate the
-           plan; widen every pre-flight drop, energy drops included (critic
-           B10), at the simulated takeoff time, and record each with its
-           reason (``pass_1_preflight_drops``).
+           plan; widen every pre-flight drop, energy drops (critic B10) and
+           on-board ``delivery`` drops included, at the simulated takeoff
+           time, and record each with its reason (``pass_1_preflight_drops``).
         3. **Each stop:** the departure check (``abort``: the next stop with
            its return-and-upload tail, priced on the clock, today's rule;
            ``replan``: the whole remainder, re-planned when it fails), the
@@ -1084,6 +1106,7 @@ class MuleSupervisor:
         from hermes.mule.ferry import RESPONSE_REPLAN
         from hermes.scheduler.stages.s3b_feasibility import (
             REASON_BUDGET,
+            REASON_DELIVERY,
             REASON_ENERGY,
             REASON_OVERDUE,
             RULE_BUDGET,
@@ -1133,10 +1156,14 @@ class MuleSupervisor:
             sum(len(c.devices) for c in pass_1_queue), sim_start, fx.spec.band,
         )
         _feas = getattr(self.scheduler, "last_feasibility", None)
+        # A contact the on-board clause refused (deadline_bounds="delivery")
+        # is widened like a budget drop: it was not late itself, but it got
+        # no contact either. The list is empty in every other mode.
         dropped_pre = (
             list(getattr(_feas, "dropped_overdue", ()))
             + list(getattr(_feas, "dropped_budget", ()))
             + list(getattr(_feas, "dropped_energy", ()))
+            + list(getattr(_feas, "dropped_delivery", ()))
         )
         if dropped_pre:
             self._widen_abandoned(dropped_pre, mission_round=mission_round)
@@ -1147,11 +1174,13 @@ class MuleSupervisor:
              "deadline_ts": float(wp.deadline_ts), "reason": reason}
             for reason, name in ((REASON_OVERDUE, "dropped_overdue"),
                                  (REASON_BUDGET, "dropped_budget"),
-                                 (REASON_ENERGY, "dropped_energy"))
+                                 (REASON_ENERGY, "dropped_energy"),
+                                 (REASON_DELIVERY, "dropped_delivery"))
             for wp in getattr(_feas, name, ())
         ]
         planned_devices = mission_planned_devices(pass_1_queue, _feas)
         rec.no_insert = {d for wp in list(pass_1_queue) + dropped_pre for d in wp.devices}
+        rec.deadlines = dict(planned_deadlines)
         budget = self.scheduler.mission_budget_s
         start = self.scheduler.mission_start_ts
         budget_end_1 = None if budget is None else float(start) + float(budget)
@@ -1341,20 +1370,46 @@ class MuleSupervisor:
         """Fly one pass stop by stop; return the stops flown, in order.
 
         At every departure, takeoff included, the mule holds its flight state
-        ``(pose, clock(), energy spent this pass)``; with ``check`` it runs
-        the departure check (:meth:`_ferry_departure`), and in Pass 1 the
-        beacon hook may insert an offered contact. The pass ends when nothing
-        is left or an abort gave up the rest.
+        ``(pose, clock(), energy spent this pass, deliver_by)``; with
+        ``check`` it runs the departure check (:meth:`_ferry_departure`), and
+        in Pass 1 the beacon hook may insert an offered contact. The pass
+        ends when nothing is left or an abort gave up the rest.
+
+        ``deliver_by`` is ``inf`` (nothing on board) except in Pass 1 under
+        ``deadline_bounds="delivery"``, where it is the running minimum of
+        the own Deadline(j) (``rec.deadlines``) of every member whose update
+        was actually collected, CLEAN, at a stop flown so far: the check, the
+        re-plan and the beacon hook then hold the rest of the route to the
+        updates really on board. S3b's walk before takeoff assumes every
+        planned member answers and folds the stop's ``deadline_ts``, the
+        minimum of the same members' deadlines, so the two agree when every
+        member answers, and the in-flight bound is never the tighter: a
+        member that did not answer carries no update to be late. Pass 2
+        carries nothing to the cluster and has no deadline clause.
+
+        The bound is checked at departures only. When the contact at the stop
+        where the pass ends (the last one, or the one after which an abort or
+        a re-plan gave up the rest) runs longer than priced, a silent
+        member's listen window or a noisy band, nothing is left to decide:
+        the updates are on board and the mule flies home, so the landing can
+        pass ``deliver_by``. The pass leaves its final ``deliver_by`` in
+        ``rec.deliver_by`` for ``delivery_overrun_s``, which records that.
         """
-        from hermes.scheduler.stages.s3b_feasibility import FlightState
+        from hermes.scheduler.stages.s3b_feasibility import (
+            DEADLINE_BOUNDS_DELIVERY,
+            FlightState,
+        )
+        from hermes.types import MissionOutcome
 
         clock = self._now
         remainder = list(queue)
         flown: List[ContactWaypoint] = []
         collect = pass_kind is MissionPass.COLLECT
+        route_level = collect and fx.spec.deadline_bounds == DEADLINE_BOUNDS_DELIVERY
+        deliver_by = math.inf
         while True:
             state = FlightState(
-                tuple(self.mule_pose), clock(), fx.energy_j() - energy_origin_j,
+                tuple(self.mule_pose), clock(), fx.energy_j() - energy_origin_j, deliver_by,
             )
             if remainder and check:
                 kept = self._ferry_departure(
@@ -1369,11 +1424,17 @@ class MuleSupervisor:
             if not remainder:
                 break
             wp = remainder.pop(0)
-            self._ferry_stop(
+            outcomes = self._ferry_stop(
                 fx, wp, state, pass_kind=pass_kind, mission_round=mission_round,
                 synth=synth, energy_origin_j=energy_origin_j, rec=rec,
             )
+            if route_level:
+                for did, outcome in outcomes.items():
+                    if outcome is MissionOutcome.CLEAN:
+                        deliver_by = min(deliver_by, rec.deadlines.get(did, wp.deadline_ts))
             flown.append(wp)
+        if route_level:
+            rec.deliver_by = deliver_by
         return flown
 
     def _ferry_departure(
@@ -1477,7 +1538,7 @@ class MuleSupervisor:
         synth,
         energy_origin_j: float,
         rec: _FerryLog,
-    ) -> None:
+    ) -> Dict[DeviceID, Any]:
         """Fly to ``wp`` and serve it: the leg, the contact plan, the contact.
 
         The leg is charged as ``transit`` and the pose jumps to the stop; the
@@ -1489,6 +1550,9 @@ class MuleSupervisor:
         sortie's, counted from ``energy_origin_j`` (the pass's takeoff) as
         the departure state and the energy clause count it: Pass 2 restarts
         at 0, so the L1 state and the energy clause agree on the battery.
+
+        Returns the contact's per-device outcome map (empty when the contact
+        failed), from which the caller learns whose updates are on board.
         """
         clock = self._now
         collect = pass_kind is MissionPass.COLLECT
@@ -1507,11 +1571,14 @@ class MuleSupervisor:
             )))
         plan = fx.contact_plan(wp, positions, pass_kind=pass_kind, mission_round=mission_round)
         before = self.mission.last_contact
+        outcomes: Dict[DeviceID, Any] = {}
         try:
             if collect:
-                self.mission.run_contact(list(wp.devices), synth, plan=plan)
+                served = self.mission.run_contact(list(wp.devices), synth, plan=plan)
             else:
-                self.mission.deliver_contact(list(wp.devices), synth, plan=plan)
+                served = self.mission.deliver_contact(list(wp.devices), synth, plan=plan)
+            if isinstance(served, dict):
+                outcomes = served
         except MissionSessionError as e:
             log.warning(
                 "mule=%s round=%d Pass %d %s failed pos=%s: %s",
@@ -1549,6 +1616,7 @@ class MuleSupervisor:
         })
         if l1_choice is not None:
             rec.choices[pass_kind].append(l1_choice)
+        return outcomes
 
     def _ferry_home(self, fx) -> None:
         """The return leg to the dock, charged as ``return``; the pose is the dock."""
@@ -1637,6 +1705,7 @@ class MuleSupervisor:
         """The mission's result: the recorded fields as the legacy path fills
         them, plus the sim fields (design section 2.5)."""
         from hermes.mule.ferry import backhaul_record
+        from hermes.scheduler.stages.s3b_feasibility import DEADLINE_BOUNDS_DELIVERY
 
         clock = self._now
         sim_end = clock()
@@ -1663,6 +1732,9 @@ class MuleSupervisor:
             band=fx.spec.band,
             backhaul=backhaul_record(up),
             pass_1_preflight_drops=list(rec.preflight_drops),
+            delivery_overrun_s=(max(0.0, t_pass_1_end - rec.deliver_by)
+                                if fx.spec.deadline_bounds == DEADLINE_BOUNDS_DELIVERY
+                                else None),
             **legacy,
         )
 
@@ -1756,11 +1828,12 @@ class MuleSupervisor:
         anchor = positions[devices[0]]
         if any(planar_distance_m(anchor, positions[d]) > fx.range_planar_m for d in devices):
             return refuse("members not within range of one stop")
-        deadline = min(
-            compute_deadline(states[d], t, self.scheduler.window_scale,
-                             law=self.scheduler.deadline_law)
+        member_deadlines = {
+            d: compute_deadline(states[d], t, self.scheduler.window_scale,
+                                law=self.scheduler.deadline_law)
             for d in devices
-        )
+        }
+        deadline = min(member_deadlines.values())
         stop = fx.annotate([ContactWaypoint(
             position=anchor, devices=devices, bucket=offer.bucket, deadline_ts=deadline,
         )], positions)[0]
@@ -1784,6 +1857,9 @@ class MuleSupervisor:
         })
         rec.inserted_devices += len(devices)
         rec.no_insert.update(devices)
+        # The inserted stop was priced with these deadlines, so its members'
+        # updates are held to them once on board (deadline_bounds="delivery").
+        rec.deadlines.update(member_deadlines)
         log.info(
             "mule=%s beacon offer %s inserted at %d/%d (predicted home %.3f)",
             self.mule_id, _ids(devices), index, len(remainder), home,
@@ -2033,7 +2109,9 @@ class MuleSupervisor:
         never adapts. That matters most for devices S3b drops or an in-flight
         abort abandons: without a signal they stay just as un-serveable next
         mission. Widening Φ is the same response the scheduler already gives a
-        missed contact.
+        missed contact. Every reason is treated alike: a contact refused by
+        the on-board clause (``delivery``) is widened as a budget drop is,
+        since neither device was late itself.
         """
         from hermes.types import MissionOutcome, RoundCloseDelta
 

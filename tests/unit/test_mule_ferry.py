@@ -77,6 +77,16 @@ def test_the_default_spec_is_the_channel_free_control():
     assert spec.flight == FlightModel() and spec.payload == PayloadModel()
 
 
+@pytest.mark.parametrize("bounds", ["collection", "delivery_per_stop", "delivery"])
+def test_the_spec_takes_each_deadline_bound_to_the_physics(bounds):
+    spec = FerrySpec(deadline_bounds=bounds)
+    assert spec.deadline_bounds == bounds and spec.describe()["deadline_bounds"] == bounds
+    built = FerrySpec.from_config(rf_range_m=RF, seed=1, deadline_bounds=bounds)
+    assert built.deadline_bounds == bounds
+    rt = FerryRuntime(built, None, rf_range_m=RF, session_time_s=1.0)
+    assert rt.physics().deadline_bounds == bounds
+
+
 @pytest.mark.parametrize("kw, match", [
     (dict(band="wide"), "needs a ContactLink"),
     (dict(band="wide", link=ContactLink(anchor_planar_m=RF)), "needs a ContactChannel"),

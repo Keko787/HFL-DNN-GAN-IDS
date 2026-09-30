@@ -332,6 +332,12 @@ SIM_MISSION_FIELDS = (
     "energy_j", "band", "backhaul", "pass_1_preflight_drops",
 )
 
+#: Carried after them only when the result sets it (not None): the route-level
+#: ``deadline_bounds="delivery"`` mission's ``delivery_overrun_s``. Left out
+#: otherwise, so a mission under any other value keeps the key set above and
+#: its trace byte for byte (Freeze Rule 1).
+SIM_MISSION_OPTIONAL_FIELDS = ("delivery_overrun_s",)
+
 
 def _jsonable(value):
     """``value`` with every container a JSON list/dict and every number a Python one.
@@ -363,6 +369,10 @@ def _sim_mission_fields(result) -> dict:
     as ``mule_ready.mission_clock`` says.
     """
     out = {name: _jsonable(getattr(result, name, None)) for name in SIM_MISSION_FIELDS}
+    for name in SIM_MISSION_OPTIONAL_FIELDS:
+        value = getattr(result, name, None)
+        if value is not None:
+            out[name] = _jsonable(value)
     out["energy_status"] = "simulated"
     return out
 

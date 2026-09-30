@@ -45,8 +45,9 @@ AFA9526_NOTES = (
     "four test_mode_switch.py subprocess tests: the spawned legacy scripts import 'Config', which is",
     "  not on the path (ModuleNotFoundError), so the banner never prints.",
     "test_exp4_realmodel_smoke.py::test_exp4_real_model_synthetic_converges: rounds_closed == 0;",
-    "  it failed in the full run and again when re-run alone (consistent here, not load-induced).",
-    "  The unit spec expected five failures; this sixth awaits the user's sign-off.",
+    "  it failed in the full run and again when re-run alone, both at afa9526.",
+    "  The unit spec expected five failures; the user signed this sixth off on 2026-09-29: the",
+    "  test has since been judged flaky under load, and its fix waits for the session-TTL pilot.",
 )
 
 
