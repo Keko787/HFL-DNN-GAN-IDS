@@ -105,7 +105,7 @@ One entry point drives every arm: [`experiments.exp4.runner_main`](../experiment
 | Flag | Default | Meaning |
 |---|---|---|
 | `--csv` | required | Per-trial CSV (created if missing; **resumable**). |
-| `--arms` | `H0 H1 H2 H3 B1 B2` | Subset of arms. **H0 and B2 need `--real-model`.** See §2.3. |
+| `--arms` | `H0 H1 H2 H3 D1 D2 D3 D4 D5` (`driver.DEFAULT_ARMS`) | Subset of arms. **H0 and D2 need `--real-model`**; on `--mission-clock sim` H0 is dropped from the default list and refused when named. The plan arms run only when named (§2.7). See §2.3, §2.5. |
 | `--N` | `2` | Device-population sweep. |
 | `--rrf` | `60` | `rf_range_m` sweep. |
 | `--n-missions` | `2` | Missions (FL rounds) per trial. |
@@ -132,18 +132,23 @@ with a warning from a stub run.
 | `H1` | + mule, gated scheduler, two-pass HFL, deterministic ranking | |
 | `H2` | + `TargetSelectorRL` in the S3.5 tie-break | random-init unless `--selector-weights` |
 | `H3` | + L1 adaptive channel | use with `--l1-channel` |
-| `B1` | **SOTA baseline** — MAX-AoI greedy ranking | stub or real-model |
-| `B2` | **SOTA baseline** — Oort's statistical-utility ranking | **needs `--real-model`** |
+| `D1` | **SOTA baseline** — MAX-AoI, as a whole scheduler | stub or real-model |
+| `D2` | **SOTA baseline** — Oort's statistical-utility selection, as a whole scheduler | **needs `--real-model`** |
 
-**Valid pairings.** `B1`/`B2`/`H2` vs `H1` isolate the ranking policy — same transport, same
-realism, same seeds, one thing different. `H1` vs `H0` is the architecture comparison. `H3` vs `H2`
-is the L1 comparison. **`H2`/`H3` must not be compared against `H0`/`H1`** — they run with
-`--l1-channel`, which changes the backhaul model in both, and their seeds do not line up.
+D1 and D2 replace S3, S3b and S3.5 with their own rule, so they own admission as well as order.
+They supersede the ordering-only B1/B2, which the driver no longer runs. D3–D5 are in §2.5 and
+the plan arms in §2.7.
 
-> **Why `B2` refuses without `--real-model`.** Oort ranks on each device's training loss. The stub
+**Valid pairings.** `D1`/`D2`/`H2` vs `H1` isolate the policy (D1 and D2 the whole scheduler, H2
+the ranking) — same transport, same realism, same seeds, one thing different. `H1` vs `H0` is the
+architecture comparison. `H3` vs `H2` is the L1 comparison. **`H2`/`H3` must not be compared
+against `H0`/`H1`** — they run with `--l1-channel`, which changes the backhaul model in both, and
+their seeds do not line up.
+
+> **Why `D2` refuses without `--real-model`.** Oort ranks on each device's training loss. The stub
 > reports a *random* loss, so ranking on it would be a random ordering wearing Oort's name — a
 > result-shaped artefact. The driver raises, and the policy raises `OortUnusableError` if devices
-> were served but no loss arrived. Do not work around it; run `B2` with real training or not at all.
+> were served but no loss arrived. Do not work around it; run `D2` with real training or not at all.
 
 ### 2.1 The two scheduler toggles — both off, and every committed result is an "off" run
 
@@ -315,15 +320,16 @@ contacts only, so they do not compare with wall-clock rows.
 
 - `mission_completed.pass_1_preflight_drops` lists each contact that H1–H3 dropped before takeoff,
   with its reason (`overdue`, `budget`, `energy` or, under `--deadline-bounds delivery`,
-  `delivery`, listed in that order). It is always [] for D1–D5, whose walks report no drops. Under
-  `--deadline-bounds delivery` the in-flight records can also read `delivery`: `aborts[].reason`,
-  and `replans[].rejected[].reason` and `replans[].dropped[].reason`, for a stop that would land an
-  update already on board after its Deadline(j), and `mission_completed.delivery_overrun_s` says
-  how far the Pass-1 upload, or the landing when nothing was uploaded, ended past the earliest
-  deadline of the updates on board; no CSV column reads it. A `mission_empty` means only that
-  Pass 1 aggregated no update: either the plan was empty, or its contacts were flown and answered
-  nothing. `mission_empty` carries only `mission_round`
-  (and, under `--dock-on-empty`, `docked`); the plan fields are on the same round's
+  `delivery`, listed in that order). It is always [] for D1–D5; since Phase 4, D1–D3 and D5
+  report what their walk left out before takeoff in `pass_1_policy_drops` instead, never widened
+  (§2.7). Under `--deadline-bounds delivery` the in-flight records can also read `delivery`:
+  `aborts[].reason`, and `replans[].rejected[].reason` and `replans[].dropped[].reason`, for a
+  stop that would land an update already on board after its Deadline(j), and
+  `mission_completed.delivery_overrun_s` says how far the Pass-1 upload, or the landing when
+  nothing was uploaded, ended past the earliest deadline of the updates on board; no CSV column
+  reads it. A `mission_empty` means only that Pass 1 aggregated no update: either the plan was
+  empty, or its contacts were flown and answered nothing. `mission_empty` carries only
+  `mission_round` (and, under `--dock-on-empty`, `docked`); the plan fields are on the same round's
   `mission_completed`. If that `mission_completed` has `pass_1_contacts` 0 (an empty
   `pass_1_plan`) and a non-empty `pass_1_preflight_drops` whose entries all read `budget`, no
   contact fits the budget on its own: each was priced from the dock at takeoff, and the budget is
@@ -362,14 +368,17 @@ contacts only, so they do not compare with wall-clock rows.
 - *The narrow-band cliff.* With `--contact-band narrow` (or medium), `--payload-bytes` set and a
   `--mission-budget-s` below the field-wide contact's predicted home time, every gated arm flies
   empty missions (30 s turnarounds, `rounds_closed` 0). For H1–H3, `pass_1_preflight_drops` shows
-  the budget drop; D1–D5 record []. The budget is not the only clause that can empty them. At
+  the budget drop; D1–D5 record [] there, and since Phase 4 D1–D3 and D5 name the contact in
+  `pass_1_policy_drops` (§2.7). The budget is not the only clause that can empty them. At
   `--deadline-time-scale 1.0` (Φ₀ = 60 s) the contact's predicted finish (94.9 s after takeoff at
   N = 8, 1 MB) can be past Deadline(j): H1–H3 then drop it as `overdue` at any budget, above the
   knee too, until missed missions widen its window past that finish, while D1–D3 and D5 keep the
   budget cliff. With `--deadline-time-scale t_nom` (Φ₀ = 6 × T_nom, 1500 s in trial T2) the
   budget binds first. Measure the knee per band, payload, N and deadline unit (Configuration
   Reference §17.1). Decided 2026-09-29: the cliff waits for Phase 4's member-subset admission, and
-  until then narrow and medium cells are not compared under budgets below it.
+  until then narrow and medium cells are not compared under budgets below it. Phase 4 lands it
+  behind `--member-admission` (§2.7): the plan arms fly `subset` by default, and H1–H3, D1–D3 and
+  D5 fly it when a run asks; `whole`, their default, keeps the cliff.
 - *Missions run longer than planned.* The planner prices the mean SNR and dwell is convex in it,
   so realized missions ran longer than predicted by +0.8 % on average on wide at 1 MB, +7.1 % on
   wide at 10 MB and +19.2 % on narrow at 1 MB. Budgets bind in flight more often on narrow bands
@@ -394,6 +403,178 @@ No Phase 3 result has been recorded yet.
 # KNEE_S: the budget knee from the Phase 3 pilot's H1 sweep; TTL_S: at least 2x the 95th-percentile real-model fit time with N devices training at once.
 python -m experiments.exp4.runner_main --csv results/exp5_p3/h1_sim_wide_knee.csv --arms H1 --N 6 --n-missions 4 --regime jittery --n-trials 40 --real-model --realism --mission-budget-s "$KNEE_S" --mission-clock sim --contact-band wide --deadline-time-scale t_nom --in-flight-response replan --replan-fallback trim --session-ttl-s "$TTL_S" --keep-event-traces
 ```
+
+### 2.7 The plan clock (FeRRy Phase 4)
+
+Every default is the recorded run; see `HERMES_Configuration_Reference.md` §18 for each value and
+Freeze §5k for what changed. The plan arms run only when named with `--arms`, and only on
+`--mission-clock sim`: the default arm list is still the nine Phase 3 arms (H0 is dropped from it on
+the simulated clock). The trial CSV header is unchanged, but write every Phase 4 run to a fresh CSV
+path, and every setting of a sweep to its own: the runner skips (cell, arm, trial) keys already in a
+file, and none of the Phase 4 flags is part of the key, so a second setting written to the same file
+would silently keep the first's rows.
+
+| Flag | Default | Meaning |
+|---|---|---|
+| `--arms F FX FB+wide FB+medium FB+narrow F-cov F-cap F-prio` | the nine Phase 3 arms | The plan arms (below). The runner refuses one the driver cannot run (on the wall clock, without a band, with `--pass-2-budget`, with `abort` and a cap, ...) before any trial, as a usage error. |
+| `--member-admission {whole,subset}` | each arm's own | `subset` lets a stop that fails whole admit the members that still fit. The plan arms fly `subset` unless the run says `whole` (F under `whole` keeps the narrow-band cliff, for comparison); H1–H3, D1–D3 and D5 fly `whole` unless the run says `subset`; D4 always flies `whole`. The setting applies to every arm of the run. |
+| `--age-cap-missions S` | off | The age cap: a device whose update has not reached the model for S of its mule's missions must be served. Set it from the S\* tool (below). F-cap always runs without it. |
+| `--age-cap-lookahead L` | 0 | A device is capped from age S − L. Leave it at 0. |
+| `--plan-score-params JSON` | {} | The plan score's settings as a JSON object, e.g. `'{"c_cov_per_device": 0.25, "c_energy": 0, "coverage_rank": "weighted"}'` for one cell of the κ sweep. Unknown keys are refused. F-cov sets its coverage term off on top. |
+| `--plan-search-params JSON` | {} | The search's bounds (`exact_max_devices`, `exhaustive_max_stops`, `heuristic_max_passes`, `heuristic_max_evaluations`). Leave them at the defaults: at N = 6 the search is exact. |
+| `--base-seed` | 42 | The salt of every trial's seed. A pilot takes a base seed of its own (decision 7), or its trials are the headline's first ones. |
+
+| Arm | What it is | Notes |
+|---|---|---|
+| `F` | The plan search over every band class, with the committed order in flight | Phase 4's F: the learned pair choice is Phase 5's. |
+| `FX` | F with the cross-heuristic in flight: after each Pass-1 stop the nearest stop that keeps the rest feasible, and on arrival the fastest class that still reaches every device b̄ reaches | The exit gate's arm. At the measured payload it flies exactly as F (critic B6). |
+| `FB+wide`, `FB+medium`, `FB+narrow` | The plan search pinned to one class (Path B+) | Fly their own class whatever `--contact-band` says. |
+| `F-cov` | F without the coverage term | Serves only what the cap forces: report it as "cap-only service" (decision 3). |
+| `F-cap` | F without the age cap | |
+| `F-prio` | F whose coverage weight is the age alone, without the miss streak | `--miss-priority` does not reach the plan arms: each sets its own, and the row records it. |
+
+**What a plan arm needs.** `--mission-clock sim` and a `--contact-band`, which is the reference
+class for the arms that search the classes (and the band of every H and D arm in the same CSV).
+Every plan arm flies the `trim` fallback, whatever `--replan-fallback` says, and gets T_nom per cell
+(`--t-nom-s` gives it instead), since its score measures the whole mission against T_nom. A cap
+needs `--in-flight-response replan`: `abort` gives up capped stops and is refused with a cap.
+`--pass-2-budget` is refused.
+
+**The pilot plan** (decision 7 of 2026-09-30; no pilot has run). Nothing runs before the user's
+go-ahead, and not before the Phase 3 pilot has set the session TTL and the knee (§2.6).
+
+- *Common settings:* N = 6, jittery; `--mission-clock sim --contact-band wide --deadline-time-scale
+  t_nom --in-flight-response replan --replan-fallback trim --aggregation agg:cutoff
+  --contact-reliability-source channel`; a base seed of the pilots' own; fresh CSV paths; n = 20
+  for every stub pilot (the exit gate's).
+- *The real-model FX smoke* (the design's pilot table, with decision 7's payload): FX alone, at
+  1 MB, at the knee, 4 missions, n = 5, once the Phase 3 pilot has set the session TTL.
+- *Budgets:* the stub FX smoke at the gate's 30 s and 60 s; the 5.4 and 5.8 pilots at the knee and
+  at a stress budget, half the knee rounded to 5 s. The knee is the Phase 3 pilot's H1 sweep on wide,
+  plus the same sweep at 1 MB, both under the pilots' own `channel` reliability source (critic C4).
+- *Payloads:* 5.4 at the measured payload and at 1 MB; 5.8 and the cap check at 1 MB (at the
+  measured payload F serves every device every mission, so the cap and the coverage term never
+  bind); the real-model FX smoke at 1 MB.
+- *Missions:* 5.8 at 4, the headline's, and at 8, because the cap binds only from mission S on (the
+  headline's count is fixed after it); the cap check at 8; everything else at 4.
+- *Arms* (the design's pilot table): the stub FX smoke F and FX; 5.4 F, FB+wide, FB+medium and
+  FB+narrow; 5.8 F, F-cov, F-cap, F-prio, FB+wide, D1, D3 (uniform weights, the default) and D4
+  route-only (`agg:cutoff`, as the common flags give it); the cap check (build-plan decision D4) F
+  at S − 1, S and S + 1, one CSV each.
+- *The cap:* S comes from the S\* tool at the knee and the stress budget, before the pilots (below).
+- *Cap violations* are reported by cause, with no pass mark: device availability alone makes about
+  15 % of device-missions miss at S = 3 (critic A2).
+- *"Behaves" means:* every trial ends ok; the predicate holds at every departure; FB+c flies only
+  class c; F's plan key is never above the best FB+'s (critic A3); a repeated trial gives identical
+  traces bar wall stamps (`plan_wall_s` is one); planning takes at most 1 s per mission
+  (`plan_wall_s`).
+- *Cost:* about 1,400 stub trials, to be re-costed before the go-ahead
+  (`experiments/exp4/cost_matrix.py` knows no plan arm).
+
+**The κ sweep** (decision 2): κ in {0.15, 0.25, 1} and c₄ in {0, 0.1}, reporting the plans that fly
+empty, under `"coverage_rank": "weighted"`. Under the default `lexicographic` rank κ only orders
+plans that serve the same weight share, so the sweep would not show the trade decision 2 priced;
+`weighted` ranks by V alone (R11). Each (κ, c₄) is its own run with its own CSV; the setting is not
+a grid axis, so the seeds are the same across the sweep and the cells stay paired.
+
+**The S\* tool** (`experiments/analysis/age_cap_s_star.py`, planning level only: nothing is flown).
+It prints, per arm family and budget, the S\* that 90 % of its 30 reference layouts need, each
+family's S (i) and S + 1 (ii), and the cell's S, F's, never below 2 (decision 1). Give it the cell's
+settings: the pilots' budgets, the payload, the band classes, and `--theta-bytes 18756` for a
+real-model cell at the measured payload (its default is the stub's θ). It prices the realism field,
+as runs with `--realism` lay devices out (`--no-realism` prices the tight cluster). An (ii) it
+cannot vouch for carries its caveat: for a pinned class, at a budget outside the 45–90 s measured,
+or under whole admission. Today, at 1 MB with the spec's prior budgets of 90 and 45 s, it gives F
+an S of 2 (FB+wide 4, FB+medium 3, FB+narrow 3), and at the measured payload F's S\* is 1, so S is
+2 by the floor; the pilots re-run it at the measured knee.
+
+```bash
+# KNEE_S and STRESS_S: the Phase 3 pilot's knee at 1 MB, and half of it rounded to 5 s.
+python -m experiments.analysis.age_cap_s_star --budgets "$KNEE_S" "$STRESS_S" --payload-bytes 1000000 --contact-band wide --regime jittery --json results/exp5_p4/s_star_1mb.json
+```
+
+A 5.8 pilot cell at the stress budget (S from the tool; PILOT_SEED a base seed of the pilots' own;
+TTL_S the Phase 3 pilot's session TTL). Repeat it at the knee, and at 4 missions; the plan arms and
+the D arms of one invocation share the cell's seeds:
+
+```bash
+python -m experiments.exp4.runner_main --csv results/exp5_p4/s58_pilot_stress_8m.csv --arms F F-cov F-cap F-prio FB+wide D1 D3 D4 --N 6 --n-missions 8 --regime jittery --n-trials 20 --base-seed "$PILOT_SEED" --realism --mission-budget-s "$STRESS_S" --payload-bytes 1000000 --mission-clock sim --contact-band wide --deadline-time-scale t_nom --in-flight-response replan --replan-fallback trim --aggregation agg:cutoff --contact-reliability-source channel --age-cap-missions "$S" --session-ttl-s "$TTL_S" --keep-event-traces
+```
+
+One point of the κ sweep (κ = 0.25, c₄ = 0):
+
+```bash
+python -m experiments.exp4.runner_main --csv results/exp5_p4/kappa_0.25_c4_0.csv --arms F --N 6 --n-missions 4 --regime jittery --n-trials 20 --base-seed "$PILOT_SEED" --realism --mission-budget-s "$STRESS_S" --payload-bytes 1000000 --mission-clock sim --contact-band wide --deadline-time-scale t_nom --in-flight-response replan --replan-fallback trim --aggregation agg:cutoff --contact-reliability-source channel --age-cap-missions "$S" --plan-score-params '{"c_cov_per_device": 0.25, "c_energy": 0, "coverage_rank": "weighted"}' --session-ttl-s "$TTL_S" --keep-event-traces
+```
+
+**Reading a plan-mode trace.**
+
+- `mule_ready` states the plan settings the scheduler runs, the score's and search's resolved.
+  `mission_completed.plan` is the mission's closed plan: `band` (b̄, the class committed), `search`
+  (the search mode), `per_class` (each class's best: `v`, `served`, `cap_key`, `served_share`, and
+  the rank applied), `score` (`v`, the predicted whole mission `mission_s`, and the terms),
+  `demand`, `weights`, `served`, `cap` (S, the ages, the capped devices and the violations, each
+  with its device, planning age and cause) and `visited`. `plan_wall_s`, beside it, is wall time:
+  leave it out of any determinism comparison.
+- `mission_completed.band` is b̄, and `pass_1_flown[].band` the class each stop was flown on: under
+  FX a Pass-1 stop can differ from b̄, while Pass 2 always flies b̄. The scorer's `band_shares`
+  counts per stop.
+- `pass_1_preflight_drops` can read `plan`: a demanded device the plan left out by choice, whose
+  offered stop fits alone from the dock at takeoff. It is widened like any drop but stays out of
+  S3c's planned count. A clause (`overdue`, `budget`, `energy`) means the device does not fit even
+  alone there; under `whole` the clause judges its whole stop.
+- A hover stop is not marked: it is a one-device Pass-1 stop away from its device, often at the dock
+  or at the class's reach edge.
+- D1–D3 and D5 on the simulated clock record what their walk left out before takeoff in
+  `pass_1_policy_drops` (`"widened": false`), only when they left something out; those devices are
+  never widened.
+- The violations, by cause: `unplannable` means no class the arm may fly serves the device alone
+  within the budget, even at its best hover point, which is physics for the time budget (under an
+  energy capacity it reflects the time-minimising point; the pilots set none); `crowded` means some
+  class could but the plan chose otherwise, the planner's myopia or partition drift (below);
+  `dropped_in_flight` means its stop was dropped or trimmed in flight; `not_merged` means it was
+  flown but its update did not reach the merge (no reply, an availability failure, a cutoff).
+- `plan.score.mission_s` is a prediction: Pass 2 is priced on the class's S3a stops at the dock, and
+  the mule rebuilds Pass 2 after Pass 1, so the flown mission (`sim_end_s − sim_start_s`) can differ
+  by a few seconds either way.
+- Score every arm at one S with `traces_scorer.py --age-cap-s S`: `cap_violations` counts (device,
+  mission) pairs aged at least S after the mission, for every arm, H and D arms and F-cap included,
+  while `cap_violation_events` is the plan-mode mule's own log by cause. The two differ by lost
+  backhaul uploads and merges the cluster defers. `plan_served_share_mean` counts devices, not
+  weights; `far_served_share` counts the devices beyond `--rrf` of the dock.
+
+**Pilot notes** (from the build, its review and the hover decision; Freeze §5k).
+
+- *The hover point's place.* It minimises time, so a capped far device is often served from the dock
+  or from the class's reach edge, where the noisy link is weakest. Expect more in-flight misses
+  there: in the pilots' configuration FB+medium's `not_merged` at 45 s rose from 228 to 245 with the
+  hover stops, and F's `dropped_in_flight` at 30 s from 0 to 12. A margin inside the reach is a
+  pilot-time choice.
+- *Empty missions before the cap binds.* Uncapped devices keep S3a's stops, so a mission can fly
+  empty while nothing is capped, most at 30 s (on the S\* tool's layouts at 30 s: 5, 18 and 6 empty
+  plans for FB+wide, FB+medium and FB+narrow, none with a capped device). F under
+  `--member-admission whole` can fly empty at 30 s while a capped device fits alone at its hover
+  point.
+- *Pass 2* still delivers at S3a's stops, so a far device is visited at its own position on the way
+  back out.
+- *Partition drift.* S3a re-clusters every mission, so a capped device's stop can serve it alone but
+  not beside another capped device: at S\*+1 FB+medium crowded 7 times in 291 missions at 45 s and
+  FB+wide twice in 360, and at 30 s every family crowds (F 20 times in 309). Read the FB+ arms'
+  `crowded` counts at the stress budget, and every arm's at 30 s, with this in mind.
+- *Longer missions under the default rank.* Time only breaks ties among plans that serve the same
+  weight, so a plan can take a much longer Pass 2 to serve one more device (layout 18, mission 4:
+  182 s against 118 s under `weighted`). The served share is nominal: a member at a class's edge
+  counts fully, though its outage on the jittery channel is about 0.15–0.2.
+- *Deadline windows span more of F's missions.* T_nom, the deadline unit, stays priced on wide for
+  every arm (critic C4), so an arm with shorter missions fits more of them into a deadline window
+  (the critic's estimate: F's narrow missions about 55 s against a T_nom of 172–250 s, about 4×
+  as many as a wide arm's). Documented, not corrected: compare deadline-driven counts between F
+  and the wide arms with this in mind.
+- *Planning time.* At N = 6 the search is exact and a plan takes at most about 0.25 s; the "1 s per
+  mission" mark does not extend to large N (at N = 96 on a 500 m field a plan took 3.1–3.4 s).
+- *Not yet built:* Study 5.4's sweep knobs (unit U10, before the 5.4 headline; the pilots run the
+  default layouts, where 0.68 of the devices already lie beyond 60 m at N = 6), and F·round and
+  F·pref (unit U11, with Study 5.2).
 
 ## 3. Smoke run (one trial, no dataset)
 

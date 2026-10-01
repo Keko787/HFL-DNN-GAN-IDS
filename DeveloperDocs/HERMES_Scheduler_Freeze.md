@@ -8,11 +8,13 @@ the files listed in §5 after this point invalidates recorded sweeps** and must 
 State at freeze: working tree clean for `hermes/scheduler/` and `hermes/mule/`; **153 scheduler
 tests passing**.
 
-**Amendments** (§5a–5j): 1–4 landed before or alongside the recorded sweeps. 5 and 6 (2026-09-27
+**Amendments** (§5a–5j) **and Phase 4** (§5k): 1–4 landed before or alongside the recorded sweeps. 5 and 6 (2026-09-27
 and 09-28) fix defects and change what the budgeted, `--l1-channel` and D1/D2 cells measure. 7
 (2026-09-28) opens this surface for the FeRRy build, behind switches whose defaults keep this
 pipeline. 8 and 9 (2026-09-28) land with the Phase 0/1 audit and Phase 2, and 10 (2026-09-29, the
-RF transport fix) with Phase 3. The code behind every recorded result is the tag `exp4-recorded`.
+RF transport fix) with Phase 3. Phase 4 (2026-09-30, the plan clock) needed none: every mechanism
+lands behind a switch or is additive (§5k). The code behind every recorded result is the tag
+`exp4-recorded`.
 
 ---
 
@@ -354,10 +356,19 @@ in legacy mode unless a study sets otherwise. Each switch is recorded here when 
 | Beacon inserts (`MuleSupervisor.offer_contact`) | none (decision D6) | mission clock only: an offered stop is inserted at its cheapest place only if the whole edited remainder passes the predicate, and never evicts a planned stop. Inert: nothing offers one in Phase 3 | Phase 3, commit `ef1faa1` (§5j) |
 | Driver wall budget (`--session-ttl-s`; the trial's hard kill) | a 3 s session TTL; the kill at `--trial-budget-s` (120 s); `down_wait_s` = that budget at K > 1 | the TTL at least 2× the 95th percentile of the real model's `train_offline` time, measured with N devices training at once (the exit gate's concurrency; the pilot plan of 2026-09-29); on the mission clock the kill is the larger of the budget and a bound built from the waits the code caps (562 s at a 3 s TTL, N = 6, one mule, 4 missions; K missions' worth per mission when the cluster orders uploads), and `down_wait_s` follows it | Phase 3, commit `ef1faa1` (§5j) |
 | Analysis on simulated time (consumer and scorer) | the wall clock | the clock read from `mule_ready.mission_clock` (absent: wall, every recorded trace); missions ordered by their simulated ends; `sim_s_to_τ` beside `wall_s_to_τ`; 15 simulated columns; a trace whose clocks disagree is refused (`ClockDomainError`); without a trial CSV, a mission-clock marker's `ok` is relabelled `timeout` against the soft cap the runner applied (`soft_cap_s` in `trial_status.json`, written when `runner_main` ran the trial), not against the trial's own re-costed budget | Phase 3, commit `ef1faa1` (§5j) |
-| `plan_mode` | `legacy` | `ferry` | Phase 4, planned |
-| `band_class_policy` | — | `search`; `fixed:<class>` is Path B+ | Phase 4, planned |
-| Age cap `S` | off | set by build-plan decision D4 | Phase 4, planned |
-| Flight-clock choice | distance order, or `TargetSelectorRL` within a bucket | masked pair score, or the cross-heuristic | Phase 5, planned |
+| Plan mode (`MuleConfig.plan_mode`; the driver's plan arms) | `legacy`: `FLScheduler.build_contact_queue` plans each mission as recorded, and at the defaults nothing loads the plan package (an H or D arm under `subset` loads its member walk) | `ferry`: at the dock `FLScheduler.build_ferry_plan` commits each mission to one band class b̄ and a Pass-1 route as one decision (S1, S3, the age cap, S3a once per class at R_planar(c) with the hover rule, the search, a guard fold under S3b's predicate, the commit); the mule flies b̄ in both passes and closes the plan once the merge is known. Simulated clock only; needs a `contact_band` and `t_nom_s`; refuses the `reorder` fallback (under `abort` too), `pass_2_budget`, a `contact_policy`, an RL selector, and `abort` together with a cap | Phase 4, commit `69b551f` (§5k) |
+| Band-class policy (`band_class_policy`) | — (one `contact_band` for every stop) | `search` (arm F): every class of the link, each mission; `contact_band` is then only the reference class, which the ferry spec, T_nom, D4's split and the H and D arms of the same CSV use. `fixed:<class>` (Path B+, the FB+ arms): the run's `contact_band` only, with the `committed` flight slot only | Phase 4, commit `69b551f` (§5k) |
+| Member admission, plan arms (`member_admission`; `--member-admission`) | `whole`, the field's default (plan mode is new) | `subset`, the plan arms' default (decision 4): the search and the plan-mode trim may fly a stop reduced to the members that fit. `whole` flies whole stops in every mode, in flight too (R5), which keeps the narrow-band cliff for comparison | Phase 4, commit `69b551f` (§5k) |
+| Member admission, H and D arms (`member_admission`; `--member-admission subset`) | `whole`: S3b and the D1–D3 and D5 walks admit a contact with all its members or none (the narrow-band cliff, §5j E2E1-01) | `subset`, when a run asks for it (decision 4 (b)): before takeoff only, a contact that fails whole is re-issued with the members that still fit, skip not stop, in the arm's own member order (H1–H3: own deadline, then Pass-1 dwell, then id, the miss streak first under miss priority; D1–D3: the arm's per-device score; D5: FedCS's selection key). H complements are dropped by reason and widened; D complements are reported (`pass_1_policy_drops`) and never widened. Nothing in flight reduces their contacts. Never D4, whose tour has no gate | Phase 4, commit `69b551f` (§5k) |
+| Flight slot (`flight_slot`) | the queue's order (`remainder.pop(0)`): distance order, or `TargetSelectorRL` within a bucket | `committed` (F, the FB+ arms): the same pop, on b̄. `cross_heuristic` (FX, decision 5): in Pass 1, after each stop, the nearest remaining stop whose move to the front keeps the rest of the plan feasible (else the plan's next), and at each arrival the fastest class that still reaches every device b̄ reaches there, priced at the arrival SNR, so it never dwells longer than F would at that SNR. At takeoff the plan's first stop is flown (the band rule still applies on arrival there), and Pass 2 flies the committed order on b̄ | Phase 4, commit `69b551f` (§5k) |
+| Flight-clock pair choice | the slot's fixed fillings above | the masked pair score (the learned pair Q, in the same slot) | Phase 5, planned |
+| Age cap S (`age_cap_missions`; `--age-cap-missions`) | off (None) | an int ≥ 1, counted in the device's own mule's missions since its last merged update (`last_merged_round`, mission 0 for a device never merged; decision 1), plan mode only. The plan serves the oldest capped devices that fit before it weighs anything else (the cap key), a stop whose members are all capped is exempt from its deadline clause, and every capped device a mission fails is logged by cause. S is set per cell from the S\* tool: the smallest value that covers 90 % of layouts at both pilot budgets, never below 2 | Phase 4, commit `69b551f` (§5k) |
+| Cap lookahead L (`age_cap_lookahead`; `--age-cap-lookahead`) | 0 | a device is capped from age S − L. Kept at 0 (R9): L = 1 does not remove the miss of critic probe A3 | Phase 4, commit `69b551f` (§5k) |
+| Plan score (`plan_score_params`; `--plan-score-params`) | {}, the defaults (read in plan mode only) | V = −[c₁(Δ/T)² + c₂U + c₃L] − c₄E/(P_hover·T): Δ the whole mission on b̄ (Pass 1, the turnaround, Pass 2) against T = T_nom (decision 2 (b)); c₁ = 1 (`c_time`), c₂ = κ·N_demand with κ = 1 (`c_cov_per_device`), c₃ = c₂ (`c_link`), c₄ = 0.1 (`c_energy`); `coverage_weights` `age`, the age times (1 + miss streak) under the arm's miss priority (decision 3); `dwell_in_delta` False is F-dwell; `coverage_rank` `lexicographic` ranks the candidates by the cap key, then the served weight share, then V (R11), `weighted` by the cap key, then V (the pilot's κ sweep), and with κ = 0 (F-cov) the weighted rank applies whatever it says. Hand-set and swept, in FedEx's form with the convex-surrogate caveat | Phase 4, commit `69b551f` (§5k) |
+| Plan search (`plan_search_params`; `--plan-search-params`) | {}, the defaults (read in plan mode only) | `exact` (every ordered stop sequence, each stop reduced to every member subset) when the demand has at most `exact_max_devices` (6) devices; `stop_subsets` (ordered stop subsets, each stop whole if it fits, else reduced greedily) when a class has at most `exhaustive_max_stops` (6) stops; `local` above (a 2-OPT tour, its trim, first-improvement scans), bounded by `heuristic_max_passes` (50) and `heuristic_max_evaluations` (2,000 walks per class): counts, never wall time | Phase 4, commit `69b551f` (§5k) |
+| Runner's default arm list (`driver.DEFAULT_ARMS`) | every arm of `driver.ARMS`: H0–H3 and D1–D5 | `DEFAULT_ARMS` keeps those nine. The plan arms (`PLAN_ARMS`: F, FX, FB+wide, FB+medium, FB+narrow, F-cov, F-cap, F-prio; `ARMS` is both lists) run only when named with `--arms`, on the simulated clock, and the runner refuses one the driver cannot run before any trial (`Exp4Driver.check_arm`) | Phase 4, commit `69b551f` (§5k) |
+| D-arm drop report (`FLScheduler.last_policy_drops`; `mission_completed.pass_1_policy_drops`) | none: D1–D5 say nothing of what they leave out before takeoff (`pass_1_preflight_drops` is []) | on the simulated clock, each contact the D1–D5 walk left out before takeoff (under `subset`, the rest of a contact it served in part), labelled with the clause that refuses it alone from takeoff under the arm's in-flight rule, else `budget`; written only when non-empty, with `"widened": false`, and never widened (decision 6). Not a switch: the one trace-event field that can appear at the defaults (§5k) | Phase 4, commit `69b551f` (§5k) |
+| Hover stops (plan mode; no switch of its own) | — (S3a's stops) | under a budget and a cap, each capped device that its own S3a stop cannot serve alone within the budget leaves that stop for a one-device stop at its best hover point on the class: the point of the dock-to-device segment, within the class's reach and above the SNR floor, that minimises its alone Pass-1 mission (the user's decision of 2026-09-30, after the final check's PLAN-1 and E2E2-01). `unplannable` then means that no class the arm may fly serves the device alone within the budget even there | Phase 4, commit `69b551f` (§5k) |
 
 The Phase 3 physics values are parameters, not switches: the SNR floor, altitude, path-loss
 exponent, shadowing σ and margin quantile (D1); the interference regime and period, the noise bin,
@@ -383,19 +394,30 @@ hermes/scheduler/fl_scheduler.py        Phase 3 (public accessors for the budget
                                           and the feasibility model; as landed also the deadline
                                           time unit, the override refusal, the pre-flight order
                                           check, fold_remainder / replan_remainder and the T_nom
-                                          helper, §5j), Phase 4 (plan mode, clustering per band
-                                          class, commit, a visited set per mission)
+                                          helper, §5j), Phase 4 (as landed: plan mode, S3a once
+                                          per band class, the commit and its visited set, the
+                                          plan-mode re-plan; in build_contact_queue only the
+                                          D arms' drop report, its reset, and the member-subset
+                                          carrier, §5k)
 hermes/scheduler/stages/s3_deadline.py  Phase 1 (law, priority key, PARTIAL vs TIMEOUT, overrides
                                           that expire), Phase 3 (the law's time unit, the override
                                           refusal, the SpectrumSig fold, §5j)
-hermes/scheduler/stages/s3a_cluster.py  Phase 4 (radius from the band class, once per class)
+hermes/scheduler/stages/s3a_cluster.py  Phase 4 planned the radius per band class; the stage
+                                          already takes it, so the file is untouched (§5k)
 hermes/scheduler/stages/s3b_feasibility.py  Phase 1 (priority key in the walk), Phase 3 (one
-                                          FeasibilityModel; single-contact predicate)
+                                          FeasibilityModel; single-contact predicate), Phase 4
+                                          (additive: dropped_plan, the member_admission values,
+                                          the opt-in member-subset walk, §5k)
 hermes/scheduler/selector/              Phase 5 (pair features, masked pointer Q, replay with the
                                           next candidates, the ferry_sim trainer, the scope guard
                                           over pairs)
 hermes/mule/mule_main.py                Phase 1 (version threading, Pass-2 budget), Phase 3 (clock,
-                                          band, re-plan), Phase 5 (pair choice)
+                                          band, re-plan), Phase 4 (plan mode, the flight slot, the
+                                          exempt set in flight, the plan's close, §5k), Phase 5
+                                          (pair choice)
+hermes/scheduler/policies/              not frozen (§5); Phase 4 (the member-subset keyword in
+                                          budget_walk.py, fedcs_degraded.py, max_aoi.py, oort.py
+                                          and whittle.py; cross_heuristic.py, new, §5k)
 ```
 
 **Landed so far (Phase 1, commit `8f23f02`; Amendments 5 and 6 are commit `dc90f84`).** In the frozen files: `fl_scheduler.py`
@@ -942,7 +964,9 @@ below. None changes legacy behaviour, so none is an amendment.
   (D1–D3, D5) show the budget cliff. Phase 4's member-subset admission is the fix for the cliff
   (Configuration Reference §17.1). *Decided 2026-09-29:* the fix is deferred to Phase 4, and
   narrow and medium cells are not compared under budgets below the cliff until then; their budget
-  knees wait for Study 5.4.
+  knees wait for Study 5.4. *(2026-09-30: Phase 4 lands member-subset admission behind
+  `member_admission`, for the plan arms by default and for H1–H3, D1–D3 and D5 when a run asks;
+  `whole`, the default, keeps the cliff and its pins, §5k.)*
 - *The hard kill's bound* (`ferry_wall_bound_s`) takes ceil(N/K) devices per slice. Angular or
   CARP slices can be unbalanced, so at K ≥ 3, when the cluster does not order the uploads (a full
   quorum, not FedBuff), an all-timeouts worst case can exceed it (slices of 7, 1 and 1 devices at a
@@ -1007,6 +1031,447 @@ run yet:
 A later pilot could run the knee sweep under both `trim` and `reorder` and choose by how often
 the pre-flight check fires and what each costs in coverage; that is an idea on record, not part of
 the plan.
+
+## 5k. Phase 4 behind switches, no amendment (2026-09-30)
+
+Lands with FeRRy Phase 4 (build plan, Phase 4, "Plan clock: reach as a decision"; commit
+`69b551f`, on `6e6f92d`). It is not an amendment (Rule 3): nothing changes the wall clock, or Phase 3's
+simulated clock, at the defaults. Every mechanism sits behind a switch of the §5g table whose
+default is the recorded pipeline, in behaviour and in trace output, or is additive: the one
+trace-event field that can appear at the defaults is the D arms' drop report, and every mule's
+per-role JSON gains the eight plan fields at their defaults (below). "Legacy" now has two faces, and
+both are pinned: the wall clock by the 144 afa9526 goldens (§5j), and Phase 3's simulated clock with
+`plan_mode = legacy` by oracles captured at `6e6f92d` before any Phase 4 edit (unit UG4, below).
+
+**Build-plan decision D4 and the seven decisions** (the user, 2026-09-30). Each is the
+recommendation except the fourth.
+
+1. *The age cap S (D4).* A device's age is the number of missions its own mule has flown since its
+   last merged update (`last_merged_round`, mission 0 for a device never merged), the scorer's own
+   unit. S is the smallest value that covers 90 % of layouts at both pilot budgets (the knee and
+   the stress budget), never below 2: S = 1 would cap every device at every mission (critic A1). S
+   is a configuration value; the S\* tool prints it, (i), and S + 1, (ii).
+2. *Plan-score time.* Δ is the whole mission on the chosen band (Pass 1, the dock turnaround and
+   Pass 2), measured against T_nom (`t_nom_s`, which plan mode requires). κ = 1: serve everyone the
+   budget allows, and let time break ties. The pilot sweeps κ in {0.15, 0.25, 1} and c₄ in {0, 0.1}.
+3. *Coverage weight.* Age × (1 + miss streak), declared roughly quadratic in age: every device the
+   plan leaves out is widened as a miss, so the streak tracks the age (critic A5). F−prio drops the
+   streak factor and weighs by age alone. F−cov keeps the plan's letter and is reported as "cap-only
+   service".
+4. *The narrow-band cliff fix, also for the H and D arms* (option (b), not the recommendation).
+   Member-subset admission lands for the F family and, as an opt-in branch whose default is `whole`,
+   in S3b's `filter_feasible` (H1–H3), `greedy_budget_walk` (D1–D3) and FedCS's walk (D5). D4 has no
+   gate and is unaffected.
+5. *FX.* `policies/cross_heuristic.py` is built now (below); the learned pair choice stays in
+   Phase 5.
+6. *D-arm drops.* Reported only, as `pass_1_policy_drops`, written only when non-empty, and never
+   widened.
+7. *The pilots.* The recommended plan (Run Guide §2.7). Nothing runs before the user's go-ahead, and
+   not before the Phase 3 pilot has set the session TTL and the knee.
+
+**Resolutions taken during the build** (the orchestrator's, each recorded where it lands):
+
+- *R1.* A cap without the mission round raises (critic B9). Plan mode needs the round even with the
+  cap off, since the age weights read it, and the commit refuses a cap without one.
+- *R2.* The cap's stop rules (B2's deadline, exempt and priority stops) have one definition:
+  `plan/member_subset.py` imports `stop_deadline`, `is_exempt` and `is_priority` from
+  `stages/s3d_age_cap.py`, never the reverse.
+- *R3.* The link term's outage formula is defined twice, by the runtime
+  (`FerryRuntime.outage_probability`, which the planner calls) and by the score
+  (`plan_score.outage_by_distance`); a test ties the two within 1e-15.
+- *R4.* Every plan arm's commit records the predicted whole mission, `score.mission_s`, beside V's Δ
+  (`score.delta_s`, which leaves the dwell out under F−dwell).
+- *R5.* `whole` means whole in every mode: the search flies whole stops in all three of its modes,
+  and the plan-mode re-plan keeps or drops whole stops (`FLScheduler._trim_whole`).
+- *R6.* FX's next-stop rule acts only after each Pass-1 stop, never at takeoff or in Pass 2, and its
+  band rule only in Pass 1. "Never dwells longer than F" holds at the arrival SNR, which is how
+  decision 5 prices it: a contact charges each target at its own session start (critic C2).
+- *R7.* The local search's bound stays at 2,000 walks per class. Its cap limitation is recorded, not
+  fixed: no move swaps one stop for another, so where two capped stops compete for one slot it keeps
+  the one the trim took first. Forced onto 1,496 small capped class searches it ended with a worse
+  cap key than the exact search in 6.1 % (a replace move would give 2.5 %, an oldest-first start
+  2.5 %, both 1.9 %).
+- *R8.* The empty plan's band is the first searched class (by class index).
+- *R9.* The lookahead L stays 0.
+- *R10.* Pass 2 is never member-reduced: it delivers to whole stops on b̄, `pass_2_budget` is
+  refused in plan mode (critic B8), and the budget walk refuses the subset carrier in Pass 2.
+- *R11.* Coverage first (below).
+- *R12.* Under `whole` the plan's drop labels (spec item 8) judge the stop: `plan` only when the
+  whole stop fits from the dock at takeoff, else the clause that refuses it, so a capped member of a
+  mixed stop that is late for its co-members' deadline reads `overdue`. The cap's violations judge
+  the device alone, under either admission (the hover decision, below).
+- *R13.* At S = S\*, arm F on critic layout 25 crowds three times over its 3S = 6 missions
+  (missions 2, 5 and 6), not once as critic A4 found under the design's score: the user's score
+  (decision 2 (b)) takes narrow {d0, d1, d2} at mission 1, where the design's took medium. Pinned as
+  flown. Across the 30 layouts at S\* only layouts 1, 18 and 25 crowd anyone (1, 2 and 3 times),
+  and only as `crowded`.
+- *R14.* `score.mission_s` is a prediction: Pass 2 is priced on the class's S3a stops at plan time,
+  but the mule rebuilds Pass 2's queue after Pass 1 has moved the deadlines, so the flown mission
+  can differ (at U7's build, 3 of 270 deterministic loopback missions ran 2.3 to 7.9 s longer than
+  predicted; in the final check's real FX trials the gap was up to 5.8 s, either way).
+
+**Coverage first (R11).** U7's probe showed that V alone does not keep decision 2's promise to serve
+everyone the budget allows. Every plan that serves anyone pays a whole Pass 2 on its class, and the
+empty plan pays only the turnaround, so the empty plan can outscore a device that fits. In the probe
+(u and v 60 m either side of the dock, z 400 m out; FB+wide, 1 MB, a 37.6 s budget, T = 200 s, the
+cap off) serving v scored V = −3.85 (a predicted 264 s mission, its Pass 2 flying out to z) and the
+empty plan −3.02 (its 30 s turnaround); with the weights growing together, the arm flew empty six
+missions running. So `plan_score_params.coverage_rank` decides how the candidates that tie on the
+cap key are ranked:
+
+- `lexicographic`, the default: the served weight share, Σ_served w / Σ_demand w, then V. Every
+  demanded device weighs more than 0, so the empty plan wins only when no plan that serves anyone is
+  admitted, and time breaks ties among plans that serve the same weight;
+- `weighted`: V alone (U0's `Candidate.key`), trading coverage against time at the rate κ sets. The
+  pilot's κ sweep flies it;
+- with κ = 0 (F−cov) the weighted rank applies whatever the setting says: cap-only service
+  (decision 3).
+
+The rank changes neither V nor its terms nor `mission_s`, and `weighted` is the search as built
+before it, bit for bit (a digest over 184 random problems). Under `lexicographic` a single
+first-improvement scan never takes a drop or drop-member move, since each serves less weight, and
+alone it ended below `weighted`'s plan under its own key on 3 of 600 random local problems at κ = 1
+and 3 of 327 at drawn κ. So the local search runs up to three scans: the weighted key's from the
+trim's route, the plan key's from the best plan met, and the plan key's from the trim's route when
+that differs. They share the per-class bound, and the class's best is never below `weighted`'s under
+the plan key (0 of the same 600 and 327 after the fix). The cost: no extra walks on the 100 m Exp 4
+field, and 32 % to 56 % more on 300 m and 500 m fields within the same bound. Two consequences are
+recorded. Missions can be longer, since time only breaks ties: layout 18's fourth mission is
+predicted at 182 s where `weighted`'s plan took 118 s, and over 30 layouts × 6 missions at 45 s with
+the cap off F's plans differ from `weighted`'s in 3 of 180 missions (a mean predicted mission of
+119.0 s against 118.0 s) and FB+wide's in 14 of 180 (159.2 s against 153.5 s), where `weighted` flew
+7 empty missions and `lexicographic` none. And the share is nominal: it counts a served member
+fully, though on the pilots' jittery channel its outage at a class's edge is about 0.15–0.2. Layout
+18's crowding at S\* falls from 3 to 2 under it (R13).
+
+**The hover decision** (the user, 2026-09-30, after the final check's PLAN-1 and E2E2-01, below). In
+plan mode a capped device (age ≥ S − L) that its own S3a stop cannot serve alone within the budget
+(U1's `servable_alone`, from the dock at takeoff) leaves that stop for a one-device stop at its best
+hover point on the class (`plan/hover.py`). That point p lies on the segment from the dock to the
+device and minimises the device's alone mission, transit dock → p, its dwell at |device − p| at the
+class's predicted rate, return p → dock and the Pass-1 upload, among the points within the class's
+planar reach of the device where its predicted dwell is finite. It must be within reach by both
+distance formulas in the code: the model's `** 0.5`, which decides whether the dwell is charged, and
+the `math.sqrt` of S3a and of the contact gate, which decides whether the mule solicits the device.
+It is found deterministically, independent of the clock, the budget and the partition: a 64-cell
+grid, then at most 64 rounds that halve at most 8 cells each, while a cell's bound can still beat
+the best point by more than 1e-9 s, a tie going to the point nearer the device. Because the dwell
+never falls with the distance on the contact link, no point of the plane serves the device alone
+sooner. The stop it leaves keeps its position and takes its remaining members' bucket and B2
+deadline, and an emptied stop goes. Uncapped devices, and capped devices that their S3a stop serves
+alone, keep S3a's stops; without a budget, or with the cap off, nothing moves; Pass 2 is still
+priced and flown on S3a's stops. `unplannable` now means that no class the arm may fly serves the
+device alone within the time budget even at its best hover point. The S\* tool uses the same stop
+family, and its S + 1 claim is narrowed to what was measured, with caveats it prints (Configuration
+Reference §18.7).
+
+*Under an energy capacity* the point still minimises time. The energy clause weighs a second of
+hovering (168.5 W) more than a second of flight (143.6 W), so a slightly slower point with a shorter
+dwell can need less energy, and the label can then read `unplannable` while such a point would serve
+the device: `unplannable` is physics for the time budget only. With no time budget binding, 34 of
+the 1,080 device-class pairs of the critic's and the S\* tool's 30 layouts have such a point at 1 MB
+(2 at 64 kB, 625 at 8 MB). No pilot sets a capacity; an energy-aware point is the user's call (open
+items).
+
+**What landed, by unit** (Configuration Reference §18 has each setting):
+
+- *Goldens at `6e6f92d` (unit UG4).* `tests/golden/_build_p3_sim.py`, `data/p3_sim.json` and
+  `test_golden_p3_sim.py`, captured on the untouched tree: eight stub trials of Phase 3's simulated
+  clock through `Exp4Driver.run_trial`, with the real cluster, mule and device services run in
+  process. They are H1 with the pilots' flags (wide, the `t_nom` unit, `replan` with `trim`,
+  `agg:cutoff`, the `channel` source, 1 MB, 60 s, the seconds backhaul), D1, D3 and route-only D4 on
+  its layout, the narrow cliff flown empty (T2 at 60 s) and whole (99.5 s), H1 on medium, and H1 on
+  narrow at the measured payload, so contacts are flown on all three classes at both payload modes.
+  Each trial's row, per-role JSON and every mule, cluster and device event is compared on its
+  `6e6f92d` keys: an added key passes, a removed or renamed one fails, and values and event
+  sequences must match exactly. In process the device-serve columns are harness values (`coverage`
+  and `participation_entropy` 0, `jains_fairness` 1.0), so the consumer's serve fold is pinned by
+  `tests/unit/test_exp4_metrics.py` instead. Every trial flies the `t_nom` deadline unit, and D5 and
+  K = 2 are not among them; random-instance tests against `6e6f92d`'s modules cover D5. The goldens
+  are now 228 tests: the 144 afa9526 ones and the 84 of `test_golden_p3_sim.py`. A second pass/fail
+  baseline was recorded at `6e6f92d` (below).
+- *Plan types (U0).* `hermes/scheduler/plan/__init__.py`, which re-exports the types only, and
+  `plan/types.py`, every type that crosses a unit boundary (critic B13): the switch values,
+  `AgeCapSpec`, `CapState`, `PlanScoreParams`, `PlanSearchParams`, `PlanOptions`, `PlanSetup`,
+  `PlanClass`, `ScoreTerms`, `MemberFold`, `Candidate`, `SearchResult` and `ArrivalView`. Additively
+  in `hermes/types/scheduler.py`: `PlanCommit`, `CapViolation`, the cap reasons, and the band-class
+  policy and search modes, which the plan package re-exports. The commit is frozen and checked: it
+  refuses a `fixed:<class>` policy on another class (FB+c flies only class c), an unknown search
+  mode and a cap without its round, it holds no wall time (critic B12), and `close` returns a
+  checked copy. Unknown score or search settings are refused, and `fixed:<class>` pairs with the
+  `committed` slot only.
+- *The age cap (U1).* `stages/s3d_age_cap.py`: the age m − (`last_merged_round` or 0), with no clamp
+  to 1 and no fallback to `last_clean_round`; exempt, mixed and priority stops, computed on the
+  route actually folded (critic B1); B2's deadline; the cap key (critic C5); `servable_alone`; the
+  plan-time and close-time violations.
+- *The plan score (U2).* `plan/plan_score.py`: V, the coverage weights (the age floored at 1 in the
+  weight only), the mean-SNR outage, `predicted_mission_s`, and R11's `served_share`, `applied_rank`
+  and `plan_key`. V of the empty plan is −c₁(t_turn/T)² − c₂. With Δ and E held and c₃ ≤ c₂, serving
+  one more device never lowers V, and it raises V when c₂ > 0 unless c₃ = c₂ and the device's outage
+  is 1: the plan's "V falls as coverage falls" (L842) as the tests state it.
+- *Member subsets for the F family (U3).* `plan/member_subset.py`: `reduce_stop`, the F member order
+  (capped first, then weight per second of predicted dwell, then id), `admit_members` (the one
+  member walk, skip not stop, with an injectable order), `admit_stop`, `fold_members`, and
+  `trim_members`, the in-flight trim, which flies the priority stops first and reserves their capped
+  members before the rest, so a capped member is dropped only when the protected-only trim cannot
+  hold it. Additively in `s3b_feasibility.py`: the `member_admission` values and
+  `FeasibilityResult.dropped_plan`, appended last, so the positional construction still works and
+  `REASONS` is unchanged. On the Phase 3 cliff instance (T2: `device_positions(8, 777, 100.0)`,
+  narrow, 1 MB) F admits 5 devices at 60 s (home 54.490 s) and 7 at 99.0 s (home 81.903 s), where
+  S3b admits none; `test_p3_final_fixes_mule.py` keeps its pins as the `whole` side.
+- *Member subsets for the H and D arms (U3b).* `filter_feasible(member_subsets=...)`, with
+  `MemberSubsets` and `fold_subsets`, in S3b; `greedy_budget_walk(member_subsets=...)` and
+  `left_out` in `policies/budget_walk.py`; `fedcs_greedy_select(member_subsets=...)` in
+  `fedcs_degraded.py` (its deviation 11); the keyword forwarded by `max_aoi.py`, `oort.py` and
+  `whittle.py` (Whittle's deviation 9). The whole-scheduler contract (§5d) gains an optional
+  `member_subsets=None` on `admit_and_order` and the class flag `admits_member_subsets = True`,
+  which MAX-AoI, Oort, Whittle and FedCS declare and FedEx does not. Member orders: H1–H3 the
+  member's own deadline, then its Pass-1 dwell at the SNR offset, then id, with the miss streak
+  first under miss priority; D1–D3 the arm's own contact key on the one-member contact (the age,
+  Oort's utility, the Whittle index), then id; D5 Algorithm 3's selection key on the one-member
+  pick, then id. This is the fidelity argument of critic B5: the published methods select devices,
+  not stops. Only the pre-flight call passes the carrier, so the in-flight check, the re-plan and
+  the trim never create reduced stops for these arms, and the budget walk refuses the carrier in
+  Pass 2. One interaction under `subset`: inside the pre-flight order check, S3b's re-admission
+  re-sorts the kept stops by their own deadlines, and a reduced stop's deadline can be later than
+  its original's. In a random probe it dropped a stop in 17 of the 1,231 checks that fired (0 under
+  `whole`); such drops join `last_feasibility` and are widened. (The `trim` fallback's own drops in
+  that check are Phase 3 behaviour under either admission.)
+- *The search (U4).* `plan/plan_search.py`, with an independent brute force
+  (`tests/unit/_p4_brute.py`: itertools over class × device subset × orders, priced by a plain
+  `FeasibilityModel.fold`). Exact up to 6 devices; above that, the depth-first stop-subset family or
+  the local search. The walk bound buys determinism, not a time bound: at N = 6 a whole plan took at
+  most about 0.25 s (no budget, a synthetic worst case) and about 20 ms under 30–120 s budgets, but
+  at N = 96 on a 500 m field at 1 MB with no budget every class reaches 2,000 walks and one plan
+  took 3.1–3.4 s. The scan order and the skip of neighbours already walked are part of the contract,
+  and the search's memo key includes the deadlines on board (`deliver_by`).
+- *The scheduler fork (U5).* In `fl_scheduler.py`: `FLScheduler(member_admission=, plan_mode=,
+  plan=)` and its refusals; `build_ferry_plan`; the spec's item 8 drop labels; the plan-mode re-plan
+  (U3's member trim under `subset`, `_trim_whole` under `whole`), which dates the plan's own members
+  by the plan and a beacon insert's by the mule's record; `plan_protected`; `close_plan`; and
+  `last_policy_drops`, `last_plan` and `last_plan_wall_s`. Inside the frozen `build_contact_queue`
+  three things change: `last_policy_drops` is reset with the other diagnostics, so an early return
+  cannot re-emit a stale report (critic A9); the member-subset carrier goes to the two pre-flight
+  admission calls under `subset`; and the D arms' report is set on the simulated clock, with
+  `last_feasibility` left None for them. S1 and S3 are repeated in `build_ferry_plan`, not
+  refactored out of the frozen method (a test pins equal deadlines and buckets), and the
+  source-order pins hold. On 2,000 random instances the scheduler at its defaults equals
+  `6e6f92d`'s, loaded from git.
+- *The runtime and FX (U6).* In `mule/ferry.py`: `FerryRuntime.band` and `set_band`, an optional
+  `band=` on every method that reads a band, per-class physics bound at construction (critic B3),
+  `outage_probability`, `plan_classes` and `arrival_view`; `contact_plan` refuses a Pass-2 plan on
+  any class but b̄. `policies/cross_heuristic.py` holds the slot's two fillings (§5g);
+  `policies/__init__.py` does not import it, since it loads the plan package. At its defaults the
+  runtime equals `6e6f92d`'s bit for bit on 27 cases (9 configurations × 3 seeds).
+- *The supervisor (U7).* In `mule_main.py`: `MuleSupervisor(member_admission=, plan_mode=,
+  plan_options=, t_nom_s=)` and its refusals; per mission `set_mission_round`, `build_ferry_plan`,
+  `set_band(b̄)`, then the annotations; the `plan` drops widened and recorded after the other four
+  reasons and left out of S3c's planned count (critic C6); the D arms' report; `close_plan` right
+  after `record_merged`, with `merged = ()` on the empty path. In flight, Pass 1 only: the exempt
+  set, recomputed at each departure, goes to the departure check, abort's head fold, the re-plan,
+  the beacon hook's fold and FX's `fits`, and the re-plan gets the mule's deadlines; the order is
+  the departure check, then the beacon hook, then the slot; a capped member never lowers
+  `deliver_by`, in a mixed stop too; the beacon hook groups an offer within b̄'s range; and under
+  `agg:cutoff` `not_merged` follows the merge's exclusions, not the round report. On critic B4's
+  deterministic loopback (the link's σ kept, every noise term 0, availability 1): for arm F, no
+  violation at S\*+1 on any of the 30 layouts at 45 and 60 s (the test flies F only; the pinned
+  classes can still crowd at 45 s, below); F's plan key never above any FB+c's (critic A3); FX
+  never lands later than F after the last Pass-1 stop; and a K = 2 plan-mode loopback.
+- *Processes, driver and runner (U8).* The eight `MuleConfig` plan fields, `PLAN_MULE_FIELDS`,
+  inside `SIM_ONLY_MULE_FIELDS` and outside `FERRY_SPEC_FIELDS`, so Phase 3's `ferry_params` are
+  unchanged, with their guards in `mule_config_errors`; the plan wiring and the new `mule_ready` and
+  `mission_completed` fields in `processes/mule.py`; the plan fields as explicit topology
+  parameters, copied to every mule; in the driver `DEFAULT_ARMS`, `PLAN_ARMS`, each arm's band,
+  member admission and `miss_priority`, `check_arm`, T_nom computed for every plan arm (per cell,
+  unless `--t-nom-s` gives it), and the provenance rule (plan keys in `ferry_params` in plan mode
+  only, `contact_band` reading `search` for the search arms); the runner's flags.
+- *Analysis and the S\* tool (U9).* `MissionRecord` gains the plan and cap fields;
+  `traces_scorer.py` gains one age walk shared by every age figure, the nine Phase 4 columns,
+  `--age-cap-s` and the driver's provenance rule; `experiments/analysis/age_cap_s_star.py` is new.
+  All 600 kept traces score as `6e6f92d`'s scorer scores them, with the nine columns blank (0 rows
+  differ). The allowed-added set at `tests/unit/test_multi_mule_scoring.py:1084-1098` is edited on
+  purpose.
+- *Coverage first (R11) and the hover stops*, above.
+
+**Visible at the defaults, additive only.** Every mule's per-role JSON, on either clock, carries
+the eight plan fields at their defaults. A D-arm mission on the simulated clock that leaves a
+contact out before takeoff gains `pass_1_policy_drops` (decision 6), the one trace-event field;
+Phase 3's simulated D-arm traces have none, and UG4's compare reports it as an added key. Nothing
+else: no plan field reaches `mule_ready` or `mission_completed` at the defaults (tests pin their
+absence on H1, D4 and wall-clock missions), Phase 3 rows keep their `ferry_params`, `contact_band`
+and `miss_priority` strings, and the trial CSV header is unchanged. The scorer's CSV gains nine
+columns, blank on every older trace at the defaults. `FeasibilityResult.dropped_plan` is empty
+outside plan mode, and `FerryRuntime.band` never moves there.
+
+**How legacy identity was checked.** For every unit: the 228 goldens before and after, and UG4's
+P3-sim compare (`8 trials x 8 parts compared (same)`); `6e6f92d`'s modules loaded from git beside
+the live ones (S3b, the walks and the five D policies on 1,200 random and 180 band-priced instances,
+the scheduler on 2,000, the runtime on 27 cases); fresh-interpreter tests that no path at the
+defaults loads `hermes.scheduler.plan`, `s3d_age_cap` or `cross_heuristic` (an H or D walk loads
+the member walk only under `subset`); and the 600 kept traces re-scored. The final check's legacy
+dimension widened the in-process differential to 74 trials and found no change.
+
+**Test baselines and the compare rule.** `tests/golden/make_baseline.py` now holds two pass/fail
+baselines (`BASES`): `pytest_baseline.txt`, the full suite at afa9526 before any Phase 3 change
+(1,560 tests, 6 failures; signed off by the user on 2026-09-29), and `pytest_baseline_6e6f92d.txt`,
+the full suite at `6e6f92d` before any Phase 4 code change, with UG4's goldens added (2,918 tests,
+the 84 of `test_golden_p3_sim.py` among them: 2,913 passed and the five deterministic afa9526
+failures with their signatures; unit UG4), which gates Phase 3's own tests too. "The full suite
+passes" for Phase 4 means: the same as both baselines, that is the same outcome per node id and
+the same signature per known failure, new tests allowed. `compare` checks every
+recorded baseline by default (`--base` picks one, `--baseline` names a file). It exits 0 when the
+run is the same as each, 1 when it differs from one, and 2 when a baseline file it was to compare
+with is missing, printing `MISSING` and still comparing the other; the worst status wins, so a
+baseline left out of a commit cannot switch its gate off in silence. It also lists the new tests
+that fail, which are never differences, so read that line. A flaky test (`FLAKY`) may pass, or fail
+its known way, from run to run. Only `test_exp4_real_model_synthetic_converges` is listed: its
+`rounds_closed == 0` failure under load flipped the afa9526 comparison to DIFFERS on its own. A
+change of it is reported as allowed; any other failure of it, an error or not running still differs.
+`--flaky NODE_ID` adds a test, and `--strict` drops the list (the old rule). `write --base 6e6f92d`
+refuses unless HEAD is `6e6f92d` with `hermes/` and `experiments/` clean.
+
+```
+py -3.11 -m pytest tests -p no:cacheprovider -q -rfE --junitxml=run.xml
+py -3.11 tests/golden/make_baseline.py compare run.xml                   # both baselines
+py -3.11 tests/golden/make_baseline.py compare run.xml --base 6e6f92d    # one of them
+```
+
+Phase 4 adds 1,862 tests in 15 new test files (`tests/unit/test_p4_*.py`,
+`tests/integration/test_p4_*.py` and `tests/golden/test_golden_p3_sim.py`), UG4's 84 goldens among
+them, with three helper modules: `tests/unit/_p4_brute.py`, the search's independent brute force,
+`_p4_ref.py`, which loads `6e6f92d`'s modules from git, and UG4's `tests/golden/_build_p3_sim.py`.
+The `6e6f92d` baseline already records the 84 goldens, so a compare against it lists 84 fewer new
+tests than the 15 files hold. The full run of the Phase 4 tree (2026-09-30: 4,696 tests, 4,690
+passed and the six afa9526 failures) is the same as both baselines (exit 0): against afa9526 with
+3,136 new tests and against `6e6f92d` with 1,778, none failing. The real-model smoke test, which
+passed in the `6e6f92d` baseline, failed its known way, a change the flaky allow-list allows.
+
+**Final cross-cutting check (2026-09-30).** Six review dimensions: spec fidelity; the plan pipeline
+across units; legacy identity and the H and D paths; the driver, configuration and analysis; an
+end-to-end replay of the plan arms with one mule (8 real trials, 40 missions, 35 in plan mode, and
+285 missions in process); and one of plan mode at K = 2, the D arms and the S\* tool. Four found no
+defect. The two findings, both confirmed, share one cause:
+
+- *PLAN-1 (high).* S3a re-clusters the demand every mission on S3's deadlines. A device the plan
+  leaves out is widened, so its deadline recedes and S3a anchors it last, and once it lies far from
+  the rest it becomes a stop of its own at its own position, from which no plan serves it within the
+  budget. The cap then logged it `unplannable`, which reads as physics, dropped it as `budget` and
+  widened it again, so it starved, often for good. On critic B4's loopback, FB+medium at 45 s and
+  1 MB, at S = S\*(medium) + 1 = 3, left d5, d3 and d1 of critic layouts 0, 4 and 26 `unplannable`
+  from mission 5, 5 and 4 to mission 16 (ages up to 15), though each fits alone from a reachable
+  point (d5 and d3 hovering at the dock, in 13.25 s). In the pilots' configuration, built by the
+  driver (1 MB, S = 3), FB+medium had `unplannable` violations in 8 of 30 runs at 45 s with the
+  critic's seeds and 13 of 30 with runner-style seeds, FB+wide in 13 and 14, FB+narrow in 0 and 1,
+  and F, FX and F−prio in none; at 30 s F and FX in 11 of 30 each and FB+medium in 26 of 30, with 21
+  empty plans; at 90 s none. Every such event named a device that some reachable point served alone
+  within the budget.
+- *E2E2-01 (medium).* The S\* tool priced S\* on a fresh, all-new S3a partition, from which the
+  running missions drift, so its documented S\*+1 guarantee failed for the pinned classes at the
+  stress budget. On its own layouts at 45 s, FB+medium (layouts 0 and 27) had 12 violations at S\*+1
+  on devices the tool calls servable (9 `unplannable`, 3 `crowded`), and FB+wide (layout 29) one
+  `crowded`; F and FB+narrow were clean, and every family at 60 and 90 s.
+
+The hover decision (above) fixes both. After it, on the S\* tool's 30 layouts at 1 MB, each flown at
+its own S\*+1 for 3S missions on B4's loopback (either deadline unit): at 45 s F has no violation in
+276 missions (8 `unplannable` before), FB+wide 2 `crowded` in 360 (89 `unplannable` and 1
+`crowded`), FB+medium 7 `crowded` in 291 with an oldest age of 6 (36 `unplannable` and 4 `crowded`,
+oldest 15) and FB+narrow none in 327 (8 `unplannable`); 60 and 90 s are clean; at 30 s every family
+still crowds (F 20 in 309; FB+wide 45 `crowded`, and 29 `unplannable` on its 3 devices that no point
+serves alone within 30 s, with 5 empty plans; FB+medium 38 and 18 empty plans; FB+narrow 22 and 6).
+In the pilots' configuration, re-run, `unplannable` fell to 0 at 45 s (FB+medium, FB+wide) and at
+30 s (F, FX, FB+medium). The fix's review raised three low findings, all addressed: under an energy
+capacity `unplannable` is physics for the time budget only (documented above); the hover point's
+refinement constants are pinned against an exact minimum, to 1e-6 s at 1 MB, at 8 MB, and at 2 MB
+with a 100 m range; and the S\* tool's (ii) lines print the caveats measured.
+
+Other observations of the check, none a defect: the plan arms ignore `--miss-priority` and refuse
+`reorder` under `abort` too (as built); with L > 0 the scorer's pair count is below the mule's log;
+a trace records no position for a committed stop that was never flown (`PlanCommit.describe()`
+leaves the queue out, and `pass_1_plan` holds devices and deadlines only), which limits a
+trace-level check of "the predicate holds at every departure"; the S\* tool has no mule-count
+option, which fits the one-mule pilots; `experiments/exp4/cost_matrix.py` knows no plan arm, so the
+pilots' re-costing cannot use it as it is; and F−prio crowded twice at S\*+1 in 230 of the check's
+runs, the documented myopia of a planner that looks one mission ahead.
+
+**Frozen surface touched,** all behind the switches: `fl_scheduler.py` (plan mode; in
+`build_contact_queue` only the reset, the carrier and the report above); `stages/s3b_feasibility.py`
+(additive: the `member_admission` values, `dropped_plan`, the opt-in member-subset walk);
+`mule_main.py` (plan mode, the flight slot, the exempt set in flight, the plan's close, the drop
+report). `s3a_cluster.py` is untouched: it already takes the radius, and the plan calls it once per
+class, so the §5g file list is corrected. `s1_eligibility.py`, `s3_deadline.py`,
+`s3c_mission_window.py`, `s35_selector.py` and `selector/` are untouched. Outside the frozen
+surface: `mule/ferry.py`, `types/scheduler.py`, the five D-arm policy files, `processes/config.py`
+and `processes/mule.py`, the Exp 4 `driver.py`, `runner_main.py`, `topology_builder.py` and
+`events_consumer.py`, and `analysis/traces_scorer.py`. New: `scheduler/plan/` (`__init__.py`,
+`types.py`, `plan_score.py`, `member_subset.py`, `plan_search.py`, `hover.py`),
+`stages/s3d_age_cap.py`, `policies/cross_heuristic.py` and `experiments/analysis/age_cap_s_star.py`.
+Tests: `tests/golden/` (UG4's files, `make_baseline.py`, `README.md`), the new test files, the cliff
+docstring in `test_p3_final_fixes_mule.py` and the allowed-added set in
+`test_multi_mule_scoring.py`.
+
+**Deviations from the build plan** (also in `FeRRy_Build_Plan.html`, Phase 4):
+
+- the plan inconsistencies the Phase 4 design lists (its §0.4, items 1–24) are resolved as it
+  proposes. On the plan page itself: Figure 2 cites FedEx-Async's Theorem 2 (eq. 24), not "Thm 1";
+  the Energy metric row states the SIMULATED Zeng–Xu–Zhang energy that the clock's ledger gives; the
+  optimality gap is V_O1 − V_arm ≥ 0, since V ≤ 0; and Chen et al. (TVT 2025), which the theory
+  track cites, joins Sources;
+- FX's flight slot is built in Phase 4, not Phase 5 (the exit gate flies it, L845), and Phase 4's F
+  is the plan search with the `committed` slot: the learned pair Q stays in Phase 5;
+- FX's band rule is the fastest class that still reaches every target of b̄, at the arrival SNR
+  (critic A7), not the design's "most targets", which added up to 94 s of dwell and overran the
+  budget at the last stop, where nothing re-checks; FX acts in Pass 1 only, and picks each next stop
+  after serving a stop, not at takeoff;
+- Δ is the whole mission on b̄ against T_nom (decision 2 (b)), not Pass 1 against the budget (L533,
+  L899);
+- the coverage weights are age × (1 + miss streak), not the letter's 1 − served/N, and F−cov is
+  reported as cap-only service (decision 3); the age counts the device's own mule's missions, not
+  cluster rounds (L531; decision 1);
+- the plan ranks the served weight share before V by default (coverage first, R11);
+- a capped device may be served from a hover stop, not only from S3a's stops at R(b̄) (the hover
+  decision);
+- member subsets also for H1–H3, D1–D3 and D5, opt-in and before takeoff only (decision 4 (b)),
+  which brings those baselines closer to the published methods, which select devices, not stops
+  (critic B5);
+- no `reorder` in the plan-mode re-plan (L541; critic B11): it is a trim of the committed plan,
+  priority stops first, and re-ordering belongs to the flight slot. The plan arms fly the `trim`
+  fallback under either in-flight response, which is stricter than the Phase 4 spec's "under
+  `replan`";
+- `pass_2_budget` is refused in plan mode (critic B8), and so is `abort` together with a cap (critic
+  A10);
+- the search is exact only up to 6 devices; above that its two families are heuristics, and the
+  local search can keep a younger capped stop where two compete for one slot (R7);
+- each plan arm sets its own `miss_priority` (on, and off for F−prio) and ignores `--miss-priority`,
+  and plan settings given outside plan mode are refused rather than ignored;
+- F·round and F·pref (L705) are deferred to Study 5.2 (unit U11), and the 5.4 sweep knobs (unit U10)
+  to before the 5.4 headline;
+- size: about 9,000 lines of code (8,975 added and 120 removed, over 26 files) and 18,800 of tests
+  (18,789 added and 51 removed), docstrings and the golden harness included, plus the `6e6f92d`
+  baseline record (2,940 lines) and the `p3_sim.json` fixture (370 KiB), against the ~800 estimated
+  in the plan; the Phase 4 spec had estimated about 3,000 and 3,500.
+
+**Open items.**
+
+- *Where the hover point sits.* It minimises time, so it is often the dock or the class's reach
+  edge, where the noisy link is weakest: in the pilots' configuration, re-run with the fix,
+  FB+medium's `not_merged` rose from 228 to 245 and F's `dropped_in_flight` at 30 s from 0 to 12. A
+  margin inside the reach, or an outage weight, is a pilot-time choice.
+- *Empty missions before the cap binds.* Uncapped devices keep S3a's stops, so a mission can still
+  fly empty while nothing is capped (at 30 s on the S\* tool's layouts: 5, 18 and 6 empty plans for
+  FB+wide, FB+medium and FB+narrow, none with a capped device).
+- *Pass 2* still delivers at S3a's stops, so a far device is still visited at its own position.
+- *Partition-drift crowding* remains at S\*+1 for the pinned classes at 45 s and for every family at
+  30 s (above): a capped device's S3a stop can serve it alone, but not beside another capped device.
+- *F-whole* (F under `--member-admission whole`) can fly empty at 30 s while a capped device fits
+  alone at its hover point: whole admission flies the device's whole stop or none.
+- *An energy-aware hover point* (above): under a capacity the point still minimises time, and the
+  label reflects that point.
+- *The planning-time bound.* "At most 1 s per mission" holds for the N = 6 pilots (`plan_wall_s`);
+  the 2,000-walk count bounds no time at N = 96 on large fields (several seconds).
+- *U10* (Study 5.4's sweep knobs) before the 5.4 headline; *U11* (F·round, F·pref) with Study 5.2.
+- *The pilots* (decision 7; Run Guide §2.7) wait for the user's go-ahead, after the Phase 3 pilot
+  has set the session TTL and the knee: about 1,400 stub trials, to be re-costed before the
+  go-ahead.
 
 ## 6. Unfreezing
 
