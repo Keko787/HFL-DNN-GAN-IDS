@@ -32,6 +32,16 @@ or would silently measure something else, are refused by
 :meth:`TopologyConfig.validate` (critic B16). Several mules on the simulated
 clock below a full quorum are served in simulated-time order by the cluster
 (critic B9, unit U9: ``hermes.processes.cluster.SimOrderGate``).
+
+FeRRy Phase 4 — the plan clock (the Phase 4 spec, other choices 10). The
+``MuleConfig`` plan fields (:data:`PLAN_MULE_FIELDS`) configure it:
+``plan_mode`` "legacy" (the default) is every recorded run, "ferry" commits
+each mission to a band class and a route as one decision; the others are the
+plan's options (``hermes.scheduler.plan.PlanOptions.from_config``'s keywords)
+and ``member_admission``, which the H and D arms may set too (the user's
+decision 4 (b)). They mean something only on the simulated clock, and they
+are not ferry-spec fields, so Phase 3's ``ferry_params`` keep their strings.
+:func:`mule_config_errors` refuses what plan mode cannot fly.
 """
 
 from __future__ import annotations
@@ -61,6 +71,25 @@ BACKHAUL_MODELS: Tuple[str, ...] = (BACKHAUL_MISSION, BACKHAUL_SECONDS)
 #: ``hermes.scheduler.stages.s3b_feasibility.DEADLINE_BOUNDS``, restated so
 #: this module stays import-free (a unit test keeps the two equal).
 DEADLINE_BOUNDS: Tuple[str, ...] = ("collection", "delivery_per_stop", "delivery")
+
+#: FeRRy Phase 4 — the plan clock's switch values, each with its recorded value
+#: first: ``plan_mode``, ``member_admission``, ``flight_slot`` and the
+#: band-class policy (``search`` or ``fixed:<class>``). Restated from
+#: ``hermes.scheduler.plan.types`` and ``hermes.types.scheduler`` (and
+#: ``MEMBER_ADMISSIONS`` from ``hermes.scheduler.stages.s3b_feasibility``) so
+#: that this module stays import-free and a recorded mule never loads the plan
+#: package; a unit test keeps each equal to its source.
+PLAN_MODE_LEGACY = "legacy"
+PLAN_MODE_FERRY = "ferry"
+PLAN_MODES: Tuple[str, ...] = (PLAN_MODE_LEGACY, PLAN_MODE_FERRY)
+MEMBER_ADMISSION_WHOLE = "whole"
+MEMBER_ADMISSION_SUBSET = "subset"
+MEMBER_ADMISSIONS: Tuple[str, ...] = (MEMBER_ADMISSION_WHOLE, MEMBER_ADMISSION_SUBSET)
+FLIGHT_SLOT_COMMITTED = "committed"
+FLIGHT_SLOT_CROSS_HEURISTIC = "cross_heuristic"
+FLIGHT_SLOTS: Tuple[str, ...] = (FLIGHT_SLOT_COMMITTED, FLIGHT_SLOT_CROSS_HEURISTIC)
+BAND_POLICY_SEARCH = "search"
+BAND_POLICY_FIXED_PREFIX = "fixed:"
 
 
 def mission_schedule_index(mission_round, length: int) -> int:
@@ -374,6 +403,38 @@ class MuleConfig:
     # with the seconds model, which observes its own channel.
     rf_prior_schedule_db: Optional[List[float]] = None
 
+    # ---------------- FeRRy Phase 4: the plan clock -----------------------------
+    # ``plan_mode`` "legacy" is every recorded run: the scheduler plans each
+    # mission with ``build_contact_queue``. "ferry" commits each mission at the
+    # dock to one band class and a Pass-1 route as one decision
+    # (``FLScheduler.build_ferry_plan``), flies that class in both passes and
+    # closes the plan once the merge is known (hermes/mule/mule_main.py). It
+    # needs the simulated clock, a ``contact_band`` (under ``search`` only the
+    # reference class) and ``t_nom_s`` (T in the plan score, the user's
+    # decision 2 (b)); ``mule_config_errors`` lists what else it refuses. The
+    # fields after it are ``hermes.scheduler.plan.PlanOptions.from_config``'s
+    # keywords and keep its names (:data:`PLAN_OPTION_FIELDS`):
+    # ``band_class_policy`` "search" (every class of the link, arm F) or
+    # "fixed:<class>" (the run's ``contact_band`` only, arm FB+<class>);
+    # ``flight_slot`` "committed" (arm F) or "cross_heuristic" (arm FX, decision
+    # 5); the age cap S in the device's own missions (None: off, arm F-cap) and
+    # its lookahead L (decision 1); the plan score's and the search's settings
+    # (``PlanScoreParams`` and ``PlanSearchParams`` field names; {} keeps their
+    # defaults, and an unknown key is refused).
+    # ``member_admission`` (decision 4 (b)): "whole", the recorded rule, admits a
+    # stop with all its members or not at all; "subset" may admit the members
+    # that still fit. It is valid on the simulated clock in plan mode (the F
+    # arms fly "subset" unless a run asks otherwise) and for the H and D arms
+    # (S3b, the D1-D3 and D5 walks; never D4, whose tour has no gate).
+    plan_mode: str = PLAN_MODE_LEGACY
+    band_class_policy: str = BAND_POLICY_SEARCH
+    member_admission: str = MEMBER_ADMISSION_WHOLE
+    flight_slot: str = FLIGHT_SLOT_COMMITTED
+    age_cap_missions: Optional[int] = None
+    age_cap_lookahead: int = 0
+    plan_score_params: dict = field(default_factory=dict)
+    plan_search_params: dict = field(default_factory=dict)
+
     def ferry_spec_kwargs(self) -> Dict[str, Any]:
         """The keyword arguments of ``FerrySpec.from_config`` this config gives.
 
@@ -431,13 +492,28 @@ FERRY_SPEC_FIELDS: Dict[str, str] = {
     "p_hover_w": "p_hover_w",
 }
 
+#: ``MuleConfig``'s FeRRy Phase 4 plan fields: ``plan_mode`` and the plan
+#: options (:data:`PLAN_OPTION_FIELDS`). Not ferry-spec fields (the spec prices
+#: flight and the channel; the plan decides what to fly), so a Phase 3 trial's
+#: ``ferry_params`` is unchanged; each is simulated-clock only
+#: (:data:`SIM_ONLY_MULE_FIELDS`).
+PLAN_MULE_FIELDS: Tuple[str, ...] = (
+    "plan_mode", "band_class_policy", "member_admission", "flight_slot",
+    "age_cap_missions", "age_cap_lookahead", "plan_score_params", "plan_search_params",
+)
+
+#: The plan fields ``hermes.scheduler.plan.PlanOptions.from_config`` takes, under
+#: the same names (a unit test keeps them equal to its keywords).
+PLAN_OPTION_FIELDS: Tuple[str, ...] = PLAN_MULE_FIELDS[1:]
+
 #: ``MuleConfig`` fields that only mean something on the simulated clock:
-#: the ferry fields, the trial seed, the input width and the causal RF prior
-#: schedule. On the wall clock each must keep its default. The deadline time
-#: unit is not among them: it is a law parameter on either clock.
+#: the ferry fields, the trial seed, the input width, the causal RF prior
+#: schedule and the plan fields. On the wall clock each must keep its default.
+#: The deadline time unit is not among them: it is a law parameter on either
+#: clock.
 SIM_ONLY_MULE_FIELDS: Tuple[str, ...] = tuple(FERRY_SPEC_FIELDS) + (
     "trial_seed", "input_dim", "rf_prior_schedule_db",
-)
+) + PLAN_MULE_FIELDS
 
 
 def _field_default(cls, name: str) -> Any:
@@ -460,8 +536,8 @@ def _finite_number(value: Any) -> bool:
 def mule_config_errors(cfg: "MuleConfig") -> List[str]:
     """What is wrong with ``cfg``'s clock settings; empty when it can run.
 
-    Cheap, import-free checks (the mule builds its ``FerrySpec`` at start,
-    which validates every value in full):
+    Cheap checks, import-free but for plan mode's options (the mule builds its
+    ``FerrySpec`` at start, which validates every value in full):
 
     * ``mission_clock`` is "wall" or "sim";
     * on the wall clock every sim-only field is at its default: a contact
@@ -472,7 +548,9 @@ def mule_config_errors(cfg: "MuleConfig") -> List[str]:
       the channel reliability source only with a band (critic B16), the
       ground-truth availability only under that source, a backhaul period
       for the seconds model, and the causal RF prior schedule only under the
-      ``mission`` model, as finite SNRs (critic B4).
+      ``mission`` model, as finite SNRs (critic B4);
+    * on the sim clock, the FeRRy Phase 4 plan fields
+      (:func:`_plan_config_errors`).
     """
     errors: List[str] = []
     clock = getattr(cfg, "mission_clock", CLOCK_WALL)
@@ -533,6 +611,138 @@ def mule_config_errors(cfg: "MuleConfig") -> List[str]:
                 f"rf_prior_schedule_db must be a non-empty list of finite SNRs (dB), "
                 f"got {schedule!r}"
             )
+    errors += _plan_config_errors(cfg)
+    return errors
+
+
+def _plan_config_errors(cfg: "MuleConfig") -> List[str]:
+    """What is wrong with a simulated-clock config's plan fields (FeRRy Phase 4).
+
+    The Phase 4 spec, other choices 10, with the critic's corrections. Every
+    check fires only on a value other than the recorded one, so a Phase 3
+    config passes as it always did.
+
+    * ``plan_mode`` and ``member_admission`` are known values.
+    * Outside plan mode, ``member_admission`` is the one plan field an arm may
+      set (the H and D arms, decision 4 (b)), and not with D4's
+      ``contact_policy='fedex'``, whose tour has no gate to admit part of a
+      stop (unit_U3b.md section 1.4). Every other plan field, the age cap
+      included, configures plan mode and is refused, not silently ignored.
+    * In plan mode: a ``contact_band`` (the reference class; the channel-free
+      control has no classes to choose among) and ``t_nom_s`` (T in the score,
+      decision 2 (b)); a band-class policy of ``search`` or ``fixed:<class>``
+      with the class the run's ``contact_band`` (other choices 2); the
+      ``trim`` fallback, whatever the in-flight response, since the scheduler
+      refuses ``reorder`` in plan mode: there the Pass-1 re-plan is a trim of
+      the committed plan (members under ``subset``, whole stops only under
+      ``whole``, R5), priority stops first when the rest does not fit as
+      flown, and re-ordering belongs to the flight slot (other choices 9,
+      critic B11); no ``pass_2_budget``, whose walk admits whole stops, so a
+      narrow Pass 2 at 1 MB (45 s at the median) would deliver nothing under a
+      short budget (critic B8); a cap S that is an int >= 1 and a lookahead
+      that is an int >= 0; no ``contact_policy`` and no ``use_rl_selector``,
+      since the plan owns admission and order; and no ``abort`` together with
+      a cap, since abort gives up the whole tail, capped stops that would fit
+      alone included (critic A10).
+    * When all of that holds, the options are built as the mule builds them
+      (``hermes.scheduler.plan.PlanOptions.from_config``, imported only here,
+      in plan mode), so every check of the plan's own types runs before a
+      trial starts rather than when its mule does: an unknown flight slot, the
+      cross-heuristic slot with a pinned band (FB+c flies only class c while
+      FX switches class on arrival, unit U0), an unknown score or search
+      setting, or a value those settings refuse.
+    """
+    mode = getattr(cfg, "plan_mode", PLAN_MODE_LEGACY)
+    if mode not in PLAN_MODES:
+        return [f"plan_mode must be one of {PLAN_MODES}, got {mode!r}"]
+    errors: List[str] = []
+    admission = getattr(cfg, "member_admission", MEMBER_ADMISSION_WHOLE)
+    if admission not in MEMBER_ADMISSIONS:
+        errors.append(f"member_admission must be one of {MEMBER_ADMISSIONS}, got {admission!r}")
+    if mode == PLAN_MODE_LEGACY:
+        if admission == MEMBER_ADMISSION_SUBSET and cfg.contact_policy == "fedex":
+            errors.append(
+                "member_admission='subset' re-issues a stop that fails whole with the "
+                "members that still fit; contact_policy='fedex' (arm D4) visits every "
+                "contact with no gate, so it runs 'whole'"
+            )
+        changed = [
+            name for name in PLAN_OPTION_FIELDS
+            if name != "member_admission"
+            and getattr(cfg, name, _field_default(MuleConfig, name))
+            != _field_default(MuleConfig, name)
+        ]
+        if changed:
+            errors.append(
+                f"{', '.join(changed)}: plan mode only; set plan_mode='ferry' or leave "
+                f"the default"
+            )
+        return errors
+    if cfg.contact_band is None:
+        errors.append(
+            "plan_mode='ferry' chooses the band class each mission: it needs a "
+            "contact_band (the reference class; the channel-free control has none)"
+        )
+    if cfg.t_nom_s is None:
+        errors.append(
+            "plan_mode='ferry' scores the whole mission against T_nom: set t_nom_s"
+        )
+    policy = getattr(cfg, "band_class_policy", BAND_POLICY_SEARCH)
+    if isinstance(policy, str) and policy.startswith(BAND_POLICY_FIXED_PREFIX):
+        if policy[len(BAND_POLICY_FIXED_PREFIX):] != cfg.contact_band:
+            errors.append(
+                f"band_class_policy={policy!r} must pin the run's contact_band "
+                f"({cfg.contact_band!r}): FB+<class> flies that class only"
+            )
+    elif policy != BAND_POLICY_SEARCH:
+        errors.append(
+            f"band_class_policy must be {BAND_POLICY_SEARCH!r} or "
+            f"'{BAND_POLICY_FIXED_PREFIX}<class>', got {policy!r}"
+        )
+    if cfg.replan_fallback != "trim":
+        errors.append(
+            f"plan_mode='ferry' re-plans Pass 1 by trimming the committed plan (members "
+            f"under member_admission='subset', whole stops only under 'whole'), priority "
+            f"stops first, and leaves re-ordering to the flight slot: replan_fallback must "
+            f"be 'trim', got {cfg.replan_fallback!r} (the scheduler refuses 'reorder' in "
+            f"plan mode, critic B11)"
+        )
+    if cfg.pass_2_budget:
+        errors.append(
+            "plan_mode='ferry' refuses pass_2_budget: the budgeted Pass-2 walk admits "
+            "whole stops, so a narrow Pass 2 would deliver nothing under a short "
+            "budget (critic B8)"
+        )
+    cap = getattr(cfg, "age_cap_missions", None)
+    if cap is not None and (isinstance(cap, bool) or not isinstance(cap, int) or cap < 1):
+        errors.append(f"age_cap_missions must be None or an int >= 1, got {cap!r}")
+    lookahead = getattr(cfg, "age_cap_lookahead", 0)
+    if isinstance(lookahead, bool) or not isinstance(lookahead, int) or lookahead < 0:
+        errors.append(f"age_cap_lookahead must be an int >= 0, got {lookahead!r}")
+    if cfg.contact_policy is not None:
+        errors.append(
+            f"plan_mode='ferry' plans admission and order itself: it takes no "
+            f"contact_policy (got {cfg.contact_policy!r})"
+        )
+    if cfg.use_rl_selector:
+        errors.append(
+            "plan_mode='ferry' plans admission and order itself: it takes no RL "
+            "selector (use_rl_selector)"
+        )
+    if cap is not None and cfg.in_flight_response == "abort":
+        errors.append(
+            "in_flight_response='abort' gives up the whole tail, capped stops that "
+            "would fit alone included: it is refused with an age cap (critic A10); "
+            "use 'replan'"
+        )
+    if errors:
+        return errors
+    from hermes.scheduler.plan.types import PlanOptions  # plan mode only
+
+    try:
+        PlanOptions.from_config(**{name: getattr(cfg, name) for name in PLAN_OPTION_FIELDS})
+    except (TypeError, ValueError) as e:
+        errors.append(f"plan options: {e}")
     return errors
 
 

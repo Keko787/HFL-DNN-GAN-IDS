@@ -124,6 +124,18 @@ Deviations from the paper, each with its reason:
     re-checks the mission budget (and only the budget) before each contact in
     flight, from its actual pose and clock (``in_flight_check =
     IN_FLIGHT_BUDGET``).
+11. **Member subsets (FeRRy Phase 4, opt-in).** FedCS's candidates are
+    clients, not stops (critic B5). Under the user's decision 4 (b) of
+    2026-09-30, a run that sets ``member_admission="subset"`` has the plan
+    before takeoff pass ``member_subsets``, and a pick that fails whole is
+    re-issued with the members that still fit, taken in Algorithm 3's own
+    line-3 order applied to each member's one-member pick from the current
+    pose (:func:`_selection_key` on its marginal time), then by device id.
+    The transit is common to the members, so the least dwell goes first under
+    both ``unit`` and ``devices``. The pick is still removed unconditionally
+    (line 4), the members left out with it, and pose and clock advance on the
+    reduced pick. The in-flight check and re-plan keep or drop picks whole;
+    None, the default, is the recorded walk.
 
 **Skip versus stop.** Line 4 removes the pick whether or not it is admitted,
 and the loop continues; this port does the same. For the ``unit`` key under
@@ -168,6 +180,8 @@ from hermes.scheduler.stages.s3b_feasibility import (
     RULE_BUDGET,
     FeasibilityModel,
     FlightState,
+    MemberSubsets,
+    Verdict,
 )
 
 from .budget_walk import IN_FLIGHT_BUDGET
@@ -208,6 +222,7 @@ def fedcs_greedy_select(
     mission_deadline_ts: Optional[float],
     model: Optional[FeasibilityModel] = None,
     state: Optional[FlightState] = None,
+    member_subsets: Optional[MemberSubsets] = None,
 ) -> List[ContactWaypoint]:
     """Algorithm 3 on the mule's cost model; returns the ordered route.
 
@@ -221,7 +236,9 @@ def fedcs_greedy_select(
     (``FeasibilityModel.admit``); in legacy mode those are exactly
     ``cost()``'s total and ``clock + total <= mission_deadline_ts``.
     ``state`` (FeRRy Phase 3) starts from a flight state, energy spent
-    included, instead of ``(mule_pose, now)``.
+    included, instead of ``(mule_pose, now)``. ``member_subsets`` (FeRRy
+    Phase 4, deviation 11; None, the default, is the recorded walk): a pick
+    that fails whole is re-issued with the members that still fit.
     """
     if value not in VALUE_KINDS:
         raise ValueError(f"value must be one of {VALUE_KINDS}, got {value!r}")
@@ -245,12 +262,47 @@ def fedcs_greedy_select(
         # Lines 6-7, with <= (deviation 5): the shared predicate, budget rule
         # (no gate without a deadline). T_cs = T_agg = 0 in legacy mode.
         verdict = m.admit(cur, x, rule=RULE_BUDGET, budget_end=mission_deadline_ts)
+        if not verdict.ok and member_subsets is not None:
+            x, verdict = _admit_members(m, cur, x, verdict, value=value,
+                                        budget_end=mission_deadline_ts, subsets=member_subsets)
         if not verdict.ok:
             continue
         # Lines 8-9.
         cur = verdict.next_state
         route.append(x)
     return route
+
+
+def _admit_members(
+    m: FeasibilityModel,
+    cur: FlightState,
+    x: ContactWaypoint,
+    verdict: Verdict,
+    *,
+    value: str,
+    budget_end: Optional[float],
+    subsets: MemberSubsets,
+) -> Tuple[ContactWaypoint, Verdict]:
+    """Deviation 11: the members of a pick that failed whole that still fit.
+
+    The members go in line 3's order on one-member picks from ``cur``, then by
+    device id, through the plan package's one member walk (``admit_members``,
+    unit U3), imported here so the recorded walk loads no plan module.
+    Returns the pick reduced to them with its verdict, or ``(x, verdict)``
+    unchanged when none fits.
+    """
+    from hermes.scheduler.plan.member_subset import admit_members  # noqa: WPS433
+
+    def key(did: DeviceID) -> tuple:
+        one = subsets.reduce(x, (did,))
+        return (_selection_key(one, m.leg(cur.pose, one).total_s, value), did)
+
+    got = admit_members(m, cur, x, sorted(x.devices, key=key), rule=RULE_BUDGET,
+                        budget_end=budget_end, deadlines=subsets.deadlines,
+                        device_states=subsets.device_states)
+    if got.stop is None:
+        return x, verdict
+    return got.stop, got.verdict  # type: ignore[return-value]
 
 
 class FedCSDegradedPolicy:
@@ -266,6 +318,9 @@ class FedCSDegradedPolicy:
     # per-device deadline, so holding its route to S3b's overdue test in
     # flight would re-impose exactly the rule this arm is compared against.
     in_flight_check = IN_FLIGHT_BUDGET
+    # FeRRy Phase 4 (decision 4 (b)): admit_and_order takes the pre-flight
+    # member-subset carrier (deviation 11).
+    admits_member_subsets = True
 
     def __init__(self, value: str = VALUE_UNIT) -> None:
         if value not in VALUE_KINDS:
@@ -324,6 +379,7 @@ class FedCSDegradedPolicy:
         *,
         mission_deadline_ts: Optional[float] = None,
         feasibility_model=None,
+        member_subsets=None,
     ) -> List[ContactWaypoint]:
         """FedCS as a **complete scheduler**: the largest greedy set that fits.
 
@@ -331,6 +387,9 @@ class FedCSDegradedPolicy:
         the policy owns admission. Travel is priced only with the scheduler's
         ``feasibility_model`` so every arm faces the same physics.
         ``device_states`` is not read (deviation 1) and nothing is mutated.
+        ``member_subsets`` (FeRRy Phase 4, deviation 11) is passed only by the
+        plan before takeoff under ``member_admission="subset"``; None, the
+        default, is the recorded walk.
         """
         if not contacts:
             return []
@@ -341,4 +400,5 @@ class FedCSDegradedPolicy:
             now=env.now,
             mission_deadline_ts=mission_deadline_ts,
             model=feasibility_model,
+            member_subsets=member_subsets,
         )

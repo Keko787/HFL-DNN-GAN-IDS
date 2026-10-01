@@ -51,6 +51,27 @@ upload would take at the floor rate (CQI 1), the longest a successful upload
 can take, before it gives up (:meth:`FerryRuntime.upload_cap_s`). The planner
 prices a carrier whose mean is below the floor the same way.
 
+**The band as a decision (FeRRy Phase 4, unit U6).** In plan mode the mule no
+longer flies ``spec.band`` throughout: the plan commits one class b̄ per
+mission for both passes, and the FX flight slot may fly another class at a
+Pass-1 stop (the Phase 4 spec, other choices 2; the user's decision 5). So the
+runtime holds the class it flies, :attr:`FerryRuntime.band`, which
+:meth:`FerryRuntime.set_band` moves, and every band read takes an explicit
+class or defaults to it. Pass 2 flies b̄: :meth:`FerryRuntime.contact_plan`
+refuses a Pass-2 plan on any other class. The scheduler's physics is built per
+class and bound to that class when it is built (critic B3),
+:meth:`FerryRuntime.plan_classes` hands the planner one model per class, and
+:meth:`FerryRuntime.arrival_view` shows the flight slot what each class would
+reach at a stop. One ``ContactChannel`` serves every class (its SNR is a pure
+function of the time, the class, the distance and the link), so a class flown
+by FX sees what an arm pinned to that class would see there, and the arms stay
+paired. With ``plan_mode = "legacy"`` nothing calls
+:meth:`~FerryRuntime.set_band` and no band is named: the band stays
+``spec.band`` and every output is the recorded one (Freeze Rule 1; UG4's
+goldens pin the three classes in flight). The plan types are imported only by
+the two plan-mode builders, so the legacy import path never loads
+``hermes.scheduler.plan``.
+
 The module imports nothing from ``experiments/`` (finding A-01).
 """
 
@@ -63,7 +84,18 @@ import numbers
 import statistics
 from dataclasses import dataclass, field
 from types import MappingProxyType
-from typing import Any, Dict, FrozenSet, List, Mapping, Optional, Sequence, Tuple
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Dict,
+    FrozenSet,
+    List,
+    Mapping,
+    Optional,
+    Sequence,
+    Tuple,
+)
 
 import numpy as np
 
@@ -92,6 +124,11 @@ from hermes.scheduler.stages.s3b_feasibility import (
 )
 from hermes.types import ContactWaypoint, DeviceID, MissionPass, weights_byte_count
 from hermes.types.bundles import BackhaulUpload
+
+if TYPE_CHECKING:  # pragma: no cover - names for the type checker only
+    # Plan mode imports them where it builds them (plan_classes, arrival_view),
+    # so the legacy import path never loads hermes.scheduler.plan.
+    from hermes.scheduler.plan.types import ArrivalView, PlanClass
 
 log = logging.getLogger(__name__)
 
@@ -588,6 +625,27 @@ class StopObservation:
     max_slant_m: Optional[float] = None
 
 
+@dataclass(frozen=True)
+class _OnClass:
+    """A runtime method with its band class bound: per-class physics (critic B3).
+
+    ``FerryPhysics.member_dwell_s`` and ``PlanClass.outage`` are called
+    without a band, and the runtime's methods then read
+    :attr:`FerryRuntime.band` at call time. Bound here, when the physics is
+    built, a class's model keeps pricing its own class after
+    :meth:`FerryRuntime.set_band` moves the runtime to another. Everything
+    else stays live: the dwell prices the payload the mule carries when it is
+    called. Equal when the method and the class are, as the bound method it
+    replaces in :meth:`FerryRuntime.physics` was.
+    """
+
+    method: Callable[..., Any]
+    band: str
+
+    def __call__(self, *args: Any) -> Any:
+        return self.method(*args, band=self.band)
+
+
 # --------------------------------------------------------------------------- #
 # The runtime
 # --------------------------------------------------------------------------- #
@@ -599,7 +657,10 @@ class FerryRuntime:
     (None only for planning-only use, :meth:`FerrySpec.feasibility_model`).
     The runtime holds what changes during a trial: the payload the mule
     carries (the θ of the current pass), the backhaul carrier H3 holds across
-    missions, and the causal RF prior fed by each upload (critic B4).
+    missions, the causal RF prior fed by each upload (critic B4), and (FeRRy
+    Phase 4) the band class it flies, :attr:`band`, which only plan mode moves
+    (:meth:`set_band`). Every method that reads a band takes an explicit
+    ``band`` class name and otherwise reads :attr:`band` when it is called.
 
     Only the supervisor thread uses it.
     """
@@ -627,8 +688,13 @@ class FerryRuntime:
         self.clock = clock
         self.rf_range_m = rng
         self.session_time_s = float(session_time_s)
+        #: The band class the mule flies: ``spec.band`` until :meth:`set_band`
+        #: moves it (FeRRy Phase 4: the class a plan commits for a mission),
+        #: None without a band. Legacy runs never move it.
+        self.band: Optional[str] = spec.band
         #: S3a's radius and the contact gate's range: R_planar(band), exactly
         #: ``rf_range_m`` at wide, and ``rf_range_m`` itself without a band.
+        #: :meth:`set_band` recomputes both.
         self.range_planar_m: float = rng if spec.band is None else link.range_planar_m(spec.band)  # type: ignore[union-attr]
         self.band_index: Optional[int] = None if spec.band is None else link.index(spec.band)  # type: ignore[union-attr]
         self._theta_bytes = 0
@@ -672,14 +738,68 @@ class FerryRuntime:
         return self.spec.payload.upload_bytes(self._theta_bytes)
 
     # ------------------------------------------------------------------ #
+    # The band (FeRRy Phase 4)
+    # ------------------------------------------------------------------ #
+
+    def set_band(self, band: str) -> None:
+        """Fly the class ``band`` from now on: a mission's committed class b̄.
+
+        The plan commits one class per mission for both passes (the Phase 4
+        spec, other choices 2), and the supervisor calls this after the
+        commit. From then on the range S3a clusters Pass 2 with, the beacon
+        hook's range, the annotations and every read without an explicit
+        band follow ``band``: :attr:`range_planar_m` and :attr:`band_index`
+        are recomputed as the constructor computes them. Physics built
+        earlier keeps the class it was built for (critic B3, :meth:`physics`).
+
+        Refused without a band (the channel-free control has no classes) and
+        for a class the link does not have; the runtime is then unchanged.
+        Legacy runs never call it.
+        """
+        name = self._class_name(band)
+        link = self.spec.link
+        self.band = name
+        self.range_planar_m = link.range_planar_m(name)  # type: ignore[union-attr]
+        self.band_index = link.index(name)  # type: ignore[union-attr]
+
+    def _class_name(self, band: Any) -> str:
+        """``band`` checked as a class of this runtime's link."""
+        if self.spec.band is None or self.spec.link is None:
+            raise ValueError(
+                f"band {band!r}: the channel-free control (no contact band) has no band classes"
+            )
+        if not isinstance(band, str):
+            raise TypeError(f"a band is a class name such as 'wide', got {band!r}")
+        self.spec.link.index(band)                      # raises on an unknown class
+        return band
+
+    def _band(self, band: Optional[str]) -> Optional[str]:
+        """The class a call prices: ``band`` when given, else :attr:`band`."""
+        return self.band if band is None else self._class_name(band)
+
+    def _band_fields(self, band: Optional[str]) -> Tuple[Optional[str], Optional[int], float]:
+        """(class, index, R_planar) of ``band``, or the runtime's own three
+        attributes when it is None, so a legacy read is the recorded one."""
+        if band is None:
+            return self.band, self.band_index, self.range_planar_m
+        name = self._class_name(band)
+        link = self.spec.link
+        return name, link.index(name), link.range_planar_m(name)  # type: ignore[union-attr]
+
+    # ------------------------------------------------------------------ #
     # The scheduler's physics
     # ------------------------------------------------------------------ #
 
     def member_dwell_s(
         self, d_planar: float, pass_kind: MissionPass, snr_offset_db: float,
+        band: Optional[str] = None,
     ) -> Optional[float]:
-        """One member's predicted airtime at the mean SNR (plus δ_obs); None below the floor."""
-        link, band = self.spec.link, self.spec.band
+        """One member's predicted airtime at the mean SNR (plus δ_obs); None below the floor.
+
+        Priced on ``band``, or on :attr:`band` as it is when called; the
+        physics binds its class instead (:meth:`physics`, critic B3).
+        """
+        link, band = self.spec.link, self._band(band)
         snr = link.mean_snr_db(band, d_planar) + float(snr_offset_db)  # type: ignore[union-attr]
         return link.dwell_s(self.session_bytes(pass_kind), band, snr)  # type: ignore[union-attr]
 
@@ -731,28 +851,39 @@ class FerryRuntime:
         dt, _ = self._upload_time_at(bh.pred_snr_db(carrier), self.predicted_upload_bytes())
         return dt
 
-    def physics(self) -> FerryPhysics:
+    def physics(self, band: Optional[str] = None) -> FerryPhysics:
         """The :class:`FerryPhysics` the scheduler prices with (design section 3.1).
 
         Member positions are looked up by the scheduler's device states
         (``FLScheduler`` binds its own map, critic B11). Without a band the
         physics has no member dwell and a contact costs ``session_time_s``
         (critic A1).
+
+        The physics prices one band class, ``band`` or :attr:`band` when it
+        is built, and is bound to it then (critic B3): its member dwell and
+        its range stay that class's whatever :meth:`set_band` does later, so
+        the plan's per-class models (:meth:`plan_classes`) never price at the
+        last band set. The payload and the held carrier stay live. In legacy
+        runs the band never moves, so this is the recorded physics.
         """
-        energy = self.spec.flight.energy
+        energy, link = self.spec.flight.energy, self.spec.link
+        name = self._band(band)
         return FerryPhysics(
             dock=self.spec.flight.dock,
-            member_dwell_s=self.member_dwell_s if self.banded else None,
+            member_dwell_s=None if name is None else _OnClass(self.member_dwell_s, name),
             upload_s=self.predicted_upload_s,
             p_move_w=energy.p_move_w,
             p_hover_w=energy.p_hover_w,
             energy_capacity_j=energy.capacity_j,
             deadline_bounds=self.spec.deadline_bounds,
-            range_m=self.range_planar_m if self.banded else None,
+            range_m=None if name is None else link.range_planar_m(name),  # type: ignore[union-attr]
         )
 
-    def feasibility_model(self, base: Optional[FeasibilityModel] = None) -> FeasibilityModel:
-        """``base`` (cruise speed and session time) with this runtime's physics.
+    def feasibility_model(
+        self, base: Optional[FeasibilityModel] = None, band: Optional[str] = None,
+    ) -> FeasibilityModel:
+        """``base`` (cruise speed and session time) with this runtime's physics
+        on ``band`` (default: :attr:`band`), bound to that class (:meth:`physics`).
 
         The clock charges legs with the flight model's speed, so the planner
         must use the same one; a base that already carries physics is refused.
@@ -769,7 +900,76 @@ class FerryRuntime:
                 f"flight model flies at {self.spec.flight.cruise_speed_m_s!r} m/s: the "
                 "clock would charge other legs than the planner predicts"
             )
-        return dataclasses.replace(base, ferry=self.physics())
+        return dataclasses.replace(base, ferry=self.physics(band))
+
+    def outage_probability(self, d_planar: float, band: Optional[str] = None) -> float:
+        """P(SNR < floor) for a member ``d_planar`` metres from the stop, at the mean SNR.
+
+        The plan score's link term (the Phase 4 spec, other choices 7, the
+        design's link option (ii)): ``Φ((floor − SNR_b(d)) / σ_eff)`` with
+        ``σ_eff = √(σ_sh² + σ_I² + A²/2)``, where ``SNR_b(d)`` is the link's
+        mean on ``band`` (default :attr:`band`) and σ_sh, σ_I and A are the
+        contact channel's own shadowing sigma, interference noise sigma and
+        interference amplitude: the realized SNR is ``mean + X_j(t) +
+        I_b(t)`` (``ContactChannel.snr_db``), and ``A·sin(·)`` over a uniform
+        phase has variance A²/2. It is a normal approximation, since the
+        sinusoid is not normal. The channel's sigmas, not the link's: they
+        agree in every channel ``from_link`` builds, and critic B4's
+        deterministic channel keeps the link's σ_sh in the mean but draws no
+        noise, so its outage is the step below. Two edge cases follow the
+        contact gate (``ContactPlan.at_arrival``): with every noise term 0
+        the SNR is the mean, so the outage is 1 below the floor and 0 at or
+        above it (the gate's inclusive floor); beyond R_planar(b) the gate
+        never solicits the member, so the outage is 1.
+        """
+        name = self._class_name(self.band if band is None else band)
+        link, chan = self.spec.link, self.spec.contact_channel
+        d = float(d_planar)
+        if d > link.range_planar_m(name):  # type: ignore[union-attr]
+            return 1.0
+        margin = link.snr_floor_db - link.mean_snr_db(name, d)  # type: ignore[union-attr]
+        sigma = math.sqrt(
+            chan.shadow_sigma_db ** 2 + chan.interference_sigma_db ** 2  # type: ignore[union-attr]
+            + chan.interference_amp_db ** 2 / 2.0  # type: ignore[union-attr]
+        )
+        if sigma == 0.0:
+            return 1.0 if margin > 0.0 else 0.0
+        return statistics.NormalDist().cdf(margin / sigma)
+
+    def plan_classes(self, base: Optional[FeasibilityModel] = None) -> Tuple["PlanClass", ...]:
+        """The planner's classes (Phase 4 plan mode): one per link class, in link order.
+
+        Each :class:`~hermes.scheduler.plan.types.PlanClass` carries the
+        class's R_planar as its radius (S3a's radius and the gate's range),
+        a model on ``base`` whose physics is bound to the class
+        (:meth:`feasibility_model`; critic B3), its place in the link's
+        class order, and its outage (:meth:`outage_probability`) bound to
+        the class. The supervisor builds them once, into
+        ``PlanSetup.classes``; the scheduler binds each model to its device
+        states and commits the chosen class's model, so the in-flight check
+        and Pass 2 price b̄. Needs a band: plan mode has no channel-free
+        control.
+        """
+        # Plan mode only: importing here keeps hermes.scheduler.plan off the
+        # legacy import path (U0's hand-off).
+        from hermes.scheduler.plan.types import PlanClass
+
+        if not self.banded:
+            raise ValueError(
+                "the plan chooses among band classes: the channel-free control "
+                "(no contact band) has none"
+            )
+        link = self.spec.link
+        return tuple(
+            PlanClass(
+                name=name,
+                index=index,
+                radius_m=link.range_planar_m(name),  # type: ignore[union-attr]
+                model=self.feasibility_model(base, band=name),
+                outage=_OnClass(self.outage_probability, name),
+            )
+            for index, name in enumerate(link.names)  # type: ignore[union-attr]
+        )
 
     # ------------------------------------------------------------------ #
     # Stops
@@ -777,6 +977,7 @@ class FerryRuntime:
 
     def annotate(
         self, queue: Sequence[ContactWaypoint], positions: Mapping[DeviceID, Sequence[float]],
+        band: Optional[str] = None,
     ) -> List[ContactWaypoint]:
         """The planned waypoints with ``band``, ``range_m`` and ``pred_snr_db`` (design section 4.5).
 
@@ -784,32 +985,37 @@ class FerryRuntime:
         fields are ``compare=False``, so an annotated waypoint equals and
         hashes like the plan's. ``pred_snr_db`` is each member's mean SNR on
         the band at its planar distance, in member order (None without a
-        band). The mule flies the annotated objects from here on.
+        band). The mule flies the annotated objects from here on. The band is
+        ``band`` or :attr:`band`, with its R_planar.
         """
+        name, _, rng = self._band_fields(band)
         out: List[ContactWaypoint] = []
         for wp in queue:
             pred: Optional[Tuple[float, ...]] = None
             if self.banded:
-                link, band = self.spec.link, self.spec.band
+                link = self.spec.link
                 pred = tuple(
-                    link.mean_snr_db(band, planar_distance_m(wp.position, positions[d]))  # type: ignore[union-attr]
+                    link.mean_snr_db(name, planar_distance_m(wp.position, positions[d]))  # type: ignore[union-attr]
                     for d in wp.devices
                 )
             out.append(dataclasses.replace(
-                wp, band=self.spec.band, range_m=self.range_planar_m, pred_snr_db=pred,
+                wp, band=name, range_m=rng, pred_snr_db=pred,
             ))
         return out
 
     def observe(
         self, wp: ContactWaypoint, positions: Mapping[DeviceID, Sequence[float]], t_s: float,
+        band: Optional[str] = None,
     ) -> StopObservation:
-        """The channel at ``wp`` at simulated time ``t_s`` (the arrival)."""
+        """The channel at ``wp`` at simulated time ``t_s`` (the arrival); ``snr_db``
+        on ``band`` or :attr:`band`, ``class_snr_db`` on every class."""
         stop = tuple(wp.position)
         devices = tuple(wp.devices)
+        band = self._band(band)
         dist = tuple(planar_distance_m(stop, positions[d]) for d in devices)
         if not self.banded:
             return StopObservation(t_s=float(t_s), devices=devices, distances_m=dist)
-        link, chan, band = self.spec.link, self.spec.contact_channel, self.spec.band
+        link, chan = self.spec.link, self.spec.contact_channel
         snr = tuple(
             chan.snr_db(t_s, band, d, link_key=j, stop_pos=stop)  # type: ignore[union-attr]
             for j, d in zip(devices, dist)
@@ -858,6 +1064,7 @@ class FerryRuntime:
         *,
         pass_kind: MissionPass,
         mission_round: int,
+        band: Optional[str] = None,
     ) -> ContactPlan:
         """The stop's :class:`ContactPlan`, built at arrival (design section 4.2).
 
@@ -867,9 +1074,23 @@ class FerryRuntime:
         priced at its own session-start SNR (critic C2), the band's airtime,
         and in Pass 1 the uplink drops of the availability draw. Without a
         band: every member a target, ``session_time_s`` per contact.
+
+        The band is ``band`` (the FX slot's choice at a Pass-1 stop, the
+        user's decision 5) or :attr:`band`. Every class reads the one
+        contact channel, so the plan on class c is what an arm flying c
+        would get at this stop and time. Pass 2 flies :attr:`band`, the
+        mission's b̄ (the Phase 4 spec, other choices 2: "FX switches band
+        per stop in Pass 1 only"), so a Pass-2 plan on another class is
+        refused whoever asks for it, and nothing is charged.
         """
         if self.clock is None:
             raise ValueError("a planning-only FerryRuntime has no clock to build contact plans on")
+        explicit = band is not None
+        band, band_index, range_planar_m = self._band_fields(band)
+        if explicit and band != self.band and MissionPass(pass_kind) is not MissionPass.COLLECT:
+            raise ValueError(
+                f"Pass 2 flies the committed class {self.band!r}, not {band!r}: the band "
+                "switches per stop in Pass 1 only (the Phase 4 spec, other choices 2)")
         members = list(wp.devices)
         drops = (self.uplink_drops(members, mission_round)
                  if MissionPass(pass_kind) is MissionPass.COLLECT else frozenset())
@@ -881,23 +1102,84 @@ class FerryRuntime:
         )
         if not self.banded:
             return ContactPlan.at_arrival(members, **common)
-        link, chan, band = self.spec.link, self.spec.contact_channel, self.spec.band
+        link, chan = self.spec.link, self.spec.contact_channel
         stop = tuple(wp.position)
         return ContactPlan.at_arrival(
             members,
             band=band,
-            band_index=self.band_index,
+            band_index=band_index,
             positions={d: tuple(positions[d]) for d in members},
-            range_planar_m=self.range_planar_m,
+            range_planar_m=range_planar_m,
             snr_fn=lambda j, d, t: chan.snr_db(t, band, d, link_key=j, stop_pos=stop),  # type: ignore[union-attr]
             snr_floor_db=link.snr_floor_db,  # type: ignore[union-attr]
             dwell_fn=lambda n, s: link.dwell_s(n, band, s),  # type: ignore[union-attr]
             **common,
         )
 
-    def rates_bps(self, snr_db: Sequence[float]) -> Tuple[float, ...]:
-        """The band's rate at each SNR (0 below the floor)."""
-        link, band = self.spec.link, self.spec.band
+    def arrival_view(
+        self,
+        wp: ContactWaypoint,
+        positions: Mapping[DeviceID, Sequence[float]],
+        t_s: float,
+        *,
+        pass_kind: MissionPass,
+    ) -> "ArrivalView":
+        """What every class would reach at ``wp`` at time ``t_s``: the FX slot's input.
+
+        One :class:`~hermes.scheduler.plan.types.ArrivalClass` per class of
+        the link, in link order, with the members the class would solicit at
+        ``t_s`` by the contact plan's own gate (within its R_planar, inclusive,
+        and at or above the floor, on the one contact channel) and the dwell
+        of serving them all, each priced at its SNR at ``t_s`` for a
+        ``pass_kind`` session of the payload the mule carries. The pass is
+        required, as for :meth:`contact_plan`, so a view is never priced for
+        the other pass's bytes. FX reads views at Pass-1 arrivals only (the
+        slot's ``reads_arrival_view``); the view itself holds for either pass.
+        FX compares the classes on that dwell (critic A7: the fastest class
+        that still reaches every target of the committed class, priced at the
+        arrival SNR, never dwells longer than F would there). The contact itself
+        prices each target at its own session start (critic C2), so the
+        realized dwell can differ from this view's, for every class alike.
+        ``committed`` is :attr:`band`, the mission's b̄ once :meth:`set_band`
+        has run. Pure: it reads the channel and charges nothing, so the
+        supervisor calls it at the arrival, before :meth:`contact_plan`,
+        with the same ``t_s``. Needs a band (plan mode).
+        """
+        # Plan mode only: importing here keeps hermes.scheduler.plan off the
+        # legacy import path (U0's hand-off).
+        from hermes.scheduler.plan.types import ArrivalClass, ArrivalView
+
+        if not self.banded:
+            raise ValueError(
+                "the arrival view compares band classes: the channel-free control "
+                "(no contact band) has none"
+            )
+        link, chan = self.spec.link, self.spec.contact_channel
+        stop = tuple(wp.position)
+        devices = tuple(wp.devices)
+        dist = {j: planar_distance_m(stop, positions[j]) for j in devices}
+        nbytes = self.session_bytes(pass_kind)
+        floor = link.snr_floor_db  # type: ignore[union-attr]
+        classes = []
+        for index, name in enumerate(link.names):  # type: ignore[union-attr]
+            reach = link.range_planar_m(name)  # type: ignore[union-attr]
+            targets: List[DeviceID] = []
+            dwell = 0.0
+            for j in devices:
+                snr = chan.snr_db(  # type: ignore[union-attr]
+                    t_s, name, dist[j], link_key=j, stop_pos=stop)
+                if dist[j] <= reach and snr >= floor:
+                    targets.append(j)
+                    # At or above the floor the rate is positive, so the dwell is finite.
+                    dwell += link.dwell_s(nbytes, name, snr)  # type: ignore[union-attr, operator]
+            classes.append(ArrivalClass(name=name, index=index, targets=tuple(targets),
+                                        dwell_s=dwell))
+        return ArrivalView(devices=devices, committed=self.band,  # type: ignore[arg-type]
+                           classes=tuple(classes))
+
+    def rates_bps(self, snr_db: Sequence[float], band: Optional[str] = None) -> Tuple[float, ...]:
+        """The band's rate at each SNR (0 below the floor), on ``band`` or :attr:`band`."""
+        link, band = self.spec.link, self._band(band)
         return tuple(link.rate_bps(band, s) for s in snr_db)  # type: ignore[union-attr]
 
     # ------------------------------------------------------------------ #

@@ -13,6 +13,10 @@ The class is deliberately I/O-free. Glue code on the mule binds it to:
     * L1 RF listener -> :meth:`ingest_beacon`
     * Supervisor main loop -> :meth:`build_target_queue`
 
+FeRRy Phase 4's plan mode (``plan_mode="ferry"``) plans each mission's band
+class and route as one decision with :meth:`FLScheduler.build_ferry_plan`; the
+default, ``legacy``, is the recorded pipeline and never loads the plan package.
+
 Design refs:
     * HERMES_FL_Scheduler_Design.md §5.1 FLScheduler loop
     * HERMES_FL_Scheduler_Design.md §6.2 FLScheduler state
@@ -24,7 +28,19 @@ import dataclasses
 import logging
 import math
 import time
-from typing import Collection, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Collection,
+    Dict,
+    FrozenSet,
+    Iterable,
+    List,
+    Mapping,
+    Optional,
+    Sequence,
+    Tuple,
+)
 
 from hermes.types import (
     BUCKET_PRIORITY,
@@ -59,6 +75,11 @@ from .stages import (
 from .stages.s2b_flag import DEFAULT_FL_THRESHOLD
 from .stages.s3_deadline import DeadlineLaw
 
+if TYPE_CHECKING:  # pragma: no cover - names for the type checker only
+    from hermes.types.scheduler import PlanCommit
+
+    from .plan.types import PlanSetup
+
 log = logging.getLogger(__name__)
 
 
@@ -67,6 +88,12 @@ class FLSchedulerError(RuntimeError):
 
 
 MulePose = Tuple[float, float, float]
+
+#: ``plan_mode``'s recorded value (FeRRy Phase 4): plan with
+#: :meth:`FLScheduler.build_contact_queue` exactly as recorded. Restated from
+#: ``hermes.scheduler.plan.types.PLAN_MODE_LEGACY`` so that a legacy scheduler
+#: never loads the plan package (Freeze Rule 1); a test pins the two equal.
+_PLAN_MODE_LEGACY = "legacy"
 
 
 class FLScheduler:
@@ -94,6 +121,9 @@ class FLScheduler:
         refuse_deadline_overrides: bool = False,
         validate_flown_order: bool = False,
         replan_fallback: str = "reorder",
+        member_admission: str = "whole",
+        plan_mode: str = _PLAN_MODE_LEGACY,
+        plan: Optional["PlanSetup"] = None,
     ):
         self._device_states: Dict[DeviceID, DeviceSchedulerState] = {}
         # FeRRy Phase 3 (spec Q1) — the deadline law's time unit. 1.0 is the
@@ -191,6 +221,61 @@ class FLScheduler:
                 feasibility_model, ferry=ferry.bind(self._device_states),
             )
         self._feasibility_model = feasibility_model
+        # FeRRy Phase 4 (the user's decision 4 (b); unit_U3b.md section 1.4) —
+        # may the admission before takeoff re-issue a contact that fails whole
+        # with the members that still fit? ``whole``, the default, is the
+        # recorded rule: all the members or none, which leaves the narrow-band
+        # cliff (tests/unit/test_p3_final_fixes_mule.py). ``subset`` lifts it
+        # for the F family (build_ferry_plan) and, when a run asks for it, for
+        # H1-H3 (S3b) and D1-D3, D5 (their own walks). The H and D arms see it
+        # only as the carrier build_contact_queue hands their pre-flight walk,
+        # so nothing in flight reduces their contacts. The member walk prices
+        # members with the ferry physics, which only the simulated clock
+        # carries; a whole-scheduler policy must declare that its walk takes
+        # the carrier (D4 does not).
+        from .stages.s3b_feasibility import (  # noqa: WPS433
+            MEMBER_ADMISSION_SUBSET,
+            MEMBER_ADMISSIONS,
+        )
+
+        if member_admission not in MEMBER_ADMISSIONS:
+            raise FLSchedulerError(
+                f"member_admission must be one of {MEMBER_ADMISSIONS}, got {member_admission!r}"
+            )
+        # FeRRy Phase 4 — the plan clock (build plan L822-847). ``legacy``, the
+        # default, plans with build_contact_queue as recorded and never loads
+        # the plan package. ``ferry`` plans each mission at the dock with
+        # build_ferry_plan: the band class and the route as one decision over
+        # the classes of ``plan`` (a plan.types.PlanSetup, which the mule
+        # builds once).
+        self._plan_mode = _PLAN_MODE_LEGACY
+        self._plan: Optional["PlanSetup"] = None
+        if plan_mode == _PLAN_MODE_LEGACY:
+            if plan is not None:
+                raise FLSchedulerError(
+                    "plan (a PlanSetup) is for plan_mode='ferry'; a legacy scheduler "
+                    "plans with build_contact_queue"
+                )
+        else:
+            self._plan = self._bind_plan(
+                plan_mode, plan, target_selector=target_selector,
+                replan_fallback=replan_fallback, member_admission=member_admission,
+            )
+            self._plan_mode = plan_mode
+        if member_admission == MEMBER_ADMISSION_SUBSET and self._plan is None:
+            if ferry is None:
+                raise FLSchedulerError(
+                    "member_admission='subset' prices each member with the ferry physics: it "
+                    "needs a feasibility model that carries them (the simulated clock)"
+                )
+            if (hasattr(target_selector, "admit_and_order")
+                    and not getattr(target_selector, "admits_member_subsets", False)):
+                raise FLSchedulerError(
+                    f"member_admission='subset': the whole-scheduler policy "
+                    f"{getattr(target_selector, 'name', type(target_selector).__name__)!r} "
+                    f"does not take member subsets (admits_member_subsets)"
+                )
+        self._member_admission = member_admission
         # The budget is measured from this stamp. The mule sets it at the start
         # of every mission (start_mission); ingest_slice also sets it, for
         # callers that drive the scheduler without a mule.
@@ -203,6 +288,17 @@ class FLScheduler:
         # the trace can score a miss against the device's deadline rather than
         # the tightest one in its contact.
         self.last_plan_deadlines: Dict[DeviceID, float] = {}
+        # FeRRy Phase 4 (the user's decision 6; critic A9) — what a
+        # whole-scheduler baseline (D1-D5) left out of the latest Pass-1 plan,
+        # as (contact, reason) pairs, reported and never widened. Filled on the
+        # simulated clock only; last_feasibility stays None for those arms.
+        self.last_policy_drops: List[Tuple[ContactWaypoint, str]] = []
+        # FeRRy Phase 4 — plan mode's commit for the mission (a PlanCommit,
+        # replaced by its closed copy at close_plan), and the wall time the
+        # plan took. The wall time is a diagnostic and never enters a decision
+        # or the commit (critic B12). None in legacy mode.
+        self.last_plan: Optional["PlanCommit"] = None
+        self.last_plan_wall_s: Optional[float] = None
         # FeRRy Phase 2 — the mission being planned, when the mule says so;
         # handed to whole-scheduler policies through SelectorEnv.
         self._mission_round: Optional[int] = None
@@ -302,6 +398,89 @@ class FLScheduler:
     def replan_fallback(self) -> str:
         """``reorder`` or ``trim``: see the constructor and routing/replan.py."""
         return self._replan_fallback
+
+    @property
+    def member_admission(self) -> str:
+        """``whole`` (recorded) or ``subset``: see the constructor (FeRRy Phase 4)."""
+        return getattr(self, "_member_admission", "whole")
+
+    @property
+    def plan_mode(self) -> str:
+        """``legacy`` (recorded) or ``ferry``: see the constructor (FeRRy Phase 4)."""
+        return getattr(self, "_plan_mode", _PLAN_MODE_LEGACY)
+
+    @property
+    def plan_setup(self) -> Optional["PlanSetup"]:
+        """Plan mode's setup, its class models bound to these device states; None in legacy."""
+        return getattr(self, "_plan", None)
+
+    def _bind_plan(
+        self,
+        plan_mode: str,
+        plan: Any,
+        *,
+        target_selector: Any,
+        replan_fallback: str,
+        member_admission: str,
+    ) -> "PlanSetup":
+        """Check plan mode's settings and return ``plan`` with each class bound.
+
+        Each class model looks its members up in this scheduler's device
+        states, a live view, as the Phase 3 model is bound above (critic B11),
+        unless the caller bound its own map; so the committed model prices the
+        devices where they are. Refused, each for its own reason:
+
+        * a ``target_selector``: the plan owns admission and order, and a
+          learned selector or a whole-scheduler baseline would own them too;
+        * ``replan_fallback="reorder"``: the plan-mode re-plan is a trim of
+          the committed plan (:meth:`_trim_plan`: members under ``subset``,
+          whole stops only under ``whole``), which flies the priority stops
+          first when the rest no longer fits and never re-orders otherwise;
+          re-ordering belongs to the flight slot (Phase 4 spec, other choices
+          9; critic B11);
+        * a ``member_admission`` other than the plan options' own: the
+          scheduler's switch is the one source (unit_U3b.md section 1.1), and
+          the search reads it from the options;
+        * classes that do not share one dock: one mule takes off from one dock,
+          and the plan prices Pass 2, the return legs and every label from it.
+        """
+        from .plan.types import PLAN_MODE_FERRY, PLAN_MODES, PlanSetup  # noqa: WPS433
+        from .routing.replan import FALLBACK_REORDER  # noqa: WPS433
+
+        if plan_mode != PLAN_MODE_FERRY:
+            raise FLSchedulerError(f"plan_mode must be one of {PLAN_MODES}, got {plan_mode!r}")
+        if not isinstance(plan, PlanSetup):
+            raise FLSchedulerError(
+                f"plan_mode='ferry' needs plan, a hermes.scheduler.plan.PlanSetup, got {plan!r}"
+            )
+        if target_selector is not None:
+            raise FLSchedulerError(
+                "plan_mode='ferry' plans admission and order itself: it takes no "
+                "target_selector (no contact_policy, no learned selector)"
+            )
+        if replan_fallback == FALLBACK_REORDER:
+            raise FLSchedulerError(
+                "plan_mode='ferry' re-plans Pass 1 by trimming the committed plan (members "
+                "under member_admission='subset', whole stops only under 'whole'), priority "
+                "stops first, and leaves re-ordering to the flight slot: replan_fallback must "
+                "be 'trim' ('reorder' is refused in plan mode, critic B11)"
+            )
+        if plan.options.member_admission != member_admission:
+            raise FLSchedulerError(
+                f"member_admission={member_admission!r} but the plan options say "
+                f"{plan.options.member_admission!r}: the scheduler's switch is the one source"
+            )
+        classes = []
+        for c in plan.classes:
+            ferry = c.model.ferry
+            if ferry.device_states is None:
+                c = dataclasses.replace(c, model=dataclasses.replace(
+                    c.model, ferry=ferry.bind(self._device_states)))
+            classes.append(c)
+        docks = {tuple(c.model.ferry.dock) for c in classes}
+        if len(docks) != 1:
+            raise FLSchedulerError(f"the plan's classes must share one dock, got {sorted(docks)}")
+        return dataclasses.replace(plan, classes=tuple(classes))
 
     def _new_state(self, device_id: DeviceID, **fields) -> DeviceSchedulerState:
         """A state row for a newly tracked device, starting at Φ₀.
@@ -644,6 +823,9 @@ class FLScheduler:
         self.last_feasibility = None
         self.last_plan_deadlines = {}
         self.last_order_check = None
+        # FeRRy Phase 4 (critic A9): a baseline's drops too, or an early return
+        # below would leave the previous mission's in place to be reported again.
+        self.last_policy_drops = []
 
         eligible_ids = filter_eligible(
             self._device_states, now=_now, beacon_window_s=self._beacon_window_s
@@ -683,6 +865,18 @@ class FLScheduler:
         )
         if not contacts:
             return []
+
+        # FeRRy Phase 4 (the user's decision 4 (b); unit_U3b.md section 5.2) —
+        # under member_admission="subset" the admission below may re-issue a
+        # contact with the members that still fit, and a reduced contact needs
+        # each member's own deadline and bucket, which only this plan holds.
+        # Only this pre-flight call builds the carrier; under "whole" nothing
+        # is passed, so the calls are exactly the recorded ones.
+        subsets: Dict[str, Any] = {}
+        if getattr(self, "_member_admission", "whole") != "whole":
+            from .stages.s3b_feasibility import MemberSubsets  # noqa: WPS433
+
+            subsets["member_subsets"] = MemberSubsets(deadlines, self._device_states)
 
         # Freeze Amendment 4 — whole-scheduler baseline delegation (arms D1/D2).
         #
@@ -725,7 +919,16 @@ class FLScheduler:
                     else start + self._mission_budget_s
                 ),
                 feasibility_model=self._feasibility_model,
+                **subsets,
             )
+            # FeRRy Phase 4 (the user's decision 6) — report what the policy
+            # left out; never widened, so last_feasibility stays None. Only on
+            # the simulated clock (a model with the ferry physics), the only
+            # clock whose trace carries the report.
+            if getattr(self._feasibility_model, "ferry", None) is not None:
+                self.last_policy_drops = self._policy_drops(
+                    contacts, route, now=_now, mule_pose=mule_pose, **subsets,
+                )
             log.info(
                 "whole-scheduler policy %s admitted %d/%d contacts",
                 getattr(self._target_selector, "name", "?"),
@@ -749,6 +952,7 @@ class FLScheduler:
                 priority=(
                     self._contact_miss_priority if self._miss_priority else None
                 ),
+                **subsets,
             )
             self.last_feasibility = feas
             if feas.n_dropped:
@@ -890,6 +1094,50 @@ class FLScheduler:
         )
         return list(res.route)
 
+    def _policy_drops(
+        self,
+        contacts: Sequence[ContactWaypoint],
+        route: Sequence[ContactWaypoint],
+        *,
+        now: float,
+        mule_pose: MulePose,
+        member_subsets: Any = None,
+    ) -> List[Tuple[ContactWaypoint, str]]:
+        """What a whole-scheduler baseline left out before takeoff, with a reason each.
+
+        The user's decision 6: D1-D5 never said which contacts their walk left
+        out, so the trace reports them (``pass_1_policy_drops``) and never
+        widens them, since a synthetic miss would move the fields their round
+        inference reads. The contacts are ``policies.budget_walk.left_out``'s:
+        each contact the route serves no member of, and under member subsets
+        the rest of a contact it serves in part. Each is labelled as the
+        in-flight re-plan labels a baseline's drop (:meth:`replan_remainder`):
+        the clause that refuses it on its own from the plan's start, under the
+        arm's in-flight rule, else ``budget``, the budget the policy's
+        higher-ranked contacts took (its walk does not say which clause bound).
+        """
+        from .policies.budget_walk import left_out  # noqa: WPS433
+        from .stages.s3b_feasibility import (  # noqa: WPS433
+            REASON_BUDGET,
+            FeasibilityModel,
+            FlightState,
+        )
+
+        rest = left_out(contacts, route, member_subsets=member_subsets)
+        if not rest:
+            return []
+        model = self._feasibility_model or FeasibilityModel()
+        start = self._mission_start_ts if self._mission_start_ts is not None else now
+        budget_end = None if self._mission_budget_s is None else start + self._mission_budget_s
+        rule = self.in_flight_rule(MissionPass.COLLECT)
+        state = FlightState(tuple(mule_pose), float(now))  # type: ignore[arg-type]
+        drops: List[Tuple[ContactWaypoint, str]] = []
+        for wp in rest:
+            v = model.admit(state, wp, rule=rule, budget_end=budget_end,
+                            pass_kind=MissionPass.COLLECT)
+            drops.append((wp, v.reason if not v.ok else REASON_BUDGET))
+        return drops
+
     # ------------------------------------------------------------------ #
     # FeRRy Phase 3 — the in-flight rule and the re-plan (design §3.4)
     # ------------------------------------------------------------------ #
@@ -963,6 +1211,7 @@ class FLScheduler:
         protected: Collection[ContactWaypoint] = (),
         snr_offset_db: float = 0.0,
         two_opt_fallback: Optional[bool] = None,
+        deadlines: Optional[Mapping[DeviceID, float]] = None,
     ):
         """Re-plan the rest of a pass from a flight state (design §3.4, critic C3).
 
@@ -1002,6 +1251,17 @@ class FLScheduler:
         remainder's members only. A baseline's drop is labelled with the
         clause that refuses the stop on its own from ``state``, else
         ``budget`` (the policy's walk does not report which clause bound).
+
+        FeRRy Phase 4, plan mode (``plan_mode="ferry"``; Phase 4 spec, other
+        choices 9): Pass 1 is re-planned by a trim of the committed plan
+        (:meth:`_trim_plan`), never by ``routing.replan.replan_route``, whose
+        identity check forbids the reduced stops a member trim makes: a member
+        trim under ``member_admission="subset"``, a trim of whole stops under
+        ``whole`` (R5). Pass 2 is re-planned as above, with whole stops.
+        ``deadlines`` is read by the member trim only: each member's own
+        deadline, which a reduced stop takes, for the members of stops the
+        beacon hook inserted after the plan (the mule's record of them); the
+        plan's own members keep the plan's.
         """
         from .routing.replan import (  # noqa: WPS433
             FALLBACK_REORDER,
@@ -1025,6 +1285,10 @@ class FLScheduler:
         rule = self.in_flight_rule(pass_kind)
         if rule == RULE_NONE:
             return ReplanResult(tuple(stops), (), ORDER_NONE)
+        if (pass_kind is MissionPass.COLLECT
+                and getattr(self, "_plan_mode", _PLAN_MODE_LEGACY) != _PLAN_MODE_LEGACY):
+            return self._trim_plan(stops, state=state, budget_end=budget_end, rule=rule,
+                                   snr_offset_db=snr_offset_db, deadlines=deadlines)
         model = self._feasibility_model or FeasibilityModel()
         ferry = getattr(model, "ferry", None)
         dock = None if ferry is None else ferry.dock
@@ -1182,6 +1446,515 @@ class FLScheduler:
         )
 
         return order_pass_2_greedy(contacts, mule_pose=mule_pose)
+
+    # ------------------------------------------------------------------ #
+    # FeRRy Phase 4 — the plan clock: reach as a decision (L822-847)
+    # ------------------------------------------------------------------ #
+
+    def build_ferry_plan(
+        self,
+        *,
+        now: Optional[float] = None,
+        mule_pose: Optional[MulePose] = None,
+    ) -> List[ContactWaypoint]:
+        """Plan mode's Pass-1 plan: the band class and the route as one decision.
+
+        The build plan's commit (Fig. 1, L359-361; one mission, L529-541): at
+        the dock, before takeoff, the mule chooses b̄ and the Pass-1 route
+        together and holds both for the mission (Pass 2 flies b̄ too). The
+        steps (Phase 4 spec, other choices 1):
+
+        1. This plan's diagnostics only, reset as build_contact_queue resets
+           them (Freeze Amendment 8), so an error below leaves no stale plan.
+        2. The mission being planned: ages count the mule's own missions, so a
+           cap without it is refused before anything is built (critic B9).
+           Any plan needs it, as the ages feed the coverage weights too
+           (``s3d_age_cap.evaluate_cap``).
+        3. S1 and S3: build_contact_queue's calls, repeated here rather than
+           refactored out of the frozen method (a test pins equal deadlines
+           and buckets). The demand is the devices S3 bucketed and dated, in
+           S3's order.
+        4. The age cap (U1) and the coverage weights (U2) under this arm's
+           ``miss_priority``.
+        5. For each class the arm may fly (``PlanSetup.searched``): S3a at the
+           class's radius, then the hover rule (the user's decision of
+           2026-09-30, ``plan/hover.py``): each capped device its S3a stop
+           cannot serve alone within the budget leaves that stop for a stop of
+           its own at its best hover point on the class. S3a re-clusters on
+           S3's deadlines every mission and puts a far device left last at its
+           own position, where the cap could never serve it (final check
+           PLAN-1). Pass 2 is priced once on the class as T_nom prices it
+           (decision 2 (b); ``plan_search.price_pass_2``), on S3a's stops.
+        6. The search (U4), from the dock at ``now`` to the budget's end,
+           which runs from the mission's start stamp as S3b's does. Without a
+           budget nothing is gated (S3b's opt-in contract): such a plan cell
+           is the control, and it serves whom V prefers.
+        7. The guard: the route must pass S3b's predicate as flown, with the
+           exempt stops (every member capped) protected, the set computed on
+           the route itself (critic B1): a reduced stop is a new waypoint, so
+           a set taken from S3a's stops would miss it. A failure is a bug in
+           the search and raises FLSchedulerError; nothing is committed.
+        8. The commit: the class's model becomes this scheduler's model, so
+           the departure check, the re-plan and Pass 2 price b̄;
+           ``last_feasibility`` holds the route and every demanded device the
+           plan leaves out, labelled per spec item 8 (:meth:`_plan_drops`) at
+           the stop the search was offered for it (its hover stop, if it got
+           one); ``last_plan`` holds the ``PlanCommit``, with the cap's
+           plan-time violations (:meth:`_plan_servable`) and, for every arm,
+           the predicted whole mission under ``score["mission_s"]`` (U2's
+           ``predicted_mission_s``). Under ``member_admission="whole"`` the
+           drop labels judge the stop, the least such a plan flies, not one
+           device (R5); the violations judge the device alone under either
+           admission, so ``unplannable`` is never the arm's admission rule,
+           and without an energy capacity it is physics
+           (:meth:`_plan_servable`).
+
+        Neither the pre-flight order check nor the T_nom helper enters this
+        path: the plan passes the predicate as flown by construction, and
+        T_nom prices a legacy plan on the cell's reference class for every
+        arm. Wall time never enters a decision; it is measured into
+        ``last_plan_wall_s`` only. ``mule_pose`` defaults to the dock, and any
+        other pose is refused: the plan is made at the dock, from which Pass 2
+        and every label are priced.
+        """
+        setup = getattr(self, "_plan", None)
+        if setup is None:
+            raise FLSchedulerError(
+                "build_ferry_plan is plan mode's (plan_mode='ferry'); a legacy "
+                "scheduler plans with build_contact_queue"
+            )
+        wall_start = time.perf_counter()
+        _now = self._now() if now is None else now
+        _wscale = self.window_scale  # S3c; 1.0 unless enabled
+        self.last_feasibility = None
+        self.last_plan_deadlines = {}
+        self.last_order_check = None
+        self.last_policy_drops = []
+        self.last_plan = None
+        self.last_plan_wall_s = None
+
+        options = setup.options
+        if self._mission_round is None:
+            if options.cap.enabled:
+                raise FLSchedulerError(
+                    "a capped plan needs the mission being planned (critic B9): the age "
+                    "counts the mule's missions since each device's last merged update; "
+                    "call set_mission_round first"
+                )
+            raise FLSchedulerError(
+                "plan mode needs the mission being planned: the coverage weights read "
+                "each device's age in the mule's missions; call set_mission_round first"
+            )
+        dock = tuple(setup.classes[0].model.ferry.dock)
+        if mule_pose is not None and tuple(float(c) for c in mule_pose) != dock:
+            raise FLSchedulerError(
+                f"the plan is made at the dock {dock!r}, not at {tuple(mule_pose)!r}"
+            )
+
+        from hermes.types.scheduler import PlanCommit  # noqa: WPS433
+
+        from .plan.hover import offer_hover_stops  # noqa: WPS433
+        from .plan.plan_score import (  # noqa: WPS433
+            MISSION_SCORE_KEY,
+            demand_weights,
+            predicted_mission_s,
+        )
+        from .plan.plan_search import ClassInput, plan_search, price_pass_2  # noqa: WPS433
+        from .plan.types import REASON_PLAN  # noqa: WPS433
+        from .stages.s3b_feasibility import (  # noqa: WPS433
+            MEMBER_ADMISSION_WHOLE,
+            REASON_BUDGET,
+            REASON_DELIVERY,
+            REASON_ENERGY,
+            REASON_OVERDUE,
+            RULE_DEADLINE_BUDGET,
+            FeasibilityResult,
+            FlightState,
+        )
+        from .stages.s3d_age_cap import (  # noqa: WPS433
+            cap_stops,
+            evaluate_cap,
+            plan_violations,
+        )
+
+        # S1 — eligibility; S3 — bucket and deadline: build_contact_queue's calls.
+        eligible_ids = filter_eligible(
+            self._device_states, now=_now, beacon_window_s=self._beacon_window_s
+        )
+        deadlines: Dict[DeviceID, float] = {}
+        for did in eligible_ids:
+            st = self._device_states[did]
+            try:
+                bucket = classify_bucket(
+                    st, now=_now, beacon_window_s=self._beacon_window_s
+                )
+            except ValueError:
+                log.warning("build_ferry_plan: S3 refused to bucket %s", did)
+                continue
+            st.bucket = bucket
+            deadlines[did] = compute_deadline(
+                st, now=_now, window_scale=_wscale, law=self._deadline_law,
+            )
+        self.last_plan_deadlines = dict(deadlines)
+        # A device S3 refused this pass stays out, whatever bucket an earlier
+        # pass left on it: the plan prices every demanded device's deadline.
+        demand = [did for did in eligible_ids if did in deadlines]
+
+        cap = evaluate_cap(demand, self._device_states, mission_round=self._mission_round,
+                           spec=options.cap)
+        weights = demand_weights(demand, self._device_states, ages=cap.ages,
+                                 miss_priority=self._miss_priority,
+                                 mode=options.score.coverage_weights)
+        start = FlightState(dock, float(_now))  # type: ignore[arg-type]
+        origin = self._mission_start_ts if self._mission_start_ts is not None else _now
+        budget_end = None if self._mission_budget_s is None else origin + self._mission_budget_s
+
+        entries = []
+        for c in setup.searched:
+            stops = cluster_by_rf_range(
+                eligible_device_ids=demand,
+                device_states=self._device_states,
+                deadlines=deadlines,
+                rf_range_m=c.radius_m,
+            )
+            # The hover rule (step 5): only capped devices move, and only
+            # those their S3a stop cannot serve alone on this class.
+            stops = offer_hover_stops(
+                stops, model=c.model, reach_m=c.radius_m, movable=cap.capped, start=start,
+                budget_end=budget_end, deadlines=deadlines, device_states=self._device_states,
+                capped=cap.capped,
+            )
+            pass_2 = price_pass_2(c.model, self.build_pass_2_queue(
+                rf_range_m=c.radius_m, now=_now, mule_pose=dock,  # type: ignore[arg-type]
+            ))
+            entries.append(ClassInput(c, tuple(stops), pass_2))
+        result = plan_search(setup, entries, start=start, budget_end=budget_end,
+                             deadlines=deadlines, device_states=self._device_states,
+                             cap=cap, weights=weights)
+        best = result.best
+        entry = next(e for e in entries if e.cls.name == best.band)
+        route = list(best.fold.route)
+
+        guard = best.cls.model.fold(
+            route, start, rule=RULE_DEADLINE_BUDGET, budget_end=budget_end, skip=False,
+            protected=cap_stops(route, cap.capped).exempt,
+        )
+        if not guard.ok:
+            raise FLSchedulerError(
+                f"the plan on class {best.band!r} fails S3b's predicate as flown at "
+                f"{[(list(wp.devices), why) for wp, why in guard.rejected]}: the search "
+                "admits only plans that pass it, so this is a bug; nothing was committed"
+            )
+
+        served = best.served
+        whole = self.member_admission == MEMBER_ADMISSION_WHOLE
+        drops = self._plan_drops(entry, served, start=start, budget_end=budget_end,
+                                 deadlines=deadlines, capped=cap.capped, whole=whole)
+        left_capped = [did for did in demand if did in cap.capped and did not in served]
+        violations = plan_violations(cap, served, servable=self._plan_servable(
+            left_capped, entries, start=start, budget_end=budget_end,
+        ))
+        score = dict(best.terms.as_dict())
+        score[MISSION_SCORE_KEY] = predicted_mission_s(
+            serves_any=bool(served), pass_1_s=best.fold.home - start.clock,
+            turnaround_s=setup.turnaround_s, pass_2_s=entry.pass_2.time_s,
+        )
+        commit = PlanCommit(
+            mission_round=self._mission_round,
+            band=best.band,
+            band_index=best.cls.index,
+            band_class_policy=options.band_class_policy,
+            queue=tuple(route),
+            demand=tuple(demand),
+            weights=weights,
+            budget_end=budget_end,
+            t_ref_s=setup.t_ref_s,
+            score=score,
+            constants=options.score.constants(len(demand)),
+            search_mode=result.mode,
+            n_candidates=result.n_candidates,
+            per_class=result.per_class,
+            cap_s=cap.spec.s_missions,
+            cap_lookahead=cap.spec.lookahead,
+            ages=cap.ages,
+            capped=cap.capped,
+            violations=violations,
+        )
+
+        # The commit (Fig. 1, "Commit the plan"): b̄'s physics from here on.
+        self._feasibility_model = best.cls.model
+        self.last_feasibility = FeasibilityResult(
+            kept=list(route),
+            dropped_overdue=drops[REASON_OVERDUE],
+            dropped_budget=drops[REASON_BUDGET],
+            dropped_energy=drops[REASON_ENERGY],
+            dropped_delivery=drops[REASON_DELIVERY],
+            dropped_plan=drops[REASON_PLAN],
+        )
+        self.last_plan = commit
+        self.last_plan_wall_s = time.perf_counter() - wall_start
+        log.info(
+            "ferry plan: class %s (%s search, %d candidates), %d/%d demanded devices "
+            "on %d stops, V=%.6f, cap key %s",
+            best.band, result.mode, result.n_candidates, len(served), len(demand),
+            len(route), best.terms.v, list(best.cap_key),
+        )
+        return route
+
+    def _plan_drops(
+        self,
+        entry: Any,
+        served: Collection[DeviceID],
+        *,
+        start: Any,
+        budget_end: Optional[float],
+        deadlines: Mapping[DeviceID, float],
+        capped: Collection[DeviceID],
+        whole: bool,
+    ) -> Dict[str, List[ContactWaypoint]]:
+        """The demanded devices a plan leaves out, by offered stop and reason (spec item 8).
+
+        Each device is labelled with the first clause of S3b's predicate that
+        refuses it alone on the committed class, at the stop the search was
+        offered for it (``entry.stops``: its S3a stop, or its hover stop when
+        it got one, ``plan/hover.py``), from the plan's start at the dock, in
+        the predicate's order: ``overdue`` (never for a capped device, which
+        is exempt from its own deadline alone), ``budget``, ``energy``;
+        ``delivery`` cannot fire at takeoff, where nothing is on board (critic
+        A11 (ii)). A device no clause refuses alone was left out by the plan's
+        choice: the plan-level reason ``plan``, which S3c's planned count
+        leaves out (critic C6). The walk's own reasons are not used: they come
+        from whatever state each stop was tried in (U3's
+        ``MemberFold.dropped``). The devices of one stop and one reason form
+        one waypoint (U3's ``reduce_stop``), in the offered stops' order; the
+        mule widens and records them as it does every drop before takeoff.
+        Keyed by S3b's ``REASONS`` and ``plan``.
+
+        ``whole`` (``member_admission="whole"``): a plan flies each offered
+        stop whole or leaves it out whole (R5), so the least it could fly to serve
+        a device is the device's whole stop, not the device alone. The stop's
+        left-out members are then judged together, as that stop, priced as
+        the search prices it (B2's deadline, protected when every member is
+        capped): ``plan`` only when the whole stop fits from the dock at
+        takeoff, and otherwise the clause that refuses it, which is a
+        shortfall S3c counts, as H1's gate reports the same contact. Such a
+        clause can be ``overdue`` for a capped member of a mixed stop: the
+        stop is late for its uncapped members' deadline (B2), and whole
+        admission cannot fly the capped member without them.
+        """
+        from .plan.member_subset import reduce_stop  # noqa: WPS433
+        from .plan.types import REASON_PLAN  # noqa: WPS433
+        from .stages.s3b_feasibility import REASONS, RULE_DEADLINE_BUDGET  # noqa: WPS433
+        from .stages.s3d_age_cap import is_exempt  # noqa: WPS433
+
+        model = entry.cls.model
+        reasons = tuple(REASONS) + (REASON_PLAN,)
+        drops: Dict[str, List[ContactWaypoint]] = {reason: [] for reason in reasons}
+        for wp in entry.stops:
+            out = [did for did in wp.devices if did not in served]
+            if not out:
+                continue
+            left: Dict[str, List[DeviceID]] = {}
+            for unit in ([out] if whole else [[did] for did in out]):
+                alone = reduce_stop(wp, unit, deadlines=deadlines,
+                                    device_states=self._device_states, capped=capped)
+                v = model.admit(start, alone, rule=RULE_DEADLINE_BUDGET, budget_end=budget_end,
+                                protected=is_exempt(alone, capped))
+                left.setdefault(REASON_PLAN if v.ok else v.reason, []).extend(unit)
+            for reason in reasons:
+                if reason in left:
+                    drops[reason].append(reduce_stop(
+                        wp, left[reason], deadlines=deadlines,
+                        device_states=self._device_states, capped=capped,
+                    ))
+        return drops
+
+    @staticmethod
+    def _plan_servable(
+        left_capped: Sequence[DeviceID],
+        entries: Sequence[Any],
+        *,
+        start: Any,
+        budget_end: Optional[float],
+    ) -> FrozenSet[DeviceID]:
+        """The capped devices left out that some class could serve alone (spec item 6).
+
+        Those are ``crowded``; the rest are ``unplannable``: no class the arm
+        may fly serves the device alone within the budget, from the dock at
+        takeoff, even at its best hover point (the user's decision of
+        2026-09-30). ``entries`` are the classes the arm may fly with the
+        stops the search was offered, so this is U1's ``servable_alone`` at
+        each capped device's offered stop: its S3a stop when that serves it
+        alone, else its hover stop (``plan/hover.py``). The best hover point
+        is no slower alone than any other stop of the class, so without an
+        energy capacity a device none of them serves is physics, not the
+        plan's partition. With a capacity it need not be: the point minimises
+        time, and a slower point with a shorter dwell can need less energy,
+        so a device the capacity refuses at its hover point can be
+        ``unplannable`` while such a point would serve it (the user's call;
+        no pilot sets a capacity). Under either admission: ``whole`` flies
+        whole stops (R5), and a capped device its whole stop leaves out is
+        ``crowded`` when it fits alone, since the arm's admission rule, not
+        physics, left it out.
+        """
+        from .stages.s3d_age_cap import servable_alone  # noqa: WPS433
+
+        return servable_alone(left_capped, [(e.cls.model, e.stops) for e in entries],
+                              start=start, budget_end=budget_end)
+
+    def _trim_plan(
+        self,
+        stops: List[ContactWaypoint],
+        *,
+        state: Any,
+        budget_end: Optional[float],
+        rule: str,
+        snr_offset_db: float,
+        deadlines: Optional[Mapping[DeviceID, float]],
+    ):
+        """Plan mode's Pass-1 re-plan: a trim of the committed plan.
+
+        Phase 4 spec, other choices 9. The remainder is kept if it passes as
+        flown, its exempt stops protected; otherwise the priority stops (any
+        member capped) fly first and the rest follow, each part in the flight
+        order. The exempt, mixed and priority stops are recomputed from the
+        commit's capped set on every route (critic B1), so the caller's
+        ``protected`` adds nothing and is not read (:meth:`plan_protected`
+        gives the same set). It never re-orders otherwise: ``reorder`` is
+        refused in plan mode, as re-ordering belongs to the flight slot
+        (critic B11). ``routing.replan.replan_route`` is not used, as its
+        identity check forbids the reduced stops a member trim makes. What the
+        trim may do to a stop is the arm's ``member_admission``, the switch
+        the plan was searched under:
+
+        * ``subset``: U3's ``trim_members``. Priority stops shed their
+          uncapped members first, and each stop is kept whole if it fits,
+          else reduced to the members that fit, else dropped. A reduced stop
+          takes its members' own deadlines: the plan's for the plan's own
+          members, as the committed stops carry them, so a reduced stop is
+          dated as the plan dated its whole stop; for the members of a stop
+          the beacon hook inserted after the plan, those in ``deadlines``
+          (the mule's record); and a member dated by neither takes its
+          stop's deadline, never later than its own, rather than none.
+        * ``whole``: whole stops only (:meth:`_trim_whole`), as R5 has a
+          ``whole`` arm fly whole stops in every mode.
+        """
+        from .plan.member_subset import trim_members  # noqa: WPS433
+        from .stages.s3b_feasibility import (  # noqa: WPS433
+            MEMBER_ADMISSION_WHOLE,
+            FeasibilityModel,
+        )
+
+        plan = getattr(self, "last_plan", None)
+        if plan is None:
+            raise FLSchedulerError(
+                "the plan-mode re-plan trims the committed plan: build_ferry_plan first"
+            )
+        model = self._feasibility_model or FeasibilityModel()
+        if self.member_admission == MEMBER_ADMISSION_WHOLE:
+            return self._trim_whole(stops, state, model=model, capped=plan.capped, rule=rule,
+                                    budget_end=budget_end, snr_offset_db=snr_offset_db)
+        member_deadlines = dict(deadlines or {})
+        member_deadlines.update(self.last_plan_deadlines)
+        for wp in stops:
+            for did in wp.devices:
+                member_deadlines.setdefault(did, wp.deadline_ts)
+        return trim_members(
+            stops, state, model=model,
+            budget_end=budget_end, deadlines=member_deadlines,
+            device_states=self._device_states, capped=plan.capped, weights=plan.weights,
+            rule=rule, snr_offset_db=snr_offset_db,
+        )
+
+    @staticmethod
+    def _trim_whole(
+        stops: List[ContactWaypoint],
+        state: Any,
+        *,
+        model: Any,
+        capped: Collection[DeviceID],
+        rule: str,
+        budget_end: Optional[float],
+        snr_offset_db: float,
+    ):
+        """The plan-mode re-plan under ``member_admission="whole"``: whole stops only.
+
+        R5: a ``whole`` arm flies whole stops in every mode, in flight too, so
+        it keeps the narrow-band cliff for comparison (design D-D). These are
+        U3's trim rules on whole stops, as the search's whole-mode start
+        applies them (U4, ``plan_search``): the remainder is kept if it passes
+        as flown, its exempt stops protected; otherwise its priority stops fly
+        first and then the rest, each part in its flight order, and each stop
+        is kept if it fits whole from where the previous one left the mule,
+        else dropped whole with the reason it failed, as the Phase 3 trim
+        drops a stop. So a mixed stop late for its uncapped members' deadline
+        (B2) is dropped ``overdue``, capped members included: whole admission
+        cannot fly them without their co-members. The stops keep the
+        deadlines they carry, so no member's own deadline is needed, and every
+        stop returned is one of ``stops``, the very object. The drops are
+        listed in the remainder's order, as the member trim lists them.
+        """
+        from .routing.replan import (  # noqa: WPS433
+            ORDER_ARM_TRIMMED,
+            ORDER_CURRENT,
+            ReplanResult,
+        )
+        from .stages.s3d_age_cap import cap_stops, priority_first  # noqa: WPS433
+
+        index = {id(wp): i for i, wp in enumerate(stops)}
+        if len(index) != len(stops):
+            raise ValueError("the plan-mode re-plan: the remainder lists a stop twice")
+        common = dict(rule=rule, budget_end=budget_end, pass_kind=MissionPass.COLLECT,
+                      protected=cap_stops(stops, capped).exempt, snr_offset_db=snr_offset_db)
+        if model.fold(stops, state, skip=False, **common).ok:
+            return ReplanResult(tuple(stops), (), ORDER_CURRENT)
+        walk = model.fold(list(priority_first(stops, capped)), state, skip=True, **common)
+        dropped = sorted(walk.rejected, key=lambda pair: index[id(pair[0])])
+        return ReplanResult(tuple(walk.route), tuple(dropped), ORDER_ARM_TRIMMED)
+
+    def plan_protected(self, remainder: Iterable[ContactWaypoint]) -> FrozenSet[ContactWaypoint]:
+        """The stops of ``remainder`` exempt from their own deadline clause (plan mode).
+
+        Those whose every member the committed plan capped (U1's
+        ``cap_stops(...).exempt``): what the departure check, the re-plan and
+        the beacon hook's fold take as ``protected`` in plan mode (Phase 4
+        spec, other choices 9). Computed on ``remainder`` as it stands, since a
+        reduced stop is a new waypoint (critic B1); waypoints compare by
+        position, members, bucket and deadline, so the mule's annotated copies
+        match. Empty in legacy mode and without a cap: nothing is protected,
+        as in Phase 3.
+        """
+        plan = getattr(self, "last_plan", None)
+        if plan is None or not plan.capped:
+            return frozenset()
+        from .stages.s3d_age_cap import cap_stops  # noqa: WPS433
+
+        return cap_stops(remainder, plan.capped).exempt
+
+    def close_plan(
+        self, flown: Iterable[ContactWaypoint], merged: Iterable[DeviceID],
+    ) -> "PlanCommit":
+        """Close the mission's plan: its visited set and close-time cap violations.
+
+        The mule calls it once per mission, after ``record_merged``, with the
+        Pass-1 stops it actually flew (after any in-flight trim, and with the
+        beacon hook's inserts) and exactly the devices its merge used; on the
+        empty path (Pass 1 collected nothing) with ``merged=()`` (Phase 4 spec,
+        other choices 6). U1's ``close_commit`` adds ``dropped_in_flight`` for
+        each capped device the plan served that no flown stop held, and
+        ``not_merged`` for each one visited whose update the merge did not use.
+        The commit is frozen, so ``last_plan`` becomes the closed copy, which
+        is returned: read ``last_plan`` after this call, not before.
+        """
+        plan = getattr(self, "last_plan", None)
+        if plan is None:
+            raise FLSchedulerError("close_plan: no plan to close (build_ferry_plan commits one)")
+        if plan.closed:
+            raise FLSchedulerError("close_plan: this mission's plan is already closed")
+        from .stages.s3d_age_cap import close_commit  # noqa: WPS433
+
+        self.last_plan = close_commit(plan, flown, merged)
+        return self.last_plan
 
 
 # --------------------------------------------------------------------------- #

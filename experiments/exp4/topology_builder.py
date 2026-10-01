@@ -31,6 +31,14 @@ slice's ground-truth availability ``{device_id: rel_i}`` from
 ``device_reliabilities(seed, N)`` for its keyed draw. The positions, the
 legacy reliability formula and the device-id stream are unchanged, and with
 the defaults every config is the recorded one.
+
+FeRRy Phase 4 — the plan fields (``hermes.processes.config.PLAN_MULE_FIELDS``:
+``plan_mode``, the band-class policy, member admission, the flight slot, the
+age cap S and its lookahead, and the plan score's and search's settings) are
+explicit parameters, copied to every mule; they are not ``ferry_settings``,
+which hold only ferry-spec fields (critic A8). Their defaults are the recorded
+mule, and off the simulated clock the topology's validation accepts only the
+defaults.
 """
 
 from __future__ import annotations
@@ -47,7 +55,16 @@ from hermes.processes import (
     MuleConfig,
     TopologyConfig,
 )
-from hermes.processes.config import CLOCK_SIM, CLOCK_WALL, FERRY_SPEC_FIELDS, MISSION_CLOCKS
+from hermes.processes.config import (
+    BAND_POLICY_SEARCH,
+    CLOCK_SIM,
+    CLOCK_WALL,
+    FERRY_SPEC_FIELDS,
+    FLIGHT_SLOT_COMMITTED,
+    MEMBER_ADMISSION_WHOLE,
+    MISSION_CLOCKS,
+    PLAN_MODE_LEGACY,
+)
 
 #: The cluster's synthetic batch size in every Exp 4 topology (the builder's
 #: default); the driver prices the pushed batch with it (FeRRy Phase 3).
@@ -258,6 +275,16 @@ def build_exp4_topology(
     rf_link_token: Optional[str] = None,
     newest_solicit_only: Optional[bool] = None,
     rf_prior_schedule_db: Optional[Sequence[float]] = None,
+    # FeRRy Phase 4 — the plan clock (MuleConfig's plan fields). The defaults
+    # build the recorded mule.
+    plan_mode: str = PLAN_MODE_LEGACY,
+    band_class_policy: str = BAND_POLICY_SEARCH,
+    member_admission: str = MEMBER_ADMISSION_WHOLE,
+    flight_slot: str = FLIGHT_SLOT_COMMITTED,
+    age_cap_missions: Optional[int] = None,
+    age_cap_lookahead: int = 0,
+    plan_score_params: Optional[Mapping[str, Any]] = None,
+    plan_search_params: Optional[Mapping[str, Any]] = None,
 ) -> TopologyConfig:
     """Return a validated :class:`TopologyConfig` for one H1 trial.
 
@@ -296,10 +323,28 @@ def build_exp4_topology(
     validation refuses what cannot run (``TopologyConfig.validate``: critic
     B4 and B16, and an ordered simulated-clock topology without
     ``down_wait_s``; critic B9's refusal was lifted by unit U9).
+
+    FeRRy Phase 4. ``plan_mode``, ``band_class_policy``, ``member_admission``,
+    ``flight_slot``, ``age_cap_missions``, ``age_cap_lookahead``,
+    ``plan_score_params`` and ``plan_search_params`` are the ``MuleConfig``
+    plan fields every mule gets (a plan arm's, or an H or D arm's member
+    admission). The topology's validation refuses any but their defaults off
+    the simulated clock, and on it what plan mode cannot fly
+    (``hermes.processes.config.mule_config_errors``).
     """
     if mission_clock not in MISSION_CLOCKS:
         raise ValueError(f"mission_clock must be one of {MISSION_CLOCKS}, got {mission_clock!r}")
     sim = mission_clock == CLOCK_SIM
+    # FeRRy Phase 4: the plan fields go to every mule as given; off the
+    # simulated clock the topology's validation refuses any but the defaults,
+    # and on it what plan mode cannot fly (``mule_config_errors``).
+    plan = dict(
+        plan_mode=plan_mode, band_class_policy=band_class_policy,
+        member_admission=member_admission, flight_slot=flight_slot,
+        age_cap_missions=age_cap_missions, age_cap_lookahead=age_cap_lookahead,
+        plan_score_params=dict(plan_score_params or {}),
+        plan_search_params=dict(plan_search_params or {}),
+    )
     ferry = dict(ferry_settings or {})
     unknown = sorted(set(ferry) - set(FERRY_SPEC_FIELDS))
     if unknown:
@@ -475,6 +520,7 @@ def build_exp4_topology(
         whittle_variant=str(whittle_variant),
         whittle_weights=str(whittle_weights),
         fedcs_value=str(fedcs_value),
+        **plan,
         **mule_extra,
     )
     if n_mules == 1:
@@ -532,6 +578,10 @@ def _split_between_mules(
             rf_prior_schedule_db=(
                 None if mule.rf_prior_schedule_db is None else list(mule.rf_prior_schedule_db)
             ),
+            # FeRRy Phase 4: every mule plans with the same settings, each
+            # from its own copy (at K > 1 plan mode runs per slice, critic B10).
+            plan_score_params=dict(mule.plan_score_params),
+            plan_search_params=dict(mule.plan_search_params),
         )
         for k, mid in enumerate(mule_ids)
     ]

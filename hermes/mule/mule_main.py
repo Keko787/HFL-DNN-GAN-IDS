@@ -44,6 +44,17 @@ outcome are stamped from the clock; the in-flight check is priced on it
 (``abort``) or checks and repairs the whole remainder (``replan``); a beacon
 hook can insert contacts that fit. The glue lives in ``mule/ferry.py``.
 Without a clock every path is exactly the recorded one (Freeze Rule 1).
+
+FeRRy Phase 4 (the plan clock, "reach as a decision"; build plan L822-847): with
+``plan_mode="ferry"`` the mule commits each mission at the dock to the band class
+b̄ and the Pass-1 route as one decision (``FLScheduler.build_ferry_plan``), flies
+b̄ in both passes (``FerryRuntime.set_band``), fills the flight slot with the
+committed order or arm FX's cross-heuristic, holds the stops whose members the
+age cap binds exempt from their own deadline at every departure, and closes the
+plan with its visited set once the merge is known. ``member_admission`` passes
+member-subset admission through to the scheduler. At the defaults
+(``plan_mode="legacy"``, ``member_admission="whole"``) every path is the
+recorded one, and the plan package is never loaded.
 """
 
 from __future__ import annotations
@@ -53,7 +64,7 @@ import math
 import threading
 import time
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, FrozenSet, List, Optional, Tuple
 
 import numpy as np
 
@@ -89,6 +100,13 @@ MulePose = Tuple[float, float, float]
 #: A supervisor on the mission clock refuses any other ``now_fn``.
 _WALL_NOW = time.time
 
+#: ``plan_mode``'s values (FeRRy Phase 4), the recorded one first. Restated from
+#: ``hermes.scheduler.plan.types.PLAN_MODES`` so that a legacy mule never loads
+#: the plan package (Freeze Rule 1); a test pins the two equal.
+_PLAN_MODE_LEGACY = "legacy"
+_PLAN_MODE_FERRY = "ferry"
+_PLAN_MODES: Tuple[str, ...] = (_PLAN_MODE_LEGACY, _PLAN_MODE_FERRY)
+
 
 class MuleSupervisorError(RuntimeError):
     """Raised when the supervisor's invariants are violated."""
@@ -112,6 +130,12 @@ def mission_planned_devices(queue, feasibility=None) -> int:
     (``deadline_bounds="delivery"``). ``dropped_energy`` and
     ``dropped_delivery`` are empty in every legacy plan, so nothing recorded
     moves.
+
+    FeRRy Phase 4 (critic C6): a plan-mode plan's ``dropped_plan``, the demand
+    it left out by choice although no clause refused it, is not counted. Those
+    devices are no shortfall of the deadline windows, so counting them would
+    make S3c widen every window for the plan's own choices. It is empty in
+    every legacy plan.
     """
     planned = sum(len(c.devices) for c in queue)
     for wp in (
@@ -212,7 +236,9 @@ class MissionRunResult:
     # ``deadline_bounds="delivery"``, ``delivery``, in that order), so a
     # trace shows what emptied or shrank a mission (finding E2E1-01).
     # No predicted home: S3b keeps none, and the record never re-prices.
-    # Empty for the whole-scheduler baselines, whose walks report no drops.
+    # Empty for the whole-scheduler baselines, whose walks report no drops
+    # (their report is ``pass_1_policy_drops``, below). In plan mode a fifth
+    # reason follows the four, ``plan``: demand the plan left out by choice.
     # ``delivery_overrun_s`` (``deadline_bounds="delivery"`` only, None in
     # every other mode) is how far the Pass-1 upload (or the landing, with
     # nothing uploaded) ended past ``deliver_by``, the earliest Deadline(j)
@@ -238,6 +264,26 @@ class MissionRunResult:
     backhaul: Optional[Dict[str, Any]] = None
     pass_1_preflight_drops: Optional[List[Dict[str, Any]]] = None
     delivery_overrun_s: Optional[float] = None
+
+    # FeRRy Phase 4 — plan mode and the baselines' drop report (the Phase 4
+    # spec, other choices 12; the user's decision 6). Each is None at the
+    # defaults, so a recorded mission's result keeps its values. In plan mode
+    # ``band`` is the mission's committed class b̄, and ``pass_1_flown[].band``
+    # the class each stop was flown on (FX may fly another class than b̄ at a
+    # Pass-1 stop; Pass 2 flies b̄). ``plan`` is the mission's closed
+    # ``PlanCommit.describe()``: JSON-ready and free of wall time, so a
+    # repeated trial describes the same plan. ``plan_wall_s`` is the wall time
+    # the plan took, the only wall time a result holds, and so left out of
+    # every determinism comparison (critic B12). ``pass_1_policy_drops`` is
+    # what a whole-scheduler baseline (D1-D5) left out before takeoff on the
+    # simulated clock, one entry per contact as in ``pass_1_preflight_drops``
+    # plus ``"widened": false``: reported, never widened, since a synthetic
+    # miss would move the fields the baselines' round inference reads. None
+    # when the baseline left nothing out, so no other trace gains the key
+    # (critic D2).
+    plan: Optional[Dict[str, Any]] = None
+    plan_wall_s: Optional[float] = None
+    pass_1_policy_drops: Optional[List[Dict[str, Any]]] = None
 
 
 def _merged_device_ids(report, agg) -> List[DeviceID]:
@@ -282,6 +328,13 @@ class _FerryLog:
         #: The Pass-1 ``deliver_by`` when the mule turned home (``inf``:
         #: nothing on board, or not ``delivery``): ``delivery_overrun_s``.
         self.deliver_by: float = math.inf
+        #: What a whole-scheduler baseline left out before takeoff
+        #: (``pass_1_policy_drops``, FeRRy Phase 4 decision 6): never widened.
+        self.policy_drops: List[Dict[str, Any]] = []
+        #: Plan mode's capped devices (FeRRy Phase 4): their updates do not
+        #: lower the in-flight ``deliver_by``, as a protected stop's deadline
+        #: does not in the predicate. Empty in legacy mode.
+        self.capped: FrozenSet[DeviceID] = frozenset()
 
 
 class MuleSupervisor:
@@ -308,6 +361,16 @@ class MuleSupervisor:
     ``now_fn``, a ``FerrySpec`` (or a ferry-physics model) without the clock,
     and the clock without ``rf_range_m`` (the single-pass path is not ported).
     Without a clock every path is the recorded one.
+
+    FeRRy Phase 4, on the mission clock only. ``member_admission`` (``whole``,
+    recorded, or ``subset``; the user's decision 4 (b)) is passed through to
+    the scheduler, its one runtime switch, and only when it is not the
+    recorded value. ``plan_mode="ferry"`` plans each mission with the plan
+    clock: ``plan_options`` (a ``hermes.scheduler.plan.PlanOptions``, the
+    ``MuleConfig`` plan fields) and ``t_nom_s`` (T in the plan score) are
+    required then and refused in legacy mode, where the plan package is never
+    loaded (:meth:`_init_plan`). ``plan_mode="legacy"``, the default, is every
+    recorded path.
     """
 
     def __init__(
@@ -339,6 +402,10 @@ class MuleSupervisor:
         feasibility_model=None,
         mission_clock=None,
         ferry=None,
+        member_admission: str = "whole",
+        plan_mode: str = _PLAN_MODE_LEGACY,
+        plan_options=None,
+        t_nom_s: Optional[float] = None,
     ) -> None:
         self.mule_id = mule_id
         self.mule_pose = mule_pose
@@ -366,6 +433,18 @@ class MuleSupervisor:
             sched_extra["deadline_time_scale"] = deadline_time_scale
         if initial_window_s is not None:
             sched_extra["initial_window_s"] = initial_window_s
+        # FeRRy Phase 4 — the flight slot, which only plan mode fills
+        # (_init_plan). None keeps every recorded path, and each branch reads
+        # it with getattr, since tests bind supervisor methods onto stand-ins
+        # (critic B7).
+        self._flight_slot = None
+        if plan_mode not in _PLAN_MODES:
+            raise MuleSupervisorError(f"plan_mode must be one of {_PLAN_MODES}, got {plan_mode!r}")
+        if plan_mode == _PLAN_MODE_LEGACY and (plan_options is not None or t_nom_s is not None):
+            raise MuleSupervisorError(
+                "plan_options and t_nom_s configure plan mode (plan_mode='ferry'); a legacy "
+                "mule plans with build_contact_queue"
+            )
         host_now = None
         if mission_clock is None:
             if ferry is not None:
@@ -378,12 +457,28 @@ class MuleSupervisor:
                     "a feasibility model with ferry physics prices simulated seconds; "
                     "it needs the mission clock"
                 )
+            # FeRRy Phase 4 (unit_U3b.md section 1.4): member subsets price each
+            # member with the ferry physics, and the plan clock plans with it.
+            from hermes.scheduler.stages.s3b_feasibility import MEMBER_ADMISSION_WHOLE
+
+            if member_admission != MEMBER_ADMISSION_WHOLE:
+                raise MuleSupervisorError(
+                    f"member_admission={member_admission!r} prices each member with the "
+                    "ferry physics: it runs on the mission clock (mission_clock=MissionClock())"
+                )
+            if plan_mode != _PLAN_MODE_LEGACY:
+                raise MuleSupervisorError(
+                    "plan_mode='ferry' plans on the mission clock: pass "
+                    "mission_clock=MissionClock() and a FerrySpec with a contact band as well"
+                )
             if feasibility_model is not None:
                 sched_extra["feasibility_model"] = feasibility_model
         else:
             self._init_ferry(
                 mission_clock, ferry, feasibility_model,
                 now_fn=now_fn, rf_range_m=rf_range_m, sched_extra=sched_extra,
+                member_admission=member_admission, plan_mode=plan_mode,
+                plan_options=plan_options, t_nom_s=t_nom_s, pass_2_budget=pass_2_budget,
             )
             now_fn = mission_clock
             host_now = mission_clock
@@ -490,10 +585,25 @@ class MuleSupervisor:
         now_fn,
         rf_range_m: Optional[float],
         sched_extra: Dict[str, Any],
+        member_admission: str = "whole",
+        plan_mode: str = _PLAN_MODE_LEGACY,
+        plan_options=None,
+        t_nom_s: Optional[float] = None,
+        pass_2_budget: bool = False,
     ) -> None:
-        """Wire the mission clock and the ferry runtime (design section 2.2)."""
+        """Wire the mission clock and the ferry runtime (design section 2.2).
+
+        FeRRy Phase 4: in plan mode, also the planner's setup and the flight
+        slot (:meth:`_init_plan`); in legacy mode ``member_admission`` reaches
+        the scheduler only when it is not the recorded ``whole`` (unit_U3b.md
+        section 5.3), so a recorded mule builds its scheduler with exactly the
+        arguments it always did.
+        """
         from hermes.mule.ferry import RESPONSE_REPLAN, FerryRuntime, FerrySpec
-        from hermes.scheduler.stages.s3b_feasibility import FeasibilityModel
+        from hermes.scheduler.stages.s3b_feasibility import (
+            MEMBER_ADMISSION_WHOLE,
+            FeasibilityModel,
+        )
 
         if now_fn is not _WALL_NOW:
             raise MuleSupervisorError(
@@ -538,6 +648,91 @@ class MuleSupervisor:
             refuse_deadline_overrides=True,
             replan_fallback=spec.replan_fallback,
         )
+        if plan_mode == _PLAN_MODE_FERRY:
+            self._flight_slot = self._init_plan(
+                spec, run, base, plan_options=plan_options, t_nom_s=t_nom_s,
+                member_admission=member_admission, pass_2_budget=pass_2_budget,
+                sched_extra=sched_extra,
+            )
+        elif member_admission != MEMBER_ADMISSION_WHOLE:
+            sched_extra["member_admission"] = member_admission
+
+    def _init_plan(
+        self,
+        spec,
+        run,
+        base,
+        *,
+        plan_options,
+        t_nom_s: Optional[float],
+        member_admission: str,
+        pass_2_budget: bool,
+        sched_extra: Dict[str, Any],
+    ):
+        """Plan mode's wiring (FeRRy Phase 4; the Phase 4 spec, other choices 1, 2 and 10).
+
+        The planner's setup is built once: one class per class of the contact
+        link, each model bound to its own class (``FerryRuntime.plan_classes``,
+        critic B3) on the cost model's ``base``; the run's ``contact_band`` as
+        the reference class (under ``fixed:<c>``, the class pinned); T =
+        ``t_nom_s``, since the score measures the whole mission against the
+        cell's nominal period (the user's decision 2 (b)); and the dock
+        turnaround that mission counts between the passes. The scheduler gets
+        ``plan_mode="ferry"``, the setup and ``member_admission``, which is the
+        one switch: the scheduler refuses options that say otherwise
+        (unit_U3b.md section 1.1; R5), as it refuses the ``reorder`` fallback
+        (critic B11) and a target selector. Returns the flight slot the
+        options name (``policies.cross_heuristic.flight_slot_policy``).
+
+        Refused here, each for its own reason: options that are not
+        ``PlanOptions``; the channel-free control, which has no band classes to
+        choose among; no ``t_nom_s``; ``pass_2_budget``, whose walk admits whole
+        stops, so a narrow Pass 2 at 1 MB (45 s at the median) would deliver
+        nothing under a short budget (critic B8); and ``abort`` together with a
+        cap, since abort gives up the whole tail, capped stops that would fit
+        alone included (critic A10). The plan package is imported only here
+        and on plan mode's paths, so a legacy mule never loads it.
+        """
+        from hermes.mule.ferry import RESPONSE_ABORT
+        from hermes.scheduler.plan.types import PLAN_MODE_FERRY, PlanOptions, PlanSetup
+        from hermes.scheduler.policies.cross_heuristic import flight_slot_policy
+
+        if not isinstance(plan_options, PlanOptions):
+            raise MuleSupervisorError(
+                "plan_mode='ferry' needs plan_options, a hermes.scheduler.plan.PlanOptions "
+                f"(the MuleConfig plan fields), got {plan_options!r}"
+            )
+        if not spec.banded:
+            raise MuleSupervisorError(
+                "plan_mode='ferry' chooses the band class each mission: it needs a contact "
+                "band (the channel-free control has no band classes)"
+            )
+        if t_nom_s is None:
+            raise MuleSupervisorError(
+                "plan_mode='ferry' scores the whole mission against T_nom: set t_nom_s"
+            )
+        if pass_2_budget:
+            raise MuleSupervisorError(
+                "plan_mode='ferry' refuses pass_2_budget: the budgeted Pass-2 walk admits "
+                "whole stops, so a narrow Pass 2 would deliver nothing under a short budget "
+                "(critic B8)"
+            )
+        if plan_options.cap.enabled and spec.in_flight_response == RESPONSE_ABORT:
+            raise MuleSupervisorError(
+                "in_flight_response='abort' gives up the whole tail, capped stops that would "
+                "fit alone included: it is refused with an age cap (critic A10); use 'replan'"
+            )
+        try:
+            setup = PlanSetup(
+                options=plan_options, classes=run.plan_classes(base), reference=spec.band,
+                t_ref_s=t_nom_s, turnaround_s=spec.flight.turnaround_s,
+            )
+        except (TypeError, ValueError) as e:
+            raise MuleSupervisorError(f"plan_mode='ferry': {e}") from e
+        sched_extra.update(
+            plan_mode=PLAN_MODE_FERRY, plan=setup, member_admission=member_admission,
+        )
+        return flight_slot_policy(plan_options.flight_slot)
 
     @property
     def mission_clock(self):
@@ -1102,6 +1297,17 @@ class MuleSupervisor:
 
         The mission's result carries the sim fields of design section 2.5.
         Nothing sleeps for simulated time.
+
+        FeRRy Phase 4, plan mode (the Phase 4 spec, other choices 1, 2, 6, 8
+        and 9). Step 2 is the commit: ``build_ferry_plan`` chooses b̄ and the
+        route at the dock, and the runtime flies b̄ from then on
+        (``set_band``), so the annotations, Pass 2's radius and the beacon
+        hook's range follow it. The demand the plan left out by choice
+        (``plan``) is widened and recorded like every pre-flight drop, and
+        stays out of S3c's planned count. The plan is closed after
+        ``record_merged`` with the Pass-1 stops actually flown and exactly the
+        devices merged, on the empty path with none merged. The D arms' drop
+        report (decision 6) is read from the scheduler in either mode.
         """
         from hermes.mule.ferry import RESPONSE_REPLAN
         from hermes.scheduler.stages.s3b_feasibility import (
@@ -1139,12 +1345,21 @@ class MuleSupervisor:
         # ============================ Pass 1 ============================
         mission_round = self.mission.open_round(theta_pass_1, theta_version=version_pass_1)
         self.scheduler.set_mission_round(mission_round)
-        pass_1_queue = self.scheduler.build_contact_queue(
-            rf_range_m=fx.range_planar_m,
-            mule_pose=dock,
-            mule_energy=self.mule_energy,
-            rf_prior_snr_db=self.rf_prior_snr_db,
-        )
+        plan_mode = getattr(self, "_flight_slot", None) is not None
+        if plan_mode:
+            # FeRRy Phase 4 — the commit (build plan Fig. 1): b̄ and the route
+            # as one decision at the dock, then b̄ in both passes.
+            pass_1_queue = self.scheduler.build_ferry_plan(mule_pose=dock)
+            commit = self.scheduler.last_plan
+            fx.set_band(commit.band)
+            rec.capped = frozenset(commit.capped)
+        else:
+            pass_1_queue = self.scheduler.build_contact_queue(
+                rf_range_m=fx.range_planar_m,
+                mule_pose=dock,
+                mule_energy=self.mule_energy,
+                rf_prior_snr_db=self.rf_prior_snr_db,
+            )
         pass_1_queue = fx.annotate(pass_1_queue, self._ferry_positions(pass_1_queue))
         planned_caps = self._age_caps()
         planned_deadlines = dict(
@@ -1153,7 +1368,7 @@ class MuleSupervisor:
         log.info(
             "mule=%s round=%d pass=1 contacts=%d devices_total=%d sim_t=%.3f band=%s",
             self.mule_id, mission_round, len(pass_1_queue),
-            sum(len(c.devices) for c in pass_1_queue), sim_start, fx.spec.band,
+            sum(len(c.devices) for c in pass_1_queue), sim_start, fx.band,
         )
         _feas = getattr(self.scheduler, "last_feasibility", None)
         # A contact the on-board clause refused (deadline_bounds="delivery")
@@ -1165,6 +1380,19 @@ class MuleSupervisor:
             + list(getattr(_feas, "dropped_energy", ()))
             + list(getattr(_feas, "dropped_delivery", ()))
         )
+        drop_reasons = [(REASON_OVERDUE, "dropped_overdue"),
+                        (REASON_BUDGET, "dropped_budget"),
+                        (REASON_ENERGY, "dropped_energy"),
+                        (REASON_DELIVERY, "dropped_delivery")]
+        if plan_mode:
+            # FeRRy Phase 4 (the Phase 4 spec, other choices 8): the demand the
+            # plan left out by choice got no contact either, so it is widened
+            # and recorded like any drop, under the plan-level reason ``plan``.
+            # mission_planned_devices leaves it out of S3c's count (critic C6).
+            from hermes.scheduler.plan.types import REASON_PLAN
+
+            dropped_pre += list(getattr(_feas, "dropped_plan", ()))
+            drop_reasons.append((REASON_PLAN, "dropped_plan"))
         if dropped_pre:
             self._widen_abandoned(dropped_pre, mission_round=mission_round)
         # Finding E2E1-01: without this record an empty mission's trace does
@@ -1172,11 +1400,17 @@ class MuleSupervisor:
         rec.preflight_drops = [
             {"position": [float(c) for c in wp.position], "devices": _ids(wp.devices),
              "deadline_ts": float(wp.deadline_ts), "reason": reason}
-            for reason, name in ((REASON_OVERDUE, "dropped_overdue"),
-                                 (REASON_BUDGET, "dropped_budget"),
-                                 (REASON_ENERGY, "dropped_energy"),
-                                 (REASON_DELIVERY, "dropped_delivery"))
+            for reason, name in drop_reasons
             for wp in getattr(_feas, name, ())
+        ]
+        # FeRRy Phase 4 (the user's decision 6): what a whole-scheduler
+        # baseline left out, reported and never widened (a synthetic miss
+        # would move the fields its round inference reads). The scheduler
+        # fills it for the D arms on this clock only; empty for every other arm.
+        rec.policy_drops = [
+            {"position": [float(c) for c in wp.position], "devices": _ids(wp.devices),
+             "deadline_ts": float(wp.deadline_ts), "reason": reason, "widened": False}
+            for wp, reason in getattr(self.scheduler, "last_policy_drops", None) or ()
         ]
         planned_devices = mission_planned_devices(pass_1_queue, _feas)
         rec.no_insert = {d for wp in list(pass_1_queue) + dropped_pre for d in wp.devices}
@@ -1223,6 +1457,11 @@ class MuleSupervisor:
                 "empty round and continuing: %s",
                 self.mule_id, mission_round, e,
             )
+            if plan_mode:
+                # FeRRy Phase 4 (the Phase 4 spec, other choices 6): nothing
+                # merged, so every capped device the plan served and a stop
+                # flown visited is ``not_merged``.
+                self.scheduler.close_plan(flown_1, ())
             answered = False
             up = None
             before = self.client_cluster.last_down()
@@ -1247,9 +1486,14 @@ class MuleSupervisor:
                 docked_empty=self.dock_on_empty,
             )
 
-        self.scheduler.record_merged(
-            _merged_device_ids(report, agg), mission_round,
-        )
+        merged = _merged_device_ids(report, agg)
+        self.scheduler.record_merged(merged, mission_round)
+        if plan_mode:
+            # FeRRy Phase 4 (the Phase 4 spec, other choices 6): the visited set
+            # is the members of the Pass-1 stops actually flown (after any trim,
+            # with the beacon hook's inserts), and the close-time violations
+            # read exactly the devices record_merged was given.
+            self.scheduler.close_plan(flown_1, merged)
 
         # ===================== Inter-pass dock =====================
         up = fx.charge_upload(weights_byte_count(agg.weights))
@@ -1394,6 +1638,17 @@ class MuleSupervisor:
         the updates are on board and the mule flies home, so the landing can
         pass ``deliver_by``. The pass leaves its final ``deliver_by`` in
         ``rec.deliver_by`` for ``delivery_overrun_s``, which records that.
+
+        FeRRy Phase 4, plan mode. The next stop is the flight slot's pick
+        (:meth:`_ferry_next_stop`), made after the departure check and the
+        beacon hook: the committed slot (F) always picks the plan's next
+        stop, as legacy mode does; FX's cross-heuristic may pick another after
+        a Pass-1 stop. A capped member's update does not lower ``deliver_by``
+        (the Phase 4 spec, other choices 9), as the predicate does not lower
+        it for a stop exempt from its own deadline: a stop whose members the
+        cap binds is flown for them whatever their deadlines, so holding the
+        rest of the route to those deadlines would refuse every later stop
+        for updates that may be late anyway (``s3b_feasibility``, ``admit``).
         """
         from hermes.scheduler.stages.s3b_feasibility import (
             DEADLINE_BOUNDS_DELIVERY,
@@ -1406,6 +1661,7 @@ class MuleSupervisor:
         flown: List[ContactWaypoint] = []
         collect = pass_kind is MissionPass.COLLECT
         route_level = collect and fx.spec.deadline_bounds == DEADLINE_BOUNDS_DELIVERY
+        capped = getattr(rec, "capped", frozenset())
         deliver_by = math.inf
         while True:
             state = FlightState(
@@ -1423,19 +1679,75 @@ class MuleSupervisor:
                 remainder = self._take_offers(fx, remainder, state, budget_end=budget_end, rec=rec)
             if not remainder:
                 break
-            wp = remainder.pop(0)
+            slot = getattr(self, "_flight_slot", None)
+            index = 0 if slot is None else self._ferry_next_stop(
+                slot, remainder, state, pass_kind=pass_kind, budget_end=budget_end,
+                after_stop=bool(flown),
+            )
+            wp = remainder.pop(index)
             outcomes = self._ferry_stop(
                 fx, wp, state, pass_kind=pass_kind, mission_round=mission_round,
                 synth=synth, energy_origin_j=energy_origin_j, rec=rec,
             )
             if route_level:
                 for did, outcome in outcomes.items():
-                    if outcome is MissionOutcome.CLEAN:
+                    if outcome is MissionOutcome.CLEAN and did not in capped:
                         deliver_by = min(deliver_by, rec.deadlines.get(did, wp.deadline_ts))
             flown.append(wp)
         if route_level:
             rec.deliver_by = deliver_by
         return flown
+
+    def _ferry_protected(
+        self, stops: List[ContactWaypoint], pass_kind: MissionPass,
+    ) -> Dict[str, Any]:
+        """Plan mode's exempt stops among ``stops``, as the fold's keyword; else none.
+
+        The Phase 4 spec, other choices 9: in plan mode the departure check,
+        the re-plan, the beacon hook's fold and FX's ``fits`` hold a stop
+        whose every member the plan capped exempt from its own deadline
+        clause, as the plan and its guard priced it
+        (``FLScheduler.plan_protected``). The set is recomputed on ``stops``
+        as they stand, since a trim makes new waypoints (critic B1). Pass 1
+        only: the cap is about collecting updates, and Pass 2 has no deadline
+        clause. Legacy mode passes nothing, so every recorded call keeps its
+        arguments (Phase 3 gave none of them a protected set).
+        """
+        if getattr(self, "_flight_slot", None) is None or pass_kind is not MissionPass.COLLECT:
+            return {}
+        return {"protected": self.scheduler.plan_protected(stops)}
+
+    def _ferry_next_stop(
+        self,
+        slot,
+        remainder: List[ContactWaypoint],
+        state,
+        *,
+        pass_kind: MissionPass,
+        budget_end: Optional[float],
+        after_stop: bool,
+    ) -> int:
+        """The index of the stop to fly next: the flight slot's pick (plan mode).
+
+        The user's decision 5 and U6's order: the slot chooses after the
+        departure check and the beacon hook have settled the remainder, so it
+        reads the state the service left. The committed slot (F, FB+c)
+        returns 0, the plan's next stop, without calling ``fits``. FX's
+        cross-heuristic, in Pass 1 after a stop (``after_stop``: a stop of
+        this pass has been flown; not at takeoff, not in Pass 2), returns the
+        nearest remaining stop whose move to the front still passes the
+        departure check's own fold (``fits``: the whole reordered remainder
+        from ``state`` under the arm's in-flight rule, the plan's exempt stops
+        protected), else 0. The slot applies those rules itself.
+        """
+        def fits(order: List[ContactWaypoint]) -> bool:
+            return self.scheduler.fold_remainder(
+                order, state=state, budget_end=budget_end, pass_kind=pass_kind,
+                **self._ferry_protected(list(order), pass_kind),
+            ).ok
+
+        return slot.next_stop(remainder, state, fits=fits, pass_kind=pass_kind,
+                              after_stop=after_stop)
 
     def _ferry_departure(
         self,
@@ -1460,6 +1772,15 @@ class MuleSupervisor:
         final for the mission: widened in Pass 1, a SKIPPED delivery in Pass 2,
         stamped at the drop time. δ_obs is 0 (critic C1). Both price with the
         scheduler's model, so the mule never re-implements S3b.
+
+        FeRRy Phase 4, plan mode (the Phase 4 spec, other choices 9): in Pass 1
+        both folds and the re-plan hold the plan's exempt stops protected
+        (:meth:`_ferry_protected`), and the re-plan is the scheduler's trim of
+        the committed plan (never ``routing.replan.replan_route``, whose
+        identity check forbids the reduced stops a member trim makes), given
+        each member's own deadline from the mule's record so that a stop the
+        beacon hook inserted is dated as it was priced (``rec.deadlines``).
+        ``abort`` flies only without a cap there (critic A10).
         """
         from hermes.mule.ferry import RESPONSE_ABORT
 
@@ -1467,6 +1788,7 @@ class MuleSupervisor:
         if fx.spec.in_flight_response == RESPONSE_ABORT:
             head = self.scheduler.fold_remainder(
                 remainder[:1], state=state, budget_end=budget_end, pass_kind=pass_kind,
+                **self._ferry_protected(remainder[:1], pass_kind),
             )
             if head.ok:
                 return remainder
@@ -1491,13 +1813,16 @@ class MuleSupervisor:
             })
             return None
 
+        plan_kw = self._ferry_protected(remainder, pass_kind)
         fold = self.scheduler.fold_remainder(
-            remainder, state=state, budget_end=budget_end, pass_kind=pass_kind,
+            remainder, state=state, budget_end=budget_end, pass_kind=pass_kind, **plan_kw,
         )
         if fold.ok:
             return remainder
+        if plan_kw:
+            plan_kw["deadlines"] = rec.deadlines
         res = self.scheduler.replan_remainder(
-            remainder, state=state, budget_end=budget_end, pass_kind=pass_kind,
+            remainder, state=state, budget_end=budget_end, pass_kind=pass_kind, **plan_kw,
         )
         dropped = res.dropped_contacts
         rec.replans.append({
@@ -1553,6 +1878,12 @@ class MuleSupervisor:
 
         Returns the contact's per-device outcome map (empty when the contact
         failed), from which the caller learns whose updates are on board.
+
+        FeRRy Phase 4, plan mode: the contact plan is built on the class the
+        flight slot names at the arrival (:meth:`_ferry_band_at_arrival`), and
+        the record's ``band`` and rates are that plan's class. In legacy mode,
+        and under the committed slot, the plan's class is the runtime's band,
+        so the record holds what it always did.
         """
         clock = self._now
         collect = pass_kind is MissionPass.COLLECT
@@ -1569,7 +1900,14 @@ class MuleSupervisor:
                 obs, pose=self.mule_pose, energy_j=fx.energy_j() - energy_origin_j,
                 budget_s=self.scheduler.mission_budget_s,
             )))
-        plan = fx.contact_plan(wp, positions, pass_kind=pass_kind, mission_round=mission_round)
+        slot = getattr(self, "_flight_slot", None)
+        if slot is None:
+            plan = fx.contact_plan(wp, positions, pass_kind=pass_kind, mission_round=mission_round)
+        else:
+            plan = fx.contact_plan(
+                wp, positions, pass_kind=pass_kind, mission_round=mission_round,
+                band=self._ferry_band_at_arrival(slot, fx, wp, positions, pass_kind),
+            )
         before = self.mission.last_contact
         outcomes: Dict[DeviceID, Any] = {}
         try:
@@ -1592,7 +1930,8 @@ class MuleSupervisor:
         if fx.banded:
             arrival_snr = [float(plan.snr_db[d]) for d in wp.devices]
             snr = {str(d): s for d, s in zip(wp.devices, arrival_snr)}
-            rate = {str(d): r for d, r in zip(wp.devices, fx.rates_bps(arrival_snr))}
+            rate = {str(d): r for d, r in zip(wp.devices,
+                                              fx.rates_bps(arrival_snr, band=plan.band))}
         rec.flown[pass_kind].append({
             "position": [float(c) for c in wp.position],
             "devices": _ids(wp.devices),
@@ -1603,7 +1942,7 @@ class MuleSupervisor:
             "transit_s": transit,
             "arrival_s": plan.arrival_ts,
             "end_s": commit.end_ts if commit is not None else clock(),
-            "band": fx.spec.band,
+            "band": plan.band,
             "targets": _ids(plan.targets),
             "unreachable": _ids(plan.unreachable),
             "snr_db": snr,
@@ -1617,6 +1956,25 @@ class MuleSupervisor:
         if l1_choice is not None:
             rec.choices[pass_kind].append(l1_choice)
         return outcomes
+
+    def _ferry_band_at_arrival(self, slot, fx, wp: ContactWaypoint, positions,
+                               pass_kind: MissionPass) -> Optional[str]:
+        """The class to build this stop's contact plan on (plan mode); None: b̄.
+
+        The user's decision 5 with critic A7's rule: FX's slot reads what each
+        class would reach here now (``FerryRuntime.arrival_view``, at the
+        arrival: the transit is charged and nothing else is until the contact
+        plan, so the view and the plan see one instant) and names the fastest
+        class that still reaches every device the committed class reaches.
+        At the arrival SNR it never dwells longer than b̄ would, so the
+        remainder the departure check priced on b̄ stays priced
+        conservatively, at the last stop too, after which nothing re-checks.
+        The committed slot reads no view and keeps b̄; in Pass 2 every slot
+        keeps b̄, and the runtime refuses a Pass-2 plan on another class.
+        """
+        view = (fx.arrival_view(wp, positions, self._now(), pass_kind=pass_kind)
+                if slot.reads_arrival_view(pass_kind) else None)
+        return slot.band_at_arrival(view, pass_kind=pass_kind)
 
     def _ferry_home(self, fx) -> None:
         """The return leg to the dock, charged as ``return``; the pose is the dock."""
@@ -1703,13 +2061,23 @@ class MuleSupervisor:
         **legacy,
     ) -> MissionRunResult:
         """The mission's result: the recorded fields as the legacy path fills
-        them, plus the sim fields (design section 2.5)."""
+        them, plus the sim fields (design section 2.5).
+
+        FeRRy Phase 4: in plan mode ``band`` is b̄, the class the runtime flew,
+        and ``plan`` the closed commit's description with the plan's wall time
+        beside it (critic B12); ``pass_1_policy_drops`` only when a baseline
+        left something out (critic D2). All three stay None otherwise.
+        """
         from hermes.mule.ferry import backhaul_record
         from hermes.scheduler.stages.s3b_feasibility import DEADLINE_BOUNDS_DELIVERY
 
         clock = self._now
         sim_end = clock()
         ledger = clock.ledger()
+        plan = plan_wall_s = None
+        if getattr(self, "_flight_slot", None) is not None:
+            plan = self.scheduler.last_plan.describe()
+            plan_wall_s = self.scheduler.last_plan_wall_s
         return MissionRunResult(
             mission_round=mission_round,
             pass_1_queue=list(pass_1_queue),
@@ -1729,12 +2097,15 @@ class MuleSupervisor:
             pass_2_budget_overrun_s=(None if budget_end_2 is None
                                      else max(0.0, sim_end - budget_end_2)),
             energy_j=fx.spec.flight.energy.energy_j(ledger),
-            band=fx.spec.band,
+            band=fx.band,
             backhaul=backhaul_record(up),
             pass_1_preflight_drops=list(rec.preflight_drops),
             delivery_overrun_s=(max(0.0, t_pass_1_end - rec.deliver_by)
                                 if fx.spec.deadline_bounds == DEADLINE_BOUNDS_DELIVERY
                                 else None),
+            plan=plan,
+            plan_wall_s=plan_wall_s,
+            pass_1_policy_drops=list(getattr(rec, "policy_drops", ())) or None,
             **legacy,
         )
 
@@ -1840,8 +2211,11 @@ class MuleSupervisor:
         best = None
         for i in range(len(remainder) + 1):
             edited = list(remainder[:i]) + [stop] + list(remainder[i:])
+            # FeRRy Phase 4: in plan mode the plan's exempt stops stay protected,
+            # so an insert is priced as the departure check will price it.
             fold = self.scheduler.fold_remainder(
                 edited, state=state, budget_end=budget_end, pass_kind=MissionPass.COLLECT,
+                **self._ferry_protected(edited, MissionPass.COLLECT),
             )
             if fold.ok and (best is None or fold.home < best[0]):
                 best = (fold.home, i, edited)

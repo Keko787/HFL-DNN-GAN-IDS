@@ -96,6 +96,9 @@ class MaxAoIPolicy:
     # which this arm replaces; applying it in flight refused exactly the stale
     # devices MAX-AoI puts first.
     in_flight_check = IN_FLIGHT_BUDGET
+    # FeRRy Phase 4 (decision 4 (b)): admit_and_order takes the pre-flight
+    # member-subset carrier; its walk ranks members by this arm's own key.
+    admits_member_subsets = True
 
     def rank_contacts(
         self,
@@ -151,13 +154,18 @@ class MaxAoIPolicy:
         *,
         mission_deadline_ts: Optional[float] = None,
         feasibility_model=None,
+        member_subsets=None,
     ) -> List[ContactWaypoint]:
         """MAX-AoI as a **complete scheduler** — it decides *who*, not just order.
 
         Presence of this method is what makes the arm a whole-scheduler baseline:
         the scheduler delegates S3/S3b/S3.5 to it entirely, so this policy owns
         the admission decision our S3b gate would otherwise make. Fly to the
-        stalest devices until the budget runs out.
+        stalest devices until the budget runs out. ``member_subsets`` (FeRRy
+        Phase 4) is passed only by the plan before takeoff under
+        ``member_admission="subset"``: a contact that fails whole is then
+        re-issued with its stalest members that still fit (None, the default,
+        is the recorded walk).
         """
         if not contacts:
             return []
@@ -168,4 +176,5 @@ class MaxAoIPolicy:
             now=env.now,
             mission_deadline_ts=mission_deadline_ts,
             model=feasibility_model,
+            member_subsets=member_subsets,
         )
