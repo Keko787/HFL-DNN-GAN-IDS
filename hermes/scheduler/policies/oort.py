@@ -116,6 +116,9 @@ class OortPolicy:
     name = "OORT"
     # Freeze Amendment 8 — the mule re-checks the budget only in flight.
     in_flight_check = IN_FLIGHT_BUDGET
+    # FeRRy Phase 4 (decision 4 (b)): admit_and_order takes the pre-flight
+    # member-subset carrier; its walk ranks members by this arm's own key.
+    admits_member_subsets = True
 
     def __init__(self, *, staleness_weight: float = DEFAULT_STALENESS_WEIGHT):
         self.staleness_weight = float(staleness_weight)
@@ -286,13 +289,18 @@ class OortPolicy:
         *,
         mission_deadline_ts: Optional[float] = None,
         feasibility_model=None,
+        member_subsets=None,
     ) -> List[ContactWaypoint]:
         """Oort as a **complete scheduler** — it decides *who*, not just order.
 
         Presence of this method makes the arm a whole-scheduler baseline: the
         scheduler delegates S3/S3b/S3.5 entirely, so this policy owns the
         admission decision our S3b gate would otherwise make. Visit the
-        highest-utility contacts until the budget runs out.
+        highest-utility contacts until the budget runs out. ``member_subsets``
+        (FeRRy Phase 4) is passed only by the plan before takeoff under
+        ``member_admission="subset"``: a contact that fails whole is then
+        re-issued with its highest-utility members that still fit (None, the
+        default, is the recorded walk).
         """
         if not contacts:
             return []
@@ -304,4 +312,5 @@ class OortPolicy:
             now=env.now,
             mission_deadline_ts=mission_deadline_ts,
             model=feasibility_model,
+            member_subsets=member_subsets,
         )

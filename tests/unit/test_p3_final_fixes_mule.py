@@ -13,10 +13,12 @@ changes no behaviour for it:
 * the cliff is pinned at the scheduler level on trial T2's layout,
   ``device_positions(8, 777, 100.0)``, at T2's deadline unit, where the one
   contact's predicted home is 99.115 s after takeoff: 0 devices are admitted
-  at 60 s and at 99.0 s, all 8 at 99.5 s. **Phase 4 must update this test
-  deliberately:** admitting a member subset of a contact that does not fit
-  (or capping S3a's contacts by predicted dwell) changes the 60 s and 99.0 s
-  answers, which is the point of that change;
+  at 60 s and at 99.0 s, all 8 at 99.5 s. Phase 4 keeps these pins as the
+  ``whole`` side of ``member_admission``, the default (the user's decision 4
+  (b) of 2026-09-30). Under ``subset`` the F family and, when a run asks for
+  it, H1-H3, D1-D3 and D5 admit the members that still fit, 5 at 60 s and 7
+  at 99.0 s on this layout: see tests/unit/test_p4_member_subset.py and
+  tests/unit/test_p4_member_subset_hd.py;
 * the deadline unit decides which clause our arms hit first. At the runner's
   default unit 1.0, Deadline(j) is 60 s after takeoff (Phi_0) and the
   contact's predicted finish is 94.9 s, so S3b (H1-H3) drops it as

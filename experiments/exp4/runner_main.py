@@ -15,11 +15,20 @@ Usage::
 Defaults are a tiny smoke grid (each trial spawns a real process tree,
 so keep the grid small until the paper run). Only arm **H1** exists in
 EX-4.0; H0/H2/H3 arrive in later chunks.
+
+FeRRy Phase 4: the plan arms (``driver.PLAN_ARMS``) run only when named with
+``--arms``, on ``--mission-clock sim``; the default arm list is still the nine
+Phase 3 arms (``driver.DEFAULT_ARMS``). The plan flags set the plan arms' age
+cap, score and search settings (the score's and search's as JSON objects, so a
+pilot can sweep kappa and the coverage rank), and ``--member-admission`` the
+H and D arms' member subsets. A pilot takes its own ``--base-seed`` (the
+Phase 4 spec, decision 7), since the grid derives every trial's seed from it.
 """
 
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import sys
 from pathlib import Path
@@ -33,7 +42,7 @@ from hermes.scheduler.policies.whittle import VARIANTS as WHITTLE_VARIANTS
 from hermes.scheduler.policies.whittle import WEIGHT_MODES as WHITTLE_WEIGHTS
 from hermes.scheduler.stages.s3b_feasibility import DEADLINE_BOUNDS
 
-from .driver import ARMS, PROVENANCE_COLUMNS, Exp4Driver
+from .driver import DEFAULT_ARMS, PLAN_ARMS, PROVENANCE_COLUMNS, Exp4Driver
 from .metrics import Exp4MetricSummary
 
 log = logging.getLogger("experiments.exp4.runner_main")
@@ -213,15 +222,83 @@ def _phase_3_driver_kwargs(args, parser: argparse.ArgumentParser) -> dict:
     )
 
 
+def _add_phase_4_flags(parser: argparse.ArgumentParser) -> None:
+    """FeRRy Phase 4 — the plan arms' settings and member subsets (simulated clock).
+
+    Every flag defaults to the recorded run, and none is a grid axis, so the
+    trial seeds do not move. On the wall clock the driver refuses them all.
+    """
+    g = parser.add_argument_group("FeRRy Phase 4: the plan clock")
+    g.add_argument(
+        "--member-admission", choices=("whole", "subset"), default=None,
+        help="Member subsets (decision 4 (b)): 'subset' lets a stop that fails whole "
+             "admit the members that still fit, 'whole' is the recorded rule. Default: "
+             "each arm's own, 'subset' for the plan arms and 'whole' for H1-H3, D1-D3 "
+             "and D5; D4 always runs whole.",
+    )
+    g.add_argument(
+        "--age-cap-missions", type=int, default=None,
+        help="The plan arms' age cap S (decision 1): a device not merged for S of its "
+             "mule's missions must be served. Default off; F-cap always runs without it.",
+    )
+    g.add_argument(
+        "--age-cap-lookahead", type=int, default=0,
+        help="The cap's lookahead L: a device is capped from age S - L (default 0).",
+    )
+    g.add_argument(
+        "--plan-score-params", default=None, metavar="JSON",
+        help="The plan score's settings as a JSON object of PlanScoreParams fields, "
+             "e.g. '{\"c_cov_per_device\": 0.25, \"c_energy\": 0, \"coverage_rank\": "
+             "\"weighted\"}' for the pilot's sweep of kappa, c4 and the coverage rank; "
+             "unknown keys are refused. F-cov sets the coverage term off on top.",
+    )
+    g.add_argument(
+        "--plan-search-params", default=None, metavar="JSON",
+        help="The plan search's bounds as a JSON object of PlanSearchParams fields "
+             "(exact_max_devices, exhaustive_max_stops, heuristic_max_passes, "
+             "heuristic_max_evaluations).",
+    )
+
+
+def _json_object(text: Optional[str], flag: str, parser: argparse.ArgumentParser) -> dict:
+    """A JSON-object flag's value as a dict ({} when not given)."""
+    if text is None:
+        return {}
+    try:
+        value = json.loads(text)
+    except ValueError as e:
+        parser.error(f"{flag} must be a JSON object: {e}")
+    if not isinstance(value, dict):
+        parser.error(f"{flag} must be a JSON object, got {text!r}")
+    return value
+
+
+def _phase_4_driver_kwargs(args, parser: argparse.ArgumentParser) -> dict:
+    """The ``Exp4Driver`` keywords of the Phase 4 flags."""
+    return dict(
+        member_admission=args.member_admission,
+        age_cap_missions=args.age_cap_missions,
+        age_cap_lookahead=int(args.age_cap_lookahead),
+        plan_score_params=_json_object(args.plan_score_params, "--plan-score-params", parser),
+        plan_search_params=_json_object(args.plan_search_params, "--plan-search-params", parser),
+    )
+
+
 def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = argparse.ArgumentParser(prog="experiments.exp4.runner_main")
     parser.add_argument("--csv", required=True, type=Path,
                         help="Per-trial CSV path (created if missing; resumable).")
     parser.add_argument("--n-trials", type=int, default=1,
                         help="Trials per cell (paired across arms).")
-    parser.add_argument("--base-seed", type=int, default=42)
+    parser.add_argument("--base-seed", type=int, default=42,
+                        help="Salt of every trial's seed (sha256 of base seed, cell and "
+                             "trial index). A pilot takes one of its own, so its seeds are "
+                             "not the headline's (FeRRy Phase 4 spec, decision 7).")
     parser.add_argument("--arms", nargs="+", default=None,
-                        help=f"Which arms to run (default: all of {list(ARMS)}).")
+                        help=f"Which arms to run (default: the Phase 3 arms "
+                             f"{list(DEFAULT_ARMS)}). The FeRRy Phase 4 plan arms "
+                             f"{list(PLAN_ARMS)} run only when named, with "
+                             f"--mission-clock sim.")
     parser.add_argument("--N", nargs="+", type=int, default=[2],
                         help="Device-population sweep.")
     parser.add_argument("--rrf", nargs="+", type=float, default=[60.0],
@@ -532,6 +609,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
              "paper's letter) or the contact's device count.",
     )
     _add_phase_3_flags(parser)
+    _add_phase_4_flags(parser)
     args = parser.parse_args(argv)
 
     logging.basicConfig(
@@ -542,7 +620,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     # H0 (traditional flat FL) is a real-model convergence baseline; drop it
     # from a stub run rather than erroring every H0 trial.
     explicit_arms = args.arms is not None
-    arms = list(args.arms) if explicit_arms else list(ARMS)
+    arms = list(args.arms) if explicit_arms else list(DEFAULT_ARMS)
     if args.mission_clock == "sim" and "H0" in arms:
         # FeRRy Phase 3 (critic A5): H0 has no simulated round time.
         if explicit_arms:
@@ -646,8 +724,15 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         fedcs_value=args.fedcs_value,
     )
     driver_kwargs.update(_phase_3_driver_kwargs(args, parser))
+    driver_kwargs.update(_phase_4_driver_kwargs(args, parser))
     try:
         driver = Exp4Driver(**driver_kwargs)
+        # FeRRy Phase 4: a plan arm the driver cannot run (on the wall clock,
+        # without a band, with a budgeted Pass 2, ...) is refused here, before
+        # any trial, rather than as an error row per trial.
+        for arm in arms:
+            if arm in PLAN_ARMS:
+                driver.check_arm(arm)
     except ValueError as e:
         # A combination the driver refuses (e.g. agg:plain with several mules
         # and a smaller quorum): say so as a usage error, before any trial.

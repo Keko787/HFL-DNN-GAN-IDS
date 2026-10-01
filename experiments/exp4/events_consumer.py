@@ -56,6 +56,17 @@ simulated clock the mule solicits only the contact's members, so those
 non-member timeouts never happen, and the serve counts (and the coverage and
 Jain's index computed from them) count member contacts only. Ferry and
 wall-clock rows do not compare on those figures.
+
+FeRRy Phase 4 — the plan clock (the Phase 4 spec, other choices 12). A mission
+in plan mode records its closed commit in ``mission_completed.plan`` (the
+class b̄ it committed to, the demand, the devices it serves, V and the age
+cap's S, capped set and violations) and the plan's wall time beside it
+(``plan_wall_s``); every simulated-clock mission records the class each
+Pass-1 stop was flown on (``pass_1_flown[].band``), and a whole-scheduler
+baseline what it left out before takeoff (``pass_1_policy_drops``, only when
+it left something out). :class:`MissionRecord` carries them all, None where a
+mission does not record them, so a trace recorded before Phase 4 reads as it
+did.
 """
 
 from __future__ import annotations
@@ -157,6 +168,52 @@ class MissionRecord:
     replans: Optional[int] = None
     aborts: Optional[int] = None
     inserts: Optional[int] = None
+    # FeRRy Phase 4 (the Phase 4 spec, other choices 12): the band flown, the
+    # plan clock's commit and the whole-scheduler baselines' drop report, from
+    # ``mission_completed``'s fields. Each is None where the mission does not
+    # record it: every field on a wall-clock mission; the plan fields outside
+    # plan mode (they come from ``plan``, which only a plan-mode mission
+    # writes); ``policy_drops`` on every trace recorded before Phase 4, and on
+    # every mission a baseline left nothing out of, since the mule writes
+    # ``pass_1_policy_drops`` only when it is not empty (critic D2). Which of
+    # those an absence means is the scorer's to say (``traces_scorer``).
+    #: The class the mission flew (``mission_completed.band``): the committed
+    #: class b̄ in plan mode, the configured band otherwise, None without one.
+    band: Optional[str] = None
+    #: ``pass_1_flown[].band`` in flight order: the class each Pass-1 stop was
+    #: flown on, which under FX can differ from b̄ (decision 5; Pass 2 always
+    #: flies b̄). None without ``pass_1_flown`` (the wall clock); an entry is
+    #: None for a stop flown without a band (the channel-free control).
+    flown_bands: Optional[Tuple[Optional[str], ...]] = None
+    #: The committed plan (``mission_completed.plan``, the closed
+    #: ``PlanCommit.describe()``): its class and search mode, the demand (the
+    #: devices left after S1 and S3) and the devices its stops serve, V and the
+    #: predicted whole mission (``score.mission_s``: Pass 1, the turnaround and
+    #: Pass 2, decision 2 (b); never ``delta_s``, which leaves the dwell out
+    #: under F-dwell), and the age cap: S (``cap.s``, None when the arm runs
+    #: none), the devices capped at planning and every violation the mule
+    #: logged as ``(device, planning age, reason)``.
+    plan_band: Optional[str] = None
+    plan_search: Optional[str] = None
+    plan_demand: Optional[Tuple[str, ...]] = None
+    plan_served: Optional[Tuple[str, ...]] = None
+    plan_v: Optional[float] = None
+    plan_mission_s: Optional[float] = None
+    cap_s: Optional[int] = None
+    cap_capped: Optional[Tuple[str, ...]] = None
+    cap_violations: Optional[Tuple[Tuple[str, int, str], ...]] = None
+    #: The wall seconds the plan took (``plan_wall_s``): a wall time, so it is
+    #: left out of every determinism comparison (critic B12).
+    plan_wall_s: Optional[float] = None
+    #: What a whole-scheduler baseline (D1-D5) left out before takeoff on the
+    #: simulated clock (``pass_1_policy_drops``, decision 6), as ``(devices,
+    #: reason)`` per dropped contact; reported by the mule, never widened.
+    policy_drops: Optional[Tuple[Tuple[Tuple[str, ...], str], ...]] = None
+
+    @property
+    def has_plan(self) -> bool:
+        """Whether the mission recorded a plan-clock commit (plan mode only)."""
+        return self.plan_demand is not None
 
     def contains(self, ts: Optional[float]) -> bool:
         """Whether ``ts`` falls inside this mission's time window."""
@@ -411,6 +468,11 @@ def observation_from_rows(
                 replans=_opt_len(r.get("replans")),
                 aborts=_opt_len(r.get("aborts")),
                 inserts=_opt_len(r.get("inserts")),
+                band=_opt_str(r.get("band")),
+                flown_bands=_flown_bands(r.get("pass_1_flown")),
+                plan_wall_s=_opt_float(r.get("plan_wall_s")),
+                policy_drops=_policy_drops(r.get("pass_1_policy_drops")),
+                **_plan_fields(r.get("plan")),
             )
         )
 
@@ -1185,3 +1247,68 @@ def _session_outcomes(raw) -> Optional[Tuple[Tuple[str, str, float], ...]]:
             continue
         sessions.append((str(s["device"]), str(s["outcome"]), contact_ts))
     return tuple(sessions)
+
+
+def _ids_or_none(raw) -> Optional[Tuple[str, ...]]:
+    """A recorded list of device ids as a tuple of strings; None when absent."""
+    return tuple(str(d) for d in raw) if isinstance(raw, (list, tuple)) else None
+
+
+def _flown_bands(raw) -> Optional[Tuple[Optional[str], ...]]:
+    """``pass_1_flown`` → each stop's ``band`` in flight order; None when absent."""
+    if not isinstance(raw, list):
+        return None
+    return tuple(_opt_str(s.get("band")) for s in raw if isinstance(s, dict))
+
+
+def _policy_drops(raw) -> Optional[Tuple[Tuple[Tuple[str, ...], str], ...]]:
+    """``pass_1_policy_drops`` → ``(devices, reason)`` per entry; None when absent.
+
+    The mule writes the field only when a baseline left something out, so an
+    absent field means "nothing dropped" on a trace whose build reports drops
+    and "not known" on one recorded before; the scorer decides which
+    (``traces_scorer.plan_report``).
+    """
+    if not isinstance(raw, list):
+        return None
+    drops: List[Tuple[Tuple[str, ...], str]] = []
+    for entry in raw:
+        if not isinstance(entry, dict) or not isinstance(entry.get("devices"), (list, tuple)):
+            continue
+        drops.append((tuple(str(d) for d in entry["devices"]), str(entry.get("reason"))))
+    return tuple(drops)
+
+
+def _plan_fields(raw) -> Dict[str, object]:
+    """``mission_completed.plan`` → :class:`MissionRecord`'s plan and cap fields.
+
+    The plan is the closed ``PlanCommit.describe()`` (``hermes.types.scheduler``):
+    ``band``, ``search``, ``demand``, ``served``, ``score`` (``v`` and, for
+    every plan arm, ``mission_s``) and ``cap`` (``s``, ``capped`` and
+    ``violations``, each ``{device, age, reason}``). Every field is None when
+    the mission recorded no plan, and each one the plan lacks is None too.
+    """
+    if not isinstance(raw, dict):
+        return {}
+    score = raw.get("score") if isinstance(raw.get("score"), dict) else {}
+    cap = raw.get("cap") if isinstance(raw.get("cap"), dict) else {}
+    violations = None
+    if isinstance(cap.get("violations"), list):
+        violations = tuple(
+            (str(v["device"]), int(v["age"]), str(v["reason"]))
+            for v in cap["violations"]
+            if isinstance(v, dict) and v.get("device") is not None
+            and _opt_int(v.get("age")) is not None and v.get("reason") is not None
+        )
+    return {
+        "plan_band": _opt_str(raw.get("band")),
+        "plan_search": _opt_str(raw.get("search")),
+        # A plan always records its demand (possibly empty): has_plan reads it.
+        "plan_demand": _ids_or_none(raw.get("demand")) or (),
+        "plan_served": _ids_or_none(raw.get("served")),
+        "plan_v": _opt_float(score.get("v")),
+        "plan_mission_s": _opt_float(score.get("mission_s")),
+        "cap_s": _opt_int(cap.get("s")),
+        "cap_capped": _ids_or_none(cap.get("capped")),
+        "cap_violations": violations,
+    }

@@ -41,6 +41,23 @@ adopts the chosen carrier's SNR mission by mission as the selector's RF prior
 instead of the trial's mean (critic B4, :func:`chosen_snr_schedule`). H0 is
 refused on the simulated clock (critic A5: its simulated round time is
 outside Phase 3). With the defaults every trial is the recorded wall-clock one.
+
+**FeRRy Phase 4: the plan arms** (:data:`PLAN_ARMS`; the Phase 4 spec, other
+choices 11 and 12). F, FX, FB+wide, FB+medium, FB+narrow, F-cov, F-cap and
+F-prio fly the plan clock (``MuleConfig.plan_mode="ferry"``) on the simulated
+clock only. Each arm's plan fields are explicit topology parameters
+(:meth:`Exp4Driver.plan_settings`); FB+<class>'s band travels in its ferry
+settings (:meth:`Exp4Driver.ferry_settings`, critic A8); a plan arm always
+has T_nom (T in its score) and the ``trim`` fallback (its Pass-1 re-plan
+trims the committed plan: members under ``subset``, whole stops only under
+``whole``), and its row records its own ``miss_priority``. The provenance
+shows the plan fields in ``ferry_params`` in plan mode only, and
+``contact_band`` reads ``search`` for an arm that searches the classes
+(:func:`plan_ferry_params`, :func:`contact_band_column`, which the trace
+scorer shares). An H or D arm may run member subsets (``member_admission``,
+the user's decision 4 (b)); D4 always runs whole. The runner's default arm
+list stays the nine Phase 3 arms (:data:`DEFAULT_ARMS`), and the trial CSV
+header is unchanged.
 """
 
 from __future__ import annotations
@@ -55,7 +72,7 @@ import subprocess
 import tempfile
 import time
 import traceback
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Mapping, Optional, Sequence, Tuple
 
@@ -91,12 +108,105 @@ log = logging.getLogger("experiments.exp4.driver")
 #: (FedCS's greedy selection, degraded to last-known state). D4's two runs in
 #: the build plan differ only in ``aggregation`` (agg:fedex faithful, agg:cutoff
 #: route-only), so they share the label.
-ARMS = ("H0", "H1", "H2", "H3", "D1", "D2", "D3", "D4", "D5")
+#:
+#: These nine are the runner's default arm list (FeRRy Phase 4 keeps it, so a
+#: run that names no arms runs what it always ran).
+DEFAULT_ARMS = ("H0", "H1", "H2", "H3", "D1", "D2", "D3", "D4", "D5")
+
+#: FeRRy Phase 4 — the plan arms (build plan L977-984; the Phase 4 spec, other
+#: choices 11). Each flies the plan clock, which commits every mission at the
+#: dock to a band class and a route as one decision, on the simulated clock
+#: only. ``F`` searches every band class of the link; ``FX`` is F with the
+#: cross-heuristic flight slot (decision 5); ``FB+<class>`` pins that class
+#: (Path B+). The ablations drop one part of F: ``F-cov`` the coverage term
+#: (decision 3, "cap-only service"), ``F-cap`` the age cap and ``F-prio`` the
+#: miss-streak factor of the coverage weight. The labels are ASCII, with no
+#: "__" and none of the characters Windows forbids in a path, so a kept
+#: trace's directory (:func:`trace_dir_name`) holds them whole and the trace
+#: scorer parses them back (``parse_trial_dir``).
+PLAN_ARMS = ("F", "FX", "FB+wide", "FB+medium", "FB+narrow", "F-cov", "F-cap", "F-prio")
+
+#: Every arm the driver runs.
+ARMS = DEFAULT_ARMS + PLAN_ARMS
 
 #: ``MuleConfig.contact_policy`` of each whole-scheduler arm.
 _ARM_POLICY = {
     "D1": "max_aoi", "D2": "oort", "D3": "whittle", "D4": "fedex", "D5": "fedcs",
 }
+
+#: Each plan arm's change to F's plan fields (:meth:`Exp4Driver.plan_settings`).
+#: F-prio's change is its ``miss_priority`` (:meth:`Exp4Driver.effective_miss_priority`),
+#: which is not a plan field.
+_PLAN_ARM = {
+    "F": {},
+    "FX": {"flight_slot": "cross_heuristic"},
+    "FB+wide": {"band_class_policy": "fixed:wide"},
+    "FB+medium": {"band_class_policy": "fixed:medium"},
+    "FB+narrow": {"band_class_policy": "fixed:narrow"},
+    "F-cov": {},
+    "F-cap": {"age_cap_missions": None, "age_cap_lookahead": 0},
+    "F-prio": {},
+}
+
+#: F-cov's plan score settings, over the driver's own: the coverage term off,
+#: c2 = c3 = 0 (``PlanScoreParams``: c3 = c2 unless set; unit U0's F-cov).
+#: With coverage worth nothing an empty plan scores best, so the arm serves
+#: capped devices only: "cap-only service" (decision 3).
+F_COV_SCORE = {"c_cov_per_device": 0.0, "c_link": 0.0}
+
+#: The arms that may admit part of a stop (``member_admission="subset"``,
+#: decision 4 (b)): the plan arms, H1-H3 (S3b's gate) and D1-D3 and D5 (their
+#: walks). D4's visit-all tour has no gate and always runs whole; H0 has no
+#: mule.
+_SUBSET_ARMS = frozenset(("H1", "H2", "H3", "D1", "D2", "D3", "D5") + PLAN_ARMS)
+
+
+def plan_ferry_params(mule: Mapping[str, Any]) -> Dict[str, Any]:
+    """The FeRRy Phase 4 keys of a trial's ``ferry_params`` column.
+
+    ``mule`` is a mule's config as a mapping: a ``MuleConfig``'s fields, or the
+    per-role JSON a kept trace holds; a missing key takes ``MuleConfig``'s
+    default. In plan mode, every plan field (``PLAN_MULE_FIELDS``) as the
+    config holds it; outside it, ``member_admission`` only when it is not the
+    recorded ``whole`` (an H or D arm run with subsets, whose rows must not
+    read like the recorded ones, unit_U3b.md section 5.4); {} at the defaults,
+    so a Phase 3 row's ``ferry_params`` is unchanged (Freeze Rule 1). The
+    trace scorer derives the same keys from a kept trace with this function,
+    so the two columns agree.
+    """
+    from hermes.processes.config import (
+        MEMBER_ADMISSION_WHOLE,
+        PLAN_MODE_FERRY,
+        PLAN_MULE_FIELDS,
+        MuleConfig,
+    )
+
+    defaults = MuleConfig(mule_id="defaults")
+
+    def value(name: str) -> Any:
+        return mule[name] if name in mule else getattr(defaults, name)
+
+    if value("plan_mode") == PLAN_MODE_FERRY:
+        return {name: value(name) for name in PLAN_MULE_FIELDS}
+    admission = value("member_admission")
+    return {} if admission == MEMBER_ADMISSION_WHOLE else {"member_admission": admission}
+
+
+def contact_band_column(mule: Mapping[str, Any]) -> str:
+    """The ``contact_band`` provenance column for a mule's config (as a mapping).
+
+    ``search`` for a plan arm that searches the band classes, whose config's
+    ``contact_band`` is only the reference class (critic B14); otherwise the
+    band the mule flies, the pinned class of FB+<class> included, and "" for
+    the channel-free control and the wall clock. Shared with the trace scorer,
+    like :func:`plan_ferry_params`.
+    """
+    from hermes.processes.config import BAND_POLICY_SEARCH, PLAN_MODE_FERRY
+
+    if (mule.get("plan_mode") == PLAN_MODE_FERRY
+            and mule.get("band_class_policy", BAND_POLICY_SEARCH) == BAND_POLICY_SEARCH):
+        return BAND_POLICY_SEARCH
+    return mule.get("contact_band") or ""
 
 #: Scheduler-configuration columns the driver stamps on every row, on top of
 #: the metric schema. They exist so a results CSV is self-describing: rows
@@ -484,6 +594,24 @@ class Exp4Driver:
     # Design R8: the input width a ferry cell's real model must have; None =
     # the data source's own (21 canonical, the synthetic task's otherwise).
     expected_input_dim: Optional[int] = None
+    # ---- FeRRy Phase 4: the plan clock (simulated clock only) ---- #
+    # ``member_admission`` ("whole" | "subset"; decision 4 (b)): None gives each
+    # arm its own default, "subset" for the plan arms and "whole" for H1-H3,
+    # D1-D3 and D5; D4 always runs whole (``effective_member_admission``). The
+    # rest configure the plan arms (``PLAN_ARMS``) and are chosen at the
+    # pilots: the age cap S in missions (None: off; decision 1, the S* tool
+    # recommends it) with its lookahead L, and the plan score's and search's
+    # settings by ``PlanScoreParams`` / ``PlanSearchParams`` field name (the
+    # pilot sweeps kappa as ``c_cov_per_device``, and c4 as ``c_energy``). Each
+    # arm's own change goes on top (``plan_settings``). Declared before
+    # ``soft_cap_s``, which the Phase 3 final check pins as the last field
+    # (tests/unit/test_p3_final_fixes_driver.py); every caller passes these by
+    # keyword.
+    member_admission: Optional[str] = None
+    age_cap_missions: Optional[int] = None
+    age_cap_lookahead: int = 0
+    plan_score_params: Dict[str, Any] = field(default_factory=dict)
+    plan_search_params: Dict[str, Any] = field(default_factory=dict)
     # The runner's soft cap on a trial's run time, as the caller applies it
     # (runner_main sets it to the cap it hands TrialRunner: --timeout-s, else
     # the largest wall budget over the grid). On the mission clock a trial's
@@ -544,6 +672,7 @@ class Exp4Driver:
         #: T_nom per cell, computed once (:meth:`nominal_period_s`).
         self._t_nom_cache: Dict[str, float] = {}
         self._check_clock()
+        self._check_plan()
 
     @property
     def sim(self) -> bool:
@@ -609,6 +738,12 @@ class Exp4Driver:
                 "initial_window_missions": self.initial_window_missions is not None,
                 "agg_period_t_nom": bool(self.agg_period_t_nom),
                 "expected_input_dim": self.expected_input_dim is not None,
+                # FeRRy Phase 4: member subsets and the plan arms' settings.
+                "member_admission": self.member_admission not in (None, "whole"),
+                "age_cap_missions": self.age_cap_missions is not None,
+                "age_cap_lookahead": self.age_cap_lookahead != 0,
+                "plan_score_params": bool(self.plan_score_params),
+                "plan_search_params": bool(self.plan_search_params),
             }
             changed = [k for k, v in ferry_only.items() if v]
             if changed:
@@ -663,14 +798,24 @@ class Exp4Driver:
         policy (its L1 controller at every upload), every other arm the fixed
         one; the backhaul regime is the cell's; the ferry physics overrides
         on top. T_nom is added per cell by :meth:`run_trial` when known.
+
+        FeRRy Phase 4: a plan arm flies :meth:`arm_contact_band` (FB+<class>
+        its class, which travels here because the builder takes the band only
+        in the ferry settings, critic A8; the search arms the configured band,
+        their reference class) and re-plans with the ``trim`` fallback, whatever
+        the configured one: plan mode's Pass-1 re-plan is a trim of the
+        committed plan (members under ``subset``, whole stops only under
+        ``whole``), priority stops first, and the scheduler refuses ``reorder``
+        there, as re-ordering belongs to the flight slot (critic B11). Every
+        other arm's settings are exactly the configured ones.
         """
         out: Dict[str, Any] = {
-            "contact_band": self.contact_band,
+            "contact_band": self.arm_contact_band(arm),
             "contact_band_classes": (
                 None if self.contact_band_classes is None else list(self.contact_band_classes)
             ),
             "in_flight_response": self.in_flight_response,
-            "replan_fallback": self.replan_fallback,
+            "replan_fallback": "trim" if arm in PLAN_ARMS else self.replan_fallback,
             "backhaul_model": self.backhaul_model,
             "backhaul_policy": "adaptive" if arm == "H3" else "fixed",
             "backhaul_regime": "jittery" if regime == "jittery" else "clean",
@@ -681,6 +826,162 @@ class Exp4Driver:
         }
         out.update(self.ferry_physics)
         return out
+
+    # ------------------------------------------------------------------ #
+    # FeRRy Phase 4 — the plan arms and member subsets
+    # ------------------------------------------------------------------ #
+
+    def _check_plan(self) -> None:
+        """Refuse plan settings no arm could run (FeRRy Phase 4).
+
+        On the wall clock :meth:`_check_clock` has already refused every one
+        that is set. Here: a known ``member_admission``, a cap S that is None
+        or an int >= 1, a lookahead that is an int >= 0 (the types' own rules,
+        ``AgeCapSpec``), and settings that are mappings. The score and search
+        settings, when given, are built as a plan mule builds them
+        (``PlanOptions.from_config``, so an unknown key is refused before any
+        trial), which loads the plan package on that path only.
+        """
+        from hermes.processes.config import MEMBER_ADMISSIONS
+
+        if self.member_admission is not None and self.member_admission not in MEMBER_ADMISSIONS:
+            raise ValueError(
+                f"member_admission must be one of {MEMBER_ADMISSIONS} or None (each arm's "
+                f"own default), got {self.member_admission!r}"
+            )
+        cap = self.age_cap_missions
+        if cap is not None and (isinstance(cap, bool) or not isinstance(cap, int) or cap < 1):
+            raise ValueError(f"age_cap_missions must be None or an int >= 1, got {cap!r}")
+        lookahead = self.age_cap_lookahead
+        if isinstance(lookahead, bool) or not isinstance(lookahead, int) or lookahead < 0:
+            raise ValueError(f"age_cap_lookahead must be an int >= 0, got {lookahead!r}")
+        for name in ("plan_score_params", "plan_search_params"):
+            if not isinstance(getattr(self, name), Mapping):
+                raise ValueError(f"{name} must be a mapping, got {getattr(self, name)!r}")
+        if self.plan_score_params or self.plan_search_params:
+            from hermes.scheduler.plan.types import PlanOptions
+
+            try:
+                PlanOptions.from_config(
+                    plan_score_params=dict(self.plan_score_params),
+                    plan_search_params=dict(self.plan_search_params),
+                )
+            except (TypeError, ValueError) as e:
+                raise ValueError(f"plan settings: {e}") from e
+
+    def arm_contact_band(self, arm: str) -> Optional[str]:
+        """The band class a trial of ``arm`` gives its mule's ``contact_band``.
+
+        FB+<class> flies its class (the arm pins it); every other arm the
+        configured ``contact_band``, which for the searching plan arms is only
+        the reference class (the ferry spec, T_nom, D4's split and the H and D
+        arms of the same CSV use it; the Phase 4 spec, other choices 2).
+        """
+        pinned = _PLAN_ARM.get(arm, {}).get("band_class_policy")
+        if pinned is not None:
+            return pinned[len("fixed:"):]
+        return self.contact_band
+
+    def effective_member_admission(self, arm: str) -> str:
+        """``member_admission`` for a trial of ``arm`` (decision 4 (b); unit_U3b.md 5.4).
+
+        The setting, else the arm's own default: ``subset`` for a plan arm
+        (the F family's rule), ``whole`` for H1-H3, D1-D3 and D5 (the recorded
+        gates). D4 runs ``whole`` whatever the setting: its tour has no gate.
+        """
+        if arm not in _SUBSET_ARMS:
+            return "whole"
+        if self.member_admission is not None:
+            return self.member_admission
+        return "subset" if arm in PLAN_ARMS else "whole"
+
+    def effective_miss_priority(self, arm: str) -> bool:
+        """``miss_priority`` for a trial of ``arm``, as its mule runs and its row records it.
+
+        A plan arm's coverage weight is the device's age times (1 + its miss
+        streak) when its ``miss_priority`` is on (decision 3): on for every
+        plan arm but F-prio, which weighs by age alone. Every other arm runs
+        the configured value, as recorded.
+        """
+        if arm in PLAN_ARMS:
+            return arm != "F-prio"
+        return bool(self.miss_priority)
+
+    def plan_settings(self, arm: str) -> Dict[str, Any]:
+        """The ``MuleConfig`` plan fields of a trial of ``arm``, as topology parameters.
+
+        A plan arm gets every plan field: F's (``plan_mode="ferry"``, the
+        ``search`` band-class policy, the ``committed`` flight slot), the
+        driver's member admission (else ``subset``), cap S, lookahead and score
+        and search settings, and on top the arm's own change (FX's slot,
+        FB+<class>'s pinned class, F-cov's coverage term off, F-cap's cap off).
+        An H or D arm gets ``member_admission`` only when it is not the
+        recorded ``whole``, and every other arm nothing, so a recorded arm's
+        topology is built with exactly the arguments it always was.
+        """
+        admission = self.effective_member_admission(arm)
+        if arm not in PLAN_ARMS:
+            return {} if admission == "whole" else {"member_admission": admission}
+        out: Dict[str, Any] = {
+            "plan_mode": "ferry",
+            "band_class_policy": "search",
+            "member_admission": admission,
+            "flight_slot": "committed",
+            "age_cap_missions": self.age_cap_missions,
+            "age_cap_lookahead": int(self.age_cap_lookahead),
+            "plan_score_params": dict(self.plan_score_params),
+            "plan_search_params": dict(self.plan_search_params),
+        }
+        if arm == "F-cov":
+            out["plan_score_params"].update(F_COV_SCORE)
+        out.update(_PLAN_ARM[arm])
+        return out
+
+    def check_arm(self, arm: str) -> None:
+        """Refuse an arm this driver cannot run, before any trial of it starts.
+
+        Only the plan arms have needs to check (FeRRy Phase 4); every other
+        known arm passes, and an unknown one raises as :meth:`run_trial` does.
+        A plan arm needs the simulated clock (refused on the wall clock). Then
+        its mule config is built as its trial would build it, with a
+        placeholder T_nom and backhaul period (the trial computes both), and
+        refused with the mule's own guards (``mule_config_errors``: a band
+        class, which FB+<class> brings and the search arms take from the
+        configured ``contact_band`` as their reference class; the budgeted
+        Pass 2, critic B8; abort with a cap, critic A10; unknown score or search
+        settings; the rest of the Phase 4 spec's other choices 10) and the
+        ferry spec's (a class the link does not have).
+        """
+        if arm not in ARMS:
+            raise ValueError(f"unknown arm {arm!r}; the driver runs {ARMS}")
+        if arm not in PLAN_ARMS:
+            return
+        if not self.sim:
+            raise ValueError(
+                f"arm {arm} flies the plan clock (FeRRy Phase 4) on the simulated mission "
+                f"clock: run it with mission_clock='sim' (--mission-clock sim)"
+            )
+        settings = self.ferry_settings(arm=arm, regime="clean")
+        from hermes.mule.ferry import FerrySpec
+        from hermes.processes.config import MuleConfig, mule_config_errors
+
+        if settings.get("backhaul_model") == "seconds":
+            settings["backhaul_period_s"] = settings.get("backhaul_period_s") or 1.0
+        settings["t_nom_s"] = float(self.t_nom_s) if self.t_nom_s is not None else 1.0
+        cfg = MuleConfig(
+            mule_id=f"check-{arm}", rf_range_m=float(self.default_rf_range_m),
+            n_missions=int(self.default_n_missions), mission_clock="sim", trial_seed=0,
+            mission_budget_s=self.mission_budget_s, pass_2_budget=bool(self.pass_2_budget),
+            miss_priority=self.effective_miss_priority(arm),
+            **settings, **self.plan_settings(arm),
+        )
+        errors = mule_config_errors(cfg)
+        if errors:
+            raise ValueError(f"arm {arm}: " + "; ".join(errors))
+        try:
+            FerrySpec.from_config(**cfg.ferry_spec_kwargs())
+        except (TypeError, ValueError) as e:
+            raise ValueError(f"arm {arm}: {e}") from e
 
     @staticmethod
     def _spec_kwargs(
@@ -876,9 +1177,13 @@ class Exp4Driver:
         synth = StubGeneratorHost(disc_weights=[]).make_synth_batch(SYNTH_BATCH_SIZE)
         return weights_byte_count(theta), int(sum(int(a.nbytes) for a in synth))
 
-    def _needs_t_nom(self) -> bool:
+    def _needs_t_nom(self, arm: Optional[str] = None) -> bool:
+        """Whether a trial of ``arm`` needs T_nom: a setting derived from it, or a
+        plan arm, whose score measures the mission against it (FeRRy Phase 4,
+        decision 2 (b)); computed per cell when not given."""
         return self.sim and (
-            (self.backhaul_model == "seconds" and self.backhaul_period_s is None)
+            arm in PLAN_ARMS
+            or (self.backhaul_model == "seconds" and self.backhaul_period_s is None)
             or self.deadline_time_scale == "t_nom"
             or self.initial_window_missions is not None
             or bool(self.agg_period_t_nom)
@@ -1020,7 +1325,7 @@ class Exp4Driver:
         settings = self.ferry_settings(arm=arm, regime=regime)
         t_nom = None if self.t_nom_s is None else float(self.t_nom_s)
         computed = False
-        if t_nom is None and self._needs_t_nom():
+        if t_nom is None and self._needs_t_nom(arm):
             theta_b, synth_b = self._payload_bytes(init_theta_path)
             t_nom = self.nominal_period_s(
                 n_devices=n_devices, rf_range_m=rf_range_m, regime=settings["backhaul_regime"],
@@ -1060,10 +1365,10 @@ class Exp4Driver:
         params = cell.params
         arm = cell.arm
         if arm not in ARMS:
-            raise ValueError(
-                f"unknown arm {arm!r}; EX-4.0/4.1 ship {ARMS} "
-                f"(H0/H2/H3 arrive in later chunks)"
-            )
+            raise ValueError(f"unknown arm {arm!r}; the driver runs {ARMS}")
+        if arm in PLAN_ARMS:
+            # FeRRy Phase 4: refused before anything is prepared or spawned.
+            self.check_arm(arm)
 
         n_devices = int(params.get("N", params.get("n_devices", self.default_n_devices)))
         rf_range_m = float(params.get("rrf", params.get("rf_range_m", self.default_rf_range_m)))
@@ -1169,8 +1474,14 @@ class Exp4Driver:
                 {} if self._deadline_law.is_recorded
                 else self._deadline_law.to_params()
             ),
-            miss_priority=bool(self.miss_priority),
+            # FeRRy Phase 4: a plan arm runs its own (the configured value for
+            # every other arm, as recorded).
+            miss_priority=self.effective_miss_priority(arm),
         )
+        # FeRRy Phase 4 — a plan arm's plan fields, or an H or D arm's member
+        # subsets, as the builder's own parameters; empty for a recorded arm,
+        # whose topology is then built with exactly the recorded arguments.
+        plan_kwargs = self.plan_settings(arm)
         # FeRRy Phase 2 — the mule count, the quorum and the dock settings. At
         # one mule with the defaults these are the builder's own defaults, so
         # the topology is the recorded one.
@@ -1280,6 +1591,7 @@ class Exp4Driver:
                     **realism_kwargs,
                     **selector_kwargs,
                     **clock_kwargs,
+                    **plan_kwargs,
                     **extra,
                 )
 
@@ -1676,7 +1988,9 @@ class Exp4Driver:
                 "" if law.is_recorded
                 else json.dumps(law.to_params(), sort_keys=True)
             )
-            row["miss_priority"] = int(bool(self.miss_priority))
+            # FeRRy Phase 4: the arm's own value (a plan arm's is its own; any
+            # other arm's the configured one, as recorded).
+            row["miss_priority"] = int(self.effective_miss_priority(getattr(cell, "arm", "")))
             row.update(self._multi_mule_provenance(
                 getattr(cell, "arm", ""), down_wait_s=clock.down_wait_s,
             ))
@@ -1796,6 +2110,15 @@ class Exp4Driver:
           keeps the draw in the mule JSON's ``device_availability`` instead.)
         * ``input_dim``: the model's input width (int), "" on the stub. Old:
           the cluster JSON's ``input_dim`` ("" when null).
+
+        FeRRy Phase 4 (other choices 12; unit_U3b.md section 5.4), both read
+        off the mule config so the trace scorer derives the same strings from
+        its JSON (:func:`contact_band_column`, :func:`plan_ferry_params`):
+        ``contact_band`` reads ``search`` for a plan arm that searches the band
+        classes (FB+<class> keeps its class), and ``ferry_params`` gains the
+        plan fields in plan mode, or an H or D arm's ``member_admission`` when
+        it is ``subset``. Neither changes a row at the defaults. No column is
+        added, so the trial CSV header is the Phase 3 one.
         """
         switches = dict(clock.settings)
         mule = topo.mules[0] if topo.mules else None
@@ -1841,7 +2164,11 @@ class Exp4Driver:
                     int(mule.n_missions), float(clock.t_nom_s),
                 )
             shown["t_nom_computed"] = bool(clock.t_nom_computed)
+            fields = asdict(mule)
+            shown.update(plan_ferry_params(fields))
             row["ferry_params"] = json.dumps(shown, sort_keys=True, default=str)
+            if getattr(mule, "plan_mode", "legacy") == "ferry":
+                row["contact_band"] = contact_band_column(fields)
         return row
 
     @staticmethod

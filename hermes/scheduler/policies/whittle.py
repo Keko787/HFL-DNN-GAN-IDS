@@ -141,6 +141,17 @@ paper can state it too:**
 
 8. **Tie-break.** The paper states none. Equal indices are ordered by
    ``(position, devices)``, so the route does not depend on input order.
+
+9. **Member subsets (FeRRy Phase 4, opt-in).** Under the user's decision 4
+   (b) of 2026-09-30, a run that sets ``member_admission="subset"`` has the
+   plan before takeoff pass ``member_subsets``, and a contact that fails
+   whole under the budget is re-issued with the members that still fit,
+   largest index first (each member's index as a one-member contact, then
+   the device id; ``budget_walk._walk_subsets``). A reduced contact thus
+   keeps its largest-index members, which is closer to Cui's per-UAV
+   activation (the largest indices are served) than summing indices over a
+   whole contact (deviation 2). The in-flight check and re-plan keep or drop
+   contacts whole; None, the default, is the recorded walk.
 """
 
 from __future__ import annotations
@@ -378,6 +389,9 @@ class WhittlePolicy:
     # Freeze Amendment 8 — the mule re-checks the mission budget only in
     # flight. The per-device deadline is S3b's rule, which this arm replaces.
     in_flight_check = IN_FLIGHT_BUDGET
+    # FeRRy Phase 4 (decision 4 (b)): admit_and_order takes the pre-flight
+    # member-subset carrier (deviation 9).
+    admits_member_subsets = True
 
     def __init__(
         self,
@@ -449,6 +463,7 @@ class WhittlePolicy:
         *,
         mission_deadline_ts: Optional[float] = None,
         feasibility_model=None,
+        member_subsets=None,
     ) -> List[ContactWaypoint]:
         """Cui's index as a **complete scheduler** — it decides *who*, not just order.
 
@@ -456,7 +471,10 @@ class WhittlePolicy:
         breaking ties, then admits them with the shared greedy budget walk
         under ``mission_deadline_ts`` and ``feasibility_model``. Returns the
         admitted contacts in rank order. Reads ``device_states``; never writes
-        them.
+        them. ``member_subsets`` (FeRRy Phase 4, deviation 9) is passed only by
+        the plan before takeoff under ``member_admission="subset"``: a contact
+        that fails whole is then re-issued with its largest-index members that
+        still fit (None, the default, is the recorded walk).
         """
         if not contacts:
             self.last_device_inputs = {}
@@ -475,4 +493,5 @@ class WhittlePolicy:
             now=env.now,
             mission_deadline_ts=mission_deadline_ts,
             model=feasibility_model,
+            member_subsets=member_subsets,
         )

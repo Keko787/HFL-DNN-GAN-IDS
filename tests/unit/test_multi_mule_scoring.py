@@ -1083,14 +1083,19 @@ def test_the_recorded_cell_scores_as_it_did_with_one_mule(trial):
     assert score.n_mules == 1
     # Columns added since: the Phase 2 fleet provenance (one mule, the rest
     # blank at their recorded values), the count of uploads the cluster
-    # never folded, which one mule never has, and FeRRy Phase 3's: its
+    # never folded, which one mule never has, FeRRy Phase 3's: its
     # provenance (blank at the recorded settings, bar the three this L1 cell
     # ran that no CSV recorded before), the mission-clock metrics and the
-    # simulated time to τ, all blank on the wall clock.
+    # simulated time to τ, all blank on the wall clock, and FeRRy Phase 4's
+    # scorer columns (cap violations, band shares, the plan, far service and
+    # a baseline's drops), all blank on a trace recorded before Phase 4.
+    from experiments.analysis.traces_scorer import PHASE_4_COLUMNS  # noqa: WPS433
+
     phase_3 = set(SIM_COLUMNS) | {f"sim_s_to_tau{t:g}" for t in RECORDED_TAUS}
     added = set(row) - set(want) - {"trace_root"}
     assert "n_mules" in added
-    assert added <= set(PROVENANCE_COLUMNS) | {"unmerged_missions"} | phase_3
+    assert added <= (set(PROVENANCE_COLUMNS) | {"unmerged_missions"} | phase_3
+                     | set(PHASE_4_COLUMNS))
     assert row["unmerged_missions"] == 0
     recorded = {"n_mules": 1, "l1_channel": 1, "realism": 1, "input_dim": 21}
     assert {c: row[c] for c in added - {"unmerged_missions"}} == {

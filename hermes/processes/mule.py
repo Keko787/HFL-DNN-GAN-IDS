@@ -38,6 +38,19 @@ process with ``EXIT_BOOTSTRAP_FAILED``.
 On the wall clock every build step and event is the recorded one; a deadline
 time unit other than the recorded one (valid on either clock) adds its three
 fields to ``mule_ready``.
+
+FeRRy Phase 4 (the Phase 4 spec, other choices 10 and 12), on the simulated
+clock only. ``MuleConfig.plan_mode == "ferry"`` hands the supervisor the plan
+options its config describes (``hermes.scheduler.plan.PlanOptions``, imported
+in plan mode only), ``t_nom_s`` and ``member_admission``; an H or D arm's
+``member_admission`` reaches the supervisor only when it is not the recorded
+``whole``. ``mule_ready`` then states the plan settings the scheduler runs
+(read back from it, audit #15), and ``mission_completed`` carries the
+mission's closed plan (``plan``, ``PlanCommit.describe()``), the plan's wall
+time beside it (``plan_wall_s``, left out of every determinism comparison,
+critic B12) and a baseline's pre-flight drops (``pass_1_policy_drops``, the
+user's decision 6), each only when the mission has one, so every other trace
+keeps its key set (critic D2).
 """
 
 from __future__ import annotations
@@ -63,6 +76,10 @@ from hermes.types.scheduler import DEFAULT_FULFILMENT_WINDOW_S
 
 from .config import (
     CLOCK_SIM,
+    MEMBER_ADMISSION_WHOLE,
+    PLAN_MODE_FERRY,
+    PLAN_MODE_LEGACY,
+    PLAN_OPTION_FIELDS,
     MuleConfig,
     mission_schedule_index,
     mule_config_errors,
@@ -335,8 +352,18 @@ SIM_MISSION_FIELDS = (
 #: Carried after them only when the result sets it (not None): the route-level
 #: ``deadline_bounds="delivery"`` mission's ``delivery_overrun_s``. Left out
 #: otherwise, so a mission under any other value keeps the key set above and
-#: its trace byte for byte (Freeze Rule 1).
-SIM_MISSION_OPTIONAL_FIELDS = ("delivery_overrun_s",)
+#: its trace byte for byte (Freeze Rule 1). FeRRy Phase 4 (other choices 12)
+#: adds three the same way: a plan-mode mission's ``plan`` (its closed
+#: ``PlanCommit.describe()``, which holds no wall time) and ``plan_wall_s``
+#: (the plan's wall time, kept outside ``plan`` so determinism comparisons
+#: drop it, critic B12), and a baseline's ``pass_1_policy_drops`` (decision 6),
+#: left out when empty as well (critic D2).
+SIM_MISSION_OPTIONAL_FIELDS = (
+    "delivery_overrun_s", "plan", "plan_wall_s", "pass_1_policy_drops",
+)
+
+#: Optional fields left out when empty too, not only when None.
+_OMITTED_WHEN_EMPTY = frozenset({"pass_1_policy_drops"})
 
 
 def _jsonable(value):
@@ -371,8 +398,9 @@ def _sim_mission_fields(result) -> dict:
     out = {name: _jsonable(getattr(result, name, None)) for name in SIM_MISSION_FIELDS}
     for name in SIM_MISSION_OPTIONAL_FIELDS:
         value = getattr(result, name, None)
-        if value is not None:
-            out[name] = _jsonable(value)
+        if value is None or (name in _OMITTED_WHEN_EMPTY and not value):
+            continue
+        out[name] = _jsonable(value)
     out["energy_status"] = "simulated"
     return out
 
@@ -492,6 +520,28 @@ class MuleService:
 
             sup_kwargs["mission_clock"] = MissionClock()
             sup_kwargs["ferry"] = ferry_spec
+        # FeRRy Phase 4 (simulated clock only; the guards above refuse the
+        # plan fields on the wall clock). Plan mode gets its options, built
+        # from the config's plan fields exactly as the guards checked them, T
+        # for its score (t_nom_s) and member_admission, which must equal the
+        # options' (the scheduler's one source, unit_U3b.md section 1.1). An H
+        # or D arm's member_admission is passed only when it is not the
+        # recorded "whole", so a recorded mule builds its supervisor with
+        # exactly the arguments it always did, and loads no plan module.
+        admission = getattr(cfg, "member_admission", MEMBER_ADMISSION_WHOLE)
+        if getattr(cfg, "plan_mode", PLAN_MODE_LEGACY) == PLAN_MODE_FERRY:
+            from hermes.scheduler.plan.types import PlanOptions
+
+            sup_kwargs.update(
+                plan_mode=PLAN_MODE_FERRY,
+                plan_options=PlanOptions.from_config(
+                    **{name: getattr(cfg, name) for name in PLAN_OPTION_FIELDS}
+                ),
+                t_nom_s=cfg.t_nom_s,
+                member_admission=admission,
+            )
+        elif admission != MEMBER_ADMISSION_WHOLE:
+            sup_kwargs["member_admission"] = admission
         self.supervisor = MuleSupervisor(
             mule_id=MuleID(cfg.mule_id),
             rf=self.rf,
@@ -527,6 +577,7 @@ class MuleService:
             down_wait_s=self.supervisor.down_wait_s,
             dock_on_empty=bool(self.supervisor.dock_on_empty),
             **self._sim_ready_fields(),
+            **self._plan_ready_fields(),
             **self._wall_time_unit_fields(),
         )
 
@@ -599,6 +650,27 @@ class MuleService:
             rf_link_token_set=self.cfg.rf_link_token is not None,
             rf_prior_source=rf_prior_source,
         )
+        return fields
+
+    def _plan_ready_fields(self) -> dict:
+        """``mule_ready``'s FeRRy Phase 4 fields: the plan settings the scheduler runs.
+
+        Read back from the scheduler, like the fields above (audit #15). In
+        plan mode: ``plan_mode`` and the options by their config names
+        (``PlanOptions.describe``: the band-class policy, the flight slot, the
+        cap S and lookahead, and the score and search settings resolved, their
+        defaults included), with the scheduler's own ``member_admission``.
+        Otherwise only a ``member_admission`` other than the recorded
+        ``whole`` (an H or D arm run with subsets). {} at the defaults, so a
+        recorded ``mule_ready`` keeps its key set (critic D2).
+        """
+        sched = self.supervisor.scheduler
+        admission = getattr(sched, "member_admission", MEMBER_ADMISSION_WHOLE)
+        if getattr(sched, "plan_mode", PLAN_MODE_LEGACY) != PLAN_MODE_FERRY:
+            return {} if admission == MEMBER_ADMISSION_WHOLE else {"member_admission": admission}
+        fields = {"plan_mode": sched.plan_mode}
+        fields.update(_jsonable(sched.plan_setup.options.describe()))
+        fields["member_admission"] = admission
         return fields
 
     def _feed_rf_prior(self, result) -> None:

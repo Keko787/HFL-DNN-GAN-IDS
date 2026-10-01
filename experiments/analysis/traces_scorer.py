@@ -77,6 +77,40 @@ the re-plans, aborts and inserts (:mod:`experiments.exp4.metrics`), and the
 provenance the Phase 3 driver columns. A trace whose clocks disagree is
 refused, never scored (:class:`~experiments.exp4.events_consumer.ClockDomainError`).
 
+FeRRy Phase 4 (the plan clock; the Phase 4 spec, other choices 6 and 12) adds
+:data:`PHASE_4_COLUMNS` after ``deadline_basis``, each blank where the trace
+cannot say, so every trace recorded before Phase 4 scores blank in all of them
+at the defaults and keeps every other column:
+
+* **Cap violations** at an age cap S (the user's decision 1: a device's age is
+  its own mule's missions since its last merged update, the unit of the ages
+  above): ``cap_s``; ``cap_violations``, the (device, mission) pairs whose age
+  after the mission is at least S; ``cap_violation_devices``, the devices with
+  any; and ``cap_violation_events``, the mule's own log of the capped devices
+  it failed, by cause (``unplannable``, ``crowded``, ``dropped_in_flight``,
+  ``not_merged``; JSON), at the S the mule ran. S is ``--age-cap-s`` when
+  given, which scores every arm of a study at one S, the H and D arms and F-cap
+  included; else the trace's own (the S its plan-mode mule ran); else the four
+  are blank. The pair count and the mule's log differ by what the mule cannot
+  see (a lost backhaul upload, a merge the cluster deferred), and with a
+  lookahead L > 0 the mule also logs devices aged S − L to S − 1.
+* **The plan** (plan-mode missions only): ``plan_served_share_mean``, the mean
+  over missions of the share of the demand the committed plan serves, counted
+  in devices (|served| / |demand|, not the coverage weights, which differ
+  between F, F-prio and the uniform option), over missions with a demand; and
+  ``plan_v_mean``, the mean of the plans' V.
+* On simulated-clock traces a Phase 4 build recorded (its mule config carries
+  ``plan_mode``, as every Phase 4 mule's JSON does, at the defaults too):
+  ``band_shares``, the share of Pass-1 stops flown on each band class
+  (``pass_1_flown[].band``, so FX's per-stop switches count; JSON);
+  ``far_served_share``, the merged updates of the devices beyond ``rf_range_m``
+  of the dock over those devices' own missions; and, for a whole-scheduler
+  baseline (D1-D5), ``policy_drops``, the devices it left out before takeoff
+  (``pass_1_policy_drops``, summed over missions: 0 when it left nothing out,
+  which the mule then does not write). Older traces record these facts only in
+  part, or not at all (D arms reported no drops before Phase 4), so there they
+  are blank.
+
 Usage::
 
     python -m experiments.analysis.traces_scorer \\
@@ -85,6 +119,9 @@ Usage::
     python -m experiments.analysis.traces_scorer \\
         --traces results/exp4_s3c/off_traces results/exp4_s3c/on_traces \\
         --status-csv results/exp4_s3c/off.csv results/exp4_s3c/on.csv
+
+    python -m experiments.analysis.traces_scorer \\
+        --traces results/exp4_p4/s58_traces --age-cap-s 3 --csv scored.csv
 """
 
 from __future__ import annotations
@@ -92,14 +129,20 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import math
 from dataclasses import MISSING, dataclass, field, fields
 from pathlib import Path
-from typing import Dict, Iterable, List, Mapping, Optional, Sequence, Tuple, Union
+from typing import Dict, Iterable, Iterator, List, Mapping, Optional, Sequence, Tuple, Union
 
 import numpy as np
 
 from experiments.exp3.metrics import jains_fairness
-from experiments.exp4.driver import PROVENANCE_COLUMNS, TRIAL_STATUS_FILE
+from experiments.exp4.driver import (
+    PROVENANCE_COLUMNS,
+    TRIAL_STATUS_FILE,
+    contact_band_column,
+    plan_ferry_params,
+)
 from experiments.exp4.events_consumer import (
     ClockDomainError,
     Exp4Observation,
@@ -110,15 +153,18 @@ from experiments.exp4.events_consumer import (
 )
 from experiments.exp4.metrics import Exp4MetricSummary, summarise_observation
 from experiments.exp4.topology_builder import SESSION_TTL_S, device_positions, device_spread_m
+from hermes.l1.mission_clock import DOCK_POSE
 from hermes.mission.aggregation_rules import AGG_PLAIN, AggregationSpec
 from hermes.processes.config import (
     BACKHAUL_SECONDS,
     CLOCK_SIM,
     CLOCK_WALL,
     FERRY_SPEC_FIELDS,
+    PLAN_MODE_FERRY,
     MuleConfig,
 )
 from hermes.scheduler.stages.s3_deadline import LAW_ADDITIVE, DeadlineLaw, time_scale_for_period
+from hermes.types.scheduler import CAP_REASONS
 
 
 # --------------------------------------------------------------------------- #
@@ -337,6 +383,16 @@ def _clock_provenance(
     (:func:`_realism`). On a trace recorded before Phase 3 (every kept one)
     that leaves ``l1_channel``, ``realism`` and ``input_dim`` as recorded and
     the other ten blank: all of them ran the recorded 3 s TTL.
+
+    FeRRy Phase 4 (other choices 12; unit_U3b.md section 5.5): ``contact_band``
+    and the plan keys of ``ferry_params`` come from the driver's own functions
+    (:func:`~experiments.exp4.driver.contact_band_column`,
+    :func:`~experiments.exp4.driver.plan_ferry_params`) applied to the mule
+    config, so the two files agree by construction: ``search`` for a plan arm
+    that searches the band classes, and the plan fields in plan mode, or an H
+    or D arm's ``member_admission`` when it is ``subset``. A config without the
+    plan fields (every trace recorded before Phase 4) reads as their defaults,
+    so its strings are unchanged.
     """
     sim = mule.get("mission_clock") == CLOCK_SIM
 
@@ -345,7 +401,7 @@ def _clock_provenance(
 
     return {
         "mission_clock": CLOCK_SIM if sim else "",
-        "contact_band": mule.get("contact_band") or "",
+        "contact_band": contact_band_column(mule),
         "in_flight_response": unless(mule.get("in_flight_response"), "abort"),
         "backhaul_model": unless(mule.get("backhaul_model"), "mission"),
         "contact_reliability_source": unless(mule.get("contact_reliability_source"), "origin"),
@@ -365,7 +421,9 @@ def _format_ferry_params(mule: Mapping[str, object], marker: Mapping[str, object
     ferry field of the mule config but those :data:`_FERRY_PARAMS_OMITTED`
     (a field the config lacks takes ``MuleConfig``'s default), the backhaul
     period resolved to ``n_missions * T_nom`` when the seconds model computes
-    it, and ``t_nom_computed`` (:func:`_t_nom_computed`)."""
+    it, ``t_nom_computed`` (:func:`_t_nom_computed`) and the FeRRy Phase 4
+    plan keys (:func:`~experiments.exp4.driver.plan_ferry_params`: none at the
+    defaults)."""
     from hermes.l1.channel_model import backhaul_period_s
 
     defaults = {f.name: f for f in fields(MuleConfig)}
@@ -384,6 +442,7 @@ def _format_ferry_params(mule: Mapping[str, object], marker: Mapping[str, object
             and t_nom is not None):
         shown["backhaul_period_s"] = backhaul_period_s(int(mule.get("n_missions") or 0), t_nom)
     shown["t_nom_computed"] = _t_nom_computed(mule, marker)
+    shown.update(plan_ferry_params(mule))
     return json.dumps(shown, sort_keys=True, default=str)
 
 
@@ -402,7 +461,9 @@ def _t_nom_computed(mule: Mapping[str, object], marker: Mapping[str, object]) ->
     the driver records a T_nom only when it computed one, so that is exact
     for every such trial. A T_nom given beside one of those settings reads
     as computed, and so does one given beside a Φ₀ given in seconds, which
-    the configs record as they record a Φ₀ given in missions.
+    the configs record as they record a Φ₀ given in missions. FeRRy Phase 4:
+    plan mode (``plan_mode == "ferry"``) needs T_nom too, as T in its score
+    (decision 2 (b)), so it counts as such a setting.
     """
     recorded = marker.get("t_nom_computed")
     if isinstance(recorded, bool):
@@ -417,6 +478,7 @@ def _t_nom_computed(mule: Mapping[str, object], marker: Mapping[str, object]) ->
         or _float_or_none(mule.get("deadline_time_scale")) == time_scale_for_period(t_nom)
         or period == t_nom
         or _float_or_none(mule.get("initial_window_s")) is not None
+        or mule.get("plan_mode") == PLAN_MODE_FERRY
     )
 
 
@@ -675,30 +737,15 @@ def age_profile(
         raise ValueError("age_profile needs at least one device")
     w = _normalised_weights(devices, weights)
 
-    home = _home_mules(obs, devices)
-    flown: Dict[Optional[str], int] = {}    # missions completed, per mule key
-    fleet = 0                               # ... and by the whole fleet
-
-    def clock(d: str) -> int:
-        """Missions completed that count toward device ``d``'s age."""
-        return fleet if home[d] is None else flown.get(home[d], 0)
-
-    last_merged = {d: 0 for d in devices}
     merged_counts = {d: 0 for d in devices}
     network_aou: List[float] = []
     ages_seen: List[int] = []
     missions = _ordered(obs.missions, obs.mission_clock)
-    for mission in missions:
-        fleet += 1
-        mule = obs.mule_key(mission.mule_id)
-        flown[mule] = flown.get(mule, 0) + 1
-        for d in merged_devices(obs, mission):
-            if d in last_merged:
-                last_merged[d] = clock(d)
-                merged_counts[d] += 1
-        ages = {d: clock(d) - last_merged[d] for d in devices}
-        network_aou.append(sum(w[d] * ages[d] for d in devices))
-        ages_seen.extend(ages.values())
+    for step in _age_walk(obs, devices):
+        for d in step.merged:
+            merged_counts[d] += 1
+        network_aou.append(sum(w[d] * step.ages[d] for d in devices))
+        ages_seen.extend(step.ages.values())
 
     jain = jains_fairness(merged_counts) if sum(merged_counts.values()) > 0 else None
     if not missions:
@@ -716,6 +763,53 @@ def age_profile(
         merged_updates=merged_counts,
         jain_merged=jain,
     )
+
+
+@dataclass(frozen=True)
+class _AgeStep:
+    """One mission of :func:`_age_walk`: the mission, the devices whose age
+    counts it (their own mule flew it; with one mule every device), each
+    device's age after it, and the devices whose updates reached the model at
+    it (a device appears once per merged update)."""
+
+    mission: MissionRecord
+    own: Tuple[str, ...]
+    ages: Dict[str, int]
+    merged: Tuple[str, ...]
+
+
+def _age_walk(obs: Exp4Observation, devices: Sequence[str]) -> Iterator[_AgeStep]:
+    """The missions in completion order with every device's age after each.
+
+    The one definition of a device's age (:func:`age_profile`), shared by the
+    cap violations (FeRRy Phase 4, decision 1, which counts the cap in exactly
+    this unit) and the far devices' service, so they can never drift apart.
+    ``devices`` are distinct ids.
+    """
+    home = _home_mules(obs, devices)
+    flown: Dict[Optional[str], int] = {}    # missions completed, per mule key
+    fleet = 0                               # ... and by the whole fleet
+
+    def clock(d: str) -> int:
+        """Missions completed that count toward device ``d``'s age."""
+        return fleet if home[d] is None else flown.get(home[d], 0)
+
+    last_merged = {d: 0 for d in devices}
+    for mission in _ordered(obs.missions, obs.mission_clock):
+        fleet += 1
+        mule = obs.mule_key(mission.mule_id)
+        flown[mule] = flown.get(mule, 0) + 1
+        merged = []
+        for d in merged_devices(obs, mission):
+            if d in last_merged:
+                last_merged[d] = clock(d)
+                merged.append(d)
+        yield _AgeStep(
+            mission=mission,
+            own=tuple(d for d in devices if home[d] is None or home[d] == mule),
+            ages={d: clock(d) - last_merged[d] for d in devices},
+            merged=tuple(merged),
+        )
 
 
 # --------------------------------------------------------------------------- #
@@ -784,6 +878,241 @@ def deadline_misses(obs: Exp4Observation) -> DeadlineMisses:
 
 
 # --------------------------------------------------------------------------- #
+# FeRRy Phase 4: the plan clock
+# --------------------------------------------------------------------------- #
+
+#: The scorer's FeRRy Phase 4 columns, in row order after ``deadline_basis``
+#: (the Phase 4 spec, other choices 12; the module docstring says what each
+#: holds and when it is blank). Scorer-only: the trial CSV's header is
+#: unchanged.
+PHASE_4_COLUMNS = (
+    "cap_s", "cap_violations", "cap_violation_devices", "cap_violation_events",
+    "band_shares", "plan_served_share_mean", "plan_v_mean", "far_served_share",
+    "policy_drops",
+)
+
+
+@dataclass(frozen=True)
+class CapViolations:
+    """The age cap's violations in one trial at S (decision 1; other choices 6).
+
+    ``pairs`` counts the (device, mission) pairs, over each device's own
+    mule's missions, whose age after the mission is at least ``s``: a device
+    the mission merged has age 0, any other ``m − U`` missions since its last
+    merged update ``U`` (never merged: ``m``). That is exactly a device capped
+    when mission m was planned (age ≥ S, lookahead 0; unit U1's
+    ``device_age``) that m did not merge, so the count needs no plan and
+    scores every arm alike. ``devices`` counts the devices with any.
+    """
+
+    s: int
+    pairs: int
+    devices: int
+
+
+def cap_violations(obs: Exp4Observation, devices: Sequence[str], s: int) -> CapViolations:
+    """:class:`CapViolations` of ``devices`` at the cap ``s`` (an int ≥ 1)."""
+    if isinstance(s, bool) or not isinstance(s, int) or s < 1:
+        raise ValueError(f"the age cap S is an int >= 1, got {s!r}")
+    devices = list(dict.fromkeys(str(d) for d in devices))
+    pairs = 0
+    late: set = set()
+    for step in _age_walk(obs, devices):
+        for d in step.own:
+            if step.ages[d] >= s:
+                pairs += 1
+                late.add(d)
+    return CapViolations(s=int(s), pairs=pairs, devices=len(late))
+
+
+def trace_cap_s(obs: Exp4Observation, mule_cfg: Mapping[str, object]) -> Optional[int]:
+    """The age cap S the trace's own mules ran, None when they ran none.
+
+    Read from the missions' plans (``plan.cap.s``), else, for a plan-mode trial
+    that recorded no plan (it flew no mission), from its mule config's
+    ``age_cap_missions``. Every mule of a trial runs one S, so plans that
+    disagree are refused rather than scored at either.
+    """
+    ran = {m.cap_s for m in obs.missions if m.cap_s is not None}
+    if len(ran) > 1:
+        raise ValueError(f"the trace's plans ran different age caps: {sorted(ran)}")
+    if ran:
+        return ran.pop()
+    if mule_cfg.get("plan_mode") == PLAN_MODE_FERRY:
+        cap = mule_cfg.get("age_cap_missions")
+        if isinstance(cap, int) and not isinstance(cap, bool):
+            return int(cap)
+    return None
+
+
+def cap_violation_events(obs: Exp4Observation) -> Optional[Dict[str, int]]:
+    """The mule's own log of the capped devices it failed, by cause.
+
+    ``plan.cap.violations`` summed over the missions whose plan ran a cap,
+    every cause in ``CAP_REASONS`` listed (0 included); None when no mission
+    did. At the S the mule ran (``plan.cap.s``), with its lookahead.
+    """
+    capped = [m for m in obs.missions if m.cap_s is not None]
+    if not capped:
+        return None
+    counts = {reason: 0 for reason in CAP_REASONS}
+    for m in capped:
+        for _device, _age, reason in m.cap_violations or ():
+            counts[reason] = counts.get(reason, 0) + 1
+    return counts
+
+
+def band_shares(obs: Exp4Observation) -> Optional[Dict[str, float]]:
+    """The share of Pass-1 stops flown on each band class, over the trial.
+
+    Per stop (``pass_1_flown[].band``), so FX's switches at a stop show, not
+    only each mission's committed class (decision 5; Pass 2 always flies the
+    committed class b̄). None when no stop was flown on a band.
+    """
+    counts: Dict[str, int] = {}
+    for m in obs.missions:
+        for band in m.flown_bands or ():
+            if band is not None:
+                counts[band] = counts.get(band, 0) + 1
+    total = sum(counts.values())
+    if not total:
+        return None
+    return {band: n / total for band, n in sorted(counts.items())}
+
+
+def plan_means(obs: Exp4Observation) -> Tuple[Optional[float], Optional[float]]:
+    """``(served share, V)`` of the committed plans, each averaged over missions.
+
+    The served share is |served| / |demand| in devices (a mission whose
+    demand is empty is left out), not the plan's weighted coverage (1 −
+    ``score.coverage``): the weights differ between F, F-prio and the uniform
+    option, the device count does not. None where no mission recorded a plan.
+    """
+    shares = [
+        len(m.plan_served or ()) / len(m.plan_demand)
+        for m in obs.missions if m.has_plan and m.plan_demand
+    ]
+    values = [m.plan_v for m in obs.missions if m.has_plan and m.plan_v is not None]
+    return (
+        float(np.mean(shares)) if shares else None,
+        float(np.mean(values)) if values else None,
+    )
+
+
+def far_devices(
+    positions: Mapping[str, Sequence[float]], rf_range_m: float,
+    dock: Sequence[float] = DOCK_POSE,
+) -> Tuple[str, ...]:
+    """The devices beyond ``rf_range_m`` of the dock, in the plane (Study 5.4's
+    far devices: R_planar(wide) is the run's ``rf_range_m``)."""
+    return tuple(
+        d for d, p in positions.items()
+        if math.hypot(float(p[0]) - float(dock[0]), float(p[1]) - float(dock[1]))
+        > float(rf_range_m)
+    )
+
+
+def far_served_share(
+    obs: Exp4Observation, devices: Sequence[str], far: Iterable[str],
+) -> Optional[float]:
+    """The far devices' merged updates over their own missions (Study 5.4).
+
+    Each mission of a far device's own mule can collect one update of it at
+    most, so the share, Σ merged updates / Σ own missions over the far
+    devices, is at most 1. Merged as the ages count it (:func:`_age_walk`):
+    an update lost on the backhaul or cut by the merge never counts, and a
+    deferred one counts when the merge that flushed it runs. None without a
+    far device or a mission.
+    """
+    devices = list(dict.fromkeys(str(d) for d in devices))
+    wanted = {str(d) for d in far} & set(devices)
+    merged = missions = 0
+    for step in _age_walk(obs, devices):
+        missions += sum(1 for d in step.own if d in wanted)
+        merged += sum(1 for d in step.merged if d in wanted)
+    return merged / missions if missions else None
+
+
+def policy_drops(obs: Exp4Observation) -> int:
+    """The devices a whole-scheduler baseline left out before takeoff, summed
+    over missions (``pass_1_policy_drops``; a mission without it left none)."""
+    return sum(len(devices) for m in obs.missions for devices, _ in m.policy_drops or ())
+
+
+@dataclass(frozen=True)
+class PlanReport:
+    """One trial's :data:`PHASE_4_COLUMNS`; None is a blank column."""
+
+    cap: Optional[CapViolations] = None
+    cap_events: Optional[Dict[str, int]] = None
+    band_shares: Optional[Dict[str, float]] = None
+    plan_served_share_mean: Optional[float] = None
+    plan_v_mean: Optional[float] = None
+    far_served_share: Optional[float] = None
+    policy_drops: Optional[int] = None
+
+    def to_row(self) -> Dict[str, object]:
+        cap = self.cap
+        return {
+            "cap_s": "" if cap is None else cap.s,
+            "cap_violations": "" if cap is None else cap.pairs,
+            "cap_violation_devices": "" if cap is None else cap.devices,
+            "cap_violation_events": _json_or_blank(self.cap_events),
+            "band_shares": _json_or_blank(self.band_shares),
+            "plan_served_share_mean": _blank(self.plan_served_share_mean),
+            "plan_v_mean": _blank(self.plan_v_mean),
+            "far_served_share": _blank(self.far_served_share),
+            "policy_drops": _blank(self.policy_drops),
+        }
+
+
+def plan_report(
+    obs: Exp4Observation,
+    devices: Sequence[str],
+    *,
+    mule_cfg: Mapping[str, object],
+    positions: Mapping[str, Sequence[float]],
+    age_cap_s: Optional[int] = None,
+) -> PlanReport:
+    """One trial's FeRRy Phase 4 columns, blank where the trace cannot say.
+
+    The cap columns at ``age_cap_s`` when given (every arm of a study scored
+    at one S), else at the trace's own S (:func:`trace_cap_s`), else blank;
+    the mule's log by cause wherever its plans ran a cap. A trace whose plans
+    ran two caps is refused whether or not ``age_cap_s`` is given: the log
+    would add up missions taken at two S. The plan means
+    wherever a mission recorded a plan. The band shares, the far devices'
+    service and a baseline's drops only on a simulated-clock trace a Phase 4
+    build recorded, recognised by its mule config's ``plan_mode`` (every Phase
+    4 mule's JSON holds the plan fields, at their defaults too): a trace
+    recorded before cannot say whether a baseline dropped anything (D arms
+    reported nothing then), and would otherwise gain columns its recorded rows
+    never had. ``devices`` and ``positions`` are the trial's (the cluster's
+    seed list); the far devices are those beyond the mule config's
+    ``rf_range_m`` of the dock.
+    """
+    # Read even when a study S is given, so its refusal of two caps holds.
+    ran = trace_cap_s(obs, mule_cfg)
+    s = age_cap_s if age_cap_s is not None else ran
+    served, v = plan_means(obs)
+    phase_4 = "plan_mode" in mule_cfg and obs.mission_clock == CLOCK_SIM
+    far = None
+    rf_range_m = _float_or_none(mule_cfg.get("rf_range_m"))
+    if phase_4 and rf_range_m is not None and positions:
+        far = far_served_share(obs, devices, far_devices(positions, rf_range_m))
+    return PlanReport(
+        cap=None if s is None else cap_violations(obs, devices, s),
+        cap_events=cap_violation_events(obs),
+        band_shares=band_shares(obs) if phase_4 else None,
+        plan_served_share_mean=served,
+        plan_v_mean=v,
+        far_served_share=far,
+        policy_drops=(policy_drops(obs) if phase_4 and mule_cfg.get("contact_policy")
+                      else None),
+    )
+
+
+# --------------------------------------------------------------------------- #
 # One trial, and a whole trace root
 # --------------------------------------------------------------------------- #
 
@@ -809,6 +1138,9 @@ class TrialScore:
     #: Uploads the cluster logged but never folded (several mules only; see
     #: ``Exp4Observation.unmerged_keys``).
     unmerged_missions: int = 0
+    #: FeRRy Phase 4: :data:`PHASE_4_COLUMNS` (:func:`plan_report`), blank by
+    #: default.
+    plan: PlanReport = field(default_factory=PlanReport)
 
     def provenance_key(self) -> Tuple[Tuple[str, object], ...]:
         """The provenance as a hashable, column-ordered tuple."""
@@ -844,6 +1176,7 @@ class TrialScore:
             "deadline_miss_rate": _blank(self.deadlines.rate),
             "deadline_basis": _blank(self.deadlines.basis),
         })
+        row.update(self.plan.to_row())
         for reach in self.tau:
             tag = _tau_tag(reach.tau)
             row[f"reached_{tag}"] = int(reach.reached)
@@ -863,17 +1196,22 @@ def score_trial(
     taus: Sequence[float] = (0.82,),
     weights: Optional[Mapping[str, float]] = None,
     status_csv: StatusSource = None,
+    age_cap_s: Optional[int] = None,
 ) -> TrialScore:
     """Score one retained trial directory.
 
     ``status_csv`` (a trial CSV's path, or :func:`load_status_csv` of one)
     supplies the status of a trace that carries no marker, and overrides the
     marker's ``ok`` when it records a failure (see :func:`trial_status`).
+    ``age_cap_s`` is the S the cap violations are counted at; None counts
+    them at the trace's own S, if its mules ran one (:func:`plan_report`).
 
     Raises :class:`~experiments.exp4.events_consumer.ClockDomainError`,
     naming the trial, for a trace whose clocks disagree: in its events (see
     :func:`~experiments.exp4.events_consumer.trace_clock_domain`), or between
-    the clock its mules announced and the one their configs set.
+    the clock its mules announced and the one their configs set, and
+    ``ValueError``, naming it too, for an ``age_cap_s`` that is not an int
+    >= 1 or plans that ran two caps (with or without ``age_cap_s``).
     """
     trace_dir = Path(trace_dir)
     if not taus:
@@ -921,7 +1259,21 @@ def score_trial(
         expired_missions=len(obs.expired_keys),
         n_mules=obs.n_mules,
         unmerged_missions=len(obs.unmerged_keys),
+        plan=_trial_plan_report(trace_dir, obs, devices, mule_cfg, age_cap_s),
     )
+
+
+def _trial_plan_report(
+    trace_dir: Path, obs: Exp4Observation, devices: Sequence[str],
+    mule_cfg: Mapping[str, object], age_cap_s: Optional[int],
+) -> PlanReport:
+    """:func:`plan_report` of one trial directory; a trace it refuses (plans
+    that ran two caps) is named, as a clock-domain refusal is."""
+    try:
+        return plan_report(obs, devices, mule_cfg=mule_cfg,
+                           positions=_device_positions(trace_dir), age_cap_s=age_cap_s)
+    except ValueError as e:
+        raise ValueError(f"{trace_dir.name}: {e}") from e
 
 
 def score_traces(
@@ -931,20 +1283,22 @@ def score_traces(
     arms: Optional[Iterable[str]] = None,
     include_failed: bool = False,
     status_csv: StatusSource = None,
+    age_cap_s: Optional[int] = None,
 ) -> List[TrialScore]:
     """Score every trial directory under ``trace_root``, in name order.
 
     Directories whose names are not trial names are skipped, and so, unless
     ``include_failed``, are trials whose status is not ``ok`` (see
     :func:`trial_status`): a timed-out or ``no_eval`` trial is not a valid
-    observation, and the trial CSV's analysis drops it too.
+    observation, and the trial CSV's analysis drops it too. ``age_cap_s`` as
+    in :func:`score_trial`.
     """
     index = _status_index(status_csv)
     scores: List[TrialScore] = []
     for d, _ in _trial_dirs(trace_root, arms):
         if not include_failed and trial_status(d, index).status != "ok":
             continue
-        scores.append(score_trial(d, taus=taus, status_csv=index))
+        scores.append(score_trial(d, taus=taus, status_csv=index, age_cap_s=age_cap_s))
     return scores
 
 
@@ -978,7 +1332,13 @@ def main(argv=None) -> int:
                          "marker, and of trials the runner relabelled after it.")
     ap.add_argument("--include-failed", action="store_true",
                     help="Also score trials whose status is not ok.")
+    ap.add_argument("--age-cap-s", type=int, default=None,
+                    help="Count cap violations at this age cap S (missions since a "
+                         "device's last merged update) for every arm; default: each "
+                         "trace's own S, and blank for a trace whose mules ran none.")
     args = ap.parse_args(argv)
+    if args.age_cap_s is not None and args.age_cap_s < 1:
+        ap.error(f"--age-cap-s must be >= 1, got {args.age_cap_s}")
     # One CSV per root, never merged: a trial's key is unique only within its
     # own sweep (see StatusIndex), so paired sweeps would overwrite each
     # other's statuses.
@@ -994,6 +1354,7 @@ def main(argv=None) -> int:
         scores.extend(score_traces(
             root, taus=args.tau, arms=args.arms,
             include_failed=args.include_failed, status_csv=index,
+            age_cap_s=args.age_cap_s,
         ))
         statuses.extend(trial_statuses(root, arms=args.arms, status_csv=index))
 
@@ -1016,6 +1377,8 @@ def main(argv=None) -> int:
         print("no trial directories found" if not statuses else "no trials left to score")
         return 1
     _warn_provenance_conflicts(scores)
+    if args.age_cap_s is not None:
+        _warn_other_caps(scores, args.age_cap_s)
     if args.csv:
         write_scores_csv(scores, args.csv)
         print(f"wrote {len(scores)} rows to {args.csv}")
@@ -1063,6 +1426,32 @@ def _warn_provenance_conflicts(scores: Sequence[TrialScore]) -> None:
         if len(provs) > 1:
             print(f"warning: {key.cell_id} {key.arm} t{key.trial_index} s{key.seed} "
                   f"was scored under {len(provs)} different provenances")
+
+
+def _warn_other_caps(scores: Sequence[TrialScore], age_cap_s: int) -> None:
+    """Flag trials whose mules ran another cap than ``--age-cap-s``.
+
+    Their ``cap_violations`` count at ``--age-cap-s``, but
+    ``cap_violation_events`` is the mule's own log at the S it ran, so the two
+    columns of such a row do not compare.
+    """
+    for s in scores:
+        ran = _cap_in_provenance(s.provenance)
+        if ran is not None and ran != age_cap_s:
+            k = s.key
+            print(f"warning: {k.cell_id} {k.arm} t{k.trial_index} s{k.seed} ran the age "
+                  f"cap S = {ran}; its violations are counted at --age-cap-s {age_cap_s}, "
+                  f"its cap_violation_events at S = {ran}")
+
+
+def _cap_in_provenance(provenance: Mapping[str, object]) -> Optional[int]:
+    """The ``age_cap_missions`` a plan-mode row's ``ferry_params`` records."""
+    try:
+        params = json.loads(str(provenance.get("ferry_params") or "{}"))
+    except json.JSONDecodeError:
+        return None
+    cap = params.get("age_cap_missions") if isinstance(params, dict) else None
+    return cap if isinstance(cap, int) and not isinstance(cap, bool) else None
 
 
 # --------------------------------------------------------------------------- #
@@ -1220,6 +1609,29 @@ def _device_ids(trace_dir: Path) -> List[str]:
     )
 
 
+def _device_positions(trace_dir: Path) -> Dict[str, Tuple[float, ...]]:
+    """Each device's position, from the cluster's seed list, else the device
+    configs (the same sources as :func:`_device_ids`); a device whose position
+    neither records is left out."""
+    positions: Dict[str, Tuple[float, ...]] = {}
+    for s in _first_json(trace_dir, "cluster*.json").get("seed_devices") or ():
+        if isinstance(s, dict) and "device_id" in s and _is_position(s.get("position")):
+            positions[str(s["device_id"])] = tuple(float(c) for c in s["position"])
+    if positions:
+        return positions
+    for p in sorted(trace_dir.glob("device-*.json")):
+        cfg = _read_json(p)
+        if _is_position(cfg.get("position")):
+            did = str(cfg.get("device_id") or p.stem[len("device-"):])
+            positions[did] = tuple(float(c) for c in cfg["position"])
+    return positions
+
+
+def _is_position(v) -> bool:
+    return (isinstance(v, (list, tuple)) and len(v) >= 2
+            and all(_float_or_none(c) is not None for c in v))
+
+
 def _first_json(trace_dir: Path, pattern: str) -> dict:
     for p in sorted(trace_dir.glob(pattern)):
         return _read_json(p)
@@ -1249,6 +1661,12 @@ def _tau_tag(tau: float) -> str:
 
 def _blank(v):
     return "" if v is None else v
+
+
+def _json_or_blank(v) -> str:
+    """A mapping column as JSON with sorted keys, as the driver writes its own;
+    blank for None."""
+    return "" if v is None else json.dumps(v, sort_keys=True)
 
 
 def _float_or_none(v) -> Optional[float]:

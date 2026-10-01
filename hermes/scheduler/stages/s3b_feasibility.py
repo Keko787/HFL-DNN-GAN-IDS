@@ -143,6 +143,26 @@ DEADLINE_BOUNDS: Tuple[str, ...] = (
     DEADLINE_BOUNDS_COLLECTION, DEADLINE_BOUNDS_DELIVERY_PER_STOP, DEADLINE_BOUNDS_DELIVERY,
 )
 
+#: ``member_admission`` (FeRRy Phase 4, the user's decision 4 (b) of
+#: 2026-09-30). ``whole`` admits a contact with all its members or not at all:
+#: the recorded rule of this gate and of the D-arm walks, and the default of
+#: every arm outside the F family. It leaves the narrow-band cliff (one
+#: field-wide contact, so 0 or N devices under a budget), pinned in
+#: tests/unit/test_p3_final_fixes_mule.py.
+#: ``subset``, on the simulated clock only, re-issues a contact that fails
+#: whole with the members that still fit
+#: (``hermes.scheduler.plan.member_subset``): the F family's default, and
+#: H1-H3's, D1-D3's and D5's when a run asks for it. For the H and D arms only
+#: the admission before takeoff reduces a contact; their in-flight check and
+#: re-plan keep or drop contacts whole. The values live here, not in
+#: ``hermes.scheduler.plan``, so that this gate, the walks and the scheduler
+#: can name them without putting the plan package on the recorded import
+#: path; ``hermes.scheduler.plan`` restates the tuple, pinned equal by
+#: tests/unit/test_p4_member_subset.py.
+MEMBER_ADMISSION_WHOLE = "whole"
+MEMBER_ADMISSION_SUBSET = "subset"
+MEMBER_ADMISSIONS: Tuple[str, ...] = (MEMBER_ADMISSION_WHOLE, MEMBER_ADMISSION_SUBSET)
+
 
 def _check_rule(rule: str) -> None:
     if rule not in RULES:
@@ -708,19 +728,31 @@ class FeasibilityResult:
     #: dropped devices must include it, as it includes ``dropped_budget``
     #: (the device was not late itself either).
     dropped_delivery: List[ContactWaypoint] = field(default_factory=list)
+    #: FeRRy Phase 4, plan mode only (``plan_mode="ferry"``): the demanded
+    #: devices the plan leaves out by choice, those no clause of the predicate
+    #: refuses alone from the dock (drop reason ``plan``,
+    #: ``hermes.scheduler.plan.REASON_PLAN``; Phase 4 spec, other choices 8),
+    #: as one waypoint per stop. Always empty in legacy mode; appended last so
+    #: the positional construction of the fields above is unchanged. Counted in
+    #: ``n_dropped``; a reader that widens the dropped devices must include it,
+    #: but S3c's planned count (``mission_planned_devices`` in the mule) leaves
+    #: it out: these are the plan's choices, not deadline shortfalls (critic C6).
+    dropped_plan: List[ContactWaypoint] = field(default_factory=list)
 
     @property
     def n_dropped(self) -> int:
         return (len(self.dropped_overdue) + len(self.dropped_budget) + len(self.dropped_energy)
-                + len(self.dropped_delivery))
+                + len(self.dropped_delivery) + len(self.dropped_plan))
 
     @property
     def dropped(self) -> List[ContactWaypoint]:
         """Every dropped contact: overdue, then over budget, then energy, then
-        on-board delivery (the last is empty in every mode but ``delivery``,
-        so the others keep their order)."""
+        on-board delivery, then the plan's own choices (the last two are empty
+        in every mode but ``delivery`` and plan mode, so the others keep their
+        order)."""
         return (list(self.dropped_overdue) + list(self.dropped_budget)
-                + list(self.dropped_energy) + list(self.dropped_delivery))
+                + list(self.dropped_energy) + list(self.dropped_delivery)
+                + list(self.dropped_plan))
 
 
 def filter_feasible(
@@ -733,6 +765,7 @@ def filter_feasible(
     priority: Optional[Callable[[ContactWaypoint], float]] = None,
     state: Optional[FlightState] = None,
     snr_offset_db: float = 0.0,
+    member_subsets: Optional[MemberSubsets] = None,
 ) -> FeasibilityResult:
     """Drop contacts that cannot be served in time. EDF-ordered greedy walk.
 
@@ -752,6 +785,16 @@ def filter_feasible(
     ``deadline_bounds="delivery"``, the earliest deadline of the updates
     already on board (``deliver_by``). ``snr_offset_db`` is the observed-rate
     adjustment for ferry pricing (0 by default).
+
+    ``member_subsets`` (FeRRy Phase 4, ``member_admission="subset"``, the
+    user's decision 4 (b)) is None by default, the recorded walk. Before
+    takeoff the scheduler passes the plan's per-member deadlines and device
+    states (:class:`MemberSubsets`), and a contact that fails whole is
+    re-issued with the members that still fit (:func:`_filter_subsets`); the
+    members left out are dropped under the clause that refused them. The
+    re-admission in flight never passes it, so the in-flight re-plan keeps or
+    drops contacts whole (``routing.replan``'s identity check). Without a
+    budget it is inert, as the gate is.
 
     The walk is a fold, skipping what fails, over
     :meth:`FeasibilityModel.admit` with :data:`RULE_DEADLINE_BUDGET`.
@@ -774,10 +817,186 @@ def filter_feasible(
         )
 
     start = state if state is not None else FlightState(tuple(mule_pose), float(now))  # type: ignore[arg-type]
+    if member_subsets is not None:
+        return _filter_subsets(ordered, start, mdl, mission_deadline_ts, priority,
+                               snr_offset_db, member_subsets)
     walk = mdl.fold(
         ordered, start, rule=RULE_DEADLINE_BUDGET, budget_end=mission_deadline_ts,
         skip=True, snr_offset_db=snr_offset_db,
     )
+    return FeasibilityResult(
+        list(walk.route),
+        walk.rejected_by(REASON_OVERDUE),
+        walk.rejected_by(REASON_BUDGET),
+        walk.rejected_by(REASON_ENERGY),
+        walk.rejected_by(REASON_DELIVERY),
+    )
+
+
+# --------------------------------------------------------------------------- #
+# FeRRy Phase 4: member subsets for the whole-contact walks (opt-in)
+# --------------------------------------------------------------------------- #
+
+@dataclass(frozen=True, eq=False)
+class MemberSubsets:
+    """What a whole-contact walk needs to re-issue part of a contact.
+
+    An S3a contact carries only its members' earliest deadline and worst
+    bucket. A contact reduced to some of its members needs each member's own
+    ``Deadline(j)`` (S3's, the plan's ``last_plan_deadlines``) and bucket (the
+    device states), which only the scheduler holds. So under
+    ``member_admission="subset"`` (the user's decision 4 (b) of 2026-09-30)
+    the scheduler builds one per plan before takeoff and hands it to this gate
+    (:func:`filter_feasible`) or to the arm's own walk (``greedy_budget_walk``,
+    ``fedcs_greedy_select``). Nothing in flight builds one: the in-flight
+    check, the re-plan and the trim keep or drop contacts whole, as
+    ``routing.replan``'s identity check requires.
+
+    :meth:`reduce` is the plan package's ``reduce_stop`` (unit U3), the one
+    reduction rule the F family uses too: the contact's position, the members
+    in its order, the worst of their buckets and the earliest of their own
+    deadlines. It is imported when called, so neither this module nor any
+    walk that imports it loads a plan module on the recorded path
+    (unit_U3b.md section 1.5).
+    """
+
+    deadlines: Mapping[Any, float]
+    device_states: Mapping[Any, Any] = field(repr=False)
+
+    def reduce(self, wp: ContactWaypoint, members: Collection[Any]) -> ContactWaypoint:
+        """``wp`` with only ``members``: ``wp`` itself when they are all of them."""
+        from hermes.scheduler.plan.member_subset import reduce_stop  # noqa: WPS433
+
+        return reduce_stop(wp, members, deadlines=self.deadlines,
+                           device_states=self.device_states)
+
+
+def fold_subsets(
+    route: Sequence[ContactWaypoint],
+    state: FlightState,
+    *,
+    model: FeasibilityModel,
+    rule: str,
+    budget_end: Optional[float],
+    member_order: Callable[[ContactWaypoint], Sequence[Any]],
+    subsets: MemberSubsets,
+    pass_kind: MissionPass = MissionPass.COLLECT,
+    snr_offset_db: float = 0.0,
+) -> FoldResult:
+    """:meth:`FeasibilityModel.fold` with ``skip=True``, re-issuing what fails whole.
+
+    Each contact is tried whole from the state the previous one left, as
+    ``fold`` tries it; admitted, it is flown as it is (the same object).
+    Refused, its members are walked in ``member_order(wp)`` by the plan
+    package's one member walk (``admit_members``, unit U3): a member is
+    admitted when the contact reduced to the members admitted so far plus it
+    still passes the predicate, and skipped otherwise (skip, not stop). If
+    some member fits, the reduced contact is flown and the state moves on its
+    verdict; the members left out are rejected as one reduced contact per
+    reason, in :data:`REASONS` order (``complements``). If none fits, the
+    contact is rejected whole with the reason it failed whole, the object and
+    reason ``fold`` gives, and the state does not move.
+
+    Why one pass is final: from a fixed flight state every clause of
+    :meth:`FeasibilityModel.admit` is monotone in a contact's member set. The
+    dwell is a sum of member times, each >= 0 (:meth:`FerryPhysics.dwell_s`);
+    the deadline the contact is held to is its members' minimum; arrival, the
+    return leg and the upload do not depend on the members; the energy grows
+    with the dwell. So a member refused beside part of the admitted set stays
+    refused beside all of it, the pass admits a maximal set for its order, and
+    a contact that fits whole would be admitted whole by it: the whole try
+    only saves the walk.
+
+    ``verdicts`` has one entry per input contact: the verdict of what was
+    flown for it, or of its refusal. ``home`` is as in ``fold``. Where no
+    contact is reduced, the result equals ``model.fold(route, state,
+    skip=True)`` object for object. There is no ``protected`` set: no
+    whole-contact gate has one before takeoff.
+    """
+    from hermes.scheduler.plan.member_subset import admit_members, complements  # noqa: WPS433
+
+    _check_rule(rule)
+    pass_kind = MissionPass(pass_kind)
+    flown: List[ContactWaypoint] = []
+    rejected: List[Tuple[ContactWaypoint, str]] = []
+    verdicts: List[Verdict] = []
+    cur = state
+    home: Optional[float] = None
+    for wp in route:
+        v = model.admit(cur, wp, rule=rule, budget_end=budget_end, pass_kind=pass_kind,
+                        snr_offset_db=snr_offset_db)
+        if not v.ok:
+            walk = admit_members(
+                model, cur, wp, member_order(wp), rule=rule, budget_end=budget_end,
+                deadlines=subsets.deadlines, device_states=subsets.device_states,
+                pass_kind=pass_kind, snr_offset_db=snr_offset_db,
+            )
+            if walk.stop is None:
+                verdicts.append(v)
+                rejected.append((wp, v.reason))  # type: ignore[arg-type]
+                continue
+            rejected.extend(complements(wp, walk.refused, deadlines=subsets.deadlines,
+                                        device_states=subsets.device_states))
+            wp, v = walk.stop, walk.verdict  # type: ignore[assignment]
+        verdicts.append(v)
+        flown.append(wp)
+        cur = v.next_state
+        home = v.home
+    if home is None:
+        home = model.home_at(cur)
+    return FoldResult(
+        route=tuple(flown), rejected=tuple(rejected), verdicts=tuple(verdicts),
+        state=cur, home=home,
+    )
+
+
+def _filter_subsets(
+    ordered: Sequence[ContactWaypoint],
+    start: FlightState,
+    mdl: FeasibilityModel,
+    budget_end: float,
+    priority: Optional[Callable[[ContactWaypoint], float]],
+    snr_offset_db: float,
+    subsets: MemberSubsets,
+) -> FeasibilityResult:
+    """S3b's walk with member subsets (:func:`filter_feasible` given ``member_subsets``).
+
+    The contacts go in S3b's own order; one that fails whole is re-issued with
+    the members that still fit (:func:`fold_subsets`). Each member is ranked by
+    S3b's contact key applied to its one-member contact (unit_U3b.md section
+    2.2):
+
+    * its own ``Deadline(j)`` first: EDF inside a contact as across contacts.
+      Service rotates: a served member's next deadline moves later, while a
+      member left out keeps its early one and leads the next mission; the
+      cheapest dwell first would instead favour the same near, high-SNR
+      members every mission (research map section 4);
+    * then its predicted dwell. The contact key's position term is common to
+      every member of a contact, so the dwell breaks deadline ties before the
+      id: among equal deadlines the cheapest first admits the most members (at
+      mission 1 every new device shares t_ref and the default window);
+    * then the device id;
+    * with ``priority`` (``miss_priority``), the member's own priority, its
+      miss streak, leads: a missed member's wider window gives it a later
+      deadline, and without this it would go last inside its contact, the
+      inversion miss priority exists to prevent.
+
+    The members left out join the drop list of the clause that refused them,
+    one reduced contact per clause, never ``dropped_plan``; the mule widens
+    and records them like any other drop. Like S3b's EDF across contacts, EDF
+    inside a contact is not count-optimal when deadlines differ.
+    """
+    def member_order(wp: ContactWaypoint) -> List[Any]:
+        def key(did: Any) -> tuple:
+            one = subsets.reduce(wp, (did,))
+            lead = () if priority is None else (-priority(one),)
+            return lead + (one.deadline_ts,
+                           mdl.leg(start.pose, one, snr_offset_db=snr_offset_db).dwell_s, did)
+        return sorted(wp.devices, key=key)
+
+    walk = fold_subsets(ordered, start, model=mdl, rule=RULE_DEADLINE_BUDGET,
+                        budget_end=budget_end, member_order=member_order, subsets=subsets,
+                        snr_offset_db=snr_offset_db)
     return FeasibilityResult(
         list(walk.route),
         walk.rejected_by(REASON_OVERDUE),
