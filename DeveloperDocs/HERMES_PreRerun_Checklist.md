@@ -55,6 +55,20 @@ hold. The status of 2026-08-13 follows it, kept for the record.
 >   change every header; (4) the exit gate
 >   (H1, D1, D2, D3 and D4 re-baselined on the new clock, then the Phase 1–2 studies re-run) only
 >   on the user's go-ahead.
+> - **Phase 4 has landed behind its switches (commit `69b551f`; Freeze §5k, 2026-09-30).** No
+>   amendment: at the defaults nothing changes the wall clock or Phase 3's simulated clock, and the
+>   one trace-event field that can appear at the defaults is `pass_1_policy_drops`, on a
+>   simulated-clock D-arm mission that leaves a contact out (reported, never widened); every mule's
+>   per-role JSON gains the eight plan fields at their defaults. The trial CSV header is unchanged;
+>   the scorer's CSV gains nine columns, blank on older traces. Before its pilots (Run Guide §2.7):
+>   (1) the Phase 3 pilot, which sets the session TTL and the knee (the Phase 4 pilots re-measure
+>   the knee under the `channel` source, at the measured payload and at 1 MB); (2) the age cap S per
+>   cell from the S\* tool (`experiments/analysis/age_cap_s_star.py`) at the knee and the stress
+>   budget; (3) the commit that lands Phase 4, recorded with the rows; (4) fresh CSV paths, one per
+>   setting of a sweep (κ, S), since no Phase 4 flag is part of a trial's key; (5) a base seed of
+>   the pilots' own; (6) the pilots only on the user's go-ahead. "The full suite passes" now means
+>   the same as both test baselines, afa9526 and 6e6f92d (§1), and the Phase 4 tree's full run
+>   (4,696 tests, 2026-09-30) is the same as both.
 
 **Status on 2026-08-13:** ✅ **GATE OPEN.** All six exit criteria met; the matrix in §5.1 is cleared
 to run.
@@ -140,9 +154,15 @@ The single most useful distinction here. Most open items do **not** need new tri
 | Turn a FeRRy switch on (Amendment 7) | **Yes** (new arm) | Changes what the scheduler decides |
 | Simulated mission clock for the mule arms (FeRRy Phase 3, `--mission-clock sim`) | **Yes**, every mule arm | The re-run bill of build-plan decision D2: H1–H3 and D1–D5 (later F) re-run on the new clock, and the Phase 1–2 studies are re-run, not re-scored, since legacy traces carry no simulated stamps. H0 is not re-run there: its simulated round time is outside Phase 3, and the driver refuses it on the simulated clock (critic A5). *(Corrected 2026-09-29; this row first listed H0–H3, D1 and D2, and put every arm on the seconds-axis channel, whose backhaul is now a per-study choice.)* |
 | Turn on another Phase 3 switch: a contact band, `replan`, the seconds-axis backhaul, the channel reliability source, a declared payload, a deadline time unit, a `--deadline-bounds` other than `collection` | **Yes** (new cells) | Each changes what the mule decides or what a contact costs, so each is a study setting on the new clock. The seconds backhaul alone moves every exit-gate number: about 16 % of uploads lost when jittery at a fixed carrier, against today's flat 2 % (critic A4) |
+| Fly a plan arm (FeRRy Phase 4, `plan_mode = ferry`: F, FX, FB+wide, FB+medium, FB+narrow, F-cov, F-cap, F-prio) | **Yes** (new arms) | New cells on the simulated clock: the plan clock decides the band class, the route and who is served. They run only when named with `--arms`; the runner's default arm list is still the nine Phase 3 arms (`DEFAULT_ARMS`) |
+| Turn on member subsets for an H or D arm (`--member-admission subset`) | **Yes** (new cells) | Changes what H1–H3, D1–D3 and D5 admit before takeoff (D4 never takes it). `whole`, the default, is the recorded rule, pinned by the Phase 3 cliff tests and the goldens |
+| Change a plan arm's setting: the age cap S and its lookahead, the plan score (κ, c₄, `coverage_rank`), the search bounds | **Yes** (new cells), each setting in its own CSV | Each changes what the plan decides. No Phase 4 flag is part of a trial's (cell, arm, trial) key, so a second setting written to the same CSV would silently keep the first's rows |
+| The D arms' drop report (`pass_1_policy_drops`, Phase 4 decision 6) | **No** | Report only, on the simulated clock, never widened: a D-arm mission that leaves a contact out before takeoff gains the field, and nothing it flies changes. Phase 3's simulated D-arm traces lack it |
+| Phase 4's scorer columns (9) and `traces_scorer.py --age-cap-s` | **No** | Re-analysis of kept traces. The trial CSV header is unchanged; older traces score blank in the new columns (with `--age-cap-s`, the cap columns fill for them too) |
+| The full-suite gate: `tests/golden/make_baseline.py compare` against both baselines | **No** (a test gate, not a trial change) | "The full suite passes" now means the same as `pytest_baseline.txt` (afa9526, before Phase 3: 1,560 tests, 6 failures, signed off 2026-09-29) and as `pytest_baseline_6e6f92d.txt` (6e6f92d, before any Phase 4 code change, with UG4's goldens added: 2,918 tests, the 84 of `test_golden_p3_sim.py` among them, and the five deterministic afa9526 failures): the same outcome per test and the same signature per known failure, new tests allowed. `compare` exits 0 when the run is the same as each, 1 when it differs from one and 2 when a baseline file is missing; the real-model smoke test may pass or fail its known way (`FLAKY`; `--strict` drops the allow-list) |
 | — | — | — |
 | P-02 transport fix (Freeze Amendment 10) | **No** for any recorded run | It changes legacy behaviour only where a device is silent for more than 30 s of wall time (a quorum wait with several mules, a long fit, a slow startup), where the cluster's dock send on Windows blocks for more than 60 ms (the dock link's bound, meant as 60 s), or where a device's link drops for another reason (the device now re-dials and re-registers instead of spinning). None is expected in the recorded runs: the longest silence in the 600 kept traces is 23.3 s, and K = 2 and real-model trials before and after it are identical. Every multi-mule run must use the fixed code |
-| Land a FeRRy switch at its legacy default (Amendment 7) | **No** | Legacy behaviour unchanged; each switch lands with a test that pins its default to the frozen pipeline. Phase 3's are also pinned by the afa9526 golden fixtures (`tests/golden/`, 144 tests) |
+| Land a FeRRy switch at its legacy default (Amendment 7) | **No** | Legacy behaviour unchanged; each switch lands with a test that pins its default to the frozen pipeline. Phase 3's are also pinned by the afa9526 golden fixtures (`tests/golden/`, 144 tests), and Phase 4's by those and by oracles of Phase 3's simulated clock captured at 6e6f92d (`p3_sim.json`; the goldens are now 228 tests) |
 | Phase 3's new CSV columns (13 provenance, 15 simulated) | **No**, but start a new CSV | Additive, but they change every header, so the runner refuses to append to an older file. The 15 simulated columns are blank on the wall clock. The provenance columns are blank at the driver's defaults, but `realism`, `l1_channel` and `input_dim` are filled whenever set, on either clock (a wall-clock re-run of a recorded real-model `--realism` cell gets `realism` 1 and `input_dim` 21), as are a deadline time scale other than 1.0, an `initial_window_s` and a session TTL other than 3 s |
 | Re-score retained traces with `traces_scorer.py` | **No** | Re-analysis of kept JSONL; possible only where `--keep-event-traces` was on |
 | `ε_prop` calibration | **No** | Energy is a post-hoc function of recorded columns |
@@ -183,7 +203,7 @@ means **an existing CSV cannot be resumed** by a newer runner: it fails loudly w
 recorded with these mechanisms active must never be pooled with historical rows, so being forced
 into a new file is the correct outcome. Start a new CSV; do not override.
 
-### Amendments 4–10 (2026-08-17 to 2026-09-29) — and what they did cost
+### Amendments 4–10 (2026-08-17 to 2026-09-29) and Phase 4 — and what they did cost
 
 The title of this section held through Amendment 4. It no longer holds: Amendments 5 and 6 are
 defect fixes, so their default *is* the corrected behaviour, and they change recorded results.
@@ -197,6 +217,7 @@ defect fixes, so their default *is* the corrected behaviour, and they change rec
 | 5h, Amendment 8 | D1/D2 budget-checked in flight; a plan's diagnostics reset per plan; the Phase 1 audit fixes (ferry mode only) | none for parts 1–2 (fixes) | Every budgeted D1/D2 cell (already owed) |
 | 5i, Amendment 9 | Mule failures fail the trial; bootstrap and reconnects survive; Phase 2 multi-mule runtime and arms D3–D5 behind switches | none for parts 1–4 (fault paths) | None |
 | 5j, Amendment 10 | The P-02 transport fix: RF reads without a timeout, send bounds packed per OS (the dock link's 60 s bound was 60 ms on Windows), a re-registering device replaces its socket, and devices re-dial (acknowledged, with an optional per-trial token); FeRRy Phase 3 (mission clock, contact link, re-plan, seconds-axis backhaul) behind switches | none for the fix; one switch per Phase 3 mechanism, legacy by default | None expected from the fix (no kept trace has a device silent for more than 23.3 s); every mule arm re-runs on the mission clock |
+| 5k, Phase 4 (no amendment) | FeRRy Phase 4, the plan clock (plan mode, member subsets, the age cap, FX) behind switches, and the D arms' drop report, additive | one switch per mechanism, legacy by default; none for the drop report, which only reports | None; the plan arms are new arms |
 
 The caveat above now applies to the numbers as well as the files: `main` does not reproduce the
 recorded budgeted, `--l1-channel` or D1/D2 rows. Re-derive a recorded number from the tag
