@@ -1,4 +1,4 @@
-"""Record, or compare against, the full-suite pass/fail baselines (units UG, UG4).
+"""Record, or compare against, the full-suite pass/fail baselines (units UG, UG4, UG5).
 
 A baseline records the suite as it ran at one commit on this host: one
 ``<outcome> <node id>`` line per test and, under each failing test, an
@@ -7,17 +7,20 @@ line, the exception type, the first ``assert`` line of the message or else
 its first line, and any exception the message quotes, such as a subprocess's
 ``ModuleNotFoundError``). "The full suite passes" means: the same outcome per
 node id, the same signature for each known failure, new tests allowed. There
-are two (``BASES``):
+are three (``BASES``):
 
 * ``pytest_baseline.txt``, afa9526, before any Phase 3 change (unit UG);
 * ``pytest_baseline_6e6f92d.txt``, 6e6f92d, before any Phase 4 change (unit
   UG4), so that Phase 3's own tests, new against afa9526 and so never gated
-  by it, are gated too.
+  by it, are gated too;
+* ``pytest_baseline_386c275.txt``, 386c275, before any Phase 5 change (unit
+  UG5), so that Phase 4's own tests, new against both and so never gated by
+  them, are gated too.
 
     py -3.11 -m pytest tests -p no:cacheprovider -q -rfE --junitxml=<run.xml>
     py -3.11 tests/golden/make_baseline.py compare <run.xml>     # every baseline
-    py -3.11 tests/golden/make_baseline.py compare <run.xml> --base 6e6f92d
-    py -3.11 tests/golden/make_baseline.py write <run.xml> --base 6e6f92d  # at 6e6f92d only
+    py -3.11 tests/golden/make_baseline.py compare <run.xml> --base 386c275
+    py -3.11 tests/golden/make_baseline.py write <run.xml> --base 386c275  # at 386c275 only
 
 ``compare`` lists, per baseline, the tests whose outcome changed, the known
 failures whose signature changed, the baseline tests that did not run, the
@@ -94,6 +97,17 @@ E6F92D_NOTES = (
     "  (FLAKY in make_baseline.py): compare lets it pass or fail its known way (see below).",
 )
 
+#: What is known about the failures of the 386c275 run (kept in the header).
+B386C275_NOTES = (
+    "the five deterministic afa9526 failures, with their afa9526 signatures: the selector's",
+    "  decision-dense DoD cell [60.0] (test_contact_selector_ab.py), and the four",
+    "  test_mode_switch.py subprocess tests (the legacy scripts import 'Config', not on the path).",
+    "test_exp4_realmodel_smoke.py::test_exp4_real_model_synthetic_converges is flaky under load",
+    "  (FLAKY in make_baseline.py): compare lets it pass or fail its known way (see below).",
+    "Phase 4's own tests (test_p4_*.py and the rest of Phase 4's new files) all pass, and so do",
+    "  UG5's plan-arm goldens (test_golden_p4_plan.py), recorded here before any Phase 5 change.",
+)
+
 
 class Base(NamedTuple):
     """One recorded baseline: the commit it ran at and how its file is headed."""
@@ -110,6 +124,9 @@ BASES: Dict[str, Base] = {
     "6e6f92d": Base("6e6f92da038227147489515d876cc3f353584283",
                     HERE / "pytest_baseline_6e6f92d.txt", "FeRRy Phase 4 unit UG4", "Phase 4",
                     E6F92D_NOTES),
+    "386c275": Base("386c27552e249da07550bc9042b4a907c7e8e684",
+                    HERE / "pytest_baseline_386c275.txt", "FeRRy Phase 5 unit UG5", "Phase 5",
+                    B386C275_NOTES),
 }
 
 

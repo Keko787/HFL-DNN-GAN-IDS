@@ -111,6 +111,38 @@ at the defaults and keeps every other column:
   part, or not at all (D arms reported no drops before Phase 4), so there they
   are blank.
 
+FeRRy Phase 5 (the flight clock's learned fillings; the Phase 5 spec, other
+choices 6 and 9). The provenance names a learned arm's checkpoint as the
+driver does, by tag and sha only: ``pair_tag`` and ``pair_sha256`` in
+``ferry_params`` for an FQ arm, and ``policy_tag`` and ``policy_sha256`` in
+``policy_params`` for E3 (the driver's own ``plan_ferry_params`` and
+``learned_policy_params``), so their rows join their trial CSV rows too. With
+``pair_columns`` (``--pair-columns``) :data:`PHASE_5_COLUMNS` follow the τ
+columns; without it the row is the Phase 4 one, column for column, so no row
+of a recorded trace changes and no Phase 4 pin moves (:func:`pair_report` says
+what each holds):
+
+* **The pair slot's decisions** (``pass_1_pairs``, pooled over the trial's
+  missions): ``pair_decisions``, how many it made, one per Pass-1 stop flown;
+  ``pair_feasible_mean``, the mean number of pairs its mask admitted;
+  ``pair_mask_empty``, how many found none and fell back on FX's pair;
+  ``pair_fx_agree_share``, the share whose chosen pair was FX's by FX's own
+  rule at that arrival (not the FX arm's flight, which under ``replan``
+  re-plans first; an empty mask's decision agrees, since its fallback is
+  FX's pair); ``pair_band_off_bbar_share``, the share served on a class other
+  than the committed b̄; ``pair_reorder_share``, the share whose pair chose a
+  stop other than the remainder's head. The agreement and re-order shares
+  count the choice: the stop is served on the chosen band at once, but the
+  departure check after it may re-plan the order the pair set
+  (``trimmed_next``) and the beacon hook may insert a stop ahead of it, so
+  the stop flown next can differ. Blank on a trial that flew no pair slot; on
+  one that made no decision the two counts are 0 and the rest blank.
+* **E3's unvisited stops**: ``e3_unvisited_mean``, the mean over missions of
+  the stops its pass left when none was admissible any more
+  (``pass_1_e3_unvisited``, never widened); blank for every other arm.
+
+Study 5.6's "stops served per mission" is ``pass1_contacts_mean``.
+
 Usage::
 
     python -m experiments.analysis.traces_scorer \\
@@ -122,6 +154,9 @@ Usage::
 
     python -m experiments.analysis.traces_scorer \\
         --traces results/exp4_p4/s58_traces --age-cap-s 3 --csv scored.csv
+
+    python -m experiments.analysis.traces_scorer \\
+        --traces results/exp5/s55_traces --pair-columns --csv scored.csv
 """
 
 from __future__ import annotations
@@ -141,6 +176,7 @@ from experiments.exp4.driver import (
     PROVENANCE_COLUMNS,
     TRIAL_STATUS_FILE,
     contact_band_column,
+    learned_policy_params,
     plan_ferry_params,
 )
 from experiments.exp4.events_consumer import (
@@ -159,7 +195,9 @@ from hermes.processes.config import (
     BACKHAUL_SECONDS,
     CLOCK_SIM,
     CLOCK_WALL,
+    CONTACT_POLICY_CHEN_DQN,
     FERRY_SPEC_FIELDS,
+    FLIGHT_SLOT_PAIR_Q,
     PLAN_MODE_FERRY,
     MuleConfig,
 )
@@ -550,7 +588,10 @@ def _format_dock_params(mule: Mapping[str, object]) -> str:
 
 def _format_policy_params(mule: Mapping[str, object]) -> str:
     """``policy_params`` as the driver writes it: the options of arm D3
-    (``whittle``) or D5 (``fedcs``), blank for every other policy."""
+    (``whittle``) or D5 (``fedcs``), and FeRRy Phase 5's arm E3 (``chen_dqn``)
+    by its checkpoint's tag and sha, from the driver's own
+    :func:`~experiments.exp4.driver.learned_policy_params` so the two columns
+    agree; blank for every other policy."""
     policy = mule.get("contact_policy")
     if policy == "whittle":
         params = {"variant": mule.get("whittle_variant") or "expected",
@@ -558,8 +599,9 @@ def _format_policy_params(mule: Mapping[str, object]) -> str:
     elif policy == "fedcs":
         params = {"value": mule.get("fedcs_value") or "unit"}
     else:
-        return ""
-    return json.dumps(params, sort_keys=True)
+        params = {}
+    params.update(learned_policy_params(mule))
+    return json.dumps(params, sort_keys=True) if params else ""
 
 
 def _format_deadline_law(form, params) -> Tuple[str, str]:
@@ -1113,6 +1155,91 @@ def plan_report(
 
 
 # --------------------------------------------------------------------------- #
+# FeRRy Phase 5: the learned fillings
+# --------------------------------------------------------------------------- #
+
+#: The scorer's FeRRy Phase 5 columns (the Phase 5 spec, other choices 9), in
+#: row order after the τ columns, and only with ``pair_columns``
+#: (``--pair-columns``): without it the row is the Phase 4 one, so no Phase 4
+#: pin moves (critic B1). Scorer-only: the trial CSV's header is unchanged.
+PHASE_5_COLUMNS = (
+    "pair_decisions", "pair_feasible_mean", "pair_mask_empty", "pair_fx_agree_share",
+    "pair_band_off_bbar_share", "pair_reorder_share", "e3_unvisited_mean",
+)
+
+
+@dataclass(frozen=True)
+class PairReport:
+    """One trial's :data:`PHASE_5_COLUMNS`; None is a blank column."""
+
+    pair_decisions: Optional[int] = None
+    pair_feasible_mean: Optional[float] = None
+    pair_mask_empty: Optional[int] = None
+    pair_fx_agree_share: Optional[float] = None
+    pair_band_off_bbar_share: Optional[float] = None
+    pair_reorder_share: Optional[float] = None
+    e3_unvisited_mean: Optional[float] = None
+
+    def to_row(self) -> Dict[str, object]:
+        return {col: _blank(getattr(self, col)) for col in PHASE_5_COLUMNS}
+
+
+def pair_report(obs: Exp4Observation, *, mule_cfg: Mapping[str, object]) -> PairReport:
+    """One trial's FeRRy Phase 5 columns, blank where it flew no learned filling.
+
+    The pair columns pool every decision of every mission (one per Pass-1 stop
+    the pair slot flew; with several mules, every mule's): their count; the
+    mean number of pairs the mask admitted; how many found none, so that the
+    slot fell back on FX's pair (``fallback``); and the shares whose chosen
+    pair was FX's by FX's own rule at that arrival (``agrees_fx``: FX's rule,
+    not the FX arm's flight, which under ``replan`` re-plans first; unit U3;
+    a decision whose mask was empty fell back on FX's pair, so it agrees),
+    that served the stop on a class other than the committed b̄, and whose
+    pair chose a stop other than the remainder's head (``next_index``
+    neither 0 nor home). The agreement and re-order shares count the choice,
+    not the flight: the stop is served on the chosen band at once, but the
+    departure check after it may re-plan the order the pair set
+    (``trimmed_next``) and the beacon hook may insert a stop ahead of it. A
+    trial flew the pair slot when its mule config names it or any of its
+    missions recorded a decision: FerrySim installs its slots on FX's
+    configuration (``MuleSupervisor.install_flight_slot``), so its traces
+    name FX's slot.
+    The mule writes ``pass_1_pairs`` only for a mission that decided
+    something, so on such a trial a mission without it made no decision: with
+    none at all the two counts are 0 and the means and shares, with nothing to
+    average, blank. A share or mean leaves out a decision that does not hold
+    its field in the form the mule writes, and a record whose choice is not
+    in that form is no decision (the consumer's ``PairDecision``); no record
+    the mule writes is either. On any other trial every pair column is blank.
+
+    ``e3_unvisited_mean`` is the mean over the trial's missions of the stops
+    arm E3's pass left when no stop was admissible any more
+    (``pass_1_e3_unvisited``, reported and never widened; a mission without
+    it left none), on a trial whose mule config names E3's policy or whose
+    missions recorded E3's calls; blank on any other, and with no mission.
+    """
+    missions = obs.missions
+    unvisited = None
+    if missions and (mule_cfg.get("contact_policy") == CONTACT_POLICY_CHEN_DQN or any(
+            m.e3_calls is not None or m.e3_unvisited is not None for m in missions)):
+        unvisited = float(np.mean([len(m.e3_unvisited or ()) for m in missions]))
+    if not (mule_cfg.get("flight_slot") == FLIGHT_SLOT_PAIR_Q
+            or any(m.pair_decisions is not None for m in missions)):
+        return PairReport(e3_unvisited_mean=unvisited)
+    decisions = [d for m in missions for d in m.pair_decisions or ()]
+    return PairReport(
+        pair_decisions=len(decisions),
+        pair_feasible_mean=_mean_present(d.feasible for d in decisions),
+        pair_mask_empty=sum(1 for d in decisions if d.mask_empty),
+        pair_fx_agree_share=_mean_present(d.agrees_fx for d in decisions),
+        pair_band_off_bbar_share=_mean_present(
+            None if d.committed is None else d.band != d.committed for d in decisions),
+        pair_reorder_share=_mean_present(d.reorders for d in decisions),
+        e3_unvisited_mean=unvisited,
+    )
+
+
+# --------------------------------------------------------------------------- #
 # One trial, and a whole trace root
 # --------------------------------------------------------------------------- #
 
@@ -1141,6 +1268,10 @@ class TrialScore:
     #: FeRRy Phase 4: :data:`PHASE_4_COLUMNS` (:func:`plan_report`), blank by
     #: default.
     plan: PlanReport = field(default_factory=PlanReport)
+    #: FeRRy Phase 5: :data:`PHASE_5_COLUMNS` (:func:`pair_report`), after the
+    #: τ columns, when scored with ``pair_columns``; None leaves them out, so
+    #: the default row is the Phase 4 one.
+    pairs: Optional[PairReport] = None
 
     def provenance_key(self) -> Tuple[Tuple[str, object], ...]:
         """The provenance as a hashable, column-ordered tuple."""
@@ -1187,6 +1318,8 @@ class TrialScore:
             row[f"wall_s_to_{tag}"] = _blank(reach.wall_s)
             # FeRRy Phase 3: simulated seconds, on the mission clock only.
             row[f"sim_s_to_{tag}"] = _blank(reach.sim_s)
+        if self.pairs is not None:
+            row.update(self.pairs.to_row())
         return row
 
 
@@ -1197,6 +1330,7 @@ def score_trial(
     weights: Optional[Mapping[str, float]] = None,
     status_csv: StatusSource = None,
     age_cap_s: Optional[int] = None,
+    pair_columns: bool = False,
 ) -> TrialScore:
     """Score one retained trial directory.
 
@@ -1205,6 +1339,8 @@ def score_trial(
     marker's ``ok`` when it records a failure (see :func:`trial_status`).
     ``age_cap_s`` is the S the cap violations are counted at; None counts
     them at the trace's own S, if its mules ran one (:func:`plan_report`).
+    ``pair_columns`` adds :data:`PHASE_5_COLUMNS` after the τ columns
+    (:func:`pair_report`); without it the row has none of them.
 
     Raises :class:`~experiments.exp4.events_consumer.ClockDomainError`,
     naming the trial, for a trace whose clocks disagree: in its events (see
@@ -1260,6 +1396,7 @@ def score_trial(
         n_mules=obs.n_mules,
         unmerged_missions=len(obs.unmerged_keys),
         plan=_trial_plan_report(trace_dir, obs, devices, mule_cfg, age_cap_s),
+        pairs=pair_report(obs, mule_cfg=mule_cfg) if pair_columns else None,
     )
 
 
@@ -1284,26 +1421,29 @@ def score_traces(
     include_failed: bool = False,
     status_csv: StatusSource = None,
     age_cap_s: Optional[int] = None,
+    pair_columns: bool = False,
 ) -> List[TrialScore]:
     """Score every trial directory under ``trace_root``, in name order.
 
     Directories whose names are not trial names are skipped, and so, unless
     ``include_failed``, are trials whose status is not ``ok`` (see
     :func:`trial_status`): a timed-out or ``no_eval`` trial is not a valid
-    observation, and the trial CSV's analysis drops it too. ``age_cap_s`` as
-    in :func:`score_trial`.
+    observation, and the trial CSV's analysis drops it too. ``age_cap_s`` and
+    ``pair_columns`` as in :func:`score_trial`.
     """
     index = _status_index(status_csv)
     scores: List[TrialScore] = []
     for d, _ in _trial_dirs(trace_root, arms):
         if not include_failed and trial_status(d, index).status != "ok":
             continue
-        scores.append(score_trial(d, taus=taus, status_csv=index, age_cap_s=age_cap_s))
+        scores.append(score_trial(d, taus=taus, status_csv=index, age_cap_s=age_cap_s,
+                                  pair_columns=pair_columns))
     return scores
 
 
 def write_scores_csv(scores: Sequence[TrialScore], path) -> None:
-    """One row per trial. The column set is fixed by the first score's τ list."""
+    """One row per trial. The column set is fixed by the first score's τ list
+    and whether it carries the pair columns."""
     if not scores:
         raise ValueError("no scores to write")
     rows = [s.to_row() for s in scores]
@@ -1336,6 +1476,13 @@ def main(argv=None) -> int:
                     help="Count cap violations at this age cap S (missions since a "
                          "device's last merged update) for every arm; default: each "
                          "trace's own S, and blank for a trace whose mules ran none.")
+    ap.add_argument("--pair-columns", action="store_true",
+                    help="Add the FeRRy Phase 5 columns after the tau columns: the pair "
+                         "slot's decisions (how many, the pairs its mask admitted, empty "
+                         "masks, and the shares that chose FX's pair, served off the "
+                         "committed class and chose a stop other than the remainder's "
+                         "head) and E3's unvisited stops per mission. Off by default, "
+                         "when the row is the Phase 4 one.")
     args = ap.parse_args(argv)
     if args.age_cap_s is not None and args.age_cap_s < 1:
         ap.error(f"--age-cap-s must be >= 1, got {args.age_cap_s}")
@@ -1354,7 +1501,7 @@ def main(argv=None) -> int:
         scores.extend(score_traces(
             root, taus=args.tau, arms=args.arms,
             include_failed=args.include_failed, status_csv=index,
-            age_cap_s=args.age_cap_s,
+            age_cap_s=args.age_cap_s, pair_columns=args.pair_columns,
         ))
         statuses.extend(trial_statuses(root, arms=args.arms, status_csv=index))
 
@@ -1645,6 +1792,12 @@ def _read_json(path: Path) -> dict:
         return data if isinstance(data, dict) else {}
     except (OSError, json.JSONDecodeError):
         return {}
+
+
+def _mean_present(values: Iterable[object]) -> Optional[float]:
+    """The mean of the values that are not None (a bool as 1 or 0); None if none are."""
+    present = [float(v) for v in values if v is not None]
+    return float(np.mean(present)) if present else None
 
 
 def _fmt_mean(values, width: int, places: int) -> str:

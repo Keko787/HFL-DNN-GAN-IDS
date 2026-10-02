@@ -24,6 +24,16 @@ Families of comparisons, added for Phase 0 of the FeRRy build plan:
 * :func:`compare_to_reference` — every arm against one reference arm as a
   Holm-adjusted family, with the claim rule applied.
 
+Study 5.5's rule (FeRRy Phase 5; the user's decision 5 (a), the Phase 5 spec's
+other choices 12), on the training seeds' held-out means as the unit:
+
+* :func:`tost_paired` — Schuirmann's two one-sided tests on a paired t:
+  "flat" means every γ > 0 is within ±ε of γ = 0, which a difference test
+  that fails to reject never shows.
+* :func:`trend_test` — Page's L test for a monotone trend across ordered
+  levels (the γ grid) with the seeds as blocks, reported as the mean
+  Spearman ρ over the seeds with a bootstrap over them.
+
 Kept in a separate module so the experiment-specific modules
 (:mod:`experiments.analysis.exp1`, etc.) only worry about the
 domain-specific layout of their CSVs.
@@ -31,8 +41,11 @@ domain-specific layout of their CSVs.
 
 from __future__ import annotations
 
+import itertools
+import math
+import numbers
 from dataclasses import dataclass
-from typing import Callable, Dict, Mapping, Optional, Sequence
+from typing import Callable, Dict, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -543,6 +556,294 @@ def compare_to_reference(
         )
         for i, arm in enumerate(others)
     }
+
+
+# --------------------------------------------------------------------------- #
+# Equivalence — two one-sided tests (TOST)
+# --------------------------------------------------------------------------- #
+
+@dataclass(frozen=True)
+class TostResult:
+    """Output of :func:`tost_paired`."""
+
+    n_pairs: int
+    mean_diff: float  # mean of (a − b) over the paired units
+    se: float         # its standard error, sd(a − b) / √n with ddof = 1
+    df: int           # n − 1
+    margin: float     # ε: equivalent means −ε < mean difference < +ε
+    t_lower: float    # (mean_diff + ε) / se, against H0: mean ≤ −ε
+    t_upper: float    # (mean_diff − ε) / se, against H0: mean ≥ +ε
+    p_lower: float
+    p_upper: float
+    p_value: float    # the larger of the two
+    ci_low: float     # the (1 − 2α) t interval on the mean difference
+    ci_high: float
+    alpha: float
+
+    @property
+    def equivalent(self) -> bool:
+        """Both one-sided nulls rejected at ``alpha``: the difference is within ±ε."""
+        return self.p_value < self.alpha
+
+
+def tost_paired(
+    a: Sequence[float],
+    b: Sequence[float],
+    *,
+    margin: float,
+    alpha: float = 0.05,
+) -> TostResult:
+    """Schuirmann's two one-sided tests (TOST) for the equivalence of paired means.
+
+    Index ``i`` of ``a`` and of ``b`` is one paired unit (in Study 5.5 a
+    training seed, each side scored on the same held-out runs), and the
+    differences ``a − b`` are tested on a paired t (the Phase 5 spec, other
+    choices 12): against H0: mean ≤ −ε (``p_lower``) and against H0: mean ≥ +ε
+    (``p_upper``), each one-sided at ``alpha``. Rejecting both says the mean
+    difference lies within ±ε; a difference test that fails to reject says
+    nothing of the kind, which is why decision 5 (a) reads "flat" this way and
+    not as the plan's "not significant". ``p_value`` is the larger p, and
+    ``equivalent`` holds exactly when the (1 − 2α) t interval
+    ``[ci_low, ci_high]`` lies inside (−ε, +ε). ``margin`` is ε in the data's
+    units (Study 5.5's ε = max(0.01, 0.1 × the validation headroom), in return
+    per episode).
+
+    A family read as "every contrast is equivalent" (5.5's "flat": every
+    γ > 0 within ±ε of γ = 0) is an intersection-union test: it holds at level
+    α with each TOST at α and takes no Holm adjustment (Berger 1982), where a
+    family read as "some contrast differs" (5.5's "rising") does.
+
+    With zero variance (every pair differs by the same amount) the mean
+    difference is known exactly, so each one-sided null is rejected (p = 0)
+    when the difference is strictly inside its bound and stands (p = 1)
+    otherwise; the t statistics are then ±inf, or nan on the bound.
+    """
+    from scipy import stats
+
+    if (isinstance(margin, bool) or not isinstance(margin, numbers.Real)
+            or not math.isfinite(margin) or margin <= 0.0):
+        raise ValueError(f"the equivalence margin must be a finite number > 0, got {margin!r}")
+    if not 0.0 < alpha < 0.5:
+        raise ValueError(f"alpha must be in (0, 0.5) for a (1 - 2 alpha) interval, got {alpha}")
+    pair = _paired_matrix([a, b], what="tost_paired")
+    diff = pair[:, 0] - pair[:, 1]
+    n = int(diff.size)
+    df = n - 1
+    eps = float(margin)
+    mean = float(diff.mean())
+    se = float(diff.std(ddof=1)) / math.sqrt(n)
+    if se > 0.0:
+        t_lower, t_upper = (mean + eps) / se, (mean - eps) / se
+        p_lower = float(stats.t.sf(t_lower, df))
+        p_upper = float(stats.t.cdf(t_upper, df))
+        half = float(stats.t.ppf(1.0 - alpha, df)) * se
+    else:
+        t_lower, t_upper = _over_zero(mean + eps), _over_zero(mean - eps)
+        p_lower = 0.0 if mean > -eps else 1.0
+        p_upper = 0.0 if mean < eps else 1.0
+        half = 0.0
+    return TostResult(
+        n_pairs=n, mean_diff=mean, se=se, df=df, margin=eps,
+        t_lower=t_lower, t_upper=t_upper, p_lower=p_lower, p_upper=p_upper,
+        p_value=max(p_lower, p_upper), ci_low=mean - half, ci_high=mean + half,
+        alpha=float(alpha),
+    )
+
+
+def _over_zero(x: float) -> float:
+    """``x / 0``, a zero-variance sample's t statistic: ±inf, and nan for 0 / 0."""
+    return math.copysign(math.inf, x) if x != 0.0 else math.nan
+
+
+# --------------------------------------------------------------------------- #
+# Ordered levels — Page's trend test
+# --------------------------------------------------------------------------- #
+
+#: :func:`trend_test`'s alternatives and methods.
+TREND_ALTERNATIVES = ("increasing", "decreasing", "two-sided")
+TREND_METHODS = ("auto", "exact", "asymptotic")
+#: The most levels the exact null is computed for: it enumerates the k!
+#: orderings of a seed's ranks (40,320 at k = 8; Study 5.5 has six γ).
+EXACT_MAX_LEVELS = 8
+#: The most seeds ``method="auto"`` convolves the exact null over; its cost
+#: grows with the square of the seeds, and the normal approximation is close
+#: long before (Study 5.5 has ten).
+EXACT_MAX_SEEDS = 200
+
+
+@dataclass(frozen=True)
+class TrendResult:
+    """Output of :func:`trend_test`."""
+
+    levels: Tuple[float, ...]  # ascending
+    means: Tuple[float, ...]   # each level's mean over the seeds: the curve
+    n_seeds: int
+    statistic: float           # Page's L
+    rho: float                 # L as a mean Spearman ρ over the seeds, in [−1, 1]
+    ci_low: float              # percentile bootstrap over the seeds, on rho
+    ci_high: float
+    p_value: float
+    alternative: str           # "increasing", "decreasing" or "two-sided"
+    method: str                # "exact" or "asymptotic"
+
+    @property
+    def significant(self) -> bool:
+        return self.p_value < 0.05
+
+
+def trend_test(
+    samples_by_level: Mapping[float, Sequence[float]],
+    *,
+    alternative: str = "increasing",
+    method: str = "auto",
+    n_bootstraps: int = 2000,
+    confidence: float = 0.95,
+    seed: int = 42,
+) -> TrendResult:
+    """Page's L test for a monotone trend across ordered levels, on paired seeds.
+
+    ``samples_by_level`` maps each level, a number (Study 5.5's γ), to its
+    per-seed values, index-aligned across levels as for :func:`friedman_test`
+    (index ``i`` of every level is training seed ``i``). Each seed is a block:
+    it ranks the levels by its own values (ties share the average rank), and
+    L = Σ_j j · R_j, with the levels in ascending order j = 1..k and R_j the
+    j-th level's rank sum over the seeds, is large when the values rise with
+    the level (Page 1963). Ranking within each seed sets aside how well that
+    seed does at every level, so only the order of the levels counts.
+
+    ``rho`` is L in Spearman's units, 12 L / (n k (k² − 1)) − 3 (k + 1) / (k − 1)
+    over n seeds: the mean over the seeds of Spearman's ρ between the level and
+    the seed's values whenever no seed ties two levels; +1 when every seed rises
+    with the level, −1 when every seed falls. ``ci_low`` and ``ci_high`` are a
+    percentile bootstrap over the seeds (:func:`bootstrap_ci` of the per-seed
+    ρ). This is the "Spearman's ρ across γ" Study 5.5 reports beside its rule
+    (the Phase 5 spec, other choices 12; design D-H's "Spearman ... with a
+    bootstrap over seeds"); ``means`` is the curve itself.
+
+    The p-value is for ``alternative``: ``"increasing"`` (Page's own
+    one-sided test), ``"decreasing"``, or ``"two-sided"``, twice the smaller
+    tail and at most 1. ``method="exact"`` takes it from the permutation null,
+    in which every ordering of a seed's ranks is equally likely, ties kept:
+    each seed's k! orderings are enumerated and convolved across the seeds,
+    which is scipy's exact ``page_trend_test`` without ties and its exhaustive
+    within-seed ``permutation_test`` with them. ``"asymptotic"`` is the normal
+    approximation with the permutation variance, ties included, which is
+    scipy's asymptotic test without ties. ``"auto"`` is exact up to
+    :data:`EXACT_MAX_LEVELS` levels and :data:`EXACT_MAX_SEEDS` seeds.
+    """
+    from scipy import stats
+
+    if alternative not in TREND_ALTERNATIVES:
+        raise ValueError(f"alternative must be one of {TREND_ALTERNATIVES}, got {alternative!r}")
+    if method not in TREND_METHODS:
+        raise ValueError(f"method must be one of {TREND_METHODS}, got {method!r}")
+    keys = list(samples_by_level)
+    for key in keys:
+        if isinstance(key, bool) or not isinstance(key, numbers.Real) or not math.isfinite(key):
+            raise ValueError(f"trend_test's levels are finite numbers, got {key!r}")
+    if len(keys) < 3:
+        raise ValueError(
+            "trend_test needs at least 3 levels; compare two with "
+            "paired_wilcoxon_with_cliffs_delta"
+        )
+    keys.sort(key=float)
+    data = _paired_matrix([samples_by_level[key] for key in keys], what="trend_test")
+    n, k = data.shape
+    if method == "exact" and k > EXACT_MAX_LEVELS:
+        raise ValueError(
+            f"the exact null enumerates k! orderings per seed, for at most "
+            f"{EXACT_MAX_LEVELS} levels; got {k}: use method='asymptotic'"
+        )
+    if method == "auto":
+        method = "exact" if k <= EXACT_MAX_LEVELS and n <= EXACT_MAX_SEEDS else "asymptotic"
+
+    ranks = stats.rankdata(data, axis=1)
+    per_seed = ranks @ np.arange(1, k + 1, dtype=np.float64)
+    statistic = float(per_seed.sum())
+    per_seed_rho = 12.0 * per_seed / (k * (k * k - 1.0)) - 3.0 * (k + 1.0) / (k - 1.0)
+    rho, lo, hi = bootstrap_ci(per_seed_rho, np.mean, n_bootstraps=n_bootstraps,
+                               confidence=confidence, seed=seed)
+    if method == "exact":
+        p_up, p_down = _page_exact_tails(ranks)
+    else:
+        p_up, p_down = _page_normal_tails(ranks, statistic)
+    if alternative == "increasing":
+        p = p_up
+    elif alternative == "decreasing":
+        p = p_down
+    else:
+        p = 2.0 * min(p_up, p_down)
+    return TrendResult(
+        levels=tuple(float(key) for key in keys),
+        means=tuple(float(m) for m in data.mean(axis=0)),
+        n_seeds=int(n),
+        statistic=statistic,
+        rho=float(rho),
+        ci_low=float(lo),
+        ci_high=float(hi),
+        p_value=float(min(1.0, p)),
+        alternative=alternative,
+        method=method,
+    )
+
+
+def _page_exact_tails(ranks: np.ndarray) -> Tuple[float, float]:
+    """``(P(L ≥ l), P(L ≤ l))`` for the observed L under the permutation null.
+
+    Average ranks are halves at worst, so the work is in doubled ranks, where
+    every L is an integer and the null's support an integer grid. Each seed's
+    null is enumerated once per tie pattern (:func:`_seed_null`), and the seeds'
+    are convolved, since under H0 the seeds order their ranks independently.
+    """
+    n, k = ranks.shape
+    weights = np.arange(1, k + 1, dtype=np.int64)
+    doubled = np.rint(2.0 * ranks).astype(np.int64)
+    nulls: Dict[Tuple[int, ...], Tuple[int, np.ndarray]] = {}
+    low, pmf = 0, np.ones(1)
+    for row in doubled:
+        pattern = tuple(sorted(int(v) for v in row))
+        if pattern not in nulls:
+            nulls[pattern] = _seed_null(pattern, weights)
+        seed_low, seed_pmf = nulls[pattern]
+        low += seed_low
+        pmf = np.convolve(pmf, seed_pmf)
+    at = int(np.sum(doubled @ weights)) - low
+    return float(pmf[at:].sum()), float(pmf[:at + 1].sum())
+
+
+def _seed_null(pattern: Tuple[int, ...], weights: np.ndarray) -> Tuple[int, np.ndarray]:
+    """One seed's null of its doubled L: the smallest value and the pmf from it.
+
+    Every one of the k! orderings of the seed's doubled ranks is equally likely
+    under H0; with ties several give the same ranks, and each counts.
+    """
+    orderings = np.array(list(itertools.permutations(pattern)), dtype=np.int64)
+    values = orderings @ weights
+    low = int(values.min())
+    counts = np.bincount(values - low).astype(np.float64)
+    return low, counts / counts.sum()
+
+
+def _page_normal_tails(ranks: np.ndarray, statistic: float) -> Tuple[float, float]:
+    """``(P(L ≥ l), P(L ≤ l))`` under the normal approximation.
+
+    L's permutation mean is n k (k + 1)² / 4 with or without ties, and each
+    seed adds the permutation variance of a linear rank statistic,
+    Σ_j (j − j̄)² · Σ_j (r_j − r̄)² / (k − 1), which without ties is Page's
+    k² (k + 1) (k² − 1) / 144 and with ties smaller. A design in which every
+    seed ties every level has no variance and no trend: both tails are 1.
+    """
+    from scipy import stats
+
+    n, k = ranks.shape
+    centre = (k + 1.0) / 2.0
+    j = np.arange(1, k + 1, dtype=np.float64)
+    mean = n * k * (k + 1.0) ** 2 / 4.0
+    var = float(np.sum((j - centre) ** 2)) * float(np.sum((ranks - centre) ** 2)) / (k - 1.0)
+    if var <= 0.0:
+        return 1.0, 1.0
+    z = (statistic - mean) / math.sqrt(var)
+    return float(stats.norm.sf(z)), float(stats.norm.cdf(z))
 
 
 # --------------------------------------------------------------------------- #

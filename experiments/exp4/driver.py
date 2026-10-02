@@ -58,6 +58,24 @@ scorer shares). An H or D arm may run member subsets (``member_admission``,
 the user's decision 4 (b)); D4 always runs whole. The runner's default arm
 list stays the nine Phase 3 arms (:data:`DEFAULT_ARMS`), and the trial CSV
 header is unchanged.
+
+**FeRRy Phase 5: the learned arms and H1+L1** (:data:`PHASE_5_ARMS`; the Phase
+5 spec, other choices 5 and 6, decision 8 (a)). The FQ arms (:data:`PAIR_ARMS`)
+are F with the learned (band, next stop) score in the flight slot
+(``flight_slot="pair_q"``), each on F's settings everywhere F has them
+(:func:`is_plan_arm`, critic A5), and E3 is Chen et al.'s DQN as a legacy-mode
+whole scheduler (``contact_policy="chen_dqn"``). A learned arm flies the
+verified checkpoint of its tag (:data:`CHECKPOINT_TAGS`; ``pair_checkpoints``
+and ``policy_checkpoints``) and is refused without one (no random-init arm);
+an FQ arm needs ``in_flight_response="replan"`` (resolution R3). The driver
+verifies each file as the mule will but checks no training state, which is
+the runner's to refuse (critic B9), so FerrySim's bootstrap checkpoints fly.
+``H1+L1`` is H1 with H3's adaptive backhaul and no learned selector. The
+provenance names each checkpoint by tag and sha only, ``pair_tag`` and
+``pair_sha256`` in ``ferry_params`` and ``policy_tag`` and ``policy_sha256``
+in ``policy_params``, for those arms only (:func:`plan_ferry_params`,
+:func:`learned_policy_params`, which the trace scorer shares); every other
+row reads as before, and the default arm list is still :data:`DEFAULT_ARMS`.
 """
 
 from __future__ import annotations
@@ -126,17 +144,57 @@ DEFAULT_ARMS = ("H0", "H1", "H2", "H3", "D1", "D2", "D3", "D4", "D5")
 #: scorer parses them back (``parse_trial_dir``).
 PLAN_ARMS = ("F", "FX", "FB+wide", "FB+medium", "FB+narrow", "F-cov", "F-cap", "F-prio")
 
+#: FeRRy Phase 5 — the FQ arms (the Phase 5 spec, other choices 5; design D-L
+#: (a)): F with the learned (band, next stop) score in its flight slot
+#: (``flight_slot="pair_q"``), the plan's "F" of L1039, while Phase 4's F stays
+#: the committed slot (the paper may call FQ "F"). ``FQ`` flies the main score,
+#: ``FQ-hand`` the one trained on today's reward (F·hand, decision 4),
+#: ``FQ-dwell`` and ``FQ-cov`` the ones trained under F's plan-term ablations
+#: (Study 5.7, only if Study 5.5 keeps the score, critic C2), and ``FQ-g0`` ...
+#: ``FQ-g99`` the γ sweep's (Study 5.5). Labels as the plan arms'.
+PAIR_ARMS = ("FQ", "FQ-hand", "FQ-dwell", "FQ-cov", "FQ-g0", "FQ-g25", "FQ-g50", "FQ-g75",
+             "FQ-g90", "FQ-g99")
+
+#: The learned arms: the FQ arms and ``E3``, the numpy port of Chen et al.'s DQN
+#: (decision 7 (a); ``contact_policy="chen_dqn"``). Each flies one verified
+#: checkpoint, named by its tag (:data:`CHECKPOINT_TAGS`): there is no
+#: random-init arm (:meth:`Exp4Driver.check_arm`).
+LEARNED_ARMS = PAIR_ARMS + ("E3",)
+
+#: The arms Phase 5 adds: the learned ones and ``H1+L1``, H1's scheduler with
+#: H3's adaptive backhaul controller and no learned selector, so that the
+#: adaptive backhaul keeps a reference once H2 and H3 leave Exp 5 (decision 8
+#: (a); critic A6). They run only when named.
+PHASE_5_ARMS = LEARNED_ARMS + ("H1+L1",)
+
 #: Every arm the driver runs.
-ARMS = DEFAULT_ARMS + PLAN_ARMS
+ARMS = DEFAULT_ARMS + PLAN_ARMS + PHASE_5_ARMS
+
+#: Each learned arm's checkpoint tag (the Phase 5 spec, other choices 5): the
+#: runner's ``--pair-checkpoint TAG=PATH`` and ``--policy-checkpoint E3=PATH``
+#: name the file each tag flies (``Exp4Driver.pair_checkpoints`` and
+#: ``policy_checkpoints``), and the tag travels with the checkpoint's sha in the
+#: mule config and the row's provenance. A tag also names a directory of the
+#: checkpoint layout (``results/exp5/checkpoints/<study>/<tag>/``).
+CHECKPOINT_TAGS = {
+    "FQ": "main", "FQ-hand": "hand", "FQ-dwell": "dwell", "FQ-cov": "cov",
+    "FQ-g0": "g0", "FQ-g25": "g25", "FQ-g50": "g50", "FQ-g75": "g75", "FQ-g90": "g90",
+    "FQ-g99": "g99", "E3": "e3",
+}
+#: The tags of the pair checkpoints, in :data:`PAIR_ARMS` order, and of E3's.
+PAIR_CHECKPOINT_TAGS = tuple(CHECKPOINT_TAGS[arm] for arm in PAIR_ARMS)
+POLICY_CHECKPOINT_TAGS = (CHECKPOINT_TAGS["E3"],)
 
 #: ``MuleConfig.contact_policy`` of each whole-scheduler arm.
 _ARM_POLICY = {
     "D1": "max_aoi", "D2": "oort", "D3": "whittle", "D4": "fedex", "D5": "fedcs",
+    "E3": "chen_dqn",
 }
 
 #: Each plan arm's change to F's plan fields (:meth:`Exp4Driver.plan_settings`).
 #: F-prio's change is its ``miss_priority`` (:meth:`Exp4Driver.effective_miss_priority`),
-#: which is not a plan field.
+#: which is not a plan field. FeRRy Phase 5: every FQ arm flies the pair slot;
+#: FQ-dwell's and FQ-cov's score changes are in :data:`_ARM_SCORE`.
 _PLAN_ARM = {
     "F": {},
     "FX": {"flight_slot": "cross_heuristic"},
@@ -146,6 +204,7 @@ _PLAN_ARM = {
     "F-cov": {},
     "F-cap": {"age_cap_missions": None, "age_cap_lookahead": 0},
     "F-prio": {},
+    **{arm: {"flight_slot": "pair_q"} for arm in PAIR_ARMS},
 }
 
 #: F-cov's plan score settings, over the driver's own: the coverage term off,
@@ -154,11 +213,40 @@ _PLAN_ARM = {
 #: capped devices only: "cap-only service" (decision 3).
 F_COV_SCORE = {"c_cov_per_device": 0.0, "c_link": 0.0}
 
+#: FQ-dwell's plan score settings, over the driver's own: the dwell taken out
+#: of Δ in the score (``PlanScoreParams.dwell_in_delta``; Study 5.7's dwell
+#: ablation, design D-L (a)).
+FQ_DWELL_SCORE = {"dwell_in_delta": False}
+
+#: Each arm's change to the plan score's settings (:meth:`Exp4Driver.plan_settings`):
+#: F-cov's and FQ-cov's coverage term off, FQ-dwell's dwell out of Δ.
+_ARM_SCORE = {"F-cov": F_COV_SCORE, "FQ-cov": F_COV_SCORE, "FQ-dwell": FQ_DWELL_SCORE}
+
 #: The arms that may admit part of a stop (``member_admission="subset"``,
 #: decision 4 (b)): the plan arms, H1-H3 (S3b's gate) and D1-D3 and D5 (their
 #: walks). D4's visit-all tour has no gate and always runs whole; H0 has no
-#: mule.
-_SUBSET_ARMS = frozenset(("H1", "H2", "H3", "D1", "D2", "D3", "D5") + PLAN_ARMS)
+#: mule. FeRRy Phase 5: the FQ arms as F, H1+L1 as H1; E3 visits a stop for all
+#: its members, as D4 does, so it runs whole.
+_SUBSET_ARMS = frozenset(("H1", "H2", "H3", "D1", "D2", "D3", "D5") + PLAN_ARMS + PAIR_ARMS
+                         + ("H1+L1",))
+
+#: The arms that fly H3's adaptive backhaul controller: on the simulated clock
+#: ``backhaul_policy="adaptive"``, and with ``l1_channel`` the adaptive
+#: per-mission loss schedule (``backhaul_plan(adaptive=True)``). FeRRy Phase 5
+#: adds H1+L1 (decision 8 (a); critic A6).
+_ADAPTIVE_BACKHAUL_ARMS = ("H3", "H1+L1")
+
+
+def is_plan_arm(arm: str) -> bool:
+    """Whether ``arm`` flies the plan clock: the Phase 4 plan arms and the FQ arms.
+
+    The one predicate every plan-mode gate of the driver and the runner reads
+    (the Phase 5 spec, other choices 5; critic A5): an FQ arm is F with the
+    pair slot, so it gets F's settings wherever F has them (the trim fallback,
+    member subsets, the miss priority, T_nom and the pre-trial check), while
+    :data:`PLAN_ARMS` keeps its pinned value.
+    """
+    return arm in PLAN_ARMS or arm in PAIR_ARMS
 
 
 def plan_ferry_params(mule: Mapping[str, Any]) -> Dict[str, Any]:
@@ -173,8 +261,14 @@ def plan_ferry_params(mule: Mapping[str, Any]) -> Dict[str, Any]:
     so a Phase 3 row's ``ferry_params`` is unchanged (Freeze Rule 1). The
     trace scorer derives the same keys from a kept trace with this function,
     so the two columns agree.
+
+    FeRRy Phase 5 (other choices 6; critic B10): a mule flying the pair slot
+    (``flight_slot="pair_q"``) adds its checkpoint's provenance, ``pair_tag``
+    and ``pair_sha256``, from the config's tag and sha; never its path. No
+    other slot adds anything, so every Phase 4 row keeps its string.
     """
     from hermes.processes.config import (
+        FLIGHT_SLOT_PAIR_Q,
         MEMBER_ADMISSION_WHOLE,
         PLAN_MODE_FERRY,
         PLAN_MULE_FIELDS,
@@ -187,9 +281,32 @@ def plan_ferry_params(mule: Mapping[str, Any]) -> Dict[str, Any]:
         return mule[name] if name in mule else getattr(defaults, name)
 
     if value("plan_mode") == PLAN_MODE_FERRY:
-        return {name: value(name) for name in PLAN_MULE_FIELDS}
+        out = {name: value(name) for name in PLAN_MULE_FIELDS}
+        if value("flight_slot") == FLIGHT_SLOT_PAIR_Q:
+            out.update(pair_tag=value("pair_checkpoint_tag"),
+                       pair_sha256=value("pair_checkpoint_sha256"))
+        return out
     admission = value("member_admission")
     return {} if admission == MEMBER_ADMISSION_WHOLE else {"member_admission": admission}
+
+
+def learned_policy_params(mule: Mapping[str, Any]) -> Dict[str, Any]:
+    """The FeRRy Phase 5 keys of a trial's ``policy_params`` column: arm E3's checkpoint.
+
+    ``mule`` is a mule's config as a mapping, as for :func:`plan_ferry_params`.
+    For ``contact_policy="chen_dqn"`` (arm E3) its checkpoint's provenance,
+    ``policy_tag`` and ``policy_sha256``, from the config's tag and sha, never
+    its path (the Phase 5 spec, other choices 6); {} for every other policy,
+    so no Phase 3 or Phase 4 row's ``policy_params`` changes. The trace scorer
+    derives the same keys from a kept trace's per-role JSON with this
+    function, so the two columns agree.
+    """
+    from hermes.processes.config import CONTACT_POLICY_CHEN_DQN
+
+    if mule.get("contact_policy") != CONTACT_POLICY_CHEN_DQN:
+        return {}
+    return {"policy_tag": mule.get("policy_checkpoint_tag"),
+            "policy_sha256": mule.get("policy_checkpoint_sha256")}
 
 
 def contact_band_column(mule: Mapping[str, Any]) -> str:
@@ -612,6 +729,17 @@ class Exp4Driver:
     age_cap_lookahead: int = 0
     plan_score_params: Dict[str, Any] = field(default_factory=dict)
     plan_search_params: Dict[str, Any] = field(default_factory=dict)
+    # ---- FeRRy Phase 5: the learned arms' checkpoints (simulated clock only) ---- #
+    # ``pair_checkpoints`` maps a pair tag (``PAIR_CHECKPOINT_TAGS``: main, hand,
+    # dwell, cov, g0 ... g99) to the pair_q checkpoint its FQ arm flies, and
+    # ``policy_checkpoints`` maps E3's tag (e3) to its chen_dqn checkpoint; a
+    # learned arm whose tag has none is refused (no random-init arm). The runner
+    # fills them (--pair-checkpoint TAG=PATH, --policy-checkpoint E3=PATH) after
+    # refusing any a campaign may not fly; the driver verifies each file as the
+    # mule will, but no training state (the Phase 5 spec, other choices 6).
+    # Declared before ``soft_cap_s``, the last field (see above).
+    pair_checkpoints: Dict[str, Any] = field(default_factory=dict)
+    policy_checkpoints: Dict[str, Any] = field(default_factory=dict)
     # The runner's soft cap on a trial's run time, as the caller applies it
     # (runner_main sets it to the cap it hands TrialRunner: --timeout-s, else
     # the largest wall budget over the grid). On the mission clock a trial's
@@ -673,6 +801,7 @@ class Exp4Driver:
         self._t_nom_cache: Dict[str, float] = {}
         self._check_clock()
         self._check_plan()
+        self._check_checkpoints()
 
     @property
     def sim(self) -> bool:
@@ -744,6 +873,9 @@ class Exp4Driver:
                 "age_cap_lookahead": self.age_cap_lookahead != 0,
                 "plan_score_params": bool(self.plan_score_params),
                 "plan_search_params": bool(self.plan_search_params),
+                # FeRRy Phase 5: the learned arms' checkpoints.
+                "pair_checkpoints": bool(self.pair_checkpoints),
+                "policy_checkpoints": bool(self.policy_checkpoints),
             }
             changed = [k for k, v in ferry_only.items() if v]
             if changed:
@@ -808,6 +940,9 @@ class Exp4Driver:
         ``whole``), priority stops first, and the scheduler refuses ``reorder``
         there, as re-ordering belongs to the flight slot (critic B11). Every
         other arm's settings are exactly the configured ones.
+
+        FeRRy Phase 5: an FQ arm's are F's (:func:`is_plan_arm`), and H1+L1
+        flies H3's adaptive backhaul policy.
         """
         out: Dict[str, Any] = {
             "contact_band": self.arm_contact_band(arm),
@@ -815,9 +950,9 @@ class Exp4Driver:
                 None if self.contact_band_classes is None else list(self.contact_band_classes)
             ),
             "in_flight_response": self.in_flight_response,
-            "replan_fallback": "trim" if arm in PLAN_ARMS else self.replan_fallback,
+            "replan_fallback": "trim" if is_plan_arm(arm) else self.replan_fallback,
             "backhaul_model": self.backhaul_model,
-            "backhaul_policy": "adaptive" if arm == "H3" else "fixed",
+            "backhaul_policy": "adaptive" if arm in _ADAPTIVE_BACKHAUL_ARMS else "fixed",
             "backhaul_regime": "jittery" if regime == "jittery" else "clean",
             "backhaul_period_s": self.backhaul_period_s,
             "contact_reliability_source": self.contact_reliability_source,
@@ -888,22 +1023,24 @@ class Exp4Driver:
         The setting, else the arm's own default: ``subset`` for a plan arm
         (the F family's rule), ``whole`` for H1-H3, D1-D3 and D5 (the recorded
         gates). D4 runs ``whole`` whatever the setting: its tour has no gate.
+        FeRRy Phase 5: an FQ arm as F, H1+L1 as H1, and E3 ``whole`` always,
+        since it visits a stop for all its members (the config guard's rule).
         """
         if arm not in _SUBSET_ARMS:
             return "whole"
         if self.member_admission is not None:
             return self.member_admission
-        return "subset" if arm in PLAN_ARMS else "whole"
+        return "subset" if is_plan_arm(arm) else "whole"
 
     def effective_miss_priority(self, arm: str) -> bool:
         """``miss_priority`` for a trial of ``arm``, as its mule runs and its row records it.
 
         A plan arm's coverage weight is the device's age times (1 + its miss
         streak) when its ``miss_priority`` is on (decision 3): on for every
-        plan arm but F-prio, which weighs by age alone. Every other arm runs
-        the configured value, as recorded.
+        plan arm but F-prio, which weighs by age alone, so on for every FQ arm
+        too, as for F. Every other arm runs the configured value, as recorded.
         """
-        if arm in PLAN_ARMS:
+        if is_plan_arm(arm):
             return arm != "F-prio"
         return bool(self.miss_priority)
 
@@ -918,9 +1055,14 @@ class Exp4Driver:
         An H or D arm gets ``member_admission`` only when it is not the
         recorded ``whole``, and every other arm nothing, so a recorded arm's
         topology is built with exactly the arguments it always was.
+
+        FeRRy Phase 5 (critic A5): an FQ arm gets F's fields with the pair slot
+        (``flight_slot="pair_q"``), FQ-cov F-cov's score and FQ-dwell the dwell
+        out of Δ (:data:`_ARM_SCORE`); its checkpoint is not a plan field
+        (:meth:`checkpoint_settings`).
         """
         admission = self.effective_member_admission(arm)
-        if arm not in PLAN_ARMS:
+        if not is_plan_arm(arm):
             return {} if admission == "whole" else {"member_admission": admission}
         out: Dict[str, Any] = {
             "plan_mode": "ferry",
@@ -932,10 +1074,170 @@ class Exp4Driver:
             "plan_score_params": dict(self.plan_score_params),
             "plan_search_params": dict(self.plan_search_params),
         }
-        if arm == "F-cov":
-            out["plan_score_params"].update(F_COV_SCORE)
+        if arm in _ARM_SCORE:
+            out["plan_score_params"].update(_ARM_SCORE[arm])
         out.update(_PLAN_ARM[arm])
         return out
+
+    # ------------------------------------------------------------------ #
+    # FeRRy Phase 5 — the learned arms' checkpoints, and H1+L1
+    # ------------------------------------------------------------------ #
+
+    def _check_checkpoints(self) -> None:
+        """Refuse checkpoint settings no learned arm could fly (FeRRy Phase 5).
+
+        Each mapping runs from a learned arm's tag to a path: a pair tag
+        (:data:`PAIR_CHECKPOINT_TAGS`) in ``pair_checkpoints``, E3's in
+        ``policy_checkpoints``. A tag no arm flies is refused rather than
+        ignored, and so is a path that is not a non-empty string or path. The
+        files are read only when an arm that flies one is checked
+        (:meth:`check_arm`), so building a driver reads none. On the wall clock
+        :meth:`_check_clock` has refused both mappings already.
+        """
+        for name, tags in (("pair_checkpoints", PAIR_CHECKPOINT_TAGS),
+                           ("policy_checkpoints", POLICY_CHECKPOINT_TAGS)):
+            given = getattr(self, name)
+            if not isinstance(given, Mapping):
+                raise ValueError(f"{name} must be a mapping of checkpoint tag to path, got "
+                                 f"{given!r}")
+            unknown = sorted(repr(tag) for tag in given if tag not in tags)
+            if unknown:
+                raise ValueError(f"{name}: {', '.join(unknown)} is no learned arm's tag; the "
+                                 f"tags are {list(tags)}")
+            for tag, path in given.items():
+                if not isinstance(path, (str, Path)) or not str(path).strip():
+                    raise ValueError(f"{name}[{tag!r}] must be the checkpoint's path, got "
+                                     f"{path!r}")
+        #: (kind, tag) -> (the config's path, the verified sha256), read once
+        #: (:meth:`_verified_checkpoint`), so every trial names the same sha.
+        self._checkpoints: Dict[Tuple[str, str], Tuple[str, str]] = {}
+
+    def checkpoint_settings(self, arm: str) -> Dict[str, Any]:
+        """The ``MuleConfig`` checkpoint fields of a trial of ``arm``, as topology parameters.
+
+        FeRRy Phase 5 (the Phase 5 spec, other choices 5 and 6). An FQ arm
+        flies the pair checkpoint of its tag and E3 its policy checkpoint, each
+        as (path, sha256, tag): the path relative to the repository root when
+        the file lies inside it, else absolute; the sha the verified manifest's
+        (:meth:`_verified_checkpoint`). Every other arm gets nothing, so its
+        topology is built with exactly the arguments it always was. Raises
+        ValueError for a learned arm whose tag has no checkpoint (no
+        random-init arm) or whose file is refused.
+        """
+        if arm not in LEARNED_ARMS:
+            return {}
+        path, sha256 = self._verified_checkpoint(arm)
+        prefix = "policy" if arm == "E3" else "pair"
+        return {f"{prefix}_checkpoint": path, f"{prefix}_checkpoint_sha256": sha256,
+                f"{prefix}_checkpoint_tag": CHECKPOINT_TAGS[arm]}
+
+    def _verified_checkpoint(self, arm: str) -> Tuple[str, str]:
+        """(the config's path, the sha256) of ``arm``'s checkpoint, verified once.
+
+        The path as given is read against the working directory, as a command
+        line reads it, and verified whole (``pair_q.verify_checkpoint``: the
+        format, the header and the arrays against the manifest), so the sha a
+        trial's config names, and its row records, is that of the arrays
+        checked here; the mule refuses any others. It must be the arm's kind
+        (``pair_q`` for an FQ arm, ``chen_dqn`` for E3). The config gets the
+        path relative to the repository root when the file lies inside it,
+        with ``/`` separators, so a kept per-role JSON names no host directory
+        (the mule reads it under the same root,
+        ``hermes.processes.mule.REPO_ROOT``), and the resolved absolute path
+        otherwise. That is not the Phase 5 spec's "as given" (other choices
+        6): the mule reads every relative path under that root, so a relative
+        path from outside the repository, as given, would name another file.
+        No training state is checked: the runner refuses what a campaign may
+        not fly (critic B9), so FerrySim's bootstrap checkpoints fly here.
+        """
+        tag = CHECKPOINT_TAGS[arm]
+        e3 = arm == "E3"
+        given = (self.policy_checkpoints if e3 else self.pair_checkpoints).get(tag)
+        if given is None:
+            flag = "--policy-checkpoint E3=PATH" if e3 else f"--pair-checkpoint {tag}=PATH"
+            raise ValueError(
+                f"arm {arm} flies the checkpoint tagged {tag!r}, and none was given ({flag}): "
+                f"a learned arm flies a verified checkpoint, never a random one (no random-init "
+                f"arm; the Phase 5 spec, other choices 5)"
+            )
+        from hermes.processes import mule as mule_process
+        from hermes.scheduler.selector.pair_q import (
+            KIND_CHEN_DQN,
+            KIND_PAIR_Q,
+            verify_checkpoint,
+        )
+
+        kind = KIND_CHEN_DQN if e3 else KIND_PAIR_Q
+        cached = self._checkpoints.get((kind, tag))
+        if cached is not None:
+            return cached
+        resolved = Path(given).resolve()
+        try:
+            manifest = verify_checkpoint(resolved)
+        except (ValueError, OSError) as e:
+            raise ValueError(f"arm {arm}: checkpoint {str(given)!r} is refused: {e}") from e
+        if manifest["kind"] != kind:
+            raise ValueError(
+                f"arm {arm}: checkpoint {str(given)!r} is a {manifest['kind']!r} checkpoint, and "
+                f"arm {arm} flies a {kind!r} one"
+            )
+        try:
+            written = resolved.relative_to(mule_process.REPO_ROOT).as_posix()
+        except ValueError:
+            written = str(resolved)
+        cached = (written, str(manifest["sha256"]))
+        self._checkpoints[(kind, tag)] = cached
+        return cached
+
+    def _check_learned(self, arm: str, cfg, spec) -> None:
+        """Load ``arm``'s checkpoint exactly as its mule will (FeRRy Phase 5).
+
+        ``cfg`` is the arm's mule config and ``spec`` its ``FerrySpec``. The
+        pair score is loaded under its own schema over the link's classes
+        (``selector.pair_features.load_pair_scorer``) and E3's network on the
+        contact band (``policies.chen_dqn.load_e3_network``), each against the
+        config's sha, from the path the mule reads
+        (``hermes.processes.mule.checkpoint_path``). So a checkpoint trained on
+        other classes or rows is refused before any trial, and a file that is
+        no longer the one whose sha the provenance names (rewritten since the
+        first check) before each trial, rather than by a mule process the trial
+        has already started. A few kilobytes per trial.
+        """
+        from hermes.processes.mule import checkpoint_path
+
+        try:
+            if arm == "E3":
+                from hermes.scheduler.policies.chen_dqn import load_e3_network
+
+                load_e3_network(checkpoint_path(cfg.policy_checkpoint),
+                                expect_sha256=cfg.policy_checkpoint_sha256,
+                                band=cfg.contact_band)
+            else:
+                from hermes.scheduler.selector.pair_features import load_pair_scorer
+
+                load_pair_scorer(checkpoint_path(cfg.pair_checkpoint),
+                                 expect_sha256=cfg.pair_checkpoint_sha256,
+                                 classes=spec.link.names)
+        except (ValueError, OSError) as e:
+            raise ValueError(f"arm {arm}: its mule would refuse its checkpoint: {e}") from e
+
+    def _check_adaptive_backhaul(self, arm: str) -> None:
+        """Refuse ``H1+L1`` where it would fly as H1 (FeRRy Phase 5; decision 8 (a)).
+
+        H1+L1 is H1's scheduler with H3's adaptive backhaul controller (critic
+        A6), which flies only with the L1 channel (``l1_channel``: the adaptive
+        per-mission loss schedule, on either clock) or, on the simulated clock,
+        the seconds-axis backhaul (``backhaul_model="seconds"``: the controller
+        at every upload). Anywhere else its trial would be H1's under another
+        label, so it is refused rather than run.
+        """
+        if self.l1_channel or (self.sim and self.backhaul_model == "seconds"):
+            return
+        raise ValueError(
+            f"arm {arm} is H1 with H3's adaptive backhaul (decision 8 (a)), which flies only "
+            f"with the L1 channel (--l1-channel) or, on the simulated clock, the seconds-axis "
+            f"backhaul (--backhaul-model seconds); here it would fly as H1"
+        )
 
     def check_arm(self, arm: str) -> None:
         """Refuse an arm this driver cannot run, before any trial of it starts.
@@ -951,15 +1253,41 @@ class Exp4Driver:
         Pass 2, critic B8; abort with a cap, critic A10; unknown score or search
         settings; the rest of the Phase 4 spec's other choices 10) and the
         ferry spec's (a class the link does not have).
+
+        FeRRy Phase 5 (:data:`PHASE_5_ARMS`). An FQ arm is checked as F is,
+        and also needs ``in_flight_response="replan"`` (the orchestrator's
+        resolution R3: its mask folds the whole rest of the flight, which only
+        the re-plan's departure check folds next) and the checkpoint of its
+        tag. E3 needs the simulated clock and its checkpoint, and is checked
+        against its mule's guards (a contact band, whole stops). There is no
+        random-init arm, and each checkpoint is loaded as its mule will load it
+        (:meth:`_check_learned`), but no training state is checked: that is
+        the runner's (critic B9). H1+L1 needs the adaptive backhaul it is named
+        for (:meth:`_check_adaptive_backhaul`).
         """
         if arm not in ARMS:
             raise ValueError(f"unknown arm {arm!r}; the driver runs {ARMS}")
-        if arm not in PLAN_ARMS:
+        if arm == "H1+L1":
+            self._check_adaptive_backhaul(arm)
+            return
+        if not is_plan_arm(arm) and arm not in LEARNED_ARMS:
             return
         if not self.sim:
+            if arm in PLAN_ARMS:
+                raise ValueError(
+                    f"arm {arm} flies the plan clock (FeRRy Phase 4) on the simulated mission "
+                    f"clock: run it with mission_clock='sim' (--mission-clock sim)"
+                )
             raise ValueError(
-                f"arm {arm} flies the plan clock (FeRRy Phase 4) on the simulated mission "
+                f"arm {arm} flies a learned filling (FeRRy Phase 5) on the simulated mission "
                 f"clock: run it with mission_clock='sim' (--mission-clock sim)"
+            )
+        if arm in PAIR_ARMS and self.in_flight_response != "replan":
+            raise ValueError(
+                f"arm {arm} flies the pair score, whose mask admits a pair only when the whole "
+                f"rest of the flight still fits, which is what the re-plan's departure check "
+                f"folds next: run it with in_flight_response='replan' (--in-flight-response "
+                f"replan; resolution R3), got {self.in_flight_response!r}"
             )
         settings = self.ferry_settings(arm=arm, regime="clean")
         from hermes.mule.ferry import FerrySpec
@@ -968,20 +1296,23 @@ class Exp4Driver:
         if settings.get("backhaul_model") == "seconds":
             settings["backhaul_period_s"] = settings.get("backhaul_period_s") or 1.0
         settings["t_nom_s"] = float(self.t_nom_s) if self.t_nom_s is not None else 1.0
+        policy = {"contact_policy": _ARM_POLICY[arm]} if arm in _ARM_POLICY else {}
         cfg = MuleConfig(
             mule_id=f"check-{arm}", rf_range_m=float(self.default_rf_range_m),
             n_missions=int(self.default_n_missions), mission_clock="sim", trial_seed=0,
             mission_budget_s=self.mission_budget_s, pass_2_budget=bool(self.pass_2_budget),
             miss_priority=self.effective_miss_priority(arm),
-            **settings, **self.plan_settings(arm),
+            **settings, **self.plan_settings(arm), **policy, **self.checkpoint_settings(arm),
         )
         errors = mule_config_errors(cfg)
         if errors:
             raise ValueError(f"arm {arm}: " + "; ".join(errors))
         try:
-            FerrySpec.from_config(**cfg.ferry_spec_kwargs())
+            spec = FerrySpec.from_config(**cfg.ferry_spec_kwargs())
         except (TypeError, ValueError) as e:
             raise ValueError(f"arm {arm}: {e}") from e
+        if arm in LEARNED_ARMS:
+            self._check_learned(arm, cfg, spec)
 
     @staticmethod
     def _spec_kwargs(
@@ -1180,9 +1511,9 @@ class Exp4Driver:
     def _needs_t_nom(self, arm: Optional[str] = None) -> bool:
         """Whether a trial of ``arm`` needs T_nom: a setting derived from it, or a
         plan arm, whose score measures the mission against it (FeRRy Phase 4,
-        decision 2 (b)); computed per cell when not given."""
+        decision 2 (b); an FQ arm too, as F); computed per cell when not given."""
         return self.sim and (
-            arm in PLAN_ARMS
+            is_plan_arm(arm)
             or (self.backhaul_model == "seconds" and self.backhaul_period_s is None)
             or self.deadline_time_scale == "t_nom"
             or self.initial_window_missions is not None
@@ -1366,8 +1697,8 @@ class Exp4Driver:
         arm = cell.arm
         if arm not in ARMS:
             raise ValueError(f"unknown arm {arm!r}; the driver runs {ARMS}")
-        if arm in PLAN_ARMS:
-            # FeRRy Phase 4: refused before anything is prepared or spawned.
+        if arm in PLAN_ARMS or arm in PHASE_5_ARMS:
+            # FeRRy Phase 4 and 5: refused before anything is prepared or spawned.
             self.check_arm(arm)
 
         n_devices = int(params.get("N", params.get("n_devices", self.default_n_devices)))
@@ -1482,6 +1813,9 @@ class Exp4Driver:
         # subsets, as the builder's own parameters; empty for a recorded arm,
         # whose topology is then built with exactly the recorded arguments.
         plan_kwargs = self.plan_settings(arm)
+        # FeRRy Phase 5 — a learned arm's checkpoint (path, sha256, tag), as
+        # verified by check_arm above; empty for every other arm.
+        plan_kwargs.update(self.checkpoint_settings(arm))
         # FeRRy Phase 2 — the mule count, the quorum and the dock settings. At
         # one mule with the defaults these are the builder's own defaults, so
         # the topology is the recorded one.
@@ -1499,13 +1833,14 @@ class Exp4Driver:
         # fixed band; H3 runs the U(c,t) controller. The per-mission loss
         # schedule (cluster) + chosen-channel mean SNR (selector RF prior)
         # replace the flat backhaul loss for all mule arms in this mode.
+        # FeRRy Phase 5: H1+L1 runs H3's controller too (decision 8 (a)).
         if self.l1_channel:
             from .channel import ChannelModel, backhaul_plan
             model = ChannelModel(
                 n_bands=self.l1_channel_bands, n_missions=n_missions,
                 seed=cell.seed, jittery=(regime == "jittery"),
             )
-            plan = backhaul_plan(model, adaptive=(arm == "H3"))
+            plan = backhaul_plan(model, adaptive=(arm in _ADAPTIVE_BACKHAUL_ARMS))
             realism_kwargs["backhaul_loss_schedule"] = plan.loss_schedule
             if not self.sim:
                 realism_kwargs["rf_prior_snr_db"] = plan.mean_chosen_snr_db
@@ -1993,6 +2328,7 @@ class Exp4Driver:
             row["miss_priority"] = int(self.effective_miss_priority(getattr(cell, "arm", "")))
             row.update(self._multi_mule_provenance(
                 getattr(cell, "arm", ""), down_wait_s=clock.down_wait_s,
+                mule=topo.mules[0] if topo.mules else None,
             ))
             row.update(self._clock_provenance(topo, clock))
             # A trial that produced NO model evaluation at all never trained a
@@ -2044,7 +2380,7 @@ class Exp4Driver:
             orch.cleanup()
 
     def _multi_mule_provenance(
-        self, arm: str, *, down_wait_s: Any = "default",
+        self, arm: str, *, down_wait_s: Any = "default", mule: Any = None,
     ) -> Dict[str, Any]:
         """The FeRRy Phase 2 provenance columns for a row of ``arm``.
 
@@ -2053,13 +2389,18 @@ class Exp4Driver:
         mule, the recorded dock, no policy options — so a single-mule row
         reads as it always did. ``down_wait_s`` is the trial's own DOWN wait
         (FeRRy Phase 3: the re-costed wall budget with several mules on the
-        mission clock); by default the driver's.
+        mission clock); by default the driver's. FeRRy Phase 5: ``mule``, the
+        trial's mule config, adds arm E3's checkpoint to ``policy_params``
+        (:func:`learned_policy_params`, read off the config as the scorer
+        reads it off the per-role JSON); nothing for any other mule.
         """
         recorded_topology = int(self.n_mules) == 1 and int(self.min_participation) == 1
         dock_on_empty = self.effective_dock_on_empty
         if down_wait_s == "default":
             down_wait_s = self.effective_down_wait_s
-        policy = self._policy_params(arm)
+        policy = dict(self._policy_params(arm))
+        if mule is not None:
+            policy.update(learned_policy_params(asdict(mule)))
         return {
             "n_mules": int(self.n_mules),
             "min_participation": "" if recorded_topology else int(self.min_participation),

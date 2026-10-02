@@ -208,7 +208,7 @@ def test_the_package_re_exports_every_type_and_the_commit_names_are_one():
 def test_switch_values_list_the_recorded_value_first():
     assert PLAN_MODES == ("legacy", "ferry")
     assert MEMBER_ADMISSIONS == ("whole", "subset")            # decision 4 (b)
-    assert FLIGHT_SLOTS == ("committed", "cross_heuristic")    # decision 5
+    assert FLIGHT_SLOTS == ("committed", "cross_heuristic", "pair_q")   # decision 5; Phase 5
     assert COVERAGE_WEIGHTS == ("age", "uniform")              # decision 3
     assert SEARCH_MODES == ("exact", "stop_subsets", "local")
     assert CAP_REASONS == ("unplannable", "crowded", "dropped_in_flight", "not_merged")
@@ -630,7 +630,7 @@ def test_a_pinned_band_flies_the_committed_slot_only():
 
 @pytest.mark.parametrize("kwargs", [
     {"band_class_policy": "fixed:"}, {"member_admission": "partial"},
-    {"flight_slot": "pair_q"}, {"age_cap_missions": 0}, {"plan_score_params": {"c_x": 1}},
+    {"flight_slot": "pair_x"}, {"age_cap_missions": 0}, {"plan_score_params": {"c_x": 1}},
 ])
 def test_the_options_refuse_bad_config(kwargs):
     with pytest.raises((TypeError, ValueError)):

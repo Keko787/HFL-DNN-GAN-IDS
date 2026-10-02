@@ -42,12 +42,23 @@ and ``member_admission``, which the H and D arms may set too (the user's
 decision 4 (b)). They mean something only on the simulated clock, and they
 are not ferry-spec fields, so Phase 3's ``ferry_params`` keep their strings.
 :func:`mule_config_errors` refuses what plan mode cannot fly.
+
+FeRRy Phase 5 — the learned fillings (the Phase 5 spec, other choices 6).
+``flight_slot`` gains ``pair_q``, the learned (band, next stop) score of the
+FQ arms, and ``contact_policy`` gains ``chen_dqn``, arm E3. Each flies one
+checkpoint named by three fields (:data:`CHECKPOINT_MULE_FIELDS`: its path,
+the sha256 of its arrays and its tag), all three with the switch and none
+without it. They are simulated-clock only and neither ferry-spec nor plan
+fields, so Phase 3's and Phase 4's ``ferry_params`` keep their strings, and
+an old per-role JSON loads with them at None. :func:`mule_config_errors`
+refuses what the learned fillings cannot fly.
 """
 
 from __future__ import annotations
 
 import json
 import math
+import re
 from dataclasses import MISSING, asdict, dataclass, field, fields
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -78,7 +89,8 @@ DEADLINE_BOUNDS: Tuple[str, ...] = ("collection", "delivery_per_stop", "delivery
 #: ``hermes.scheduler.plan.types`` and ``hermes.types.scheduler`` (and
 #: ``MEMBER_ADMISSIONS`` from ``hermes.scheduler.stages.s3b_feasibility``) so
 #: that this module stays import-free and a recorded mule never loads the plan
-#: package; a unit test keeps each equal to its source.
+#: package; a unit test keeps each equal to its source. FeRRy Phase 5 adds the
+#: flight slot's ``pair_q``, the learned (band, next stop) score (the FQ arms).
 PLAN_MODE_LEGACY = "legacy"
 PLAN_MODE_FERRY = "ferry"
 PLAN_MODES: Tuple[str, ...] = (PLAN_MODE_LEGACY, PLAN_MODE_FERRY)
@@ -87,9 +99,32 @@ MEMBER_ADMISSION_SUBSET = "subset"
 MEMBER_ADMISSIONS: Tuple[str, ...] = (MEMBER_ADMISSION_WHOLE, MEMBER_ADMISSION_SUBSET)
 FLIGHT_SLOT_COMMITTED = "committed"
 FLIGHT_SLOT_CROSS_HEURISTIC = "cross_heuristic"
-FLIGHT_SLOTS: Tuple[str, ...] = (FLIGHT_SLOT_COMMITTED, FLIGHT_SLOT_CROSS_HEURISTIC)
+FLIGHT_SLOT_PAIR_Q = "pair_q"
+FLIGHT_SLOTS: Tuple[str, ...] = (
+    FLIGHT_SLOT_COMMITTED, FLIGHT_SLOT_CROSS_HEURISTIC, FLIGHT_SLOT_PAIR_Q,
+)
 BAND_POLICY_SEARCH = "search"
 BAND_POLICY_FIXED_PREFIX = "fixed:"
+
+#: FeRRy Phase 5 — ``contact_policy`` value of arm E3, the per-departure DQN
+#: after Chen et al. (GLOBECOM Workshops 2023; build plan L1026), which flies
+#: legacy mode on the simulated clock with a contact band. Restated from the
+#: policy's own ``name`` (``hermes.scheduler.policies.chen_dqn``, unit U6) so
+#: that this module stays import-free; the two must stay equal.
+CONTACT_POLICY_CHEN_DQN = "chen_dqn"
+
+#: A checkpoint's sha256 as ``hashlib.sha256(...).hexdigest()`` writes it: 64
+#: lowercase hexadecimal digits, so the mule's check compares exact strings.
+_SHA256_HEX = re.compile(r"[0-9a-f]{64}")
+
+#: A checkpoint tag (``main``, ``hand``, ``dwell``, ``cov``, ``g0`` ... ``g99``,
+#: ``e3``; the Phase 5 spec, other choices 5): ASCII letters, digits, ``_`` and
+#: ``-``, a letter or digit first, at most 28 characters, the bound the arm
+#: labels keep. A tag names a directory of the checkpoint layout
+#: (``results/exp5/checkpoints/<study>/<tag>/``), the runner's
+#: ``--pair-checkpoint TAG=PATH`` and the provenance, so it holds no path
+#: separator, dot, space or ``=``.
+_CHECKPOINT_TAG = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,27}")
 
 
 def mission_schedule_index(mission_round, length: int) -> int:
@@ -403,6 +438,29 @@ class MuleConfig:
     # with the seconds model, which observes its own channel.
     rf_prior_schedule_db: Optional[List[float]] = None
 
+    # ---------------- FeRRy Phase 5: the learned fillings' checkpoints ---------
+    # Declared before the Phase 4 block because a test pins the plan fields as
+    # this class's last (test_p4_config_driver.py). A learned filling flies one
+    # checkpoint, named by three fields set together or not at all
+    # (``mule_config_errors``): its path (repo-relative when the driver finds
+    # it inside the repo, else absolute; read under the repo root when
+    # relative), the sha256 of its arrays, which the mule verifies before it
+    # flies and refuses to run on a mismatch, and its tag (``main``, ``hand``,
+    # ``g0`` ... ``g99``, ``e3``), which with the sha is the run's provenance.
+    # The ``pair_checkpoint*`` triple goes with ``flight_slot="pair_q"`` (plan
+    # mode; the FQ arms), the ``policy_checkpoint*`` triple with
+    # ``contact_policy="chen_dqn"`` (arm E3: legacy mode on the simulated
+    # clock, with a contact band); None elsewhere, every recorded run included.
+    # Simulated-clock only, and neither ferry-spec nor plan fields, so Phase
+    # 3's and Phase 4's ``ferry_params`` keep their strings (the Phase 5 spec,
+    # other choices 6).
+    pair_checkpoint: Optional[str] = None
+    pair_checkpoint_sha256: Optional[str] = None
+    pair_checkpoint_tag: Optional[str] = None
+    policy_checkpoint: Optional[str] = None
+    policy_checkpoint_sha256: Optional[str] = None
+    policy_checkpoint_tag: Optional[str] = None
+
     # ---------------- FeRRy Phase 4: the plan clock -----------------------------
     # ``plan_mode`` "legacy" is every recorded run: the scheduler plans each
     # mission with ``build_contact_queue``. "ferry" commits each mission at the
@@ -416,9 +474,11 @@ class MuleConfig:
     # keywords and keep its names (:data:`PLAN_OPTION_FIELDS`):
     # ``band_class_policy`` "search" (every class of the link, arm F) or
     # "fixed:<class>" (the run's ``contact_band`` only, arm FB+<class>);
-    # ``flight_slot`` "committed" (arm F) or "cross_heuristic" (arm FX, decision
-    # 5); the age cap S in the device's own missions (None: off, arm F-cap) and
-    # its lookahead L (decision 1); the plan score's and the search's settings
+    # ``flight_slot`` "committed" (arm F), "cross_heuristic" (arm FX, decision
+    # 5) or, FeRRy Phase 5, "pair_q" (the FQ arms, with the pair checkpoint
+    # above); the age cap S in the device's own missions (None: off, arm
+    # F-cap) and its lookahead L (decision 1); the plan score's and the
+    # search's settings
     # (``PlanScoreParams`` and ``PlanSearchParams`` field names; {} keeps their
     # defaults, and an unknown key is refused).
     # ``member_admission`` (decision 4 (b)): "whole", the recorded rule, admits a
@@ -506,14 +566,28 @@ PLAN_MULE_FIELDS: Tuple[str, ...] = (
 #: the same names (a unit test keeps them equal to its keywords).
 PLAN_OPTION_FIELDS: Tuple[str, ...] = PLAN_MULE_FIELDS[1:]
 
+#: ``MuleConfig``'s FeRRy Phase 5 checkpoint fields, (path, sha256, tag) per
+#: learned filling: the pair score's, with ``flight_slot="pair_q"``, and arm
+#: E3's, with ``contact_policy="chen_dqn"``. Declared in this order, right
+#: before ``plan_mode``. Neither ferry-spec nor plan fields, so no Phase 3 or
+#: Phase 4 ``ferry_params`` string changes (the Phase 5 spec, other choices 6);
+#: each is simulated-clock only (:data:`SIM_ONLY_MULE_FIELDS`).
+PAIR_CHECKPOINT_FIELDS: Tuple[str, ...] = (
+    "pair_checkpoint", "pair_checkpoint_sha256", "pair_checkpoint_tag",
+)
+POLICY_CHECKPOINT_FIELDS: Tuple[str, ...] = (
+    "policy_checkpoint", "policy_checkpoint_sha256", "policy_checkpoint_tag",
+)
+CHECKPOINT_MULE_FIELDS: Tuple[str, ...] = PAIR_CHECKPOINT_FIELDS + POLICY_CHECKPOINT_FIELDS
+
 #: ``MuleConfig`` fields that only mean something on the simulated clock:
 #: the ferry fields, the trial seed, the input width, the causal RF prior
-#: schedule and the plan fields. On the wall clock each must keep its default.
-#: The deadline time unit is not among them: it is a law parameter on either
-#: clock.
+#: schedule, the checkpoint fields and the plan fields. On the wall clock each
+#: must keep its default. The deadline time unit is not among them: it is a
+#: law parameter on either clock.
 SIM_ONLY_MULE_FIELDS: Tuple[str, ...] = tuple(FERRY_SPEC_FIELDS) + (
     "trial_seed", "input_dim", "rf_prior_schedule_db",
-) + PLAN_MULE_FIELDS
+) + CHECKPOINT_MULE_FIELDS + PLAN_MULE_FIELDS
 
 
 def _field_default(cls, name: str) -> Any:
@@ -550,7 +624,10 @@ def mule_config_errors(cfg: "MuleConfig") -> List[str]:
       for the seconds model, and the causal RF prior schedule only under the
       ``mission`` model, as finite SNRs (critic B4);
     * on the sim clock, the FeRRy Phase 4 plan fields
-      (:func:`_plan_config_errors`).
+      (:func:`_plan_config_errors`);
+    * the FeRRy Phase 5 learned fillings: arm E3's ``contact_policy='chen_dqn'``
+      only on the sim clock, and there their settings and checkpoint fields
+      (:func:`_learned_config_errors`).
     """
     errors: List[str] = []
     clock = getattr(cfg, "mission_clock", CLOCK_WALL)
@@ -566,6 +643,11 @@ def mule_config_errors(cfg: "MuleConfig") -> List[str]:
             errors.append(
                 f"{', '.join(changed)}: only on the simulated mission clock; set "
                 f"mission_clock='sim' or leave the default"
+            )
+        if getattr(cfg, "contact_policy", None) == CONTACT_POLICY_CHEN_DQN:
+            errors.append(
+                f"contact_policy={CONTACT_POLICY_CHEN_DQN!r} (arm E3) chooses each next stop "
+                f"in flight on the simulated mission clock: set mission_clock='sim'"
             )
         return errors
     if cfg.rf_range_m is None:
@@ -612,6 +694,7 @@ def mule_config_errors(cfg: "MuleConfig") -> List[str]:
                 f"got {schedule!r}"
             )
     errors += _plan_config_errors(cfg)
+    errors += _learned_config_errors(cfg)
     return errors
 
 
@@ -643,14 +726,19 @@ def _plan_config_errors(cfg: "MuleConfig") -> List[str]:
       that is an int >= 0; no ``contact_policy`` and no ``use_rl_selector``,
       since the plan owns admission and order; and no ``abort`` together with
       a cap, since abort gives up the whole tail, capped stops that would fit
-      alone included (critic A10).
+      alone included (critic A10). FeRRy Phase 5: the pair slot
+      (``flight_slot='pair_q'``) flies ``replan`` only, since its mask admits a
+      pair when the whole rest of the flight still fits, the fold that only the
+      re-plan's departure check runs next (the orchestrator's resolution R3);
+      with a cap, A10's reason is the one given.
     * When all of that holds, the options are built as the mule builds them
       (``hermes.scheduler.plan.PlanOptions.from_config``, imported only here,
       in plan mode), so every check of the plan's own types runs before a
       trial starts rather than when its mule does: an unknown flight slot, the
       cross-heuristic slot with a pinned band (FB+c flies only class c while
-      FX switches class on arrival, unit U0), an unknown score or search
-      setting, or a value those settings refuse.
+      FX switches class on arrival, unit U0), and so the pair slot with one
+      (FeRRy Phase 5: ``pair_q`` chooses the class on arrival too), an
+      unknown score or search setting, or a value those settings refuse.
     """
     mode = getattr(cfg, "plan_mode", PLAN_MODE_LEGACY)
     if mode not in PLAN_MODES:
@@ -735,6 +823,18 @@ def _plan_config_errors(cfg: "MuleConfig") -> List[str]:
             "would fit alone included: it is refused with an age cap (critic A10); "
             "use 'replan'"
         )
+    elif (getattr(cfg, "flight_slot", FLIGHT_SLOT_COMMITTED) == FLIGHT_SLOT_PAIR_Q
+          and cfg.in_flight_response != "replan"):
+        # FeRRy Phase 5 (the orchestrator's resolution R3): the pair slot's mask
+        # folds the whole rest of the flight after the stop, the fold only the
+        # re-plan's departure check runs next; under 'abort' that check folds
+        # the next stop alone. With a cap set, A10's reason above says it.
+        errors.append(
+            f"flight_slot='pair_q' needs in_flight_response='replan', got "
+            f"{cfg.in_flight_response!r}: the pair slot admits a (band, next stop) pair only "
+            f"when the whole rest of the flight still fits after the stop, which is the "
+            f"fold the re-plan's departure check runs next (resolution R3)"
+        )
     if errors:
         return errors
     from hermes.scheduler.plan.types import PlanOptions  # plan mode only
@@ -743,6 +843,97 @@ def _plan_config_errors(cfg: "MuleConfig") -> List[str]:
         PlanOptions.from_config(**{name: getattr(cfg, name) for name in PLAN_OPTION_FIELDS})
     except (TypeError, ValueError) as e:
         errors.append(f"plan options: {e}")
+    return errors
+
+
+def _checkpoint_field_errors(name: str, value: Any) -> List[str]:
+    """What is malformed about one checkpoint field's value (empty when it is not)."""
+    if name.endswith("_sha256"):
+        if not isinstance(value, str) or not _SHA256_HEX.fullmatch(value):
+            return [f"{name} must be the sha256 of the checkpoint's arrays, 64 lowercase hex "
+                    f"digits as hashlib writes them, got {value!r}"]
+    elif name.endswith("_tag"):
+        if not isinstance(value, str) or not _CHECKPOINT_TAG.fullmatch(value):
+            return [f"{name} must be a tag of ASCII letters, digits, '_' and '-', a letter or "
+                    f"digit first, at most 28 characters, got {value!r}"]
+    elif not isinstance(value, str) or not value.strip():
+        return [f"{name} must be the checkpoint's path, a non-empty string, got {value!r}"]
+    return []
+
+
+def _learned_config_errors(cfg: "MuleConfig") -> List[str]:
+    """What is wrong with a simulated-clock config's learned fillings (FeRRy Phase 5).
+
+    The Phase 5 spec's switches table and other choices 6 and 11. A learned
+    filling flies only from a verified checkpoint, never a random one (Freeze
+    L491: no random-init arm), and a checkpoint field set where nothing reads
+    it would be silently ignored, so the fields come with their switch, all
+    three together, and never without it:
+
+    * ``flight_slot='pair_q'`` in plan mode needs ``pair_checkpoint``,
+      ``pair_checkpoint_sha256`` and ``pair_checkpoint_tag``; any other slot
+      takes none of them. The slot is a plan option, so plan mode is the plan
+      guard's to require, and a pinned band ``PlanOptions``' to refuse
+      (:func:`_plan_config_errors`);
+    * ``contact_policy='chen_dqn'`` (arm E3) in legacy mode needs a
+      ``contact_band``, the one class it flies (build plan L1026), whole
+      stops (``member_admission`` 'whole': it visits a stop for all its
+      members, as D4 does, and the scheduler refuses member subsets to a
+      policy that does not take them), and ``policy_checkpoint``,
+      ``policy_checkpoint_sha256`` and ``policy_checkpoint_tag``; any other
+      policy takes none of them. Plan mode refuses it with every
+      ``contact_policy`` (the plan guard);
+    * a field set beside its switch is well formed: a path, a sha256 as
+      ``hashlib`` writes it (:data:`_SHA256_HEX`), a tag
+      (:data:`_CHECKPOINT_TAG`).
+
+    Where a switch cannot run at all (``pair_q`` outside plan mode,
+    ``chen_dqn`` in it), the plan guard refuses the switch itself and its
+    requirements are not added on top, so each mistake reads as one reason.
+    Every check fires only on a value other than the recorded one (the six
+    fields None, no ``pair_q`` and no ``chen_dqn``), so a Phase 3 or Phase 4
+    config passes as it always did. The mule verifies the file itself, its
+    sha and its schema, when it loads it; this checks the config.
+    """
+    errors: List[str] = []
+    mode = getattr(cfg, "plan_mode", PLAN_MODE_LEGACY)
+    policy = getattr(cfg, "contact_policy", None)
+    if policy == CONTACT_POLICY_CHEN_DQN and mode == PLAN_MODE_LEGACY:
+        if cfg.contact_band is None:
+            errors.append(
+                f"contact_policy={CONTACT_POLICY_CHEN_DQN!r} (arm E3) flies the cell's one "
+                f"contact band: set contact_band"
+            )
+        if getattr(cfg, "member_admission", MEMBER_ADMISSION_WHOLE) != MEMBER_ADMISSION_WHOLE:
+            errors.append(
+                f"member_admission={cfg.member_admission!r}: contact_policy="
+                f"{CONTACT_POLICY_CHEN_DQN!r} (arm E3) visits a stop for all its members, so "
+                f"it runs 'whole'"
+            )
+    for names, switch, value, wanted, runs in (
+        (PAIR_CHECKPOINT_FIELDS, "flight_slot",
+         getattr(cfg, "flight_slot", FLIGHT_SLOT_COMMITTED), FLIGHT_SLOT_PAIR_Q,
+         mode == PLAN_MODE_FERRY),
+        (POLICY_CHECKPOINT_FIELDS, "contact_policy", policy, CONTACT_POLICY_CHEN_DQN,
+         mode == PLAN_MODE_LEGACY),
+    ):
+        given = [name for name in names if getattr(cfg, name, None) is not None]
+        if value != wanted:
+            if given:
+                errors.append(
+                    f"{', '.join(given)}: only with {switch}={wanted!r}; leave them unset (None)"
+                )
+            continue
+        if not runs:
+            continue
+        missing = [name for name in names if name not in given]
+        if missing:
+            errors.append(
+                f"{switch}={wanted!r} flies a verified checkpoint, never a random one: set "
+                f"{', '.join(names)} (missing: {', '.join(missing)})"
+            )
+        for name in given:
+            errors += _checkpoint_field_errors(name, getattr(cfg, name))
     return errors
 
 

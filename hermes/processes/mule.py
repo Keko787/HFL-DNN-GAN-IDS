@@ -51,18 +51,37 @@ time beside it (``plan_wall_s``, left out of every determinism comparison,
 critic B12) and a baseline's pre-flight drops (``pass_1_policy_drops``, the
 user's decision 6), each only when the mission has one, so every other trace
 keeps its key set (critic D2).
+
+FeRRy Phase 5 (the Phase 5 spec, other choices 5, 6 and 9), on the simulated
+clock only. A learned filling flies a verified checkpoint and nothing else
+(there is no random-init arm): ``flight_slot="pair_q"`` hands the supervisor
+the pair slot built around the score of ``pair_checkpoint``
+(``selector.pair_features.build_pair_slot``, over the link's classes), and
+``contact_policy="chen_dqn"`` builds arm E3 from ``policy_checkpoint``
+(``policies.chen_dqn.ChenDQNPolicy.from_checkpoint``). Both are read before
+the process binds anything, and a checkpoint whose arrays are not the sha its
+config names, or whose kind, schema or classes are not what the arm reads,
+stops the mule there (:class:`CheckpointRefused`). A relative checkpoint path
+is read under the repository root (:data:`REPO_ROOT`), where the Exp 4 driver
+writes one that lies inside it. ``mule_ready`` then announces the checkpoint
+flown, ``pair`` or ``policy_checkpoint`` (its verified manifest's provenance
+and the config's tag, no path), and ``mission_completed`` carries the
+mission's decisions, ``pass_1_pairs`` or E3's ``pass_1_e3`` and
+``pass_1_e3_unvisited``, each only on those mules and only when it has one,
+so every other trace keeps its key set (Freeze Rule 1).
 """
 
 from __future__ import annotations
 
 import argparse
+import contextlib
 import logging
 import signal
 import sys
 import threading
 import time
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import Any, Iterator, List, Optional, Tuple
 
 from hermes.mule import MuleSupervisor, MuleSupervisorError
 from hermes.observability import (
@@ -76,6 +95,8 @@ from hermes.types.scheduler import DEFAULT_FULFILMENT_WINDOW_S
 
 from .config import (
     CLOCK_SIM,
+    CONTACT_POLICY_CHEN_DQN,
+    FLIGHT_SLOT_PAIR_Q,
     MEMBER_ADMISSION_WHOLE,
     PLAN_MODE_FERRY,
     PLAN_MODE_LEGACY,
@@ -104,6 +125,111 @@ EXIT_BOOTSTRAP_FAILED = 5
 #: starts from. D4's FedEx tour returns here. FeRRy Phase 3: re-exported from
 #: the mission clock's module, the one definition (design section 2.1).
 from hermes.l1.mission_clock import DOCK_POSE  # noqa: E402
+
+#: FeRRy Phase 5 — the repository root, the directory that holds ``hermes``. A
+#: relative checkpoint path is read under it (:func:`checkpoint_path`), not under
+#: the working directory, which an orchestrated mule inherits from whatever runs
+#: the trial: the Exp 4 driver writes the path of a checkpoint that lies inside
+#: the repository relative to this root, so a kept per-role JSON names no host
+#: directory, and any other one absolute, not "as given" as the Phase 5 spec's
+#: other choices 6 says, since a relative one read here would name another file.
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+class CheckpointRefused(ValueError):
+    """A learned filling's checkpoint the mule refuses to fly (FeRRy Phase 5).
+
+    The mule flies a checkpoint only once its arrays match the sha its config
+    names and its kind, schema and classes are what the arm reads (other
+    choices 6), so anything else stops the process before it binds a port, as
+    a config the guards refuse does.
+    """
+
+
+def checkpoint_path(path: Any) -> Path:
+    """Where the checkpoint a config names lies: an absolute path as it is, a
+    relative one under :data:`REPO_ROOT`, whatever the working directory.
+
+    Raises ValueError for no path at all, since a learned filling flies a
+    verified checkpoint, never a random one (no random-init arm).
+    """
+    if path is None or (isinstance(path, str) and not path.strip()):
+        raise ValueError("no checkpoint path: a learned filling flies a verified checkpoint, "
+                         "never a random one")
+    out = Path(path)
+    return out if out.is_absolute() else REPO_ROOT / out
+
+
+@contextlib.contextmanager
+def _refused_checkpoint(cfg: MuleConfig, name: str) -> Iterator[None]:
+    """A loader's refusal of the checkpoint ``cfg.<name>``, raised as the mule's.
+
+    The loaders raise ``pair_q.CheckpointError`` (a ValueError) for a file they
+    refuse, FileNotFoundError for a path with nothing behind it and a plain
+    ValueError for one that is no ``.npz``: to the mule each is a checkpoint it
+    does not fly, refused with its config field named.
+    """
+    try:
+        yield
+    except (ValueError, OSError) as exc:
+        raise CheckpointRefused(
+            f"mule {cfg.mule_id}: {name}={getattr(cfg, name, None)!r} is refused, and the "
+            f"mule flies a verified checkpoint only: {exc}"
+        ) from exc
+
+
+def _checkpoint_provenance(manifest: Any, tag: Any) -> dict:
+    """What ``mule_ready`` announces of a checkpoint flown (FeRRy Phase 5).
+
+    The verified manifest's provenance (``pair_q.manifest_provenance``: the
+    sha, kind and purpose, the schema's version and the classes, γ, the
+    reward, the seeds, the episodes, FerrySim's cell family with its hash and
+    the learner's revision; the sha binds the first six) and the config's
+    tag. No path: provenance is by tag and sha (other choices 6).
+    """
+    from hermes.scheduler.selector.pair_q import manifest_provenance
+
+    return _jsonable(dict(manifest_provenance(manifest), tag=str(tag)))
+
+
+def _build_pair_slot(cfg: MuleConfig, spec):
+    """The pair slot of a ``flight_slot="pair_q"`` mule in plan mode; None for any other.
+
+    FeRRy Phase 5 (resolution R8; other choices 5 and 6). The slot ranks the
+    pairs with the learned score of the config's checkpoint, verified whole
+    against ``pair_checkpoint_sha256`` and read under its own schema over the
+    link's classes in link order (``selector.pair_features.build_pair_slot``),
+    so it never flies a random network, nor rows other than those it was
+    trained on. ``spec`` is the mule's ``FerrySpec``, whose link names the
+    classes. The pair modules are imported on this path only.
+    """
+    if (getattr(cfg, "plan_mode", PLAN_MODE_LEGACY) != PLAN_MODE_FERRY
+            or getattr(cfg, "flight_slot", None) != FLIGHT_SLOT_PAIR_Q):
+        return None
+    from hermes.scheduler.selector.pair_features import build_pair_slot
+
+    with _refused_checkpoint(cfg, "pair_checkpoint"):
+        return build_pair_slot(
+            checkpoint_path(cfg.pair_checkpoint),
+            expect_sha256=cfg.pair_checkpoint_sha256,
+            classes=spec.link.names,
+        )
+
+
+def _learned_fillings(cfg: MuleConfig, spec) -> Tuple[Any, Any]:
+    """(pair slot, E3 policy) a mule flies from its checkpoints, each None if it has none.
+
+    FeRRy Phase 5: the mule reads both before it binds anything, so a refused
+    checkpoint stops it at once (:class:`CheckpointRefused`). ``spec`` is the
+    mule's ``FerrySpec``, None on the wall clock, where the guards refuse both
+    fillings.
+    """
+    if spec is None:
+        return None, None
+    policy = None
+    if getattr(cfg, "contact_policy", None) == CONTACT_POLICY_CHEN_DQN:
+        policy = _build_target_selector(cfg)
+    return _build_pair_slot(cfg, spec), policy
 
 
 def _build_target_selector(cfg: MuleConfig):
@@ -152,9 +278,24 @@ def _build_target_selector(cfg: MuleConfig):
             log.info("mule %s: FedCS (degraded) greedy baseline policy "
                      "(value=%s)", cfg.mule_id, value)
             return FedCSDegradedPolicy(value=value)
+        # FeRRy Phase 5 — arm E3, after Chen et al. (decision 7 (a)): a whole
+        # scheduler that names each next stop in flight, flown from its verified
+        # checkpoint only (on the cell's contact band, the checkpoint's class).
+        # Its module is imported here and nowhere else on a mule's path.
+        if policy == CONTACT_POLICY_CHEN_DQN:
+            from hermes.scheduler.policies.chen_dqn import ChenDQNPolicy
+
+            log.info("mule %s: E3 baseline policy (Chen et al.'s DQN, numpy port) from "
+                     "checkpoint tag %s", cfg.mule_id, getattr(cfg, "policy_checkpoint_tag", None))
+            with _refused_checkpoint(cfg, "policy_checkpoint"):
+                return ChenDQNPolicy.from_checkpoint(
+                    checkpoint_path(getattr(cfg, "policy_checkpoint", None)),
+                    expect_sha256=cfg.policy_checkpoint_sha256,
+                    band=cfg.contact_band,
+                )
         raise ValueError(
             f"unknown contact_policy {policy!r}; expected 'max_aoi', 'oort', "
-            f"'whittle', 'fedex', 'fedcs' or None"
+            f"'whittle', 'fedex', 'fedcs', 'chen_dqn' or None"
         )
 
     if not getattr(cfg, "use_rl_selector", False):
@@ -357,13 +498,20 @@ SIM_MISSION_FIELDS = (
 #: ``PlanCommit.describe()``, which holds no wall time) and ``plan_wall_s``
 #: (the plan's wall time, kept outside ``plan`` so determinism comparisons
 #: drop it, critic B12), and a baseline's ``pass_1_policy_drops`` (decision 6),
-#: left out when empty as well (critic D2).
+#: left out when empty as well (critic D2). FeRRy Phase 5 (other choices 9)
+#: adds three after them, each left out when None or empty: a ``pair_q``
+#: mission's closed decision records (``pass_1_pairs``), and arm E3's record of
+#: each next-stop call (``pass_1_e3``) and of the stops its pass left
+#: (``pass_1_e3_unvisited``), so only those missions gain a key.
 SIM_MISSION_OPTIONAL_FIELDS = (
     "delivery_overrun_s", "plan", "plan_wall_s", "pass_1_policy_drops",
+    "pass_1_pairs", "pass_1_e3", "pass_1_e3_unvisited",
 )
 
 #: Optional fields left out when empty too, not only when None.
-_OMITTED_WHEN_EMPTY = frozenset({"pass_1_policy_drops"})
+_OMITTED_WHEN_EMPTY = frozenset({
+    "pass_1_policy_drops", "pass_1_pairs", "pass_1_e3", "pass_1_e3_unvisited",
+})
 
 
 def _jsonable(value):
@@ -438,6 +586,10 @@ class MuleService:
         self._rf_prior_schedule: Optional[List[float]] = (
             [float(v) for v in schedule] if self._sim and schedule is not None else None
         )
+        # FeRRy Phase 5 — a learned filling's verified checkpoint, read here,
+        # before anything is bound, so a refused one (CheckpointRefused) stops
+        # the mule at once. Both None on every other mule.
+        pair_slot, e3_policy = _learned_fillings(cfg, ferry_spec)
 
         # 1. Mule's RF server — devices connect here. Amendment 10: with a
         # token (one per trial) it refuses registrations carrying another.
@@ -540,6 +692,11 @@ class MuleService:
                 t_nom_s=cfg.t_nom_s,
                 member_admission=admission,
             )
+            # FeRRy Phase 5: the pair slot fills a pair_q mule's flight slot.
+            # Passed to that mule only, so F, FX and every other plan mule
+            # build their supervisor with exactly the arguments they did.
+            if pair_slot is not None:
+                sup_kwargs["pair_slot"] = pair_slot
         elif admission != MEMBER_ADMISSION_WHOLE:
             sup_kwargs["member_admission"] = admission
         self.supervisor = MuleSupervisor(
@@ -548,7 +705,9 @@ class MuleService:
             dock=self.dock,
             session_ttl_s=cfg.session_ttl_s,
             rf_range_m=cfg.rf_range_m,
-            target_selector=_build_target_selector(cfg),
+            target_selector=(
+                e3_policy if e3_policy is not None else _build_target_selector(cfg)
+            ),
             **sup_kwargs,
         )
 
@@ -578,6 +737,7 @@ class MuleService:
             dock_on_empty=bool(self.supervisor.dock_on_empty),
             **self._sim_ready_fields(),
             **self._plan_ready_fields(),
+            **self._learned_ready_fields(),
             **self._wall_time_unit_fields(),
         )
 
@@ -671,6 +831,31 @@ class MuleService:
         fields = {"plan_mode": sched.plan_mode}
         fields.update(_jsonable(sched.plan_setup.options.describe()))
         fields["member_admission"] = admission
+        return fields
+
+    def _learned_ready_fields(self) -> dict:
+        """``mule_ready``'s FeRRy Phase 5 fields: the checkpoint a learned filling flies.
+
+        ``pair`` on a mule whose flight slot is the pair slot, and
+        ``policy_checkpoint`` on arm E3's (the Phase 5 spec, other choices 6),
+        each the verified manifest's provenance with the config's tag
+        (:func:`_checkpoint_provenance`), read back from what the supervisor
+        flies (audit #15): the slot's learned score, the scheduler's policy.
+        {} on every other mule, so a recorded ``mule_ready`` keeps its key set
+        (Freeze Rule 1).
+        """
+        cfg = self.cfg
+        fields = {}
+        if getattr(cfg, "flight_slot", None) == FLIGHT_SLOT_PAIR_Q:
+            slot = getattr(self.supervisor, "_flight_slot", None)
+            scorer = getattr(slot, "scorer", None)
+            if scorer is not None:
+                fields["pair"] = _checkpoint_provenance(scorer.manifest, cfg.pair_checkpoint_tag)
+        if getattr(cfg, "contact_policy", None) == CONTACT_POLICY_CHEN_DQN:
+            policy = getattr(self.supervisor.scheduler, "target_selector", None)
+            if policy is not None:
+                fields["policy_checkpoint"] = _checkpoint_provenance(
+                    policy.manifest, cfg.policy_checkpoint_tag)
         return fields
 
     def _feed_rf_prior(self, result) -> None:

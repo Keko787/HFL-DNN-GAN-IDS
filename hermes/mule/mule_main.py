@@ -55,6 +55,21 @@ plan with its visited set once the merge is known. ``member_admission`` passes
 member-subset admission through to the scheduler. At the defaults
 (``plan_mode="legacy"``, ``member_admission="whole"``) every path is the
 recorded one, and the plan package is never loaded.
+
+FeRRy Phase 5 (the flight clock's (band, stop) score; build plan L911-935): with
+``flight_slot="pair_q"`` the flight slot is a ``pair_slot`` (the mule process
+builds it from its verified checkpoint), which decides one pair at each Pass-1
+arrival: the class the stop is served on, at once, and the stop flown next. The
+supervisor moves that stop to the front after the service, so the departure
+check folds the order the pair set (and trims it if it fails) before the
+slot's pick, index 0; each decision is recorded at the arrival and closed when
+the mission ends, on every one of its exits (``pass_1_pairs``). In legacy mode
+a whole-scheduler policy that declares ``chooses_next_stop`` (arm E3) names
+each Pass-1 stop itself, at takeoff and at every departure, among the stops
+S3b's single-contact predicate admits (``pass_1_e3``, ``pass_1_e3_unvisited``).
+:meth:`MuleSupervisor.install_flight_slot` is FerrySim's in-process seam. No
+other slot decides at an arrival and no existing policy chooses a next stop,
+so every recorded path is unchanged and loads no Phase 5 module.
 """
 
 from __future__ import annotations
@@ -285,6 +300,21 @@ class MissionRunResult:
     plan_wall_s: Optional[float] = None
     pass_1_policy_drops: Optional[List[Dict[str, Any]]] = None
 
+    # FeRRy Phase 5 — the flight clock's decisions (the Phase 5 spec, other
+    # choices 1, 9 and 11). Each is None at the defaults, so a recorded
+    # mission's result keeps its values. ``pass_1_pairs`` is a ``pair_q``
+    # mission's decisions in arrival order, each closed when the mission
+    # ended (``policies.pair_slot.closed_record``: the members collected at
+    # the stop with their raw L3 weights, the late ones, the next arrival or
+    # the end of the sortie, ``terminal`` and ``trimmed_next``); None when no
+    # Pass-1 stop was flown. ``pass_1_e3`` is arm E3's record of each
+    # next-stop call, and ``pass_1_e3_unvisited`` the stops its pass left
+    # when none was admissible, reported and never widened; each None when
+    # empty. JSON-ready and free of wall time.
+    pass_1_pairs: Optional[List[Dict[str, Any]]] = None
+    pass_1_e3: Optional[List[Dict[str, Any]]] = None
+    pass_1_e3_unvisited: Optional[List[Dict[str, Any]]] = None
+
 
 def _merged_device_ids(report, agg) -> List[DeviceID]:
     """CLEAN devices of a round report minus those its merge excluded."""
@@ -297,6 +327,60 @@ def _merged_device_ids(report, agg) -> List[DeviceID]:
 
 def _ids(devices) -> List[str]:
     return [str(d) for d in devices]
+
+
+def _raw_merge_weights(spec: AggregationSpec, agg, report) -> Dict[DeviceID, float]:
+    """Each merged update's raw L3 weight w_i: what the mule's merge gave it.
+
+    FeRRy Phase 5: the pair slot's reward is the merge weight of the updates
+    collected at each stop (the user's decision 4 (a)), so a decision's record
+    holds the weight the merge actually used. ``agg:plain`` averages by example
+    count (``partial_fedavg``), so w_i is the update's n_i, the count its CLEAN
+    report line carries; the age-aware rules store w_i / M_m with M_m
+    (``merge_on_mule``: ``device_weights`` and ``weight_mass``), so w_i is their
+    product, ``update_weights``' raw weight. An update the merge left out (past
+    its age cutoff, or with no examples) is absent, so it weighs 0; so does
+    every update of a mission with no aggregate (the empty round).
+    """
+    if agg is None:
+        return {}
+    if spec.is_plain:
+        examples = {line.device_id: line.num_examples for line in getattr(report, "lines", ())
+                    if line.outcome.is_on_time()}
+        return {d: float(examples.get(d, 0)) for d in agg.contributing_devices}
+    return {d: float(w) * float(agg.weight_mass)
+            for d, w in zip(agg.contributing_devices, agg.device_weights)}
+
+
+def _decides_at_arrival(slot, pass_kind: MissionPass) -> bool:
+    """True when ``slot`` decides the pair at this pass's arrivals (FeRRy Phase 5).
+
+    Only the pair slot does, and only in Pass 1 (``decides_at_arrival``). The
+    committed and FX slots have no such method, so nothing new is asked of
+    them and their calls stay the 386c275 ones (UG5's ``flight_slot`` part);
+    an answer that is not True decides nothing. A function, not a method, so
+    a stand-in bound to the supervisor's legacy methods needs nothing new.
+    """
+    decides = getattr(slot, "decides_at_arrival", None)
+    return callable(decides) and decides(pass_kind) is True
+
+
+def _next_stop_policy(slot, scheduler, pass_kind: MissionPass):
+    """The policy that names this pass's stops in flight (arm E3), else None.
+
+    FeRRy Phase 5 (the Phase 5 spec, other choices 11): legacy mode's Pass 1
+    only, and only a whole-scheduler policy that declares
+    ``chooses_next_stop`` True, read with getattr (Freeze Rule 1). No existing
+    policy, slot or selector declares it, so every other arm flies its
+    recorded path, and a stand-in whose attributes are all truthy is not
+    taken for one. Never in plan mode, where the flight slot picks (and the
+    scheduler refuses a target selector), and never in Pass 2, which delivers
+    in the queue's order (critic B7 i).
+    """
+    if slot is not None or pass_kind is not MissionPass.COLLECT:
+        return None
+    policy = getattr(scheduler, "target_selector", None)
+    return policy if getattr(policy, "chooses_next_stop", False) is True else None
 
 
 class _FerryLog:
@@ -335,6 +419,37 @@ class _FerryLog:
         #: lower the in-flight ``deliver_by``, as a protected stop's deadline
         #: does not in the predicate. Empty in legacy mode.
         self.capped: FrozenSet[DeviceID] = frozenset()
+        #: FeRRy Phase 5 — the pair slot's decisions this mission, in arrival
+        #: order (:class:`_PairDecision`), closed in ``_ferry_result``.
+        self.pairs: List["_PairDecision"] = []
+        #: The clock at the Pass-1 landing, where the empty round's last
+        #: decision ends (it uploads nothing the merge used).
+        self.landing_s: Optional[float] = None
+        #: Arm E3's next-stop calls, and the stops its pass left unvisited.
+        self.e3: List[Dict[str, Any]] = []
+        self.e3_unvisited: List[Dict[str, Any]] = []
+
+
+class _PairDecision:
+    """One pair decision of a ``pair_q`` mission, from its arrival to its close.
+
+    FeRRy Phase 5 (the Phase 5 spec, other choices 1): ``choice`` is the
+    slot's ``PairChoice`` at the arrival at ``stop`` and ``arrival_s`` that
+    instant. The contact adds each member's outcome and stamp, and the
+    departure check after the stop whether it trimmed the order the pair set
+    (``trimmed_next``); the mission's close reads all of it
+    (:meth:`MuleSupervisor._ferry_close_pairs`).
+    """
+
+    __slots__ = ("choice", "stop", "arrival_s", "outcomes", "stamps", "trimmed_next")
+
+    def __init__(self, choice: Any, stop: ContactWaypoint, arrival_s: float) -> None:
+        self.choice = choice
+        self.stop = stop
+        self.arrival_s = float(arrival_s)
+        self.outcomes: Dict[DeviceID, Any] = {}
+        self.stamps: Dict[DeviceID, float] = {}
+        self.trimmed_next = False
 
 
 class MuleSupervisor:
@@ -371,6 +486,13 @@ class MuleSupervisor:
     required then and refused in legacy mode, where the plan package is never
     loaded (:meth:`_init_plan`). ``plan_mode="legacy"``, the default, is every
     recorded path.
+
+    FeRRy Phase 5, plan mode only. ``pair_slot`` fills the flight slot when
+    ``plan_options.flight_slot`` is ``"pair_q"``: a
+    ``hermes.scheduler.policies.pair_slot.PairQSlot``, which the mule process
+    builds from its verified checkpoint. It is required then and refused
+    otherwise, legacy mode included (:meth:`_init_plan`).
+    :meth:`install_flight_slot` is FerrySim's in-process seam for the same slot.
     """
 
     def __init__(
@@ -406,6 +528,7 @@ class MuleSupervisor:
         plan_mode: str = _PLAN_MODE_LEGACY,
         plan_options=None,
         t_nom_s: Optional[float] = None,
+        pair_slot=None,
     ) -> None:
         self.mule_id = mule_id
         self.mule_pose = mule_pose
@@ -438,12 +561,22 @@ class MuleSupervisor:
         # it with getattr, since tests bind supervisor methods onto stand-ins
         # (critic B7).
         self._flight_slot = None
+        # FeRRy Phase 5 — the offsets the pair slot's previous Pass-1 arrival
+        # observed, with its time: (t, per-class offsets), None before the
+        # first. Carried across stops and sorties, and reset with the mule,
+        # once per trial (critic A3).
+        self._pair_previous_offsets: Optional[Tuple[float, Tuple[float, ...]]] = None
         if plan_mode not in _PLAN_MODES:
             raise MuleSupervisorError(f"plan_mode must be one of {_PLAN_MODES}, got {plan_mode!r}")
         if plan_mode == _PLAN_MODE_LEGACY and (plan_options is not None or t_nom_s is not None):
             raise MuleSupervisorError(
                 "plan_options and t_nom_s configure plan mode (plan_mode='ferry'); a legacy "
                 "mule plans with build_contact_queue"
+            )
+        if plan_mode == _PLAN_MODE_LEGACY and pair_slot is not None:
+            raise MuleSupervisorError(
+                "pair_slot fills plan mode's flight slot (flight_slot='pair_q'); a legacy mule "
+                "has no flight slot"
             )
         host_now = None
         if mission_clock is None:
@@ -479,6 +612,7 @@ class MuleSupervisor:
                 now_fn=now_fn, rf_range_m=rf_range_m, sched_extra=sched_extra,
                 member_admission=member_admission, plan_mode=plan_mode,
                 plan_options=plan_options, t_nom_s=t_nom_s, pass_2_budget=pass_2_budget,
+                pair_slot=pair_slot,
             )
             now_fn = mission_clock
             host_now = mission_clock
@@ -590,6 +724,7 @@ class MuleSupervisor:
         plan_options=None,
         t_nom_s: Optional[float] = None,
         pass_2_budget: bool = False,
+        pair_slot=None,
     ) -> None:
         """Wire the mission clock and the ferry runtime (design section 2.2).
 
@@ -597,7 +732,8 @@ class MuleSupervisor:
         slot (:meth:`_init_plan`); in legacy mode ``member_admission`` reaches
         the scheduler only when it is not the recorded ``whole`` (unit_U3b.md
         section 5.3), so a recorded mule builds its scheduler with exactly the
-        arguments it always did.
+        arguments it always did. FeRRy Phase 5: ``pair_slot`` goes to
+        :meth:`_init_plan`, which checks it against the options.
         """
         from hermes.mule.ferry import RESPONSE_REPLAN, FerryRuntime, FerrySpec
         from hermes.scheduler.stages.s3b_feasibility import (
@@ -652,7 +788,7 @@ class MuleSupervisor:
             self._flight_slot = self._init_plan(
                 spec, run, base, plan_options=plan_options, t_nom_s=t_nom_s,
                 member_admission=member_admission, pass_2_budget=pass_2_budget,
-                sched_extra=sched_extra,
+                sched_extra=sched_extra, pair_slot=pair_slot,
             )
         elif member_admission != MEMBER_ADMISSION_WHOLE:
             sched_extra["member_admission"] = member_admission
@@ -668,6 +804,7 @@ class MuleSupervisor:
         member_admission: str,
         pass_2_budget: bool,
         sched_extra: Dict[str, Any],
+        pair_slot=None,
     ):
         """Plan mode's wiring (FeRRy Phase 4; the Phase 4 spec, other choices 1, 2 and 10).
 
@@ -692,9 +829,25 @@ class MuleSupervisor:
         cap, since abort gives up the whole tail, capped stops that would fit
         alone included (critic A10). The plan package is imported only here
         and on plan mode's paths, so a legacy mule never loads it.
+
+        FeRRy Phase 5 (the Phase 5 spec, other choices 1): ``flight_slot =
+        "pair_q"`` flies ``pair_slot``, a ``PairQSlot`` the mule process builds
+        from the verified checkpoint, and is refused without one, since
+        ``flight_slot_policy`` keeps the two fixed fillings only; a
+        ``pair_slot`` beside any other slot is refused too, so a mule never
+        flies a pair its options do not name. Anything but a ``PairQSlot`` is
+        refused, because the slot's guards (the scope guard, the mask and the
+        fallback) are what hold a scorer to admitted pairs. The pair slot's
+        module is imported only on that path, so the returned slot is never
+        None in plan mode and the fixed fillings load nothing new.
         """
         from hermes.mule.ferry import RESPONSE_ABORT
-        from hermes.scheduler.plan.types import PLAN_MODE_FERRY, PlanOptions, PlanSetup
+        from hermes.scheduler.plan.types import (
+            FLIGHT_SLOT_PAIR_Q,
+            PLAN_MODE_FERRY,
+            PlanOptions,
+            PlanSetup,
+        )
         from hermes.scheduler.policies.cross_heuristic import flight_slot_policy
 
         if not isinstance(plan_options, PlanOptions):
@@ -722,6 +875,24 @@ class MuleSupervisor:
                 "in_flight_response='abort' gives up the whole tail, capped stops that would "
                 "fit alone included: it is refused with an age cap (critic A10); use 'replan'"
             )
+        if plan_options.flight_slot == FLIGHT_SLOT_PAIR_Q:
+            from hermes.scheduler.policies.pair_slot import PairQSlot
+
+            if pair_slot is None:
+                raise MuleSupervisorError(
+                    "flight_slot='pair_q' flies a pair slot: pass pair_slot, the PairQSlot the "
+                    "mule process builds from the verified checkpoint"
+                )
+            if not isinstance(pair_slot, PairQSlot):
+                raise MuleSupervisorError(
+                    "pair_slot must be a hermes.scheduler.policies.pair_slot.PairQSlot, whose "
+                    f"guards hold its scorer to admitted pairs, got {type(pair_slot).__name__}"
+                )
+        elif pair_slot is not None:
+            raise MuleSupervisorError(
+                f"pair_slot fills flight_slot='pair_q' only; these options fly the "
+                f"{plan_options.flight_slot!r} slot"
+            )
         try:
             setup = PlanSetup(
                 options=plan_options, classes=run.plan_classes(base), reference=spec.band,
@@ -732,7 +903,53 @@ class MuleSupervisor:
         sched_extra.update(
             plan_mode=PLAN_MODE_FERRY, plan=setup, member_admission=member_admission,
         )
+        if pair_slot is not None:
+            return pair_slot
         return flight_slot_policy(plan_options.flight_slot)
+
+    def install_flight_slot(self, slot) -> None:
+        """Fill plan mode's flight slot with the pair slot ``slot``, before the first mission.
+
+        FerrySim's in-process seam (the Phase 5 spec, other choices 8): an FQ
+        episode runs the arm's FX configuration and installs the episode's
+        ``PairQSlot`` (a scripted reference, a learning slot, or one loaded
+        from a checkpoint), so the episode flies the code a trial flies, the
+        slot aside. A stack trial fills the slot through the config path
+        instead (``pair_slot``); the two fly alike mission for mission, since
+        the scheduler never reads the flight slot (``mule_ready`` still names
+        the configured slot). Never called on a recorded path.
+
+        Refused, each for its own reason: on a legacy mule, which has no flight
+        slot; once a mission has started, so that every mission is flown by one
+        slot from its commit to its close; for anything but a ``PairQSlot``, so
+        the fixed fillings keep the calls UG5 pins and every pair is held to
+        the slot's guards; and under a pinned band, which flies the committed
+        slot only (``PlanOptions``: FB+c flies only class c).
+        """
+        if getattr(self, "_flight_slot", None) is None:
+            raise MuleSupervisorError(
+                "install_flight_slot fills plan mode's flight slot (plan_mode='ferry'); a "
+                "legacy mule has none"
+            )
+        if getattr(self.mission, "mission_round", 0):
+            raise MuleSupervisorError(
+                "install_flight_slot comes before the first mission: a mission is flown by "
+                "one slot from its commit to its close"
+            )
+        from hermes.scheduler.policies.pair_slot import PairQSlot
+
+        if not isinstance(slot, PairQSlot):
+            raise TypeError(
+                "install_flight_slot installs a hermes.scheduler.policies.pair_slot.PairQSlot, "
+                f"got {type(slot).__name__}"
+            )
+        fixed = self.scheduler.plan_setup.options.fixed_band
+        if fixed is not None:
+            raise MuleSupervisorError(
+                f"band_class_policy pins class {fixed!r}, which flies the committed slot only: "
+                "the pair slot switches band on arrival"
+            )
+        self._flight_slot = slot
 
     @property
     def mission_clock(self):
@@ -1308,6 +1525,12 @@ class MuleSupervisor:
         ``record_merged`` with the Pass-1 stops actually flown and exactly the
         devices merged, on the empty path with none merged. The D arms' drop
         report (decision 6) is read from the scheduler in either mode.
+
+        FeRRy Phase 5: the pair slot's decisions and arm E3's picks are made in
+        flight (:meth:`_ferry_fly_pass`), and the clock at the Pass-1 landing
+        is kept for the empty round's last decision. Each of the three exits
+        (the empty round, no DOWN, and the normal path) returns through
+        :meth:`_ferry_result`, which closes the decisions.
         """
         from hermes.mule.ferry import RESPONSE_REPLAN
         from hermes.scheduler.stages.s3b_feasibility import (
@@ -1425,6 +1648,7 @@ class MuleSupervisor:
             energy_origin_j=0.0, rec=rec,
         )
         self._ferry_home(fx)
+        rec.landing_s = clock()
 
         # S3c — served counts the devices of the contacts flown (design
         # section 3.4); planned is the committed plan, its pre-flight drops
@@ -1649,6 +1873,21 @@ class MuleSupervisor:
         cap binds is flown for them whatever their deadlines, so holding the
         rest of the route to those deadlines would refuse every later stop
         for updates that may be late anyway (``s3b_feasibility``, ``admit``).
+
+        FeRRy Phase 5 (the Phase 5 spec, other choices 1 and 11). The pair slot
+        (``pair_q``) decides at each Pass-1 arrival, inside :meth:`_ferry_stop`
+        (:meth:`_ferry_pair_at_arrival`), the class the stop is served on and
+        the stop flown next; right after the stop that stop is moved to the
+        front (``cross_heuristic.moved_to_front``, the order the mask priced),
+        so the next departure check folds the order the pair set, then the
+        beacon hook runs, then the slot's pick, index 0. The decision records
+        whether that check kept the order (``trimmed_next`` is True when it
+        re-planned it under ``replan`` or gave up the pass under ``abort``).
+        In legacy mode a whole-scheduler policy that declares
+        ``chooses_next_stop`` (arm E3) names the next stop instead of index 0,
+        at the same point and at takeoff too (:meth:`_ferry_e3_next_stop`);
+        its None ends the pass. Neither acts in Pass 2, and every other slot,
+        policy and pass makes exactly the recorded calls.
         """
         from hermes.scheduler.stages.s3b_feasibility import (
             DEADLINE_BOUNDS_DELIVERY,
@@ -1663,6 +1902,13 @@ class MuleSupervisor:
         route_level = collect and fx.spec.deadline_bounds == DEADLINE_BOUNDS_DELIVERY
         capped = getattr(rec, "capped", frozenset())
         deliver_by = math.inf
+        slot = getattr(self, "_flight_slot", None)
+        # FeRRy Phase 5: the pair slot's arrivals and arm E3's departures, each
+        # off for every other slot, policy and pass (Freeze Rule 1).
+        decides = _decides_at_arrival(slot, pass_kind)
+        chooser = _next_stop_policy(slot, getattr(self, "scheduler", None), pass_kind)
+        pending: Optional[_PairDecision] = None     # the decision the next check folds
+        collected: set = set()                      # E3: the updates on board this pass
         while True:
             state = FlightState(
                 tuple(self.mule_pose), clock(), fx.energy_j() - energy_origin_j, deliver_by,
@@ -1672,28 +1918,50 @@ class MuleSupervisor:
                     fx, remainder, state, pass_kind=pass_kind,
                     mission_round=mission_round, budget_end=budget_end, rec=rec,
                 )
+                if pending is not None:
+                    pending.trimmed_next = kept is not remainder
                 if kept is None:
                     break
                 remainder = kept
+            pending = None
             if collect:
                 remainder = self._take_offers(fx, remainder, state, budget_end=budget_end, rec=rec)
             if not remainder:
                 break
-            slot = getattr(self, "_flight_slot", None)
-            index = 0 if slot is None else self._ferry_next_stop(
-                slot, remainder, state, pass_kind=pass_kind, budget_end=budget_end,
-                after_stop=bool(flown),
-            )
+            if slot is not None:
+                index = self._ferry_next_stop(
+                    slot, remainder, state, pass_kind=pass_kind, budget_end=budget_end,
+                    after_stop=bool(flown),
+                )
+            elif chooser is not None:
+                index = self._ferry_e3_next_stop(
+                    chooser, fx, remainder, state, budget_end=budget_end,
+                    after_stop=bool(flown), collected=collected, rec=rec,
+                )
+                if index is None:
+                    break
+            else:
+                index = 0
             wp = remainder.pop(index)
+            arrival = {"remainder": remainder, "budget_end": budget_end} if decides else {}
             outcomes = self._ferry_stop(
                 fx, wp, state, pass_kind=pass_kind, mission_round=mission_round,
-                synth=synth, energy_origin_j=energy_origin_j, rec=rec,
+                synth=synth, energy_origin_j=energy_origin_j, rec=rec, **arrival,
             )
             if route_level:
                 for did, outcome in outcomes.items():
                     if outcome is MissionOutcome.CLEAN and did not in capped:
                         deliver_by = min(deliver_by, rec.deadlines.get(did, wp.deadline_ts))
             flown.append(wp)
+            if decides:
+                pending = rec.pairs[-1]
+                if pending.choice.next_index:
+                    from hermes.scheduler.policies.cross_heuristic import moved_to_front
+
+                    remainder = moved_to_front(remainder, pending.choice.next_index)
+            if chooser is not None:
+                collected.update(did for did, outcome in outcomes.items()
+                                 if outcome is MissionOutcome.CLEAN)
         if route_level:
             rec.deliver_by = deliver_by
         return flown
@@ -1863,6 +2131,8 @@ class MuleSupervisor:
         synth,
         energy_origin_j: float,
         rec: _FerryLog,
+        remainder: Optional[List[ContactWaypoint]] = None,
+        budget_end: Optional[float] = None,
     ) -> Dict[DeviceID, Any]:
         """Fly to ``wp`` and serve it: the leg, the contact plan, the contact.
 
@@ -1884,6 +2154,13 @@ class MuleSupervisor:
         the record's ``band`` and rates are that plan's class. In legacy mode,
         and under the committed slot, the plan's class is the runtime's band,
         so the record holds what it always did.
+
+        FeRRy Phase 5: given ``remainder`` (the stops left once this one was
+        taken) and Pass 1's ``budget_end``, which :meth:`_ferry_fly_pass` passes
+        only for a slot that decides at the arrival, the pair is decided here,
+        at the arrival instant (:meth:`_ferry_pair_at_arrival`), the plan is
+        built on its class, and the decision keeps each member's outcome and
+        stamp for its close. Every other call is the recorded one.
         """
         clock = self._now
         collect = pass_kind is MissionPass.COLLECT
@@ -1900,9 +2177,19 @@ class MuleSupervisor:
                 obs, pose=self.mule_pose, energy_j=fx.energy_j() - energy_origin_j,
                 budget_s=self.scheduler.mission_budget_s,
             )))
+        decision: Optional[_PairDecision] = None
         slot = getattr(self, "_flight_slot", None)
         if slot is None:
             plan = fx.contact_plan(wp, positions, pass_kind=pass_kind, mission_round=mission_round)
+        elif remainder is not None:
+            decision = self._ferry_pair_at_arrival(
+                slot, fx, wp, positions, state, remainder=remainder, budget_end=budget_end,
+                energy_origin_j=energy_origin_j, rec=rec,
+            )
+            plan = fx.contact_plan(
+                wp, positions, pass_kind=pass_kind, mission_round=mission_round,
+                band=decision.choice.band,
+            )
         else:
             plan = fx.contact_plan(
                 wp, positions, pass_kind=pass_kind, mission_round=mission_round,
@@ -1926,6 +2213,9 @@ class MuleSupervisor:
         commit = self.mission.last_contact
         if commit is before:
             commit = None
+        if decision is not None:
+            decision.outcomes = dict(outcomes)
+            decision.stamps = {} if commit is None else dict(commit.contact_ts)
         snr = rate = None
         if fx.banded:
             arrival_snr = [float(plan.snr_db[d]) for d in wp.devices]
@@ -1975,6 +2265,199 @@ class MuleSupervisor:
         view = (fx.arrival_view(wp, positions, self._now(), pass_kind=pass_kind)
                 if slot.reads_arrival_view(pass_kind) else None)
         return slot.band_at_arrival(view, pass_kind=pass_kind)
+
+    def _ferry_pair_at_arrival(
+        self,
+        slot,
+        fx,
+        wp: ContactWaypoint,
+        positions,
+        state,
+        *,
+        remainder: List[ContactWaypoint],
+        budget_end: Optional[float],
+        energy_origin_j: float,
+        rec: _FerryLog,
+    ) -> _PairDecision:
+        """The pair slot's decision at a Pass-1 arrival at ``wp`` (FeRRy Phase 5).
+
+        The Phase 5 spec, other choices 1, 2 and 4, as units U3 and U4 hand
+        them over. Everything is read at the arrival instant (the transit
+        charged, nothing else yet, and every read pure), so the view, the mask
+        and the contact plan built on the chosen class see one time. The
+        ``PairView`` holds what each class reaches at ``wp`` and its dwell at
+        the SNR observed now (``arrival_view``), every class's observed median
+        SNR and offsets (``observe``, ``class_offsets_db``), the offsets the
+        previous Pass-1 arrival of this trial observed and their age (the
+        mule's memory, carried across stops and sorties, since one snapshot
+        cannot tell a rising phase from a falling one: critic A3), the
+        sortie's clock, budget and energy, and one candidate per stop of
+        ``remainder``, priced from ``wp`` (``stop_contexts``) with the
+        commit's half (cap flags, mean plan age, mean on-time rate and
+        coverage weight), or home alone when nothing remains. N counts the
+        demand with any beacon insert, so a member's share never passes 1.
+
+        The mask's predicate is bound from the arrival's flight state, whose
+        ``deliver_by`` is the departure's, unchanged by the transit, with the
+        mule's record of each member's own deadline, which dates a beacon
+        insert's members (``bind_fits_pair`` over
+        ``FLScheduler.fits_after_service``). The slot may serve the plan's
+        devices and the beacon hook's inserts, never the pre-flight drops that
+        ``rec.no_insert`` also holds. The decision is appended to
+        ``rec.pairs``; its class is the one the contact plan is built on.
+        """
+        from hermes.scheduler.plan.types import PairView, StopContext
+        from hermes.scheduler.policies.pair_slot import bind_fits_pair
+        from hermes.scheduler.selector.features import _on_time_rate
+        from hermes.scheduler.stages.s3b_feasibility import FlightState
+
+        collect = MissionPass.COLLECT
+        sch = self.scheduler
+        commit = sch.last_plan
+        t = self._now()
+        rest = list(remainder)
+        prices = fx.stop_contexts(wp, rest, self._ferry_positions(rest), pass_kind=collect)
+        if rest:
+            states = sch.device_states
+            exempt = sch.plan_protected(rest)
+
+            def mean(values) -> float:
+                values = list(values)
+                return sum(values) / len(values)
+
+            stops = tuple(
+                StopContext(
+                    stop=stop, index=i, travel_s=price.travel_s,
+                    pred_dwell_s=price.pred_dwell_s, pred_snr_db=price.pred_snr_db,
+                    capped=any(d in commit.capped for d in stop.devices),
+                    exempt=stop in exempt,
+                    age=mean(float(commit.ages.get(d, 0)) for d in stop.devices),
+                    on_time=mean(_on_time_rate(states[d]) for d in stop.devices),
+                    weight=sum(float(commit.weights.get(d, 0.0)) for d in stop.devices),
+                )
+                for i, (stop, price) in enumerate(zip(rest, prices))
+            )
+        else:
+            stops = (StopContext.home(prices[0].travel_s),)
+        inserted = frozenset(DeviceID(d) for entry in rec.inserts for d in entry["devices"])
+        budget_s = sch.mission_budget_s
+        energy = fx.energy_j() - energy_origin_j
+        offsets = fx.class_offsets_db(wp, positions, t)
+        previous = getattr(self, "_pair_previous_offsets", None)
+        view = PairView(
+            arrival=fx.arrival_view(wp, positions, t, pass_kind=collect),
+            pose=tuple(self.mule_pose),
+            observed_snr_db=fx.observe(wp, positions, t).class_snr_db,
+            offsets_db=offsets,
+            previous_offsets_db=None if previous is None else previous[1],
+            previous_age_s=None if previous is None else t - previous[0],
+            period_s=fx.spec.contact_channel.interference_period_s,
+            clock_s=t,
+            budget_end=budget_end,
+            budget_s=budget_s,
+            t_ref_s=commit.t_ref_s,
+            energy_j=energy,
+            energy_ref_j=fx.energy_ref_j(budget_s),
+            stops=stops,
+            demand=len(set(commit.demand) | inserted),
+            demand_weight=sum(float(commit.weights.get(d, 0.0)) for d in commit.demand),
+            cap_s=commit.cap_s,
+        )
+        arrival = FlightState(tuple(self.mule_pose), t, energy, state.deliver_by)
+        choice = slot.pair_at_arrival(
+            view,
+            fits_pair=bind_fits_pair(sch, view, served_at=wp, state=arrival,
+                                     budget_end=budget_end, deadlines=rec.deadlines),
+            pass_kind=collect,
+            admitted=frozenset(commit.served) | inserted,
+        )
+        self._pair_previous_offsets = (t, offsets)
+        decision = _PairDecision(choice, wp, t)
+        rec.pairs.append(decision)
+        return decision
+
+    def _ferry_e3_next_stop(
+        self,
+        policy,
+        fx,
+        remainder: List[ContactWaypoint],
+        state,
+        *,
+        budget_end: Optional[float],
+        after_stop: bool,
+        collected,
+        rec: _FerryLog,
+    ) -> Optional[int]:
+        """Arm E3's pick at a Pass-1 departure, takeoff included; None ends the pass.
+
+        The Phase 5 spec, other choices 11 (critic B7). A legacy-mode
+        whole-scheduler policy that declares ``chooses_next_stop`` names the
+        next stop itself, among the stops left once the departure check and
+        the beacon hook have settled them (``policies.next_stop``'s
+        protocol). It sees Chen's observation from the departure, on the
+        contact band (``FerryRuntime.e3_observation``; N is the mule's slice
+        with any planned or inserted device outside it, ``remaining`` counts
+        the updates collected this pass), and ``admissible(i)``, S3b's
+        single-contact predicate under the budget rule, the return and the
+        upload included (``FeasibilityModel.admit``: Chen's safety
+        controller, with no deadline). Its answer is held to the protocol
+        (``next_stop.checked_choice``: an admissible index, or None exactly
+        when no stop is admissible), so a policy can neither fly an
+        inadmissible stop nor drop the rest by choice. Each call is recorded
+        (``pass_1_e3``); on None the stops left are recorded too
+        (``pass_1_e3_unvisited``) and never widened, as a baseline's drops
+        are not (the user's decision 6), and the mule flies home.
+        """
+        import numbers
+
+        from hermes.scheduler.policies.next_stop import checked_choice
+        from hermes.scheduler.stages.s3b_feasibility import RULE_BUDGET
+
+        stops = list(remainder)
+        model = self.scheduler.feasibility_model
+        mask = tuple(
+            model.admit(state, wp, rule=RULE_BUDGET, budget_end=budget_end,
+                        pass_kind=MissionPass.COLLECT).ok
+            for wp in stops
+        )
+
+        def admissible(i) -> bool:
+            if isinstance(i, bool) or not isinstance(i, numbers.Integral) or not (
+                    0 <= i < len(stops)):
+                raise ValueError(
+                    f"admissible(i) takes the index of one of the {len(stops)} stop(s) left, "
+                    f"got {i!r}")
+            return mask[int(i)]
+
+        current = getattr(self.scheduler, "current_slice", None)
+        demand = len(set(getattr(current, "device_ids", ()) or ()) | set(rec.no_insert))
+        view = fx.e3_observation(
+            state.pose, stops, self._ferry_positions(stops), state.clock, demand=demand,
+            budget_end=budget_end, budget_s=self.scheduler.mission_budget_s,
+            energy_j=state.energy_j, collected=frozenset(collected),
+        )
+        answer = policy.next_stop(list(stops), state, view=view, admissible=admissible,
+                                  pass_kind=MissionPass.COLLECT, after_stop=after_stop)
+        index = checked_choice(answer, stops, admissible=admissible)
+        rec.e3.append({
+            "t_s": state.clock,
+            "after_stop": after_stop,
+            "stops": [_ids(wp.devices) for wp in stops],
+            "admissible": list(mask),
+            "next_index": index,
+            "next": "home" if index is None else _ids(stops[index].devices),
+        })
+        if index is None:
+            rec.e3_unvisited = [
+                {"position": [float(c) for c in wp.position], "devices": _ids(wp.devices),
+                 "deadline_ts": float(wp.deadline_ts), "widened": False}
+                for wp in stops
+            ]
+            log.info(
+                "mule=%s Pass 1 ends at sim t=%.3f: no stop is admissible; %d left unvisited",
+                self.mule_id, state.clock, len(stops),
+            )
+        return index
 
     def _ferry_home(self, fx) -> None:
         """The return leg to the dock, charged as ``return``; the pose is the dock."""
@@ -2067,6 +2550,13 @@ class MuleSupervisor:
         and ``plan`` the closed commit's description with the plan's wall time
         beside it (critic B12); ``pass_1_policy_drops`` only when a baseline
         left something out (critic D2). All three stay None otherwise.
+
+        FeRRy Phase 5: every exit of a mission on the clock returns through
+        here (the empty round, no DOWN, and the normal path), so the pair
+        slot's decisions are closed here (:meth:`_ferry_close_pairs`,
+        ``pass_1_pairs``; critic B2), and arm E3's records are carried
+        (``pass_1_e3``, ``pass_1_e3_unvisited``). All three stay None
+        otherwise, so no other result changes.
         """
         from hermes.mule.ferry import backhaul_record
         from hermes.scheduler.stages.s3b_feasibility import DEADLINE_BOUNDS_DELIVERY
@@ -2075,9 +2565,20 @@ class MuleSupervisor:
         sim_end = clock()
         ledger = clock.ledger()
         plan = plan_wall_s = None
-        if getattr(self, "_flight_slot", None) is not None:
+        slot = getattr(self, "_flight_slot", None)
+        if slot is not None:
             plan = self.scheduler.last_plan.describe()
             plan_wall_s = self.scheduler.last_plan_wall_s
+        pairs = None
+        if _decides_at_arrival(slot, MissionPass.COLLECT):
+            # The empty round merged nothing, so its sortie ends at the landing;
+            # every other exit uploaded the merge, and ends with the upload.
+            empty = legacy.get("empty", False)
+            landing = getattr(rec, "landing_s", None)
+            pairs = self._ferry_close_pairs(
+                slot, rec, end_s=landing if empty and landing is not None else t_pass_1_end,
+                aggregate=legacy.get("aggregate"), report=legacy.get("report"),
+            )
         return MissionRunResult(
             mission_round=mission_round,
             pass_1_queue=list(pass_1_queue),
@@ -2106,8 +2607,59 @@ class MuleSupervisor:
             plan=plan,
             plan_wall_s=plan_wall_s,
             pass_1_policy_drops=list(getattr(rec, "policy_drops", ())) or None,
+            pass_1_pairs=pairs,
+            pass_1_e3=list(getattr(rec, "e3", ())) or None,
+            pass_1_e3_unvisited=list(getattr(rec, "e3_unvisited", ())) or None,
             **legacy,
         )
+
+    def _ferry_close_pairs(
+        self, slot, rec: _FerryLog, *, end_s: float, aggregate, report,
+    ) -> Optional[List[Dict[str, Any]]]:
+        """Close the mission's pair decisions, hand them to the slot, and return them.
+
+        The Phase 5 spec, other choices 1 and 7 (critic B2, B12). Each record
+        gets what the mission settled: ``collected``, the stop's members whose
+        sessions were CLEAN there, in member order, each with its raw L3
+        weight, the weight the mule's merge gave it (:func:`_raw_merge_weights`:
+        0 for an update the merge left out, and for every update of the empty
+        round, which merged nothing); ``late``, those collected after their own
+        Deadline(j) (the plan's, or a beacon insert's), as the deadline scorer
+        reads a CLEAN session; and the decision's end. A decision is terminal
+        exactly when no later Pass-1 decision follows it in the sortie, so a
+        ``home`` decision that a beacon insert follows is not, and its
+        ``t_next_s`` is the inserted stop's arrival, as every other
+        non-terminal decision's is the next arrival. The terminal one ends at
+        ``end_s``: the end of the upload, or the landing on the empty round.
+        ``trimmed_next`` is what the departure check after the stop did.
+
+        ``slot.close_mission`` gets the closed records in decision order at
+        every mission's close, none included (a no-op unless FerrySim trains),
+        and they become ``pass_1_pairs``, None when no decision was made.
+        """
+        from hermes.scheduler.policies.pair_slot import closed_record
+        from hermes.types import MissionOutcome
+
+        decisions = list(getattr(rec, "pairs", ()))
+        weights = _raw_merge_weights(self.aggregation, aggregate, report)
+        closed: List[Dict[str, Any]] = []
+        for k, d in enumerate(decisions):
+            terminal = k == len(decisions) - 1
+            collected = [did for did in d.stop.devices
+                         if d.outcomes.get(did) is MissionOutcome.CLEAN]
+            late = [did for did in collected
+                    if d.stamps[did] > rec.deadlines.get(did, d.stop.deadline_ts)]
+            closed.append(closed_record(
+                d.choice.describe(),
+                collected=_ids(collected),
+                weights={str(did): weights.get(did, 0.0) for did in collected},
+                late=_ids(late),
+                t_next_s=end_s if terminal else decisions[k + 1].arrival_s,
+                terminal=terminal,
+                trimmed_next=d.trimmed_next,
+            ))
+        slot.close_mission(closed)
+        return closed or None
 
     # ------------------------------------------------------------------ #
     # FeRRy Phase 3 — the beacon hook (design section 3.6)

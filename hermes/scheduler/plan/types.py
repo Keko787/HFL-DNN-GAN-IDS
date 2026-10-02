@@ -30,6 +30,19 @@ What lives here:
   modes it records. They live in ``hermes.types`` beside the waypoint the
   commit holds, and are re-exported here.
 
+**FeRRy Phase 5 (its unit U0).** The flight slot's third filling,
+``pair_q``, the learned (band, next stop) score, is built by several units
+too: the mask's predicate and the runtime's hooks (U4), the slot (U3), the
+supervisor (U5), the features (U1) and the learner's trainer (U8), so what
+they hand each other is defined here first (critic B11): what the slot sees
+at an arrival (:class:`PairView`, with one :class:`StopContext` per candidate
+next stop), the mask's predicate (:data:`FitsPair`), what ranks the pairs
+(:class:`PairScorer`) and what the slot decided (:class:`PairChoice`). They
+are scheduler-side data and a protocol, numpy-free like the rest. They stay
+out of ``__all__``, as the coverage ranks below do: the package re-exports
+``__all__`` name for name (``plan/__init__.py``, pinned in
+``tests/unit/test_p4_types.py``), so they are imported from this module.
+
 Freeze Rule 1: the plan path runs only with ``plan_mode = "ferry"``; with
 ``legacy`` nothing here is reached. The module is numpy-free and imports
 nothing from ``hermes.l1``, ``hermes.mule`` or ``experiments``: physics
@@ -46,7 +59,19 @@ import math
 import numbers
 from dataclasses import dataclass, field, fields
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, Callable, Dict, FrozenSet, Mapping, Optional, Tuple
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Dict,
+    FrozenSet,
+    Mapping,
+    Optional,
+    Protocol,
+    Sequence,
+    Tuple,
+    runtime_checkable,
+)
 
 from hermes.types.ids import DeviceID
 from hermes.types.scheduler import (
@@ -121,11 +146,17 @@ MEMBER_ADMISSIONS: Tuple[str, ...] = (MEMBER_ADMISSION_WHOLE, MEMBER_ADMISSION_S
 #: exactly today's ``remainder.pop(0)``; ``cross_heuristic`` (arm FX, decision
 #: 5) flies to the nearest remaining stop that keeps the rest of the plan
 #: feasible and, on arrival, switches to the fastest band that still reaches
-#: every device the committed band reaches. The learned pair choice is Phase 5.
+#: every device the committed band reaches. ``pair_q`` (FeRRy Phase 5, the FQ
+#: arms) chooses both at each Pass-1 arrival as one decision, the learned
+#: (band, next stop) score over the pairs the mask admits (:class:`PairView`),
+#: and flies only from a verified checkpoint, which the mule's config names.
 #: A pinned band (``fixed:<class>``) flies ``committed`` only (:class:`PlanOptions`).
 FLIGHT_SLOT_COMMITTED = "committed"
 FLIGHT_SLOT_CROSS_HEURISTIC = "cross_heuristic"
-FLIGHT_SLOTS: Tuple[str, ...] = (FLIGHT_SLOT_COMMITTED, FLIGHT_SLOT_CROSS_HEURISTIC)
+FLIGHT_SLOT_PAIR_Q = "pair_q"
+FLIGHT_SLOTS: Tuple[str, ...] = (
+    FLIGHT_SLOT_COMMITTED, FLIGHT_SLOT_CROSS_HEURISTIC, FLIGHT_SLOT_PAIR_Q,
+)
 
 #: ``PlanScoreParams.coverage_weights`` (decision 3): ``age`` weighs a demanded
 #: device by its age a_j, ``uniform`` by 1 (the plan's letter, 1 − served/N);
@@ -728,6 +759,512 @@ class ArrivalView:
 
 
 # --------------------------------------------------------------------------- #
+# The pair slot (FeRRy Phase 5)
+# --------------------------------------------------------------------------- #
+
+#: ``PairChoice.fallback``. ``mask_empty``: no pair fits at the arrival, so the
+#: mule flies FX's pair, its fastest covering class with no reorder, and the
+#: record says so (the Phase 5 spec, other choices 1). The case is common: at
+#: N = 6 and 1 MB, FX's own pair already overruns the budget, priced at the
+#: arrival SNR, at 19 of about 71 last-stop arrivals (the Phase 5 design,
+#: finding 3), so the fallback decides the flight there.
+PAIR_FALLBACK_MASK_EMPTY = "mask_empty"
+PAIR_FALLBACKS: Tuple[str, ...] = (PAIR_FALLBACK_MASK_EMPTY,)
+
+#: One pair: the class the arrival's stop is served on, and the index in the
+#: remainder of the stop flown next, or None for home.
+Pair = Tuple[str, Optional[int]]
+
+#: ``fits_pair(band, index) -> bool``: does the pair keep the rest of the
+#: flight feasible? The supervisor binds the scheduler's mask predicate
+#: (``FLScheduler.fits_after_service``; the Phase 5 spec, other choices 2):
+#: the state after serving the stop on ``band`` at the arrival's dwell, then
+#: the remainder flown with its stop ``index`` first and the rest in plan
+#: order, folded on b̄ under the arm's in-flight rule with the exempt stops
+#: protected; for None (home), the landing within the budget end and
+#: ``deliver_by``, and the energy clause. The slot asks it about every pair
+#: and re-implements none of it.
+FitsPair = Callable[[str, Optional[int]], bool]
+
+
+def _index(value: Any, name: str) -> Optional[int]:
+    """``value`` as a remainder index (an int >= 0), or None for home."""
+    return None if value is None else _count(value, name)
+
+
+def _flag(value: Any, name: str) -> bool:
+    if not isinstance(value, bool):
+        raise TypeError(f"{name} must be a bool, got {value!r}")
+    return value
+
+
+def _positive(value: Any, name: str) -> float:
+    out = _finite(value, name)
+    if out <= 0.0:
+        raise ValueError(f"{name} must be > 0, got {value!r}")
+    return out
+
+
+def _energy_ref(value: Any, name: str) -> Optional[float]:
+    """An energy reference as a float > 0, or None for none; 0 is stored as None.
+
+    The reference is ``FerryRuntime.l1_state``'s (``mule/ferry.py``): the
+    capacity if one is set, else P_hover times the budget. That product is 0
+    when P_hover is, which ``EnergyModel`` accepts (``l1/mission_clock.py``,
+    P_hover >= 0) while a capacity must be > 0, and ``l1_state`` reads a 0
+    reference as none (``if not e_ref``). So a 0 is stored as None here: a
+    reader tests ``is None`` alone and never divides by 0.
+    """
+    if value is None:
+        return None
+    out = _nonneg(value, name)
+    return out if out > 0.0 else None
+
+
+def _numbers(values: Any, name: str) -> Tuple[float, ...]:
+    """``values`` as a tuple of finite floats (a string is no sequence of numbers)."""
+    if isinstance(values, (str, bytes)) or not isinstance(values, collections.abc.Iterable):
+        raise TypeError(f"{name} must be a sequence of numbers, got {values!r}")
+    return tuple(_finite(v, name) for v in values)
+
+
+def _per_class(values: Any, n_classes: int, name: str) -> Tuple[float, ...]:
+    """One finite float per class of the link, in link order."""
+    out = _numbers(values, name)
+    if len(out) != n_classes:
+        raise ValueError(
+            f"{name} holds one number per class of the link ({n_classes}), got {len(out)}"
+        )
+    return out
+
+
+def _json_record(value: Any, name: str) -> Any:
+    """A fresh JSON-ready copy of ``value``, tuples as lists.
+
+    Refuses what JSON cannot carry exactly (non-finite numbers, keys that are
+    not strings, other objects) and any key that names a wall time: a
+    decision record holds none, so a repeated trial records the same
+    decisions (critic B12, as for the plan commit).
+    """
+    if value is None or isinstance(value, (bool, str)):
+        return value
+    if isinstance(value, numbers.Integral):
+        return int(value)
+    if isinstance(value, numbers.Real):
+        return _finite(value, name)
+    if isinstance(value, collections.abc.Mapping):
+        out: Dict[str, Any] = {}
+        for key, item in value.items():
+            if not isinstance(key, str):
+                raise TypeError(f"{name}: keys must be strings, got {key!r}")
+            if "wall" in key:
+                raise ValueError(
+                    f"{name}: {key!r} names a wall time; a decision record holds none, so a "
+                    f"repeated trial records the same decisions (critic B12)"
+                )
+            out[key] = _json_record(item, f"{name}[{key!r}]")
+        return out
+    if isinstance(value, (list, tuple)):
+        return [_json_record(item, name) for item in value]
+    raise TypeError(f"{name} must be JSON-ready (numbers, strings, lists, dicts), got {value!r}")
+
+
+def _frozen(value: Any) -> Any:
+    """A JSON-ready value (:func:`_json_record`'s) made read-only all the way
+    down: lists as tuples, maps as read-only maps.
+
+    A record is checked once, when its choice is made, so a nested list or map
+    left mutable would let a wall time or a non-JSON value in after the check,
+    and :meth:`PairChoice.describe` would then fail at the mission's close.
+    """
+    if isinstance(value, list):
+        return tuple(_frozen(item) for item in value)
+    if isinstance(value, dict):
+        return MappingProxyType({key: _frozen(item) for key, item in value.items()})
+    return value
+
+
+@dataclass(frozen=True)
+class StopContext:
+    """One candidate for the pair's second half: a stop of the remainder, or home.
+
+    At a Pass-1 arrival at stop k the mule builds one per stop of the
+    remainder, in its order (``index`` is the stop's place there), or the
+    single :meth:`home` when nothing remains: home is offered only then,
+    since the slot never drops a stop (the Phase 5 spec, other choices 1;
+    Freeze principle 12). It holds what the pair features read about the
+    candidate (other choices 4), priced from k before k is served:
+
+    * ``travel_s``: the leg from k to the stop (to the dock for home), on the
+      mission clock's flight model;
+    * ``pred_dwell_s``: serving every member on the committed class b̄ at the
+      mean SNR, as the departure check prices the rest of the route (δ_obs =
+      0, Freeze L829);
+    * ``pred_snr_db``: per class of the link, in link order, the median over
+      the members of their mean SNR at the stop. The band at the stop is
+      chosen at its own arrival, so the features carry every class's
+      prospect there (other choices 4, feature 7);
+    * ``capped``: some member is capped (``PlanCommit.capped``); ``exempt``:
+      the cap binds every member, so the stop is exempt from its own deadline
+      clause (``FLScheduler.plan_protected``), which implies ``capped``;
+    * ``age``: the mean of the members' plan ages (``PlanCommit.ages``, in
+      their own mule's missions; a member without one, a beacon insert,
+      counts 0);
+    * ``on_time``: the mean of the members' on-time rates, in [0, 1]
+      (``selector.features._on_time_rate``);
+    * ``weight``: the sum of the members' coverage weights
+      (``PlanCommit.weights``; 0 for a member without one), from which the
+      features take the committed weight still to collect.
+
+    The stop's own deadline is its ``deadline_ts``; the slack is the
+    features' to price. Home has no stop and nothing but its leg, so its row
+    depends on the leg alone.
+    """
+
+    stop: Optional[ContactWaypoint]
+    index: Optional[int]
+    travel_s: float
+    pred_dwell_s: float
+    pred_snr_db: Tuple[float, ...]
+    capped: bool
+    exempt: bool
+    age: float
+    on_time: float
+    weight: float
+
+    def __post_init__(self) -> None:
+        travel = _nonneg(self.travel_s, "travel_s")
+        dwell = _nonneg(self.pred_dwell_s, "pred_dwell_s")
+        snr = _numbers(self.pred_snr_db, "pred_snr_db")
+        capped = _flag(self.capped, "capped")
+        exempt = _flag(self.exempt, "exempt")
+        age = _nonneg(self.age, "age")
+        on_time = _nonneg(self.on_time, "on_time")
+        if on_time > 1.0:
+            raise ValueError(f"on_time is a rate in [0, 1], got {self.on_time!r}")
+        weight = _nonneg(self.weight, "weight")
+        if self.stop is None:
+            if self.index is not None:
+                raise ValueError(
+                    f"home is no stop of the remainder: its index is None, got {self.index!r}"
+                )
+            if dwell or snr or capped or exempt or age or on_time or weight:
+                raise ValueError(
+                    "home carries its leg only: no dwell, SNR, cap flags, age, rate or weight"
+                )
+        else:
+            if not isinstance(self.stop, ContactWaypoint):
+                raise TypeError(
+                    f"stop must be a ContactWaypoint (None for home), got {self.stop!r}")
+            object.__setattr__(self, "index", _count(self.index, "index"))
+            if not snr:
+                raise ValueError("a stop's pred_snr_db holds one mean SNR per class of the link")
+            if exempt and not capped:
+                raise ValueError(
+                    "an exempt stop is one the cap binds for every member: exempt implies capped"
+                )
+        for name, value in (("travel_s", travel), ("pred_dwell_s", dwell), ("pred_snr_db", snr),
+                            ("age", age), ("on_time", on_time), ("weight", weight)):
+            object.__setattr__(self, name, value)
+
+    @classmethod
+    def home(cls, travel_s: float) -> "StopContext":
+        """The return to the dock, offered when the remainder is empty: its leg."""
+        return cls(stop=None, index=None, travel_s=travel_s, pred_dwell_s=0.0, pred_snr_db=(),
+                   capped=False, exempt=False, age=0.0, on_time=0.0, weight=0.0)
+
+    @property
+    def is_home(self) -> bool:
+        return self.stop is None
+
+
+@dataclass(frozen=True)
+class PairView:
+    """What the pair slot sees at a Pass-1 arrival (``flight_slot = "pair_q"``).
+
+    Scheduler-side data, like :class:`ArrivalView` (critic B14): the mule
+    builds it from its runtime (``FerryRuntime.arrival_view``, ``observe``,
+    ``class_offsets_db`` and ``stop_contexts``), its commit (``last_plan``)
+    and its device states, and the slot and the pair features read it, so
+    neither side imports the other. It is taken at the arrival at stop k,
+    after the transit is charged and before the contact, at one simulated
+    instant, ``clock_s``:
+
+    * ``arrival``: what each class reaches at k and the dwell of serving it,
+      at the arrival SNR. Its classes are in link order (their indices
+      increase), and every per-class tuple here follows them;
+    * ``pose``: where the mule is, k's position;
+    * ``observed_snr_db``: per class, the median realized SNR over k's
+      members now (``StopObservation.class_snr_db``);
+    * ``offsets_db``: per class, the median over k's members of realized
+      minus mean SNR, each link differenced before the median (critic C6),
+      from which the features read the interference phase;
+    * ``previous_offsets_db`` and ``previous_age_s``: the offsets the
+      previous Pass-1 arrival of this trial observed and how long ago that
+      was, carried across stops and sorties; both None at the trial's first
+      (critic A3: one snapshot cannot tell a rising phase from a falling
+      one);
+    * ``period_s``: P_c, the contact channel's interference period (its
+      configuration, not its phases);
+    * ``budget_end`` (absolute; None without a budget) and ``budget_s``, the
+      mission budget's length (None without one);
+    * ``t_ref_s``: T_nom, the T of the plan score;
+    * ``energy_j``: the simulated energy spent this sortie, and
+      ``energy_ref_j`` the reference ``FerryRuntime.l1_state`` uses: the
+      capacity if one is set, else P_hover times the budget, else None. A 0
+      reference (P_hover = 0) is none there, and is stored as None here;
+    * ``stops``: the candidates for the next half (:class:`StopContext`),
+      the remainder in its order, or home alone;
+    * ``demand``: N, the devices the mission's plan demanded, with
+      ``demand_weight`` the sum of their coverage weights, and ``cap_s`` the
+      cap S (None: off).
+
+    The pairs (:attr:`pairs`) are the covering classes (:attr:`covering`)
+    times the candidates, class-major in link order and then in the
+    remainder's order (home is alone): the slot breaks ties to the lowest
+    row, and a scorer's numbers come in this order. A device appears once
+    among k and the remainder: a plan serves each device at one stop, a trim
+    only removes members, and the beacon hook refuses a device already
+    planned this mission.
+    """
+
+    arrival: ArrivalView
+    pose: Tuple[float, float, float]
+    observed_snr_db: Tuple[float, ...]
+    offsets_db: Tuple[float, ...]
+    previous_offsets_db: Optional[Tuple[float, ...]]
+    previous_age_s: Optional[float]
+    period_s: float
+    clock_s: float
+    budget_end: Optional[float]
+    budget_s: Optional[float]
+    t_ref_s: float
+    energy_j: float
+    energy_ref_j: Optional[float]
+    stops: Tuple[StopContext, ...]
+    demand: int
+    demand_weight: float
+    cap_s: Optional[int]
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.arrival, ArrivalView):
+            raise TypeError(f"arrival must be an ArrivalView, got {self.arrival!r}")
+        indices = [entry.index for entry in self.arrival.classes]
+        if indices != sorted(indices):
+            raise ValueError(f"the arrival's classes are in link order, by index: {indices}")
+        n = len(indices)
+        pose = _numbers(self.pose, "pose")
+        if len(pose) != 3:
+            raise ValueError(f"pose is (x, y, z), got {self.pose!r}")
+        if (self.previous_offsets_db is None) != (self.previous_age_s is None):
+            raise ValueError(
+                "previous_offsets_db and previous_age_s come together: both None before the "
+                "trial's first Pass-1 observation, both set after it"
+            )
+        stops = tuple(self.stops)
+        if not stops:
+            raise ValueError("an arrival offers a next stop or home: stops is never empty")
+        for ctx in stops:
+            if not isinstance(ctx, StopContext):
+                raise TypeError(f"stops hold StopContext entries, got {ctx!r}")
+        if any(ctx.is_home for ctx in stops):
+            if len(stops) != 1:
+                raise ValueError("home is offered only when the remainder is empty, and alone")
+        else:
+            if [ctx.index for ctx in stops] != list(range(len(stops))):
+                raise ValueError(
+                    f"stops are the remainder in its order, indexed 0..{len(stops) - 1}: "
+                    f"{[ctx.index for ctx in stops]}"
+                )
+            for ctx in stops:
+                _per_class(ctx.pred_snr_db, n, f"stops[{ctx.index}].pred_snr_db")
+        devices = list(self.arrival.devices) + [d for ctx in stops if ctx.stop is not None
+                                                for d in ctx.stop.devices]
+        if len(set(devices)) != len(devices):
+            twice = sorted({str(d) for d in devices if devices.count(d) > 1})
+            raise ValueError(f"a device appears once among the stop and the remainder: {twice}")
+        values = {
+            "pose": pose,
+            "observed_snr_db": _per_class(self.observed_snr_db, n, "observed_snr_db"),
+            "offsets_db": _per_class(self.offsets_db, n, "offsets_db"),
+            "previous_offsets_db": None if self.previous_offsets_db is None else _per_class(
+                self.previous_offsets_db, n, "previous_offsets_db"),
+            "previous_age_s": None if self.previous_age_s is None else _nonneg(
+                self.previous_age_s, "previous_age_s"),
+            "period_s": _positive(self.period_s, "period_s"),
+            "clock_s": _finite(self.clock_s, "clock_s"),
+            "budget_end": None if self.budget_end is None else _finite(
+                self.budget_end, "budget_end"),
+            "budget_s": None if self.budget_s is None else _positive(self.budget_s, "budget_s"),
+            "t_ref_s": _positive(self.t_ref_s, "t_ref_s"),
+            "energy_j": _nonneg(self.energy_j, "energy_j"),
+            "energy_ref_j": _energy_ref(self.energy_ref_j, "energy_ref_j"),
+            "stops": stops,
+            "demand": _positive_count(self.demand, "demand"),
+            "demand_weight": _nonneg(self.demand_weight, "demand_weight"),
+            "cap_s": None if self.cap_s is None else _positive_count(self.cap_s, "cap_s"),
+        }
+        for name, value in values.items():
+            object.__setattr__(self, name, value)
+
+    @property
+    def covering(self) -> Tuple[ArrivalClass, ...]:
+        """The classes whose targets include every target of the committed class.
+
+        FX's candidate set (``cross_heuristic.fastest_covering_class``): a
+        pair's band reaches every device the committed class reaches at this
+        stop, a capped one included (the Phase 5 spec, other choices 2). The
+        committed class is always among them. In link order.
+        """
+        need = set(self.arrival.committed_entry.targets)
+        return tuple(entry for entry in self.arrival.classes if need.issubset(entry.targets))
+
+    @property
+    def remainder(self) -> Tuple[ContactWaypoint, ...]:
+        """The stops still to fly, in order (empty when home is offered)."""
+        return tuple(ctx.stop for ctx in self.stops if ctx.stop is not None)
+
+    @property
+    def homebound(self) -> bool:
+        """True when the remainder is empty, so the next half is home."""
+        return self.stops[0].is_home
+
+    @property
+    def pairs(self) -> Tuple[Pair, ...]:
+        """Every pair offered, class-major: the slot's rows, in tie order."""
+        return tuple((entry.name, ctx.index) for entry in self.covering for ctx in self.stops)
+
+    def row(self, band: str, next_index: Optional[int]) -> int:
+        """The row of the pair (``band``, ``next_index``) in :attr:`pairs`."""
+        try:
+            return self.pairs.index((band, next_index))
+        except ValueError:
+            raise ValueError(
+                f"the view offers no pair ({band!r}, {next_index!r}); its pairs: {self.pairs}"
+            ) from None
+
+
+@runtime_checkable
+class PairScorer(Protocol):
+    """What ranks the pairs at an arrival: the learned score or a scripted rule.
+
+    The pair slot's injectable scorer (the Phase 5 spec, unit U3). The
+    learned score (the pair features' adapter over the pair network, units
+    U1 and U2) and the scripted references (FX's pair, the committed pair,
+    HYB and ``greedy_1``, unit U3; critic A2 and B5) fill it alike, so the
+    slot and its guards are one code path for all of them.
+
+    ``score(view, mask=...)`` returns one finite number per pair of
+    ``view.pairs``, in that order; higher is better (:func:`check_pair_scores`
+    checks the count and the numbers). ``mask`` is ``fits_pair``'s verdict on
+    every pair, in the same order, for a scorer that records or replays its
+    branches (the headroom oracle's search). The scorer ranks and the slot
+    picks, the masked argmax with ties to the lowest row, so whatever fills
+    it chooses among admitted pairs only (Freeze principle 12), and the one
+    fallback when none fits is the slot's. ``name`` labels the scorer in the
+    slot's records.
+    """
+
+    name: str
+
+    def score(self, view: PairView, *, mask: Tuple[bool, ...]) -> Sequence[float]:
+        """One finite number per pair of ``view.pairs``; higher is better."""
+        ...
+
+
+def check_pair_scores(view: PairView, scores: Any) -> Tuple[float, ...]:
+    """A scorer's numbers checked against ``view``: one finite float per pair, in order."""
+    if not isinstance(view, PairView):
+        raise TypeError(f"view must be a PairView, got {view!r}")
+    out = _numbers(scores, "score")
+    if len(out) != len(view.pairs):
+        raise ValueError(
+            f"a scorer gives one number per pair: {len(view.pairs)} pairs, {len(out)} scores"
+        )
+    return out
+
+
+@dataclass(frozen=True)
+class PairChoice:
+    """What the pair slot decided at an arrival, and the decision's record.
+
+    ``band`` is the class stop k is served on, at once. ``next_index`` is the
+    stop of the remainder flown next, which the supervisor moves to the
+    front after the stop (``cross_heuristic.moved_to_front``; 0 keeps the
+    plan's order), or None for home, which only an empty remainder offers;
+    the departure check then folds that order and may trim it (the Phase 5
+    spec, other choices 1). ``total`` counts the pairs the view offered and
+    ``feasible`` those ``fits_pair`` admitted.
+
+    When none fits, ``fallback`` is ``mask_empty`` and the pair is FX's: its
+    band, the fastest covering class, with no reorder (``next_index`` 0, or
+    None for home), so the fallback never moves a stop. Otherwise
+    ``fallback`` is None and the pair is one the mask admitted, which the
+    slot guarantees. ``q`` is the chosen pair's score where the scorer's
+    numbers mean one (None otherwise); ``fx_band`` and ``fx_next`` are FX's
+    pair at this arrival, kept for the agreement share. ``record`` is the
+    decision's trace entry (``mission_completed.pass_1_pairs``), JSON-ready
+    and without a wall time (critic B12), and read-only all the way down (its
+    lists come back as tuples and its maps as read-only maps), so nothing gets
+    past those checks once they have run; :meth:`describe` gives a fresh plain
+    copy, lists and dicts, to write, or to complete at the mission's close.
+    """
+
+    band: str
+    next_index: Optional[int]
+    total: int
+    feasible: int
+    fallback: Optional[str]
+    q: Optional[float]
+    fx_band: str
+    fx_next: Optional[int]
+    record: Mapping[str, Any]
+
+    def __post_init__(self) -> None:
+        _name(self.band, "band")
+        _name(self.fx_band, "fx_band")
+        object.__setattr__(self, "next_index", _index(self.next_index, "next_index"))
+        object.__setattr__(self, "fx_next", _index(self.fx_next, "fx_next"))
+        total = _positive_count(self.total, "total")
+        feasible = _count(self.feasible, "feasible")
+        if feasible > total:
+            raise ValueError(f"feasible ({feasible}) counts pairs among the total ({total})")
+        if self.fallback is not None:
+            _choice(self.fallback, PAIR_FALLBACKS, "fallback")
+        if (self.fallback == PAIR_FALLBACK_MASK_EMPTY) != (feasible == 0):
+            raise ValueError(
+                f"fallback {self.fallback!r} with {feasible} feasible pair(s): the slot falls "
+                f"back exactly when no pair fits"
+            )
+        if self.fallback is not None and (
+                self.band != self.fx_band or self.next_index not in (0, None)):
+            raise ValueError(
+                f"the {self.fallback!r} fallback flies FX's band with no reorder, got "
+                f"({self.band!r}, {self.next_index!r}) with FX's band {self.fx_band!r}"
+            )
+        if self.q is not None:
+            object.__setattr__(self, "q", _finite(self.q, "q"))
+        if not isinstance(self.record, collections.abc.Mapping):
+            raise TypeError(f"record must be a mapping, got {self.record!r}")
+        object.__setattr__(self, "total", total)
+        object.__setattr__(self, "feasible", feasible)
+        object.__setattr__(self, "record", _frozen(_json_record(self.record, "record")))
+
+    @property
+    def pair(self) -> Pair:
+        return (self.band, self.next_index)
+
+    @property
+    def agrees_fx(self) -> bool:
+        """True when the pair is FX's pair at this arrival."""
+        return self.pair == (self.fx_band, self.fx_next)
+
+    def describe(self) -> Dict[str, Any]:
+        """A fresh, JSON-ready copy of :attr:`record`, with plain lists and dicts."""
+        return _json_record(self.record, "record")
+
+
+# --------------------------------------------------------------------------- #
 # Options and the mule's setup
 # --------------------------------------------------------------------------- #
 
@@ -742,7 +1279,10 @@ class PlanOptions:
     flies only class c (Phase 4 spec, decision 7), while ``cross_heuristic``
     switches band on arrival (decision 5), and FX without that switch is not
     FX (decision 5 (c)). No arm pairs the two (spec, other choices 11), so the
-    pair is refused rather than given a meaning of its own.
+    pair is refused rather than given a meaning of its own. FeRRy Phase 5's
+    ``pair_q`` chooses the band on arrival too, so a pinned band refuses it by
+    the same rule (the Phase 5 spec's switches table): with one class the
+    pair would be the stop alone.
     """
 
     band_class_policy: str = BAND_POLICY_SEARCH

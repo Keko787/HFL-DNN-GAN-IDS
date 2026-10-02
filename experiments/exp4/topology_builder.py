@@ -39,6 +39,13 @@ explicit parameters, copied to every mule; they are not ``ferry_settings``,
 which hold only ferry-spec fields (critic A8). Their defaults are the recorded
 mule, and off the simulated clock the topology's validation accepts only the
 defaults.
+
+FeRRy Phase 5 — a learned arm's checkpoint (``MuleConfig``'s six checkpoint
+fields: the path, sha256 and tag of the pair score's checkpoint, which goes
+with ``flight_slot="pair_q"``, or of arm E3's, which goes with
+``contact_policy="chen_dqn"``) is an explicit parameter too, copied to every
+mule. None, the default, builds the recorded mule; the topology's validation
+refuses the fields off the simulated clock and beside any other slot or policy.
 """
 
 from __future__ import annotations
@@ -285,6 +292,14 @@ def build_exp4_topology(
     age_cap_lookahead: int = 0,
     plan_score_params: Optional[Mapping[str, Any]] = None,
     plan_search_params: Optional[Mapping[str, Any]] = None,
+    # FeRRy Phase 5 — a learned arm's checkpoint (MuleConfig's checkpoint
+    # fields). The defaults build the recorded mule.
+    pair_checkpoint: Optional[str] = None,
+    pair_checkpoint_sha256: Optional[str] = None,
+    pair_checkpoint_tag: Optional[str] = None,
+    policy_checkpoint: Optional[str] = None,
+    policy_checkpoint_sha256: Optional[str] = None,
+    policy_checkpoint_tag: Optional[str] = None,
 ) -> TopologyConfig:
     """Return a validated :class:`TopologyConfig` for one H1 trial.
 
@@ -331,6 +346,15 @@ def build_exp4_topology(
     admission). The topology's validation refuses any but their defaults off
     the simulated clock, and on it what plan mode cannot fly
     (``hermes.processes.config.mule_config_errors``).
+
+    FeRRy Phase 5. ``pair_checkpoint``, ``pair_checkpoint_sha256`` and
+    ``pair_checkpoint_tag`` (an FQ arm's, with ``flight_slot="pair_q"``), and
+    ``policy_checkpoint``, ``policy_checkpoint_sha256`` and
+    ``policy_checkpoint_tag`` (arm E3's, with ``contact_policy="chen_dqn"``),
+    are the checkpoint fields every mule gets as given; each mule verifies its
+    file when it starts. The topology's validation refuses them off the
+    simulated clock, beside any other slot or policy, and a switch without
+    all three (``mule_config_errors``: no random-init arm).
     """
     if mission_clock not in MISSION_CLOCKS:
         raise ValueError(f"mission_clock must be one of {MISSION_CLOCKS}, got {mission_clock!r}")
@@ -344,6 +368,14 @@ def build_exp4_topology(
         age_cap_missions=age_cap_missions, age_cap_lookahead=age_cap_lookahead,
         plan_score_params=dict(plan_score_params or {}),
         plan_search_params=dict(plan_search_params or {}),
+    )
+    # FeRRy Phase 5: a learned arm's checkpoint fields go to every mule as
+    # given (None, the recorded mule's); the validation refuses misplaced ones.
+    checkpoints = dict(
+        pair_checkpoint=pair_checkpoint, pair_checkpoint_sha256=pair_checkpoint_sha256,
+        pair_checkpoint_tag=pair_checkpoint_tag, policy_checkpoint=policy_checkpoint,
+        policy_checkpoint_sha256=policy_checkpoint_sha256,
+        policy_checkpoint_tag=policy_checkpoint_tag,
     )
     ferry = dict(ferry_settings or {})
     unknown = sorted(set(ferry) - set(FERRY_SPEC_FIELDS))
@@ -521,6 +553,7 @@ def build_exp4_topology(
         whittle_weights=str(whittle_weights),
         fedcs_value=str(fedcs_value),
         **plan,
+        **checkpoints,
         **mule_extra,
     )
     if n_mules == 1:

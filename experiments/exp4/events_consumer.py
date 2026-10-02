@@ -67,11 +67,25 @@ baseline what it left out before takeoff (``pass_1_policy_drops``, only when
 it left something out). :class:`MissionRecord` carries them all, None where a
 mission does not record them, so a trace recorded before Phase 4 reads as it
 did.
+
+FeRRy Phase 5 — the flight clock's learned fillings (the Phase 5 spec, other
+choices 9). A mission flown with the pair slot (``flight_slot = pair_q``)
+records its closed decisions in ``mission_completed.pass_1_pairs``, one per
+Pass-1 stop flown: the (band, next stop) pair chosen at the arrival, what the
+mask admitted, FX's pair at that arrival and what the stop collected, with no
+wall time (:class:`PairDecision`). Arm E3 (Chen et al.'s DQN) records each of
+its next-stop calls (``pass_1_e3``, :class:`E3Call`) and the stops its pass
+left when none was admissible any more (``pass_1_e3_unvisited``). The mule
+writes each only when it is not empty, so :class:`MissionRecord` reads them as
+None where a mission does not record them, and a trace recorded before Phase 5
+reads as it did.
 """
 
 from __future__ import annotations
 
 import json
+import math
+import numbers
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Dict, List, Mapping, Optional, Sequence, Set, Tuple
@@ -98,6 +112,119 @@ class ClockDomainError(ValueError):
 # --------------------------------------------------------------------------- #
 # Structured observation
 # --------------------------------------------------------------------------- #
+
+#: ``pass_1_pairs[].fallback`` when no pair fitted and the slot chose FX's pair
+#: (``hermes.scheduler.plan.types.PAIR_FALLBACK_MASK_EMPTY``), restated here
+#: because scoring loads no plan module.
+PAIR_MASK_EMPTY = "mask_empty"
+
+
+@dataclass(frozen=True)
+class PairDecision:
+    """One closed decision of the pair slot (FeRRy Phase 5, ``flight_slot = pair_q``).
+
+    Read from ``mission_completed.pass_1_pairs[]``, the record the mule closes
+    at the mission's end (``hermes.scheduler.policies.pair_slot``,
+    ``DECISION_KEYS`` and ``CLOSE_KEYS``): at a Pass-1 arrival the slot chose a
+    pair, the class the stop is served on, at once, and the stop to fly next,
+    which the supervisor then moves to the front of the remainder. That is
+    the choice, not always the flight: the departure check after the stop
+    folds the new order and may re-plan it (``trimmed_next``), and the beacon
+    hook may insert a stop ahead of it.
+
+    Each field is read only in the JSON form the mule writes it in: a number
+    is a finite int or float, an index or a count an int >= 0, a flag a bool,
+    a name a string, an id list a list of strings. A field in any other form
+    (a bool or a float as an index, a numeric string, a bool as a number)
+    reads as None, a list as empty, so none is read as a value of another
+    kind. A record whose choice is in another form (``band`` not a string, or
+    ``next_index`` neither an int >= 0 nor None for home) holds no decision
+    and is skipped, so an index that cannot be read never reads as home; for
+    the same reason FX's pair is read whole, and an ``admitted_pairs`` entry
+    that cannot be read is left out. Values are not checked against each
+    other: the slot checks its records as it writes them (``closed_record``).
+    """
+
+    #: The arrival, simulated seconds.
+    t_s: Optional[float]
+    #: The stop's members, and b̄, the class the mission committed to.
+    devices: Tuple[str, ...]
+    committed: Optional[str]
+    #: The pair chosen: the class the stop was served on, and the next stop,
+    #: by its index in the remainder as it stood (0 keeps that order; None is
+    #: home, offered only once no stop is left) and by its members (None for
+    #: home).
+    band: str
+    next_index: Optional[int]
+    next_devices: Optional[Tuple[str, ...]]
+    #: How many pairs were offered and how many the mask admitted, and those as
+    #: ``(band, index)`` in row order (index None for home).
+    pairs: Optional[int]
+    feasible: Optional[int]
+    admitted_pairs: Tuple[Tuple[str, Optional[int]], ...]
+    #: :data:`PAIR_MASK_EMPTY` when the mask admitted no pair, else None.
+    fallback: Optional[str]
+    #: FX's pair by FX's own rule at this arrival (both halves None when the
+    #: record does not hold it so), and whether the pair chosen is it.
+    fx_band: Optional[str]
+    fx_next: Optional[int]
+    agrees_fx: Optional[bool]
+    #: The scorer that ranked the pairs (``pair_v1`` for the learned score, else
+    #: a scripted reference's name), and its Q for the pair chosen and for FX's
+    #: (None for a scorer without Q values).
+    scorer: Optional[str]
+    q: Optional[float]
+    q_fx: Optional[float]
+    #: Closed at the mission's end: the members collected CLEAN at the stop,
+    #: their raw L3 weights in that order, those collected after their own
+    #: deadline, the next decision's arrival (the end of the sortie for its
+    #: last decision), whether it was the sortie's last decision, and whether
+    #: the departure check after the stop re-planned the order the pair set
+    #: (under ``abort``, gave up the pass).
+    collected: Tuple[str, ...]
+    w: Tuple[float, ...]
+    late: Tuple[str, ...]
+    t_next_s: Optional[float]
+    terminal: Optional[bool]
+    trimmed_next: Optional[bool]
+
+    @property
+    def mask_empty(self) -> bool:
+        """Whether the mask admitted no pair, so the slot fell back on FX's pair
+        (FX's band, with no reorder)."""
+        return self.fallback == PAIR_MASK_EMPTY
+
+    @property
+    def reorders(self) -> bool:
+        """Whether the pair chose a stop other than the remainder's head
+        (``next_index`` neither 0 nor home); what flew next can differ
+        (``trimmed_next``, a beacon insert)."""
+        return self.next_index not in (0, None)
+
+
+@dataclass(frozen=True)
+class E3Call:
+    """One next-stop call of arm E3 (FeRRy Phase 5), from ``mission_completed.pass_1_e3[]``.
+
+    At takeoff and at every Pass-1 departure the mule asks Chen et al.'s DQN
+    which stop of those left to fly next, among the ones S3b's single-contact
+    check admits (the return and the upload included, no deadline); None flies
+    home and ends the pass. Read as :class:`PairDecision` is: each field only
+    in the JSON form the mule writes it in, else None (a list empty), and a
+    call whose choice (``next_index``: an int >= 0, or None for home) is in
+    another form is skipped.
+    """
+
+    #: When the call was made (simulated seconds), and whether after a stop
+    #: (False at takeoff).
+    t_s: Optional[float]
+    after_stop: Optional[bool]
+    #: The stops left, each as its members, and S3b's verdict on each.
+    stops: Tuple[Tuple[str, ...], ...]
+    admissible: Tuple[bool, ...]
+    #: The stop flown next, by its index in ``stops``; None flew home.
+    next_index: Optional[int]
+
 
 @dataclass(frozen=True)
 class MissionRecord:
@@ -209,6 +336,19 @@ class MissionRecord:
     #: simulated clock (``pass_1_policy_drops``, decision 6), as ``(devices,
     #: reason)`` per dropped contact; reported by the mule, never widened.
     policy_drops: Optional[Tuple[Tuple[Tuple[str, ...], str], ...]] = None
+    # FeRRy Phase 5 (the Phase 5 spec, other choices 9): the learned fillings'
+    # records, from ``mission_completed``'s fields. The mule writes each only
+    # when it is not empty, so None is both "this arm records none" and "this
+    # mission made none"; which one an absence means is the scorer's to say
+    # (``traces_scorer.pair_report``), as for ``policy_drops``.
+    #: ``pass_1_pairs``: the pair slot's closed decisions in flight order, one
+    #: per Pass-1 stop flown.
+    pair_decisions: Optional[Tuple[PairDecision, ...]] = None
+    #: ``pass_1_e3``: arm E3's next-stop calls, in order.
+    e3_calls: Optional[Tuple[E3Call, ...]] = None
+    #: ``pass_1_e3_unvisited``: the members of each stop E3's pass left when no
+    #: stop was admissible any more (reported, never widened).
+    e3_unvisited: Optional[Tuple[Tuple[str, ...], ...]] = None
 
     @property
     def has_plan(self) -> bool:
@@ -472,6 +612,9 @@ def observation_from_rows(
                 flown_bands=_flown_bands(r.get("pass_1_flown")),
                 plan_wall_s=_opt_float(r.get("plan_wall_s")),
                 policy_drops=_policy_drops(r.get("pass_1_policy_drops")),
+                pair_decisions=_pair_decisions(r.get("pass_1_pairs")),
+                e3_calls=_e3_calls(r.get("pass_1_e3")),
+                e3_unvisited=_e3_unvisited(r.get("pass_1_e3_unvisited")),
                 **_plan_fields(r.get("plan")),
             )
         )
@@ -1312,3 +1455,179 @@ def _plan_fields(raw) -> Dict[str, object]:
         "cap_capped": _ids_or_none(cap.get("capped")),
         "cap_violations": violations,
     }
+
+
+# FeRRy Phase 5's records are read strictly (PairDecision): each field only in
+# the JSON form the mule writes it in, never coerced as the legacy fields'
+# _opt_int, _opt_float, _opt_str and _ids_or_none coerce theirs, which would
+# read a bool as index 1, truncate a float index or parse a numeric string.
+
+def _opt_bool(v) -> Optional[bool]:
+    """A recorded flag; None when absent or not a bool (the mule writes no 0 or 1)."""
+    return v if isinstance(v, bool) else None
+
+
+def _opt_number(v) -> Optional[float]:
+    """A recorded number as a float: a finite int or float, as the mule writes
+    every number; None for anything else, a bool or a numeric string included."""
+    if isinstance(v, bool) or not isinstance(v, numbers.Real):
+        return None
+    try:
+        out = float(v)
+    except OverflowError:
+        return None
+    return out if math.isfinite(out) else None
+
+
+def _opt_count(v) -> Optional[int]:
+    """A recorded count or index: an int >= 0; None for anything else, so a bool
+    never reads as 1, a float is never truncated and a numeric string never parsed."""
+    if isinstance(v, bool) or not isinstance(v, numbers.Integral) or v < 0:
+        return None
+    return int(v)
+
+
+#: A key the record lacks, told apart from a recorded None (home) by :func:`_stop_index`.
+_MISSING = object()
+
+
+def _stop_index(v) -> Tuple[bool, Optional[int]]:
+    """A recorded next stop as ``(read, index)``: an int >= 0, or None for home.
+    ``read`` is False for anything else, a missing key included, which must
+    therefore never read as home."""
+    if v is None:
+        return True, None
+    index = _opt_count(v)
+    return index is not None, index
+
+
+def _opt_name(v) -> Optional[str]:
+    """A recorded name (a class, the fallback, a scorer): a string; else None."""
+    return v if isinstance(v, str) else None
+
+
+def _id_list(raw) -> Optional[Tuple[str, ...]]:
+    """A recorded list of device ids: a list of strings; None for anything else."""
+    if isinstance(raw, (list, tuple)) and all(isinstance(d, str) for d in raw):
+        return tuple(raw)
+    return None
+
+
+def _float_tuple(raw) -> Tuple[float, ...]:
+    """A recorded list of numbers as floats; empty when absent, or when any entry
+    is not a number, which would leave the rest out of step with their ids."""
+    if not isinstance(raw, (list, tuple)):
+        return ()
+    values = tuple(_opt_number(v) for v in raw)
+    return () if any(v is None for v in values) else values
+
+
+def _pair_decisions(raw) -> Optional[Tuple[PairDecision, ...]]:
+    """``pass_1_pairs`` → one :class:`PairDecision` per record, in flight order;
+    None when absent. An entry that is not a record, or whose choice is in
+    another form (:func:`_pair_decision`), is skipped."""
+    if not isinstance(raw, list):
+        return None
+    read = (_pair_decision(r) for r in raw if isinstance(r, dict))
+    return tuple(d for d in read if d is not None)
+
+
+def _pair_decision(r: Mapping[str, object]) -> Optional[PairDecision]:
+    """One closed record of ``pass_1_pairs`` (the slot's ``DECISION_KEYS`` and
+    ``CLOSE_KEYS``); None when its choice is in another form: ``band`` not a
+    string, or ``next_index`` neither an int >= 0 nor None for home."""
+    band = _opt_name(r.get("band"))
+    read, next_index = _stop_index(r.get("next_index", _MISSING))
+    if band is None or not read:
+        return None
+    # FX's pair is read whole, so a half that cannot be read never pairs FX's
+    # band with home.
+    fx_band = _opt_name(r.get("fx_band"))
+    fx_read, fx_next = _stop_index(r.get("fx_next", _MISSING))
+    if fx_band is None or not fx_read:
+        fx_band, fx_next = None, None
+    return PairDecision(
+        t_s=_opt_number(r.get("t_s")),
+        devices=_id_list(r.get("devices")) or (),
+        committed=_opt_name(r.get("committed")),
+        band=band,
+        next_index=next_index,
+        # "home" for the dock, else the next stop's members.
+        next_devices=_id_list(r.get("next")),
+        pairs=_opt_count(r.get("pairs")),
+        feasible=_opt_count(r.get("feasible")),
+        admitted_pairs=_admitted_pairs(r.get("admitted_pairs")),
+        fallback=_opt_name(r.get("fallback")),
+        fx_band=fx_band,
+        fx_next=fx_next,
+        agrees_fx=_opt_bool(r.get("agrees_fx")),
+        scorer=_opt_name(r.get("scorer")),
+        q=_opt_number(r.get("q")),
+        q_fx=_opt_number(r.get("q_fx")),
+        collected=_id_list(r.get("collected")) or (),
+        w=_float_tuple(r.get("w")),
+        late=_id_list(r.get("late")) or (),
+        t_next_s=_opt_number(r.get("t_next_s")),
+        terminal=_opt_bool(r.get("terminal")),
+        trimmed_next=_opt_bool(r.get("trimmed_next")),
+    )
+
+
+def _admitted_pairs(raw) -> Tuple[Tuple[str, Optional[int]], ...]:
+    """``admitted_pairs`` (``[[band, index], ...]``, index None for home) as
+    ``(band, index)`` tuples. An entry in another form is left out, so an
+    index that cannot be read never reads as home."""
+    if not isinstance(raw, (list, tuple)):
+        return ()
+    out: List[Tuple[str, Optional[int]]] = []
+    for p in raw:
+        if isinstance(p, (list, tuple)) and len(p) == 2 and isinstance(p[0], str):
+            read, index = _stop_index(p[1])
+            if read:
+                out.append((p[0], index))
+    return tuple(out)
+
+
+def _stop_lists(raw) -> Tuple[Tuple[str, ...], ...]:
+    """A recorded list of stops, each its members; empty when absent, or when
+    any stop is in another form, so the stops stay index for index with their
+    verdicts."""
+    if not isinstance(raw, (list, tuple)):
+        return ()
+    stops = tuple(_id_list(s) for s in raw)
+    return () if any(s is None for s in stops) else stops
+
+
+def _e3_calls(raw) -> Optional[Tuple[E3Call, ...]]:
+    """``pass_1_e3`` → one :class:`E3Call` per call, in order; None when absent.
+    An entry that is not a record, or whose choice (``next_index``) is in
+    another form, is skipped."""
+    if not isinstance(raw, list):
+        return None
+    calls: List[E3Call] = []
+    for r in raw:
+        if not isinstance(r, dict):
+            continue
+        read, next_index = _stop_index(r.get("next_index", _MISSING))
+        if not read:
+            continue
+        verdicts = r.get("admissible")
+        calls.append(E3Call(
+            t_s=_opt_number(r.get("t_s")),
+            after_stop=_opt_bool(r.get("after_stop")),
+            stops=_stop_lists(r.get("stops")),
+            # All or nothing, as the stops are.
+            admissible=(tuple(verdicts) if isinstance(verdicts, (list, tuple))
+                        and all(isinstance(v, bool) for v in verdicts) else ()),
+            next_index=next_index,
+        ))
+    return tuple(calls)
+
+
+def _e3_unvisited(raw) -> Optional[Tuple[Tuple[str, ...], ...]]:
+    """``pass_1_e3_unvisited`` → each stop's members, in order; None when absent.
+    An entry that is not a record holding its members (a list of ids) is skipped."""
+    if not isinstance(raw, list):
+        return None
+    members = (_id_list(entry.get("devices")) for entry in raw if isinstance(entry, dict))
+    return tuple(m for m in members if m is not None)

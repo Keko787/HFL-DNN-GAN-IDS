@@ -1956,6 +1956,174 @@ class FLScheduler:
         self.last_plan = close_commit(plan, flown, merged)
         return self.last_plan
 
+    # ------------------------------------------------------------------ #
+    # FeRRy Phase 5 — the pair mask's predicate (plan mode)
+    # ------------------------------------------------------------------ #
+
+    def fits_after_service(
+        self,
+        rest: Sequence[ContactWaypoint],
+        *,
+        served_at: ContactWaypoint,
+        state,
+        dwell_s: float,
+        collected: Collection[DeviceID],
+        budget_end: Optional[float],
+        pass_kind: MissionPass = MissionPass.COLLECT,
+        deadlines: Optional[Mapping[DeviceID, float]] = None,
+    ):
+        """Does the rest of Pass 1 still fit once ``served_at`` is served as priced?
+
+        The pair mask's one predicate (FeRRy Phase 5 spec, other choices 2; the
+        user's decision 1 (a)). At a Pass-1 arrival the ``pair_q`` slot picks
+        the class to serve the stop on and the stop to fly next, and it may
+        pick only a pair this admits (Freeze principle 12). The supervisor
+        asks once per pair, so the mask re-implements nothing of S3b. Returns
+        an ``s3b_feasibility.FoldResult``; its ``ok`` is the mask's bit.
+
+        ``state`` is the arrival's ``s3b_feasibility.FlightState`` at
+        ``served_at`` (the transit charged, nothing else yet). The service is
+        priced as the arrival view prices the class
+        (``FerryRuntime.arrival_view``): ``dwell_s`` at the SNR observed now,
+        ``collected`` the members it reaches. The state after it is the clock
+        plus ``dwell_s`` and the energy plus P_hover times ``dwell_s`` (the
+        clock charges a dwell at hover power); under
+        ``deadline_bounds="delivery"`` its ``deliver_by`` is lowered to the own
+        deadline of each collected member the plan did not cap, as the
+        supervisor lowers it after a stop. A member is dated by the plan
+        (``last_plan_deadlines``), else by ``deadlines``, the mule's record of
+        the members the beacon hook inserted (as :meth:`_trim_plan` reads
+        them), else by ``served_at``'s deadline. A listen window is not
+        priced: the clock charges one only when a reply is missing, and the
+        departure check after the stop sees it.
+
+        * A stop pair (``rest`` not empty): ``rest`` is the remainder in the
+          order the pair flies it, the chosen stop first and the others in
+          plan order (``cross_heuristic.moved_to_front``), and the result is
+          :meth:`fold_remainder` of it from the state after the service, the
+          plan's exempt stops protected (:meth:`plan_protected`), on b̄'s
+          model at the mean SNR (δ_obs = 0, Freeze L829), under the arm's
+          in-flight rule: the whole rest still fits (the user's decision 1
+          (a)). It is the fold FX's ``fits`` runs, and the one the departure
+          check runs next under ``in_flight_response="replan"`` when the
+          service goes as priced. Under ``"abort"`` that check folds the
+          chosen stop alone, whose verdict is this fold's first, so a pair
+          admitted here passes it too and the mask is the stricter.
+        * The home pair (``rest`` empty, offered only at the last stop): a
+          fold of no stop admits anything, so the landing is checked here by
+          the clauses ``FeasibilityModel.admit`` holds a stop's landing to, in
+          its order: the end of the dwell plus the return leg plus the Pass-1
+          upload by ``deliver_by`` (``delivery``; route-level
+          ``deadline_bounds`` only) and by ``budget_end`` (``budget``), then
+          the energy clause (``energy``, with a capacity). The result is the
+          fold of ``served_at`` alone as served: one verdict, from the arrival
+          to the landing.
+
+        Neither pair tests the served stop's own deadline clause
+        (``overdue``): the mule is there whichever pair it picks. Under
+        route-level ``delivery`` and the deadline rule, the lowered
+        ``deliver_by`` still holds the landing and every later stop to the
+        dates of the uncapped members collected (refused as ``delivery``),
+        the stop's deadline standing in for a member that neither the plan
+        nor ``deadlines`` dates.
+
+        Without a budget nothing is gated (S3b's opt-in contract). Pure:
+        nothing moves. Plan mode only and after the commit, since the mask
+        prices the committed plan, and Pass 1 only, since the slot makes no
+        Pass-2 decision; refused otherwise, so a legacy mule never reaches it.
+        """
+        import numbers  # noqa: WPS433
+
+        from .stages.s3b_feasibility import (  # noqa: WPS433
+            DEADLINE_BOUNDS_DELIVERY,
+            REASON_BUDGET,
+            REASON_DELIVERY,
+            REASON_ENERGY,
+            RULE_DEADLINE_BUDGET,
+            RULE_NONE,
+            FeasibilityModel,
+            FlightState,
+            FoldResult,
+            Verdict,
+        )
+
+        if self.plan_mode == _PLAN_MODE_LEGACY:
+            raise FLSchedulerError(
+                "fits_after_service is the pair mask's predicate (plan_mode='ferry'): a "
+                "legacy mule chooses no pair"
+            )
+        plan = getattr(self, "last_plan", None)
+        if plan is None:
+            raise FLSchedulerError(
+                "the pair mask prices the committed plan: build_ferry_plan first"
+            )
+        if MissionPass(pass_kind) is not MissionPass.COLLECT:
+            raise ValueError(
+                "the pair is chosen at Pass-1 arrivals only: Pass 2 delivers on b̄ in the "
+                "queue's order (the Phase 5 spec, other choices 1)"
+            )
+        if isinstance(dwell_s, bool) or not isinstance(dwell_s, numbers.Real):
+            raise TypeError(f"dwell_s must be a number of seconds, got {dwell_s!r}")
+        dwell = float(dwell_s)
+        if not (math.isfinite(dwell) and dwell >= 0.0):
+            raise ValueError(f"dwell_s must be finite and >= 0, got {dwell_s!r}")
+        if tuple(state.pose) != tuple(served_at.position):
+            raise ValueError(
+                f"state is the arrival's at the stop served: its pose {tuple(state.pose)!r} "
+                f"is not {tuple(served_at.position)!r}"
+            )
+        got = list(collected)
+        outside = sorted({str(d) for d in got} - {str(d) for d in served_at.devices})
+        if outside:
+            raise ValueError(f"collected names devices outside the stop served: {outside}")
+        stops = list(rest)
+        here = set(served_at.devices)
+        twice = sorted({str(d) for wp in stops for d in wp.devices if d in here})
+        if twice:
+            raise ValueError(f"the rest holds members of the stop served: {twice}")
+        model = self._feasibility_model or FeasibilityModel()
+        ferry = model.ferry
+        if ferry is None:
+            raise FLSchedulerError(
+                "the pair mask prices the ferry physics, which plan mode always carries"
+            )
+
+        deliver_by = state.deliver_by
+        if ferry.deadline_bounds == DEADLINE_BOUNDS_DELIVERY:
+            own = dict(deadlines or {})
+            own.update(self.last_plan_deadlines)
+            for did in got:
+                if did not in plan.capped:
+                    deliver_by = min(deliver_by, own.get(did, served_at.deadline_ts))
+        after = FlightState(tuple(state.pose), state.clock + dwell,
+                            state.energy_j + ferry.p_hover_w * dwell, deliver_by)
+        if stops:
+            return self.fold_remainder(
+                stops, state=after, budget_end=budget_end, pass_kind=MissionPass.COLLECT,
+                protected=self.plan_protected(stops),
+            )
+
+        rule = self.in_flight_rule(MissionPass.COLLECT)
+        gated = budget_end is not None and rule != RULE_NONE
+        back, _ = model.cost(served_at.position, ferry.dock)
+        home = after.clock + back + ferry.upload_time_s()
+        reason: Optional[str] = None
+        if (gated and rule == RULE_DEADLINE_BUDGET
+                and ferry.deadline_bounds == DEADLINE_BOUNDS_DELIVERY
+                and home > after.deliver_by):
+            reason = REASON_DELIVERY
+        elif gated and home > budget_end:
+            reason = REASON_BUDGET
+        elif (gated and ferry.energy_capacity_j is not None
+              and after.energy_j + ferry.p_move_w * back > ferry.energy_capacity_j):
+            reason = REASON_ENERGY
+        verdict = Verdict(ok=reason is None, reason=reason, arrival=state.clock,
+                          finish=after.clock, home=home, next_state=after)
+        return FoldResult(
+            route=(served_at,), rejected=() if reason is None else ((served_at, reason),),
+            verdicts=(verdict,), state=after, home=home,
+        )
+
 
 # --------------------------------------------------------------------------- #
 # FeRRy Phase 3 — the nominal mission period T_nom (spec Q1)
