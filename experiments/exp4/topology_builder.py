@@ -97,6 +97,24 @@ def device_spread_m(
     return field_radius_m if field_radius_m is not None else min(rf_range_m * 0.4, 25.0)
 
 
+def grown_field_radius_m(radius_m: float, n_devices: int, ref_n: int) -> float:
+    """The realism field's half-width for ``n_devices`` at the density of ``ref_n``.
+
+    Exp 5 addendum (Studies 5.9 and 5.11): a field of half-width ``radius_m``
+    holds ``ref_n`` devices at the reference density; ``n_devices`` keep that
+    density on ``radius_m * sqrt(n_devices / ref_n)``, rounded to 0.1 m so
+    that a FerrySim cell can name the same field (``cells.FerryCell``). At
+    ``n_devices == ref_n`` it is ``radius_m``.
+    """
+    if isinstance(ref_n, bool) or not isinstance(ref_n, int) or ref_n < 1:
+        raise ValueError(f"ref_n must be an int >= 1, got {ref_n!r}")
+    if isinstance(n_devices, bool) or not isinstance(n_devices, int) or n_devices < 1:
+        raise ValueError(f"n_devices must be an int >= 1, got {n_devices!r}")
+    if n_devices == ref_n:
+        return float(radius_m)
+    return round(float(radius_m) * math.sqrt(n_devices / ref_n), 1)
+
+
 def device_positions(n_devices: int, seed: int, spread_m: float) -> List[Tuple[float, float]]:
     """The devices' (x, y), drawn exactly as every recorded trial drew them.
 

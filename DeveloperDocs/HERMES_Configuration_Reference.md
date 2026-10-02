@@ -1975,7 +1975,8 @@ the `jittery56` hash and the test literals.
 
 **Families**, one score per contact regime: `jittery`, the four jittery cells (sha256
 `32b5cb6b…3e91`); `clean`, the two clean cells (`76955c9b…5902`); and `jittery56`, the jittery cells
-and Study 5.6's four (`0079de11…ac66`). A manifest records its family and the hash
+and Study 5.6's four (`0079de11…ac66`); and, since the Exp 5 addendum, `scale` (§20.3,
+`d410f0d1…70ad`), which moves none of them. A manifest records its family and the hash
 (`cells.family_sha256`). Study 5.5 is read on `STUDY_5_5_CELLS` (jit-n12-120 and jit-n12-180),
 whichever family trained the score; which family the jittery score practises on is the user's
 choice before the 5.5 sweep (R29).
@@ -2231,6 +2232,65 @@ writes none.
 
 ```bash
 python -m experiments.exp4.runner_main --csv results/exp5/s511b/fp.csv --arms F FX --N 6 12 24 --keep-event-traces --footprint-probe ...
+```
+
+### 20.3 A field that grows with N, the scale family and the pilot (Studies 5.9 and 5.11 (c))
+
+**The field rule.** The realism field is a fixed 100 m half-width, so the device density rises with
+N. `topology_builder.grown_field_radius_m(radius, N, ref_n)` keeps the density of `ref_n` devices
+in `radius`: `radius * sqrt(N / ref_n)`, rounded to 0.1 m (at N = ref_n, `radius` itself). From
+100 m at N = 6: 141.4 m at 12, 200 m at 24, 282.8 m at 48, 400 m at 96.
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `Exp4Driver.h1_field_ref_n` (`--h1-field-ref-n`) | None | Grow the realism field with N at this size's density: a trial's devices and T_nom's reference layouts are drawn on `field_radius_m(N)`. Needs `--realism` (refused otherwise). None keeps the recorded fixed field; the runner passes it only when given. The row does not record it (the kept traces hold the positions): write each setting to its own CSV. |
+| S\* tool `--field-radius-m`, `--field-ref-n` | 100, None | The same field for the S\* tool's layouts. |
+| `FerryCell.field_radius_m` | None | A FerrySim cell's field half-width (`h1_field_radius_m` in its driver settings); at None it is left out of the cell's JSON, so the other families' hashes are unchanged. |
+
+T_nom at N = 6's density (the cells' flags, 1 MB, wide): 203 s at 6, 442 s at 12, 1,066 s at 24,
+2,384 s at 48 and 6,123 s at 96, against 298, 378, 458 and 638 s at 12 to 96 in the fixed 100 m
+field. Which field Studies 5.9 and 5.11 fly is the user's choice; the scale family below is the
+constant-density one.
+
+**The scale family** (`cells.SCALE_CELLS`, family `scale`): Study 5.11 (c)'s FerrySim cells beyond
+the stack, the jittery decision-rich configuration of §19.9 at N = 24, 48 and 96 on the grown field
+(`cells.SCALE_FIELD_M`), one mule, S = 2.
+
+| Cell | N | Field | Budget |
+|---|---|---|---|
+| `scl-n24-350`, `scl-n24-525` | 24 | 200 m | 350 s (the binding edge), 525 s (1.5 ×) |
+| `scl-n48-680`, `scl-n48-1020` | 48 | 282.8 m | 680 s, 1,020 s |
+| `scl-n96-1330`, `scl-n96-1995` | 96 | 400 m | 1,330 s, 1,995 s |
+
+The budgets are stand-ins until each size's budget pilot: the **binding edge** is the largest budget
+on a 10 s grid at which F's S\* on 90 % of the S\* tool's 30 layouts is still 2 (one mission can no
+longer serve every servable device on more than a tenth of them), found by bisection at planning
+level on 2 Oct 2026, and the second budget is 1.5 × the edge. The rule reproduces the N = 12
+stand-ins exactly (edge 120 s, 1.5 × 180 s); its N = 6 edge is 80 s, beside the priors 45 and 90 s.
+S\* on 90 % of layouts is 2 at each edge and 1 at 1.5 ×, so S takes decision 1's floor, 2. The cells
+stay out of `CELLS` (the headroom report's default) and every other family. A score trained at
+N = 6 and 12 flies here out of practice (its /N features shift): a declared test; so does E3, whose
+observation divides distances by the 100 m field (`chen_dqn.LENGTH_SCALE_M`, part of its schema). One FX episode as
+a build check (2 Oct 2026, this container, not a measurement): 1.5 s at N = 24, 2.8 s at 48 and
+9.8 s at 96, the planner 0.33, 0.61 and 2.26 s per mission.
+
+**The pilot** (`python -m experiments.ferrysim pilot`, `experiments/ferrysim/pilot.py`): every
+(cell, budget, policy) on the first `--episodes` episodes of each cell's validation stream (never
+the held-out one), every budget and policy on the same layouts, each `--budgets` value overriding
+the cell's own. Each episode's summary is `evaluate`'s plus `served_share` per mission (updates
+collected over N) and `served_of_demand` (over the plan's demand), and its wall times: the
+episode's (`wall_s`), the planner's per mission and each flight decision's (`decide_s`, `mask_s`,
+from `EpisodeResult.walls`, which is never part of an episode's equality or summary). The table
+(`pilot_table`) folds them per (cell, budget, policy), means and 95th percentiles; the knee is read
+off it as the stack's pilot reads its own (where the served share stops rising): the module names
+none. `--plan-search-params` forces the planner's mode as the runner's flag does (Study 5.11 (a)
+in process), `--device-model stub` flies the stack's stub trainer, and `--trace-root` keeps each
+episode's traces under `budget=<b>/<cell>/<policy>/` for `traces_scorer --cost-columns`.
+Policies are the references' labels (FX, F, `fx_pair`, `committed_pair`, `hyb`, `greedy_1`) or any
+driver arm; the default is FX.
+
+```bash
+python -m experiments.ferrysim pilot --cells scl-n96-1330 --budgets 1000 1330 1700 2000 --policies FX greedy_1 --episodes 20 --workers 4 --out results/exp5/s511c/pilot_n96.json
 ```
 
 ---
