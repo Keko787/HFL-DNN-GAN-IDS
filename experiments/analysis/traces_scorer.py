@@ -220,6 +220,7 @@ from hermes.processes.config import (
     CLOCK_SIM,
     CLOCK_WALL,
     CONTACT_POLICY_CHEN_DQN,
+    FERRY_PARAMS_OMITTED_AT_NONE,
     FERRY_SPEC_FIELDS,
     FLIGHT_SLOT_PAIR_Q,
     PLAN_MODE_FERRY,
@@ -499,6 +500,10 @@ def _format_ferry_params(mule: Mapping[str, object], marker: Mapping[str, object
             default = defaults[name]
             shown[name] = (default.default_factory() if default.default_factory is not MISSING
                            else default.default)
+        if name in FERRY_PARAMS_OMITTED_AT_NONE and shown[name] is None:
+            # The Exp 5 addendum's ferry fields, left out at None as the driver
+            # leaves them (a recorded trace keeps its string).
+            del shown[name]
     t_nom = _float_or_none(mule.get("t_nom_s"))
     if (mule.get("backhaul_model") == BACKHAUL_SECONDS and mule.get("backhaul_period_s") is None
             and t_nom is not None):

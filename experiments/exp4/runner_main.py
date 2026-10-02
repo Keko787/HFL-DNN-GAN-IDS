@@ -116,6 +116,12 @@ _PHYSICS_FLAGS = (
     ("contact_regime", str, "D2: contact interference regime, clean (default) or "
                             "jittery (test (c))."),
     ("interference_period_s", float, "D2: interference period P_c (s; default 60)."),
+    ("interference_amp_db", float, "Exp 5 addendum (Study 5.15): the contact channel's "
+                                   "interference amplitude A (dB; default the regime's, "
+                                   "1 clean and 5 jittery)."),
+    ("interference_sigma_db", float, "Exp 5 addendum (Study 5.15): the interference noise "
+                                     "sigma_I (dB; default the regime's, 0.4 clean and 1.5 "
+                                     "jittery)."),
     ("noise_bin_s", float, "D2: noise bin (s; default 1)."),
     ("shadow_corr_s", float, "D2: shadowing correlation time (s; default 7.4)."),
     ("shadow_keying", str, "D2: shadowing keyed by 'time' (default) or 'position'."),

@@ -439,6 +439,8 @@ class FerrySpec:
         band_classes: Optional[Sequence[Any]] = None,
         contact_regime: str = "clean",
         interference_period_s: float = 60.0,
+        interference_amp_db: Optional[float] = None,
+        interference_sigma_db: Optional[float] = None,
         noise_bin_s: float = 1.0,
         shadow_corr_s: float = 7.4,
         shadow_keying: str = "time",
@@ -464,7 +466,10 @@ class FerrySpec:
         included); the losses stay the cluster's recorded schedule.
         ``p_move_w`` / ``p_hover_w`` override the Zeng model's powers at the
         cruise speed; ``energy_capacity_j`` switches the simulated energy
-        clause on (it binds only with a budget).
+        clause on (it binds only with a budget). ``interference_amp_db`` and
+        ``interference_sigma_db`` override the contact regime's interference
+        amplitude A and noise sigma_I (the Exp 5 addendum, Study 5.15; None
+        keeps the regime's own: 1 and 0.4 dB clean, 5 and 1.5 dB jittery).
 
         ``contact_reliability_source="channel"`` keeps ``device_availability``
         for the mule's keyed draw, and the cell's devices must then be built
@@ -494,6 +499,8 @@ class FerrySpec:
                 link, salt=ferry_salt(seed, SALT_CONTACT), regime=contact_regime,
                 interference_period_s=interference_period_s, noise_bin_s=noise_bin_s,
                 shadow_corr_s=shadow_corr_s, shadow_keying=shadow_keying,
+                interference_amp_db=interference_amp_db,
+                interference_sigma_db=interference_sigma_db,
             )
         backhaul = None
         mission_upload_snr_db = None

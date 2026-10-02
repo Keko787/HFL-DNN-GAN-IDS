@@ -403,6 +403,11 @@ class MuleConfig:
     noise_bin_s: float = 1.0
     shadow_corr_s: float = 7.4
     shadow_keying: str = "time"
+    # Exp 5 addendum, Study 5.15: the contact regime's interference amplitude
+    # A and noise sigma_I (dB), overridden; None keeps the regime's own (the
+    # recorded run), and leaves each out of ``ferry_params``.
+    interference_amp_db: Optional[float] = None
+    interference_sigma_db: Optional[float] = None
     # D3 — flight and SIMULATED energy (Zeng-Xu-Zhang 2019 at the cruise
     # speed unless the powers are given; capacity None = no energy clause).
     cruise_speed_m_s: float = 5.0
@@ -544,6 +549,8 @@ FERRY_SPEC_FIELDS: Dict[str, str] = {
     "noise_bin_s": "noise_bin_s",
     "shadow_corr_s": "shadow_corr_s",
     "shadow_keying": "shadow_keying",
+    "interference_amp_db": "interference_amp_db",
+    "interference_sigma_db": "interference_sigma_db",
     "cruise_speed_m_s": "cruise_speed_m_s",
     "turnaround_s": "turnaround_s",
     "listen_s": "listen_s",
@@ -551,6 +558,19 @@ FERRY_SPEC_FIELDS: Dict[str, str] = {
     "p_move_w": "p_move_w",
     "p_hover_w": "p_hover_w",
 }
+
+#: Every ``MuleConfig`` field the Exp 5 addendum (Studies 5.11-5.15) adds, each
+#: at a default that is the recorded run, so a recorded trial's per-role JSON
+#: gains exactly these keys at their defaults; the tests that pin what it gains
+#: (Freeze Rule 1, additive fields only) name them beside Phase 4's plan fields
+#: and Phase 5's checkpoint fields.
+ADDENDUM_MULE_FIELDS: Tuple[str, ...] = ("interference_amp_db", "interference_sigma_db")
+
+#: Ferry fields a trial's ``ferry_params`` leaves out while they are None (the
+#: Exp 5 addendum): their None is the recorded run (the contact regime's own
+#: interference amplitude and noise, Study 5.15), so every recorded row keeps
+#: its string, and a run that sets one shows it.
+FERRY_PARAMS_OMITTED_AT_NONE: Tuple[str, ...] = ("interference_amp_db", "interference_sigma_db")
 
 #: ``MuleConfig``'s FeRRy Phase 4 plan fields: ``plan_mode`` and the plan
 #: options (:data:`PLAN_OPTION_FIELDS`). Not ferry-spec fields (the spec prices

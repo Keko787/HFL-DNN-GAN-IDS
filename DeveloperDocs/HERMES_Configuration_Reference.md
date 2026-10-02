@@ -2293,6 +2293,35 @@ driver arm; the default is FX.
 python -m experiments.ferrysim pilot --cells scl-n96-1330 --budgets 1000 1330 1700 2000 --policies FX greedy_1 --episodes 20 --workers 4 --out results/exp5/s511c/pilot_n96.json
 ```
 
+### 20.4 Interference strength (Study 5.15)
+
+The contact channel's interference term is `A·sin(2π(t/P_c + φ)) + σ_I·n(t)` per class (§17.2);
+the contact regime fixes A and σ_I as a pair (`CONTACT_REGIMES`: clean 1 and 0.4 dB, jittery 5 and
+1.5 dB). Study 5.15 sweeps them one axis at a time, so each can now be set on its own.
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `MuleConfig.interference_amp_db` (`--interference-amp-db`, `ferry_physics`) | None | The amplitude A (dB, ≥ 0) in place of the regime's; None keeps the regime's. |
+| `MuleConfig.interference_sigma_db` (`--interference-sigma-db`) | None | The noise σ_I (dB, ≥ 0) in place of the regime's. |
+
+Both are ferry-spec fields (`FERRY_SPEC_FIELDS` → `FerrySpec.from_config` → `ContactChannel`),
+simulated-clock only (refused on the wall clock when set), and in the driver's
+`FERRY_PHYSICS_FIELDS`, so a FerrySim cell's `ferry_physics` takes them too. The planner prices
+what flies: the outage's σ is `sqrt(σ_sh² + σ_I² + A²/2)` (`FerryRuntime.outage_probability`,
+`plan_score.sigma_eff_db`), and `mule_ready.channel_params.contact` records both values, as it
+always has. **`ferry_params`** leaves each out while it is None (`FERRY_PARAMS_OMITTED_AT_NONE`),
+so every recorded row keeps its string, and shows it when set; the scorer's provenance does the
+same. `ADDENDUM_MULE_FIELDS` names every `MuleConfig` field the addendum adds, so the tests that pin
+what a recorded trial's per-role JSON gains (at the defaults: these keys, at None) name them.
+
+The radio flags that already existed for Study 5.15: `--n-pl`, `--shadow-sigma-db`,
+`--shadow-corr-s`, `--interference-period-s`, `--contact-regime`, `--backhaul-model` and
+`--l1-channel` (§17.4, §17.5).
+
+```bash
+python -m experiments.exp4.runner_main --csv results/exp5/s515/amp8.csv --arms F FX H1 --mission-clock sim --contact-band wide --contact-regime jittery --interference-amp-db 8 ...
+```
+
 ---
 
 ## Cross-references

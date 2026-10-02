@@ -379,6 +379,8 @@ FERRY_PHYSICS_FIELDS = (
     "contact_regime", "interference_period_s", "noise_bin_s", "shadow_corr_s",
     "shadow_keying", "cruise_speed_m_s", "turnaround_s", "listen_s",
     "energy_capacity_j", "p_move_w", "p_hover_w",
+    # Exp 5 addendum (Study 5.15): the regime's interference amplitude and noise.
+    "interference_amp_db", "interference_sigma_db",
 )
 
 #: Marker written next to every kept trace: the ``status`` and ``error`` the
@@ -2587,13 +2589,14 @@ class Exp4Driver:
             "input_dim": "" if clock.input_dim is None else int(clock.input_dim),
         }
         if clock.sim and mule is not None:
-            from hermes.processes.config import FERRY_SPEC_FIELDS
+            from hermes.processes.config import FERRY_PARAMS_OMITTED_AT_NONE, FERRY_SPEC_FIELDS
 
             shown = {
                 name: getattr(mule, name) for name in FERRY_SPEC_FIELDS
                 if name not in ("contact_band", "in_flight_response", "backhaul_model",
                                 "contact_reliability_source", "device_availability",
                                 "t_nom_s")
+                and not (name in FERRY_PARAMS_OMITTED_AT_NONE and getattr(mule, name) is None)
             }
             if (mule.backhaul_model == "seconds" and mule.backhaul_period_s is None
                     and clock.t_nom_s is not None):
