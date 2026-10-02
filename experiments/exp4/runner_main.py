@@ -63,6 +63,7 @@ from hermes.scheduler.policies.whittle import WEIGHT_MODES as WHITTLE_WEIGHTS
 from hermes.scheduler.stages.s3b_feasibility import DEADLINE_BOUNDS
 
 from .driver import (
+    ADDENDUM_ARMS,
     CHECKPOINT_TAGS,
     DEFAULT_ARMS,
     PAIR_CHECKPOINT_TAGS,
@@ -516,7 +517,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                              f"{list(DEFAULT_ARMS)}). The FeRRy Phase 4 plan arms "
                              f"{list(PLAN_ARMS)} run only when named, with "
                              f"--mission-clock sim, and so do the FeRRy Phase 5 arms "
-                             f"{list(PHASE_5_ARMS)} (a learned arm with its checkpoint).")
+                             f"{list(PHASE_5_ARMS)} (a learned arm with its checkpoint) and "
+                             f"the Exp 5 addendum's {list(ADDENDUM_ARMS)}.")
     parser.add_argument("--N", nargs="+", type=int, default=[2],
                         help="Device-population sweep.")
     parser.add_argument("--rrf", nargs="+", type=float, default=[60.0],
@@ -985,7 +987,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         # is a learned arm without its checkpoint, an FQ arm without 'replan'
         # and H1+L1 without the adaptive backhaul it is named for.
         for arm in arms:
-            if arm in PLAN_ARMS or arm in PHASE_5_ARMS:
+            if arm in PLAN_ARMS or arm in PHASE_5_ARMS or arm in ADDENDUM_ARMS:
                 driver.check_arm(arm)
     except ValueError as e:
         # A combination the driver refuses (e.g. agg:plain with several mules

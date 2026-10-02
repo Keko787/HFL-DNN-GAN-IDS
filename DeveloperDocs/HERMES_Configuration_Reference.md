@@ -2322,6 +2322,23 @@ The radio flags that already existed for Study 5.15: `--n-pl`, `--shadow-sigma-d
 python -m experiments.exp4.runner_main --csv results/exp5/s515/amp8.csv --arms F FX H1 --mission-clock sim --contact-band wide --contact-regime jittery --interference-amp-db 8 ...
 ```
 
+### 20.5 The F+L1 arm (Studies 5.14 and 5.15)
+
+`F+L1` (`driver.ADDENDUM_ARMS`) is F's plan with H3's adaptive backhaul controller and no learned
+selector, as `H1+L1` is H1's scheduler with it (§19.7): the plan arms' reference for the adaptive
+backhaul. It is a plan arm (`ADDENDUM_PLAN_ARMS`, `is_plan_arm`), so it has F's settings wherever
+F has them (member subsets, the miss priority, the `trim` fallback, T_nom, the plan settings and
+the pre-trial check), while `PLAN_ARMS` keeps its pinned value. It flies the controller where
+H1+L1 does: on the simulated clock's seconds-axis backhaul (`backhaul_policy="adaptive"`, the
+carrier picked at every upload) or with `--l1-channel` (the cluster's adaptive per-mission loss
+schedule and H3's RF prior schedule); anywhere else, and on the wall clock (a plan arm), it is
+refused before any trial. Its row differs from F's only in `ferry_params`' `backhaul_policy`. It
+runs only when named.
+
+```bash
+python -m experiments.exp4.runner_main --csv results/exp5/s515/fl1.csv --arms F F+L1 H1 H1+L1 --mission-clock sim --contact-band wide --backhaul-model seconds ...
+```
+
 ---
 
 ## Cross-references
