@@ -1200,6 +1200,10 @@ stop of both passes, after the departure check and the beacon hook:
   conservative for whatever class FX flies. The design's first rule, the class that reaches the most
   members, added up to 94 s of dwell and overran the budget at the last stop, where nothing
   re-checks (critic A7).
+- `pair_q` (the FQ arms; FeRRy Phase 5, §19.2), in Pass 1 only: one decision at each Pass-1
+  arrival, the class to serve the stop on and the next stop, the masked argmax of a learned score
+  over the covering classes times the remainder; the chosen stop is moved to the front after the
+  stop, so the slot's call at the departure returns 0.
 - In Pass 2 every slot flies the queue's order on b̄, and `FerryRuntime.contact_plan` refuses a
   Pass-2 contact plan on any other class.
 
@@ -1354,7 +1358,7 @@ them whole.
 
 | Arm | Plan fields over F's | Notes |
 |---|---|---|
-| `F` | `plan_mode = ferry`, `band_class_policy = search`, `flight_slot = committed`, `member_admission = subset` unless `--member-admission` says otherwise, the run's cap, lookahead, score and search settings | The plan search with the committed slot; the learned pair Q is Phase 5's. |
+| `F` | `plan_mode = ferry`, `band_class_policy = search`, `flight_slot = committed`, `member_admission = subset` unless `--member-admission` says otherwise, the run's cap, lookahead, score and search settings | The plan search with the committed slot; the learned pair score flies as FQ (§19.7). |
 | `FX` | `flight_slot = cross_heuristic` | §18.5. |
 | `FB+wide`, `FB+medium`, `FB+narrow` | `band_class_policy = fixed:<class>`, and the mule's `contact_band` is the class (in its ferry settings, critic A8) | Path B+: the C1 ablation. |
 | `F-cov` | `plan_score_params` gains `{"c_cov_per_device": 0, "c_link": 0}` over the run's | Cap-only service (decision 3); the κ sweep does not reach it. |
@@ -1387,6 +1391,765 @@ fields as the mule config holds them, and `contact_band` reads `search` for an a
 classes (FB+c keeps its class); outside plan mode `ferry_params` gains `member_admission` only when
 it is `subset`. A Phase 3 row's strings are unchanged. `miss_priority` records each arm's own value.
 The trace scorer derives the same strings from a kept trace.
+
+## 19. The flight clock's pair score, FerrySim and E3 (FeRRy Phase 5)
+
+`flight_slot = "pair_q"` and `contact_policy = "chen_dqn"` are new values, and every default in this
+section reproduces the recorded runs (Freeze §5g, Rule 1; §5l): no trace event gains a field at the
+defaults, and every mule's per-role JSON gains six keys at null. The FQ arms fill Phase 4's flight
+slot with a learned (band, next stop) score; E3 is a numpy port of Chen et al.'s DQN, a legacy-mode
+whole scheduler that names each next stop in flight; `H1+L1` is H1 with H3's adaptive backhaul;
+FerrySim (`experiments/ferrysim/`) trains and judges the learned fillings in process. The settings
+are the user's decisions of 2026-10-01 with the resolutions R1–R29 recorded in Freeze §5l. Code:
+[hermes/scheduler/policies/pair_slot.py](../hermes/scheduler/policies/pair_slot.py),
+[hermes/scheduler/selector/pair_features.py](../hermes/scheduler/selector/pair_features.py),
+[pair_q.py](../hermes/scheduler/selector/pair_q.py) and
+[pair_replay.py](../hermes/scheduler/selector/pair_replay.py),
+[hermes/scheduler/policies/chen_dqn.py](../hermes/scheduler/policies/chen_dqn.py) and
+[next_stop.py](../hermes/scheduler/policies/next_stop.py),
+[hermes/scheduler/plan/types.py](../hermes/scheduler/plan/types.py) (the pair types),
+[hermes/scheduler/fl_scheduler.py](../hermes/scheduler/fl_scheduler.py) (`fits_after_service`),
+[hermes/mule/mule_main.py](../hermes/mule/mule_main.py),
+[hermes/processes/config.py](../hermes/processes/config.py),
+[experiments/ferrysim/](../experiments/ferrysim/__init__.py).
+
+**One decision of the pair slot** (a Pass-1 arrival at stop k; `MuleSupervisor._ferry_pair_at_arrival`):
+
+1. The view (`PairView`, §19.2) is read at the arrival instant, after the transit is charged and
+   before the contact; every read is pure.
+2. The mask: `fits_pair(b, s)`, `FLScheduler.fits_after_service` bound by
+   `pair_slot.bind_fits_pair`, is asked about every pair the view offers.
+3. The scope guard (`scope_guard.assert_pairs_admitted`) checks every pair against the plan.
+4. The scorer gives one finite number per pair (`check_pair_scores`), and the slot picks the masked
+   argmax, ties to the lowest row; with no admitted pair it flies FX's pair (`mask_empty`).
+5. The contact plan is built on the chosen class b at once. After the stop the chosen stop s is
+   moved to the front (`cross_heuristic.moved_to_front`); the next departure runs the departure
+   check on that order (the record notes `trimmed_next` when it does not keep it), then the beacon
+   hook, then the slot's `next_stop`, which returns 0.
+
+At takeoff the plan's first stop is flown (the decision still applies on arrival there), and Pass 2
+flies b̄ in the queue's order (`FerryRuntime.contact_plan` refuses any other class there): the slot
+decides nothing at either. Each mission's decisions are closed when it ends, on each of its three
+exits (§19.2).
+
+### 19.1 Switches and configuration fields
+
+The six checkpoint fields are `CHECKPOINT_MULE_FIELDS` (`PAIR_CHECKPOINT_FIELDS` and
+`POLICY_CHECKPOINT_FIELDS`), declared just before `plan_mode` (a test pins the plan fields as
+`MuleConfig`'s last), inside `SIM_ONLY_MULE_FIELDS` and outside `FERRY_SPEC_FIELDS` and
+`PLAN_MULE_FIELDS`: on the wall clock each must keep its default, and no Phase 3 or Phase 4
+`ferry_params` string changes. A recorded per-role JSON loads with them at None.
+
+| Symbol | Where | Default | Surface | Rationale |
+|---|---|---|---|---|
+| `flight_slot = pair_q` | `MuleConfig`, `PlanOptions` (`plan.types.FLIGHT_SLOT_PAIR_Q`) | `committed` | config field; the FQ arms | The learned (band, next stop) score in the flight slot (§19.2). Plan mode only; needs the three pair fields and `in_flight_response = replan` (R3); refused with a pinned band (`PlanOptions`, as `cross_heuristic` is: the pair chooses the class on arrival). |
+| `pair_checkpoint` | `MuleConfig` | None | the FQ arms (`--pair-checkpoint TAG=PATH`) | The format-2 checkpoint the slot's score loads (§19.5), a non-empty string: repo-relative with `/` when the driver finds the file inside the repository, else absolute; a relative path is read under the repository root (R12). |
+| `pair_checkpoint_sha256` | `MuleConfig` | None | the driver, from the verified manifest | The sha256 of the checkpoint's arrays, 64 lowercase hex digits: the mule flies no other arrays. |
+| `pair_checkpoint_tag` | `MuleConfig` | None | the driver, from the arm (`driver.CHECKPOINT_TAGS`) | `main`, `hand`, `dwell`, `cov`, `g0` … `g99`: ASCII letters, digits, `_` and `-`, a letter or digit first, at most 28 characters. With the sha, the row's provenance. |
+| `contact_policy = chen_dqn` | `MuleConfig` (`CONTACT_POLICY_CHEN_DQN`) | None | arm E3 | Chen et al.'s DQN as a whole scheduler (§19.6), on the simulated clock in legacy mode; needs a `contact_band`, `member_admission = whole` and the three policy fields. |
+| `policy_checkpoint`, `policy_checkpoint_sha256`, `policy_checkpoint_tag` | `MuleConfig` | None | arm E3 (`--policy-checkpoint E3=PATH`) | As the pair fields, for E3's `chen_dqn` checkpoint; its tag is `e3`. |
+| `chooses_next_stop` | a whole-scheduler policy's class attribute | absent (False) | E3 declares `True` | Read with `getattr`, and only `True` counts: the supervisor then asks the policy for the next stop at takeoff and at every Pass-1 departure (§19.6). No other policy, slot or selector declares it. |
+| `pair_slot` | `MuleSupervisor` | None | the mule process (`build_pair_slot`) | The `PairQSlot` a `pair_q` mule flies; required with `pair_q`, refused otherwise. |
+| `install_flight_slot(slot)` | `MuleSupervisor` | never called on a recorded path | FerrySim | Installs a `PairQSlot` in plan mode before the first mission; it flies mission for mission as the config path's slot does, while `mule_ready.flight_slot` still names the configured slot. |
+| `pair_checkpoints`, `policy_checkpoints` | `Exp4Driver` | {} | the runner's checkpoint flags | Tag to path, simulated clock only. A tag no learned arm flies, or an empty path, is refused when the driver is built; the files are read when an arm that flies one is checked (§19.5). |
+| `pair_columns` | `traces_scorer.score_trial`, `score_traces` | False | `--pair-columns` | The seven Phase 5 columns after the τ columns (§19.8). |
+
+**Refused combinations** (each fires only on a value other than the recorded one):
+
+- *The configuration* (`mule_config_errors`, through `_plan_config_errors` and
+  `_learned_config_errors`). On the wall clock: any of the six fields set, and `contact_policy =
+  chen_dqn` (E3 chooses each next stop on the simulated clock). On the simulated clock: `pair_q`
+  outside plan mode (a plan field off its default in legacy mode); in plan mode `pair_q` without
+  all three pair fields, with an `in_flight_response` other than `replan` (R3; with `abort` and a
+  cap, critic A10's reason is the one given), or with a pinned band (`PlanOptions`); `chen_dqn` in
+  plan mode (which takes no `contact_policy`); `chen_dqn` in legacy mode without a `contact_band`,
+  with `member_admission = subset`, or without all three policy fields; a checkpoint field beside
+  another slot or policy; a sha that is not 64 lowercase hex digits, a tag outside the pattern
+  above, a path that is not a non-empty string. Where a switch cannot run at all (`pair_q` outside
+  plan mode, `chen_dqn` in plan mode or on the wall clock), only that refusal is reported, not its
+  requirements as well.
+- *The supervisor* (`MuleSupervisor`, `MuleSupervisorError`). `pair_q` without a `pair_slot`; a
+  `pair_slot` that is not a `PairQSlot`, or beside the `committed` or `cross_heuristic` slot, or on
+  a legacy mule. `install_flight_slot` on a legacy mule, once a mission has started, under a pinned
+  band, and for anything but a `PairQSlot` (TypeError).
+- *The scheduler* (`fits_after_service`). Legacy mode, or no commit yet (`FLSchedulerError`); Pass
+  2, a pose other than the stop's, `collected` outside the stop, a `rest` holding the stop's members
+  (ValueError); a dwell that is not a finite number ≥ 0.
+- *The mule process.* A checkpoint its loader refuses (a sha, kind, schema, class or band mismatch,
+  no file, a path that is not an `.npz`), before the process binds anything: `CheckpointRefused`,
+  exit 1, no port written.
+- *The driver* (`Exp4Driver.check_arm`, before any trial and again before each trial). A learned
+  arm on the wall clock; a learned arm whose tag has no checkpoint (no random-init arm); an FQ arm
+  without `in_flight_response = replan` (R3); a checkpoint of the other kind, or one its mule would
+  refuse (§19.5); `H1+L1` where it would fly as H1 (R27). No training state is checked here, so
+  FerrySim's bootstrap checkpoints fly.
+- *The runner.* A checkpoint a campaign may not fly (§19.5), and under `--require-trained` H2 or H3
+  without `--selector-weights`, each a usage error (exit 2) before any trial.
+
+### 19.2 The pair slot
+
+**The view** (`plan.types.PairView`), read at the arrival at stop k:
+
+| Field | What it holds |
+|---|---|
+| `arrival` | `FerryRuntime.arrival_view`: per class of the link, in link order, the members it would solicit at k (within R_planar(c), at or above the SNR floor) and the dwell of serving them, at the SNR observed now |
+| `pose`, `clock_s` | the mule's pose (k's position) and the arrival instant |
+| `observed_snr_db` | per class, the median realized SNR over k's members now (`observe(...).class_snr_db`) |
+| `offsets_db` | per class, the median over k's members of realized minus mean SNR, each link differenced before the median (`FerryRuntime.class_offsets_db`; critic C6) |
+| `previous_offsets_db`, `previous_age_s` | the previous Pass-1 arrival's offsets in this trial and how long ago it was, carried across stops and sorties and reset each trial; both None at the trial's first (critic A3) |
+| `period_s` | P_c, the contact channel's interference period (its configuration, not its phases) |
+| `budget_end`, `budget_s` | the mission budget's end and its length (None without one) |
+| `t_ref_s` | T_nom, the plan's T |
+| `energy_j`, `energy_ref_j` | the energy spent this sortie, and `l1_state`'s reference: the capacity, else P_hover × the budget (a 0 reference is stored as None) |
+| `stops` | one `StopContext` per stop of the remainder, in its order, or home alone when none is left: the leg from k (`travel_s`), the dwell on b̄ at the mean SNR (`pred_dwell_s`), per class the median of the members' mean SNR (`pred_snr_db`), `capped` (some member capped), `exempt` (the stop is in `plan_protected`), the members' mean plan `age`, mean `on_time` rate and summed coverage `weight` |
+| `demand`, `demand_weight`, `cap_s` | N, the plan's demand with any beacon insert (R9); the demand's summed coverage weights; the cap S |
+
+**The pairs** are the covering classes (`PairView.covering`: those whose targets at k include every
+target of b̄ at the arrival SNR; FX's candidate set, with b̄ always among them) times the
+candidates, class-major in link order and then in the remainder's order; home stands alone. A pair
+is (b, the index of s in the remainder, or None for home).
+
+**The mask** (`FLScheduler.fits_after_service`; the user's decision 1 (a)). The state after serving
+k on b is the clock plus b's dwell at the observed SNR and the energy plus P_hover × that dwell;
+under route-level `deadline_bounds = delivery` its `deliver_by` is lowered to the own deadline of
+each target of b the plan did not cap, dated by the plan, else the mule's record of an insert, else
+the stop's deadline (conservatively, as if every target answered; R4). Then:
+
+- *a stop pair* is admitted when `fold_remainder` of the rest, s first and the others in plan order,
+  passes from that state on b̄'s model at the mean SNR (δ_obs = 0), under the arm's in-flight rule,
+  with the plan's exempt stops protected: the whole rest of the flight still fits. It is the fold
+  FX's `fits` runs, and the one the `replan` departure check runs next; under `abort` the check
+  folds the next stop alone, so the mask would be the stricter, which is why `pair_q` needs `replan`
+  (R3);
+- *home*, offered only once the remainder is empty, is admitted when the end of the dwell plus the
+  return leg and the Pass-1 upload is no later than `deliver_by` (route-level `delivery` only) and
+  the budget's end, and the energy clause holds (with a capacity).
+
+Without a budget nothing is gated. Neither pair tests the served stop's own deadline clause, since
+the mule is there whichever pair it picks, so under `collection` and `delivery_per_stop` a slower
+covering band can make that stop's own collection late unmasked (R4). The mask prices neither the
+1 s listen window (charged only when a reply is missing) nor each target's session-start pricing:
+the departure check after the stop catches both (in the final check's replay, 123 of 2,484
+decisions were followed by a re-plan at the next departure). `bind_fits_pair` answers only for the
+view's pairs, and the slot refuses a verdict that is not a bool.
+
+**The pick.** The masked argmax of the scorer's numbers, ties to the lowest row (R5), so with one
+class the ties follow the remainder's order. A scorer (`plan.types.PairScorer`) gives one finite
+number per pair, higher better; the slot refuses a wrong count or a non-finite number before
+anything is drawn. With a trainer attached (FerrySim only) the pick is `pair_q.behaviour_row`
+instead: ε-greedy over the admitted pairs, around FX's pair in the reference phase. **On an empty
+mask** the mule flies FX's pair, its fastest covering class (least dwell, then more targets, then
+b̄, then the class index) with no reorder (index 0, or home), recorded `fallback = mask_empty`; its
+effective mask is that one pair, which the learner stores and bootstraps through.
+
+**The scope guard** (`scope_guard.assert_pairs_admitted`, `SelectorScopeViolation`): every pair's band
+is a covering class; its next stop is a stop of the remainder (home only once that is empty; an
+index that is not an int in range, a bool included, is refused); and every member of the served stop
+and of the remainder is admitted this mission (the plan's served devices and the beacon hook's
+inserts, never the pre-flight drops). A violation is a wiring bug and fails loudly.
+
+**The scripted references** (`pair_slot.scripted_scorer(name)`; critic A2 and B5). Each ranks every
+pair totally, so the tie rule never decides for it, and each flies inside the slot's rules (the
+mask, the fallback, the reorder after the stop), so none is the fixed arm of its name:
+
+| Name | Ranking | Where it parts from the arm of its name |
+|---|---|---|
+| `fx_pair` | FX's band order (least dwell, then more targets, then b̄, then the class index), then nearest first | Under `abort`, only where the mask refuses every stop on FX's band and admits another band's pair. Under `replan` the FX arm re-plans first wherever (FX's band, 0) is refused, and may drop stops, while the slot reorders to FX's nearest admitted stop and drops nothing, or on an empty mask flies the head of the same re-plan |
+| `committed_pair` | b̄ first, then FX's band order, then the plan's order | Flies F's flight wherever (b̄, 0) is admitted; elsewhere it reorders, and on an empty mask flies FX's pair, which is F's only when FX's band is b̄ |
+| `hyb` | FX's band order, then the plan's order (critic B5's HYB, FX's band with the planned order) | Flies a fixed HYB's flight wherever (FX's band, 0) is admitted or no pair is; elsewhere it reorders. No fixed HYB filling exists |
+| `greedy_1` | the most targets at the arrival SNR, then the least dwell plus travel, then FX's tie-breaks | The one-step greedy rule under decision 4 (critic A2), the "most devices" band rule Phase 4 rejected: a reference to beat, not a filling |
+
+**The records** (`mission_completed.pass_1_pairs`, `pair_q` missions only), one per Pass-1 stop
+flown, in order, written at the arrival and closed when the mission ends; JSON-ready, with no wall
+time:
+
+| Key | Meaning |
+|---|---|
+| `t_s` | the arrival on the mission clock |
+| `devices`, `committed` | the stop's members; b̄ |
+| `band`, `next_index`, `next` | the pair flown: the class, the remainder's index (0 keeps the plan's order, null is home), and the next stop's members or `"home"` |
+| `pairs`, `feasible`, `admitted_pairs` | how many pairs were offered and how many the mask admitted, and those as `[band, index]` in row order |
+| `fallback` | `"mask_empty"` when no pair fitted, else null |
+| `fx_band`, `fx_next`, `agrees_fx` | FX's pair by FX's own rules at this arrival, on the remainder as it stands and priced as the mask prices it (FX's band; the nearest stop whose pair on that band the mask admits, else 0; null for home), and whether the pair flown is it. That is FX's rule, not the FX arm's flight: under `replan` the arm re-plans first exactly where `[fx_band, 0]` is missing from `admitted_pairs` with stops left |
+| `scorer`, `q`, `q_fx` | the scorer's name (`pair_v1` for the learned score, else the reference's); the scores of the pair flown and of FX's pair, to 6 places, for a scorer whose numbers are Q values, else null |
+| `collected`, `w` | added at the close: the members collected CLEAN at the stop, in member order, and the raw L3 weight the merge gave each (under `agg:plain` n_i from the CLEAN report line; under the age-aware rules `device_weights` × `weight_mass`; 0 for an update the merge left out, and on the empty round) |
+| `late` | the collected members whose stamp is strictly after their own deadline (the plan's, or the insert's) |
+| `t_next_s` | the next Pass-1 arrival, or for the sortie's last decision the end of the Pass-1 upload (the landing on the empty round), so Δt_k = `t_next_s` − `t_s` |
+| `terminal` | no later Pass-1 decision follows in the sortie: a `home` that a beacon insert follows is not terminal (critic B12) |
+| `trimmed_next` | the departure check after this stop did not keep the order the pair set: it re-planned it under `replan`, or gave up the pass under `abort` |
+
+The records close in `_ferry_result`, which every simulated-clock exit returns through (the empty
+round, no DOWN, the normal path); the slot's `close_mission` is called at every close, with
+`((), ())` when no decision was made. A beacon insert can fly ahead of the chosen stop, and `next`
+then names a stop not flown next, with `trimmed_next` False; nothing on a recorded or FerrySim path
+offers a beacon.
+
+### 19.3 The pair features (`pair_v1`)
+
+`selector.pair_features.pair_rows(view, schema)` gives one row per pair, in `view.pairs` order: on
+the three-class link 36 columns with the phase block and 24 without (4C + 24 and 2C + 18 for C
+classes). T is T_nom (`view.t_ref_s`), N the view's demand, b̄ the committed class, S the cap (1
+without one), P_c the interference period. Each column depends on the band b alone (`band`), the
+next stop s alone (`next`), both (`pair`) or neither (`state`: one value for every row of a view),
+as a test pins.
+
+| Column | Dep. | Value | Bounds |
+|---|---|---|---|
+| `band[c]`, one per class | band | 1 for the class b, else 0 | flag |
+| `snr_here` | band | b's median realized SNR over k's members now, / 30 dB | — |
+| `dwell_here` | band | b's dwell at k at that SNR, / T | ≥ 0 |
+| `gain_here` | band | b's targets at k beyond b̄'s, / N | [0, 1] |
+| `reach_here` | state | b̄'s targets at k, / N (R11) | [0, 1] |
+| `travel` | next | the leg from k to s (to the dock for home), / T | ≥ 0 |
+| `snr_next[c]`, one per class | next | s's mean SNR on class c, the median over its members, / 30 dB (0 for home) | — |
+| `dwell_next` | next | s's predicted dwell on b̄ at the mean SNR, / T | ≥ 0 |
+| `slack_next` | pair | sign(x)·log1p(abs(x) / T) with x = Deadline(s) − (now + `dwell_here` + travel + s's dwell), unclipped; 0 when `exempt_next`, and for home | — |
+| `exempt_next` | next | 1 when no deadline clause can bind s: exempt (every member capped), or undated | flag |
+| `age_next` | next | s's mean plan age, / S | ≥ 0 |
+| `on_time_next` | next | s's mean on-time rate (`features._on_time_rate`: 0.5 for a device never seen) | [0, 1] |
+| `members_next` | next | s's members, / N | [0, 1] |
+| `capped_next` | next | 1 when some member of s is capped | flag |
+| `home` | next | 1 for the home row | flag |
+| `clock_left` | pair | (budget end − (now + `dwell_here` + travel)) / budget; 1 without a budget | [−1, 1] |
+| `energy_left` | state | 1 − energy spent / the reference; 1 without one | [−1, 1] |
+| `remainder_share` | state | the remainder's members, / N | [0, 1] |
+| `least_slack` | state | the least slack over the remainder's dated, non-exempt stops, each priced after serving k on b̄ (the least `slack_next` on b̄'s rows); 0 when none | — |
+| `weight_share` | state | the remainder's committed weight / the demand's (0 when that is 0) | [0, 1] |
+| `offset[c]`, one per class | state | the class's offset at k now, / 10 dB | — |
+| `prev_offset[c]`, one per class | state | the previous Pass-1 arrival's offsets this trial, / 10 dB (0 at the trial's first) | — |
+| `has_prev` | state | 1 once a previous Pass-1 arrival was observed this trial | flag |
+| `prev_age` | state | its age, capped at 4·P_c, / P_c (0 at the first) | [0, 4] |
+| `prev_sin`, `prev_cos` | state | sin and cos of 2π·age / P_c, the age uncapped (0 at the first; R11) | [−1, 1] |
+| `arrival_sin`, `arrival_cos` | pair | sin and cos of 2π·(`dwell_here` + travel) / P_c | [−1, 1] |
+
+The phase block runs from `offset` to `arrival_cos` (design D-D (b); decision 6 (a)). What changed
+from the design's rows (the Phase 5 spec, other choices 4): feature 7 is s's mean SNR per class,
+since s's band is chosen at s's own arrival; the slack is log-scaled and unclipped, since the pilots'
+slack at collection was at least 582 s with a median of 1,143 s, which the design's [−1, 3] clip
+saturated (critic A10 (iv)), with `exempt_next` beside it; feature 11, the value of s, is dropped
+(critic C5: members / N under equal shards, noise under the stub's draws); the offsets are
+differenced per link (C6); the previous reading and its age are added (A3). R11 keeps three columns
+beyond the spec's list: `reach_here`, so that a row carries its own decision's reward level, which a
+γ > 0 target bootstraps from; and `prev_sin` and `prev_cos`, the phase between the two readings,
+which the capped age loses past 4·P_c (U1 measured that on jit-n12-120 at 1.3 % of decisions at
+P_c = 60 s, 16.9 % at 45 s and 24.7 % at 30 s, each a sortie's first). Only `gain_here` and
+`exempt_next` may be constant on a FerrySim sample (`SPARSE_COLUMNS`: a covering class that reaches
+more than b̄ is rare, and a stop whose members are all capped appears only from mission S on); every
+value is finite. A row reads no channel, clock or draw: the view is taken at the arrival from what
+the mule has observed by then. The phase block is tested at P_c = 30, 45 and 60 s.
+
+**The schema** (`PairFeatureSchema(classes, phase=True)`; the constants `SNR_SCALE_DB` 30,
+`OFFSET_SCALE_DB` 10, `PREVIOUS_AGE_CAP_PERIODS` 4 and `SHARE_CLIP` 1): its JSON (`version`
+`pair_v1`, `dim`, `classes`, `phase`, `columns`, `constants`) is the checkpoint header's `schema`,
+which the loader compares whole, so a checkpoint is read only under its own columns and scales, over
+exactly the link's classes in link order. Changing a column or a constant is a new schema version.
+
+**The learned score** (`LearnedPairScorer(net, schema)`): `score(view, mask=...)` is the online
+network's Q of `pair_rows(view)`, the whole candidate set in one call (equal rows get one Q), in
+`view.pairs` order; it does not read the mask; `q_values` is True and `name` is `pair_v1`. The
+network is held, not copied, so a trainer's updates are scored at once. `load_pair_scorer(path,
+expect_sha256=, classes=, phase=None)` verifies the checkpoint whole, then checks its kind
+(`pair_q`), its schema (this module's `pair_v1` over exactly `classes`; the phase flag only when one
+is asked, else the checkpoint's own) and the sha. Every refusal of what `path` names is a
+`CheckpointError` (a ValueError), no file and a path that is not an `.npz` included; arguments that
+no valid config holds raise TypeError or ValueError before any file is read. `build_pair_slot(...)`
+is the `PairQSlot` around it, the slot's module imported only there (R8).
+
+### 19.4 The learner (`selector/pair_q.py`, `selector/pair_replay.py`)
+
+A masked pointer double DQN in numpy: one scalar Q per row from shared weights (the legacy DDQN's
+pointer form), so the candidate set can grow and shrink with the remainder. These are new modules:
+the legacy `DDQN` refuses γ = 0, trains by SGD on a squared loss and scores one stored next row, and
+the H2 golden pins it.
+
+| Symbol | Where | Default | Rationale |
+|---|---|---|---|
+| `hidden`, `activation` | `PairQConfig` | (64, 64), tanh | Other choices 3; tanh is the only activation taken. W ~ N(0, 1/fan_in) and b = 0, float64, from `numpy.random.default_rng(seed)`; the target network starts as a copy. |
+| `gamma` | `PairQConfig` | 0.9 | γ ∈ [0, 1]. Study 5.5 sweeps {0, 0.25, 0.5, 0.75, 0.9, 0.99}; a trainer always states its own. |
+| `lr`, `adam_beta1`, `adam_beta2`, `adam_eps` | `PairQConfig` | 1e-3, 0.9, 0.999, 1e-8 | Adam with bias correction; β1, β2 and ε are Kingma and Ba's defaults, which the spec does not set. |
+| `huber_delta` | `PairQConfig` | 1.0 | The Huber loss of Q_online(s, a) − y, averaged over the batch, with y held fixed. |
+| `grad_clip` | `PairQConfig` | 10.0 | The gradient's global norm is clipped to it before Adam's step. |
+| `target_sync` | `PairQConfig` | 500 | A hard copy of the online weights every 500 updates. |
+| `n_step` | `PairQConfig` | 1 | The only value taken. |
+| `batch`, `replay_capacity`, `warmup_transitions` | `LearnerSettings` | 64, 50,000, 1,000 | No update until the replay holds 1,000 transitions; then one update per decision on a batch of 64 (`PairQLearner.observe`). |
+| `reference_episodes`, `epsilon_start`, `epsilon_end`, `decay_fraction` | `BehaviourSchedule` | 500, 0.3, 0.05, 0.5 | Critic C4: episodes 0–499 fly ε-greedy around FX's pair at 0.3; from episode 500, ε-greedy on Q, ε falling linearly from 0.3 to 0.05 at half the run, and 0.05 after. ε never starts at 1.0 for the pair score (E3's schedule has no reference phase, §19.6). |
+| `LEARNER_REVISION` | `pair_q` | 0 | Written into every checkpoint's header (R2). The one learner revision other choices 12 allows bumps it to 1, and the report refuses a sweep trained by two revisions or by one past 1. Settings changed by command-line flags are not counted; the training-spec check refuses a sweep that mixes them. |
+
+- *The target* is y = r + γ · Q_target(s′, a*), where a* is the argmax of Q_online over the next
+  decision's admitted rows, ties to the lowest row (double DQN, van Hasselt et al.). Only admitted
+  rows are ever forwarded, so a masked row cannot enter a target; γ = 0 and a done transition give
+  y = r exactly. A transition is done at the sortie's last decision: the flight Q's horizon is the
+  sortie (memo L264).
+- *A transition* (`PairTransition(x, reward, done, next_rows, next_mask)`) is the row of the pair
+  taken, its reward and, unless done, every candidate row of the next decision with the mask it was
+  taken among (on an empty mask, FX's row alone), so at least one next row is admitted. A batch
+  concatenates the next rows, each marked with its transition. The replay (`PairReplay(capacity,
+  seed=)`) is a FIFO ring sampled uniformly without replacement from `random.Random(seed)`.
+- *Choosing a row:* `masked_argmax` (ties to the lowest row; an empty mask raises) and, while
+  training, `behaviour_row`: with probability ε a uniform admitted row, else the reference when it
+  is given and admitted, else the masked argmax; exactly two draws per call, every argument checked
+  before them. Equal rows get one Q, bit for bit (`q` forwards each distinct row once), so the
+  lowest-row rule decides between them; the batched target's single pass agrees to rounding.
+- *Determinism:* every draw comes from a seeded stream, and with `OPENBLAS_NUM_THREADS=1` a training
+  run is reproducible to the byte (T3).
+
+### 19.5 Checkpoints
+
+**Format 2** (`PairQNet.save`, `.load`). An `.npz` of `format_version` (2), `header` (the canonical
+JSON, as bytes, of `format`, `kind` (`pair_q` or `chen_dqn`), `purpose` (`bootstrap` or `trained`),
+`learner_revision`, `network` (the row width and every `PairQConfig` setting, γ included), `schema`
+and `classes`) and the online weights (`layer<i>_W`, `layer<i>_b`, float64), with a JSON manifest
+beside it (the same name, `.json`; sorted keys, ASCII, no key naming a wall time). The sha256 is
+taken over every array in the file, the header included (each array's name, little-endian dtype,
+shape and bytes, in name order), so the sha a config names binds the weights, what they read, the
+kind, the purpose and the learner's revision (R2): the same weights saved as bootstrap, as trained,
+and under another revision have three shas. The legacy `DDQN.load` refuses format 2 by its own
+check, and archives are read with numpy's object loading off.
+
+**The manifest** holds exactly 21 keys: the header's seven (`HEADER_KEYS`, which the sha binds); the
+writer's four (`sha256`; `gamma`, checked against the header's network; `numpy`; `blas`); and the
+trainer's ten (`PROVENANCE_KEYS`, outside the sha): `reward` (the reward spec), `training` (the
+training spec and its outcome), `seeds`, `cell_family` and `cell_family_sha256`, `trainer_commit`
+and `dirty`, `episodes_trained` (the episodes the kept weights trained on), `validation` (the curve:
+one entry per validation, with its score, each cell's mean and the updates taken by then), and
+`held_out`, None until the evaluator fills it (`pair_q.record_held_out`) and then holding at least
+`episodes` (an int ≥ 1) and `return_mean` (a finite number), the mean undiscounted held-out return
+(`HELD_OUT_KEYS`; R10). `held_out` is written after the save, so it stays outside the sha, and
+`episodes_trained`, `held_out` and `dirty` catch mistakes, not hand edits.
+
+**The loader refuses** (`pair_q.CheckpointError`, a ValueError) a missing or malformed manifest; any
+format but 2 (the legacy DDQN's format 1 included); a broken header (one written before R2 lacks the
+purpose and the revision); arrays that disagree with the manifest's sha or its header (a relabelled
+purpose or revision included); extra or missing arrays, another dtype or shape, non-finite weights;
+and a sha, kind, class tuple (order counts) or schema other than expected. It checks no training
+state, so a bootstrap checkpoint loads, and it loads a checkpoint of another learner revision.
+`read_manifest` checks the manifest's form only: judge a checkpoint by `verify_checkpoint`'s
+manifest.
+
+**Where a checkpoint is checked:**
+
+- *The runner*, a campaign's entry (critic B9). For every checkpoint given, whichever arms run
+  (R15): `verify_checkpoint`, the flag's kind, then `campaign_refusals`: a purpose other than
+  `trained`, `episodes_trained` below 1, no held-out score, or a dirty tree without
+  `--allow-dirty-checkpoint`. Then as its tag (R24; `ferrysim.checkpoints.tag_refusals`): `gX`
+  needs γ = X/100; `hand` needs the F·hand reward, and every other pair tag the derived reward, at
+  decision 4 (a)'s weights (c_t 0.1, c_cov 1) under `gX`, `dwell` and `cov` (`main` takes any
+  weights its manifest records; R28); `e3` needs E3's bytes reward; and the kept weights must have
+  taken an update (the validation entry at `episodes_trained` records more than 0, and a manifest
+  without that record is refused). Then, once the driver is built, each pair checkpoint against the
+  plan its arm flies under the run's flags (R23: the manifest's `training.spec.plan_score_params`,
+  none recorded being the default plan, against `Exp4Driver.plan_settings(arm)`, with
+  `PlanScoreParams`' defaults filled in on both sides). Each refusal is a usage error, exit 2,
+  before any trial.
+- *The driver* (`Exp4Driver.checkpoint_settings`, `check_arm`). It reads each path once against the
+  working directory, verifies it, keeps the verified sha for the run, and writes the path into the
+  mule's config repo-relative with `/` when the file lies under the repository root, else as its
+  resolved absolute path (R12). Before each trial it loads the checkpoint exactly as the mule will
+  (`load_pair_scorer` over the link's classes, or `load_e3_network` on the contact band, from
+  `processes.mule.checkpoint_path`), so a file rewritten since the first check is refused before
+  anything is spawned; a checkpoint re-saved at the same path is therefore refused at the next
+  trial (use a new path). No training state is checked.
+- *The mule* (`processes/mule.py`). It reads a relative path under `REPO_ROOT`, whatever its working
+  directory, and loads the checkpoint against the config's sha before it binds anything; any
+  refusal is `CheckpointRefused`, and the process exits 1 without writing its port.
+
+**The layout** (decision 9 (a); `ferrysim.checkpoints.checkpoint_path`):
+`results/exp5/checkpoints/<study>/<tag>/g<γ>_s<seed>.npz`, with the manifest beside each; a study
+and a tag are plain path components. The layout has no cell family, so each family gets a study of
+its own, and a run never replaces another family's checkpoint, even with `--overwrite` (R19).
+Nothing is committed during the build: each study's final checkpoints are committed with the user's
+consent, after a LICENSE file is added (decision 9: the README names MIT, and the repository has no
+LICENSE file yet). Tests write their checkpoints under `tmp_path`.
+
+**Trained weights for the H arms.** `--require-trained` (the runner; decision 8 (a)) refuses H2 and
+H3, both in the default arm list, without `--selector-weights`, as Exp 3's `--require-trained-a4`
+does; it checks only that weights are given (R15). The learned arms need no such flag: the runner
+always refuses an untrained checkpoint.
+
+### 19.6 E3 (`contact_policy = chen_dqn`)
+
+`policies.chen_dqn.ChenDQNPolicy` (decision 7 (a); after Chen et al., GLOBECOM Workshops 2023) is a
+legacy-mode whole scheduler, as D1–D5 are, that chooses each next stop in flight.
+
+- *Declarations:* `name = "chen_dqn"`, `in_flight_check = "none"`, `admits_member_subsets = False`,
+  `chooses_next_stop = True`.
+- *Before takeoff* (`admit_and_order`): every S3a contact, nearest the takeoff pose first, then by
+  position, then by members; the order only names the rows and decides ties. It reads no budget,
+  deadline or device state, so no policy drop is reported.
+- *In flight, no check:* the departure check keeps the remainder as it stands (`RULE_NONE`), never
+  re-planning or trimming it, so E3's Pass 1 is the same under `abort` and `replan`. E3 flies the
+  driver's configured in-flight response, as D1–D5 do (R27), and its Pass 2 follows it as every
+  arm's does.
+- *The hook* (`MuleSupervisor._ferry_e3_next_stop`; the protocol of `policies/next_stop.py`): at
+  takeoff and at every Pass-1 departure, after the departure check and the beacon hook, never in
+  Pass 2, the supervisor calls `next_stop(remainder, state, view=, admissible=, pass_kind=,
+  after_stop=)`. `admissible(i)` is Chen's safety controller: S3b's single-contact predicate under
+  `RULE_BUDGET` from the departure's state (transit, dwell, the return leg and the Pass-1 upload
+  within the budget's end, and the energy clause; no deadline). The policy returns the admissible
+  row with the highest online Q, ties to the lowest row, and None exactly when no stop is admissible
+  (`checked_choice`), which ends the pass: the mule flies home, and the stops left go to
+  `pass_1_e3_unvisited`, never widened. Beacon inserts are offered to it as any stop is.
+- *The observation* (`FerryRuntime.e3_observation`, an `E3View`): per candidate stop, on the contact
+  band, from the departure pose; N is the slice with every planned or inserted device outside it
+  (R9).
+
+| Column (`e3_v1`) | Value |
+|---|---|
+| `remaining` | the share of the stop's updates not collected this mission: 1 on every row (declared constant) |
+| `snr` | the median over the members of the SNR now from the pose, realized within reach and the mean ("radio map") SNR beyond (critic B7 iv), / 10 dB |
+| `reachable` | the share of members within reach and at or above the floor: 0 on most rows (declared) |
+| `dx`, `dy`, `distance` | the stop less the pose, and the leg on the flight model's metric, / 100 m |
+| `members` | the stop's members, / N |
+| `return_energy` | the energy of the return from the stop to the dock, / the energy reference (0 without one) |
+| `energy_left` | 1 − energy spent / the reference (1 without one) |
+| `time_left` | (budget end − clock) / budget (1 without one) |
+
+The schema (`e3_v1`: the 10 columns, the two declared constant, `length_scale_m` 100 and
+`snr_scale_db` 10) and the contact band, the checkpoint's one class, are bound by the sha. **Declared
+deviations from Chen** (decision 7 (a)): stops rather than grid moves (Chen's collection status q,
+0 for every candidate at a departure, is left out); one agent (no other UAVs, no QMIX); no
+model-aided learning; `remaining` and `reachable` constant or near zero, kept for fidelity; the pair
+learner's masked double DQN rather than Chen's settings (his Adam learning rate is 5e-4); dx and dy
+the stop less the pose, Chen's sign being the other; trained at K = 1 and flown per mule at K = 3
+in Study 5.3, on slices within the trained sizes (critic B7 v). E3 is rewarded in bytes, |C_k| / N.
+It acts on the live network's online Q at each call, never on the target copy. Its training defaults
+are the pair learner's (lr 1e-3, ε from 0.3 to 0.05, no reference phase), with `--gamma` required;
+Chen's lr 5e-4 and ε from 1.0 are the user's choice at the E3 training go-ahead (R16), and the
+manifest records which. Checkpoints: `save_e3_checkpoint` and `load_e3_network` (kind `chen_dqn`,
+schema `e3_v1`, classes `[band]`); the mule builds `ChenDQNPolicy.from_checkpoint`, which refuses a
+sha, kind, schema or band mismatch; a bootstrap checkpoint loads.
+
+### 19.7 Arms, tags and the runner
+
+`driver.PHASE_5_ARMS` run only when named with `--arms`, on the simulated clock; the runner's default
+arm list stays `DEFAULT_ARMS`, and the driver runs `ARMS` = `DEFAULT_ARMS` + `PLAN_ARMS` +
+`PHASE_5_ARMS`. Labels are ASCII with no `__`, so a kept trace's directory holds them whole.
+
+| Arm | Tag | Settings over its base | Notes |
+|---|---|---|---|
+| `FQ` | `main` | F's, with `flight_slot = pair_q` | The plan's F (the paper may call FQ "F"); Phase 4's F keeps the committed slot. `main` flies any derived-reward weights its manifest records (R28). |
+| `FQ-g0`, `FQ-g25`, `FQ-g50`, `FQ-g75`, `FQ-g90`, `FQ-g99` | `g0` … `g99` | as FQ | Study 5.5's γ sweep: tag `gX` flies γ = X/100 at decision 4 (a)'s weights (R24). |
+| `FQ-hand` | `hand` | as FQ | The score trained on F·hand (decision 4): only an F·hand checkpoint, and an F·hand checkpoint only here (R24). |
+| `FQ-dwell` | `dwell` | FQ, its `plan_score_params` gaining `{"dwell_in_delta": false}` (`FQ_DWELL_SCORE`) | Study 5.7's dwell ablation, with a checkpoint trained on that plan (R23). |
+| `FQ-cov` | `cov` | FQ, its `plan_score_params` gaining F-cov's `{"c_cov_per_device": 0, "c_link": 0}` | Study 5.7's coverage ablation, likewise. |
+| `E3` | `e3` | `contact_policy = chen_dqn`, whole stops, the run's in-flight response | §19.6. |
+| `H1+L1` | — | H1 with `backhaul_policy = adaptive` (simulated clock), or `backhaul_plan(adaptive=True)` (`--l1-channel`) | Decision 8 (a): the adaptive backhaul's reference once H2 and H3 leave Exp 5. Refused without `--l1-channel` or `--backhaul-model seconds` (R27); member subsets as H1. |
+
+An FQ arm is a plan arm (`is_plan_arm`) and gets F's settings wherever F has them: the `trim`
+fallback, `subset` admission by default, the miss priority on, T_nom per cell and the pre-trial
+check; a test asserts that each FQ arm's mule config equals F's but for `flight_slot`, the
+checkpoint fields and its ablation's own field (critic A5). It also needs `--in-flight-response
+replan` (R3). FQ-dwell, FQ-cov and FQ-hand train their checkpoints only if Study 5.5 keeps the
+learned score (critic C2); otherwise Study 5.7's plan-term ablations fly FX, and `FX-dwell` and
+`FX-cov` are added then.
+
+| Flag | Default | Meaning |
+|---|---|---|
+| `--arms FQ FQ-hand FQ-dwell FQ-cov FQ-g0 ... FQ-g99 E3 H1+L1` | the nine Phase 3 arms | The Phase 5 arms, with `--mission-clock sim`; a learned arm needs its tag's checkpoint. |
+| `--pair-checkpoint TAG=PATH` | none | Repeatable; tags `main`, `hand`, `dwell`, `cov`, `g0`, `g25`, `g50`, `g75`, `g90`, `g99`. A tag no learned arm flies, a tag given twice, or an empty path is a usage error. |
+| `--policy-checkpoint E3=PATH` | none | E3's checkpoint (`e3=PATH` too). |
+| `--allow-dirty-checkpoint` | off | Fly a checkpoint trained from a dirty tree, for development and tests, not a campaign; it lifts only the dirty refusal. |
+| `--require-trained` | off | Refuse H2 and H3 without `--selector-weights` (§19.5). |
+
+None of these flags is a grid axis, so they move no seed, and each setting needs a CSV of its own:
+the runner skips (cell, arm, trial) keys already in a file. The pair learner's module is imported
+only when a checkpoint flag is given.
+
+**Provenance.** No trial CSV column is added, and no path appears in a row. For a `pair_q` mule
+`ferry_params` gains `pair_tag` and `pair_sha256` (`plan_ferry_params`); for E3 `policy_params` is
+`{"policy_sha256": ..., "policy_tag": ...}` as sorted JSON (`learned_policy_params`); every other row
+reads as before. The trace scorer derives the same strings from a kept trace's per-role JSON with the
+same two functions. The sha finds the manifest, which holds γ, the reward and the rest.
+
+### 19.8 Trace fields and the scorer's pair columns
+
+Additive, on the simulated clock and only on the mules that fly a learned filling; at the defaults no
+trace event gains a field.
+
+- **Per-role JSON** (either clock): every mule's carries the six checkpoint fields, null unless it
+  flies a learned filling.
+- **`mule_ready.pair`** (a `pair_q` mule) and **`mule_ready.policy_checkpoint`** (E3): the verified
+  manifest's provenance (`pair_q.manifest_provenance`: `sha256`, `kind`, `purpose`, `classes`,
+  `gamma`, `reward`, `seeds`, `episodes_trained`, `cell_family`, `cell_family_sha256`,
+  `learner_revision` and `schema`, the schema's version) and the config's `tag`; no path. A mule
+  whose slot FerrySim installed keeps the configured FX slot's `flight_slot` and has no `pair`.
+- **`mission_completed.pass_1_pairs`** (a `pair_q` mission that flew a Pass-1 stop): the closed
+  decision records (§19.2), left out when empty.
+- **`mission_completed.pass_1_e3`** (E3): one entry per call, with `t_s`, `after_stop` (false at
+  takeoff), `stops` (each stop's devices), `admissible` (one bool per stop), `next_index` and `next`
+  (`"home"` for None). E3's N is not recorded per call; a reader recomputes it as the slice with the
+  planned and inserted devices. **`pass_1_e3_unvisited`**: each stop left when nothing was
+  admissible, with `position`, `devices`, `deadline_ts` and `"widened": false`. Each is left out
+  when empty.
+- **The consumer** (`experiments/exp4/events_consumer.py`): `MissionRecord.pair_decisions`
+  (`PairDecision`, field for field, `next` as `next_devices`, with `mask_empty` and `reorders`),
+  `e3_calls` (`E3Call`) and `e3_unvisited` (each stop's members), None where a mission has no such
+  field. Each field is read only in the JSON form the mule writes it (a number is a finite int or
+  float, never a bool or a string; an index or count an int ≥ 0; a flag a bool; a name a string; an
+  id list a list of strings); anything else reads as None or empty, FX's pair is read whole, and a
+  record whose choice (`band` and `next_index`) cannot be read is skipped.
+
+**The pair columns** (`traces_scorer.PHASE_5_COLUMNS`) appear only with `pair_columns`
+(`--pair-columns`), after the τ columns; without it the row is the Phase 4 one, byte for byte, and
+the trial CSV's header is unchanged either way.
+
+| Column | What it holds |
+|---|---|
+| `pair_decisions` | the decisions, pooled over every mission and mule |
+| `pair_feasible_mean` | the mean number of pairs the mask admitted |
+| `pair_mask_empty` | a count: the decisions that found no admissible pair and fell back on FX's pair (the share is this over `pair_decisions`) |
+| `pair_fx_agree_share` | the share whose chosen pair was FX's by FX's own rule at that arrival; an empty-mask decision counts as agreeing |
+| `pair_band_off_bbar_share` | the share served on a class other than b̄ |
+| `pair_reorder_share` | the share whose pair chose a stop other than the remainder's head |
+| `e3_unvisited_mean` | the mean over the trial's missions of the stops E3's pass left unvisited: stops, not devices; a mission without the field left none |
+
+A trial flew the pair slot when its mule config names `pair_q` or any of its missions recorded a
+decision (FerrySim installs its slots on FX's configuration, so its traces name FX's slot); with no
+decision the two counts are 0 and the means and shares blank, and on any other trial every pair
+column is blank. `e3_unvisited_mean` applies when the config names `chen_dqn` or a mission recorded
+E3's calls, and is blank otherwise. The agreement and re-order shares count choices, not flights
+(R21): the band is flown at once, but the stop flown next can differ when `trimmed_next` is set or
+a beacon stop is inserted ahead of the chosen one. They are reported diagnostics, and no Study 5.5
+step reads them. `mule_ready.pair` is not parsed: provenance comes from the per-role JSON, as the
+driver's does.
+
+```bash
+python -m experiments.analysis.traces_scorer --traces results/exp5/s55/stack_120_traces --pair-columns --csv results/exp5/s55/stack_120_scored.csv
+```
+
+### 19.9 FerrySim (`experiments/ferrysim/`)
+
+FerrySim is the stack's own trial, run in one process (decision 2 (a)): `Exp4Driver.run_trial`, its
+per-role JSON and the real cluster, mule and device services, on synchronous in-process links and a
+virtual wall clock, simulated time being the mule's own mission clock. `inprocess.py` is a copy of
+UG4's in-process orchestrator (`tests/golden/_build_p3_sim.py`) with the helpers it takes from
+`tests` (`experiments` never imports `tests`; critic C7), one mule per trial, and two hooks: `on_mule`
+callables (FerrySim installs an episode's pair slot there) and the device model. It lives in
+`experiments/`, not `hermes/scheduler/selector/`: `hermes/` may not import `experiments/`, and the
+scheduler may not import `hermes.l1`, while FerrySim needs both.
+
+**What is stood in for** (R25). Beyond the links and the clock: the devices' local training, by the
+`equal` device model (`inprocess.equal_shard_trainer`: the same noisy update with a constant example
+count n_i = 10 and constant scores, so every update weighs the same in the merge) or `stub`, the
+stack's own stub trainer (n_i drawn afresh in [4, 15] at every training call), which the parity
+tests use; and the devices' service loops, which do not run, so device traces hold only
+`device_ready`. A FerrySim row (`EpisodeResult.row`, and the trace scorer's row of a kept trace)
+therefore has `coverage` 0.0, `participation_entropy` 0.0 and `jains_fairness` 1.0, and a
+`mission_duration_s_mean` of the harness clock: harness artifacts in every FerrySim trial, which no
+study reads, since FerrySim reads flights from the mule's own records. *Parity:* with the stub,
+FerrySim equals UG5's oracles in all nine parts; stub FX and FQ trials through the real orchestrator
+equal FerrySim's runs on every mule and cluster event, wall stamps masked, and on the row bar
+`mission_duration_s_mean` and the three serve columns (critic B8); FQ's install path equals its
+config path on every mission. A process runs one episode at a time (the patches are process-wide);
+parallel runs use spawned workers, each with `OPENBLAS_NUM_THREADS=1`, results in task order.
+
+**The cells** (decision 3 (a); `cells.CELLS` and `STUDY_5_6_CELLS`). Every cell is Phase 4's pilot
+configuration, as UG5's trials fly it: the simulated clock, realism, wide as the reference class, the
+`t_nom` deadline unit, `replan` with the `trim` fallback, `agg:cutoff`, the `channel` reliability
+source, 1 MB per direction, 4 missions, `rf_range_m` 60, the jittery network regime, and S = 2, the
+S\* tool's S at each size's two budgets.
+
+| Cell | Family | Role | N | Budget | Contact channel |
+|---|---|---|---|---|---|
+| `jit-n6-45` | jittery | control, where looking ahead cannot matter | 6 | 45 s, Phase 4's stress prior | jittery, P_c 60 s |
+| `jit-n6-90` | jittery | control | 6 | 90 s, Phase 4's knee prior | jittery, P_c 60 s |
+| `jit-n12-120` | jittery | decision-rich: Study 5.5 | 12 | 120 s, stand-in | jittery, P_c 60 s |
+| `jit-n12-180` | jittery | decision-rich: Study 5.5 | 12 | 180 s, stand-in | jittery, P_c 60 s |
+| `cln-n12-120` | clean | negative control (critic C3) | 12 | 120 s, stand-in | clean |
+| `cln-n12-180` | clean | negative control | 12 | 180 s, stand-in | clean |
+| `jit-n12-120-q`, `jit-n12-120-h` | `jittery56` | Study 5.6: lag/P_c a quarter, a half | 12 | 120 s, stand-in | jittery, P_c 104 s and 52 s |
+| `jit-n12-180-q`, `jit-n12-180-h` | `jittery56` | Study 5.6 | 12 | 180 s, stand-in | jittery, P_c 136 s and 68 s |
+
+The N = 12 budgets are stand-ins until a pilot measures the N = 12 knee and stress budget (critic
+B6). Study 5.6's periods (R22) are 4 × and 2 × `STUDY_5_6_LAGS_S` (26 s at 120 s, 34 s at 180 s):
+critic A3's lag from one Pass-1 arrival to the next in a sortie (`cells.arrival_lags`), FX's median
+over every lag of the first 200 episodes of the matching Study 5.5 cell's validation stream at the
+default P_c, rounded to the nearest second (`evaluate.fx_lag_median`; the fix round measured
+26.42 s over 1,397 lags and 34.11 s over 397). The integers are a pre-registration convention, not
+a measurement to the second: the pooled median's 95 % interval is about 25.4–27.5 s and 32.2–36.9 s,
+and the first 400 episodes give 26.80 s and 35.12 s. The half cells follow the rule though their
+52 s and 68 s lie near 60 s. The 5.6 cells stay out of `CELLS`, the headroom report's default; their
+control is the clean N = 12 cells (`STUDY_5_6_CONTROL_CELLS`). They are re-pinned with the budgets
+after the N = 12 pilot, on the same sample and statistic, and with them move the four P_c constants,
+the `jittery56` hash and the test literals.
+
+**Families**, one score per contact regime: `jittery`, the four jittery cells (sha256
+`32b5cb6b…3e91`); `clean`, the two clean cells (`76955c9b…5902`); and `jittery56`, the jittery cells
+and Study 5.6's four (`0079de11…ac66`). A manifest records its family and the hash
+(`cells.family_sha256`). Study 5.5 is read on `STUDY_5_5_CELLS` (jit-n12-120 and jit-n12-180),
+whichever family trained the score; which family the jittery score practises on is the user's
+choice before the 5.5 sweep (R29).
+
+**Seed streams** (other choices 8; critic B14). An episode is one trial of a cell, its trial seed
+drawn from `ferrysim-train-<seed>` (training run `<seed>`), `ferrysim-val` (validation, the
+headroom report and ε) or `ferrysim-heldout` (Study 5.5's held-out judgement, shared by every
+checkpoint and reference: common random numbers). A seed is 32 bits: its top two bits are the
+stream kind (1 train, 2 val, 3 held-out) and the other 30 a SHA-256 of the stream, the cell and the
+episode index. So the streams are disjoint by construction (`check_disjoint` checks it), a stream's
+episodes are distinct (a repeat is skipped), and a stream never moves when another is extended. A
+training run draws each episode's cell uniformly from its family by a keyed draw
+(`cells.train_episode`), so every γ of one seed meets the same episodes. The 5.6 cells' streams are
+keyed by their names, so their quarter and half cells do not share layouts in FerrySim; in stack
+trials the runner's seeds pair them.
+
+**The reward** (decision 4 (a); `reward.RewardSpec(kind, c_t, c_e, c_cov, n_ref,
+expected_availability)`). A decision is each Pass-1 stop flown, for every arm, so FX's, F's and a
+slot's returns are read alike:
+
+    r_k = G_k − c_t·Δt_k/T − c_e·ΔE_k/(P_hover·T)   (− c_cov·U at the sortie's last decision)
+    G_k = Σ w_i / (n_ref·N), over the updates collected CLEAN at k
+    U   = Σ ω_j over the committed devices left uncollected / Σ ω_j over the demand
+
+w_i is the raw L3 weight the mule's merge gave the update (`update_weights`: n_i·v_i·s(a_i), 0 past
+the cutoff); n_ref is the reference example count (10, the equal model's); N the mission's demand
+with any beacon insert; Δt_k runs from the arrival at k to the next arrival, or after the sortie's
+last decision to the end of the Pass-1 upload (the landing on the empty round); T is T_nom; ΔE_k is
+the mule's own energy model over that span; ω are the plan's coverage weights, over its committed
+(`served`) devices. Defaults: c_t = 0.1, c_e = 0, c_cov = 1; no lateness term (none of 1,148 probed
+collections was late, critic B3) and no energy term (energy tracks time). At the training cells
+every collected update weighs n_ref, so G_k is the stop's count over N, and "derived against
+hand-set" compares weights, not what the merge weight contains (critic B4). A sortie with no Pass-1
+stop makes no decision and adds nothing; its shortfall is reported only. FerrySim credits an update
+whose backhaul upload was lost (Freeze §5l, recorded). `hand` is F·hand, "today's reward" ported
+from ContactSim and declared as such: (200·|C_k| − Δt_k − 0.002·metres_k)/150, with no terminal
+term. `bytes` is E3's: |C_k| / N. Study 5.7's grid is `reward.grid_specs()`: c_t ∈ {0.03, 0.1, 0.3}
+× c_cov ∈ {0.25, 1, 4}. *Expected availability* (critic C1): training replaces each targeted
+member's keyed availability draw by its probability rel_j (a collected member is credited rel_j·w_j,
+a dropped one rel_j·n_ref, and U is taken in expectation); the policy never reads rel_j, and
+validation, the held-out evaluation and every reported number use the realized draw.
+
+**The episode API** (`episode.py`). `run_episode(cell, seed, policy, *, trial_index=0,
+reward=DERIVED, device_model="equal", trainer=None, sink=None, hooks=(), stop_after=None,
+keep_case=False, driver_overrides=None) -> EpisodeResult`. `Policy(label, arm="FX", scorer=None)`:
+with no scorer the arm's own slot flies (`Policy.of_arm`); a scorer factory flies a fresh
+`PairQSlot` on a plan arm's configuration, installed through `install_flight_slot`
+(`Policy.scripted(name)` for the references). `reference_policies()` gives the FX and F arms (R6),
+then `fx_pair`, `committed_pair`, `hyb` and `greedy_1`. `Trainer(epsilon, rng_seed,
+around_reference)` attaches a trainer (ε = 0 with no reference flies as none does). `EpisodeResult`
+holds the sortie records, each decision's reward terms, the mule's closed pair records, the steps
+(with a trainer), the driver's row (with R25's artifacts), and `.ret`, `.terms`, `.rescored(reward)`
+and `.summary()`. With `driver_overrides={"trace_root": d}` the trial's traces are kept under
+`d/<cell name>/<policy label>/`: a pair slot's trace and row name arm FX, and the directory names the
+policy. Under a pair slot the mule's own records are compared with FerrySim's reading stop by stop,
+and any difference raises.
+
+**Training** (`train.py`; other choices 3 and 12). `TrainSpec(kind, seed, family, cells, network,
+learner, reward, episodes=10000, eval_every=1000, val_episodes=200, patience=3, phase=True,
+plan_score_params={})` is one run: one learner, at one γ, from one seed, over one family's cells.
+The pair score flies FX's configuration with a fresh slot around the live network; E3 flies its arm
+through the config path from a bootstrap checkpoint the run writes to a temporary directory and
+deletes after. Episode e flies `BehaviourSchedule.at(e, episodes)` from its own seeded stream. An
+episode flies with the network as it stood at its start; then its transitions are pushed in
+decision order, each followed by one update once the replay is warm, so the network moves between
+episodes, never inside one. Every `eval_every` episodes and after the last, the network flies the
+validation episodes greedily (`val_episodes`, spread over the family's cells, the first of each
+cell's validation stream) at the realized draw; the score is the mean of the cells' means; a
+strictly higher score keeps the weights, and the run stops after `patience` validations without
+one. The kept weights are saved as `trained` (§19.5), recording the training spec and its outcome,
+the seeds (the initial weights' and the replay's seeds are hashes of the run's stream, so every γ
+of one seed starts alike), the family and its hash, the commit and the dirty flag,
+`episodes_trained`, the validation curve, and no held-out score yet. `TrainSpec` refuses a reward at
+the realized draw (critic C1), a kind and a reward that do not go together (`pair_q` trains on the
+derived reward or F·hand, `chen_dqn` on bytes), an E3 schedule with a reference phase, fewer
+validation episodes than cells, a plan for E3, and cells that set a plan themselves.
+`plan_score_params` (R23) is the plan the pair score trains and validates under, recorded in the
+spec only when set. A tree is dirty when git reports any change under `hermes/` or `experiments/`
+(untracked files included, ignored ones not); without git it counts as dirty.
+
+**The command line** (`python -m experiments.ferrysim <command>`). Nothing runs unless a user runs
+it, and the campaigns wait for the user's go-ahead (Freeze §5l). Each command puts the caller's
+logging level back when it ends (R28).
+
+| Command | Flags (default) |
+|---|---|
+| `train` | `--kind` (`pair_q`, or `chen_dqn`); `--family` (`jittery`; `clean`, `jittery56`); `--study` (required); `--tag` (the arm's: `g<100γ>` on the derived reward, `dwell` or `cov` with `--ablation`, `hand` on F·hand, `e3`); `--root` (the repository's `results/exp5/checkpoints`); `--gamma`, `--seed` (both required); `--episodes` (10000); `--eval-every` (1000); `--val-episodes` (200); `--patience` (3); `--reward` (derived; `bytes` for `chen_dqn`; or `hand`); `--c-t` (0.1); `--c-cov` (1); `--lr` (1e-3); `--epsilon-start` (0.3); `--epsilon-end` (0.05); `--reference-episodes` (500; none for `chen_dqn`); `--no-phase`; `--ablation` (`dwell` or `cov`); `--plan-score-params` (JSON, the runner's format); `--allow-dirty`; `--overwrite` |
+| `sweep` | as `train`, with `--gammas` and `--seeds` (both required) in place of `--gamma` and `--seed`, and `--workers` (1); every path is checked before the first run |
+| `evaluate` | `--checkpoints` (files, or directories searched for `.npz` files at any depth); `--cells` (the jittery family's four); `--stream` (`heldout`, or `val`); `--episodes` (1000); `--start` (0); `--references` (FX, F and the four scripted ones) or `--no-references`; `--reward` (derived; `hand`, `bytes`); `--c-t`; `--c-cov`; `--workers` (1); `--plan-score-params` (the references' plan); `--record`; `--out` (required) |
+| `report` | `--evaluation` (required); `--epsilon` or `--headroom` (exactly one); `--cells` (jit-n12-120 jit-n12-180); `--out` |
+| `headroom` | `--cells` (decision 3's six); `--episodes` (200); `--start` (0); `--max-leaves` (512); `--workers` (1); `--plan-score-params`; `--out` |
+
+- `train` and `sweep` refuse a dirty tree unless `--allow-dirty` is given (the manifest records it),
+  and an existing checkpoint unless `--overwrite` is given, and never replace another family's (R19).
+  A derived reward at other weights needs a `--tag` of its own (Study 5.7's grid: free tags that no
+  arm flies, which the runner refuses), and an explicit learned arm's tag takes only a run that arm
+  flies: its γ, its reward, decision 4 (a)'s weights under `gX`, `dwell` and `cov`, and an
+  ablation's plan (R23, R24). `--ablation dwell` or `cov` trains FQ-dwell's or FQ-cov's score under
+  the driver's own plan settings, under that tag, at decision 4 (a)'s weights; `--plan-score-params`
+  may not repeat its keys. `--lr`, `--epsilon-start` and `--epsilon-end` reach the manifest.
+- `evaluate` flies every checkpoint and reference on the same held-out episodes of each cell, each
+  policy read under one reward at the realized draw (`--reward bytes` for E3's own score; R18), and
+  keeps no traces. `--record` (the held-out stream only) writes each checkpoint's held-out score into
+  its manifest: `episodes`, `return_mean` (the mean of the cells' means), the stream, the reward and
+  each cell's summary. A pair checkpoint flies the plan it trained under; beside the references it
+  must have trained on theirs (`--plan-score-params`), and with `--no-references` that flag is
+  refused. The N = 6 control is among the default cells (R20: about 3.3 h for Study 5.5's
+  evaluation at 8 workers); a clean study names `--cells cln-n12-120 cln-n12-180`, and Study 5.6's
+  cells fly only when named.
+- `report` applies Study 5.5's rule (below) to an evaluation file on `--cells`, with ε given or read
+  from a headroom report flown on the evaluation's plan. It refuses an evaluation not on the
+  held-out stream, a checkpoint that is not `pair_q` or not trained, two learner revisions or one
+  past 1, mixed families, rewards or training specs, a duplicate (γ, seed), mismatched episode
+  counts, cells not flown, and a table missing a reference the rule reads, each as a usage error.
+- `python -m experiments.ferrysim.evaluate` (`--cells`, by default Study 5.5's two; `--stream`,
+  `--episodes`, `--start`, `--policies`, `--workers`, `--out`) evaluates the references alone.
+
+**Study 5.5's rule** (decision 5 (a); `report.decide`), in this order, with nothing looked at twice.
+The training seed is the unit: a seed's score is its checkpoint's mean held-out return over the
+cells read.
+
+1. *Sanity* (critic A2): the γ = 0 mean must be at least max(FX, `greedy_1`) − ε, FX being the arm
+   itself (R6); a point comparison (R18). If it fails, the outcome is `sanity-failed`, the curve is
+   not read and FX stays; the learner may be revised once, on the control cells, before the sweep.
+2. *Rising:* the best γ > 0, picked on the kept checkpoints' validation scores on the cells read
+   (ties to the lower γ; the same entries for every γ, R18), beats γ = 0 by at least ε, with the
+   bootstrap CI of the gain excluding 0 and the Holm-adjusted p below 0.05: an exact paired Wilcoxon
+   of each γ > 0 against γ = 0 on the seed means, Holm over the five contrasts
+   (`stats.compare_to_reference`; with 10 seeds the exact floor is 0.002, and 0.0098 after Holm).
+3. *Flat:* every γ > 0 is within ±ε of γ = 0 by TOST on the seed means, an intersection-union test,
+   so no Holm.
+4. *Inconclusive:* anything else.
+
+FX is replaced only if the outcome is rising and the best γ also beats the best fixed rule by ε
+under the same claim rule; the fixed rules are decision 5's four (the FX and F arms, `hyb` and
+`greedy_1`; R17), the best being the one with the highest held-out mean, and `fx_pair` and
+`committed_pair` are reported beside them. If `greedy_1` beats the FX arm by ε on the held-out runs,
+by the claim rule with the episode as the unit (R18), the verdict says so and the user decides
+(critic A2). Reported alongside, never decided on: Page's trend test with Spearman's ρ, the learning
+curves, each cell's share of sorties with two or more decisions (critic A1), every cell's means (the
+N = 6 control included) and the stack check's picks (the best γ and γ = 0, each from its
+median-validation seed). *The pre-registered grid* (R26): γ ∈ {0, 0.25, 0.5, 0.75, 0.9, 0.99}, 10
+seeds per γ and 1,000 held-out episodes per cell (`GAMMAS`, `SEEDS_PER_GAMMA`,
+`HELD_OUT_EPISODES`); a sweep whose γ set, seeds per γ or held-out count differs is labelled "NOT
+pre-registered" on the verdict's second line and in its JSON, with the reasons, and is decided by
+the same rule (the calibration's 2 γ × 3 seeds is one such sweep). Below 8 seeds "rising" is out of
+reach after Holm over five contrasts, while "flat" is not.
+
+**Headroom and ε** (decision 10 (i)(a); `headroom.py`; critic B14). Per sortie, a depth-first search
+over the sequences of admitted pairs, each leaf a deterministic replay with `fx_pair` flying the
+other sorties and the mule stopped once the sortie closes, at most `MAX_LEAVES` = 512 leaves
+(beyond that the sortie is `truncated` and its value a lower bound). V is the largest of the
+sorties' best returns summed and the whole-episode returns of the FX arm and the four scripted
+references (`value_references`); the headroom is the mean of V − R(FX arm) over the validation
+episodes (R6), and F's gain over FX is reported beside it, not in it. ε = max(0.01, 0.1 × the
+headroom) (`epsilon_from_headroom`); the build pauses only if the headroom is below 0.01 in every
+cell (`pause_rule`). `report` takes ε as max(0.01, 0.1 × the mean headroom of the cells it reads).
+Every flight flies the cells' own plan, or `--plan-score-params`, which the report records and the
+rule checks against the evaluation's plan (R23). ε belongs to Study 5.5, under decision 4's default
+reward: the headroom command has no `--reward`, and Study 5.7 has no pre-registered ε (R28). The
+build's report (Freeze §5l) gives ε = 0.01 in every cell.
+
+**The statistics** (`experiments/analysis/stats.py`). `tost_paired(a, b, *, margin, alpha=0.05)`:
+Schuirmann's two one-sided tests on the paired differences a − b; `.equivalent` when the larger
+one-sided p is below α, which is the same as the (1 − 2α) interval lying inside (−ε, ε); with zero
+variance p is 0 when the difference lies strictly inside the bound and 1 otherwise; it refuses a
+margin that is not a finite number above 0, an α outside (0, 0.5), unpaired or non-finite inputs and
+fewer than 2 seeds. `trend_test({level: per-seed values}, *, alternative="increasing",
+method="auto", n_bootstraps=2000, confidence=0.95, seed=42)`: Page's L with the seeds as blocks and
+the levels sorted ascending; `rho` is the mean over the seeds of Spearman's ρ, with a seeded
+percentile bootstrap over the seeds; the exact p comes from the permutation null with tied ranks
+kept as they are, the asymptotic one from the tie-corrected variance; `auto` is exact up to 8
+levels (`EXACT_MAX_LEVELS`) and 200 seeds (`EXACT_MAX_SEEDS`), and `exact` refuses more than 8
+levels. Both were checked against scipy (`ttest_1samp`, `page_trend_test`).
 
 ---
 

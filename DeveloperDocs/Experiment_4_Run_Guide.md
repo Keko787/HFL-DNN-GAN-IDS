@@ -105,7 +105,7 @@ One entry point drives every arm: [`experiments.exp4.runner_main`](../experiment
 | Flag | Default | Meaning |
 |---|---|---|
 | `--csv` | required | Per-trial CSV (created if missing; **resumable**). |
-| `--arms` | `H0 H1 H2 H3 D1 D2 D3 D4 D5` (`driver.DEFAULT_ARMS`) | Subset of arms. **H0 and D2 need `--real-model`**; on `--mission-clock sim` H0 is dropped from the default list and refused when named. The plan arms run only when named (§2.7). See §2.3, §2.5. |
+| `--arms` | `H0 H1 H2 H3 D1 D2 D3 D4 D5` (`driver.DEFAULT_ARMS`) | Subset of arms. **H0 and D2 need `--real-model`**; on `--mission-clock sim` H0 is dropped from the default list and refused when named. The plan arms run only when named (§2.7), and so do the Phase 5 arms (§2.8). See §2.3, §2.5. |
 | `--N` | `2` | Device-population sweep. |
 | `--rrf` | `60` | `rf_range_m` sweep. |
 | `--n-missions` | `2` | Missions (FL rounds) per trial. |
@@ -136,8 +136,10 @@ with a warning from a stub run.
 | `D2` | **SOTA baseline** — Oort's statistical-utility selection, as a whole scheduler | **needs `--real-model`** |
 
 D1 and D2 replace S3, S3b and S3.5 with their own rule, so they own admission as well as order.
-They supersede the ordering-only B1/B2, which the driver no longer runs. D3–D5 are in §2.5 and
-the plan arms in §2.7.
+They supersede the ordering-only B1/B2, which the driver no longer runs. D3–D5 are in §2.5,
+the plan arms in §2.7, and the Phase 5 arms (FQ and its variants, E3 and `H1+L1`) in §2.8. H2 and
+H3 leave Exp 5 (FeRRy Phase 5, decision 8), and `H1+L1` keeps the adaptive backhaul's reference;
+`--require-trained` refuses an H2 or H3 without `--selector-weights`.
 
 **Valid pairings.** `D1`/`D2`/`H2` vs `H1` isolate the policy (D1 and D2 the whole scheduler, H2
 the ranking) — same transport, same realism, same seeds, one thing different. `H1` vs `H0` is the
@@ -426,7 +428,7 @@ would silently keep the first's rows.
 
 | Arm | What it is | Notes |
 |---|---|---|
-| `F` | The plan search over every band class, with the committed order in flight | Phase 4's F: the learned pair choice is Phase 5's. |
+| `F` | The plan search over every band class, with the committed order in flight | Phase 4's F: the learned pair choice flies as FQ (§2.8). |
 | `FX` | F with the cross-heuristic in flight: after each Pass-1 stop the nearest stop that keeps the rest feasible, and on arrival the fastest class that still reaches every device b̄ reaches | The exit gate's arm. At the measured payload it flies exactly as F (critic B6). |
 | `FB+wide`, `FB+medium`, `FB+narrow` | The plan search pinned to one class (Path B+) | Fly their own class whatever `--contact-band` says. |
 | `F-cov` | F without the coverage term | Serves only what the cap forces: report it as "cap-only service" (decision 3). |
@@ -575,6 +577,261 @@ python -m experiments.exp4.runner_main --csv results/exp5_p4/kappa_0.25_c4_0.csv
 - *Not yet built:* Study 5.4's sweep knobs (unit U10, before the 5.4 headline; the pilots run the
   default layouts, where 0.68 of the devices already lie beyond 60 m at N = 6), and F·round and
   F·pref (unit U11, with Study 5.2).
+
+### 2.8 The flight clock's pair score, FerrySim and E3 (FeRRy Phase 5)
+
+Every default is the recorded run; see `HERMES_Configuration_Reference.md` §19 for each value and
+Freeze §5l for what landed. The Phase 5 arms run only when named with `--arms`, and only on
+`--mission-clock sim`: the default arm list is still the nine Phase 3 arms. A learned arm flies only
+a trained checkpoint that the runner has checked before any trial; no learned arm flies random
+weights. The trial CSV header is unchanged, and none of the Phase 5 flags is part of the (cell, arm,
+trial) key, so write every setting to its own CSV (each checkpoint, each Study 5.6 period, each
+Study 5.7 grid point): a second setting written to the same file would silently keep the first's
+rows.
+
+**Nothing in this section has run.** Each command below was checked with a parse-only probe (the
+argument parsers and the runner's pre-trial checks, on stand-in checkpoints, with no trial, no
+episode and no training), and none was run. What needs the user's go-ahead (Freeze §5l); nothing
+below runs, and nothing is committed, without it:
+
+1. *The training campaigns:* 77–119 trainings, about 11–22 h plus 1–2 h of held-out evaluation
+   (R20 puts Study 5.5's held-out evaluation at about 3.3 h at 8 workers with the N = 6 control),
+   run in batches, the calibration and the controls first.
+2. *E3's training settings* (R16): the pair learner's defaults, or Chen's lr 5e-4 and ε from 1.0;
+   `--gamma` is required.
+3. *The jittery score's family* (R22, R29): `jittery` or `jittery56`; the orchestrator recommends
+   `jittery56` with `--val-episodes 400`.
+4. *The LICENSE* (MIT, as the README names) before any checkpoint commit, and each checkpoint
+   commit (decision 9).
+5. *The pilots:* the N = 12 knee and stress budgets, after the Phase 3/4 pilots; then the cells,
+   the 5.6 lags and the 5.6 periods are re-pinned.
+6. *The stack trials* (Study 5.5's check, 5.6, 5.7, 5.3's E3 cells), re-costed first.
+7. *The campaign gate,* in decision 10 (ii)'s order: the headroom report (run during the build),
+   the sweep and its evaluation, the committed checkpoints, Study 5.5's verdict, the stack trials.
+8. *R14's candidate amendment.*
+
+**The two gates** (decision 10 (ii)). The code gate (every test, FerrySim's parity tests among them)
+is met once the full suite is the same as all three baselines (Freeze §5l, "Test baselines and the
+compare rule"). The campaign gate follows the go-ahead, in item 7's order.
+
+| Flag | Default | Meaning |
+|---|---|---|
+| `--arms FQ FQ-hand FQ-dwell FQ-cov FQ-g0 FQ-g25 FQ-g50 FQ-g75 FQ-g90 FQ-g99 E3 H1+L1` | the nine Phase 3 arms | The Phase 5 arms (below). The runner refuses one the driver cannot run (on the wall clock, without its checkpoint, an FQ arm without `replan`, `H1+L1` without the adaptive backhaul) before any trial, as a usage error. |
+| `--pair-checkpoint TAG=PATH` | none | Repeatable. The checkpoint (the `.npz`, its manifest `.json` beside it) that the FQ arm of TAG flies: `main` (FQ), `hand`, `dwell`, `cov`, `g0`, `g25`, `g50`, `g75`, `g90`, `g99` (FQ-g0 … FQ-g99). |
+| `--policy-checkpoint E3=PATH` | none | E3's checkpoint. |
+| `--allow-dirty-checkpoint` | off | Fly a checkpoint trained from a dirty tree: for development and tests, not for a campaign. It lifts only that refusal. |
+| `--require-trained` | off | Refuse H2 and H3 without `--selector-weights` (decision 8 (a)); they stay in the default arm list though they leave Exp 5. |
+| `--interference-period-s P` | the design's 60 s | Phase 3's contact-channel period P_c (§2.6): Study 5.6's setting on the stack (below). |
+
+| Arm | What it is | Its checkpoint | Notes |
+|---|---|---|---|
+| `FQ` | F with the learned (band, next stop) score in the flight slot | `main`: the derived reward, at whatever weights its manifest records (R28) | The build plan's F; Phase 4's F keeps the committed slot, and the paper may call FQ "F". |
+| `FQ-g0` … `FQ-g99` | FQ at γ = 0, 0.25, 0.5, 0.75, 0.9 or 0.99 | `gX`: γ = X/100, the derived reward at decision 4 (a)'s weights (c_t 0.1, c_cov 1) | Study 5.5's stack check flies the verdict's two picks. |
+| `FQ-hand` | FQ trained on F·hand | `hand`: an F·hand checkpoint, which no other tag takes | Study 5.7. |
+| `FQ-dwell`, `FQ-cov` | FQ with the plan score's dwell term, or its coverage term, off | `dwell`, `cov`: trained on that plan (`train --ablation dwell` or `cov`) | Study 5.7, only if Study 5.5 keeps the learned score (critic C2); otherwise FX-dwell and FX-cov are added. |
+| `E3` | Chen et al.'s DQN as a whole scheduler that names each next stop in flight | `E3` (tag `e3`): trained on E3's bytes reward | Legacy mode: whole stops whatever `--member-admission` says, a `--contact-band`, the run's in-flight response. |
+| `H1+L1` | H1 with H3's adaptive backhaul | none | Needs `--backhaul-model seconds` or `--l1-channel` (R27); it replaces H3 as the adaptive backhaul's reference (decision 8). |
+
+**What a learned arm needs.** An FQ arm needs what F needs (§2.7: `--mission-clock sim` and a
+`--contact-band`; it flies the `trim` fallback and T_nom per cell) and also `--in-flight-response
+replan`, which is not the runner's default (R3: its mask folds the whole rest of the flight, which
+only the re-plan's departure check folds next). E3 needs `--mission-clock sim` and a
+`--contact-band`. Each checkpoint given is checked before any trial, whichever arms run:
+
+- it is verified (the arrays against the manifest's sha, which binds the kind, the purpose, the
+  learner's revision, the schema and the classes) and is of the flag's kind (`pair_q`, `chen_dqn`);
+- it is trained (purpose `trained`, at least one episode), scored on the held-out runs (`evaluate
+  --record`) and from a clean tree, unless `--allow-dirty-checkpoint` (critic B9);
+- it is its tag's (R24): `gX`'s γ, the tag's reward (F·hand for `hand`, bytes for `e3`, the derived
+  reward for the rest), decision 4 (a)'s weights under `gX`, `dwell` and `cov`, and kept weights that
+  took an update;
+- a pair checkpoint trained on the plan its arm flies under this run's flags (R23: FQ-dwell's or
+  FQ-cov's change, and `--plan-score-params`).
+
+The driver then reads each file once, keeps its sha for the run, and before each trial loads it as
+the mule will, so a checkpoint re-saved at the same path is refused before the next trial: save new
+weights under a new path. The row records the tag and the sha (`pair_tag` and `pair_sha256` in
+`ferry_params`; `policy_tag` and `policy_sha256` in `policy_params` for E3), never the path; the sha
+finds the manifest, which holds γ, the reward and the rest.
+
+**FerrySim** (`python -m experiments.ferrysim`; configuration reference §19.9). The commands below
+are NOT RUN: each waits for the go-ahead, and `train` and `sweep` write under the repository's
+`results/exp5/checkpoints/` unless `--root` says otherwise. A development smoke run outside the
+repository (SCRATCH: a directory of your own):
+
+```bash
+python -m experiments.ferrysim train --kind pair_q --family jittery --study smoke --gamma 0.9 --seed 0 --episodes 50 --eval-every 25 --val-episodes 8 --root "$SCRATCH/ferrysim-checkpoints" --allow-dirty
+```
+
+The runner refuses that checkpoint: it has no held-out score, one trained from a dirty tree (which
+`--allow-dirty` records) needs `--allow-dirty-checkpoint`, and if its replay never warmed (1,000
+transitions) its kept weights took no update (R24; an open item asks for a `--warmup-transitions`
+flag).
+
+*The headroom report* (decision 10 (i)(a)), on the validation stream. The build ran it (Freeze §5l:
+no pause, ε = 0.01 in every cell; 49 min at 12 workers, written outside the repository). Re-run it
+into the results tree after the re-pin, and with `--plan-score-params` when a sweep trains on a
+pilot's plan, since `report` refuses a headroom report flown on another plan than the evaluation's:
+
+```bash
+python -m experiments.ferrysim headroom --episodes 200 --workers 12 --out results/exp5/headroom/headroom.json
+```
+
+*The calibration* (other choices 12): γ ∈ {0, 0.9} × 3 seeds per family, before the sweep, each
+family under a study of its own (R19), the jittery one on the family its sweep will fly (R29). Shown
+for `jittery56` with `--val-episodes 400`, the recommended setting of go-ahead item 3; for `jittery`,
+name that family and study and leave `--val-episodes` at its default:
+
+```bash
+python -m experiments.ferrysim sweep --study 5.5-calibration-jittery56 --family jittery56 --gammas 0 0.9 --seeds 0 1 2 --val-episodes 400 --workers 6
+python -m experiments.ferrysim sweep --study 5.5-calibration-clean --family clean --gammas 0 0.9 --seeds 0 1 2 --workers 6
+python -m experiments.ferrysim evaluate --checkpoints results/exp5/checkpoints/5.5-calibration-jittery56 --workers 8 --out results/exp5/calibration/jittery56_evaluation.json
+python -m experiments.ferrysim report --evaluation results/exp5/calibration/jittery56_evaluation.json --headroom results/exp5/headroom/headroom.json --out results/exp5/calibration/jittery56_verdict.json
+python -m experiments.ferrysim evaluate --checkpoints results/exp5/checkpoints/5.5-calibration-clean --cells cln-n12-120 cln-n12-180 --workers 8 --out results/exp5/calibration/clean_evaluation.json
+python -m experiments.ferrysim report --evaluation results/exp5/calibration/clean_evaluation.json --headroom results/exp5/headroom/headroom.json --cells cln-n12-120 cln-n12-180 --out results/exp5/calibration/clean_verdict.json
+```
+
+A calibration verdict reads "NOT pre-registered" (R26) and is decided by the same rule; with 3 seeds
+it cannot read "rising". If the γ = 0 sanity check fails, the learner may be revised once, on the
+control cells, before the sweep (decision 5).
+
+*Study 5.5's sweep*, its held-out evaluation (`--record` writes each checkpoint's held-out score
+into its manifest, which the runner needs; about 3.3 h at 8 workers with the N = 6 control, R20) and
+the verdict:
+
+```bash
+python -m experiments.ferrysim sweep --study 5.5-jittery56 --family jittery56 --gammas 0 0.25 0.5 0.75 0.9 0.99 --seeds 0 1 2 3 4 5 6 7 8 9 --val-episodes 400 --workers 8
+python -m experiments.ferrysim evaluate --checkpoints results/exp5/checkpoints/5.5-jittery56 --record --workers 8 --out results/exp5/s55/evaluation.json
+python -m experiments.ferrysim report --evaluation results/exp5/s55/evaluation.json --headroom results/exp5/headroom/headroom.json --out results/exp5/s55/verdict.json
+```
+
+The verdict gives the outcome (`rising`, `flat`, `inconclusive` or `sanity-failed`), whether FX is
+replaced, whether `greedy_1` beat the FX arm by ε (then the user decides, critic A2), and the stack
+check's picks (`stack_check`: `best_gamma`, `best_gamma_seed` and `gamma0_seed`, each γ's
+median-validation seed).
+
+*E3* (go-ahead item 2). E3_GAMMA is the γ chosen there; for Chen's settings add `--lr 5e-4
+--epsilon-start 1.0`. E3's own score is read in bytes (R18):
+
+```bash
+python -m experiments.ferrysim sweep --kind chen_dqn --study 5.3-e3 --family jittery --gammas "$E3_GAMMA" --seeds 0 1 2 3 4 --workers 5
+python -m experiments.ferrysim evaluate --checkpoints results/exp5/checkpoints/5.3-e3 --reward bytes --record --workers 8 --out results/exp5/e3/evaluation.json
+```
+
+*Study 5.7's scores* (only if Study 5.5 keeps the learned score; GAMMA_STAR is the verdict's best
+γ): F·hand, the two plan-term ablations, and one point of the weight grid (c_t ∈ {0.03, 0.1, 0.3} ×
+c_cov ∈ {0.25, 1, 4}, each point under a tag of its own that no arm flies; a grid checkpoint flies as
+`main`). The ablations train on their arms' plans (R23), so they are evaluated without the
+references, which fly the cells' own plan (or beside references given that plan with
+`--plan-score-params`):
+
+```bash
+python -m experiments.ferrysim sweep --study 5.7-jittery56 --family jittery56 --reward hand --gammas "$GAMMA_STAR" --seeds 0 1 2 3 4 --val-episodes 400 --workers 5
+python -m experiments.ferrysim sweep --study 5.7-jittery56 --family jittery56 --ablation dwell --gammas "$GAMMA_STAR" --seeds 0 1 2 3 4 --val-episodes 400 --workers 5
+python -m experiments.ferrysim sweep --study 5.7-jittery56 --family jittery56 --ablation cov --gammas "$GAMMA_STAR" --seeds 0 1 2 3 4 --val-episodes 400 --workers 5
+python -m experiments.ferrysim sweep --study 5.7-jittery56 --family jittery56 --c-t 0.3 --c-cov 4 --tag ct0.3-cc4 --gammas "$GAMMA_STAR" --seeds 0 1 2 --val-episodes 400 --workers 3
+python -m experiments.ferrysim evaluate --checkpoints results/exp5/checkpoints/5.7-jittery56/hand --reward hand --record --workers 8 --out results/exp5/s57/hand_evaluation.json
+python -m experiments.ferrysim evaluate --checkpoints results/exp5/checkpoints/5.7-jittery56/dwell results/exp5/checkpoints/5.7-jittery56/cov --no-references --record --workers 8 --out results/exp5/s57/ablations_evaluation.json
+```
+
+*The re-pin* (go-ahead item 5). After the N = 12 pilot, the cells' budgets, `STUDY_5_6_LAGS_S`, the
+four P_c constants, the `jittery56` hash and the test literals move together (R29), and the lag is
+re-measured on the same sample and statistic (a code edit, not a flag):
+
+```bash
+python -c "from experiments.ferrysim.evaluate import fx_lag_median; print(fx_lag_median('jit-n12-120', workers=8), fx_lag_median('jit-n12-180', workers=8))"
+```
+
+**Stack trials** (go-ahead item 6; NOT RUN, each study re-costed first: the spec estimated 320
+trials for Study 5.5's check, about 1,300 for 5.6 and 400 for 5.7). They fly FerrySim's cell
+settings on the stack, here at N = 12 and the 120 s stand-in (repeat at 180 s, to its own CSV), with
+stub devices as in §2.7 (`--real-model` for a real-model run). TTL_S is the Phase 3 pilot's session
+TTL. Study 5.5's check, with the verdict's picks (here γ = 0.9 from seed 3 and γ = 0 from seed 5):
+
+```bash
+python -m experiments.exp4.runner_main --csv results/exp5/s55/stack_120.csv --arms FQ-g90 FQ-g0 FX F --N 12 --n-missions 4 --regime jittery --n-trials 40 --realism --mission-budget-s 120 --payload-bytes 1000000 --mission-clock sim --contact-band wide --contact-regime jittery --deadline-time-scale t_nom --in-flight-response replan --replan-fallback trim --aggregation agg:cutoff --contact-reliability-source channel --age-cap-missions 2 --session-ttl-s "$TTL_S" --pair-checkpoint g90=results/exp5/checkpoints/5.5-jittery56/g90/g0.9_s3.npz --pair-checkpoint g0=results/exp5/checkpoints/5.5-jittery56/g0/g0_s5.npz --keep-event-traces
+```
+
+*Study 5.6* (decision 6 (a); R22): the same cell with the contact channel's period at 4 × or 2 × the
+lag, `--interference-period-s` 104 (the quarter cell) or 52 (the half) at 120 s, and 136 or 68 at
+180 s, beside the clean control (`--contact-regime clean`, no period), each to its own CSV. The
+period is not a grid axis, so the runner's seeds pair the cells. N_56 is the trials per cell, fixed
+when 5.6 is re-costed. The quarter cell at 120 s, the kept score flying as FQ (if FX stays, 5.6 is E3
+against FX):
+
+```bash
+python -m experiments.exp4.runner_main --csv results/exp5/s56/q_120.csv --arms FQ FX E3 --N 12 --n-missions 4 --regime jittery --n-trials "$N_56" --realism --mission-budget-s 120 --payload-bytes 1000000 --mission-clock sim --contact-band wide --contact-regime jittery --interference-period-s 104 --deadline-time-scale t_nom --in-flight-response replan --replan-fallback trim --aggregation agg:cutoff --contact-reliability-source channel --age-cap-missions 2 --session-ttl-s "$TTL_S" --pair-checkpoint main=results/exp5/checkpoints/5.5-jittery56/g90/g0.9_s3.npz --policy-checkpoint E3=results/exp5/checkpoints/5.3-e3/e3/g0.9_s0.npz --keep-event-traces
+```
+
+*Study 5.7* (FQ against FQ-dwell, FQ-cov and FQ-hand, with D4 as the travel-only reference):
+
+```bash
+python -m experiments.exp4.runner_main --csv results/exp5/s57/ablations_120.csv --arms FQ FQ-dwell FQ-cov FQ-hand D4 --N 12 --n-missions 4 --regime jittery --n-trials 40 --realism --mission-budget-s 120 --payload-bytes 1000000 --mission-clock sim --contact-band wide --contact-regime jittery --deadline-time-scale t_nom --in-flight-response replan --replan-fallback trim --aggregation agg:cutoff --contact-reliability-source channel --age-cap-missions 2 --session-ttl-s "$TTL_S" --pair-checkpoint main=results/exp5/checkpoints/5.5-jittery56/g90/g0.9_s3.npz --pair-checkpoint dwell=results/exp5/checkpoints/5.7-jittery56/dwell/g0.9_s0.npz --pair-checkpoint cov=results/exp5/checkpoints/5.7-jittery56/cov/g0.9_s0.npz --pair-checkpoint hand=results/exp5/checkpoints/5.7-jittery56/hand/g0.9_s0.npz --keep-event-traces
+```
+
+*Study 5.3's E3 cells* (a 3-mule, 60 s cell like §2.5's, here jittery and on the simulated clock,
+with E3 and `H1+L1`):
+
+```bash
+python -m experiments.exp4.runner_main --csv results/exp5/s53/k3_b60_e3.csv --arms E3 H1 H1+L1 D1 D3 --N 18 --n-mules 3 --n-missions 4 --regime jittery --n-trials 40 --real-model --realism --mission-budget-s 60 --mission-clock sim --contact-band wide --contact-regime jittery --backhaul-model seconds --aggregation agg:cutoff --session-ttl-s "$TTL_S" --policy-checkpoint E3=results/exp5/checkpoints/5.3-e3/e3/g0.9_s0.npz --keep-event-traces
+```
+
+E3 is trained at K = 1 and flown per mule at K = 3, on slices within the trained sizes (critic B7 v).
+
+**Reading a Phase 5 trace.**
+
+- `mule_ready.pair` (an FQ mule) and `mule_ready.policy_checkpoint` (E3) state the verified
+  checkpoint's provenance: the sha, kind, purpose, classes, γ, reward, seeds, episodes, the cell
+  family and its hash, the learner's revision, the schema's version, and the config's tag; no path.
+- `mission_completed.pass_1_pairs` (FQ): one record per Pass-1 stop flown, in order. At the arrival:
+  `t_s`, the stop's `devices`, b̄ (`committed`), the pair flown (`band`; `next_index`, where 0 keeps
+  the plan's order and null is home; `next`), the pairs offered (`pairs`) and admitted (`feasible`,
+  `admitted_pairs`), `fallback` (`mask_empty` when no pair fitted and FX's pair flew), FX's pair by
+  FX's own rule (`fx_band`, `fx_next`, `agrees_fx`) and the scorer with its Q values (`scorer`, `q`,
+  `q_fx`). Closed when the mission ends: `collected` and their merge weights `w`, `late`,
+  `t_next_s` (the next arrival, or the end of the Pass-1 upload), `terminal`, and `trimmed_next`
+  (the departure check after the stop did not keep the pair's order). `pass_1_flown[].band` agrees
+  with `band`.
+- `mission_completed.pass_1_e3` (E3): one entry per next-stop call, with `t_s`, `after_stop` (false
+  at takeoff), `stops`, `admissible` (one bool per stop), `next_index` and `next`;
+  `pass_1_e3_unvisited`: the stops left when none was admissible, never widened. E3's N is not
+  recorded per call.
+- Each of these is left out when empty, and none appears for any other arm.
+
+**The scorer's pair columns.** `--pair-columns` adds seven columns after the τ columns
+(configuration reference §19.8): `pair_decisions`, `pair_feasible_mean`, `pair_mask_empty` (a
+count), `pair_fx_agree_share` (an empty-mask decision counts as agreeing), `pair_band_off_bbar_share`,
+`pair_reorder_share` and `e3_unvisited_mean` (stops, not devices, over every mission). The shares
+count choices, not flights (R21); they are reported diagnostics, and no Study 5.5 step reads them.
+Without the flag the row is the Phase 4 one, byte for byte.
+
+```bash
+python -m experiments.analysis.traces_scorer --traces results/exp5/s55/stack_120_traces --pair-columns --csv results/exp5/s55/stack_120_scored.csv
+```
+
+**The refusals you will meet**, each before any trial or training, as a usage error (exit 2):
+
+- *R3:* an FQ arm without `--in-flight-response replan` (the runner's default is `abort`).
+- *No checkpoint:* a learned arm whose tag has none; a tag no learned arm flies (a 5.7 grid tag: fly
+  that checkpoint as `main`).
+- *B9:* a bootstrap checkpoint, one trained on no episode, one without a held-out score (run
+  `evaluate --record`), or one trained from a dirty tree without `--allow-dirty-checkpoint`.
+- *R24:* a checkpoint that is not its tag's, for example `g25=` a γ = 0.9 checkpoint, `hand=` a
+  derived-reward one or `main=` an F·hand one, `g90=` one trained at a 5.7 grid point's weights,
+  `E3=` one not trained on bytes, or kept weights that took no update.
+- *R23:* `dwell=` or `cov=` a checkpoint not trained by `train --ablation`, `main=` an ablation's
+  checkpoint, or any pair checkpoint trained under other `--plan-score-params` than the run gives.
+- *A dirty tree:* `train` and `sweep` refuse it unless `--allow-dirty` (git sees a change under
+  `hermes/` or `experiments/`, untracked files included), and record it in the manifest.
+- *R19:* `train` and `sweep` refuse to replace another family's checkpoint, even with
+  `--overwrite`: one study per family.
+- *R12, the paths:* a checkpoint path is read against the working directory, and one that names no
+  checkpoint, or none with its manifest beside it, is refused. The mule gets the path repo-relative
+  for a file inside the repository and absolute otherwise, so a relative path given outside the
+  repository never names another file. (During a run, a checkpoint rewritten since the runner
+  checked it is refused before its next trial.)
+- *R27:* `H1+L1` without `--backhaul-model seconds` or `--l1-channel`.
+- *`--require-trained`:* H2 or H3 without `--selector-weights`.
 
 ## 3. Smoke run (one trial, no dataset)
 

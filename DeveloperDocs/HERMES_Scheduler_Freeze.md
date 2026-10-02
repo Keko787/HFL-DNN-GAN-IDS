@@ -8,13 +8,14 @@ the files listed in §5 after this point invalidates recorded sweeps** and must 
 State at freeze: working tree clean for `hermes/scheduler/` and `hermes/mule/`; **153 scheduler
 tests passing**.
 
-**Amendments** (§5a–5j) **and Phase 4** (§5k): 1–4 landed before or alongside the recorded sweeps. 5 and 6 (2026-09-27
+**Amendments** (§5a–5j), **Phase 4** (§5k) **and Phase 5** (§5l): 1–4 landed before or alongside the recorded sweeps. 5 and 6 (2026-09-27
 and 09-28) fix defects and change what the budgeted, `--l1-channel` and D1/D2 cells measure. 7
 (2026-09-28) opens this surface for the FeRRy build, behind switches whose defaults keep this
 pipeline. 8 and 9 (2026-09-28) land with the Phase 0/1 audit and Phase 2, and 10 (2026-09-29, the
 RF transport fix) with Phase 3. Phase 4 (2026-09-30, the plan clock) needed none: every mechanism
-lands behind a switch or is additive (§5k). The code behind every recorded result is the tag
-`exp4-recorded`.
+lands behind a switch or is additive (§5k). Phase 5 (2026-10-02, the flight clock's (band, stop)
+score, FerrySim and E3) needed none either, on the same terms (§5l). The code behind every recorded
+result is the tag `exp4-recorded`.
 
 ---
 
@@ -361,7 +362,14 @@ in legacy mode unless a study sets otherwise. Each switch is recorded here when 
 | Member admission, plan arms (`member_admission`; `--member-admission`) | `whole`, the field's default (plan mode is new) | `subset`, the plan arms' default (decision 4): the search and the plan-mode trim may fly a stop reduced to the members that fit. `whole` flies whole stops in every mode, in flight too (R5), which keeps the narrow-band cliff for comparison | Phase 4, commit `69b551f` (§5k) |
 | Member admission, H and D arms (`member_admission`; `--member-admission subset`) | `whole`: S3b and the D1–D3 and D5 walks admit a contact with all its members or none (the narrow-band cliff, §5j E2E1-01) | `subset`, when a run asks for it (decision 4 (b)): before takeoff only, a contact that fails whole is re-issued with the members that still fit, skip not stop, in the arm's own member order (H1–H3: own deadline, then Pass-1 dwell, then id, the miss streak first under miss priority; D1–D3: the arm's per-device score; D5: FedCS's selection key). H complements are dropped by reason and widened; D complements are reported (`pass_1_policy_drops`) and never widened. Nothing in flight reduces their contacts. Never D4, whose tour has no gate | Phase 4, commit `69b551f` (§5k) |
 | Flight slot (`flight_slot`) | the queue's order (`remainder.pop(0)`): distance order, or `TargetSelectorRL` within a bucket | `committed` (F, the FB+ arms): the same pop, on b̄. `cross_heuristic` (FX, decision 5): in Pass 1, after each stop, the nearest remaining stop whose move to the front keeps the rest of the plan feasible (else the plan's next), and at each arrival the fastest class that still reaches every device b̄ reaches there, priced at the arrival SNR, so it never dwells longer than F would at that SNR. At takeoff the plan's first stop is flown (the band rule still applies on arrival there), and Pass 2 flies the committed order on b̄ | Phase 4, commit `69b551f` (§5k) |
-| Flight-clock pair choice | the slot's fixed fillings above | the masked pair score (the learned pair Q, in the same slot) | Phase 5, planned |
+| Flight slot `pair_q`, the learned (band, next stop) score (`flight_slot`; the FQ arms), with its checkpoint (`pair_checkpoint`, `pair_checkpoint_sha256`, `pair_checkpoint_tag`) | the slot's fixed fillings above; the three checkpoint fields None | `pair_q`, plan mode only, with `in_flight_response = replan` (resolution R3) and refused under a pinned band: at each Pass-1 arrival one decision, the class the stop is served on, at once, and the stop flown next (home only once the remainder is empty), the masked argmax of a score over the pairs that keep the plan whole (a class reaching every device b̄ reaches there at the arrival SNR, a stop of the plan, the rest of the flight still fitting: `FLScheduler.fits_after_service`), ties to the lowest row; FX's pair, recorded `mask_empty`, when no pair fits. The chosen stop is moved to the front after the stop, so the departure check folds that order. At takeoff the plan's first stop is flown (the decision still applies on arrival there), and Pass 2 flies b̄ in the queue's order. The score is a verified format-2 checkpoint, named by all three fields together (its path, the sha256 of its arrays, its tag), never a random network; each decision is recorded in `mission_completed.pass_1_pairs` | Phase 5, commit `9694775` (§5l) |
+| Contact policy `chen_dqn`, arm E3 (`contact_policy`), with its checkpoint (`policy_checkpoint`, `policy_checkpoint_sha256`, `policy_checkpoint_tag`) | None or D1–D5's; the three checkpoint fields None | `chen_dqn` (decision 7 (a)), on the simulated clock in legacy mode with a `contact_band` and whole stops (refused in plan mode and on the wall clock): a numpy port of Chen et al.'s DQN as a whole scheduler that admits every S3a contact, checks nothing in flight (`none`) and names each Pass-1 stop itself, at takeoff and at every departure, among the stops S3b's single-contact budget rule admits (landing included); its None ends the pass. Flown from a verified checkpoint named by all three fields; each call recorded in `pass_1_e3`, the stops it left in `pass_1_e3_unvisited`, never widened | Phase 5, commit `9694775` (§5l) |
+| E3's per-departure hook (a policy's `chooses_next_stop`, read with `getattr`, default False) | — (no policy, slot or selector declares it) | a legacy-mode whole-scheduler policy that declares it `True` names the next stop at takeoff and at every Pass-1 departure, after the departure check and the beacon hook; never in Pass 2 | Phase 5, commit `9694775` (§5l) |
+| FerrySim's seam (`MuleSupervisor.install_flight_slot`) | never called on a recorded path | installs a `PairQSlot` in plan mode before the first mission (refused on a legacy mule, once a mission has started, for anything but a `PairQSlot`, and under a pinned band): FerrySim's FQ episodes fly the FX arm's configuration with it, mission for mission as the config path flies | Phase 5, commit `9694775` (§5l) |
+| Arm `H1+L1` (`backhaul_policy`) | — (only H3 flies the adaptive backhaul) | H1's scheduler with H3's adaptive backhaul controller and no learned selector (decision 8 (a)): `backhaul_policy = adaptive` on the simulated clock, `backhaul_plan(adaptive=True)` under `--l1-channel`; refused where it would fly as H1 (without `--l1-channel` and without, on the simulated clock, `--backhaul-model seconds`) | Phase 5, commit `9694775` (§5l) |
+| Arm lists (`driver.LEARNED_ARMS`, `PHASE_5_ARMS`, `ARMS`; `is_plan_arm`) | `ARMS` = `DEFAULT_ARMS` + `PLAN_ARMS`; every plan-mode gate reads `arm in PLAN_ARMS` | `LEARNED_ARMS` = FQ, FQ-hand, FQ-dwell, FQ-cov, FQ-g0, FQ-g25, FQ-g50, FQ-g75, FQ-g90, FQ-g99 and E3; `PHASE_5_ARMS` = `LEARNED_ARMS` + `H1+L1`; `ARMS` = `DEFAULT_ARMS` + `PLAN_ARMS` + `PHASE_5_ARMS`. `DEFAULT_ARMS` and `PLAN_ARMS` are unchanged, so the Phase 5 arms run only when named. `is_plan_arm` (the plan arms and the FQ arms) replaces every `arm in PLAN_ARMS` gate, so an FQ arm gets F's settings (critic A5) | Phase 5, commit `9694775` (§5l) |
+| Runner `--require-trained` | off | refuses H2 and H3 without `--selector-weights`, whose selector would be random-init (decision 8 (a)) | Phase 5, commit `9694775` (§5l) |
+| Scorer `pair_columns` (`--pair-columns`) | off: the Phase 4 row | the seven Phase 5 columns after the τ columns | Phase 5, commit `9694775` (§5l) |
 | Age cap S (`age_cap_missions`; `--age-cap-missions`) | off (None) | an int ≥ 1, counted in the device's own mule's missions since its last merged update (`last_merged_round`, mission 0 for a device never merged; decision 1), plan mode only. The plan serves the oldest capped devices that fit before it weighs anything else (the cap key), a stop whose members are all capped is exempt from its deadline clause, and every capped device a mission fails is logged by cause. S is set per cell from the S\* tool: the smallest value that covers 90 % of layouts at both pilot budgets, never below 2 | Phase 4, commit `69b551f` (§5k) |
 | Cap lookahead L (`age_cap_lookahead`; `--age-cap-lookahead`) | 0 | a device is capped from age S − L. Kept at 0 (R9): L = 1 does not remove the miss of critic probe A3 | Phase 4, commit `69b551f` (§5k) |
 | Plan score (`plan_score_params`; `--plan-score-params`) | {}, the defaults (read in plan mode only) | V = −[c₁(Δ/T)² + c₂U + c₃L] − c₄E/(P_hover·T): Δ the whole mission on b̄ (Pass 1, the turnaround, Pass 2) against T = T_nom (decision 2 (b)); c₁ = 1 (`c_time`), c₂ = κ·N_demand with κ = 1 (`c_cov_per_device`), c₃ = c₂ (`c_link`), c₄ = 0.1 (`c_energy`); `coverage_weights` `age`, the age times (1 + miss streak) under the arm's miss priority (decision 3); `dwell_in_delta` False is F-dwell; `coverage_rank` `lexicographic` ranks the candidates by the cap key, then the served weight share, then V (R11), `weighted` by the cap key, then V (the pilot's κ sweep), and with κ = 0 (F-cov) the weighted rank applies whatever it says. Hand-set and swept, in FedEx's form with the convex-surrogate caveat | Phase 4, commit `69b551f` (§5k) |
@@ -398,7 +406,8 @@ hermes/scheduler/fl_scheduler.py        Phase 3 (public accessors for the budget
                                           per band class, the commit and its visited set, the
                                           plan-mode re-plan; in build_contact_queue only the
                                           D arms' drop report, its reset, and the member-subset
-                                          carrier, §5k)
+                                          carrier, §5k), Phase 5 (as landed: one method,
+                                          fits_after_service, the pair mask's predicate, §5l)
 hermes/scheduler/stages/s3_deadline.py  Phase 1 (law, priority key, PARTIAL vs TIMEOUT, overrides
                                           that expire), Phase 3 (the law's time unit, the override
                                           refusal, the SpectrumSig fold, §5j)
@@ -408,16 +417,25 @@ hermes/scheduler/stages/s3b_feasibility.py  Phase 1 (priority key in the walk), 
                                           FeasibilityModel; single-contact predicate), Phase 4
                                           (additive: dropped_plan, the member_admission values,
                                           the opt-in member-subset walk, §5k)
-hermes/scheduler/selector/              Phase 5 (pair features, masked pointer Q, replay with the
-                                          next candidates, the ferry_sim trainer, the scope guard
-                                          over pairs)
+hermes/scheduler/selector/              Phase 5 (as landed: pair_features.py, pair_q.py and
+                                          pair_replay.py, new, under this opening; in
+                                          scope_guard.py one function, assert_pairs_admitted;
+                                          ddqn.py, replay.py, features.py, target_selector_rl.py,
+                                          selector_train.py, sim_env.py and __init__.py
+                                          untouched; the trainer is experiments/ferrysim/,
+                                          outside this surface, §5l)
 hermes/mule/mule_main.py                Phase 1 (version threading, Pass-2 budget), Phase 3 (clock,
                                           band, re-plan), Phase 4 (plan mode, the flight slot, the
                                           exempt set in flight, the plan's close, §5k), Phase 5
-                                          (pair choice)
+                                          (as landed: the pair choice at each Pass-1 arrival, the
+                                          reorder after the stop, the records closed on every
+                                          exit, the pair_slot keyword, install_flight_slot and
+                                          E3's per-departure hook, §5l)
 hermes/scheduler/policies/              not frozen (§5); Phase 4 (the member-subset keyword in
                                           budget_walk.py, fedcs_degraded.py, max_aoi.py, oort.py
-                                          and whittle.py; cross_heuristic.py, new, §5k)
+                                          and whittle.py; cross_heuristic.py, new, §5k); Phase 5
+                                          (pair_slot.py, next_stop.py and chen_dqn.py, new;
+                                          cross_heuristic.py and __init__.py untouched, §5l)
 ```
 
 **Landed so far (Phase 1, commit `8f23f02`; Amendments 5 and 6 are commit `dc90f84`).** In the frozen files: `fl_scheduler.py`
@@ -1472,6 +1490,583 @@ docstring in `test_p3_final_fixes_mule.py` and the allowed-added set in
 - *The pilots* (decision 7; Run Guide §2.7) wait for the user's go-ahead, after the Phase 3 pilot
   has set the session TTL and the knee: about 1,400 stub trials, to be re-costed before the
   go-ahead.
+
+## 5l. Phase 5 behind switches, no amendment (2026-10-02)
+
+Lands with FeRRy Phase 5 (build plan, Phase 5, "Flight clock: the (band, stop) score"; commit
+`9694775`, on `386c275`). It fills Phase 4's flight slot with a learned (band, next stop)
+score (the FQ arms), builds FerrySim to train it, builds E3 to compete with it, and stops before any
+campaign. It is not an amendment (Rule 3): nothing changes the wall clock, Phase 3's simulated clock
+or Phase 4's plan arms at the defaults. Every mechanism sits behind a switch of the §5g table whose
+default is the recorded pipeline, in behaviour and in trace output, or is additive: no trace event
+gains a field at the defaults, and every mule's per-role JSON gains the six checkpoint keys at null
+(below). "Legacy" now has three faces, and all three are pinned: the wall clock by the 144 afa9526
+goldens (§5j), Phase 3's simulated clock with `plan_mode = legacy` by UG4's oracles at `6e6f92d`
+(§5k), and Phase 4's plan arms by oracles captured at `386c275` before any Phase 5 edit (unit UG5,
+below).
+
+**The user's ten decisions** (2026-10-01), each the recommended option:
+
+1. *What the score may choose: within the plan.* The band reaches every device the planned band b̄
+   reaches at the stop; the next stop is still a stop of the plan (home only once none is left);
+   the rest of the flight still fits the time and energy budget, with this stop priced at the
+   observed SNR. If no pair fits, the mule flies FX's pair and logs it.
+2. *Where the score practises: FerrySim*, the real system run in one process, with a stand-in for
+   the devices' local training, in `experiments/ferrysim/`.
+3. *The cells:* 1 MB and the jittery contact channel, at N = 6 (the control, where looking ahead
+   cannot matter) and N = 12 (decision-rich), plus a clean-channel N = 12 negative control; one
+   score per channel regime; stand-in budgets of 120 s and 180 s at N = 12 until a pilot measures
+   its knee.
+4. *The reward:* per stop, the merge weight of the updates collected there, minus c_t = 0.1 per
+   nominal mission period; at the end of the flight, c_cov = 1 times the weighted share of planned
+   devices left uncollected; no energy or lateness term. F·hand is today's reward, ported and
+   labelled as such. Study 5.7's grid: c_t ∈ {0.03, 0.1, 0.3} × c_cov ∈ {0.25, 1, 4}.
+5. *Study 5.5's rule, fixed in advance:* read on N = 12; 10 training seeds per γ ∈ {0, 0.25, 0.5,
+   0.75, 0.9, 0.99}, judged on 1,000 shared held-out runs; "rising", "flat" (TOST) or
+   "inconclusive", with Holm's correction. FX is replaced only if the curve is rising and beats the
+   best fixed rule by ε, with ε = max(0.01, 0.1 × the validation headroom). A γ = 0 sanity check
+   comes first, with one learner revision at most.
+6. *Study 5.6:* keep the periodic interference, add a two-reading phase feature, and compare two
+   N = 12 cells (stop spacing a quarter and a half of the period) with a clean control; irregular
+   interference is built later, only if 5.5 keeps the learned score.
+7. *E3, M1, O1:* E3 is a numpy port of Chen's recipe, trained in FerrySim, with its declared
+   deviations; M1 only if 5.5 keeps a learned score; O1 before the 5.4 headline.
+8. *H2, H3, ChannelDDQN:* H2 and H3 leave Exp 5; `H1+L1` (H1's scheduler with H3's adaptive
+   backhaul) is added; an opt-in `--require-trained`; ChannelDDQN is retired from the plan, its code
+   and logging kept.
+9. *Checkpoints and licences:* each study's final checkpoints are committed with their manifests
+   under `results/exp5/checkpoints/`, each commit only with the user's consent and after a LICENSE
+   file is added (the README names MIT; no LICENSE file exists yet). Nothing is committed during the
+   build.
+10. *The headroom check and the exit gate:* the headroom report runs during the build, on FerrySim's
+    validation stream, and the build pauses only if the best possible gain is below 0.01 per
+    practice run in every cell; the exit gate is split into a code gate now (every test, all three
+    baselines the same, FerrySim's parity with real processes) and a campaign gate after the
+    go-ahead.
+
+**Resolutions taken during the build** (the orchestrator's, binding):
+
+- *R1.* A sixth deliberate Phase 4 test edit: the per-role JSON gains the six checkpoint keys
+  (the spec says so), while `tests/unit/test_p4_config_driver.py:916` pinned its added keys to the
+  plan fields alone, so 8 nodes failed. Lines 896–897 and 916–918 now expect `PLAN_MULE_FIELDS +
+  CHECKPOINT_MULE_FIELDS`; node ids and line numbers are unchanged.
+- *R2.* The checkpoint header binds `purpose` and `learner_revision`, so the sha covers them: the
+  runner refuses anything but a trained checkpoint and the report checks that one revision trained
+  a sweep, so neither may be relabelled. The other manifest fields stay informational.
+- *R3.* `flight_slot = pair_q` needs `in_flight_response = replan`, guarded in `mule_config_errors`
+  and in the driver: the mask folds the whole rest of the flight, which only the re-plan's
+  departure check folds next; under `abort` that check folds the next stop alone, so the mask would
+  be stricter than the check. A cap already needs `replan`, and the Phase 4 pilots fly it.
+- *R4.* Accepted as built: `energy_ref_j` and `StopPrice` are kept beside the spec's three runtime
+  readers; a served stop's own lateness is not masked under `collection` and `delivery_per_stop`;
+  under route-level `delivery` the mask lowers `deliver_by` conservatively, by every uncapped target
+  of b (the mule lowers it by the CLEAN ones).
+- *R5.* Ties go to the lowest row (class-major, then the remainder's order), so with one class they
+  follow the remainder's order, not `rank_contacts`' position-then-devices key.
+- *R6.* Study 5.5's "FX" is the FX arm itself; `fx_pair`, the slot's version of FX's rule, is the
+  warm-start reference.
+- *R7.* Accepted as built: the record schema's additions (`admitted_pairs`, `scorer`, `terminal`,
+  `trimmed_next`), the optional `q_values` attribute, `pair_slot` importing `pair_q` at module level
+  (plan mode only) and the scope guard checking the served stop's members too.
+- *R8.* U1 builds `build_pair_slot`, which needs U1's adapter; U8a builds the oracle's replay
+  scorer.
+- *R9.* Accepted as built: the empty round's last decision ends at the landing, read literally
+  (`landing_s`); the trainer's sink takes `close_mission(((), ()))`; the two N definitions stand
+  (the pair view's: the plan's demand with any beacon insert; E3's: the slice with every planned or
+  inserted device); under `agg:plain` w = n_i, which is what the merge pays.
+- *R10.* The held-out score's keys stay as U2 named them (`HELD_OUT_KEYS`: `episodes` and
+  `return_mean`).
+- *R11.* `pair_v1` keeps three columns beyond the spec's list, giving 36 columns with the phase
+  block (24 without): `reach_here`, the absolute collection at this stop, because the reward's G_k
+  is an absolute count and a γ > 0 target bootstraps from the row's own reward level; and
+  `prev_sin` and `prev_cos`, the previous reading's phase, which survives the 4·P_c cap on the raw
+  age. Recorded as feature deviations; the schema was fixed before any checkpoint was saved.
+- *R12.* A relative checkpoint path is read under the repository root, and the driver writes a path
+  outside the repository absolute, not "as given": the mule reads every relative path under that
+  root, so a relative path from outside would name another file. The `MuleConfig` comment was
+  corrected (two comment lines, no code).
+- *R13.* The deliberate `:583` edit includes its import on the existing line 60 of
+  `test_p4_config_driver.py`; no line moved, and it counts as part of the `:583` edit, so there are
+  still six deliberate edits.
+- *R14.* A pre-existing driver leak, reported and not fixed: when a mule fails at startup,
+  `_run_topology` re-raises from `start_all` without `shutdown_all`, so the cluster process keeps
+  running. Fixing it changes every arm's error path (Rule 3), so it is a candidate amendment for the
+  user (open items).
+- *R15.* Accepted as built: the runner checks every checkpoint given, even for arms it will not run,
+  and `--require-trained` checks only for `--selector-weights`, as Exp 3's `--require-trained-a4`
+  does.
+- *R16.* E3's training defaults stay the pair learner's (lr 1e-3; ε from 0.3 to 0.05), and
+  `--gamma` is required. Chen's values (lr 5e-4, ε from 1.0, Chen's γ) are the user's choice at the
+  E3 training go-ahead; the manifest records whichever is used.
+- *R17.* The best fixed rule is chosen among decision 5's four (the FX and F arms, `hyb` and
+  `greedy_1`); `fx_pair` and `committed_pair` are reported beside them, not added.
+- *R18.* Accepted as built: `greedy_1`'s flag applies the claim rule with the held-out episode as
+  the unit; the sanity check is a point comparison; the γ pick reuses the validation entries,
+  identically for every γ; `evaluate` reads every policy under one reward (`--reward bytes` for
+  E3's own); `evaluate` keeps no traces.
+- *R19.* A checkpoint of another cell family is never overwritten, even with `--overwrite`; one
+  study per family; the layout is unchanged.
+- *R20.* The N = 6 control stays in `evaluate`'s default cells, so Study 5.5's held-out evaluation
+  takes about 3.3 h at 8 workers; `--cells` narrows it.
+- *R21* (its first bullet amended on 2026-10-02 after the final check's SPEC-1). The agreement and
+  re-order shares count choices. They are reported diagnostics only: no Study 5.5 step reads them,
+  since critic A2 replaced the design's FX-agreement gate with the one-step sanity check, and
+  FerrySim's held-out evaluation keeps no traces. Counting choices stays because the choice is the
+  slot's unit of decision. `pair_fx_agree_share` includes empty-mask decisions, documented, with
+  the count beside it; `pair_mask_empty` is a count; `e3_unvisited_mean` counts stops, not devices,
+  averaged over all missions; the trend test is Page's L with the seeds as blocks; `mule_ready.pair`
+  is not parsed, and a record whose choice cannot be read is skipped.
+- *R22.* Study 5.6's cells (the final check's SPEC-2: decision 6 (a)'s code change was "the
+  two-reading features and the cells", and only the features had been built). N = 12, jittery,
+  1 MB, at each stand-in budget, with P_c = 4 × the lag (the quarter cell) and 2 × the lag (the
+  half cell), the lag being the arrival-to-arrival time: FX's median Pass-1 lag on FerrySim's
+  validation stream at the matching Study 5.5 cell at the default P_c, rounded to the nearest
+  second and pinned as constants (26 s and 34 s, so P_c = 104 and 52 s at 120 s, 136 and 68 s at
+  180 s). The control is the clean N = 12 cells. A second family, `jittery56`, adds the four cells
+  to the jittery cells, and `jittery` is unchanged; whether the jittery score practises at the 5.6
+  periods is the user's choice before the 5.5 sweep, since it changes the family's hash. Study
+  5.5's verdict reads only jit-n12-120 and jit-n12-180, whichever family trained the score. The
+  cells are re-pinned with the budgets after the N = 12 pilot. The comment at
+  `tests/unit/test_p5_pair_features.py:808-813` is corrected: at N = 12, 30 s is the ratio-1
+  aliasing point, not a 5.6 period.
+- *R23.* Plan-trained ablation checkpoints (the final check's F1): critic C2 has FQ-dwell and FQ-cov
+  train under their own plans, which the trainer could not do, and the runner would have flown a
+  default-plan checkpoint on those arms unchecked. Built: `TrainSpec.plan_score_params`, checked
+  against `PlanScoreParams` and recorded in the manifest's training spec; training and validation
+  fly it as a driver override; `checkpoint_flight` flies a checkpoint on its recorded plan, so
+  `evaluate --record` scores it there; `--ablation dwell|cov` (the driver's own constants, and the
+  default tag) and `--plan-score-params` (the runner's format) on `train` and `sweep`. The runner
+  refuses a pair checkpoint whose recorded training plan differs from the one its arm flies; no
+  record means the default plan.
+- *R24.* A checkpoint must match its tag (the final check's F2): the runner's campaign check also
+  refuses a `gX` tag whose manifest γ is not X/100; the `hand` tag unless the reward is F·hand, and
+  an F·hand checkpoint under any other pair tag; an E3 checkpoint whose reward is not decision 7's
+  bytes; and a network that took no update, a "trained" network still at its initial weights, which
+  the spec's "no random-init arm" forbids in substance. The row's provenance stays tag plus sha.
+- *R25.* FerrySim's device-serve columns (the final check's FS-1): FerrySim does not run the
+  devices' service loops, so its device traces hold only `device_ready`, and a FerrySim row
+  (`EpisodeResult.row`, and the scorer's row of a kept trace) shows coverage 0.0,
+  participation_entropy 0.0 and jains_fairness 1.0 as harness artifacts, as UG4 declared for its
+  harness. No study reads these columns. Documented in `inprocess.py` and `episode.py`; the parity
+  tests split the masked columns into wall and serve columns and pin the artifact values. No
+  blanking, and no consumer or scorer change (Rule 3).
+- *R26.* `report` marks a sweep as not pre-registered, in its JSON and on the printed verdict's
+  second line, when its γ set, its seeds per γ or its held-out count differs from decision 5's
+  grid: with fewer than 8 seeds "rising" cannot be reached after Holm while "flat" still can. It
+  does not refuse, because the calibration runs the same code with 3 seeds.
+- *R27.* Accepted as built: `H1+L1` is refused where it would fly as plain H1, a guard against a
+  mislabelled arm; E3 flies the driver's configured in-flight response, as D1–D5 do (its Pass 1 is
+  the same under either).
+- *R28.* The repair round's open questions. (1) `main` stays open at any derived-reward weights (the
+  manifest records them and the sha finds the manifest), while `gX`, `dwell` and `cov` take only
+  decision 4 (a)'s weights; Study 5.7's grid points train under free tags that no arm flies, which
+  the runner refuses. (2) ε belongs to Study 5.5, under decision 4's default reward: the headroom
+  command has no `--reward`, so an ε under 5.7's grid weights would come from a default-weight
+  headroom, and 5.7 has no pre-registered ε (left to 5.7's own design); recorded, no change. (3)
+  Fix B's scratch lag probe is superseded by the repository helper (`evaluate.fx_lags` and
+  `fx_lag_median`, `LAG_EPISODES` = 200) and a slow re-measure test. (4) A logging leak, there
+  since U8b: FerrySim's three command lines (`python -m experiments.ferrysim`, `.evaluate` and
+  `.headroom`) called `logging.disable(WARNING)` for the whole process and never restored it, so
+  any test calling one before `tests/golden/test_golden_host_mission.py` failed 77 golden nodes,
+  which the full suite's collection order hid. Each `main` now puts the caller's level back in a
+  `finally` (pinned by `test_each_command_line_puts_the_callers_logging_level_back`), and the
+  reproduction went from 77 failed to 85 passed.
+- *R29.* What the user's choice for R22 involves, made before the 5.5 sweep: the jittery score
+  trains on `jittery` or on `jittery56`. Under either, the calibration and the sweep fly the same
+  family (decision 3: one score per regime), the study name carries the family (R19), and one sweep
+  runs per regime. Under `jittery56` each Study 5.5 cell gets 1/8 of practice instead of 1/4; the
+  half cells' periods (52 s and 68 s) lie near 60 s, so N = 12 practice near Study 5.5's periods
+  stays about half; the N = 6 control's share halves and the quarter cells (104 s and 136 s) take a
+  quarter; the kept weights are chosen on the mean over all eight cells; validation drops to 25
+  episodes per cell at the default 200 (`--val-episodes 400` keeps 50, at about +17 % training
+  time). Under `jittery`, 60 s flies lag/P_c 0.44 at 120 s and 0.57 at 180 s, so the half cells sit
+  near practice and the quarter cells outside it, and Study 5.6 must declare its quarter cells out
+  of practice. FerrySim keys the 5.6 cells' streams by name, so its quarter and half cells do not
+  share layouts; in stack trials the runner's seeds pair them. These move together at the re-pin
+  after the N = 12 pilot: `STUDY_5_6_LAGS_S` (26 s and 34 s), the four P_c constants, the
+  `jittery56` hash and the test literals (with `RATIO_BOUNDS` if the spread changes). Study 5.6
+  reads its full held-out sample: 12 episodes mislead at N = 12. The orchestrator recommends
+  `jittery56` with `--val-episodes 400`: it keeps decision 3's one score per regime and design D-G's
+  practice over 5.6's periods, and keeps the 5.6 contrast clean; most of the cost falls on the N = 6
+  control.
+
+**Recorded, no change.**
+
+- FerrySim credits an update whose backhaul upload was lost (other choices 7: w_i is the update's
+  weight), so its reward departs from "what the merge actually pays" on lost uploads only: 10 of
+  320 missions under the jittery realism (the final check's FerrySim dimension).
+- `LEARNER_REVISION` does not count settings changed by command-line flags (`--lr`,
+  `--epsilon-start`); a sweep that mixes settings is still refused through the training-spec check.
+- A beacon insert can fly ahead of the pair's chosen stop; the record's `next` then names a stop not
+  flown next, and `trimmed_next` stays False. No recorded or FerrySim path offers beacons.
+- The mask omits the 1 s listen window and the session-start pricing: in the final check's
+  end-to-end replay 123 of 2,484 decisions were followed by a re-plan at the next departure, which
+  the departure check catches as specified.
+- The 35 new files are LF in the working copy, as the spec's conventions ask (a byte count; an
+  earlier note that they were CRLF came from a Git Bash line count that misreads LF files). With
+  `core.autocrlf=true` `git add` stores them as LF either way.
+
+**The headroom report** (decision 10 (i)(a), run 2026-10-01). On FerrySim's validation stream
+(`ferrysim-val`, episodes 0–199 of each cell), at most 512 leaves per sortie, the derived reward
+(c_t 0.1, c_cov 1) and the equal device model, in process, with no training and no stack trial; it
+took 2,952 s (49 min) with 12 workers, not the "few minutes" the spec expected. The headroom of an
+episode is V − R(FX arm), where V is the largest of the per-sortie oracle's sum (a depth-first
+search over the admitted pairs, each leaf a deterministic replay with `fx_pair` flying the other
+sorties) and the whole-episode returns of the FX arm and the slot's four scripted references. F is
+reported beside V, not in it: it flies b̄ where the mask refuses it, so no pair choice reaches its
+flight. ε = max(0.01, 0.1 × headroom).
+
+| Cell | FX mean | Best scripted (mean) | Headroom ± SE | ε | Sorties with ≥ 2 decisions | Truncated sorties |
+|---|---|---|---|---|---|---|
+| jit-n6-45 | −0.1002 | `greedy_1` (−0.0954) | 0.0167 ± 0.0062 | 0.0100 | 8.5 % | 0/800 |
+| jit-n6-90 | +0.2178 | `greedy_1` (+0.2249) | 0.0212 ± 0.0058 | 0.0100 | 3.4 % | 0/800 |
+| jit-n12-120 | −0.1469 | `greedy_1` (−0.1205) | 0.0911 ± 0.0110 | 0.0100 | 87.6 % | 1/800 |
+| jit-n12-180 | +0.0590 | `greedy_1` (+0.0663) | 0.0229 ± 0.0039 | 0.0100 | 32.8 % | 4/800 |
+| cln-n12-120 | +0.0330 | `committed_pair` (+0.0371) | 0.0411 ± 0.0069 | 0.0100 | 86.3 % | 3/800 |
+| cln-n12-180 | +0.1127 | `greedy_1` (+0.1162) | 0.0126 ± 0.0031 | 0.0100 | 64.6 % | 29/800 |
+
+No pause: every cell's headroom is at least 0.01, the largest at jit-n12-120. ε is 0.01 in every
+cell, with jit-n12-120 close to rising above the floor (the bootstrap CI's upper end, 0.114, would
+give 0.0114, and its last 100 episodes alone give a headroom of 0.1044); Study 5.5's report reads ε
+from the mean headroom of the cells it reads, about 0.057 for jit-n12-120 and jit-n12-180, so
+ε = 0.01. A truncated sortie makes its cell's headroom a lower bound (cln-n12-180's 29 most). V
+exceeds the best fixed rule by 0.0647 at jit-n12-120 and 0.0156 at jit-n12-180, Study 5.5's cells,
+and by only 0.0091 at cln-n12-180, below ε. *`greedy_1`'s signal:* on validation `greedy_1` beats FX
+in 5 of 6 cells (it is below FX at cln-n12-120), significantly at jit-n12-120 (+0.0265 ± 0.0077,
+paired); by the same paired standard error also at jit-n12-180 and cln-n12-180, and by a sign test
+in no cell. Per the spec, if it also beats FX by ε on the held-out runs, the report says so and the
+user decides (critic A2). F's mean is the lowest of the six policies in every cell, yet its return
+exceeds V in 42 of 200 jit-n12-120 and 40 of 200 jit-n6-45 episodes (open items: an arrival
+check). An independent checker re-flew three cells by its own code (3,600 flights and 2,400 oracle
+searches), re-read all 1,200 episodes and reproduced every number; its caveats: with F counted in V,
+jit-n12-120's headroom would be 0.1227 and its ε 0.0123, the other cells' unchanged; and much of V
+is hindsight selection, as the design intends, since the best single policy's mean gain over FX
+reaches 0.01 only at jit-n12-120. (U8a's first report, 100 episodes per cell and F still in V,
+also found no pause.)
+
+**What landed, by unit** (Configuration Reference §19 has each setting):
+
+- *Goldens at `386c275` (unit UG5).* `tests/golden/_build_p4_plan.py` (which imports UG4's builder,
+  unedited), `data/p4_plan.json` (695 KiB) and `test_golden_p4_plan.py` (128 tests), captured on the
+  untouched tree: eight stub trials of the plan arms through `Exp4Driver.run_trial`, with the real
+  services run in process: F, FX, FB+medium, F-cov, F-cap and F-prio at N = 6, 1 MB, the jittery
+  contact channel, 45 s, S = 2 and 6 missions (seed 59); FX at 60 s; and FX at N = 12, 120 s,
+  S = 3, 4 missions (seed 26), which pins FX's next-stop rule and the departure check after a stop.
+  Beside UG4's eight parts a ninth, `flight_slot`, records every call the mule makes to its flight
+  slot with its arguments, so an argument added or left out fails by name; the other parts are
+  compared on their `386c275` keys (an added key passes, as in UG4). There is no K = 2 trial (critic
+  A4: Phase 4's K = 2 loopback stays the pin), and no trial carries a beacon offer or makes
+  `plan_protected` decisive, so the beacon hook's place and the exempt stops' protection stay
+  pinned by Phase 4's tests under the `386c275` baseline. `make_baseline.py` gains its third
+  `BASES` entry (below). The goldens are now 356 tests: 144 + 84 + 128.
+- *Types, configuration and interfaces (U0).* In `plan/types.py`: `pair_q` among the flight slots,
+  and `StopContext`, `PairView`, `FitsPair`, `PairScorer`, `check_pair_scores` and `PairChoice`,
+  outside `__all__` (import them from `hermes.scheduler.plan.types`). A choice's record is
+  JSON-ready, free of wall time and read-only all the way down; a zero energy reference is stored as
+  None. `policies/next_stop.py`, new: E3's observation (`E3Stop`, `E3View`) and the per-departure
+  protocol (`NextStopPolicy`, `checked_choice`, `pass_1_only`), with no numpy and no plan import.
+  In `processes/config.py`: the six checkpoint fields, declared just before `plan_mode`, inside
+  `SIM_ONLY_MULE_FIELDS` and outside `FERRY_SPEC_FIELDS` and `PLAN_MULE_FIELDS`, so no Phase 3 or
+  Phase 4 `ferry_params` string changes; `chen_dqn`; and their guards. Four of the six deliberate
+  test edits.
+- *The learner and its replay (U2, then U2b).* `selector/pair_q.py`: a masked pointer double DQN in
+  numpy, one Q per pair row from shared weights, with Adam, the Huber loss, a global-norm clip, hard
+  target syncs, the behaviour schedule and checkpoint format 2; `selector/pair_replay.py`:
+  transitions that carry the next decision's rows and mask, variable-length batches, sampling from
+  `random.Random(seed)`. They are new modules, not edits of `ddqn.py` and `replay.py`, which refuse
+  γ = 0, train by SGD on a squared loss and score one stored next row, and which the H2 golden pins.
+  U2's review round gave equal rows one Q, bit for bit (so the lowest-row tie rule decides between
+  them), checks `behaviour_row`'s arguments before its two draws, and refuses a held-out entry that
+  holds no score. U2b bound the purpose and the learner revision into the header (R2).
+- *The mask's predicate and the runtime's readers (U4).* `FLScheduler.fits_after_service`, one
+  method, plan mode only (refused in legacy mode and in Pass 2); `FerryRuntime.stop_contexts`,
+  `class_offsets_db`, `energy_ref_j` and `e3_observation`, and the `StopPrice` type, all pure (R4).
+  The offsets are differenced per link before the median (critic C6); E3's observation reads the
+  realized SNR within reach and the mean beyond it (critic B7 iv) and imports `next_stop` lazily.
+  AST tests show both files differ from `386c275`'s only by these, and the runtime at its defaults
+  equals `386c275`'s on 27 cases.
+- *The pair slot and the scope guard (U3).* `policies/pair_slot.py`: `PairQSlot` with an injected
+  scorer, the four scripted references (`fx_pair`, `committed_pair`, `hyb` and `greedy_1`, each the
+  slot's version of its rule, not the fixed arm), the mask's binding (`bind_fits_pair`, which
+  answers only for the view's pairs), the decision records and their close, and the trainer's seam;
+  in `selector/scope_guard.py`, one function, `assert_pairs_admitted`.
+- *The supervisor (U5).* In `mule_main.py`: the pair branch at each Pass-1 arrival; the chosen stop
+  moved to the front after the stop; `trimmed_next` set at the departure check after a decision;
+  the records closed in `_ferry_result` on all three simulated-clock exits (the empty round, no
+  DOWN, the normal path); the `pair_slot` keyword and its refusals; `install_flight_slot`; and E3's
+  per-departure hook. `MissionRunResult` gains `pass_1_pairs`, `pass_1_e3` and
+  `pass_1_e3_unvisited`, None at the defaults, and the clock is read once more at the Pass-1
+  landing (`rec.landing_s`, a pure read).
+- *FerrySim (U8a).* `experiments/ferrysim/inprocess.py`, a copy of UG4's in-process orchestrator
+  with the helpers it takes from `tests` (critic C7) and two hooks; `cells.py`, `episode.py`,
+  `reward.py`, `evaluate.py` and `headroom.py`. With the stub device model FerrySim reproduces UG5's
+  oracle of `fx_45s` and `fx_n12_120s` in all nine parts, and with no hooks UG4's
+  `h1_replan_trim_wide`; a stub FX trial through the real orchestrator equals FerrySim's run on
+  every mule and cluster event, wall stamps masked, and on the row bar its wall and device-serve
+  columns (R25). U8a's review round nested kept traces under the cell and the policy, pinned how a
+  flight is read into the reward, and took F out of the headroom's V.
+- *The features (U1).* `selector/pair_features.py`: `pair_v1` (36 columns on the three-class link
+  with the phase block, 24 without; R11), `covering_classes`, the learned score's adapter
+  (`LearnedPairScorer`), `load_pair_scorer` and `build_pair_slot` (R8). Every refusal of what a
+  checkpoint path names is a `CheckpointError`, a missing file included; the phase block is tested
+  at P_c = 30, 45 and 60 s.
+- *E3 (U6).* `policies/chen_dqn.py`: `ChenDQNPolicy`, its rows (`e3_v1`, 10 columns), its
+  checkpoints (kind `chen_dqn`, bound to its band) and its trainer's seam. It acts on the live
+  network's online Q at each call, never on the target copy.
+- *Processes, driver and runner (U7).* `processes/mule.py` loads a learned filling's checkpoint
+  before the process binds anything (a refusal is `CheckpointRefused`, exit 1), reads a relative
+  path under `REPO_ROOT`, announces `mule_ready.pair` or `mule_ready.policy_checkpoint`, and writes
+  the new `mission_completed` fields, each left out when empty; `topology_builder.py` carries the
+  six fields to every mule; `driver.py` gains the arm lists, the tags, `is_plan_arm`, `H1+L1`,
+  `checkpoint_settings`, the per-trial checkpoint check and the provenance keys; `runner_main.py`
+  gains `--pair-checkpoint`, `--policy-checkpoint`, `--allow-dirty-checkpoint` and
+  `--require-trained`; `config.py` gains R3's guard. The deliberate edit at
+  `test_p4_config_driver.py:583`, with its import on line 60 (R13).
+- *Analysis (U9).* `events_consumer.py`: `PairDecision`, `E3Call`, and `MissionRecord`'s
+  `pair_decisions`, `e3_calls` and `e3_unvisited`, each field read only in the form the mule writes
+  it; `traces_scorer.py`: `PHASE_5_COLUMNS` behind `pair_columns`, and E3's `policy_params`
+  provenance; `stats.py`: `tost_paired` and `trend_test` (Page's L). The default scorer row equals
+  the `386c275` scorer's byte for byte on all 600 recorded trials and on UG4's and UG5's 16 fixture
+  trials.
+- *The trainer and the report (U8b).* `experiments/ferrysim/train.py`, `checkpoints.py`,
+  `report.py` and `__main__.py`, the command line (`headroom`, `train`, `sweep`, `evaluate`,
+  `report`). U8b's review round refuses replacing another family's checkpoint (R19), puts the N = 6
+  control into `evaluate`'s default cells (R20), and turns a refusal of `report.decide` into a usage
+  error.
+- *The final check, the fix round and its repair*, below.
+
+**Visible at the defaults, additive only.** Every mule's per-role JSON, on either clock, carries the
+six checkpoint keys at null, inserted just before `plan_mode`, so nothing else in it moves. In
+memory, `MissionRunResult` and the consumer's `MissionRecord` each gain three fields at None, which
+no event carries at the defaults: the wall clock's `mission_completed` is built from explicit fields,
+and the simulated clock's new optional fields are left out when None or empty. Error messages that
+list the allowed values now name the Phase 5 ones (`ARMS`, `FLIGHT_SLOTS` and `chen_dqn`): for
+example the untouched `cross_heuristic.flight_slot_policy("pair_q")` now reads "must be one of
+(..., 'pair_q'), got 'pair_q'", which no pipeline path reaches. Nothing else: no trace event gains a
+field at the defaults (tests pin that no Phase 5 field reaches the `mule_ready` or
+`mission_completed` of F, FX, H1 on either clock, D1 or D4), every Phase 3 and Phase 4 row keeps its
+strings, the trial CSV header is unchanged, and the scorer's default row is the Phase 4 one.
+
+**How legacy identity was checked**, on its three faces:
+
+- *For every unit:* the goldens before and after, both builders (UG4's `8 trials x 8 parts compared
+  (same)` and UG5's `8 trials x 9 parts compared (same)`, whose lists of added keys hold only the six
+  checkpoint keys), and each unit's neighbouring tests compared node by node; fresh-interpreter tests
+  that H1, D1, D4, F and FX load none of `pair_slot`, `pair_features`, `pair_q`, `pair_replay`,
+  `chen_dqn`, `next_stop` or `experiments.ferrysim` (other choices 13); a git check that the seven
+  legacy selector files equal `386c275`'s (U2; it stands in for the spec's behavioural
+  `_p4_ref`-style test, which no unit owned).
+- *Phase 4's plan arms:* UG5's goldens, flight-slot calls and their arguments included.
+- *The final check's legacy dimension:* a hunk-by-hunk review of the 13 modified source files
+  (every changed line on a legacy path additive or an identity rewrite); an A/B against a
+  `git archive` of `386c275`: 18 more legacy-mode trials, 17 more plan-arm trials and UG4's and
+  UG5's 16, differing only by the six null keys; 51 trials byte for byte, every run-directory file,
+  with only `plan_wall_s` masked; the wall-clock builders with 0 differences; the runner on six
+  recorded command lines; the scorer's default row on 50 trials; the modules loaded in fresh
+  interpreters; and 34 legacy error paths, identical but for the four messages above. Its flight
+  dimension flew F, FX and the legacy arms on 283 configurations, bit-identical with the archive,
+  and the end-to-end replay 39 trials with 0 value differences. 2,948 existing nodes in 70 files
+  were compared with the `386c275` baseline, all the same.
+- *The `tests/` diff:* of the 182 test files tracked at `386c275` none is deleted and five changed:
+  UG5's `make_baseline.py` and `README.md`, and the three that carry exactly the six deliberate
+  edits, with their line counts and node ids unchanged:
+  1. `test_p4_types.py:211`: `FLIGHT_SLOTS` gains `pair_q`;
+  2. `test_p4_types.py:633`: the example bad value `"pair_q"` becomes `"pair_x"` (node `kwargs2`);
+  3. `test_p4_cross_heuristic.py:110-111`: `ch._SLOTS` and its loop compare with `FLIGHT_SLOTS[:2]`
+     (line 116 stays, since `flight_slot_policy` keeps only the two fixed fillings);
+  4. `test_p4_config_driver.py:155`: the restated `FLIGHT_SLOTS`;
+  5. `test_p4_config_driver.py:583`: `ARMS` gains `PHASE_5_ARMS`, imported on the existing line 60
+     (R13);
+  6. `test_p4_config_driver.py:896-897` and `:916-918`: the per-role JSON gains
+     `CHECKPOINT_MULE_FIELDS` beside `PLAN_MULE_FIELDS` (R1).
+
+  The H2 golden (`tests/golden/_mule_harness.py:600-602`) and the recorded `[60.0]` A/B failure
+  stay as they were.
+
+**Test baselines and the compare rule.** `tests/golden/make_baseline.py` now holds three pass/fail
+baselines (`BASES`): `pytest_baseline.txt`, the full suite at afa9526 before any Phase 3 change
+(1,560 tests, 6 failures; signed off by the user on 2026-09-29); `pytest_baseline_6e6f92d.txt`, at
+`6e6f92d` before any Phase 4 code change, with UG4's goldens (2,918 tests, UG4's 84 among them);
+and `pytest_baseline_386c275.txt`, the full suite at `386c275` before any Phase 5 change, with UG5's
+goldens added (4,824 tests, the 128 of `test_golden_p4_plan.py` among them: 4,819 passed and the
+five deterministic afa9526 failures with their signatures; unit UG5), which gates Phase 4's own
+tests too. UG5 recorded it in three full runs: run A, with the baseline's own test deselected,
+wrote a provisional baseline; run B, the whole suite, wrote it; and run C re-recorded it after UG5's
+review round added six tests. "The full suite passes" for Phase 5 means: the same as all three
+baselines, that is the same outcome per node id and the same signature per known failure, new
+tests allowed. `compare` checks every recorded baseline by default (`--base` picks one,
+`--baseline` names a file). It exits 0 when the run is the same as each, 1 when it differs from
+one, and 2 when a baseline file it was to compare with is missing, printing `MISSING` and still
+comparing the others; the worst status wins. It also lists the new tests that fail, which are never
+differences, so read that line. `FLAKY` holds only `test_exp4_real_model_synthetic_converges`,
+which may pass or fail its known way (it passed in the `6e6f92d` and `386c275` baselines);
+`--flaky NODE_ID` adds a test and `--strict` drops the list. `write --base 386c275` refuses unless
+HEAD is `386c275` with `hermes/` and `experiments/` clean.
+
+```
+py -3.11 -m pytest tests -p no:cacheprovider -q -rfE --junitxml=run.xml
+py -3.11 tests/golden/make_baseline.py compare run.xml                   # all three baselines
+py -3.11 tests/golden/make_baseline.py compare run.xml --base 386c275    # one of them
+```
+
+Phase 5 adds 1,310 tests in 14 new test files (`tests/unit/test_p5_*.py` and
+`tests/integration/test_p5_*.py`), beside UG5's 128 goldens (`tests/golden/test_golden_p4_plan.py`,
+with its helper `tests/golden/_build_p4_plan.py`). The `386c275` baseline already records UG5's
+128, so a compare against it lists the 14 files' tests as new; against `6e6f92d` and afa9526 it
+lists Phase 4's and UG5's tests as new too. The full run of the Phase 5 tree: 6,133 tests on 2026-10-02: 6,128 passed, and the five known failures failed their recorded way; `make_baseline.py compare` exits 0, the same as all three baselines (new tests: 4,573 against afa9526, 3,215 against 6e6f92d, 1,309 against 386c275, none failing; the flaky real-model smoke test went failed to passed, which is allowed). One later change, the headroom and evaluate commands making their `--out` folder before flying (resolution R28), passed its own and its neighbours' tests; the full re-run after it was stopped.
+
+**The final check (2026-10-02).** Six review dimensions: spec fidelity; the flight pipeline across
+units; Rule 1 on all three faces with the `tests/` diff; the driver, runner, checkpoints and
+analysis; FerrySim against the real system, and the training pipeline; and an end-to-end replay of
+real Phase 5 trials. Three found nothing: the flight pipeline (about 16,000 pair decisions and
+3,800 E3 calls re-derived independently), legacy identity with the six test edits, and the replay
+(8 real-process trials and 840 in-process FerrySim trials: 2,484 FQ decisions, 8,445 mask bits and
+5,614 E3 calls, 0 failures). The FerrySim dimension found FerrySim equal to real processes mission by
+mission on 8 real trials, the equal-shard stand-in changing only the merge weights, and its reward,
+recomputed from the real traces, equal to FerrySim's. Five findings were confirmed:
+
+- *SPEC-1 (low):* R21 gave a false reason for counting choices: no Study 5.5 step reads the shares.
+  R21 is amended (above).
+- *SPEC-2 (low):* decision 6 (a)'s Study 5.6 cells and critic A3's lag-based ratio were neither
+  built nor recorded as deferred: R22.
+- *F1 (medium):* FQ-dwell and FQ-cov could not be trained under their own plans (critic C2), and
+  the runner would fly a default-plan checkpoint under those tags on the ablated plan, unchecked:
+  R23.
+- *F2 (low):* nothing tied a checkpoint's content to the tag it flies under (γ, reward): R24.
+- *FS-1 (low):* FerrySim's devices never run their service loop, so its device events and three
+  non-wall row columns always differ from a real trial's: R25.
+
+**The fix round and its repair (2026-10-02).** Fix A built R23 and R24; fix B built R22; fix C built
+R25 and R26, and found no code comment or doc that repeated R21's false reason.
+Adversarial reviews of the three raised 11 findings, 10 confirmed and 1 refuted (RB-3, on the
+lag-ratio test's strength). The repair round fixed all 10, each pinned by a test, with the defaults
+and the three legacy faces unchanged:
+
+- *A-1:* headroom and ε are read on the evaluation's plan: `headroom --plan-score-params` records
+  the plan it flew, and `report` refuses a headroom report of another plan than the evaluation's;
+- *A-2 and A-4:* `train` and `sweep` refuse an explicit learned-arm `--tag` that its arm would not
+  fly (its γ, its reward, decision 4 (a)'s weights under `gX`, `dwell` and `cov`, an ablation's
+  plan), and the runner refuses other weights under `gX`, `dwell` and `cov`;
+- *A-3:* the kept weights' update count is the kept validation's, whatever came before it (tests);
+- *A-5:* `--policy-checkpoint`'s help states E3's own conditions (the bytes reward, an update);
+- *RB-1 and RB-2:* the lag measurement lives in the repository (`evaluate.fx_lags`,
+  `fx_lag_median`), and the comment above `STUDY_5_6_LAGS_S` gives the pooled statistic, its 95 %
+  interval (25.4–27.5 s and 32.2–36.9 s), the 400-episode values (26.80 s and 35.12 s, which round
+  to 27 and 35) and the rule that a re-pin re-measures on the same sample and statistic;
+- *RB-4:* the lag-ratio test is marked slow;
+- *C-T1 and C-T2:* the pre-registration label's tests cover "more" as well as "fewer", and pin the
+  verdicts off the grid, so the label can change no step of the rule.
+
+Then the logging fix of R28 (4).
+
+**Frozen surface touched,** all behind the switches: `fl_scheduler.py` (one method,
+`fits_after_service`); `mule_main.py` (the pair branch, the reorder, the records, the `pair_slot`
+keyword, the install seam and E3's hook); `selector/scope_guard.py` (one function,
+`assert_pairs_admitted`). The new `selector/` files (`pair_q.py`, `pair_replay.py`,
+`pair_features.py`) fall under Amendment 7's opening. Untouched: `selector/{ddqn, replay, features,
+target_selector_rl, selector_train, sim_env, __init__}.py`, `policies/cross_heuristic.py` and
+`policies/__init__.py`, `mission/*`, `l1/*`, `experiments/sim/drone_env/*` and the golden
+harnesses (UG5's files are new). Outside the frozen surface: `mule/ferry.py`, `plan/types.py`,
+`processes/config.py` and `processes/mule.py`, the Exp 4 `driver.py`, `runner_main.py`,
+`topology_builder.py` and `events_consumer.py`, and `analysis/traces_scorer.py` and
+`analysis/stats.py`. New: `policies/pair_slot.py`, `policies/next_stop.py`, `policies/chen_dqn.py`,
+and `experiments/ferrysim/` (`__init__.py`, `__main__.py`, `cells.py`, `checkpoints.py`,
+`episode.py`, `evaluate.py`, `headroom.py`, `inprocess.py`, `report.py`, `reward.py`, `train.py`).
+Tests: UG5's files, `make_baseline.py` and `README.md` in `tests/golden/`, the 14 new test files,
+and the six deliberate edits.
+
+**Deviations from the build plan** (also in `FeRRy_Build_Plan.html`, Phase 5):
+
+- FerrySim is `experiments/ferrysim/`, not `selector/ferry_sim.py` (L496, L919): `hermes/` may not
+  import `experiments/`, and the scheduler may not import `hermes.l1`, while FerrySim needs both.
+- New pair modules (`selector/pair_q.py`, `pair_replay.py`) replace the planned changes to
+  `ddqn.py` and `replay.py` (L918), which the H2 golden and the recorded A/B failure pin.
+- The pair fills the flight slot; `_pick_channel_contact`, ChannelDDQN's logging hook, is untouched
+  (L923).
+- Timing: the band serves stop k at once, at the SNR observed on arrival, and the next-stop half
+  carries s's predicted features (L543, L917).
+- "≤ 18 pairs" is not a bound (L543): the probes reached up to 15 pairs at N = 12 and 21 at
+  N = 24.
+- The features (L917): 36 columns, not about 15; the value proxy is dropped (critic C5); a phase
+  block and pooled context are added; the slack is log-scaled; three columns go beyond the spec's
+  list (R11). Six of today's eleven slots are constant, not five (seven on mission 1).
+- E3 is a numpy port of Chen's recipe, trained in FerrySim, with its declared deviations, not the
+  vendored joint-action DQN (L921); M1 and O1 are deferred (L922).
+- Checkpoints are committed only with the user's consent, after a LICENSE is added, and the
+  trained-checkpoint guard sits in the runner, not the mule, so FerrySim's E3 bootstrap checkpoint
+  loads (L923).
+- The γ sweep (L1151-1156): γ ∈ [0, 1] and 10 seeds per γ, read on N = 12, with the pre-registered
+  rule and its references, not 5 seeds with "flat" read as "not significant".
+- Study 5.6 follows decision 6 (a), at N = 12's stand-in budgets (L1167, L1171): two cells, lag/P_c
+  a quarter and a half, instead of the grid {0.25, 0.5, 1, 2}, which aliases; "FX tuned separately
+  per regime" is dropped, because FX has no parameters.
+- Study 5.7's grid is c_t × c_cov with no c_miss (L1180), and r_k is decision 4's (L550).
+- H2 and H3 leave Exp 5 and `H1+L1` keeps the adaptive backhaul's reference (decision 8);
+  ChannelDDQN is retired from the plan, its code and logging kept (L473, L1047).
+- Labels: Phase 4's F stays the committed slot, and the plan's F is built as FQ (L1039); the paper
+  may call FQ "F".
+- T2, "with one band, the pair Q reduces to today's contact ranking" (L930), is restated as a
+  structural reduction: with one class there is one row per stop, ties follow the remainder's order
+  (R5), and a −travel scorer reproduces FX's nearest feasible stop.
+- The exit gate is split (L935): a code gate now, a campaign gate after the go-ahead.
+- FerrySim's reward credits an update whose backhaul upload was lost (other choices 7), so it
+  departs from "what the merge actually pays" (L912) on lost uploads only.
+- The design's plan inconsistencies 1–29 are resolved as it proposes, except #2 (critic A2), #16
+  (B14), #20–21 (decision 6) and #24 (decision 8).
+- Size: about 14,600 lines of code (14,554 added and 73 removed, over 30 files) and 17,600 of tests
+  (17,602 added and 17 removed, over 20 files), docstrings and UG5's harness included, plus the
+  `386c275` baseline record (4,848 lines) and the `p4_plan.json` fixture (695 KiB), against the
+  ~1,500 (~300 optional) estimated in the plan; the Phase 5 spec had estimated about 4,800 and
+  4,500, and expected more than 12,000 and 20,000.
+
+**Open items.**
+
+- *R14's candidate amendment*, for the user: shut the topology down when a mule fails at startup
+  (`_run_topology` re-raises from `start_all` without `shutdown_all`, and the cluster process keeps
+  running). It is not fixed, since it changes every arm's error path (Rule 3); the driver's
+  per-trial checkpoint check means a refused checkpoint normally never reaches a mule.
+- *An arrival check* that refuses a stop whose landing no longer fits at the observed rate, for
+  every plan arm (design Q2): FX's own pair overruns at 19 of about 71 last-stop arrivals at N = 6,
+  and the headroom report found F's return above V in about a fifth of jit-n12-120's and jit-n6-45's
+  episodes, so decision 1 (a)'s mask is stricter than those flights turned out to need.
+- *A plan-clock slope* (design Q4); *10 MB as a 5.5 sensitivity* (Q7); *the rollout of FX at the
+  mean SNR* as a further reference (critic B5); *a 5.7 cell where the merge weight varies* (critic
+  B4).
+- *Irregular interference* (decision 6 (b)) and *M1*, only if Study 5.5 keeps the learned score;
+  *O1* before the 5.4 headline.
+- *The family in the checkpoint layout* (for example `<study>/<family>/<tag>/`): the applied fix
+  refuses a cross-family overwrite and asks for one study per family (R19).
+- *Counting flights rather than choices* in the agreement and re-order shares (U9's open question;
+  R21 keeps choices); *E3's N per call* in `pass_1_e3` (a trace reader recomputes it).
+- *Refusing a checkpoint of another learner revision* in the runner, and binding `episodes_trained`
+  and `dirty` into the sha (U2b's open questions).
+- *A `--warmup-transitions` flag:* a short command-line run never warms the replay (1,000
+  transitions), so its kept weights are the initial ones and the runner refuses it (R24); a
+  development run needs a code-level warm-up.
+- *The pre-registration label* checks R26's three settings only: a report read on other cells, from
+  an evaluation with `--start` other than 0, or with ε given directly still reads "pre-registered".
+- *The headroom command has no `--reward`*, and the report never compares the headroom report's
+  reward with the evaluation's (R28 (2)).
+- *The vendored drone_env* has no licence from its author and is on public `main` (decision 9: ask
+  its author or remove it; Phase 5 does not use it).
+
+**What needs the user's go-ahead.** Nothing below runs, and nothing is committed, without it:
+
+1. *The training campaigns:* 77–119 trainings, about 11–22 h plus 1–2 h of held-out evaluation
+   (R20 puts Study 5.5's held-out evaluation at about 3.3 h at 8 workers with the N = 6 control),
+   run in batches, the calibration and the controls first.
+2. *E3's training settings* (R16): the pair learner's defaults, or Chen's lr 5e-4 and ε from 1.0;
+   `--gamma` is required.
+3. *The jittery score's family* (R22, R29): `jittery` or `jittery56`; the orchestrator recommends
+   `jittery56` with `--val-episodes 400`.
+4. *The LICENSE* (MIT, as the README names) before any checkpoint commit, and each checkpoint
+   commit (decision 9).
+5. *The pilots:* the N = 12 knee and stress budgets, after the Phase 3/4 pilots; then the cells,
+   the 5.6 lags and the 5.6 periods are re-pinned.
+6. *The stack trials* (Study 5.5's check, 5.6, 5.7, 5.3's E3 cells), re-costed first.
+7. *The campaign gate,* in decision 10 (ii)'s order: the headroom report (run during the build),
+   the sweep and its evaluation, the committed checkpoints, Study 5.5's verdict, the stack trials.
+8. *R14's candidate amendment.*
 
 ## 6. Unfreezing
 
