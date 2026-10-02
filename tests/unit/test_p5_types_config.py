@@ -55,6 +55,7 @@ import hermes.scheduler.policies as policies_pkg
 from hermes.l1.mission_clock import EnergyModel
 from hermes.processes import config as C
 from hermes.processes.config import (
+    ADDENDUM_MULE_FIELDS,
     CHECKPOINT_MULE_FIELDS,
     FERRY_SPEC_FIELDS,
     PAIR_CHECKPOINT_FIELDS,
@@ -717,7 +718,8 @@ def test_recorded_per_role_json_loads_with_the_checkpoints_unset(face):
         now = json.loads(mule_config_to_json(cfg))
         assert set(raw) <= set(now) and set(SIX) <= set(now) - set(raw)
         if face == "386c275":
-            assert set(now) - set(raw) == set(SIX)
+            # and the Exp 5 addendum's fields, at their defaults
+            assert set(now) - set(raw) == set(SIX) | set(ADDENDUM_MULE_FIELDS)
         assert {k: now[k] for k in raw} == raw
 
 
@@ -859,7 +861,8 @@ def test_at_the_defaults_the_plan_arms_gain_only_the_six_keys_at_none(name):
     on Phase 4's plan arms the per-role mule JSON gains the six checkpoint keys,
     all None, and no row, event or slot call gains anything."""
     added, values = _per_role_additions(UG5.load_golden()["cases"][name], UG5.capture(name))
-    assert sorted(added.pop("configs")) == sorted(f"$.mule-exp4-mule.json.{f}" for f in SIX)
+    assert sorted(added.pop("configs")) == sorted(           # and the Exp 5 addendum's
+        f"$.mule-exp4-mule.json.{f}" for f in SIX + ADDENDUM_MULE_FIELDS)
     assert added == {part: [] for part in added} and set(added) == set(UG5.PARTS) - {"configs"}
     assert values == dict.fromkeys(SIX)
 
@@ -872,7 +875,8 @@ def test_at_the_defaults_the_simulated_clock_gains_only_the_six_keys_at_none(nam
     else."""
     added, values = _per_role_additions(UG4.load_golden()["cases"][name], UG4.capture(name))
     phase_4 = {f"$.mule-exp4-mule.json.{f}" for f in PLAN_MULE_FIELDS}
-    assert set(added.pop("configs")) - phase_4 == {f"$.mule-exp4-mule.json.{f}" for f in SIX}
+    assert set(added.pop("configs")) - phase_4 == {      # and the Exp 5 addendum's
+        f"$.mule-exp4-mule.json.{f}" for f in SIX + ADDENDUM_MULE_FIELDS}
     assert [k for keys in added.values() for k in keys
             if not k.endswith(".pass_1_policy_drops")] == []
     assert values == dict.fromkeys(SIX)
