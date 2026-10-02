@@ -1072,8 +1072,10 @@ def test_fq_flies_a_stub_trial_from_its_checkpoint(ckpts):
         if not stops:
             assert set(e) == fx_keys
             continue
-        assert set(e) == fx_keys | {"pass_1_pairs"}
+        # Study 5.11 (a): each decision's wall time beside its record.
+        assert set(e) == fx_keys | {"pass_1_pairs", "pass_1_pairs_wall"}
         records = e["pass_1_pairs"]
+        assert len(e["pass_1_pairs_wall"]) == len(records)
         assert [r["devices"] for r in records] == [s["devices"] for s in stops]
         for r in records:
             assert set(r) == set(DECISION_KEYS + CLOSE_KEYS) and r["scorer"] == "pair_v1"
@@ -1102,7 +1104,8 @@ def test_e3_flies_a_stub_trial_from_its_checkpoint(ckpts):
     h_keys = set(h_events["mission_completed"][0]) - {"pass_1_policy_drops"}
     for e in events["mission_completed"]:
         assert "pass_1_policy_drops" not in e and "pass_1_pairs" not in e
-        assert set(e) - {"pass_1_e3", "pass_1_e3_unvisited"} == h_keys and "pass_1_e3" in e
+        assert set(e) - {"pass_1_e3", "pass_1_e3_unvisited", "pass_1_e3_wall"} == h_keys
+        assert "pass_1_e3" in e and len(e["pass_1_e3_wall"]) == len(e["pass_1_e3"])
         named = [c for c in e["pass_1_e3"] if c["next"] != "home"]
         assert [c["next"] for c in named] == [s["devices"] for s in e["pass_1_flown"]]
     assert row["policy_params"] == json.dumps(

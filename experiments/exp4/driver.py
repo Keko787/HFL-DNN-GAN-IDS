@@ -740,6 +740,15 @@ class Exp4Driver:
     # Declared before ``soft_cap_s``, the last field (see above).
     pair_checkpoints: Dict[str, Any] = field(default_factory=dict)
     policy_checkpoints: Dict[str, Any] = field(default_factory=dict)
+    # Exp 5 addendum, Study 5.11: the footprint probe. ``footprint_probe``
+    # samples the RSS of every process a real-process trial starts (the
+    # cluster, the mules, the devices) every ``footprint_interval_s`` and
+    # writes ``footprint.json`` beside the kept trace (FOOTPRINT_FILE), which
+    # the scorer reads into its cost columns. It reads only, so no trial
+    # changes; it needs a trace root to write to and psutil to read with. Off
+    # by default. Declared before ``soft_cap_s``, the last field.
+    footprint_probe: bool = False
+    footprint_interval_s: float = 0.5
     # The runner's soft cap on a trial's run time, as the caller applies it
     # (runner_main sets it to the cap it hands TrialRunner: --timeout-s, else
     # the largest wall budget over the grid). On the mission clock a trial's
@@ -796,6 +805,7 @@ class Exp4Driver:
             raise ValueError(
                 f"fedcs_value must be one of {VALUE_KINDS}, got {self.fedcs_value!r}"
             )
+        self._check_footprint_probe()
         self._check_multi_mule()
         #: T_nom per cell, computed once (:meth:`nominal_period_s`).
         self._t_nom_cache: Dict[str, float] = {}
@@ -1328,6 +1338,24 @@ class Exp4Driver:
             mission_clock="sim", trial_seed=int(seed), **dict(settings),
         )
         return cfg.ferry_spec_kwargs()
+
+    def _check_footprint_probe(self) -> None:
+        """Study 5.11's footprint probe needs somewhere to write and psutil to read with."""
+        if not self.footprint_probe:
+            return
+        from experiments.exp4.footprint import probe_available
+
+        if self.trace_root is None:
+            raise ValueError(
+                "footprint_probe writes footprint.json beside each kept trace: give a "
+                "trace_root (--keep-event-traces)"
+            )
+        if not self.footprint_interval_s > 0:
+            raise ValueError(
+                f"footprint_interval_s must be > 0, got {self.footprint_interval_s!r}"
+            )
+        if not probe_available():
+            raise ValueError("footprint_probe needs psutil (pip install psutil)")
 
     def _check_multi_mule(self) -> None:
         """Refuse a mule count and quorum that cannot run or would mis-measure."""
@@ -2239,6 +2267,25 @@ class Exp4Driver:
                 exc_info=True,
             )
 
+    def _write_footprint(self, cell, footprint) -> None:
+        """Write Study 5.11's footprint (``footprint.json``) beside the kept trace.
+
+        Called once the trace is captured, a timed-out trial's included. Never
+        raises: the footprint is a measurement of the trial, not part of it.
+        """
+        if self.trace_root is None:
+            return
+        try:
+            dest = Path(self.trace_root) / trace_dir_name(cell)
+            if dest.is_dir():
+                footprint.write(dest)
+        except Exception:  # noqa: BLE001
+            log.warning(
+                "exp4 trial cell=%s trial=%d arm=%s: could not write the footprint "
+                "(continuing; the trial itself is unaffected)",
+                cell.cell_id, cell.trial_index, cell.arm, exc_info=True,
+            )
+
     def _run_topology(
         self, topo, *, cell, n_devices, rf_range_m, n_missions, started=None,
         clock: Optional[_TrialClock] = None,
@@ -2253,14 +2300,27 @@ class Exp4Driver:
                 down_wait_s=self.effective_down_wait_s,
             )
         budget_s = float(self.trial_budget_s if clock.budget_s is None else clock.budget_s)
-        orch = MultiProcessOrchestrator(topo, capture_output=True)
+        probe = footprint = None
+        if self.footprint_probe:
+            # Exp 5 addendum, Study 5.11: follow every process from the instant
+            # the orchestrator launches it until just before shutdown. Reads only.
+            from experiments.exp4.footprint import FootprintProbe
+
+            probe = FootprintProbe(interval_s=self.footprint_interval_s)
+            orch = MultiProcessOrchestrator(topo, capture_output=True, on_spawn=probe.on_spawn)
+        else:
+            orch = MultiProcessOrchestrator(topo, capture_output=True)
         captured = False
         try:
+            if probe is not None:
+                probe.start()
             orch.start_all(timeout=self.startup_timeout_s)
             timed_out = not self._await_mules(orch, budget_s)
             # Read before shutdown, which would give any mule still running a
             # non-zero status of its own making.
             failed = {} if timed_out else self._failed_mules(orch)
+            if probe is not None:
+                footprint, probe = probe.stop(), None
             orch.shutdown_all(
                 timeout=self.shutdown_timeout_s, cleanup_tmpdir=False,
             )
@@ -2270,6 +2330,8 @@ class Exp4Driver:
             # straight past this and be deleted in the `finally`.
             self._capture_traces(orch.tmpdir, cell)
             captured = True
+            if footprint is not None:
+                self._write_footprint(cell, footprint)
             if timed_out:
                 raise Exp4TrialTimeout(
                     f"exp4 trial exceeded {budget_s:.0f}s budget "
@@ -2377,6 +2439,13 @@ class Exp4Driver:
                 )
             raise
         finally:
+            if probe is not None:
+                # A raise between start and stop: end the thread, keep nothing.
+                try:
+                    probe.stop()
+                except Exception:  # noqa: BLE001 - never mask the trial's own error
+                    log.warning("exp4 trial cell=%s: footprint probe did not stop cleanly",
+                                cell.cell_id, exc_info=True)
             orch.cleanup()
 
     def _multi_mule_provenance(

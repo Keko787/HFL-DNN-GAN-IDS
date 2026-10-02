@@ -2153,6 +2153,88 @@ levels. Both were checked against scipy (`ttest_1samp`, `page_trend_test`).
 
 ---
 
+## 20. The Exp 5 addendum: Studies 5.11–5.15 (2 Oct 2026)
+
+The build plan's addendum of 2 Oct 2026 adds five studies (5.11 decision cost and scaling, 5.12
+compute and model-size heterogeneity, 5.13 data heterogeneity, 5.14 component ablations, 5.15 the
+radio layer) and lists what each must build before it runs. This section records each build as it
+lands. Freeze Rule 1 holds throughout: every switch defaults to the recorded run, every new trace
+field is additive and left out where it does not apply, and the trial CSV's header is unchanged.
+**Nothing in this section has run**; each study waits for the user's go-ahead.
+
+### 20.1 Decision cost (Study 5.11 (a))
+
+**Trace fields.** On the simulated clock, beside the records of §19.8 and never inside them (the
+records stay free of wall time, critic B12):
+
+- **`mission_completed.pass_1_pairs_wall`** (a `pair_q` mission that decided something): one entry
+  per record of `pass_1_pairs`, in its order. **`mission_completed.pass_1_e3_wall`** (E3): one
+  entry per call of `pass_1_e3`. Each entry is `{"decide_s": ..., "mask_s": ...}`, wall seconds
+  from `time.perf_counter`: `decide_s` is the whole decision (the mask's predicate, the scorer or
+  policy and the pick) and `mask_s` the predicate's share of it. For the pair slot the supervisor
+  times from binding the predicate to the slot's answer and wraps the predicate it hands the slot,
+  so the slot itself still reads no wall clock; for E3, the predicate over every stop left plus
+  the policy's answer and its check. The view (`PairView`) or observation (`e3_observation`) a
+  decision reads is built before it and is not timed.
+- Both follow `pass_1_e3_unvisited` in `SIM_MISSION_OPTIONAL_FIELDS` and are left out when None or
+  empty, so no other mission gains a key; F, FX and every H and D arm record neither.
+- Wall times, so every determinism comparison drops them as it drops `plan_wall_s`: FerrySim's
+  `inprocess.mask_wall_times` masks each value (`DECISION_WALL_FIELDS`), and the parity and
+  repeat tests mask or drop them by name.
+- **The consumer:** `MissionRecord.pair_walls` and `e3_walls`, tuples of `DecisionWall(decide_s,
+  mask_s)`, None where a mission has no such field. A time that is not a finite number ≥ 0 reads
+  as None, and an entry that is not a record as two Nones, so the rest stay in step.
+
+**The cost columns** (`traces_scorer.COST_COLUMNS`) appear only with `cost_columns`
+(`--cost-columns`), after the τ columns and, when both are asked for, after the pair columns;
+without it the row is unchanged. Scorer-only: the trial CSV's header is unchanged.
+
+| Column | What it holds |
+|---|---|
+| `plan_wall_s_mean`, `plan_wall_s_p95` | the planner's wall time per plan-mode mission (`plan_wall_s`, the whole of `build_ferry_plan`, every class searched), mean and 95th percentile (numpy's linear rule, as `age_p95`), over every mule's missions |
+| `plan_search_shares` | the share of the plan-mode missions whose committed class ran each search mode (`plan.search`: `exact`, `stop_subsets`, `local`, all listed; JSON), so a sweep that forces a mode through `--plan-search-params` can check it held |
+| `pair_wall_s_mean`, `pair_wall_s_p95`, `pair_mask_wall_s_mean` | the pair slot's `decide_s` per decision (mean, p95) and its `mask_s` (mean), pooled over the trial's decisions |
+| `e3_wall_s_mean`, `e3_wall_s_p95`, `e3_mask_wall_s_mean` | the same for E3's calls |
+| `flight_decisions_per_mission` | the mean over the trial's missions of the decisions timed in flight, both kinds together, on a trial whose mule config names the pair slot or E3's policy or whose missions recorded a wall (a mission without one made none) |
+
+Each is blank where the trial has nothing to average. Forcing the search into one mode
+(`--plan-search-params`, `PlanSearchParams`): exact with `exact_max_devices` ≥ N; stop subsets
+with `{"exact_max_devices": 0}` and `exhaustive_max_stops` ≥ the stops; local with both 0.
+
+```bash
+python -m experiments.analysis.traces_scorer --traces results/exp5/s511a_traces --cost-columns --pair-columns --csv results/exp5/s511a_scored.csv
+```
+
+### 20.2 The footprint (Study 5.11)
+
+A real-process trial runs 1 + K + N processes, about 1.6 GB apiece under `--real-model`, so
+memory sets how large an N the stack can run (the build plan, 5.11's caveats). The footprint probe
+(`experiments/exp4/footprint.py`) measures it per trial.
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `Exp4Driver.footprint_probe` (`--footprint-probe`) | off | Sample every process the orchestrator started (the cluster, the mules, the devices, each with its children) from a daemon thread, from just after `start_all` to just before `shutdown_all`, and write `footprint.json` (`FOOTPRINT_FILE`) beside the kept trace, a timed-out trial's included. Needs a trace root (`--keep-event-traces`; the runner refuses it otherwise, as a usage error) and `psutil`, which only this path imports. Reads only, so no trial changes; the runner passes the two settings to the driver only when the flag is given. |
+| `Exp4Driver.footprint_interval_s` (`--footprint-interval-s`) | 0.5 | The sampling interval, seconds (> 0). |
+
+`footprint.json` (schema 1): `processes` and `processes_by_role`; `peak_rss_bytes_total`, the
+largest summed resident memory over one sample (the concurrent peak, what has to fit in the
+host's memory); `peak_rss_bytes_by_role`, each role's largest per-process peak, where a process's
+peak is the OS's high-water mark (`VmHWM` on Linux, the peak working set on Windows) or, on a
+platform that records none, its largest sample (`peak_source`: `os`, `sampled` or `mixed`);
+`peak_rss_bytes_sum`, every process's peak summed, an upper bound on the concurrent peak;
+`samples`, `interval_s` and `probe` (the psutil version and platform). H0 runs in process and
+writes none.
+
+**Scorer columns**, in the cost group (`--cost-columns`, §20.1) after the decision cost:
+`trial_processes`, `peak_rss_mib_total` and `peak_rss_mib_cluster`, `peak_rss_mib_mule`,
+`peak_rss_mib_device` (MiB), blank for a trace without the file.
+
+```bash
+python -m experiments.exp4.runner_main --csv results/exp5/s511b/fp.csv --arms F FX --N 6 12 24 --keep-event-traces --footprint-probe ...
+```
+
+---
+
 ## Cross-references
 
 * [HERMES_FL_Scheduler_Design.md](HERMES_FL_Scheduler_Design.md) §6

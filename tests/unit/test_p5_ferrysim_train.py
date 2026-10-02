@@ -794,9 +794,10 @@ def test_the_install_path_flies_as_the_config_path(arm, smoke, tmp_path):
     assert fq_params["plan_score_params"] == plan
 
 
-#: What a real process's wall clock and OS decide (UG5's probe, U8a's FX test).
+#: What a real process's wall clock and OS decide (UG5's probe, U8a's FX test),
+#: and each flight decision's wall time (Exp 5 addendum, Study 5.11 (a)).
 _WALL_KEYS = {"ts", "duration_s", "rf_port", "dock_port", "mule_rf_port", "port",
-              "timer.mission_duration_s", "plan_wall_s"}
+              "timer.mission_duration_s", "plan_wall_s", *IP.DECISION_WALL_FIELDS}
 #: The row's wall column (the harness clock's in process, U8a's FX test).
 _ROW_WALL = {"mission_duration_s_mean"}
 #: The row's device-serve columns, built from ``device_served``, which only the

@@ -44,7 +44,7 @@ import threading
 import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Deque, Dict, List, Optional
+from typing import Callable, Deque, Dict, List, Optional
 
 from .config import (
     ClusterConfig,
@@ -162,7 +162,14 @@ class MultiProcessOrchestrator:
         *,
         python_executable: Optional[str] = None,
         capture_output: bool = False,
+        on_spawn: Optional[Callable[[str, int], None]] = None,
     ) -> None:
+        # Exp 5 addendum (Study 5.11's footprint probe): ``on_spawn(name, pid)``
+        # is called right after each process is launched (``name`` is
+        # ``cluster``, ``mule-<id>`` or ``device-<id>``), so an observer can
+        # follow a process from its first instant. None (the default) calls
+        # nothing; the orchestrator never depends on what it does.
+        self._on_spawn = on_spawn
         # L-H4 / L-M4: validate up front. ``validate()`` populates
         # ``topology.device_to_mule`` so later steps read assignment
         # from a single source of truth instead of mutating MuleConfig
@@ -481,6 +488,9 @@ class MultiProcessOrchestrator:
         proc = subprocess.Popen(argv, **kwargs)
         if self.capture_output and proc.stderr is not None:
             drainer = _StderrDrainer(name, proc.stderr, mirror_to_parent=False)
+        on_spawn = getattr(self, "_on_spawn", None)
+        if on_spawn is not None:
+            on_spawn(name, proc.pid)
         return proc, drainer
 
     def _wait_for_port(self, handle: ProcessHandle, *, timeout: float) -> int:

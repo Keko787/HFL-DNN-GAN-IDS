@@ -1067,17 +1067,34 @@ def masked_wall(value: Any) -> Any:
     return value
 
 
-def mask_wall_times(case: Dict[str, Any]) -> Dict[str, Any]:
-    """``case`` with every ``mission_completed.plan_wall_s`` masked, in place.
+#: ``mission_completed``'s per-decision wall times (Exp 5 addendum, Study 5.11
+#: (a)): lists of ``{"decide_s", "mask_s"}``, one per pair decision or E3 call,
+#: each value masked as ``plan_wall_s`` is.
+DECISION_WALL_FIELDS = ("pass_1_pairs_wall", "pass_1_e3_wall")
 
-    The planner's wall time is the only wall time in a plan-mode trial run in
-    process (the envelope stamps and durations are the harness clock's), so a
-    case masked this way is the same for the same trial.
+
+def mask_wall_times(case: Dict[str, Any]) -> Dict[str, Any]:
+    """``case`` with every wall time of ``mission_completed`` masked, in place.
+
+    The planner's wall time (``plan_wall_s``) and the flight clock's
+    per-decision wall times (:data:`DECISION_WALL_FIELDS`) are the only wall
+    times in a plan-mode trial run in process (the envelope stamps and
+    durations are the harness clock's), so a case masked this way is the same
+    for the same trial. The keys stay, so a field that goes missing still
+    differs.
     """
     for events in case["mission_completed"].values():
         for e in events:
             if "plan_wall_s" in e:
                 e["plan_wall_s"] = masked_wall(e["plan_wall_s"])
+            for name in DECISION_WALL_FIELDS:
+                entries = e.get(name)
+                if isinstance(entries, list):
+                    e[name] = [
+                        {k: masked_wall(v) for k, v in entry.items()}
+                        if isinstance(entry, dict) else entry
+                        for entry in entries
+                    ]
     return case
 
 
@@ -1094,6 +1111,7 @@ def trial_case(cell: Cell, run: TrialRun,
 
 __all__ = [
     "CLUSTER_PORT",
+    "DECISION_WALL_FIELDS",
     "DEVICE_MODELS",
     "DEVICE_MODEL_EQUAL",
     "DEVICE_MODEL_STUB",
