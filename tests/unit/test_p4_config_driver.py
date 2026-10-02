@@ -57,7 +57,7 @@ from experiments.exp4.driver import (
     ARMS,
     DEFAULT_ARMS,
     F_COV_SCORE,
-    PLAN_ARMS,
+    PHASE_5_ARMS, PLAN_ARMS,
     PROVENANCE_COLUMNS,
     Exp4Driver,
     contact_band_column,
@@ -152,7 +152,7 @@ def test_the_restated_switch_values_equal_their_sources():
     assert C.PLAN_MODES == PT.PLAN_MODES == mule_main._PLAN_MODES == ("legacy", "ferry")
     assert C.MEMBER_ADMISSIONS == PT.MEMBER_ADMISSIONS == S3B.MEMBER_ADMISSIONS == (
         "whole", "subset")
-    assert C.FLIGHT_SLOTS == PT.FLIGHT_SLOTS == ("committed", "cross_heuristic")
+    assert C.FLIGHT_SLOTS == PT.FLIGHT_SLOTS == ("committed", "cross_heuristic", "pair_q")
     assert (C.BAND_POLICY_SEARCH, C.BAND_POLICY_FIXED_PREFIX) == (
         TS.BAND_POLICY_SEARCH, TS.BAND_POLICY_FIXED_PREFIX) == ("search", "fixed:")
     assert (C.PLAN_MODE_LEGACY, C.PLAN_MODE_FERRY) == (PT.PLAN_MODE_LEGACY, PT.PLAN_MODE_FERRY)
@@ -580,7 +580,7 @@ def test_the_arm_lists():
     assert DEFAULT_ARMS == ("H0", "H1", "H2", "H3", "D1", "D2", "D3", "D4", "D5")
     assert PLAN_ARMS == ("F", "FX", "FB+wide", "FB+medium", "FB+narrow", "F-cov", "F-cap",
                          "F-prio")
-    assert ARMS == DEFAULT_ARMS + PLAN_ARMS and len(set(ARMS)) == len(ARMS)
+    assert ARMS == DEFAULT_ARMS + PLAN_ARMS + PHASE_5_ARMS and len(set(ARMS)) == len(ARMS)
 
 
 @pytest.mark.parametrize("arm", PLAN_ARMS)
@@ -893,8 +893,8 @@ def test_at_the_defaults_no_trace_gains_a_plan_field(name):
     here, on all eight 6e6f92d oracles (H1 and D4 among them): no event and
     no row gains a key, but a D arm's ``pass_1_policy_drops`` (decision 6's
     one field at the defaults) in the missions where it left something out;
-    the per-role JSON gains exactly the plan fields, at their defaults; the
-    rows' Phase 3 strings are the recorded ones."""
+    the per-role JSON gains exactly the plan fields, at their defaults, and
+    Phase 5's six checkpoint keys; the rows' Phase 3 strings are the recorded ones."""
     golden = P3.load_golden()["cases"][name]
     case = P3.capture(name)
     for part in EVENT_PARTS:
@@ -913,9 +913,9 @@ def test_at_the_defaults_no_trace_gains_a_plan_field(name):
         drops = missions[i]["pass_1_policy_drops"]
         assert drops and all(d["widened"] is False for d in drops)
     configs = P3.added_keys(golden["configs"], case["configs"])
-    assert sorted(configs) == sorted(f"$.mule-exp4-mule.json.{f}" for f in PLAN_MULE_FIELDS)
-    mule_json = json.loads(json.dumps(case["configs"]["mule-exp4-mule.json"],
-                                      default=str))
+    new_keys = PLAN_MULE_FIELDS + C.CHECKPOINT_MULE_FIELDS     # and Phase 5's six
+    assert sorted(configs) == sorted(f"$.mule-exp4-mule.json.{f}" for f in new_keys)
+    mule_json = json.loads(json.dumps(case["configs"]["mule-exp4-mule.json"], default=str))
     assert {f: mule_json[f] for f in PLAN_MULE_FIELDS} == PLAN_DEFAULTS
 
 

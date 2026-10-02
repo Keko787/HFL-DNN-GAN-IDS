@@ -23,6 +23,26 @@ cap, score and search settings (the score's and search's as JSON objects, so a
 pilot can sweep kappa and the coverage rank), and ``--member-admission`` the
 H and D arms' member subsets. A pilot takes its own ``--base-seed`` (the
 Phase 4 spec, decision 7), since the grid derives every trial's seed from it.
+
+FeRRy Phase 5: the learned arms and ``H1+L1`` (``driver.PHASE_5_ARMS``) run
+only when named. An FQ arm flies the pair checkpoint of its tag
+(``--pair-checkpoint TAG=PATH``, repeatable) and E3 its policy checkpoint
+(``--policy-checkpoint E3=PATH``). The runner is a campaign's entry, so it
+refuses a checkpoint a campaign may not fly (critic B9): one that is not
+``trained``, trained on no episode, has no held-out score, or was trained from
+a dirty tree without ``--allow-dirty-checkpoint``, each judged on the verified
+manifest. It also refuses one that is not its tag's (the orchestrator's
+resolution R24): a ``g<X>`` tag's γ other than X/100, a reward other than its
+arm's (F·hand for ``hand``, E3's bytes for ``e3``, the derived reward
+otherwise, at decision 4 (a)'s weights under ``g<X>``, ``dwell`` and ``cov``),
+or a network that took no update; and a pair checkpoint trained
+under other plan score settings than its arm flies under this run's flags
+(resolution R23: FQ-dwell's and FQ-cov's plans, ``--plan-score-params``).
+The driver then checks each file as its mule will. The opt-in
+``--require-trained`` refuses H2 and H3 without ``--selector-weights``, whose
+selector would be random-init (decision 8 (a)); off, the default, a run is
+the recorded one. None of these flags is a grid axis, so each setting of them
+gets a CSV of its own.
 """
 
 from __future__ import annotations
@@ -32,7 +52,7 @@ import json
 import logging
 import sys
 from pathlib import Path
-from typing import Optional, Sequence
+from typing import Dict, List, Mapping, Optional, Sequence
 
 from experiments.runner import TrialGrid, TrialRunner
 
@@ -42,7 +62,16 @@ from hermes.scheduler.policies.whittle import VARIANTS as WHITTLE_VARIANTS
 from hermes.scheduler.policies.whittle import WEIGHT_MODES as WHITTLE_WEIGHTS
 from hermes.scheduler.stages.s3b_feasibility import DEADLINE_BOUNDS
 
-from .driver import DEFAULT_ARMS, PLAN_ARMS, PROVENANCE_COLUMNS, Exp4Driver
+from .driver import (
+    CHECKPOINT_TAGS,
+    DEFAULT_ARMS,
+    PAIR_CHECKPOINT_TAGS,
+    PHASE_5_ARMS,
+    PLAN_ARMS,
+    POLICY_CHECKPOINT_TAGS,
+    PROVENANCE_COLUMNS,
+    Exp4Driver,
+)
 from .metrics import Exp4MetricSummary
 
 log = logging.getLogger("experiments.exp4.runner_main")
@@ -284,6 +313,188 @@ def _phase_4_driver_kwargs(args, parser: argparse.ArgumentParser) -> dict:
     )
 
 
+#: The arms whose RL selector is random-init without ``--selector-weights``
+#: (``hermes.processes.mule._build_target_selector``), which ``--require-trained``
+#: refuses (FeRRy Phase 5, decision 8 (a)).
+SELECTOR_ARMS = ("H2", "H3")
+
+
+def _add_phase_5_flags(parser: argparse.ArgumentParser) -> None:
+    """FeRRy Phase 5 — the learned arms' checkpoints and the trained-weights guard.
+
+    Every flag defaults to the recorded run, and none is a grid axis, so the
+    trial seeds do not move and each setting of them gets a CSV of its own.
+    """
+    g = parser.add_argument_group("FeRRy Phase 5: the learned arms")
+    g.add_argument(
+        "--pair-checkpoint", action="append", default=None, metavar="TAG=PATH",
+        help="The pair_q checkpoint (.npz, its manifest beside it) the FQ arm of TAG flies; "
+             f"repeatable. Tags: {', '.join(PAIR_CHECKPOINT_TAGS)} (FQ flies main, FQ-hand "
+             "hand, FQ-g0 g0, ...). It must be trained, on at least one episode, and scored "
+             "on the held-out runs; one trained from a dirty tree needs "
+             "--allow-dirty-checkpoint. It must be its tag's: gX's γ X/100, hand's reward "
+             "F·hand and every other tag's the derived reward (at decision 4 (a)'s weights "
+             "under gX, dwell and cov), a network that took an update, and the plan score "
+             "settings its arm flies under this run's flags.",
+    )
+    g.add_argument(
+        "--policy-checkpoint", action="append", default=None, metavar="E3=PATH",
+        help="The chen_dqn checkpoint arm E3 flies. It must be trained, on at least one "
+             "episode, and scored on the held-out runs; one trained from a dirty tree needs "
+             "--allow-dirty-checkpoint. It must be E3's: trained on E3's bytes reward, by a "
+             "network that took an update.",
+    )
+    g.add_argument(
+        "--allow-dirty-checkpoint", action="store_true",
+        help="Fly a checkpoint trained from a dirty tree (its manifest records it): for "
+             "development and tests, not for a campaign.",
+    )
+    g.add_argument(
+        "--require-trained", action="store_true",
+        help="Refuse H2 and H3 without --selector-weights, whose selector would then be "
+             "random-init (decision 8 (a)). Off by default, as recorded.",
+    )
+
+
+def _checkpoint_flags(
+    values: Optional[Sequence[str]],
+    flag: str,
+    tags: Sequence[str],
+    aliases: Mapping[str, str],
+    parser: argparse.ArgumentParser,
+) -> Dict[str, str]:
+    """``TAG=PATH`` values of a checkpoint flag as {tag: path} ({} when not given).
+
+    ``aliases`` maps another name of a tag to it (``E3`` for ``e3``). A tag no
+    learned arm flies, one given twice, or an empty path is a usage error.
+    """
+    out: Dict[str, str] = {}
+    for value in values or ():
+        name, sep, path = value.partition("=")
+        tag = aliases.get(name, name)
+        if not sep or not path.strip():
+            parser.error(f"{flag} takes TAG=PATH, got {value!r}")
+        if tag not in tags:
+            parser.error(f"{flag} {value!r}: {name!r} is no learned arm's tag; the tags are "
+                         f"{', '.join(list(tags) + list(aliases))}")
+        if tag in out:
+            parser.error(f"{flag}: tag {tag!r} is given twice")
+        out[tag] = path
+    return out
+
+
+def _campaign_checkpoint(
+    flag: str, tag: str, path: str, *, kind: str, allow_dirty: bool,
+    parser: argparse.ArgumentParser,
+) -> None:
+    """Refuse a checkpoint a campaign may not fly (critic B9), as a usage error.
+
+    Judged on the verified manifest (``pair_q.verify_checkpoint``: the arrays
+    against the manifest, the purpose and the learner's revision included,
+    which the sha binds), never on the manifest alone, which a hand edit could
+    relabel: not readable or not the arrays' (``CheckpointError``), not the
+    flag's kind, or refused by ``pair_q.campaign_refusals`` (not trained, no
+    episode, no held-out score, or dirty without ``--allow-dirty-checkpoint``).
+    Then as its tag (the orchestrator's resolution R24): FerrySim's reading of
+    its own manifests (``experiments.ferrysim.checkpoints.tag_refusals``: a γ
+    tag's γ, the tag's reward, at decision 4 (a)'s weights under a γ tag, dwell
+    and cov, and a network that took an update), loaded only when a checkpoint
+    is given.
+    """
+    from hermes.scheduler.selector.pair_q import campaign_refusals, verify_checkpoint
+
+    where = f"{flag} {tag}={path}"
+    try:
+        manifest = verify_checkpoint(path)
+        reasons = campaign_refusals(manifest, allow_dirty=allow_dirty)
+    except (ValueError, OSError) as e:
+        parser.error(f"{where}: {e}")
+    if manifest["kind"] != kind:
+        parser.error(f"{where}: a {manifest['kind']!r} checkpoint, and this flag takes "
+                     f"{kind!r} ones")
+    if reasons:
+        parser.error(f"{where}: a campaign does not fly this checkpoint (critic B9): "
+                     + "; ".join(reasons))
+    from experiments.ferrysim.checkpoints import tag_refusals
+
+    reasons = tag_refusals(tag, manifest)
+    if reasons:
+        parser.error(f"{where}: a campaign does not fly this checkpoint as tag {tag!r} "
+                     f"(resolution R24): " + "; ".join(reasons))
+
+
+def _check_checkpoint_plans(driver: Exp4Driver) -> None:
+    """Refuse a pair checkpoint trained under other plan score settings than its arm
+    flies here (the orchestrator's resolution R23), as a ValueError.
+
+    Each pair checkpoint given (whichever arms run, as the campaign checks)
+    flies as the FQ arm of its tag (:data:`CHECKPOINT_TAGS`), on the plan score
+    settings the driver gives that arm under this run's flags
+    (``Exp4Driver.plan_settings``: ``--plan-score-params``, and FQ-dwell's or
+    FQ-cov's own change on top); its manifest records the settings it trained
+    under (``experiments.ferrysim.checkpoints.trained_plan``, none being the
+    cells' default plan). The two are compared with ``PlanScoreParams``'
+    defaults filled in, so a default left out equals one written out.
+    """
+    if not driver.pair_checkpoints:
+        return
+    from experiments.ferrysim.checkpoints import plan_differences, trained_plan
+    from hermes.scheduler.selector.pair_q import verify_checkpoint
+
+    arms = {tag: arm for arm, tag in CHECKPOINT_TAGS.items()}
+    for tag, path in driver.pair_checkpoints.items():
+        arm = arms[tag]
+        where = f"--pair-checkpoint {tag}={path}"
+        try:
+            differ = plan_differences(trained_plan(verify_checkpoint(path)),
+                                      driver.plan_settings(arm)["plan_score_params"])
+        except (TypeError, ValueError, OSError) as e:
+            raise ValueError(f"{where}: {e}") from e
+        if differ:
+            raise ValueError(
+                f"{where}: trained under other plan score settings than arm {arm} flies here "
+                f"(resolution R23): "
+                + ", ".join(f"{name} (trained {trained!r}, flown {flown!r})"
+                            for name, (trained, flown) in differ.items())
+                + "; a checkpoint flies on the plan it trained under")
+
+
+def _phase_5_driver_kwargs(
+    args, parser: argparse.ArgumentParser, arms: List[str],
+) -> dict:
+    """The ``Exp4Driver`` keywords of the Phase 5 flags, once the runner's refusals pass.
+
+    Under ``--require-trained``, an H2 or H3 among ``arms`` without
+    ``--selector-weights`` is refused. Each checkpoint given is refused if a
+    campaign may not fly it (:func:`_campaign_checkpoint`), whichever arms
+    run, since it names the run's provenance; the checkpoints the named arms
+    need are the driver's to require (``Exp4Driver.check_arm``).
+    """
+    if args.require_trained and args.selector_weights is None:
+        untrained = [arm for arm in arms if arm in SELECTOR_ARMS]
+        if untrained:
+            parser.error(
+                f"--require-trained: arms {', '.join(untrained)} fly the RL selector, which "
+                f"without --selector-weights is random-init (decision 8 (a)); give trained "
+                f"weights or drop the arms"
+            )
+    pair = _checkpoint_flags(args.pair_checkpoint, "--pair-checkpoint", PAIR_CHECKPOINT_TAGS,
+                             {}, parser)
+    policy = _checkpoint_flags(args.policy_checkpoint, "--policy-checkpoint",
+                               POLICY_CHECKPOINT_TAGS, {"E3": "e3"}, parser)
+    if pair or policy:
+        # The pair learner's module, loaded only when a checkpoint is given.
+        from hermes.scheduler.selector.pair_q import KIND_CHEN_DQN, KIND_PAIR_Q
+
+        for flag, given, kind in (("--pair-checkpoint", pair, KIND_PAIR_Q),
+                                  ("--policy-checkpoint", policy, KIND_CHEN_DQN)):
+            for tag, path in given.items():
+                _campaign_checkpoint(flag, tag, path, kind=kind,
+                                     allow_dirty=bool(args.allow_dirty_checkpoint),
+                                     parser=parser)
+    return dict(pair_checkpoints=pair, policy_checkpoints=policy)
+
+
 def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = argparse.ArgumentParser(prog="experiments.exp4.runner_main")
     parser.add_argument("--csv", required=True, type=Path,
@@ -298,7 +509,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                         help=f"Which arms to run (default: the Phase 3 arms "
                              f"{list(DEFAULT_ARMS)}). The FeRRy Phase 4 plan arms "
                              f"{list(PLAN_ARMS)} run only when named, with "
-                             f"--mission-clock sim.")
+                             f"--mission-clock sim, and so do the FeRRy Phase 5 arms "
+                             f"{list(PHASE_5_ARMS)} (a learned arm with its checkpoint).")
     parser.add_argument("--N", nargs="+", type=int, default=[2],
                         help="Device-population sweep.")
     parser.add_argument("--rrf", nargs="+", type=float, default=[60.0],
@@ -610,6 +822,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     )
     _add_phase_3_flags(parser)
     _add_phase_4_flags(parser)
+    _add_phase_5_flags(parser)
     args = parser.parse_args(argv)
 
     logging.basicConfig(
@@ -725,13 +938,19 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     )
     driver_kwargs.update(_phase_3_driver_kwargs(args, parser))
     driver_kwargs.update(_phase_4_driver_kwargs(args, parser))
+    driver_kwargs.update(_phase_5_driver_kwargs(args, parser, arms))
     try:
         driver = Exp4Driver(**driver_kwargs)
+        # FeRRy Phase 5 (resolution R23): a pair checkpoint flies only on the
+        # plan it trained under.
+        _check_checkpoint_plans(driver)
         # FeRRy Phase 4: a plan arm the driver cannot run (on the wall clock,
         # without a band, with a budgeted Pass 2, ...) is refused here, before
-        # any trial, rather than as an error row per trial.
+        # any trial, rather than as an error row per trial. FeRRy Phase 5: so
+        # is a learned arm without its checkpoint, an FQ arm without 'replan'
+        # and H1+L1 without the adaptive backhaul it is named for.
         for arm in arms:
-            if arm in PLAN_ARMS:
+            if arm in PLAN_ARMS or arm in PHASE_5_ARMS:
                 driver.check_arm(arm)
     except ValueError as e:
         # A combination the driver refuses (e.g. agg:plain with several mules

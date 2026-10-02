@@ -72,6 +72,22 @@ goldens pin the three classes in flight). The plan types are imported only by
 the two plan-mode builders, so the legacy import path never loads
 ``hermes.scheduler.plan``.
 
+**The pair slot's inputs and E3's observation (FeRRy Phase 5, unit U4).**
+Four pure readers, added beside the recorded methods, which they leave as
+they were (Freeze Rule 1: additive only); they charge nothing and move no
+band. :meth:`FerryRuntime.stop_contexts` prices each candidate next stop
+from the stop the mule is at (the leg, the dwell on b̄ at the mean SNR as
+the departure check prices it, and every class's mean SNR there), or the leg
+home when nothing remains. :meth:`FerryRuntime.class_offsets_db` gives each
+class's offset at a stop, realized minus mean SNR differenced per link
+before the median (critic C6), from which the pair features read the
+interference phase. :meth:`FerryRuntime.e3_observation` is what arm E3 sees
+from its pose at a departure (critic B7), and :meth:`FerryRuntime.energy_ref_j`
+the energy reference of :meth:`FerryRuntime.l1_state`, which both views
+take. E3's protocol (``hermes.scheduler.policies.next_stop``) is imported by
+``e3_observation`` alone, so no other arm loads it; none of the four loads
+the plan package.
+
 The module imports nothing from ``experiments/`` (finding A-01).
 """
 
@@ -88,10 +104,12 @@ from typing import (
     TYPE_CHECKING,
     Any,
     Callable,
+    Collection,
     Dict,
     FrozenSet,
     List,
     Mapping,
+    NamedTuple,
     Optional,
     Sequence,
     Tuple,
@@ -129,6 +147,8 @@ if TYPE_CHECKING:  # pragma: no cover - names for the type checker only
     # Plan mode imports them where it builds them (plan_classes, arrival_view),
     # so the legacy import path never loads hermes.scheduler.plan.
     from hermes.scheduler.plan.types import ArrivalView, PlanClass
+    # Likewise E3's view, built by e3_observation alone (critic B7 iii).
+    from hermes.scheduler.policies.next_stop import E3View
 
 log = logging.getLogger(__name__)
 
@@ -623,6 +643,31 @@ class StopObservation:
     snr_db: Optional[Tuple[float, ...]] = None
     class_snr_db: Optional[Tuple[float, ...]] = None
     max_slant_m: Optional[float] = None
+
+
+class StopPrice(NamedTuple):
+    """One candidate next stop priced from the stop the mule is at (FeRRy Phase 5).
+
+    What :meth:`FerryRuntime.stop_contexts` gives per stop: the runtime's half
+    of a :class:`~hermes.scheduler.plan.types.StopContext`, to which the
+    supervisor adds the commit's half (the cap flags, ages, on-time rates and
+    weights).
+
+    * ``travel_s``: the leg there, as the clock charges it and the planner
+      prices it (``FlightModel.leg_s``, ``FeasibilityModel.cost``);
+    * ``pred_dwell_s``: serving every member on the class priced (b̄ by
+      default) at the mean SNR, as the departure check prices the stop
+      (δ_obs = 0, Freeze L829);
+    * ``pred_snr_db``: per class of the link, in link order, the median over
+      the members of their mean SNR there.
+
+    Home is its leg alone: ``pred_dwell_s`` 0 and no SNR, as
+    ``StopContext.home`` takes it.
+    """
+
+    travel_s: float
+    pred_dwell_s: float
+    pred_snr_db: Tuple[float, ...]
 
 
 @dataclass(frozen=True)
@@ -1282,6 +1327,196 @@ class FerryRuntime:
         """Simulated energy spent since takeoff, from the clock's ledger (SIMULATED)."""
         return self.spec.flight.energy.energy_j(self.clock.ledger())
 
+    # ------------------------------------------------------------------ #
+    # The pair slot's inputs and E3's observation (FeRRy Phase 5)
+    # ------------------------------------------------------------------ #
+
+    def stop_contexts(
+        self,
+        here: ContactWaypoint,
+        rest: Sequence[ContactWaypoint],
+        positions: Mapping[DeviceID, Sequence[float]],
+        *,
+        pass_kind: MissionPass,
+        band: Optional[str] = None,
+    ) -> Tuple[StopPrice, ...]:
+        """Each candidate next stop priced from ``here``, the stop the mule is at.
+
+        The pair slot's second half (the Phase 5 spec, other choices 4): one
+        :class:`StopPrice` per stop of ``rest``, in its order, or the single
+        price of home, the leg to the dock, when ``rest`` is empty, since home
+        is offered only then. The dwell is the one the departure check will
+        price the stop at: this runtime's physics on ``band`` (default
+        :attr:`band`, b̄ once :meth:`set_band` has run) at the mean SNR, for a
+        ``pass_kind`` session of the payload the mule carries, the members at
+        ``positions``. The pass is required, as for :meth:`arrival_view`, so
+        no dwell is priced for the other pass's bytes. Every class's mean SNR
+        is the stop's prospect, since its band is chosen at its own arrival
+        (feature 7). Pure: it reads the link and the flight model and charges
+        nothing. Needs a band (plan mode).
+        """
+        name = self._band(band)
+        if name is None:
+            raise ValueError(
+                "the stop contexts price band classes: the channel-free control (no "
+                "contact band) has none"
+            )
+        flight = self.spec.flight
+        mean, classes = self.spec.link.mean_snr_db, self.spec.link.names  # type: ignore[union-attr]
+        frm = tuple(here.position)
+        stops = list(rest)
+        if not stops:
+            return (StopPrice(travel_s=flight.leg_s(frm, flight.dock), pred_dwell_s=0.0,
+                              pred_snr_db=()),)
+        physics = self.physics(name).bind(positions)
+        prices = []
+        for wp in stops:
+            dist = [planar_distance_m(wp.position, positions[d]) for d in wp.devices]
+            prices.append(StopPrice(
+                travel_s=flight.leg_s(frm, wp.position),
+                pred_dwell_s=physics.dwell_s(wp, pass_kind),
+                pred_snr_db=tuple(float(statistics.median(mean(c, d) for d in dist))
+                                  for c in classes),
+            ))
+        return tuple(prices)
+
+    def class_offsets_db(
+        self, wp: ContactWaypoint, positions: Mapping[DeviceID, Sequence[float]], t_s: float,
+    ) -> Tuple[float, ...]:
+        """Each class's SNR offset at ``wp`` at time ``t_s``: realized less mean.
+
+        One value per class of the link, in link order: the median over the
+        stop's members of each link's realized SNR on the class (the contact
+        channel at ``t_s``, as :meth:`observe` reads it) less that link's mean
+        SNR on the class. Each link is differenced before the median (critic
+        C6): its realized SNR is ``mean + X_j(t) + I_b(t)``, so the median is
+        ``I_b(t)`` plus the members' median shadowing, which every class
+        shares. The classes' differences then isolate the interference, from
+        which the pair features read its phase (the Phase 5 spec, other
+        choices 4), and the shared part is the shadowing at the stop rather
+        than a term of the members' spread in distance, which
+        ``median(realized) - median(mean)`` would carry. Pure, like
+        :meth:`observe`, which is unchanged. Needs a band.
+        """
+        if not self.banded:
+            raise ValueError(
+                "the offsets compare band classes: the channel-free control (no contact "
+                "band) has none"
+            )
+        link, chan = self.spec.link, self.spec.contact_channel
+        stop = tuple(wp.position)
+        dist = [(j, planar_distance_m(stop, positions[j])) for j in wp.devices]
+        return tuple(
+            float(statistics.median(
+                chan.snr_db(t_s, name, d, link_key=j, stop_pos=stop)  # type: ignore[union-attr]
+                - link.mean_snr_db(name, d)  # type: ignore[union-attr]
+                for j, d in dist
+            ))
+            for name in link.names  # type: ignore[union-attr]
+        )
+
+    def energy_ref_j(self, budget_s: Optional[float]) -> Optional[float]:
+        """The sortie's energy reference, the one :meth:`l1_state` takes.
+
+        The capacity if one is set, else P_hover times ``budget_s`` if a
+        budget is set, else None. Returned as computed, 0 included (P_hover
+        may be 0): the pair and E3 views store a 0 reference as None, as
+        ``l1_state`` reads it (``if not e_ref``), so every reader of the
+        battery follows one rule.
+        """
+        energy = self.spec.flight.energy
+        if energy.capacity_j is not None:
+            return energy.capacity_j
+        if budget_s is not None:
+            return energy.p_hover_w * float(budget_s)
+        return None
+
+    def e3_observation(
+        self,
+        pose: Sequence[float],
+        stops: Sequence[ContactWaypoint],
+        positions: Mapping[DeviceID, Sequence[float]],
+        t_s: float,
+        *,
+        demand: int,
+        budget_end: Optional[float],
+        budget_s: Optional[float],
+        energy_j: float,
+        collected: Collection[DeviceID] = (),
+        band: Optional[str] = None,
+    ) -> "E3View":
+        """What arm E3 observes at a departure from ``pose`` at time ``t_s``.
+
+        Chen et al.'s observation of each candidate stop (the Phase 5 spec,
+        other choices 11): one ``E3Stop`` per stop of ``stops``, in its order,
+        on the band E3 flies, ``band`` or :attr:`band` (legacy mode never
+        moves it):
+
+        * ``snr_db``: the median over the members of their SNR now from the
+          pose, at their planar distance from it (the gate's metric): the
+          realized SNR within R_planar(band) of the pose (inclusive, as the
+          gate), and the mean SNR beyond, as a radio map gives it, since the
+          realized SNR out of reach is the simulator's alone (critic B7 iv);
+        * ``reachable``: the share of the members within that range whose
+          realized SNR is at or above the floor, the contact gate's test from
+          the pose; ``remaining``: the share not in ``collected``. Both are
+          kept for fidelity and near constant here (critic B7 ii);
+        * ``dx_m`` and ``dy_m``: the stop less the pose; ``distance_m``: the
+          leg's length on the flight model's metric (``FlightModel.leg_s``);
+          ``return_energy_j``: the return from the stop to the dock at flight
+          power, as the clock charges a return.
+
+        The sortie's fields come from the caller (``demand``, ``budget_end``,
+        ``budget_s`` and ``energy_j``, the energy spent this sortie), and the
+        energy reference is :meth:`energy_ref_j`'s. E3's protocol module is
+        imported here, so no other arm loads it (critic B7 iii). Pure. Needs
+        a band.
+        """
+        # E3's path only: importing here keeps hermes.scheduler.policies.next_stop
+        # off every other arm's import path, as arrival_view keeps the plan off
+        # the legacy one.
+        from hermes.scheduler.policies.next_stop import E3Stop, E3View
+
+        name, _, reach = self._band_fields(band)
+        if name is None:
+            raise ValueError(
+                "E3 flies a contact band: the channel-free control (no contact band) has none"
+            )
+        link, flight = self.spec.link, self.spec.flight
+        realized = self.spec.contact_channel.snr_db  # type: ignore[union-attr]
+        floor = link.snr_floor_db  # type: ignore[union-attr]
+        frm = tuple(float(c) for c in pose)
+        done = frozenset(collected)
+        observed = []
+        for wp in stops:
+            members = tuple(wp.devices)
+            snr: List[float] = []
+            reachable = 0
+            for j in members:
+                d = planar_distance_m(frm, positions[j])
+                if d <= reach:
+                    s = realized(t_s, name, d, link_key=j, stop_pos=frm)
+                    if s >= floor:
+                        reachable += 1
+                else:
+                    s = link.mean_snr_db(name, d)  # type: ignore[union-attr]
+                snr.append(s)
+            # FlightModel.leg_s's own distance, so distance_m / speed is its leg.
+            leg_m = sum((x - y) ** 2 for x, y in zip(frm, wp.position)) ** 0.5
+            observed.append(E3Stop(
+                members=len(members),
+                remaining=sum(1 for j in members if j not in done) / len(members),
+                snr_db=float(statistics.median(snr)),
+                reachable=reachable / len(members),
+                dx_m=float(wp.position[0]) - frm[0],
+                dy_m=float(wp.position[1]) - frm[1],
+                distance_m=leg_m,
+                return_energy_j=flight.energy.p_move_w * flight.leg_s(wp.position, flight.dock),
+            ))
+        return E3View(stops=tuple(observed), band=name, demand=demand, clock_s=t_s,
+                      budget_end=budget_end, budget_s=budget_s, energy_j=energy_j,
+                      energy_ref_j=self.energy_ref_j(budget_s))
+
 
 def backhaul_record(up: Optional[BackhaulUpload]) -> Optional[Dict[str, Any]]:
     """``MissionRunResult.backhaul``: the upload as a JSON-ready dict (None without one)."""
@@ -1316,5 +1551,6 @@ __all__ = [
     "RESPONSE_ABORT",
     "RESPONSE_REPLAN",
     "StopObservation",
+    "StopPrice",
     "backhaul_record",
 ]
