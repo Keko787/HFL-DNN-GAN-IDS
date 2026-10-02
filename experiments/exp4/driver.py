@@ -76,6 +76,11 @@ provenance names each checkpoint by tag and sha only, ``pair_tag`` and
 in ``policy_params``, for those arms only (:func:`plan_ferry_params`,
 :func:`learned_policy_params`, which the trace scorer shares); every other
 row reads as before, and the default arm list is still :data:`DEFAULT_ARMS`.
+
+**The Exp 5 addendum's arm** (:data:`ADDENDUM_ARMS`; Studies 5.14 and 5.15):
+``F+L1`` is F with H3's adaptive backhaul, as H1+L1 is H1 with it: a plan arm
+(:func:`is_plan_arm`, F's settings everywhere F has them), refused where the
+adaptive backhaul would not fly. It runs only when named.
 """
 
 from __future__ import annotations
@@ -168,8 +173,16 @@ LEARNED_ARMS = PAIR_ARMS + ("E3",)
 #: (a); critic A6). They run only when named.
 PHASE_5_ARMS = LEARNED_ARMS + ("H1+L1",)
 
+#: The Exp 5 addendum's arms (Studies 5.14 and 5.15): ``F+L1``, F's plan with
+#: H3's adaptive backhaul controller, the plan arms' counterpart of H1+L1. It is
+#: a plan arm (:data:`ADDENDUM_PLAN_ARMS`, :func:`is_plan_arm`), so it gets F's
+#: settings wherever F has them, while :data:`PLAN_ARMS` keeps its pinned
+#: value. It runs only when named.
+ADDENDUM_PLAN_ARMS = ("F+L1",)
+ADDENDUM_ARMS = ADDENDUM_PLAN_ARMS
+
 #: Every arm the driver runs.
-ARMS = DEFAULT_ARMS + PLAN_ARMS + PHASE_5_ARMS
+ARMS = DEFAULT_ARMS + PLAN_ARMS + PHASE_5_ARMS + ADDENDUM_ARMS
 
 #: Each learned arm's checkpoint tag (the Phase 5 spec, other choices 5): the
 #: runner's ``--pair-checkpoint TAG=PATH`` and ``--policy-checkpoint E3=PATH``
@@ -206,6 +219,7 @@ _PLAN_ARM = {
     "F-cap": {"age_cap_missions": None, "age_cap_lookahead": 0},
     "F-prio": {},
     **{arm: {"flight_slot": "pair_q"} for arm in PAIR_ARMS},
+    "F+L1": {},
 }
 
 #: F-cov's plan score settings, over the driver's own: the coverage term off,
@@ -229,13 +243,13 @@ _ARM_SCORE = {"F-cov": F_COV_SCORE, "FQ-cov": F_COV_SCORE, "FQ-dwell": FQ_DWELL_
 #: mule. FeRRy Phase 5: the FQ arms as F, H1+L1 as H1; E3 visits a stop for all
 #: its members, as D4 does, so it runs whole.
 _SUBSET_ARMS = frozenset(("H1", "H2", "H3", "D1", "D2", "D3", "D5") + PLAN_ARMS + PAIR_ARMS
-                         + ("H1+L1",))
+                         + ("H1+L1",) + ADDENDUM_PLAN_ARMS)
 
 #: The arms that fly H3's adaptive backhaul controller: on the simulated clock
 #: ``backhaul_policy="adaptive"``, and with ``l1_channel`` the adaptive
 #: per-mission loss schedule (``backhaul_plan(adaptive=True)``). FeRRy Phase 5
-#: adds H1+L1 (decision 8 (a); critic A6).
-_ADAPTIVE_BACKHAUL_ARMS = ("H3", "H1+L1")
+#: adds H1+L1 (decision 8 (a); critic A6), and the Exp 5 addendum F+L1.
+_ADAPTIVE_BACKHAUL_ARMS = ("H3", "H1+L1", "F+L1")
 
 
 def is_plan_arm(arm: str) -> bool:
@@ -245,9 +259,10 @@ def is_plan_arm(arm: str) -> bool:
     (the Phase 5 spec, other choices 5; critic A5): an FQ arm is F with the
     pair slot, so it gets F's settings wherever F has them (the trim fallback,
     member subsets, the miss priority, T_nom and the pre-trial check), while
-    :data:`PLAN_ARMS` keeps its pinned value.
+    :data:`PLAN_ARMS` keeps its pinned value. The Exp 5 addendum's F+L1
+    (:data:`ADDENDUM_PLAN_ARMS`) is F with the adaptive backhaul, so it is one too.
     """
-    return arm in PLAN_ARMS or arm in PAIR_ARMS
+    return arm in PLAN_ARMS or arm in PAIR_ARMS or arm in ADDENDUM_PLAN_ARMS
 
 
 def plan_ferry_params(mule: Mapping[str, Any]) -> Dict[str, Any]:
@@ -1252,21 +1267,25 @@ class Exp4Driver:
             raise ValueError(f"arm {arm}: its mule would refuse its checkpoint: {e}") from e
 
     def _check_adaptive_backhaul(self, arm: str) -> None:
-        """Refuse ``H1+L1`` where it would fly as H1 (FeRRy Phase 5; decision 8 (a)).
+        """Refuse ``H1+L1`` or ``F+L1`` where it would fly as H1 or F (FeRRy Phase 5;
+        decision 8 (a); the Exp 5 addendum).
 
         H1+L1 is H1's scheduler with H3's adaptive backhaul controller (critic
-        A6), which flies only with the L1 channel (``l1_channel``: the adaptive
-        per-mission loss schedule, on either clock) or, on the simulated clock,
-        the seconds-axis backhaul (``backhaul_model="seconds"``: the controller
-        at every upload). Anywhere else its trial would be H1's under another
-        label, so it is refused rather than run.
+        A6), and F+L1 F's plan with it, which flies only with the L1 channel
+        (``l1_channel``: the adaptive per-mission loss schedule, on either
+        clock) or, on the simulated clock, the seconds-axis backhaul
+        (``backhaul_model="seconds"``: the controller at every upload).
+        Anywhere else its trial would be the base arm's under another label,
+        so it is refused rather than run.
         """
         if self.l1_channel or (self.sim and self.backhaul_model == "seconds"):
             return
+        base = arm[:-len("+L1")]
+        reason = "decision 8 (a)" if arm == "H1+L1" else "the Exp 5 addendum"
         raise ValueError(
-            f"arm {arm} is H1 with H3's adaptive backhaul (decision 8 (a)), which flies only "
+            f"arm {arm} is {base} with H3's adaptive backhaul ({reason}), which flies only "
             f"with the L1 channel (--l1-channel) or, on the simulated clock, the seconds-axis "
-            f"backhaul (--backhaul-model seconds); here it would fly as H1"
+            f"backhaul (--backhaul-model seconds); here it would fly as {base}"
         )
 
     def check_arm(self, arm: str) -> None:
@@ -1293,17 +1312,20 @@ class Exp4Driver:
         random-init arm, and each checkpoint is loaded as its mule will load it
         (:meth:`_check_learned`), but no training state is checked: that is
         the runner's (critic B9). H1+L1 needs the adaptive backhaul it is named
-        for (:meth:`_check_adaptive_backhaul`).
+        for (:meth:`_check_adaptive_backhaul`). The Exp 5 addendum's F+L1 is
+        checked as F is, and needs the adaptive backhaul too.
         """
         if arm not in ARMS:
             raise ValueError(f"unknown arm {arm!r}; the driver runs {ARMS}")
         if arm == "H1+L1":
             self._check_adaptive_backhaul(arm)
             return
+        if arm in ADDENDUM_PLAN_ARMS and self.sim:
+            self._check_adaptive_backhaul(arm)
         if not is_plan_arm(arm) and arm not in LEARNED_ARMS:
             return
         if not self.sim:
-            if arm in PLAN_ARMS:
+            if arm in PLAN_ARMS or arm in ADDENDUM_PLAN_ARMS:
                 raise ValueError(
                     f"arm {arm} flies the plan clock (FeRRy Phase 4) on the simulated mission "
                     f"clock: run it with mission_clock='sim' (--mission-clock sim)"
@@ -1757,8 +1779,9 @@ class Exp4Driver:
         arm = cell.arm
         if arm not in ARMS:
             raise ValueError(f"unknown arm {arm!r}; the driver runs {ARMS}")
-        if arm in PLAN_ARMS or arm in PHASE_5_ARMS:
-            # FeRRy Phase 4 and 5: refused before anything is prepared or spawned.
+        if arm in PLAN_ARMS or arm in PHASE_5_ARMS or arm in ADDENDUM_ARMS:
+            # FeRRy Phase 4 and 5 and the Exp 5 addendum: refused before
+            # anything is prepared or spawned.
             self.check_arm(arm)
 
         n_devices = int(params.get("N", params.get("n_devices", self.default_n_devices)))

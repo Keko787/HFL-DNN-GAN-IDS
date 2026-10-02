@@ -380,7 +380,9 @@ def test_the_phase_5_arm_lists_and_tags():
     assert PAIR_ARMS == ("FQ", "FQ-hand", "FQ-dwell", "FQ-cov", "FQ-g0", "FQ-g25", "FQ-g50",
                          "FQ-g75", "FQ-g90", "FQ-g99")
     assert LEARNED_ARMS == PAIR_ARMS + ("E3",) and PHASE_5_ARMS == LEARNED_ARMS + ("H1+L1",)
-    assert ARMS == DEFAULT_ARMS + PLAN_ARMS + PHASE_5_ARMS and len(set(ARMS)) == len(ARMS)
+    # and the Exp 5 addendum's F+L1 (tests/unit/test_exp5_f_l1.py)
+    assert ARMS == DEFAULT_ARMS + PLAN_ARMS + PHASE_5_ARMS + ("F+L1",)
+    assert len(set(ARMS)) == len(ARMS)
     assert CHECKPOINT_TAGS == {
         "FQ": "main", "FQ-hand": "hand", "FQ-dwell": "dwell", "FQ-cov": "cov", "FQ-g0": "g0",
         "FQ-g25": "g25", "FQ-g50": "g50", "FQ-g75": "g75", "FQ-g90": "g90", "FQ-g99": "g99",
@@ -388,7 +390,7 @@ def test_the_phase_5_arm_lists_and_tags():
     assert PAIR_CHECKPOINT_TAGS + POLICY_CHECKPOINT_TAGS == tuple(CHECKPOINT_TAGS.values())
     for tag in CHECKPOINT_TAGS.values():
         assert mule_config_errors(_fq(pair_checkpoint_tag=tag)) == []
-    assert [arm for arm in ARMS if is_plan_arm(arm)] == list(PLAN_ARMS + PAIR_ARMS)
+    assert [arm for arm in ARMS if is_plan_arm(arm)] == list(PLAN_ARMS + PAIR_ARMS) + ["F+L1"]
 
 
 @pytest.mark.parametrize("arm", PHASE_5_ARMS)
