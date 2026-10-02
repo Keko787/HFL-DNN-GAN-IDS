@@ -25,6 +25,8 @@
 #   matplotlib    - the rebuttal figures (exp4_figure*.py)
 #   tensorflow    - create_CICIOT_Model (Config/modelStructures/NIDS/NIDS_Struct.py)
 #   keras         - Keras 3 backend that tf.keras routes to under tensorflow>=2.16
+#   psutil        - optional: the footprint probe only (Exp 5 addendum, Study 5.11,
+#                   --footprint-probe); nothing else imports it
 
 numpy==1.26.4
 pandas==2.2.2
@@ -33,3 +35,4 @@ scikit-learn==1.8.0
 matplotlib==3.8.4
 tensorflow==2.21.0
 keras==3.14.1
+psutil==5.9.8

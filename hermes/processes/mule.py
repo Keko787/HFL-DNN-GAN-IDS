@@ -502,15 +502,21 @@ SIM_MISSION_FIELDS = (
 #: adds three after them, each left out when None or empty: a ``pair_q``
 #: mission's closed decision records (``pass_1_pairs``), and arm E3's record of
 #: each next-stop call (``pass_1_e3``) and of the stops its pass left
-#: (``pass_1_e3_unvisited``), so only those missions gain a key.
+#: (``pass_1_e3_unvisited``), so only those missions gain a key. The Exp 5
+#: addendum (Study 5.11 (a)) adds two after them the same way: the wall time of
+#: each pair decision (``pass_1_pairs_wall``) and of each of E3's calls
+#: (``pass_1_e3_wall``), kept outside the records so that determinism
+#: comparisons drop them as they drop ``plan_wall_s``.
 SIM_MISSION_OPTIONAL_FIELDS = (
     "delivery_overrun_s", "plan", "plan_wall_s", "pass_1_policy_drops",
     "pass_1_pairs", "pass_1_e3", "pass_1_e3_unvisited",
+    "pass_1_pairs_wall", "pass_1_e3_wall",
 )
 
 #: Optional fields left out when empty too, not only when None.
 _OMITTED_WHEN_EMPTY = frozenset({
     "pass_1_policy_drops", "pass_1_pairs", "pass_1_e3", "pass_1_e3_unvisited",
+    "pass_1_pairs_wall", "pass_1_e3_wall",
 })
 
 

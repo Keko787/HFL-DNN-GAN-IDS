@@ -143,6 +143,26 @@ what each holds):
 
 Study 5.6's "stops served per mission" is ``pass1_contacts_mean``.
 
+Exp 5 addendum, Study 5.11 (a): the decision cost. With ``cost_columns``
+(``--cost-columns``) :data:`COST_COLUMNS` follow the τ columns (and the pair
+columns, when both are asked for); without it the row is the one above,
+column for column. Every one is a wall time or derived from wall times, so
+none enters a determinism comparison (:func:`cost_report` says what each
+holds):
+
+* **The planner** (plan-mode missions, ``plan_wall_s``): ``plan_wall_s_mean``
+  and ``plan_wall_s_p95`` over the trial's missions, and
+  ``plan_search_shares``, the share of the missions whose committed class
+  ran each search mode (JSON, every mode listed).
+* **The flight clock** (``pass_1_pairs_wall``, ``pass_1_e3_wall``, pooled
+  over the trial's decisions): ``pair_wall_s_mean``, ``pair_wall_s_p95`` and
+  ``pair_mask_wall_s_mean`` for the pair slot, the same three for E3's calls,
+  and ``flight_decisions_per_mission``, the timed decisions per mission.
+* **The footprint** (``footprint.json``, which the driver's footprint probe
+  writes beside the kept trace): ``trial_processes`` and the peak resident
+  memory in MiB, concurrent (``peak_rss_mib_total``) and per role
+  (``peak_rss_mib_cluster``, ``_mule``, ``_device``: the largest process).
+
 Usage::
 
     python -m experiments.analysis.traces_scorer \\
@@ -157,6 +177,9 @@ Usage::
 
     python -m experiments.analysis.traces_scorer \\
         --traces results/exp5/s55_traces --pair-columns --csv scored.csv
+
+    python -m experiments.analysis.traces_scorer \\
+        --traces results/exp5/s511_traces --cost-columns --csv scored.csv
 """
 
 from __future__ import annotations
@@ -187,6 +210,7 @@ from experiments.exp4.events_consumer import (
     completion_order,
     consume_run_dir,
 )
+from experiments.exp4.footprint import read_footprint
 from experiments.exp4.metrics import Exp4MetricSummary, summarise_observation
 from experiments.exp4.topology_builder import SESSION_TTL_S, device_positions, device_spread_m
 from hermes.l1.mission_clock import DOCK_POSE
@@ -202,7 +226,7 @@ from hermes.processes.config import (
     MuleConfig,
 )
 from hermes.scheduler.stages.s3_deadline import LAW_ADDITIVE, DeadlineLaw, time_scale_for_period
-from hermes.types.scheduler import CAP_REASONS
+from hermes.types.scheduler import CAP_REASONS, SEARCH_MODES
 
 
 # --------------------------------------------------------------------------- #
@@ -1240,6 +1264,156 @@ def pair_report(obs: Exp4Observation, *, mule_cfg: Mapping[str, object]) -> Pair
 
 
 # --------------------------------------------------------------------------- #
+# Exp 5 addendum, Study 5.11 (a): the decision cost
+# --------------------------------------------------------------------------- #
+
+#: The scorer's Study 5.11 columns (the build plan's addendum of 2 Oct 2026,
+#: metric "Decision cost"), in row order after the τ columns and the pair
+#: columns, and only with ``cost_columns`` (``--cost-columns``): without it the
+#: row is the Phase 5 one, so no pin moves. Wall times, so none enters a
+#: determinism comparison. Scorer-only: the trial CSV's header is unchanged.
+COST_COLUMNS = (
+    "plan_wall_s_mean", "plan_wall_s_p95", "plan_search_shares",
+    "pair_wall_s_mean", "pair_wall_s_p95", "pair_mask_wall_s_mean",
+    "e3_wall_s_mean", "e3_wall_s_p95", "e3_mask_wall_s_mean",
+    "flight_decisions_per_mission",
+    "trial_processes", "peak_rss_mib_total",
+    "peak_rss_mib_cluster", "peak_rss_mib_mule", "peak_rss_mib_device",
+)
+
+_MIB = float(1 << 20)
+
+
+@dataclass(frozen=True)
+class CostReport:
+    """One trial's :data:`COST_COLUMNS`; None is a blank column."""
+
+    plan_wall_s_mean: Optional[float] = None
+    plan_wall_s_p95: Optional[float] = None
+    plan_search_shares: Optional[Dict[str, float]] = None
+    pair_wall_s_mean: Optional[float] = None
+    pair_wall_s_p95: Optional[float] = None
+    pair_mask_wall_s_mean: Optional[float] = None
+    e3_wall_s_mean: Optional[float] = None
+    e3_wall_s_p95: Optional[float] = None
+    e3_mask_wall_s_mean: Optional[float] = None
+    flight_decisions_per_mission: Optional[float] = None
+    trial_processes: Optional[int] = None
+    peak_rss_mib_total: Optional[float] = None
+    peak_rss_mib_cluster: Optional[float] = None
+    peak_rss_mib_mule: Optional[float] = None
+    peak_rss_mib_device: Optional[float] = None
+
+    def to_row(self) -> Dict[str, object]:
+        row = {col: _blank(getattr(self, col)) for col in COST_COLUMNS}
+        row["plan_search_shares"] = _json_or_blank(self.plan_search_shares)
+        return row
+
+
+def _p95(values: Sequence[float]) -> Optional[float]:
+    """The 95th percentile (numpy's linear rule, as ``age_p95``); None if empty."""
+    return float(np.percentile(values, 95)) if values else None
+
+
+def _mib(value) -> Optional[float]:
+    """A byte count from ``footprint.json`` in MiB; None unless an int >= 0."""
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        return None
+    return value / _MIB
+
+
+def cost_report(obs: Exp4Observation, *, mule_cfg: Mapping[str, object],
+                footprint: Optional[Mapping[str, object]] = None) -> CostReport:
+    """One trial's decision cost (Exp 5 addendum, Study 5.11 (a)), blank where it has none.
+
+    **The planner.** ``plan_wall_s_mean`` and ``plan_wall_s_p95`` are over the
+    trial's missions that recorded ``plan_wall_s`` (plan mode: the wall
+    seconds ``FLScheduler.build_ferry_plan`` took at the dock, every class's
+    search included), with several mules every mule's; blank with none.
+    ``plan_search_shares`` is the share of the missions that recorded a plan
+    whose committed class ran each mode (``plan.search``: ``exact``,
+    ``stop_subsets`` or ``local``, every one listed, 0 included; JSON), so a
+    sweep that forces a mode through ``--plan-search-params`` can check it
+    held; blank with no plan.
+
+    **The flight clock.** The pair slot's decisions and E3's calls, pooled
+    over the trial's missions and mules (``pass_1_pairs_wall``,
+    ``pass_1_e3_wall``): the mean and 95th percentile of each decision's
+    ``decide_s`` (the mask's predicate, the scorer or policy and the pick)
+    and the mean of its ``mask_s`` (the predicate's share), each blank where
+    the trial recorded none; a time the mule did not write as a number >= 0
+    is left out. ``flight_decisions_per_mission`` is the mean over the
+    trial's missions of the decisions timed in flight, both kinds together,
+    on a trial whose mule config names the pair slot or E3's policy or whose
+    missions recorded a wall (a mission without one made none); blank on any
+    other trial, and with no mission. The view or observation each decision
+    reads is built before it and is not timed; FX's and F's fixed fillings
+    record no decision and so no wall.
+
+    **The footprint** (``footprint``, the trial's ``footprint.json`` as
+    :func:`experiments.exp4.footprint.read_footprint` returns it; None for a
+    trial run without the probe, when all five are blank):
+    ``trial_processes``, the processes the trial started (the cluster, the
+    mules, the devices); ``peak_rss_mib_total``, the largest summed resident
+    memory over one sample, the concurrent peak; and per role the largest
+    process's own peak (``peak_rss_mib_cluster``, ``_mule``, ``_device``).
+    In MiB; a value the probe did not write as a byte count is blank.
+    """
+    missions = obs.missions
+    plan_walls = [m.plan_wall_s for m in missions if m.plan_wall_s is not None]
+    searched = [m.plan_search for m in missions if m.has_plan]
+    shares = None
+    if searched:
+        shares = {mode: sum(1 for s in searched if s == mode) / len(searched)
+                  for mode in SEARCH_MODES}
+
+    def walls(kind: str) -> List:
+        return [w for m in missions for w in getattr(m, kind) or ()]
+
+    pair, e3 = walls("pair_walls"), walls("e3_walls")
+
+    def decided(ws) -> List[float]:
+        return [w.decide_s for w in ws if w.decide_s is not None]
+
+    per_mission = None
+    if missions and (mule_cfg.get("flight_slot") == FLIGHT_SLOT_PAIR_Q
+                     or mule_cfg.get("contact_policy") == CONTACT_POLICY_CHEN_DQN
+                     or pair or e3):
+        per_mission = float(np.mean([len(m.pair_walls or ()) + len(m.e3_walls or ())
+                                     for m in missions]))
+    return CostReport(
+        plan_wall_s_mean=_mean_present(plan_walls),
+        plan_wall_s_p95=_p95(plan_walls),
+        plan_search_shares=shares,
+        pair_wall_s_mean=_mean_present(decided(pair)),
+        pair_wall_s_p95=_p95(decided(pair)),
+        pair_mask_wall_s_mean=_mean_present(w.mask_s for w in pair),
+        e3_wall_s_mean=_mean_present(decided(e3)),
+        e3_wall_s_p95=_p95(decided(e3)),
+        e3_mask_wall_s_mean=_mean_present(w.mask_s for w in e3),
+        flight_decisions_per_mission=per_mission,
+        **_footprint_fields(footprint),
+    )
+
+
+def _footprint_fields(footprint: Optional[Mapping[str, object]]) -> Dict[str, object]:
+    """:func:`cost_report`'s five footprint fields from ``footprint.json``."""
+    if not isinstance(footprint, Mapping):
+        return {}
+    processes = footprint.get("processes")
+    by_role = footprint.get("peak_rss_bytes_by_role")
+    by_role = by_role if isinstance(by_role, Mapping) else {}
+    return {
+        "trial_processes": (processes if isinstance(processes, int)
+                            and not isinstance(processes, bool) and processes >= 0 else None),
+        "peak_rss_mib_total": _mib(footprint.get("peak_rss_bytes_total")),
+        "peak_rss_mib_cluster": _mib(by_role.get("cluster")),
+        "peak_rss_mib_mule": _mib(by_role.get("mule")),
+        "peak_rss_mib_device": _mib(by_role.get("device")),
+    }
+
+
+# --------------------------------------------------------------------------- #
 # One trial, and a whole trace root
 # --------------------------------------------------------------------------- #
 
@@ -1272,6 +1446,10 @@ class TrialScore:
     #: τ columns, when scored with ``pair_columns``; None leaves them out, so
     #: the default row is the Phase 4 one.
     pairs: Optional[PairReport] = None
+    #: Exp 5 addendum, Study 5.11 (a): :data:`COST_COLUMNS`
+    #: (:func:`cost_report`), after the τ and pair columns, when scored with
+    #: ``cost_columns``; None leaves them out.
+    costs: Optional[CostReport] = None
 
     def provenance_key(self) -> Tuple[Tuple[str, object], ...]:
         """The provenance as a hashable, column-ordered tuple."""
@@ -1320,6 +1498,8 @@ class TrialScore:
             row[f"sim_s_to_{tag}"] = _blank(reach.sim_s)
         if self.pairs is not None:
             row.update(self.pairs.to_row())
+        if self.costs is not None:
+            row.update(self.costs.to_row())
         return row
 
 
@@ -1331,6 +1511,7 @@ def score_trial(
     status_csv: StatusSource = None,
     age_cap_s: Optional[int] = None,
     pair_columns: bool = False,
+    cost_columns: bool = False,
 ) -> TrialScore:
     """Score one retained trial directory.
 
@@ -1341,6 +1522,8 @@ def score_trial(
     them at the trace's own S, if its mules ran one (:func:`plan_report`).
     ``pair_columns`` adds :data:`PHASE_5_COLUMNS` after the τ columns
     (:func:`pair_report`); without it the row has none of them.
+    ``cost_columns`` adds :data:`COST_COLUMNS` after those
+    (:func:`cost_report`); without it the row has none of them.
 
     Raises :class:`~experiments.exp4.events_consumer.ClockDomainError`,
     naming the trial, for a trace whose clocks disagree: in its events (see
@@ -1397,6 +1580,8 @@ def score_trial(
         unmerged_missions=len(obs.unmerged_keys),
         plan=_trial_plan_report(trace_dir, obs, devices, mule_cfg, age_cap_s),
         pairs=pair_report(obs, mule_cfg=mule_cfg) if pair_columns else None,
+        costs=(cost_report(obs, mule_cfg=mule_cfg, footprint=read_footprint(trace_dir))
+               if cost_columns else None),
     )
 
 
@@ -1422,14 +1607,15 @@ def score_traces(
     status_csv: StatusSource = None,
     age_cap_s: Optional[int] = None,
     pair_columns: bool = False,
+    cost_columns: bool = False,
 ) -> List[TrialScore]:
     """Score every trial directory under ``trace_root``, in name order.
 
     Directories whose names are not trial names are skipped, and so, unless
     ``include_failed``, are trials whose status is not ``ok`` (see
     :func:`trial_status`): a timed-out or ``no_eval`` trial is not a valid
-    observation, and the trial CSV's analysis drops it too. ``age_cap_s`` and
-    ``pair_columns`` as in :func:`score_trial`.
+    observation, and the trial CSV's analysis drops it too. ``age_cap_s``,
+    ``pair_columns`` and ``cost_columns`` as in :func:`score_trial`.
     """
     index = _status_index(status_csv)
     scores: List[TrialScore] = []
@@ -1437,13 +1623,13 @@ def score_traces(
         if not include_failed and trial_status(d, index).status != "ok":
             continue
         scores.append(score_trial(d, taus=taus, status_csv=index, age_cap_s=age_cap_s,
-                                  pair_columns=pair_columns))
+                                  pair_columns=pair_columns, cost_columns=cost_columns))
     return scores
 
 
 def write_scores_csv(scores: Sequence[TrialScore], path) -> None:
     """One row per trial. The column set is fixed by the first score's τ list
-    and whether it carries the pair columns."""
+    and whether it carries the pair and cost columns."""
     if not scores:
         raise ValueError("no scores to write")
     rows = [s.to_row() for s in scores]
@@ -1483,6 +1669,15 @@ def main(argv=None) -> int:
                          "committed class and chose a stop other than the remainder's "
                          "head) and E3's unvisited stops per mission. Off by default, "
                          "when the row is the Phase 4 one.")
+    ap.add_argument("--cost-columns", action="store_true",
+                    help="Add Study 5.11's decision-cost columns after the tau and pair "
+                         "columns: the planner's wall time per mission (mean, p95) and "
+                         "the share of missions in each search mode, and the pair "
+                         "slot's and E3's wall time per decision (mean, p95, the mask's "
+                         "mean) with the timed decisions per mission; and the trial's "
+                         "processes and peak memory where the runner's --footprint-probe "
+                         "recorded them. Wall times: off by default, when the row is the "
+                         "one without them.")
     args = ap.parse_args(argv)
     if args.age_cap_s is not None and args.age_cap_s < 1:
         ap.error(f"--age-cap-s must be >= 1, got {args.age_cap_s}")
@@ -1502,6 +1697,7 @@ def main(argv=None) -> int:
             root, taus=args.tau, arms=args.arms,
             include_failed=args.include_failed, status_csv=index,
             age_cap_s=args.age_cap_s, pair_columns=args.pair_columns,
+            cost_columns=args.cost_columns,
         ))
         statuses.extend(trial_statuses(root, arms=args.arms, status_csv=index))
 

@@ -483,9 +483,10 @@ def test_the_equal_device_model_changes_only_the_examples_and_scores():
 
 #: What a real process's wall clock and OS decide: the envelope stamps and
 #: durations, the ports, the planner's wall time and the mule's metrics timer
-#: of mission wall time (UG5's probe of the real orchestrator).
+#: of mission wall time (UG5's probe of the real orchestrator), and each flight
+#: decision's wall time (Exp 5 addendum, Study 5.11 (a)).
 _WALL_KEYS = {"ts", "duration_s", "rf_port", "dock_port", "mule_rf_port", "port",
-              "timer.mission_duration_s", "plan_wall_s"}
+              "timer.mission_duration_s", "plan_wall_s", *IP.DECISION_WALL_FIELDS}
 #: The row's wall column: the mean mission duration, timed by the harness clock
 #: in process and by the wall clock in a real process.
 _ROW_WALL = {"mission_duration_s_mean"}

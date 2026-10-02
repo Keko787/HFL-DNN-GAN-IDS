@@ -646,6 +646,19 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
              "directory beside the CSV.",
     )
     parser.add_argument(
+        "--footprint-probe", action="store_true",
+        help="Exp 5 addendum, Study 5.11: sample the resident memory of every "
+             "process a trial starts (the cluster, the mules, the devices) and "
+             "write footprint.json beside its kept trace: the processes, the "
+             "concurrent peak and each role's peak, which traces_scorer "
+             "--cost-columns reads. Reads only, so no trial changes. Needs "
+             "--keep-event-traces and psutil. Off by default.",
+    )
+    parser.add_argument(
+        "--footprint-interval-s", type=float, default=0.5,
+        help="The footprint probe's sampling interval in seconds (default 0.5).",
+    )
+    parser.add_argument(
         "--mission-window-adaptation", action="store_true",
         help="S3c: adapt the deadline window at MISSION level from the mule's "
              "recent success history. The per-device rule only sees 'this "
@@ -936,6 +949,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         whittle_weights=args.whittle_weights,
         fedcs_value=args.fedcs_value,
     )
+    if args.footprint_probe:
+        # Exp 5 addendum, Study 5.11; passed only when asked, so the default
+        # driver is built exactly as before.
+        driver_kwargs.update(footprint_probe=True,
+                             footprint_interval_s=float(args.footprint_interval_s))
     driver_kwargs.update(_phase_3_driver_kwargs(args, parser))
     driver_kwargs.update(_phase_4_driver_kwargs(args, parser))
     driver_kwargs.update(_phase_5_driver_kwargs(args, parser, arms))
