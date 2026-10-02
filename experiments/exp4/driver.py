@@ -108,6 +108,7 @@ from .topology_builder import (
     build_exp4_topology,
     device_positions,
     device_spread_m,
+    grown_field_radius_m,
 )
 
 log = logging.getLogger("experiments.exp4.driver")
@@ -749,6 +750,14 @@ class Exp4Driver:
     # by default. Declared before ``soft_cap_s``, the last field.
     footprint_probe: bool = False
     footprint_interval_s: float = 0.5
+    # Exp 5 addendum, Studies 5.9 and 5.11: a field that grows with N. With
+    # ``h1_field_ref_n`` set, a realism trial of N devices scatters them over
+    # the half-width ``h1_field_radius_m * sqrt(N / h1_field_ref_n)``
+    # (``topology_builder.grown_field_radius_m``), so the device density is the
+    # reference size's at every N, T_nom's reference layouts included; None
+    # keeps the recorded fixed field. The kept traces hold the positions; the
+    # row does not record it, so write each setting to its own CSV.
+    h1_field_ref_n: Optional[int] = None
     # The runner's soft cap on a trial's run time, as the caller applies it
     # (runner_main sets it to the cap it hands TrialRunner: --timeout-s, else
     # the largest wall budget over the grid). On the mission clock a trial's
@@ -806,6 +815,15 @@ class Exp4Driver:
                 f"fedcs_value must be one of {VALUE_KINDS}, got {self.fedcs_value!r}"
             )
         self._check_footprint_probe()
+        if self.h1_field_ref_n is not None:
+            ref_n = self.h1_field_ref_n
+            if isinstance(ref_n, bool) or not isinstance(ref_n, int) or ref_n < 1:
+                raise ValueError(f"h1_field_ref_n must be an int >= 1 or None, got {ref_n!r}")
+            if not self.realism:
+                raise ValueError(
+                    "h1_field_ref_n scales the realism field: without realism the devices "
+                    "sit in the tight cluster and no field is drawn (--realism)"
+                )
         self._check_multi_mule()
         #: T_nom per cell, computed once (:meth:`nominal_period_s`).
         self._t_nom_cache: Dict[str, float] = {}
@@ -1339,6 +1357,18 @@ class Exp4Driver:
         )
         return cfg.ferry_spec_kwargs()
 
+    def field_radius_m(self, n_devices: int) -> float:
+        """The realism field's half-width for a trial of ``n_devices`` devices.
+
+        ``h1_field_radius_m``, the recorded fixed field; with ``h1_field_ref_n``
+        set, grown at the reference size's density (Exp 5 addendum,
+        ``topology_builder.grown_field_radius_m``). Used only when realism is on.
+        """
+        if self.h1_field_ref_n is None:
+            return float(self.h1_field_radius_m)
+        return grown_field_radius_m(float(self.h1_field_radius_m), int(n_devices),
+                                    int(self.h1_field_ref_n))
+
     def _check_footprint_probe(self) -> None:
         """Study 5.11's footprint probe needs somewhere to write and psutil to read with."""
         if not self.footprint_probe:
@@ -1583,13 +1613,13 @@ class Exp4Driver:
             "n": int(n_devices), "rrf": float(rf_range_m), "regime": regime,
             "settings": dict(settings), "theta": int(theta_bytes), "synth": int(synth_bytes),
             "k": int(self.n_mules), "layouts": int(self.t_nom_layouts),
-            "realism": bool(self.realism), "field": float(self.h1_field_radius_m),
+            "realism": bool(self.realism), "field": self.field_radius_m(n_devices),
         }, sort_keys=True, default=str)
         cached = self._t_nom_cache.get(key)
         if cached is not None:
             return cached
         spread = device_spread_m(
-            rf_range_m, field_radius_m=(self.h1_field_radius_m if self.realism else None),
+            rf_range_m, field_radius_m=(self.field_radius_m(n_devices) if self.realism else None),
         )
         base = dict(settings)
         base.update(contact_band="wide", backhaul_regime=regime)
@@ -1764,7 +1794,7 @@ class Exp4Driver:
                 device_reliability=True,
                 reliabilities=device_reliabilities(cell.seed, n_devices),
                 world_radius_m=self.h1_world_radius_m,
-                field_radius_m=self.h1_field_radius_m,
+                field_radius_m=self.field_radius_m(n_devices),
                 backhaul_loss_pct=(
                     self.jittery_backhaul_loss_pct if regime == "jittery"
                     else self.clean_backhaul_loss_pct

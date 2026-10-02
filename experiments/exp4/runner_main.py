@@ -605,6 +605,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         help="H1 realism: device scatter radius (larger -> more contacts).",
     )
     parser.add_argument(
+        "--h1-field-ref-n", type=int, default=None,
+        help="Exp 5 addendum (Studies 5.9, 5.11): grow the realism field with N "
+             "at this size's density, half-width h1-field-radius-m * sqrt(N / "
+             "ref-n), so --N 6 12 24 with --h1-field-ref-n 6 keeps N = 6's density. "
+             "Needs --realism. The row does not record it: write each setting to "
+             "its own CSV. Default: the fixed field.",
+    )
+    parser.add_argument(
         "--selector-weights", type=Path, default=None,
         help="Arm H2: trained DDQN .npz (from experiments.exp3.train_a4). "
              "Omit for a random-init selector (H2 plumbing smoke only).",
@@ -949,6 +957,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         whittle_weights=args.whittle_weights,
         fedcs_value=args.fedcs_value,
     )
+    if args.h1_field_ref_n is not None:
+        # Exp 5 addendum; passed only when given, as the footprint probe is.
+        driver_kwargs.update(h1_field_ref_n=int(args.h1_field_ref_n))
     if args.footprint_probe:
         # Exp 5 addendum, Study 5.11; passed only when asked, so the default
         # driver is built exactly as before.

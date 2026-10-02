@@ -657,7 +657,8 @@ def s_star_report(
         theta_bytes = stub_theta if theta_bytes is None else theta_bytes
         synth_bytes = stub_synth if synth_bytes is None else synth_bytes
     spread = device_spread_m(
-        float(rf_range_m), field_radius_m=(driver.h1_field_radius_m if driver.realism else None),
+        float(rf_range_m),
+        field_radius_m=(driver.field_radius_m(int(n_devices)) if driver.realism else None),
     )
     worlds = [
         planning_world(driver, layout, rf_range_m=rf_range_m, regime=regime,
@@ -772,6 +773,13 @@ def main(argv=None) -> int:
                     help="JSON of MuleConfig physics overrides (the driver's ferry_physics).")
     ap.add_argument("--no-realism", action="store_true",
                     help="Draw the tight EX-4.0 cluster instead of the realism field.")
+    ap.add_argument("--field-radius-m", type=float, default=100.0,
+                    help="The realism field's half-width (the driver's h1_field_radius_m, "
+                         "default 100 m).")
+    ap.add_argument("--field-ref-n", type=int, default=None,
+                    help="Exp 5 addendum: grow the field with N at this size's density "
+                         "(half-width field-radius-m * sqrt(N / ref-n); the driver's "
+                         "h1_field_ref_n). Default: the fixed field.")
     ap.add_argument("--member-admission", choices=MEMBER_ADMISSIONS,
                     default=MEMBER_ADMISSION_SUBSET,
                     help="subset (the F family's, default) or whole stops.")
@@ -791,11 +799,18 @@ def main(argv=None) -> int:
             physics = json.loads(args.ferry_physics)
         except json.JSONDecodeError as e:
             ap.error(f"--ferry-physics: {e}")
+    # The Exp 5 addendum's field settings reach the driver only when given, so
+    # the default tool builds the driver it always built.
+    field_kw: Dict[str, Any] = {}
+    if args.field_radius_m != 100.0:
+        field_kw["h1_field_radius_m"] = float(args.field_radius_m)
+    if args.field_ref_n is not None:
+        field_kw["h1_field_ref_n"] = args.field_ref_n
     try:
         driver = Exp4Driver(
             mission_clock="sim", realism=not args.no_realism, contact_band=args.contact_band,
             contact_band_classes=args.contact_band_classes, backhaul_model=args.backhaul_model,
-            payload_bytes=args.payload_bytes, ferry_physics=physics,
+            payload_bytes=args.payload_bytes, ferry_physics=physics, **field_kw,
         )
         report = s_star_report(
             driver, n_devices=args.N, budgets=args.budgets, rf_range_m=args.rrf,

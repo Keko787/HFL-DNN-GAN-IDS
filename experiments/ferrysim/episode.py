@@ -221,6 +221,9 @@ class _MissionTap:
         self.sorties: List[SortieRecord] = []
         self.pair_records: List[Optional[Tuple[Dict[str, Any], ...]]] = []
         self.steps: List[Tuple[Any, ...]] = []
+        #: Each mission's wall times (Exp 5 addendum, Study 5.11): the plan's
+        #: and each flight decision's, read off the result and never compared.
+        self.walls: List[Dict[str, Any]] = []
         self._closing: Optional[Dict[str, Any]] = None
         self._sunk: List[Tuple[Tuple[Any, ...], Tuple[Dict[str, Any], ...]]] = []
 
@@ -286,6 +289,11 @@ class _MissionTap:
             raise AssertionError("the slot's sink was called more than once in a mission")
         self.sorties.append(sortie)
         self.pair_records.append(None if pairs is None else tuple(pairs))
+        self.walls.append({
+            "plan_wall_s": getattr(result, "plan_wall_s", None),
+            "pairs": [dict(w) for w in getattr(result, "pass_1_pairs_wall", None) or ()],
+            "e3": [dict(w) for w in getattr(result, "pass_1_e3_wall", None) or ()],
+        })
         self.steps.append(sunk[0][0] if sunk else ())
         if self.stop_after is not None and index >= self.stop_after:
             service.request_stop()
@@ -437,6 +445,12 @@ class EpisodeResult:
     steps: Tuple[Tuple[Any, ...], ...]
     row: Dict[str, Any]
     case: Optional[Dict[str, Any]] = None
+    #: Exp 5 addendum, Study 5.11: per mission, the planner's wall time
+    #: (``plan_wall_s``) and each flight decision's (``pairs``, ``e3``: the
+    #: mule's ``pass_1_pairs_wall`` and ``pass_1_e3_wall``). Wall times, so left
+    #: out of equality (``compare=False``) and of :meth:`summary`: an episode is
+    #: the same episode whatever its wall times.
+    walls: Tuple[Dict[str, Any], ...] = dataclasses.field(default=(), compare=False)
 
     @property
     def terms(self) -> RewardTerms:
@@ -564,6 +578,7 @@ def run_episode_on(
         steps=tuple(tap.steps) if trainer is not None else (),
         row=dict(run.row),
         case=case,
+        walls=tuple(tap.walls),
     )
 
 

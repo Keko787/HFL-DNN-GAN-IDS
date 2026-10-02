@@ -65,6 +65,33 @@ user's choice at the campaign, made before the 5.5 sweep, since a manifest
 records its family's hash (R22). Study 5.5 is read on its own two cells
 (:data:`STUDY_5_5_CELLS`), whichever family trained the score.
 
+**The scale family** (the build plan's Exp 5 addendum, Study 5.11 (c):
+FerrySim beyond the stack). The jittery decision-rich cell at N = 24, 48 and
+96, one mule, on a field that grows with N at N = 6's density (half-width
+``100 * sqrt(N / 6)`` m: 200, 282.8 and 400 m;
+``experiments.exp4.topology_builder.grown_field_radius_m``), since the
+realism field's fixed 100 m would raise the density with N. Each size flies
+two stand-in budgets until its budget pilot (``python -m experiments.ferrysim
+pilot``) measures the knee: the binding edge, the largest budget on a 10 s grid
+at which F's S* on 90 % of the S* tool's 30 layouts is still 2 (one mission
+can no longer serve every servable device on more than a tenth of them), and
+1.5 times it. The rule reproduces the N = 12 stand-ins exactly (edge 120 s,
+and 180 s); at N = 6 its edge is 80 s, beside the priors 45 and 90 s. Found by
+bisection with the S* tool at planning level (``--families F --field-ref-n 6``
+with the cells' flags), on 2 Oct 2026:
+
+    N = 24, field 200.0 m:  edge  350 s, 1.5 x edge  525 s   -> S = 2
+    N = 48, field 282.8 m:  edge  680 s, 1.5 x edge 1020 s   -> S = 2
+    N = 96, field 400.0 m:  edge 1330 s, 1.5 x edge 1995 s   -> S = 2
+
+(S* on 90 % of layouts is 2 at the edge and 1 at 1.5 x, so S takes decision
+1's floor, 2, as everywhere.) These cells stay out of :data:`CELLS` and out of
+every other family, whose cells and hashes are unchanged: the cell's field
+(``field_radius_m``) is left out of a cell's JSON when it is the driver's
+default (None), as every other cell's is. The learned score trains at N = 6
+and 12, so a score flown here is out of practice (its /N features shift), a
+declared test.
+
 **The seed streams** (the spec, other choices 8; critic B14). A FerrySim
 episode is one trial of a cell, and its trial seed (the driver's
 ``Cell.seed``: the layout, the availability, the channel's phases and every
@@ -115,6 +142,12 @@ FAMILY_JITTERY = "jittery"
 FAMILY_CLEAN = "clean"
 #: The jittery regime's second family: its cells and Study 5.6's (resolution R22).
 FAMILY_JITTERY_56 = "jittery56"
+#: Study 5.11 (c)'s cells at N = 24, 48 and 96 on a growing field (the Exp 5
+#: addendum): :data:`SCALE_CELLS`.
+FAMILY_SCALE = "scale"
+#: The reference size whose density the scale family keeps (N = 6 in the
+#: realism field's 100 m).
+SCALE_REF_N = 6
 
 
 @dataclasses.dataclass(frozen=True)
@@ -130,7 +163,11 @@ class FerryCell:
     configuration aside (the arm is the episode's). ``interference_period_s``
     sets the contact channel's interference period P_c (None: the regime's own,
     60 s; ``CONTACT_REGIMES`` in ``hermes/l1/channel_model.py``), for Study
-    5.6's cells (decision 6 (a); :data:`STUDY_5_6_CELLS`).
+    5.6's cells (decision 6 (a); :data:`STUDY_5_6_CELLS`). ``field_radius_m``
+    sets the realism field's half-width (None: the driver's 100 m), for the
+    scale family (:data:`SCALE_CELLS`); at None it is left out of
+    :meth:`to_json`, so the other cells' JSON, and their families' hashes,
+    are unchanged.
     """
 
     name: str
@@ -146,6 +183,7 @@ class FerryCell:
     rf_range_m: float = RF_RANGE_M
     network_regime: str = NETWORK_REGIME
     interference_period_s: Optional[float] = None
+    field_radius_m: Optional[float] = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.name, str) or not self.name or "|" in self.name:
@@ -162,18 +200,22 @@ class FerryCell:
         if period is not None and not (isinstance(period, (int, float))
                                        and not isinstance(period, bool) and period > 0.0):
             raise ValueError(f"interference_period_s must be > 0 or None, got {period!r}")
+        field_m = self.field_radius_m
+        if field_m is not None and not (isinstance(field_m, (int, float))
+                                        and not isinstance(field_m, bool) and field_m > 0.0):
+            raise ValueError(f"field_radius_m must be > 0 or None, got {field_m!r}")
 
     def driver_settings(self) -> Dict[str, Any]:
         """The ``Exp4Driver`` settings of this cell's trials (Phase 4's pilot flags).
 
         As UG5's ``PLAN_PILOT`` (``tests/golden/_build_p4_plan.py``) with this
-        cell's budget, cap and contact regime (and its interference period,
-        when set).
+        cell's budget, cap and contact regime (and its interference period and
+        field, when set).
         """
         physics: Dict[str, Any] = {"contact_regime": str(self.contact_regime)}
         if self.interference_period_s is not None:
             physics["interference_period_s"] = float(self.interference_period_s)
-        return dict(
+        settings = dict(
             mission_clock="sim", realism=True, contact_band="wide",
             deadline_time_scale="t_nom", in_flight_response="replan",
             replan_fallback="trim", aggregation="agg:cutoff",
@@ -181,6 +223,9 @@ class FerryCell:
             mission_budget_s=float(self.budget_s), age_cap_missions=int(self.cap_s),
             ferry_physics=physics,
         )
+        if self.field_radius_m is not None:
+            settings["h1_field_radius_m"] = float(self.field_radius_m)
+        return settings
 
     def cell_params(self) -> Dict[str, Any]:
         """The runner's grid axes of this cell (``Cell.params``)."""
@@ -200,7 +245,12 @@ class FerryCell:
                     seed=int(seed), params=self.cell_params())
 
     def to_json(self) -> Dict[str, Any]:
-        return dataclasses.asdict(self)
+        out = dataclasses.asdict(self)
+        if out["field_radius_m"] is None:
+            # The driver's field: left out, so a cell from before the scale
+            # family hashes as it did.
+            del out["field_radius_m"]
+        return out
 
 
 #: The cells (decision 3 (a)). S = 2 everywhere: the S* tool's S at each
@@ -259,18 +309,41 @@ STUDY_5_6_CELLS: Tuple[FerryCell, ...] = (
               "jittery", interference_period_s=float(P_C_HALF_180_S)),
 )
 
-#: Every cell by name, decision 3's and Study 5.6's.
-CELLS_BY_NAME: Dict[str, FerryCell] = {c.name: c for c in CELLS + STUDY_5_6_CELLS}
+#: The scale family's field half-widths (m), N = 6's density in the realism
+#: field's 100 m: ``topology_builder.grown_field_radius_m(100.0, N, 6)``,
+#: written out so that the registry is a table (a test checks them).
+SCALE_FIELD_M: Dict[int, float] = {24: 200.0, 48: 282.8, 96: 400.0}
+
+
+def _scale_cell(n: int, budget_s: float) -> FerryCell:
+    return FerryCell(f"scl-n{n}-{budget_s:g}", FAMILY_SCALE, ROLE_DECISION_RICH, n, budget_s,
+                     BUDGET_STAND_IN, 2, "jittery", field_radius_m=SCALE_FIELD_M[n])
+
+
+#: Study 5.11 (c)'s cells (the Exp 5 addendum; the module docstring): N = 24,
+#: 48 and 96 at N = 6's density, each at its binding edge and 1.5 times it,
+#: stand-ins until the size's budget pilot; S = 2.
+SCALE_CELLS: Tuple[FerryCell, ...] = (
+    _scale_cell(24, 350.0), _scale_cell(24, 525.0),
+    _scale_cell(48, 680.0), _scale_cell(48, 1020.0),
+    _scale_cell(96, 1330.0), _scale_cell(96, 1995.0),
+)
+
+#: Every cell by name: decision 3's, Study 5.6's and the scale family's.
+CELLS_BY_NAME: Dict[str, FerryCell] = {
+    c.name: c for c in CELLS + STUDY_5_6_CELLS + SCALE_CELLS}
 
 #: One score per contact regime, practised over these cells (decision 3): the
 #: jittery family, both sizes and both budgets at the default P_c, and the clean
 #: control; or, for the jittery regime's score, ``jittery56``, the jittery
 #: family's cells and Study 5.6's (resolution R22). ``jittery56`` changes
-#: neither ``jittery`` nor ``clean``.
+#: neither ``jittery`` nor ``clean``, and ``scale`` (Study 5.11 (c), flown and
+#: not trained on: the learned score practises at N = 6 and 12) none of them.
 FAMILIES: Dict[str, Tuple[FerryCell, ...]] = {
     FAMILY_JITTERY: tuple(c for c in CELLS if c.family == FAMILY_JITTERY),
     FAMILY_CLEAN: tuple(c for c in CELLS if c.family == FAMILY_CLEAN),
     FAMILY_JITTERY_56: tuple(c for c in CELLS if c.family == FAMILY_JITTERY) + STUDY_5_6_CELLS,
+    FAMILY_SCALE: SCALE_CELLS,
 }
 
 #: The cells Study 5.5 is read on (decision 5: N = 12, the jittery regime), by
@@ -285,8 +358,8 @@ STUDY_5_6_CONTROL_CELLS: Tuple[FerryCell, ...] = (CELLS_BY_NAME["cln-n12-120"],
 
 
 def cell_named(name: Union[str, FerryCell]) -> FerryCell:
-    """The cell called ``name`` (:data:`CELLS`, :data:`STUDY_5_6_CELLS`); a
-    :class:`FerryCell` is itself."""
+    """The cell called ``name`` (:data:`CELLS`, :data:`STUDY_5_6_CELLS`,
+    :data:`SCALE_CELLS`); a :class:`FerryCell` is itself."""
     if isinstance(name, FerryCell):
         return name
     try:
