@@ -1151,7 +1151,7 @@ table.mx th:first-child{text-align:left}
 
 <section id="experiments">
   <h2>Experiments</h2>
-  <p>Exp 5 runs on the real-process stack (one cluster, K mules and N device processes over loopback TCP, with real Keras training on CICIoT2023) once Phase 3 has put it on the simulated clock. Study 5.1 and the channel-free cells of 5.3 can start on today's Exp 4 harness. Unless a study says otherwise: N = 6 devices per slice, 4 missions, the jittery regime, budgets of 60 s (the S3b knee) and 30 s (stress), 40 paired seeds, τ = 0.82. Costs assume about 40 s per trial (37.8 s was measured for H1 at N = 6) and 3 shards, the most that ran without memory failures. On the simulated clock two of these defaults change (Phase 3 deviations): the budgets become the knee re-measured with the ferry model plus a stress budget, and the per-trial cost is re-measured once the ferry session TTL is set.</p>
+  <p>Exp 5 runs on the real-process stack (one cluster, K mules and N device processes over loopback TCP, with real Keras training on CICIoT2023) once Phase 3 has put it on the simulated clock. Study 5.1 and the channel-free cells of 5.3 can start on today's Exp 4 harness. Unless a study says otherwise: N = 6 devices per slice, 4 missions, the jittery regime, budgets of 60 s (the S3b knee) and 30 s (stress), 40 paired seeds, τ = 0.82. Costs assume about 40 s per trial (37.8 s was measured for H1 at N = 6) and 3 shards, the most that ran without memory failures. On the simulated clock two of these defaults change (Phase 3 deviations): the budgets become the knee re-measured with the ferry model plus a stress budget, and the per-trial cost is re-measured once the ferry session TTL is set. Studies 5.11–5.15 are an addendum of 2 Oct 2026 that covers what 5.1–5.10 leave out (data, compute, decision cost, the components one at a time and the radio layer), framed for IPDPS 2027, with a proposed split of the work around its deadlines (<a href="#addendum">addendum</a>).</p>
 
   <div class="scroll">
   <table class="wide mx">
@@ -1167,6 +1167,11 @@ table.mx th:first-child{text-align:left}
       <tr><td>5.8 Fairness under cost</td><td><span class="dot o"></span></td><td></td><td><span class="dot o"></span></td><td><span class="dot o"></span></td><td></td><td><span class="dot h"></span></td><td></td><td><span class="dot o"></span></td><td><span class="dot o"></span></td><td></td><td></td><td></td><td></td></tr>
       <tr><td>5.9 Scale and robustness</td><td><span class="dot o"></span></td><td><span class="dot o"></span></td><td></td><td></td><td><span class="dot h"></span></td><td></td><td></td><td><span class="dot o"></span></td><td><span class="dot o"></span></td><td></td><td></td><td></td><td></td></tr>
       <tr><td>5.10 Real radios</td><td><span class="dot o"></span></td><td><span class="dot o"></span></td><td></td><td></td><td><span class="dot h"></span></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+      <tr><td>5.11 Decision cost and scaling <span class="tag new">addendum</span></td><td><span class="dot o"></span></td><td><span class="dot o"></span></td><td></td><td></td><td><span class="dot h"></span></td><td></td><td></td><td></td><td><span class="dot h"></span></td><td></td><td></td><td></td><td></td></tr>
+      <tr><td>5.12 Compute and model-size heterogeneity <span class="tag new">addendum</span></td><td><span class="dot o"></span></td><td><span class="dot o"></span></td><td></td><td></td><td><span class="dot o"></span></td><td></td><td></td><td></td><td><span class="dot h"></span></td><td><span class="dot o"></span></td><td></td><td></td><td></td></tr>
+      <tr><td>5.13 Data heterogeneity <span class="tag new">addendum</span></td><td><span class="dot o"></span></td><td><span class="dot o"></span></td><td></td><td></td><td><span class="dot o"></span></td><td></td><td></td><td><span class="dot o"></span></td><td></td><td></td><td></td><td></td><td><span class="dot o"></span></td></tr>
+      <tr><td>5.14 Component ablations <span class="tag new">addendum</span></td><td><span class="dot h"></span></td><td></td><td></td><td><span class="dot o"></span></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+      <tr><td>5.15 Radio layer <span class="tag new">addendum</span></td><td><span class="dot o"></span></td><td><span class="dot o"></span></td><td></td><td><span class="dot o"></span></td><td><span class="dot o"></span></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
     </tbody>
   </table>
   </div>
@@ -1303,6 +1308,262 @@ table.mx th:first-child{text-align:left}
       <dt>Reads as</dt><dd>Validation rather than a statistical study. If access does not land, the paper states it as planned.</dd>
     </dl>
   </div>
+
+  <h3 id="addendum">Addendum, 2 Oct 2026: what 5.1–5.10 leave out, for IPDPS 2027</h3>
+  <p>A coverage review of Exp 5 against the whole system found it strong on the scheduler (5.2–5.8) and on aggregation (5.1), and thin in five places:</p>
+  <ul>
+    <li><b>Data:</b> one dataset (CICIoT2023, binary labels), IID equal shards on every device. Device value is uniform, so FerrySim's reward counts devices.</li>
+    <li><b>Compute:</b> local training runs in wall time and costs nothing on the simulated clock. No device trains slower than another, and the payload stands in for the model's size.</li>
+    <li><b>Decision cost:</b> the planner's wall time is recorded on every plan mission but never reported. The learned score's inference time is not recorded at all.</li>
+    <li><b>The components one at a time:</b> 5.7 and 5.8 switch off four mechanisms; the others have no study.</li>
+    <li><b>The radio layer:</b> no study of its own, only the clean and jittery regimes and 5.10.</li>
+  </ul>
+  <p>Studies 5.11–5.15 cover them. Each says what runs on today's code and what has to be built first. The build estimates come from a survey of the code on 2 Oct, and the trial costs use the N = 6 rate above; both are re-costed after the pilots. None of these studies has run, and none runs without the user's go-ahead.</p>
+  <div class="note warn">
+    <p><b>IPDPS 2027</b> (from its call for papers):</p>
+    <ul>
+      <li><b>Dates:</b> abstract registration 1 Oct 2026 (registered); full paper 8 Oct 2026, firm, AoE; early rejects 30 Nov; rebuttal 3 Dec; first-round decisions 18 Dec; revised submissions 18 Jan 2027; final decisions 2 Feb; camera-ready 20 Feb.</li>
+      <li><b>Length:</b> 10 double-column pages, figures and tables included; references extra.</li>
+      <li><b>Double-anonymous review:</b> the repository is public under the author's account, so the submission does not link it. The paper's artifact will be a separate repository, made once development and the experiments are complete.</li>
+      <li><b>On acceptance:</b> a reproducibility appendix is required.</li>
+      <li><b>Disclosure:</b> AI-generated text is declared in the Acknowledgements.</li>
+    </ul>
+  </div>
+  <p><b>A proposed split of the work, for the user's decision.</b></p>
+  <ul>
+    <li><b>Before 8 Oct:</b>
+      <ul>
+        <li>the pilots every cell needs: the session TTL, then the N = 6 and N = 12 budget knees;</li>
+        <li>the core of 5.3: F, FX, H1 and D1–D4 at the knee and a stress budget, 1 and 3 mules, n = 20 (E3 joins only if its 5 trainings finish in time);</li>
+        <li>the cores of 5.9 and 5.11 (b): N = 6, 12 and 24, and K = 1–3;</li>
+        <li>5.11 (a), once its scorer columns exist (about an hour's build);</li>
+        <li>the arms of 5.14 that need no build.</li>
+      </ul>
+      FX flies the slot. 5.5's sweep runs only if these leave the CPU spare.</li>
+    <li><b>In the revision window (to 18 Jan):</b> the builds of 5.11–5.15 and their studies; 5.5's sweep and verdict; then 5.1, 5.2, 5.4, 5.6–5.8 and 5.11 (c).</li>
+    <li><b>Later:</b> 5.10.</li>
+  </ul>
+
+  <div class="exp" id="s511">
+    <div class="head"><span class="id">5.11</span><h3>Decision cost and scaling</h3><span class="small">addendum</span><span class="cb">C4</span></div>
+    <dl>
+      <dt>Question</dt><dd>What do FeRRy's own decisions cost as devices grow, and does the system scale out with mules?</dd>
+      <dt>Arms</dt><dd>F and FX; H1 and D4 as references for parts (b) and (c); in FerrySim also <code>greedy_1</code> and <code>hyb</code>.</dd>
+      <dt>Sweep</dt><dd>
+        <ul>
+          <li><b>(a) Decision cost.</b> The planner's time per mission, and the pair slot's mask and score time per decision.
+            <ul>
+              <li>N ∈ {6, 12, 24, 48, 96}, on the stub trainer.</li>
+              <li>The search is forced into each mode through <code>--plan-search-params</code>: exact up to its ceiling, stop subsets, local.</li>
+            </ul>
+          </li>
+          <li><b>(b) Scaling with mules.</b> Weak scaling: 6 devices per mule, K = 1, 2, 3. Strong scaling: N = 12, K = 1, 2, 3.</li>
+          <li><b>(c) FerrySim beyond the stack.</b> N ∈ {24, 48, 96}, one mule.</li>
+        </ul>
+      </dd>
+      <dt>Held fixed</dt><dd>Payload. The budget at each N is chosen by the S* tool and a budget pilot. Seeds are paired within each part.</dd>
+      <dt>Primary metric</dt><dd>(a): decision time per mission, mean and p95, against N. (b), (c): time to τ and update yield per mule.</dd>
+      <dt>Also reported</dt><dd>The share of missions in each search mode; plan value V of local against exact where exact runs; processes and peak memory per trial; decisions per sortie.</dd>
+      <dt>Reads as</dt><dd>The systems question an IPDPS reader asks first. FeRRy scales if its decision cost stays a small share of a mission at the largest N, and if time to τ falls as mules are added at fixed N.</dd>
+      <dt>Built today</dt><dd>
+        <ul>
+          <li><code>plan_wall_s</code> is recorded on every plan mission's <code>mission_completed</code> event.</li>
+          <li>The search mode can be forced through <code>--plan-search-params</code> (thresholds 0 force local search).</li>
+          <li>The stub trainer keeps device processes free of TensorFlow.</li>
+          <li><code>--N</code> and <code>--n-mules</code> have no upper limit in code.</li>
+          <li>A FerrySim cell takes any N.</li>
+        </ul>
+      </dd>
+      <dt>To build</dt><dd>
+        <ul>
+          <li>Scorer columns for <code>plan_wall_s</code>, mean and p95: about an hour.</li>
+          <li>A per-decision wall-time field for the pair slot and E3, kept out of the decision records and the determinism checks as <code>plan_wall_s</code> is: about half a day.</li>
+          <li>FerrySim cells and a family at N = 48 and 96, each with an S* run and a budget pilot: about an hour of code. A new family leaves the existing families' hashes alone.</li>
+          <li>A field that grows with N. The realism field is a fixed 100 m half-width, so density rises with N.</li>
+          <li>A per-trial process and memory probe.</li>
+        </ul>
+      </dd>
+      <dt>Caveats</dt><dd>
+        <ul>
+          <li><b>Memory.</b> A real-model trial runs 1 + K + N processes at about 1.6 GB each, so N = 48 would need about 80 GB. Part (b) therefore runs the real model to N = 24 at most. The larger N run on the stub trainer and in FerrySim, neither of which costs training time.</li>
+          <li><b>One mule in FerrySim.</b> Scaling with mules is measured on the stack only.</li>
+          <li><b>The learned score out of practice.</b> It trains at N = 6 and 12, so at N = 48 its <code>/N</code> features shift; it is flown there as a declared out-of-practice test.</li>
+          <li><b>Planner time is known only at the ends of the range.</b> It was measured at under 0.25 s per plan at N = 6 and 3.1–3.4 s at N = 96 on a 500 m field (Phase 4); the curve between them is what (a) measures.</li>
+        </ul>
+      </dd>
+      <dt>Cost</dt><dd>
+        <ul>
+          <li>(a): minutes in process per N.</li>
+          <li>(b): 4 arms × 5 distinct cells × 20 seeds = 400 trials. K = 2 at N = 12 is shared by both scalings. Trials run slower than the N = 6 rate at K = 3.</li>
+          <li>(c): FerrySim's episode time at N = 96 is unmeasured; measure it first.</li>
+        </ul>
+      </dd>
+    </dl>
+  </div>
+
+  <div class="exp" id="s512">
+    <div class="head"><span class="id">5.12</span><h3>Compute and model-size heterogeneity</h3><span class="small">addendum</span></div>
+    <dl>
+      <dt>Question</dt><dd>Does FeRRy hold up when devices train at different speeds and the model grows? This is the regime where stragglers and payload dominate a distributed-training system.</dd>
+      <dt>Arms</dt><dd>
+        <ul>
+          <li>F, FX and H1.</li>
+          <li>D5 (FedCS, degraded): it admits by one round deadline, the classic straggler-aware selection, and once training time exists it reads it.</li>
+          <li>D4, the visit-all reference.</li>
+        </ul>
+      </dd>
+      <dt>Sweep</dt><dd>
+        <ul>
+          <li><b>Local training time per device:</b> none (today); a seeded spread; and 20 % stragglers at 5×. The levels are set by a pilot.</li>
+          <li><b>Payload:</b> 18.8 KB (measured), 1 MB and 10 MB.</li>
+          <li><b>Model:</b> the CICIoT model and one larger one, once the architecture is selectable.</li>
+        </ul>
+      </dd>
+      <dt>Primary metric</dt><dd>Time to τ.</dd>
+      <dt>Also reported</dt><dd>Update yield; contacts that found no update ready; round closure; mission energy and device training energy.</dd>
+      <dt>Reads as</dt><dd>Whether planning around availability and dwell also absorbs compute stragglers, or whether the plan needs a compute term.</dd>
+      <dt>Built today</dt><dd>
+        <ul>
+          <li><code>--payload-bytes</code>. It changes airtime and the upload charge only.</li>
+          <li>Per-device availability (the device reliabilities).</li>
+        </ul>
+      </dd>
+      <dt>To build</dt><dd>
+        <ul>
+          <li><b>Per-device training time on the simulated clock</b> (the largest build in the addendum, about 2–4 days).
+            <ul>
+              <li>A seeded training time per device, charged on the simulated clock, with a "not ready" contact outcome.</li>
+              <li>Today, training runs in wall time, and the push messages carry no simulated time.</li>
+            </ul>
+          </li>
+          <li><b>Device training energy:</b> P_comp × training time, plus transmit energy from bytes and rate. About a day, part of it in the scorer.</li>
+          <li><b><code>--model-arch</code></b> through <code>build_ids_model</code>. Today <code>create_CICIOT_Model</code> is hard-coded and the repository's other builders are not wired. About half a day.</li>
+          <li><b>D2's speed term.</b> Once training time exists, the system-speed term that D2 drops from Oort can be restored.</li>
+        </ul>
+      </dd>
+      <dt>Cost</dt><dd>5 arms × 3 training-time settings × 3 payloads × 20 seeds = 900 trials at the knee: about 3.5 h at the N = 6 rate, more at 10 MB.</dd>
+    </dl>
+  </div>
+
+  <div class="exp" id="s513">
+    <div class="head"><span class="id">5.13</span><h3>Data heterogeneity</h3><span class="small">addendum</span><span class="cb">C3</span><span class="cb">C5</span></div>
+    <dl>
+      <dt>Question</dt><dd>Do FeRRy's age, coverage and merge choices matter more when devices hold different data? And what does skew cost the detector?</dd>
+      <dt>Arms</dt><dd>
+        <ul>
+          <li>Route arms F, FX, H1 and D3 (the fairness reference), at <code>agg:cutoff</code>.</li>
+          <li><code>agg:plain</code> against <code>agg:cutoff</code> on F's route.</li>
+        </ul>
+        Route and merge are never varied together (the attribution rule).
+      </dd>
+      <dt>Sweep</dt><dd>
+        <ul>
+          <li>Label skew, by Dirichlet α ∈ {∞ (IID, today), 1, 0.1}.</li>
+          <li>Quantity skew: shard sizes drawn from a Dirichlet over devices.</li>
+          <li>One budget, the knee.</li>
+          <li>Real model throughout: the stub trainer has no data.</li>
+        </ul>
+      </dd>
+      <dt>Primary metric</dt><dd>Time to τ.</dd>
+      <dt>Also reported</dt><dd>Final accuracy and AUC; true- and false-positive rate, precision and F1; recall per attack family; Network AoU weighted by shard size.</dd>
+      <dt>Reads as</dt><dd>
+        <ul>
+          <li><b>Coverage should matter more.</b> Under skew, a missed device costs part of the class distribution, not one interchangeable update.</li>
+          <li><b>The learned score gets something to weigh.</b> Merge weights differ across devices, so decision 4's reward stops counting devices (critic B4).</li>
+          <li><b>The detector's own metrics.</b> Recall per attack family is what an IDS reader asks for beside accuracy.</li>
+        </ul>
+      </dd>
+      <dt>Built today</dt><dd>
+        <ul>
+          <li>Shards reach the devices as files, and <code>num_examples</code> already sets the merge weights, so the runtime needs no change.</li>
+          <li>A 7-class CICIoT2023 label map exists in the legacy loader.</li>
+        </ul>
+      </dd>
+      <dt>To build</dt><dd>
+        <ul>
+          <li><b>Partitioning:</b> <code>--partition {iid, dirichlet, quantity}</code> and <code>--dirichlet-alpha</code> in the task builder.
+            <ul>
+              <li>About 150 lines and tests.</li>
+              <li>Include a guard against empty shards, which today get zero metrics silently.</li>
+            </ul>
+          </li>
+          <li><b>The 7-class label</b>, kept beside the binary one (the loader collapses labels to binary before partitioning).</li>
+          <li><b>Confusion-matrix metrics</b> in the cluster's evaluation, the <code>model_eval</code> event and the scorer: about a day.</li>
+        </ul>
+        Only CICIoT2023 is wired into Exp 4. A second dataset stays out of scope.
+      </dd>
+      <dt>Cost</dt><dd>4 route arms × 4 data settings × 20 seeds, plus <code>agg:plain</code> on F's route over the same settings (F at <code>agg:cutoff</code> is shared): 400 trials, about 1.5 h at the N = 6 rate.</dd>
+    </dl>
+  </div>
+
+  <div class="exp" id="s514">
+    <div class="head"><span class="id">5.14</span><h3>Component ablations</h3><span class="small">addendum</span><span class="cb">C1</span><span class="cb">C2</span></div>
+    <dl>
+      <dt>Question</dt><dd>What does each of FeRRy's mechanisms contribute on its own?</dd>
+      <dt>Arms</dt><dd>F against F with one switch flipped:
+        <ul>
+          <li>whole stops instead of member subsets (<code>--member-admission whole</code>);</li>
+          <li>local search forced (<code>--plan-search-params</code>);</li>
+          <li>the weighted coverage rank (<code>--plan-score-params</code>);</li>
+          <li>the age cap at S*, at S* + 1, and off;</li>
+          <li>hover stops off;</li>
+          <li>the adaptive backhaul (F+L1);</li>
+          <li>for the learned score, the phase block off (<code>--no-phase</code>), only if 5.5 keeps it.</li>
+        </ul>
+        F−dwell, F−cov, F−cap and F−prio stay in 5.7 and 5.8.</dd>
+      <dt>Held fixed</dt><dd>
+        <ul>
+          <li><b>1 MB.</b> The cap, the coverage term and member subsets bind there; at the measured payload, F serves every device every mission.</li>
+          <li><b>The knee and the stress budget.</b></li>
+        </ul>
+      </dd>
+      <dt>Primary metric</dt><dd>Network AoU.</dd>
+      <dt>Also reported</dt><dd>Time to τ, round closure, cap violations by cause, decision cost.</dd>
+      <dt>Reads as</dt><dd>One Holm family against F. A mechanism that changes nothing at any setting is reported as inert, not dropped.</dd>
+      <dt>Built today</dt><dd>Flags already exist for member admission, the search thresholds, the coverage rank, the cap S and training without the phase block.</dd>
+      <dt>To build</dt><dd>
+        <ul>
+          <li><b>A hover-stop switch.</b> About half a day. It is a new switch at its legacy default, and it changes the plan arms' <code>ferry_params</code> strings.</li>
+          <li><b>The F+L1 arm.</b> About 1–2 h; it is shared with 5.15.</li>
+          <li><b>A second clusterer for S3a</b> (optional). 1–2 days.</li>
+          <li><b>Not ablatable: trim against reorder for the plan arms.</b> Reorder is refused in plan mode by design (critic B11).</li>
+        </ul>
+      </dd>
+      <dt>Cost</dt><dd>About 9 arms × 2 budgets × 40 seeds = 720 trials: about 2.7 h.</dd>
+    </dl>
+  </div>
+
+  <div class="exp" id="s515">
+    <div class="head"><span class="id">5.15</span><h3>Radio layer</h3><span class="small">addendum</span><span class="cb">C1</span></div>
+    <dl>
+      <dt>Question</dt><dd>How sensitive is FeRRy to the radio channel it plans against? Does an adaptive backhaul pay off?</dd>
+      <dt>Arms</dt><dd>F, FX and H1; H1+L1 and F+L1, both with the adaptive backhaul.</dd>
+      <dt>Sweep</dt><dd>One axis at a time from the jittery default (a crossed design is too large):
+        <ul>
+          <li>contact interference amplitude: clean (1 dB), jittery (5 dB), and one harsher level set by a pilot;</li>
+          <li>path-loss exponent: 2.2 and one lossier value;</li>
+          <li>shadowing σ: 4 and 8 dB;</li>
+          <li>the backhaul at <code>--backhaul-model seconds</code>, where loss is per upload and comes from the SNR.</li>
+        </ul>
+      </dd>
+      <dt>Primary metric</dt><dd>Time to τ.</dd>
+      <dt>Also reported</dt><dd>Round closure; delivered-backhaul share; in-flight misses; realized against planned mission time.</dd>
+      <dt>Reads as</dt><dd>
+        <ul>
+          <li>Where the band decision (C1) pays most should track how harsh the channel is.</li>
+          <li>Plans priced at the mean SNR should run long as interference grows; this shows by how much.</li>
+        </ul>
+      </dd>
+      <dt>Built today</dt><dd><code>--n-pl</code>, <code>--shadow-sigma-db</code>, <code>--shadow-corr-s</code>, <code>--interference-period-s</code>, <code>--contact-regime</code>, <code>--backhaul-model</code>, <code>--l1-channel</code>.</dd>
+      <dt>To build</dt><dd>
+        <ul>
+          <li><b>Interference amplitude and noise as flags.</b> <code>ContactChannel</code> already takes them, but <code>FerrySpec.from_config</code> does not pass them. About 2–4 h.</li>
+          <li><b>The F+L1 arm</b>, shared with 5.14.</li>
+        </ul>
+      </dd>
+      <dt>Cost</dt><dd>5 arms × about 7 settings × 20 seeds = 700 trials: about 2.6 h.</dd>
+    </dl>
+  </div>
 </section>
 
 <section id="metrics">
@@ -1320,6 +1581,10 @@ table.mx th:first-child{text-align:left}
       <tr><td>Tour overrun rate</td><td>Share of missions where D4's visit-all tour exceeds the budget.</td><td><span class="tag new">new</span></td></tr>
       <tr><td>Energy</td><td>SIMULATED, from the mission clock's ledger: P(v) over transit and return plus P_hover over dwell and listen, the Zeng–Xu–Zhang 2019 rotary-wing model (decision D3); the plan prices E(b̄, π) over both passes, return legs included. Exp 3 keeps its own E = T·P_idle + B·ε_bit + L·ε_prop.</td><td><span class="tag g">scorer</span> simulated energy since Phase 3</td></tr>
       <tr><td>Optimality gap</td><td>V_O1 − V_arm ≥ 0, for N ≤ 6 (V ≤ 0, so a ratio would not read as a gap).</td><td><span class="tag opt">optional</span></td></tr>
+      <tr><td>Decision cost</td><td>The planner's wall time per mission (<code>plan_wall_s</code>), and the pair slot's and E3's wall time per decision; mean and p95, against N (5.11, 5.14). Wall time, so it is kept out of every determinism comparison.</td><td><span class="tag w">to build</span> the plan time is recorded but not scored; the per-decision time is not recorded</td></tr>
+      <tr><td>Detection quality</td><td>True- and false-positive rate, precision and F1 of the global model on the test set, and recall per attack family on CICIoT2023's 7-class labels (5.13).</td><td><span class="tag w">to build</span> today accuracy, AUC and loss only</td></tr>
+      <tr><td>Device energy</td><td>SIMULATED: P_comp × local training time, plus transmit energy from bytes and rate (5.12). The mission's flight energy stays as above.</td><td><span class="tag w">to build</span> needs training time on the simulated clock</td></tr>
+      <tr><td>Footprint</td><td>Processes and peak memory per trial, and FerrySim's episode time against N (5.11).</td><td><span class="tag w">to build</span></td></tr>
     </tbody>
   </table>
   </div>
@@ -1346,6 +1611,9 @@ table.mx th:first-child{text-align:left}
       <tr><td>The multi-mule runtime has latent faults</td><td>Cross-mule claims rest on an identity merge</td><td>Phase 2 hardening and a 2-mule integration test before any IPDPS framing</td></tr>
       <tr><td>The theory lands late</td><td>V's constants are hand-set</td><td>Sweep the constants and present V in FedEx's form with the convex-surrogate caveat</td></tr>
       <tr><td>Simulator-to-stack gap for the learned score</td><td>A policy that works only in FerrySim</td><td>FerrySim and the stack share the clock, channel and contact-link code; report both</td></tr>
+      <tr><td>The 8 Oct 2026 deadline cannot carry the full programme</td><td>A first-round submission without the learning, data or compute results</td><td>The addendum's split: the pilots, the headline and the scaling cores first, FX in the slot; the rest in the revision window, to 18 Jan 2027</td></tr>
+      <tr><td>Real-model trials do not fit in memory at large N</td><td>About 1.6 GB per TensorFlow process, about 80 GB at N = 48</td><td>The real model to N = 24; larger N on the stub trainer and in FerrySim, stated as such (5.11)</td></tr>
+      <tr><td>Training costs nothing on the simulated clock</td><td>Results look better than on hardware where training competes with contacts</td><td>Training time on the simulated clock (5.12), or stated as a limitation</td></tr>
     </tbody>
   </table>
   </div>
@@ -1355,6 +1623,7 @@ table.mx th:first-child{text-align:left}
     <li>No rebranding as asynchronous FL. The survey taxonomy would absorb it and the comparison would shrink to FedAsync against partial FedAvg.</li>
     <li>No motion planning or obstacle avoidance. Navigation means next-stop selection and re-planning over known device positions.</li>
     <li>No hybrid-action RL unless dwell, speed or power become continuous, and no hierarchy unless test (b) shows a slope on both clocks.</li>
+    <li>No robustness to poisoned or Byzantine devices. FeRRy assumes honest devices; the intrusion detector is the model being trained, not a defence of the training. Stated as out of scope.</li>
     <li>No QMIX and no policy averaging while each mule owns a slice. Chen's learned channel twin is journal scope, where it would supply the predicted SNR at arrival.</li>
     <li>No claim to be fairer than Cui; the claim is fairness under costs Cui's model does not charge.</li>
   </ul>
