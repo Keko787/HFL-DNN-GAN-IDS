@@ -475,18 +475,27 @@ class PlanSearchParams:
       not a time bound: a walk costs more on a longer route, and where all
       three classes reach 2,000 walks (N = 96 on a 500 m field, 1 MB, no
       budget) one plan took 3.1-3.4 s (U4's timing probes).
+    * ``hover_stops`` = True (the Exp 5 addendum, Study 5.14's "hover stops
+      off"): the stop family the search runs over is S3a's stops with the
+      hover rule applied (``plan/hover.py``: a capped device its S3a stop
+      cannot serve alone within the budget gets a one-device stop at its best
+      hover point), as recorded; False leaves S3a's stops alone, so the cap's
+      ``unplannable`` then reads them. Left out of :meth:`as_dict` at True,
+      so a recorded plan's ``mule_ready`` keeps its keys.
     """
 
     exact_max_devices: int = 6
     exhaustive_max_stops: int = 6
     heuristic_max_passes: int = 50
     heuristic_max_evaluations: int = 2000
+    hover_stops: bool = True
 
     def __post_init__(self) -> None:
         for name in ("exact_max_devices", "exhaustive_max_stops"):
             object.__setattr__(self, name, _count(getattr(self, name), name))
         for name in ("heuristic_max_passes", "heuristic_max_evaluations"):
             object.__setattr__(self, name, _positive_count(getattr(self, name), name))
+        _flag(self.hover_stops, "hover_stops")
 
     @classmethod
     def from_mapping(cls, params: Optional[Mapping[str, Any]]) -> "PlanSearchParams":
@@ -494,7 +503,12 @@ class PlanSearchParams:
         return cls(**_settings(cls, params, "plan_search_params"))
 
     def as_dict(self) -> Dict[str, Any]:
-        return {f.name: getattr(self, f.name) for f in fields(self)}
+        """Every bound, and ``hover_stops`` only when it is off (the Exp 5
+        addendum's switch, at its recorded default left out)."""
+        out = {f.name: getattr(self, f.name) for f in fields(self)}
+        if self.hover_stops:
+            del out["hover_stops"]
+        return out
 
 
 @dataclass(frozen=True)

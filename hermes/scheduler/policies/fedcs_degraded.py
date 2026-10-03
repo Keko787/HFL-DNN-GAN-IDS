@@ -92,7 +92,21 @@ Deviations from the paper, each with its reason:
    reasoning is ours, not the paper's.
 3. **t^UD := 0.** Training runs offline between visits and Pass 1 pulls a
    pre-prepared update, so there is no update time for an upload to hide
-   behind and the overlap term vanishes.
+   behind and the overlap term vanishes. Exp 5 addendum, Study 5.12: with
+   the training time on the simulated clock (``hermes/mule/fit_clock.py``)
+   the update time exists, and the arm reads it (:meth:`FedCSDegradedPolicy.
+   bind_fit_clock`, the mule's fit clock). A mule cannot overlap a device's
+   update with other uploads by waiting at its stop without a capability
+   no other arm has, so the term becomes a readiness test, not a wait (the
+   user's decision of 2026-10-03, option (a)): at each step of Algorithm 3
+   the candidates are the contacts with a member whose update is ready at
+   the predicted arrival from where the route ends (``ready_at <= clock +
+   transit``); a contact none of whose members is ready is not a candidate
+   at that step and stays for later ones, and the walk ends when no
+   remaining contact has a ready member. Under member subsets the
+   candidate is reduced to its ready members; with whole stops it is priced
+   whole. The contacts left out that way are reported as ``not_ready``
+   (``last_not_ready``).
 4. **The distribution increment becomes transit — an analogy, not a
    structural match.** Sec. III-C only requires that T^d_S depend on S. In
    the paper's experiments (Sec. IV-A, p. 5), T^d_S = D_m / min_{k in S}
@@ -162,7 +176,7 @@ many are served rather than who is due.
 
 from __future__ import annotations
 
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Callable, Dict, FrozenSet, List, Optional, Sequence, Set, Tuple
 
 from hermes.types import (
     ContactWaypoint,
@@ -223,6 +237,8 @@ def fedcs_greedy_select(
     model: Optional[FeasibilityModel] = None,
     state: Optional[FlightState] = None,
     member_subsets: Optional[MemberSubsets] = None,
+    ready_at: Optional[Callable[[DeviceID], Optional[float]]] = None,
+    not_ready_out: Optional[Set[DeviceID]] = None,
 ) -> List[ContactWaypoint]:
     """Algorithm 3 on the mule's cost model; returns the ordered route.
 
@@ -239,6 +255,13 @@ def fedcs_greedy_select(
     included, instead of ``(mule_pose, now)``. ``member_subsets`` (FeRRy
     Phase 4, deviation 11; None, the default, is the recorded walk): a pick
     that fails whole is re-issued with the members that still fit.
+    ``ready_at`` (Exp 5 addendum, Study 5.12, deviation 3; None, the default,
+    is the recorded walk): each device's fit end on the simulated clock (None:
+    always ready). Only contacts with a member ready at the predicted arrival
+    are candidates at each step (reduced to their ready members under member
+    subsets), and the walk ends when none is. ``not_ready_out``, when given,
+    collects the devices left out because their update was never ready at an
+    arrival the walk could make.
     """
     if value not in VALUE_KINDS:
         raise ValueError(f"value must be one of {VALUE_KINDS}, got {value!r}")
@@ -252,13 +275,29 @@ def fedcs_greedy_select(
         # Line 3: price every candidate from where the route currently ends.
         best_i = 0
         best_key: Optional[tuple] = None
+        best_wp: Optional[ContactWaypoint] = None
         for i, wp in enumerate(remaining):
+            if ready_at is not None:
+                # Deviation 3 (Study 5.12): a candidate only with a member
+                # whose update is ready when the mule would arrive.
+                wp = _ready_part(m, cur, wp, ready_at, member_subsets)
+                if wp is None:
+                    continue
             total = m.leg(cur.pose, wp).total_s
             key = _selection_key(wp, total, value)
             if best_key is None or key < best_key:
-                best_i, best_key = i, key
+                best_i, best_key, best_wp = i, key, wp
+        if best_key is None:
+            # No remaining contact has a member ready at its arrival, and the
+            # route only moves on admission: the walk ends (ready_at only).
+            if not_ready_out is not None:
+                not_ready_out.update(d for wp in remaining for d in wp.devices)
+            break
         # Line 4: removed unconditionally, before the admission test.
-        x = remaining.pop(best_i)
+        whole = remaining.pop(best_i)
+        x = whole if best_wp is None else best_wp
+        if not_ready_out is not None and x is not whole:
+            not_ready_out.update(d for d in whole.devices if d not in x.devices)
         # Lines 6-7, with <= (deviation 5): the shared predicate, budget rule
         # (no gate without a deadline). T_cs = T_agg = 0 in legacy mode.
         verdict = m.admit(cur, x, rule=RULE_BUDGET, budget_end=mission_deadline_ts)
@@ -271,6 +310,30 @@ def fedcs_greedy_select(
         cur = verdict.next_state
         route.append(x)
     return route
+
+
+def _ready_part(
+    m: FeasibilityModel,
+    cur: FlightState,
+    wp: ContactWaypoint,
+    ready_at: Callable[[DeviceID], Optional[float]],
+    subsets: Optional[MemberSubsets],
+) -> Optional[ContactWaypoint]:
+    """Deviation 3 (Study 5.12): ``wp`` as a candidate from ``cur``, or None.
+
+    The members whose update is ready at the predicted arrival
+    (``cur.clock + transit``; a device without a fit end is always ready).
+    None when none is; ``wp`` itself when all are, or when some are and the
+    stops are whole; reduced to the ready members under member subsets.
+    """
+    arrival = cur.clock + m.leg(cur.pose, wp).transit_s
+    ready = [d for d in wp.devices
+             if (end := ready_at(d)) is None or float(end) <= arrival]
+    if not ready:
+        return None
+    if len(ready) == len(wp.devices) or subsets is None:
+        return wp
+    return subsets.reduce(wp, ready)
 
 
 def _admit_members(
@@ -322,6 +385,14 @@ class FedCSDegradedPolicy:
     # member-subset carrier (deviation 11).
     admits_member_subsets = True
 
+    # Exp 5 addendum (Study 5.12, deviation 3): the mule's fit clock, set on the
+    # instance only by :meth:`bind_fit_clock` (so an unbound policy's state is
+    # the recorded one); unbound, t^UD = 0.
+    _fits = None
+    #: The devices the last bound walk left out because their update was never
+    #: ready at an arrival it could make (empty without the fit clock).
+    last_not_ready: FrozenSet[DeviceID] = frozenset()
+
     def __init__(self, value: str = VALUE_UNIT) -> None:
         if value not in VALUE_KINDS:
             raise ValueError(
@@ -329,6 +400,16 @@ class FedCSDegradedPolicy:
                 f"got {value!r}"
             )
         self.value = value
+
+    def bind_fit_clock(self, fits, *, t_nom_s: Optional[float] = None) -> None:
+        """Read each device's update time from the mule's fit clock (Study 5.12).
+
+        ``fits`` is a ``hermes.mule.fit_clock.FitClock``; its ``ready_at`` is
+        the update time deviation 3 reads. ``t_nom_s`` is not used by FedCS
+        (one round deadline, the mission budget) and accepted so every
+        whole-scheduler baseline binds the same way.
+        """
+        self._fits = fits
 
     def rank_contacts(
         self,
@@ -393,7 +474,18 @@ class FedCSDegradedPolicy:
         """
         if not contacts:
             return []
-        return fedcs_greedy_select(
+        if self._fits is None:
+            return fedcs_greedy_select(
+                contacts,
+                value=self.value,
+                mule_pose=env.mule_pose,
+                now=env.now,
+                mission_deadline_ts=mission_deadline_ts,
+                model=feasibility_model,
+                member_subsets=member_subsets,
+            )
+        left: Set[DeviceID] = set()
+        route = fedcs_greedy_select(
             contacts,
             value=self.value,
             mule_pose=env.mule_pose,
@@ -401,4 +493,8 @@ class FedCSDegradedPolicy:
             mission_deadline_ts=mission_deadline_ts,
             model=feasibility_model,
             member_subsets=member_subsets,
+            ready_at=self._fits.ready_at,
+            not_ready_out=left,
         )
+        self.last_not_ready = frozenset(left)
+        return route

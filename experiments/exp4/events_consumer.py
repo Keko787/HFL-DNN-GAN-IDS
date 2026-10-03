@@ -79,6 +79,14 @@ left when none was admissible any more (``pass_1_e3_unvisited``). The mule
 writes each only when it is not empty, so :class:`MissionRecord` reads them as
 None where a mission does not record them, and a trace recorded before Phase 5
 reads as it did.
+
+Exp 5 addendum, Study 5.11 (a) — the decision cost in flight. Beside the pair
+records and E3's calls, the mule writes each decision's wall time
+(``pass_1_pairs_wall``, ``pass_1_e3_wall``: one entry per record, in its order,
+with ``decide_s`` and ``mask_s``), outside the records so that determinism
+comparisons drop them as they drop ``plan_wall_s``. :class:`MissionRecord`
+reads them as :class:`DecisionWall` tuples, None where a mission does not
+record them.
 """
 
 from __future__ import annotations
@@ -227,6 +235,38 @@ class E3Call:
 
 
 @dataclass(frozen=True)
+class DecisionWall:
+    """The wall time of one flight-clock decision (Exp 5 addendum, Study 5.11 (a)).
+
+    From ``mission_completed.pass_1_pairs_wall[]`` (the pair slot) or
+    ``pass_1_e3_wall[]`` (arm E3), one per decision record in its order.
+    ``decide_s`` is the whole decision, the mask's predicate, the scorer or
+    policy and the pick; ``mask_s`` the predicate's share of it. The view or
+    observation the decision reads is built before it and is not timed. Wall
+    time, so it is left out of every determinism comparison. Each is None
+    when it is not a finite number >= 0 in the form the mule writes it.
+    """
+
+    decide_s: Optional[float]
+    mask_s: Optional[float]
+
+
+@dataclass(frozen=True)
+class FitStop:
+    """One Pass-1 stop as the fit clock saw it (Exp 5 addendum, Study 5.12).
+
+    From ``mission_completed.pass_1_flown[]`` of a mule with train times:
+    the stop's ``targets`` (solicited members), those found with no update
+    ready (``not_ready``), and each collected update's uplink airtime
+    (``uplink_s``, simulated seconds; empty without a band).
+    """
+
+    targets: Tuple[str, ...]
+    not_ready: Tuple[str, ...]
+    uplink_s: Mapping[str, float]
+
+
+@dataclass(frozen=True)
 class MissionRecord:
     """One mule mission (= one FL round in the integrated stack).
 
@@ -349,6 +389,20 @@ class MissionRecord:
     #: ``pass_1_e3_unvisited``: the members of each stop E3's pass left when no
     #: stop was admissible any more (reported, never widened).
     e3_unvisited: Optional[Tuple[Tuple[str, ...], ...]] = None
+    # Exp 5 addendum, Study 5.11 (a): the wall time of each decision above,
+    # one per record in its order; wall time, so left out of every
+    # determinism comparison, as ``plan_wall_s`` is.
+    #: ``pass_1_pairs_wall``: one per record of ``pass_1_pairs``.
+    pair_walls: Optional[Tuple[DecisionWall, ...]] = None
+    #: ``pass_1_e3_wall``: one per call of ``pass_1_e3``.
+    e3_walls: Optional[Tuple[DecisionWall, ...]] = None
+    # Exp 5 addendum, Study 5.12: the devices' fits on the simulated clock,
+    # from a mule with train times; None from every other mule.
+    #: ``train_fits``: every fit the mission started, ``(device, start_s)``.
+    train_fits: Optional[Tuple[Tuple[str, float], ...]] = None
+    #: ``pass_1_flown[]``'s ``targets``, ``not_ready`` and ``uplink_s``, in
+    #: flight order.
+    fit_stops: Optional[Tuple[FitStop, ...]] = None
 
     @property
     def has_plan(self) -> bool:
@@ -377,6 +431,31 @@ class MissionRecord:
 
 
 @dataclass(frozen=True)
+class Detection:
+    """The detector's own metrics at one evaluation (Exp 5 addendum, Study 5.13).
+
+    From ``model_eval.detection``, which the cluster writes only when the
+    test set carries each row's attack family
+    (``experiments.exp4.model_task.detection_metrics``): the confusion counts,
+    TPR, FPR, precision and F1 (None where a denominator was 0), and per
+    family present in the test set its rows and its recall (the share
+    classified correctly: flagged for an attack family, passed for Benign).
+    A field not in the form the cluster writes reads as None (a map as empty).
+    """
+
+    tp: Optional[int] = None
+    fp: Optional[int] = None
+    tn: Optional[int] = None
+    fn: Optional[int] = None
+    tpr: Optional[float] = None
+    fpr: Optional[float] = None
+    precision: Optional[float] = None
+    f1: Optional[float] = None
+    recall_by_family: Mapping[str, float] = field(default_factory=dict)
+    n_by_family: Mapping[str, int] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
 class ModelEvalPoint:
     """One held-out convergence point (EX-4.1 ``model_eval`` event).
 
@@ -394,6 +473,9 @@ class ModelEvalPoint:
     #: latest simulated upload it had ingested (None on the wall clock, and
     #: for the seed model, evaluated before any upload).
     sim_ts: Optional[float] = None
+    #: Exp 5 addendum (Study 5.13): the detection metrics, None unless the
+    #: test set carried the attack families.
+    detection: Optional[Detection] = None
 
 
 @dataclass
@@ -615,6 +697,10 @@ def observation_from_rows(
                 pair_decisions=_pair_decisions(r.get("pass_1_pairs")),
                 e3_calls=_e3_calls(r.get("pass_1_e3")),
                 e3_unvisited=_e3_unvisited(r.get("pass_1_e3_unvisited")),
+                pair_walls=_decision_walls(r.get("pass_1_pairs_wall")),
+                e3_walls=_decision_walls(r.get("pass_1_e3_wall")),
+                train_fits=_train_fits(r.get("train_fits")),
+                fit_stops=_fit_stops(r.get("pass_1_flown")),
                 **_plan_fields(r.get("plan")),
             )
         )
@@ -683,6 +769,7 @@ def observation_from_rows(
                 n_test=int(r.get("n_test", 0) or 0),
                 ts=_opt_float(r.get("ts")),
                 sim_ts=_opt_float(r.get("sim_ts")),
+                detection=_detection(r.get("detection")),
             )
         )
     model_evals.sort(key=lambda p: p.cluster_round)
@@ -1622,6 +1709,82 @@ def _e3_calls(raw) -> Optional[Tuple[E3Call, ...]]:
             next_index=next_index,
         ))
     return tuple(calls)
+
+
+def _detection(raw) -> Optional[Detection]:
+    """``model_eval.detection`` → :class:`Detection`; None when absent or not a map."""
+    if not isinstance(raw, dict):
+        return None
+
+    def share(v) -> Optional[float]:
+        x = _opt_number(v)
+        return x if x is not None and 0.0 <= x <= 1.0 else None
+
+    recall = raw.get("recall_by_family")
+    counts = raw.get("n_by_family")
+    return Detection(
+        tp=_opt_count(raw.get("tp")), fp=_opt_count(raw.get("fp")),
+        tn=_opt_count(raw.get("tn")), fn=_opt_count(raw.get("fn")),
+        tpr=share(raw.get("tpr")), fpr=share(raw.get("fpr")),
+        precision=share(raw.get("precision")), f1=share(raw.get("f1")),
+        recall_by_family=({str(k): share(v) for k, v in recall.items() if share(v) is not None}
+                          if isinstance(recall, dict) else {}),
+        n_by_family=({str(k): _opt_count(v) for k, v in counts.items()
+                      if _opt_count(v) is not None} if isinstance(counts, dict) else {}),
+    )
+
+
+def _train_fits(raw) -> Optional[Tuple[Tuple[str, float], ...]]:
+    """``train_fits`` → ``(device, start_s)`` per fit, in order; None when
+    absent. An entry that is not a ``[device, finite start]`` pair is skipped."""
+    if not isinstance(raw, list):
+        return None
+    out = []
+    for e in raw:
+        if isinstance(e, (list, tuple)) and len(e) == 2 and isinstance(e[0], str):
+            t = _opt_number(e[1])
+            if t is not None:
+                out.append((e[0], t))
+    return tuple(out)
+
+
+def _fit_stops(raw) -> Optional[Tuple[FitStop, ...]]:
+    """``pass_1_flown`` → one :class:`FitStop` per stop, when the stops carry
+    the fit clock's ``not_ready`` (a mule with train times); None otherwise."""
+    if not isinstance(raw, list) or not any(
+            isinstance(e, dict) and "not_ready" in e for e in raw):
+        return None
+    out = []
+    for e in raw:
+        if not isinstance(e, dict):
+            continue
+        up = e.get("uplink_s") if isinstance(e.get("uplink_s"), dict) else {}
+        out.append(FitStop(
+            targets=_id_list(e.get("targets")) or (),
+            not_ready=_id_list(e.get("not_ready")) or (),
+            uplink_s={str(d): x for d, x in ((d, _opt_number(v)) for d, v in up.items())
+                      if x is not None and x >= 0.0},
+        ))
+    return tuple(out)
+
+
+def _decision_walls(raw) -> Optional[Tuple[DecisionWall, ...]]:
+    """``pass_1_pairs_wall`` or ``pass_1_e3_wall`` → one :class:`DecisionWall`
+    per entry, in order; None when absent. An entry that is not a record reads
+    as a wall of two Nones, so the rest stay in step with their decisions; a
+    time that is not a finite number >= 0 reads as None."""
+    if not isinstance(raw, list):
+        return None
+
+    def seconds(v) -> Optional[float]:
+        x = _opt_number(v)
+        return x if x is not None and x >= 0.0 else None
+
+    return tuple(
+        DecisionWall(decide_s=seconds(e.get("decide_s")), mask_s=seconds(e.get("mask_s")))
+        if isinstance(e, dict) else DecisionWall(None, None)
+        for e in raw
+    )
 
 
 def _e3_unvisited(raw) -> Optional[Tuple[Tuple[str, ...], ...]]:

@@ -134,6 +134,13 @@ class ContactPlan:
     * ``session_time_s``: the per-contact charge without a band.
     * ``payload_bytes``: the declared payload per direction (D3), or None to
       price the bytes the ledger measured.
+    * ``not_ready``: Exp 5 addendum (Study 5.12), Pass 1 only: members whose
+      local fit has not finished at arrival on the supervisor's fit clock
+      (``hermes/mule/fit_clock.py``). A target among them is told so in the
+      solicit, answers with its advert, and is pushed nothing: the commit
+      stamps it at the current time with no airtime and no listen, as a
+      refused one. Disjoint from ``drop_uplink`` (a device with no update has
+      no uplink to drop). Empty in every recorded run.
     """
 
     arrival_ts: float
@@ -152,6 +159,7 @@ class ContactPlan:
     listen_s: float = 1.0
     session_time_s: float = 1.0
     payload_bytes: Optional[int] = None
+    not_ready: FrozenSet[DeviceID] = frozenset()
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "arrival_ts", _finite(self.arrival_ts, "arrival_ts"))
@@ -178,6 +186,17 @@ class ContactPlan:
         if stray:
             raise ValueError(f"drop_uplink names devices outside the contact: {stray}")
         object.__setattr__(self, "drop_uplink", drop)
+        not_ready = frozenset(self.not_ready)
+        stray = sorted(not_ready - set(members))
+        if stray:
+            raise ValueError(f"not_ready names devices outside the contact: {stray}")
+        both = sorted(not_ready & drop)
+        if both:
+            raise ValueError(
+                f"not_ready and drop_uplink overlap on {both}: a device with no update "
+                "ready has no uplink to drop"
+            )
+        object.__setattr__(self, "not_ready", not_ready)
 
         object.__setattr__(self, "listen_s", _nonneg(self.listen_s, "listen_s"))
         object.__setattr__(
@@ -456,6 +475,16 @@ class ContactCommit:
     session_dwell_s: Mapping[DeviceID, float]
     stale_discarded: Mapping[str, int]
     solicit_id: int
+    # Exp 5 addendum (Study 5.12): the targets that answered and were found
+    # with no update ready (``ContactPlan.not_ready``), and the targets a push
+    # went out to (a model reached them, so each starts a fit on the fit
+    # clock), each in member order. Both empty without the fit clock's marks.
+    not_ready: Tuple[DeviceID, ...] = ()
+    pushed: Tuple[DeviceID, ...] = ()
+    # Study 5.12, the device's transmit energy: each collected update's own
+    # uplink airtime, its bytes (the declared payload, or the update's
+    # measured size) at the SNR its session started at; banded contacts only.
+    uplink_dwell_s: Mapping[DeviceID, float] = field(default_factory=dict)
 
 
 __all__ = [

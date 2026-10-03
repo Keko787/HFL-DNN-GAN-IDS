@@ -143,6 +143,48 @@ what each holds):
 
 Study 5.6's "stops served per mission" is ``pass1_contacts_mean``.
 
+Exp 5 addendum, Study 5.11 (a): the decision cost. With ``cost_columns``
+(``--cost-columns``) :data:`COST_COLUMNS` follow the τ columns (and the pair
+columns, when both are asked for); without it the row is the one above,
+column for column. Every one is a wall time or derived from wall times, so
+none enters a determinism comparison (:func:`cost_report` says what each
+holds):
+
+* **The planner** (plan-mode missions, ``plan_wall_s``): ``plan_wall_s_mean``
+  and ``plan_wall_s_p95`` over the trial's missions, and
+  ``plan_search_shares``, the share of the missions whose committed class
+  ran each search mode (JSON, every mode listed).
+* **The flight clock** (``pass_1_pairs_wall``, ``pass_1_e3_wall``, pooled
+  over the trial's decisions): ``pair_wall_s_mean``, ``pair_wall_s_p95`` and
+  ``pair_mask_wall_s_mean`` for the pair slot, the same three for E3's calls,
+  and ``flight_decisions_per_mission``, the timed decisions per mission.
+* **The footprint** (``footprint.json``, which the driver's footprint probe
+  writes beside the kept trace): ``trial_processes`` and the peak resident
+  memory in MiB, concurrent (``peak_rss_mib_total``) and per role
+  (``peak_rss_mib_cluster``, ``_mule``, ``_device``: the largest process).
+
+Exp 5 addendum, Study 5.13: the data and the detector. With
+``detection_columns`` (``--detection-columns``) :data:`DETECTION_COLUMNS`
+follow the τ, pair and cost columns (:func:`detection_report`): the trial's
+partition and alpha and the Network AoU weighted by each device's shard size
+(from the status marker's ``data``, which a non-IID or family-labelled trial
+writes), and the final evaluation's TPR, FPR, precision, F1 and recall per
+attack family (``model_eval.detection``, which the cluster writes when the
+test set carries the families).
+
+Exp 5 addendum, Study 5.12: compute and device energy. With
+``compute_columns`` (``--compute-columns``) :data:`COMPUTE_COLUMNS` follow the
+others (:func:`compute_report`), from a trace whose mules had train times
+(``mission_completed.train_fits`` and the Pass-1 stops' ``not_ready`` and
+``uplink_s``; blank otherwise): the training-time settings; the Pass-1 target
+contacts, those that found no update ready and their share, and the CLEAN
+sessions per target contact (the summary's own ``update_yield`` is the
+plan's update yield); and each device's busy seconds
+(its fits, each cut short where a newer model restarted it or the trial
+ended) and uplink seconds, with the device energy at the scorer's powers
+``P_comp`` and ``P_tx`` (``--device-p-comp-w``, ``--device-p-tx-w``), in
+total and for the most loaded device.
+
 Usage::
 
     python -m experiments.analysis.traces_scorer \\
@@ -157,6 +199,9 @@ Usage::
 
     python -m experiments.analysis.traces_scorer \\
         --traces results/exp5/s55_traces --pair-columns --csv scored.csv
+
+    python -m experiments.analysis.traces_scorer \\
+        --traces results/exp5/s511_traces --cost-columns --csv scored.csv
 """
 
 from __future__ import annotations
@@ -178,6 +223,7 @@ from experiments.exp4.driver import (
     contact_band_column,
     learned_policy_params,
     plan_ferry_params,
+    train_time_ferry_params,
 )
 from experiments.exp4.events_consumer import (
     ClockDomainError,
@@ -187,6 +233,7 @@ from experiments.exp4.events_consumer import (
     completion_order,
     consume_run_dir,
 )
+from experiments.exp4.footprint import read_footprint
 from experiments.exp4.metrics import Exp4MetricSummary, summarise_observation
 from experiments.exp4.topology_builder import SESSION_TTL_S, device_positions, device_spread_m
 from hermes.l1.mission_clock import DOCK_POSE
@@ -196,13 +243,14 @@ from hermes.processes.config import (
     CLOCK_SIM,
     CLOCK_WALL,
     CONTACT_POLICY_CHEN_DQN,
+    FERRY_PARAMS_OMITTED_AT_NONE,
     FERRY_SPEC_FIELDS,
     FLIGHT_SLOT_PAIR_Q,
     PLAN_MODE_FERRY,
     MuleConfig,
 )
 from hermes.scheduler.stages.s3_deadline import LAW_ADDITIVE, DeadlineLaw, time_scale_for_period
-from hermes.types.scheduler import CAP_REASONS
+from hermes.types.scheduler import CAP_REASONS, SEARCH_MODES
 
 
 # --------------------------------------------------------------------------- #
@@ -475,12 +523,18 @@ def _format_ferry_params(mule: Mapping[str, object], marker: Mapping[str, object
             default = defaults[name]
             shown[name] = (default.default_factory() if default.default_factory is not MISSING
                            else default.default)
+        if name in FERRY_PARAMS_OMITTED_AT_NONE and shown[name] is None:
+            # The Exp 5 addendum's ferry fields, left out at None as the driver
+            # leaves them (a recorded trace keeps its string).
+            del shown[name]
     t_nom = _float_or_none(mule.get("t_nom_s"))
     if (mule.get("backhaul_model") == BACKHAUL_SECONDS and mule.get("backhaul_period_s") is None
             and t_nom is not None):
         shown["backhaul_period_s"] = backhaul_period_s(int(mule.get("n_missions") or 0), t_nom)
     shown["t_nom_computed"] = _t_nom_computed(mule, marker)
     shown.update(plan_ferry_params(mule))
+    # Exp 5 addendum (Study 5.12): the training-time settings, when set.
+    shown.update(train_time_ferry_params(mule))
     return json.dumps(shown, sort_keys=True, default=str)
 
 
@@ -1240,6 +1294,369 @@ def pair_report(obs: Exp4Observation, *, mule_cfg: Mapping[str, object]) -> Pair
 
 
 # --------------------------------------------------------------------------- #
+# Exp 5 addendum, Study 5.11 (a): the decision cost
+# --------------------------------------------------------------------------- #
+
+#: The scorer's Study 5.11 columns (the build plan's addendum of 2 Oct 2026,
+#: metric "Decision cost"), in row order after the τ columns and the pair
+#: columns, and only with ``cost_columns`` (``--cost-columns``): without it the
+#: row is the Phase 5 one, so no pin moves. Wall times, so none enters a
+#: determinism comparison. Scorer-only: the trial CSV's header is unchanged.
+COST_COLUMNS = (
+    "plan_wall_s_mean", "plan_wall_s_p95", "plan_search_shares",
+    "pair_wall_s_mean", "pair_wall_s_p95", "pair_mask_wall_s_mean",
+    "e3_wall_s_mean", "e3_wall_s_p95", "e3_mask_wall_s_mean",
+    "flight_decisions_per_mission",
+    "trial_processes", "peak_rss_mib_total",
+    "peak_rss_mib_cluster", "peak_rss_mib_mule", "peak_rss_mib_device",
+)
+
+_MIB = float(1 << 20)
+
+#: The scorer's Study 5.13 columns (the build plan's addendum, metric
+#: "Detection quality"), in row order after the τ, pair and cost columns, and
+#: only with ``detection_columns`` (``--detection-columns``). Scorer-only.
+DETECTION_COLUMNS = (
+    "data_partition", "data_alpha", "network_aou_shard_weighted_mean",
+    "tpr_final", "fpr_final", "precision_final", "f1_final",
+    "recall_family_min", "recall_by_family_final",
+)
+
+
+#: The scorer's Study 5.12 columns (the build plan's addendum: contacts that
+#: found no update ready and device training energy; the update yield is the
+#: summary's own ``update_yield``), in row order
+#: after every other group, and only with ``compute_columns``
+#: (``--compute-columns``). Scorer-only.
+COMPUTE_COLUMNS = (
+    "train_time_median_s", "train_time_sigma", "straggler_share", "straggler_factor",
+    "pass_1_target_contacts", "not_ready_contacts", "not_ready_share", "pass_1_clean_share",
+    "policy_not_ready_drops",
+    "device_train_busy_s", "device_uplink_s", "device_p_comp_w", "device_p_tx_w",
+    "device_energy_j_total", "device_energy_j_max",
+)
+
+#: The scorer's default device powers (W) for the device energy: placeholders
+#: for an edge device under a full CPU load and its radio transmitting, to be
+#: set to the device the paper models. The row records the powers used, and
+#: the busy and uplink seconds, so the energy can be recomputed at any others.
+DEVICE_P_COMP_W = 5.0
+DEVICE_P_TX_W = 1.0
+
+
+@dataclass(frozen=True)
+class CostReport:
+    """One trial's :data:`COST_COLUMNS`; None is a blank column."""
+
+    plan_wall_s_mean: Optional[float] = None
+    plan_wall_s_p95: Optional[float] = None
+    plan_search_shares: Optional[Dict[str, float]] = None
+    pair_wall_s_mean: Optional[float] = None
+    pair_wall_s_p95: Optional[float] = None
+    pair_mask_wall_s_mean: Optional[float] = None
+    e3_wall_s_mean: Optional[float] = None
+    e3_wall_s_p95: Optional[float] = None
+    e3_mask_wall_s_mean: Optional[float] = None
+    flight_decisions_per_mission: Optional[float] = None
+    trial_processes: Optional[int] = None
+    peak_rss_mib_total: Optional[float] = None
+    peak_rss_mib_cluster: Optional[float] = None
+    peak_rss_mib_mule: Optional[float] = None
+    peak_rss_mib_device: Optional[float] = None
+
+    def to_row(self) -> Dict[str, object]:
+        row = {col: _blank(getattr(self, col)) for col in COST_COLUMNS}
+        row["plan_search_shares"] = _json_or_blank(self.plan_search_shares)
+        return row
+
+
+def _p95(values: Sequence[float]) -> Optional[float]:
+    """The 95th percentile (numpy's linear rule, as ``age_p95``); None if empty."""
+    return float(np.percentile(values, 95)) if values else None
+
+
+def _mib(value) -> Optional[float]:
+    """A byte count from ``footprint.json`` in MiB; None unless an int >= 0."""
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        return None
+    return value / _MIB
+
+
+def cost_report(obs: Exp4Observation, *, mule_cfg: Mapping[str, object],
+                footprint: Optional[Mapping[str, object]] = None) -> CostReport:
+    """One trial's decision cost (Exp 5 addendum, Study 5.11 (a)), blank where it has none.
+
+    **The planner.** ``plan_wall_s_mean`` and ``plan_wall_s_p95`` are over the
+    trial's missions that recorded ``plan_wall_s`` (plan mode: the wall
+    seconds ``FLScheduler.build_ferry_plan`` took at the dock, every class's
+    search included), with several mules every mule's; blank with none.
+    ``plan_search_shares`` is the share of the missions that recorded a plan
+    whose committed class ran each mode (``plan.search``: ``exact``,
+    ``stop_subsets`` or ``local``, every one listed, 0 included; JSON), so a
+    sweep that forces a mode through ``--plan-search-params`` can check it
+    held; blank with no plan.
+
+    **The flight clock.** The pair slot's decisions and E3's calls, pooled
+    over the trial's missions and mules (``pass_1_pairs_wall``,
+    ``pass_1_e3_wall``): the mean and 95th percentile of each decision's
+    ``decide_s`` (the mask's predicate, the scorer or policy and the pick)
+    and the mean of its ``mask_s`` (the predicate's share), each blank where
+    the trial recorded none; a time the mule did not write as a number >= 0
+    is left out. ``flight_decisions_per_mission`` is the mean over the
+    trial's missions of the decisions timed in flight, both kinds together,
+    on a trial whose mule config names the pair slot or E3's policy or whose
+    missions recorded a wall (a mission without one made none); blank on any
+    other trial, and with no mission. The view or observation each decision
+    reads is built before it and is not timed; FX's and F's fixed fillings
+    record no decision and so no wall.
+
+    **The footprint** (``footprint``, the trial's ``footprint.json`` as
+    :func:`experiments.exp4.footprint.read_footprint` returns it; None for a
+    trial run without the probe, when all five are blank):
+    ``trial_processes``, the processes the trial started (the cluster, the
+    mules, the devices); ``peak_rss_mib_total``, the largest summed resident
+    memory over one sample, the concurrent peak; and per role the largest
+    process's own peak (``peak_rss_mib_cluster``, ``_mule``, ``_device``).
+    In MiB; a value the probe did not write as a byte count is blank.
+    """
+    missions = obs.missions
+    plan_walls = [m.plan_wall_s for m in missions if m.plan_wall_s is not None]
+    searched = [m.plan_search for m in missions if m.has_plan]
+    shares = None
+    if searched:
+        shares = {mode: sum(1 for s in searched if s == mode) / len(searched)
+                  for mode in SEARCH_MODES}
+
+    def walls(kind: str) -> List:
+        return [w for m in missions for w in getattr(m, kind) or ()]
+
+    pair, e3 = walls("pair_walls"), walls("e3_walls")
+
+    def decided(ws) -> List[float]:
+        return [w.decide_s for w in ws if w.decide_s is not None]
+
+    per_mission = None
+    if missions and (mule_cfg.get("flight_slot") == FLIGHT_SLOT_PAIR_Q
+                     or mule_cfg.get("contact_policy") == CONTACT_POLICY_CHEN_DQN
+                     or pair or e3):
+        per_mission = float(np.mean([len(m.pair_walls or ()) + len(m.e3_walls or ())
+                                     for m in missions]))
+    return CostReport(
+        plan_wall_s_mean=_mean_present(plan_walls),
+        plan_wall_s_p95=_p95(plan_walls),
+        plan_search_shares=shares,
+        pair_wall_s_mean=_mean_present(decided(pair)),
+        pair_wall_s_p95=_p95(decided(pair)),
+        pair_mask_wall_s_mean=_mean_present(w.mask_s for w in pair),
+        e3_wall_s_mean=_mean_present(decided(e3)),
+        e3_wall_s_p95=_p95(decided(e3)),
+        e3_mask_wall_s_mean=_mean_present(w.mask_s for w in e3),
+        flight_decisions_per_mission=per_mission,
+        **_footprint_fields(footprint),
+    )
+
+
+def _footprint_fields(footprint: Optional[Mapping[str, object]]) -> Dict[str, object]:
+    """:func:`cost_report`'s five footprint fields from ``footprint.json``."""
+    if not isinstance(footprint, Mapping):
+        return {}
+    processes = footprint.get("processes")
+    by_role = footprint.get("peak_rss_bytes_by_role")
+    by_role = by_role if isinstance(by_role, Mapping) else {}
+    return {
+        "trial_processes": (processes if isinstance(processes, int)
+                            and not isinstance(processes, bool) and processes >= 0 else None),
+        "peak_rss_mib_total": _mib(footprint.get("peak_rss_bytes_total")),
+        "peak_rss_mib_cluster": _mib(by_role.get("cluster")),
+        "peak_rss_mib_mule": _mib(by_role.get("mule")),
+        "peak_rss_mib_device": _mib(by_role.get("device")),
+    }
+
+
+@dataclass(frozen=True)
+class DetectionReport:
+    """One trial's :data:`DETECTION_COLUMNS`; None is a blank column."""
+
+    data_partition: Optional[str] = None
+    data_alpha: Optional[float] = None
+    network_aou_shard_weighted_mean: Optional[float] = None
+    tpr_final: Optional[float] = None
+    fpr_final: Optional[float] = None
+    precision_final: Optional[float] = None
+    f1_final: Optional[float] = None
+    recall_family_min: Optional[float] = None
+    recall_by_family_final: Optional[Dict[str, float]] = None
+
+    def to_row(self) -> Dict[str, object]:
+        row = {col: _blank(getattr(self, col)) for col in DETECTION_COLUMNS}
+        row["recall_by_family_final"] = _json_or_blank(self.recall_by_family_final)
+        return row
+
+
+@dataclass(frozen=True)
+class ComputeReport:
+    """One trial's :data:`COMPUTE_COLUMNS`; None is a blank column."""
+
+    train_time_median_s: Optional[float] = None
+    train_time_sigma: Optional[float] = None
+    straggler_share: Optional[float] = None
+    straggler_factor: Optional[float] = None
+    pass_1_target_contacts: Optional[int] = None
+    not_ready_contacts: Optional[int] = None
+    not_ready_share: Optional[float] = None
+    pass_1_clean_share: Optional[float] = None
+    policy_not_ready_drops: Optional[int] = None
+    device_train_busy_s: Optional[float] = None
+    device_uplink_s: Optional[float] = None
+    device_p_comp_w: Optional[float] = None
+    device_p_tx_w: Optional[float] = None
+    device_energy_j_total: Optional[float] = None
+    device_energy_j_max: Optional[float] = None
+
+    def to_row(self) -> Dict[str, object]:
+        return {col: _blank(getattr(self, col)) for col in COMPUTE_COLUMNS}
+
+
+def device_busy_s(fits: Sequence[Tuple[str, float]], train_time_s: Mapping[str, float],
+                  end_s: float) -> Dict[str, float]:
+    """Each device's busy seconds from its fits ``(device, start)`` (in start
+    order): every fit runs ``T_j`` or until the device's next fit restarts it,
+    the last until ``end_s``, whichever is first."""
+    starts: Dict[str, List[float]] = {}
+    for did, t in fits:
+        starts.setdefault(did, []).append(float(t))
+    out: Dict[str, float] = {}
+    for did, ts in starts.items():
+        t_j = float(train_time_s.get(did, 0.0))
+        ts = sorted(ts)
+        ends = ts[1:] + [max(float(end_s), ts[-1])]
+        out[did] = float(sum(min(t_j, e - s) for s, e in zip(ts, ends)))
+    return out
+
+
+def compute_report(obs: Exp4Observation, mule_cfgs: Sequence[Mapping[str, object]], *,
+                   p_comp_w: float = DEVICE_P_COMP_W,
+                   p_tx_w: float = DEVICE_P_TX_W) -> ComputeReport:
+    """One trial's compute and device-energy columns (Exp 5 addendum, Study 5.12).
+
+    ``mule_cfgs`` are every mule's config (each holds its slice's train
+    times). **The settings**: the first config's ``train_time_params``.
+    **The contacts** (the Pass-1 stops of missions with fit records):
+    ``pass_1_target_contacts``, the targets solicited; ``not_ready_contacts``,
+    those that found no update ready, and ``not_ready_share`` of the targets;
+    ``pass_1_clean_share``, the CLEAN Pass-1 sessions per target contact (the
+    summary's ``update_yield`` is the plan's update yield);
+    ``policy_not_ready_drops``, the devices arm D5's readiness test left out
+    before takeoff (its ``pass_1_policy_drops`` labelled ``not_ready``; 0 for
+    every other arm). **The
+    devices**: ``device_train_busy_s``, the fits' seconds summed over the
+    devices (:func:`device_busy_s`, each mule's fits ended at its last
+    mission's end); ``device_uplink_s``, the collected updates' uplink
+    airtime; and the energy at ``p_comp_w`` and ``p_tx_w``, per device
+    ``P_comp * busy + P_tx * uplink``, in total and for the most loaded device.
+    Blank without fit records (a trace whose mules had no train times).
+    """
+    params = next((c.get("train_time_params") for c in mule_cfgs
+                   if isinstance(c.get("train_time_params"), Mapping)), None)
+    settings = {} if params is None else dict(
+        train_time_median_s=_float_or_none(params.get("median_s")),
+        train_time_sigma=_float_or_none(params.get("sigma")),
+        straggler_share=_float_or_none(params.get("straggler_share")),
+        straggler_factor=_float_or_none(params.get("straggler_factor")),
+    )
+    timed = [m for m in obs.missions if m.train_fits is not None]
+    if not timed:
+        return ComputeReport(**settings)
+    times: Dict[str, float] = {}
+    for c in mule_cfgs:
+        raw = c.get("device_train_time_s")
+        if isinstance(raw, Mapping):
+            times.update({str(d): float(t) for d, t in raw.items()
+                          if _float_or_none(t) is not None})
+    targets = not_ready = 0
+    uplink: Dict[str, float] = {}
+    for m in timed:
+        for stop in m.fit_stops or ():
+            targets += len(stop.targets)
+            not_ready += len(stop.not_ready)
+            for did, sec in stop.uplink_s.items():
+                uplink[did] = uplink.get(did, 0.0) + float(sec)
+    clean = sum(1 for m in timed for (_d, outcome, _t) in (m.pass_1_outcomes or ())
+                if outcome == "clean")
+    busy: Dict[str, float] = {}
+    for mule in sorted({m.mule_id for m in timed}, key=str):
+        own = [m for m in timed if m.mule_id == mule]
+        end = max((m.sim_end_s for m in own if m.sim_end_s is not None), default=None)
+        fits = [f for m in own for f in m.train_fits]
+        if end is None or not fits:
+            continue
+        busy.update(device_busy_s(fits, times, end))
+    devices = sorted(set(busy) | set(uplink))
+    energy = {d: p_comp_w * busy.get(d, 0.0) + p_tx_w * uplink.get(d, 0.0) for d in devices}
+    return ComputeReport(
+        **settings,
+        pass_1_target_contacts=targets,
+        not_ready_contacts=not_ready,
+        not_ready_share=(not_ready / targets) if targets else None,
+        pass_1_clean_share=(clean / targets) if targets else None,
+        policy_not_ready_drops=sum(len(devices) for m in timed
+                                   for devices, reason in m.policy_drops or ()
+                                   if reason == "not_ready"),
+        device_train_busy_s=float(sum(busy.values())),
+        device_uplink_s=float(sum(uplink.values())),
+        device_p_comp_w=float(p_comp_w),
+        device_p_tx_w=float(p_tx_w),
+        device_energy_j_total=float(sum(energy.values())),
+        device_energy_j_max=max(energy.values()) if energy else None,
+    )
+
+
+def detection_report(obs: Exp4Observation, devices: Sequence[str],
+                     marker: Mapping[str, object]) -> DetectionReport:
+    """One trial's data and detector columns (Exp 5 addendum, Study 5.13).
+
+    **The data** (the status marker's ``data``, written only by a trial whose
+    partition or family labels were not the recorded ones; blank otherwise):
+    ``data_partition`` and ``data_alpha``, and
+    ``network_aou_shard_weighted_mean``, the Network AoU with each device
+    weighted by its shard's rows (``data.shard_rows``; :func:`age_profile`),
+    so under quantity skew a large shard left stale counts for more. Blank
+    when the marker does not name every device's rows.
+
+    **The detector** (the last ``model_eval`` that carries ``detection``,
+    which the cluster writes when the test set carries the attack families;
+    blank without one): ``tpr_final``, ``fpr_final``, ``precision_final``,
+    ``f1_final``; ``recall_by_family_final`` (JSON, every family the test set
+    holds, Benign's being 1 - FPR) and ``recall_family_min``, the worst attack
+    family's (Benign left out). The final accuracy and AUC are the summary's
+    own columns.
+    """
+    data = marker.get("data") if isinstance(marker.get("data"), Mapping) else {}
+    partition = data.get("partition") if isinstance(data.get("partition"), str) else None
+    alpha = _float_or_none(data.get("dirichlet_alpha"))
+    weighted = None
+    rows = data.get("shard_rows")
+    if isinstance(rows, Mapping) and devices and all(
+            isinstance(rows.get(d), int) and not isinstance(rows.get(d), bool)
+            for d in devices) and sum(rows[d] for d in devices) > 0:
+        weighted = age_profile(obs, devices, weights={d: float(rows[d]) for d in devices}
+                               ).network_aou_mean
+    final = next((e.detection for e in reversed(obs.model_evals)
+                  if e.detection is not None), None)
+    if final is None:
+        return DetectionReport(data_partition=partition, data_alpha=alpha,
+                               network_aou_shard_weighted_mean=weighted)
+    attacks = [v for k, v in final.recall_by_family.items() if k != "Benign"]
+    return DetectionReport(
+        data_partition=partition, data_alpha=alpha,
+        network_aou_shard_weighted_mean=weighted,
+        tpr_final=final.tpr, fpr_final=final.fpr, precision_final=final.precision,
+        f1_final=final.f1, recall_family_min=min(attacks) if attacks else None,
+        recall_by_family_final=dict(final.recall_by_family) or None,
+    )
+
+
+# --------------------------------------------------------------------------- #
 # One trial, and a whole trace root
 # --------------------------------------------------------------------------- #
 
@@ -1272,6 +1689,18 @@ class TrialScore:
     #: τ columns, when scored with ``pair_columns``; None leaves them out, so
     #: the default row is the Phase 4 one.
     pairs: Optional[PairReport] = None
+    #: Exp 5 addendum, Study 5.11 (a): :data:`COST_COLUMNS`
+    #: (:func:`cost_report`), after the τ and pair columns, when scored with
+    #: ``cost_columns``; None leaves them out.
+    costs: Optional[CostReport] = None
+    #: Exp 5 addendum, Study 5.13: :data:`DETECTION_COLUMNS`
+    #: (:func:`detection_report`), when scored with ``detection_columns``;
+    #: None leaves them out.
+    detection: Optional[DetectionReport] = None
+    #: Exp 5 addendum, Study 5.12: :data:`COMPUTE_COLUMNS`
+    #: (:func:`compute_report`), last, when scored with ``compute_columns``;
+    #: None leaves them out.
+    compute: Optional[ComputeReport] = None
 
     def provenance_key(self) -> Tuple[Tuple[str, object], ...]:
         """The provenance as a hashable, column-ordered tuple."""
@@ -1320,6 +1749,12 @@ class TrialScore:
             row[f"sim_s_to_{tag}"] = _blank(reach.sim_s)
         if self.pairs is not None:
             row.update(self.pairs.to_row())
+        if self.costs is not None:
+            row.update(self.costs.to_row())
+        if self.detection is not None:
+            row.update(self.detection.to_row())
+        if self.compute is not None:
+            row.update(self.compute.to_row())
         return row
 
 
@@ -1331,6 +1766,11 @@ def score_trial(
     status_csv: StatusSource = None,
     age_cap_s: Optional[int] = None,
     pair_columns: bool = False,
+    cost_columns: bool = False,
+    detection_columns: bool = False,
+    compute_columns: bool = False,
+    device_p_comp_w: float = DEVICE_P_COMP_W,
+    device_p_tx_w: float = DEVICE_P_TX_W,
 ) -> TrialScore:
     """Score one retained trial directory.
 
@@ -1341,6 +1781,12 @@ def score_trial(
     them at the trace's own S, if its mules ran one (:func:`plan_report`).
     ``pair_columns`` adds :data:`PHASE_5_COLUMNS` after the τ columns
     (:func:`pair_report`); without it the row has none of them.
+    ``cost_columns`` adds :data:`COST_COLUMNS` after those
+    (:func:`cost_report`), ``detection_columns`` :data:`DETECTION_COLUMNS`
+    (:func:`detection_report`), and ``compute_columns``
+    :data:`COMPUTE_COLUMNS` last (:func:`compute_report`, at the device powers
+    ``device_p_comp_w`` and ``device_p_tx_w``); without them the row has none
+    of them.
 
     Raises :class:`~experiments.exp4.events_consumer.ClockDomainError`,
     naming the trial, for a trace whose clocks disagree: in its events (see
@@ -1397,6 +1843,13 @@ def score_trial(
         unmerged_missions=len(obs.unmerged_keys),
         plan=_trial_plan_report(trace_dir, obs, devices, mule_cfg, age_cap_s),
         pairs=pair_report(obs, mule_cfg=mule_cfg) if pair_columns else None,
+        costs=(cost_report(obs, mule_cfg=mule_cfg, footprint=read_footprint(trace_dir))
+               if cost_columns else None),
+        detection=(detection_report(obs, devices, _read_json(trace_dir / TRIAL_STATUS_FILE))
+                   if detection_columns else None),
+        compute=(compute_report(obs, [_read_json(p) for p in sorted(trace_dir.glob("mule-*.json"))],
+                                p_comp_w=device_p_comp_w, p_tx_w=device_p_tx_w)
+                 if compute_columns else None),
     )
 
 
@@ -1422,14 +1875,20 @@ def score_traces(
     status_csv: StatusSource = None,
     age_cap_s: Optional[int] = None,
     pair_columns: bool = False,
+    cost_columns: bool = False,
+    detection_columns: bool = False,
+    compute_columns: bool = False,
+    device_p_comp_w: float = DEVICE_P_COMP_W,
+    device_p_tx_w: float = DEVICE_P_TX_W,
 ) -> List[TrialScore]:
     """Score every trial directory under ``trace_root``, in name order.
 
     Directories whose names are not trial names are skipped, and so, unless
     ``include_failed``, are trials whose status is not ``ok`` (see
     :func:`trial_status`): a timed-out or ``no_eval`` trial is not a valid
-    observation, and the trial CSV's analysis drops it too. ``age_cap_s`` and
-    ``pair_columns`` as in :func:`score_trial`.
+    observation, and the trial CSV's analysis drops it too. ``age_cap_s``,
+    ``pair_columns``, ``cost_columns``, ``detection_columns``,
+    ``compute_columns`` and the device powers as in :func:`score_trial`.
     """
     index = _status_index(status_csv)
     scores: List[TrialScore] = []
@@ -1437,13 +1896,17 @@ def score_traces(
         if not include_failed and trial_status(d, index).status != "ok":
             continue
         scores.append(score_trial(d, taus=taus, status_csv=index, age_cap_s=age_cap_s,
-                                  pair_columns=pair_columns))
+                                  pair_columns=pair_columns, cost_columns=cost_columns,
+                                  detection_columns=detection_columns,
+                                  compute_columns=compute_columns,
+                                  device_p_comp_w=device_p_comp_w,
+                                  device_p_tx_w=device_p_tx_w))
     return scores
 
 
 def write_scores_csv(scores: Sequence[TrialScore], path) -> None:
     """One row per trial. The column set is fixed by the first score's τ list
-    and whether it carries the pair columns."""
+    and whether it carries the pair, cost and detection columns."""
     if not scores:
         raise ValueError("no scores to write")
     rows = [s.to_row() for s in scores]
@@ -1483,6 +1946,35 @@ def main(argv=None) -> int:
                          "committed class and chose a stop other than the remainder's "
                          "head) and E3's unvisited stops per mission. Off by default, "
                          "when the row is the Phase 4 one.")
+    ap.add_argument("--cost-columns", action="store_true",
+                    help="Add Study 5.11's decision-cost columns after the tau and pair "
+                         "columns: the planner's wall time per mission (mean, p95) and "
+                         "the share of missions in each search mode, and the pair "
+                         "slot's and E3's wall time per decision (mean, p95, the mask's "
+                         "mean) with the timed decisions per mission; and the trial's "
+                         "processes and peak memory where the runner's --footprint-probe "
+                         "recorded them. Wall times: off by default, when the row is the "
+                         "one without them.")
+    ap.add_argument("--detection-columns", action="store_true",
+                    help="Add Study 5.13's columns last: the trial's partition and alpha "
+                         "and the Network AoU weighted by shard size (from the status "
+                         "marker of a non-IID or family-labelled trial), and the final "
+                         "TPR, FPR, precision, F1 and recall per attack family (from "
+                         "model_eval's detection). Off by default.")
+    ap.add_argument("--compute-columns", action="store_true",
+                    help="Add Study 5.12's columns last, from a trace whose mules had "
+                         "train times (--train-time-s): the training-time settings, the "
+                         "Pass-1 target contacts, those that found no update ready and "
+                         "their share, the CLEAN sessions per target, and the devices' "
+                         "busy and uplink seconds with their energy (total, and the most "
+                         "loaded device). "
+                         "Off by default.")
+    ap.add_argument("--device-p-comp-w", type=float, default=DEVICE_P_COMP_W,
+                    help=f"With --compute-columns: the device's power while it trains, W "
+                         f"(default {DEVICE_P_COMP_W}, a placeholder; the row records it).")
+    ap.add_argument("--device-p-tx-w", type=float, default=DEVICE_P_TX_W,
+                    help=f"With --compute-columns: the device's power while it transmits, W "
+                         f"(default {DEVICE_P_TX_W}, a placeholder; the row records it).")
     args = ap.parse_args(argv)
     if args.age_cap_s is not None and args.age_cap_s < 1:
         ap.error(f"--age-cap-s must be >= 1, got {args.age_cap_s}")
@@ -1502,6 +1994,9 @@ def main(argv=None) -> int:
             root, taus=args.tau, arms=args.arms,
             include_failed=args.include_failed, status_csv=index,
             age_cap_s=args.age_cap_s, pair_columns=args.pair_columns,
+            cost_columns=args.cost_columns, detection_columns=args.detection_columns,
+            compute_columns=args.compute_columns, device_p_comp_w=args.device_p_comp_w,
+            device_p_tx_w=args.device_p_tx_w,
         ))
         statuses.extend(trial_statuses(root, arms=args.arms, status_csv=index))
 

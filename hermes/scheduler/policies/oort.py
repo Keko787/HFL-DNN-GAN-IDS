@@ -16,10 +16,21 @@ does not.
 Three deviations, each forced by our model rather than chosen, and each stated
 here so the paper can state them too:
 
-1. **No system-speed term.** Oort multiplies statistical utility by a straggler
-   penalty over client compute/communication speed. Our devices have no modelled
-   compute speed, so the term is **dropped** — not approximated by something
-   else, which would be worse than omitting it.
+1. **No system-speed term** — unless the devices' fits take simulated time.
+   Oort multiplies statistical utility by a straggler penalty over client
+   compute/communication speed. Without a modelled compute speed the term is
+   **dropped** — not approximated by something else, which would be worse than
+   omitting it. Exp 5 addendum, Study 5.12: with the training time on the
+   simulated clock (``hermes/mule/fit_clock.py``) the speed exists, and the
+   term is restored in whole-scheduler mode (arm D2; the user's decision of
+   2026-10-03): each explored member's utility, staleness bonus included, is
+   multiplied by ``(T / t_i) ** alpha`` when ``t_i > T`` (Oort's Eq. 2 and
+   Algorithm 1), with ``t_i`` the device's fit time plus its predicted dwell
+   at the contact (the shared feasibility model's per-member dwell; one
+   session without a band; a member predicted unreachable has ``t_i =
+   inf``), ``T`` the cell's T_nom (the preferred round duration: one
+   nominal mission) and ``alpha`` Oort's default 2
+   (:meth:`OortPolicy.bind_fit_clock`).
 2. **Mean loss, not RMS.** Oort specifies ``sqrt(Σ_k Loss(k)² / |B_i|)`` over
    per-sample losses. Our training callback reports Keras' **mean** loss.
    Monotone in the same direction, not identical.
@@ -56,6 +67,10 @@ from .budget_walk import IN_FLIGHT_BUDGET, greedy_budget_walk
 
 #: Oort's exploration weight on the staleness bonus (paper's Algorithm 1).
 DEFAULT_STALENESS_WEIGHT = 0.1
+
+#: Oort's straggler penalty exponent alpha (its default), for the restored
+#: system-speed term (deviation 1, Study 5.12).
+DEFAULT_SPEED_ALPHA = 2.0
 
 #: Utility given to a device never yet served. Oort explores unselected clients
 #: explicitly; here "never measured" outranks any measured utility, which gives
@@ -106,6 +121,27 @@ def staleness_bonus(
     return weight * math.log(current_round) / math.sqrt(state.last_clean_round)
 
 
+def _member_dwell_s(model, wp: ContactWaypoint, did: DeviceID) -> float:
+    """One member's predicted dwell at ``wp`` on the shared feasibility model.
+
+    The ferry physics' per-member dwell at the member's planar distance (Pass
+    1, no SNR offset); ``inf`` beyond the stop's range or below the floor, as
+    :meth:`FerryPhysics.dwell_s` leaves such a member out. Without a band (or
+    without the ferry physics) one session, ``session_time_s``; 0 without a
+    model.
+    """
+    if model is None:
+        return 0.0
+    ferry = getattr(model, "ferry", None)
+    if ferry is None or ferry.member_dwell_s is None:
+        return float(model.session_time_s)
+    d = ferry.member_distances_m(wp)[list(wp.devices).index(did)]
+    if ferry.range_m is not None and d > ferry.range_m:
+        return math.inf
+    t = ferry.member_dwell_s(d, MissionPass.COLLECT, 0.0)
+    return math.inf if t is None else float(t)
+
+
 class OortPolicy:
     """Rank contacts by cached statistical utility plus a staleness bonus.
 
@@ -120,12 +156,51 @@ class OortPolicy:
     # member-subset carrier; its walk ranks members by this arm's own key.
     admits_member_subsets = True
 
+    # Exp 5 addendum (Study 5.12, deviation 1): the mule's fit clock and T, set
+    # on the instance only by :meth:`bind_fit_clock` (so an unbound policy's
+    # state is the recorded one); unbound, the recorded key, no speed term.
+    _fits = None
+    _t_round_s: Optional[float] = None
+    speed_alpha = DEFAULT_SPEED_ALPHA
+
     def __init__(self, *, staleness_weight: float = DEFAULT_STALENESS_WEIGHT):
         self.staleness_weight = float(staleness_weight)
         # FeRRy Phase 3 — (mission round, current round) of the last plan made
         # in whole-scheduler mode: a re-plan of that mission ranks with the
         # round the plan used (see ``_whole_scheduler_round``).
         self._planned_round: Optional[Tuple[int, int]] = None
+
+    def bind_fit_clock(self, fits, *, t_nom_s: Optional[float]) -> None:
+        """Restore Oort's system-speed term from the mule's fit clock (Study 5.12).
+
+        ``fits`` is a ``hermes.mule.fit_clock.FitClock`` (each device's fit
+        time); ``t_nom_s`` is T, the preferred round duration: the cell's
+        T_nom, required (finite and > 0).
+        """
+        if t_nom_s is None or isinstance(t_nom_s, bool) or not (
+                math.isfinite(float(t_nom_s)) and float(t_nom_s) > 0.0):
+            raise ValueError(
+                f"Oort's system-speed term needs T, the preferred round duration (the "
+                f"cell's T_nom): got t_nom_s={t_nom_s!r}"
+            )
+        self._fits = fits
+        self._t_round_s = float(t_nom_s)
+
+    def speed_penalty(self, round_s: float) -> float:
+        """Oort's ``(T / t_i) ** alpha`` for ``t_i > T``, else 1 (0 at ``t_i = inf``)."""
+        t_round = self._t_round_s
+        if t_round is None or round_s <= t_round:
+            return 1.0
+        if math.isinf(round_s):
+            return 0.0
+        return (t_round / round_s) ** self.speed_alpha
+
+    def round_time_s(self, wp: ContactWaypoint, did: DeviceID, model) -> float:
+        """Device ``did``'s round time at ``wp``: its fit time plus its predicted
+        dwell there (the model's per-member dwell; one session without a band;
+        ``inf`` when predicted unreachable)."""
+        fit = 0.0 if self._fits is None else (self._fits.train_time_s(did) or 0.0)
+        return float(fit) + _member_dwell_s(model, wp, did)
 
     def rank_contacts(
         self,
@@ -224,8 +299,15 @@ class OortPolicy:
     # Whole-scheduler mode (arm D2)
     # ------------------------------------------------------------------ #
 
-    def _rank_key(self, device_states, current_round: int):
-        """Descending contact utility; device id breaks ties deterministically."""
+    def _rank_key(self, device_states, current_round: int, model=None):
+        """Descending contact utility; device id breaks ties deterministically.
+
+        With the fit clock bound (deviation 1, Study 5.12), each explored
+        member's utility is multiplied by its speed penalty, priced on
+        ``model``; without it, the recorded key.
+        """
+        speed = self._fits is not None
+
         def _key(wp: ContactWaypoint) -> Tuple[float, str]:
             total = 0.0
             for did in wp.devices:
@@ -237,10 +319,13 @@ class OortPolicy:
                 if u == UNEXPLORED_UTILITY:
                     return (-UNEXPLORED_UTILITY,
                             ",".join(sorted(str(d) for d in wp.devices)))
-                total += u + staleness_bonus(
+                util = u + staleness_bonus(
                     st, current_round=current_round,
                     weight=self.staleness_weight,
                 )
+                if speed:
+                    util *= self.speed_penalty(self.round_time_s(wp, did, model))
+                total += util
             return (-total, ",".join(sorted(str(d) for d in wp.devices)))
         return _key
 
@@ -307,7 +392,8 @@ class OortPolicy:
         return greedy_budget_walk(
             contacts,
             key=self._rank_key(device_states,
-                               self._whole_scheduler_round(contacts, device_states, env)),
+                               self._whole_scheduler_round(contacts, device_states, env),
+                               model=feasibility_model),
             mule_pose=env.mule_pose,
             now=env.now,
             mission_deadline_ts=mission_deadline_ts,

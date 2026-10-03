@@ -1975,7 +1975,8 @@ the `jittery56` hash and the test literals.
 
 **Families**, one score per contact regime: `jittery`, the four jittery cells (sha256
 `32b5cb6b…3e91`); `clean`, the two clean cells (`76955c9b…5902`); and `jittery56`, the jittery cells
-and Study 5.6's four (`0079de11…ac66`). A manifest records its family and the hash
+and Study 5.6's four (`0079de11…ac66`); and, since the Exp 5 addendum, `scale` (§20.3,
+`d410f0d1…70ad`), which moves none of them. A manifest records its family and the hash
 (`cells.family_sha256`). Study 5.5 is read on `STUDY_5_5_CELLS` (jit-n12-120 and jit-n12-180),
 whichever family trained the score; which family the jittery score practises on is the user's
 choice before the 5.5 sweep (R29).
@@ -2150,6 +2151,382 @@ percentile bootstrap over the seeds; the exact p comes from the permutation null
 kept as they are, the asymptotic one from the tie-corrected variance; `auto` is exact up to 8
 levels (`EXACT_MAX_LEVELS`) and 200 seeds (`EXACT_MAX_SEEDS`), and `exact` refuses more than 8
 levels. Both were checked against scipy (`ttest_1samp`, `page_trend_test`).
+
+---
+
+## 20. The Exp 5 addendum: Studies 5.11–5.15 (2 Oct 2026)
+
+The build plan's addendum of 2 Oct 2026 adds five studies (5.11 decision cost and scaling, 5.12
+compute and model-size heterogeneity, 5.13 data heterogeneity, 5.14 component ablations, 5.15 the
+radio layer) and lists what each must build before it runs. This section records each build as it
+lands. Freeze Rule 1 holds throughout: every switch defaults to the recorded run, every new trace
+field is additive and left out where it does not apply, and the trial CSV's header is unchanged.
+**Nothing in this section has run**; each study waits for the user's go-ahead.
+
+### 20.1 Decision cost (Study 5.11 (a))
+
+**Trace fields.** On the simulated clock, beside the records of §19.8 and never inside them (the
+records stay free of wall time, critic B12):
+
+- **`mission_completed.pass_1_pairs_wall`** (a `pair_q` mission that decided something): one entry
+  per record of `pass_1_pairs`, in its order. **`mission_completed.pass_1_e3_wall`** (E3): one
+  entry per call of `pass_1_e3`. Each entry is `{"decide_s": ..., "mask_s": ...}`, wall seconds
+  from `time.perf_counter`: `decide_s` is the whole decision (the mask's predicate, the scorer or
+  policy and the pick) and `mask_s` the predicate's share of it. For the pair slot the supervisor
+  times from binding the predicate to the slot's answer and wraps the predicate it hands the slot,
+  so the slot itself still reads no wall clock; for E3, the predicate over every stop left plus
+  the policy's answer and its check. The view (`PairView`) or observation (`e3_observation`) a
+  decision reads is built before it and is not timed.
+- Both follow `pass_1_e3_unvisited` in `SIM_MISSION_OPTIONAL_FIELDS` and are left out when None or
+  empty, so no other mission gains a key; F, FX and every H and D arm record neither.
+- Wall times, so every determinism comparison drops them as it drops `plan_wall_s`: FerrySim's
+  `inprocess.mask_wall_times` masks each value (`DECISION_WALL_FIELDS`), and the parity and
+  repeat tests mask or drop them by name.
+- **The consumer:** `MissionRecord.pair_walls` and `e3_walls`, tuples of `DecisionWall(decide_s,
+  mask_s)`, None where a mission has no such field. A time that is not a finite number ≥ 0 reads
+  as None, and an entry that is not a record as two Nones, so the rest stay in step.
+
+**The cost columns** (`traces_scorer.COST_COLUMNS`) appear only with `cost_columns`
+(`--cost-columns`), after the τ columns and, when both are asked for, after the pair columns;
+without it the row is unchanged. Scorer-only: the trial CSV's header is unchanged.
+
+| Column | What it holds |
+|---|---|
+| `plan_wall_s_mean`, `plan_wall_s_p95` | the planner's wall time per plan-mode mission (`plan_wall_s`, the whole of `build_ferry_plan`, every class searched), mean and 95th percentile (numpy's linear rule, as `age_p95`), over every mule's missions |
+| `plan_search_shares` | the share of the plan-mode missions whose committed class ran each search mode (`plan.search`: `exact`, `stop_subsets`, `local`, all listed; JSON), so a sweep that forces a mode through `--plan-search-params` can check it held |
+| `pair_wall_s_mean`, `pair_wall_s_p95`, `pair_mask_wall_s_mean` | the pair slot's `decide_s` per decision (mean, p95) and its `mask_s` (mean), pooled over the trial's decisions |
+| `e3_wall_s_mean`, `e3_wall_s_p95`, `e3_mask_wall_s_mean` | the same for E3's calls |
+| `flight_decisions_per_mission` | the mean over the trial's missions of the decisions timed in flight, both kinds together, on a trial whose mule config names the pair slot or E3's policy or whose missions recorded a wall (a mission without one made none) |
+
+Each is blank where the trial has nothing to average. Forcing the search into one mode
+(`--plan-search-params`, `PlanSearchParams`): exact with `exact_max_devices` ≥ N; stop subsets
+with `{"exact_max_devices": 0}` and `exhaustive_max_stops` ≥ the stops; local with both 0.
+
+```bash
+python -m experiments.analysis.traces_scorer --traces results/exp5/s511a_traces --cost-columns --pair-columns --csv results/exp5/s511a_scored.csv
+```
+
+### 20.2 The footprint (Study 5.11)
+
+A real-process trial runs 1 + K + N processes, about 1.6 GB apiece under `--real-model`, so
+memory sets how large an N the stack can run (the build plan, 5.11's caveats). The footprint probe
+(`experiments/exp4/footprint.py`) measures it per trial.
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `Exp4Driver.footprint_probe` (`--footprint-probe`) | off | Sample every process the orchestrator started (the cluster, the mules, the devices, each with its children) from a daemon thread, from just after `start_all` to just before `shutdown_all`, and write `footprint.json` (`FOOTPRINT_FILE`) beside the kept trace, a timed-out trial's included. Needs a trace root (`--keep-event-traces`; the runner refuses it otherwise, as a usage error) and `psutil`, which only this path imports. Reads only, so no trial changes; the runner passes the two settings to the driver only when the flag is given. |
+| `Exp4Driver.footprint_interval_s` (`--footprint-interval-s`) | 0.5 | The sampling interval, seconds (> 0). |
+
+`footprint.json` (schema 1): `processes` and `processes_by_role`; `peak_rss_bytes_total`, the
+largest summed resident memory over one sample (the concurrent peak, what has to fit in the
+host's memory); `peak_rss_bytes_by_role`, each role's largest per-process peak, where a process's
+peak is the OS's high-water mark (`VmHWM` on Linux, the peak working set on Windows) or, on a
+platform that records none, its largest sample (`peak_source`: `os`, `sampled` or `mixed`);
+`peak_rss_bytes_sum`, every process's peak summed, an upper bound on the concurrent peak;
+`samples`, `interval_s` and `probe` (the psutil version and platform). H0 runs in process and
+writes none.
+
+**Scorer columns**, in the cost group (`--cost-columns`, §20.1) after the decision cost:
+`trial_processes`, `peak_rss_mib_total` and `peak_rss_mib_cluster`, `peak_rss_mib_mule`,
+`peak_rss_mib_device` (MiB), blank for a trace without the file.
+
+```bash
+python -m experiments.exp4.runner_main --csv results/exp5/s511b/fp.csv --arms F FX --N 6 12 24 --keep-event-traces --footprint-probe ...
+```
+
+### 20.3 A field that grows with N, the scale family and the pilot (Studies 5.9 and 5.11 (c))
+
+**The field rule.** The realism field is a fixed 100 m half-width, so the device density rises with
+N. `topology_builder.grown_field_radius_m(radius, N, ref_n)` keeps the density of `ref_n` devices
+in `radius`: `radius * sqrt(N / ref_n)`, rounded to 0.1 m (at N = ref_n, `radius` itself). From
+100 m at N = 6: 141.4 m at 12, 200 m at 24, 282.8 m at 48, 400 m at 96.
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `Exp4Driver.h1_field_ref_n` (`--h1-field-ref-n`) | None | Grow the realism field with N at this size's density: a trial's devices and T_nom's reference layouts are drawn on `field_radius_m(N)`. Needs `--realism` (refused otherwise). None keeps the recorded fixed field; the runner passes it only when given. The row does not record it (the kept traces hold the positions): write each setting to its own CSV. |
+| S\* tool `--field-radius-m`, `--field-ref-n` | 100, None | The same field for the S\* tool's layouts. |
+| `FerryCell.field_radius_m` | None | A FerrySim cell's field half-width (`h1_field_radius_m` in its driver settings); at None it is left out of the cell's JSON, so the other families' hashes are unchanged. |
+
+T_nom at N = 6's density (the cells' flags, 1 MB, wide): 203 s at 6, 442 s at 12, 1,066 s at 24,
+2,384 s at 48 and 6,123 s at 96, against 298, 378, 458 and 638 s at 12 to 96 in the fixed 100 m
+field. Which field Studies 5.9 and 5.11 fly is the user's choice; the scale family below is the
+constant-density one.
+
+**The scale family** (`cells.SCALE_CELLS`, family `scale`): Study 5.11 (c)'s FerrySim cells beyond
+the stack, the jittery decision-rich configuration of §19.9 at N = 24, 48 and 96 on the grown field
+(`cells.SCALE_FIELD_M`), one mule, S = 2.
+
+| Cell | N | Field | Budget |
+|---|---|---|---|
+| `scl-n24-350`, `scl-n24-525` | 24 | 200 m | 350 s (the binding edge), 525 s (1.5 ×) |
+| `scl-n48-680`, `scl-n48-1020` | 48 | 282.8 m | 680 s, 1,020 s |
+| `scl-n96-1330`, `scl-n96-1995` | 96 | 400 m | 1,330 s, 1,995 s |
+
+The budgets are stand-ins until each size's budget pilot: the **binding edge** is the largest budget
+on a 10 s grid at which F's S\* on 90 % of the S\* tool's 30 layouts is still 2 (one mission can no
+longer serve every servable device on more than a tenth of them), found by bisection at planning
+level on 2 Oct 2026, and the second budget is 1.5 × the edge. The rule reproduces the N = 12
+stand-ins exactly (edge 120 s, 1.5 × 180 s); its N = 6 edge is 80 s, beside the priors 45 and 90 s.
+S\* on 90 % of layouts is 2 at each edge and 1 at 1.5 ×, so S takes decision 1's floor, 2. The cells
+stay out of `CELLS` (the headroom report's default) and every other family. A score trained at
+N = 6 and 12 flies here out of practice (its /N features shift): a declared test; so does E3, whose
+observation divides distances by the 100 m field (`chen_dqn.LENGTH_SCALE_M`, part of its schema). One FX episode as
+a build check (2 Oct 2026, this container, not a measurement): 1.5 s at N = 24, 2.8 s at 48 and
+9.8 s at 96, the planner 0.33, 0.61 and 2.26 s per mission.
+
+**The pilot** (`python -m experiments.ferrysim pilot`, `experiments/ferrysim/pilot.py`): every
+(cell, budget, policy) on the first `--episodes` episodes of each cell's validation stream (never
+the held-out one), every budget and policy on the same layouts, each `--budgets` value overriding
+the cell's own. Each episode's summary is `evaluate`'s plus `served_share` per mission (updates
+collected over N) and `served_of_demand` (over the plan's demand), and its wall times: the
+episode's (`wall_s`), the planner's per mission and each flight decision's (`decide_s`, `mask_s`,
+from `EpisodeResult.walls`, which is never part of an episode's equality or summary). The table
+(`pilot_table`) folds them per (cell, budget, policy), means and 95th percentiles; the knee is read
+off it as the stack's pilot reads its own (where the served share stops rising): the module names
+none. `--plan-search-params` forces the planner's mode as the runner's flag does (Study 5.11 (a)
+in process), `--device-model stub` flies the stack's stub trainer, and `--trace-root` keeps each
+episode's traces under `budget=<b>/<cell>/<policy>/` for `traces_scorer --cost-columns`.
+Policies are the references' labels (FX, F, `fx_pair`, `committed_pair`, `hyb`, `greedy_1`) or any
+driver arm; the default is FX.
+
+```bash
+python -m experiments.ferrysim pilot --cells scl-n96-1330 --budgets 1000 1330 1700 2000 --policies FX greedy_1 --episodes 20 --workers 4 --out results/exp5/s511c/pilot_n96.json
+```
+
+### 20.4 Interference strength (Study 5.15)
+
+The contact channel's interference term is `A·sin(2π(t/P_c + φ)) + σ_I·n(t)` per class (§17.2);
+the contact regime fixes A and σ_I as a pair (`CONTACT_REGIMES`: clean 1 and 0.4 dB, jittery 5 and
+1.5 dB). Study 5.15 sweeps them one axis at a time, so each can now be set on its own.
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `MuleConfig.interference_amp_db` (`--interference-amp-db`, `ferry_physics`) | None | The amplitude A (dB, ≥ 0) in place of the regime's; None keeps the regime's. |
+| `MuleConfig.interference_sigma_db` (`--interference-sigma-db`) | None | The noise σ_I (dB, ≥ 0) in place of the regime's. |
+
+Both are ferry-spec fields (`FERRY_SPEC_FIELDS` → `FerrySpec.from_config` → `ContactChannel`),
+simulated-clock only (refused on the wall clock when set), and in the driver's
+`FERRY_PHYSICS_FIELDS`, so a FerrySim cell's `ferry_physics` takes them too. The planner prices
+what flies: the outage's σ is `sqrt(σ_sh² + σ_I² + A²/2)` (`FerryRuntime.outage_probability`,
+`plan_score.sigma_eff_db`), and `mule_ready.channel_params.contact` records both values, as it
+always has. **`ferry_params`** leaves each out while it is None (`FERRY_PARAMS_OMITTED_AT_NONE`),
+so every recorded row keeps its string, and shows it when set; the scorer's provenance does the
+same. `ADDENDUM_MULE_FIELDS` names every `MuleConfig` field the addendum adds, so the tests that pin
+what a recorded trial's per-role JSON gains (at the defaults: these keys, at None) name them.
+
+The radio flags that already existed for Study 5.15: `--n-pl`, `--shadow-sigma-db`,
+`--shadow-corr-s`, `--interference-period-s`, `--contact-regime`, `--backhaul-model` and
+`--l1-channel` (§17.4, §17.5).
+
+```bash
+python -m experiments.exp4.runner_main --csv results/exp5/s515/amp8.csv --arms F FX H1 --mission-clock sim --contact-band wide --contact-regime jittery --interference-amp-db 8 ...
+```
+
+### 20.5 The F+L1 arm (Studies 5.14 and 5.15)
+
+`F+L1` (`driver.ADDENDUM_ARMS`) is F's plan with H3's adaptive backhaul controller and no learned
+selector, as `H1+L1` is H1's scheduler with it (§19.7): the plan arms' reference for the adaptive
+backhaul. It is a plan arm (`ADDENDUM_PLAN_ARMS`, `is_plan_arm`), so it has F's settings wherever
+F has them (member subsets, the miss priority, the `trim` fallback, T_nom, the plan settings and
+the pre-trial check), while `PLAN_ARMS` keeps its pinned value. It flies the controller where
+H1+L1 does: on the simulated clock's seconds-axis backhaul (`backhaul_policy="adaptive"`, the
+carrier picked at every upload) or with `--l1-channel` (the cluster's adaptive per-mission loss
+schedule and H3's RF prior schedule); anywhere else, and on the wall clock (a plan arm), it is
+refused before any trial. Its row differs from F's only in `ferry_params`' `backhaul_policy`. It
+runs only when named.
+
+```bash
+python -m experiments.exp4.runner_main --csv results/exp5/s515/fl1.csv --arms F F+L1 H1 H1+L1 --mission-clock sim --contact-band wide --backhaul-model seconds ...
+```
+
+### 20.6 The hover-stop switch (Study 5.14)
+
+The hover rule (§18.4, `plan/hover.py`) was unconditional in plan mode. `PlanSearchParams.hover_stops`
+switches it:
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `plan_search_params.hover_stops` (`--plan-search-params '{"hover_stops": false}'`) | true | True: the search runs over S3a's stops with the hover rule applied, as recorded. False: over S3a's stops alone, so a capped device its S3a stop cannot serve alone stays there, and the cap's `unplannable` reads S3a's stops. |
+
+It lives in the search settings, the stop family the search runs over, so it needs no new plan
+field: `PlanSearchParams.as_dict` leaves it out at True, so a plan's `mule_ready` and every pinned
+dict keep their keys, and the row's `ferry_params` records `plan_search_params` as given (`{}` at the
+defaults, `{"hover_stops": false}` when off). The build plan expected the switch to change every
+plan arm's `ferry_params` string; this way only a run that sets it shows it, and no recorded string
+moves. Study 5.14's "hover off" arm is F with this setting. The S\* tool prices the hover rule's
+stops (§18.7); a cap set for a hover-off run is the user's call (`layout_s_star(..., hover=False)`
+prices S3a's stops alone).
+
+```bash
+python -m experiments.exp4.runner_main --csv results/exp5/s514/hover_off.csv --arms F --mission-clock sim --contact-band wide --plan-search-params '{"hover_stops": false}' ...
+```
+
+### 20.7 Data heterogeneity and the detector's metrics (Study 5.13)
+
+Every recorded trial split its training rows IID (`partition_indices`: an even cut of a seeded
+permutation) and scored the global model by accuracy, AUC and loss only. All of the below is opt-in
+and needs `--real-model` (the stub trainer has no data); at the defaults the task, its files, the
+events and the rows are the recorded ones.
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `Exp4Driver.partition` (`--partition`) | `iid` | `iid`: the recorded split, exactly. `dirichlet`: label skew, each class's rows shared over the devices by Dir(α·1_N) (Hsu et al. 2019; the NIID-Bench rule), over the attack families with `family_labels`, else over the binary label. `quantity`: shard sizes Dir(α·1_N), each shard a mix as in IID. |
+| `Exp4Driver.dirichlet_alpha` (`--dirichlet-alpha`) | None | α > 0, finite (1 moderate, 0.1 strong); needed by `dirichlet` and `quantity`, refused with `iid` (α = ∞). |
+| `Exp4Driver.family_labels` (`--family-labels`) | off | Keep each row's CICIoT2023 attack family beside the binary label (`partition.FAMILIES`: Benign = 0 and the legacy loader's seven `DICT_7CLASSES` families), in the task and as a `family` array in the shard and test `.npz` files. The model stays binary and the devices never read the family. |
+
+**The partitioner** (`experiments/exp4/partition.py`). Every draw is a function of the trial seed,
+the partition and α (paired arms hold the same shards), and a skewed partition re-cuts the IID
+rows: the test set and the training rows are the IID task's, so an α sweep is paired too. **No shard
+is empty:** a draw that leaves a device short is drawn again (up to `MAX_DRAWS`, 1,000), and a
+partition that still cannot fill every device is refused; `prepare_trial` also refuses any task with
+an empty shard, which would train nothing and report zero metrics silently.
+
+**The family label on the canonical data.** `load_and_balance_data_stratified` keeps its
+`original_label` column when asked (`keep_original_label`, off by default, when it drops it as
+recorded); the loader maps it through `DICT_7CLASSES` and carries it by row index through the
+canonical `preprocess_dataset`, which shuffles and splits by position and keeps the index, so the
+family never enters the features. The synthetic task draws a family per row from a stream of its
+own (Benign for class 0, an attack family uniformly for class 1), moving no row.
+
+**The detector's metrics.** When the cluster's test set carries the families, `model_eval` adds
+`detection` (`model_task.detection_metrics`): the confusion counts (`tp`, `fp`, `tn`, `fn`), `tpr`
+(recall on attacks), `fpr`, `precision` and `f1` (null where a denominator is 0), and per family
+present its rows (`n_by_family`) and recall (`recall_by_family`: flagged for an attack family,
+passed for Benign, so Benign's is 1 − FPR). Without the families the event is the recorded one. The
+consumer reads it as `ModelEvalPoint.detection` (`Detection`). H0's in-process evaluation does not
+compute it.
+
+**The status marker** of a kept trace records a non-default data setting as `data`:
+`partition`, `dirichlet_alpha`, `family_labels` and `shard_rows`, each device's training rows by its
+id. The trial CSV's header is unchanged and its row does not record the setting: write each setting
+to its own CSV.
+
+**Scorer columns** (`traces_scorer.DETECTION_COLUMNS`, `--detection-columns`, last):
+`data_partition` and `data_alpha` (from the marker), `network_aou_shard_weighted_mean` (Network
+AoU with each device weighted by its shard's rows), and the final evaluation's `tpr_final`,
+`fpr_final`, `precision_final`, `f1_final`, `recall_by_family_final` (JSON) and
+`recall_family_min` (the worst attack family's, Benign left out). Blank where the trace cannot say;
+the final accuracy and AUC are the summary's own columns.
+
+```bash
+python -m experiments.exp4.runner_main --csv results/exp5/s513/dir01.csv --arms F FX H1 D3 --real-model --family-labels --partition dirichlet --dirichlet-alpha 0.1 --keep-event-traces ...
+python -m experiments.analysis.traces_scorer --traces results/exp5/s513/dir01_traces --detection-columns --csv results/exp5/s513/dir01_scored.csv
+```
+
+### 20.8 The model's architecture (Study 5.12)
+
+`build_ids_model` built `create_CICIOT_Model` only. `model_task.MODEL_ARCHS` makes the architecture a
+setting; each is a binary classifier over the canonical inputs with one sigmoid output, so local
+training (FedProx included), the evaluation (the detection metrics included) and the merge treat
+them alike, and each is deterministic from the seed. θ at 21 inputs, float32:
+
+| `--model-arch` | Builder (`Config/modelStructures/NIDS/NIDS_Struct.py`) | θ |
+|---|---|---|
+| `ciciot` (default, None) | `create_CICIOT_Model`: dense 64-32-16-8-4-1, every recorded run's | 18,756 B |
+| `balanced` | `create_balanced_nids`: separable Conv1D + GRU | 41,360 B |
+| `optimized` | `create_optimized_model`: a dense residual stack | 92,676 B |
+| `high_performance` | `create_high_performance_nids`: Conv1D + GRU + LSTM | 347,396 B |
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `Exp4Driver.model_arch` (`--model-arch`) | None | The architecture the seed θ (`initial_theta`), every device's trainer (`make_local_train_fn`) and the cluster's evaluation (`evaluate_theta`) build. Real model only (refused otherwise, and an unknown name). The measured payload follows θ's size on the simulated clock, so the larger models' dwell and upload grow with them; `--payload-bytes` still declares one. |
+| `DeviceConfig.model_arch`, `ClusterConfig.model_arch` | None | Set by the topology builder; written to the per-role JSON only when set (`CONFIG_FIELDS_OMITTED_AT_NONE`), so a recorded trial's JSON keeps its keys. |
+
+At None every builder is called exactly as recorded (no `arch` keyword is passed). The row does not
+record the architecture: write each to its own CSV (the kept per-role JSON names it).
+
+```bash
+python -m experiments.exp4.runner_main --csv results/exp5/s512/hp.csv --arms F FX H1 D5 D4 --real-model --model-arch high_performance --mission-clock sim --contact-band wide ...
+```
+
+### 20.9 Training time on the simulated clock, and the device energy (Study 5.12)
+
+Every recorded run charged a device's local fit nothing on the simulated clock: an update was always
+ready when the mule came. With `--train-time-s`, each device's fit takes simulated time and a Pass-1
+contact can find no update ready.
+
+**The draw** (`experiments/exp4/compute.py`). Each device's fit time `T_j` comes from four settings
+and the trial seed. A device's draws are keyed by the seed and its id, so every arm of a trial holds
+the same times:
+
+| Setting (flag) | Default | Meaning |
+|---|---|---|
+| `median_s` (`--train-time-s`) | off | The median fit time, simulated s (>= 0). 0 is the sweep's "none" level. It flies exactly as a recorded run (no contact is ever not ready), but it records the fits and uplinks for the device energy. |
+| `sigma` (`--train-time-sigma`) | 0 | The log-normal spread: `T_j = median_s * exp(sigma * z_j)`, with `z_j` a standard normal. |
+| `straggler_share` (`--straggler-share`) | 0 | Exactly `round(share * N)` devices (half up) straggle; the plan's "20 % stragglers at 5×" is 0.2 with factor 5. |
+| `straggler_factor` (`--straggler-factor`) | 1 | The stragglers' time multiple (>= 1). |
+
+`Exp4Driver.train_time_params` holds them (the simulated clock only; refused otherwise). The topology
+builder draws `T_j` for every device and gives each mule its slice's times in two fields.
+`MuleConfig.device_train_time_s` holds the per-device times, the ground truth, never shown in
+`ferry_params`, as the availability is not. `MuleConfig.train_time_params` holds the settings, and
+the row's `ferry_params` shows them as `train_time_params`.
+
+**The model** (`hermes/mule/fit_clock.py`, the mule's `FitClock`). It lives on the mule, as the
+availability draw does:
+
+* Each device starts its first fit at the mule's first takeoff: it was deployed with the seed model.
+* A device starts a new fit each time a model reaches it: a Pass-1 push (collected, uplink dropped
+  or unanswered) or a Pass-2 delivery, at that session's stamp (`ContactCommit.pushed`).
+* A Pass-1 contact at time t finds an update ready iff `t >= start_j + T_j`.
+
+A target that is not ready is named in the solicit (`FLOpenSolicit.not_ready`) and answers with its
+advert. Nothing is pushed to it, so its fit runs on and its basis is kept. It costs no airtime and no
+listen window, and is recorded as a TIMEOUT (`ContactPlan.not_ready`, `ContactCommit.not_ready`). The
+device code trains after a delivery, and after a Pass-1 push when asked to train ahead, so the model
+times its fits exactly there. One case is optimistic: a device that adopts a Pass-1 basis without
+training ahead (an unbudgeted Pass 2) and then misses its delivery. It fits at its next contact, on
+that contact's model, but the model times that fit from the basis it last received.
+
+**The records**, only when the mule has train times, so no recorded trace gains a key:
+
+* `mission_completed.train_fits`: every fit the mission started, `[device, start_s]`.
+* Each Pass-1 stop's `not_ready`: the targets found with no update ready.
+* Each Pass-1 stop's `uplink_s`: each collected update's own uplink airtime (`ContactCommit.uplink_dwell_s`: its bytes at its session's SNR; empty without a band).
+* `mule_ready.train_time_params` and `train_time_n`: the settings and how many devices the clock times (never the per-device times).
+
+**The scorer** (`traces_scorer --compute-columns`, last in the row; `compute_report`):
+
+| Column | Meaning |
+|---|---|
+| `train_time_median_s`, `train_time_sigma`, `straggler_share`, `straggler_factor` | The settings, from the mule config. |
+| `pass_1_target_contacts`, `not_ready_contacts`, `not_ready_share` | Pass-1 targets solicited, those that found no update ready, and their share. |
+| `pass_1_clean_share` | CLEAN Pass-1 sessions per target contact. The summary's own `update_yield` is the plan's update yield. |
+| `policy_not_ready_drops` | The devices arm D5's readiness test left out before takeoff (0 for every other arm). |
+| `device_train_busy_s` | The devices' fit seconds. Each fit runs `T_j`, or until a newer model restarts it, or until its mule's last mission ends, whichever comes first. |
+| `device_uplink_s` | The collected updates' uplink airtime. |
+| `device_p_comp_w`, `device_p_tx_w` | The powers used: `--device-p-comp-w` (default 5.0 W) and `--device-p-tx-w` (default 1.0 W). These are placeholders for the modelled device. |
+| `device_energy_j_total`, `device_energy_j_max` | Per device, `P_comp × busy + P_tx × uplink`, as the total and for the most loaded device. |
+
+The study's "none" level is `--train-time-s 0`, so its rows carry the same columns.
+
+**The baselines that read the update times** (the user's decisions of 2026-10-03). With train times,
+the mule process binds its fit clock to a whole-scheduler baseline that reads it
+(`bind_fit_clock`), and `mule_ready.train_time_policy` names it:
+
+* **D5, FedCS: a readiness test, no waiting** (deviation 3 of `policies/fedcs_degraded.py`). FedCS
+  counts each client's update time in the round. A mule cannot wait at a stop for an update without a
+  capability no other arm has, so the term becomes a test. At each step of Algorithm 3 the candidates
+  are the contacts with a member whose update is ready at the predicted arrival (`ready_at <= clock +
+  transit`). A contact none of whose members is ready stays for later steps, and the walk ends when no
+  remaining contact has one. Whole stops are priced whole; under member subsets a candidate is reduced
+  to its ready members. What the test left out is reported in `pass_1_policy_drops` with reason
+  `not_ready`; the scorer counts those devices as `policy_not_ready_drops`.
+* **D2, Oort: the system-speed term restored** (deviation 1 of `policies/oort.py`). Each explored
+  member's utility, staleness bonus included, is multiplied by `(T / t_i) ** alpha` when `t_i > T`
+  (Oort's Eq. 2 and Algorithm 1). `t_i` is the device's fit time plus its predicted dwell at the
+  contact: the shared feasibility model's per-member dwell, one session without a band, and `inf` for
+  a member predicted unreachable. `T` is the cell's T_nom, and `alpha` is Oort's default, 2. The
+  driver computes T_nom for D2 whenever train times are set, and `mule_config_errors` refuses D2 with
+  train times but no `t_nom_s`. Oort does not test readiness, so D2 still flies to a device whose
+  update is not ready; the term only ranks slow devices lower.
+
+Without train times nothing is bound, and both policies are the recorded ones.
+
+```bash
+python -m experiments.exp4.runner_main --csv results/exp5/s512/strag.csv --arms F FX H1 D5 D4 --mission-clock sim --contact-band wide --train-time-s 60 --straggler-share 0.2 --straggler-factor 5 --keep-event-traces results/exp5/s512/traces ...
+python -m experiments.analysis.traces_scorer --traces results/exp5/s512/traces --compute-columns --csv results/exp5/s512/scored.csv
+```
 
 ---
 

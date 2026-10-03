@@ -156,11 +156,14 @@ class _LiveSink:
 # came back. ``NO_REPLY``: the push went out and no matching reply came in the
 # TTL, or the uplink was dropped by the availability draw. ``REFUSED``: Pass 1's
 # S2B gate turned the advert down, nothing was pushed. ``PUSH_FAILED``: the link
-# refused the push.
+# refused the push. ``NOT_READY`` (Exp 5 addendum, Study 5.12): the plan names
+# the target as having no update ready on the fit clock; its advert came,
+# nothing was pushed.
 _REPLIED = "replied"
 _NO_REPLY = "no_reply"
 _REFUSED = "refused"
 _PUSH_FAILED = "push_failed"
+_NOT_READY = "not_ready"
 # How the commit classes the other members: never solicited (the gate), or
 # solicited with no advert answering this contact's solicit.
 _UNREACHABLE = "unreachable"
@@ -190,6 +193,7 @@ class _FerryContext:
     synth_batch: Any
     min_utility: float
     drop_uplink: FrozenSet[DeviceID]
+    not_ready: FrozenSet[DeviceID] = frozenset()
 
 
 class _BufferSink:
@@ -1113,6 +1117,7 @@ class HFLHostMission:
             min_utility=min_utility,
             drop_uplink=frozenset(plan.drop_uplink) if spec.kind is MissionPass.COLLECT
             else frozenset(),
+            not_ready=frozenset(plan.not_ready),
         )
         target_set = set(plan.targets)
         targets = [did for did in members if did in target_set]
@@ -1131,13 +1136,17 @@ class HFLHostMission:
                 sink.stale("ack", self._drain(
                     lambda timeout, _d=did: self.rf.recv_delivery_ack(_d, timeout=timeout)))
 
-            # 3. Targeted, numbered solicit.
+            # 3. Targeted, numbered solicit. Exp 5 addendum (Study 5.12): the
+            #    targets with no update ready are named in it, so they wait for
+            #    no push; the field is left at its default otherwise.
+            not_ready = tuple(did for did in targets if did in ctx.not_ready)
             solicit = FLOpenSolicit(
                 mule_id=self.mule_id,
                 mission_round=mission_round,
                 issued_at=plan.arrival_ts,
                 pass_kind=spec.kind,
                 solicit_id=solicit_id,
+                **({"not_ready": not_ready} if not_ready else {}),
             )
             try:
                 reached = list(self.rf.solicit(solicit, targets))
@@ -1227,6 +1236,11 @@ class HFLHostMission:
                 "deliver_contact: drop_uplink is a Pass-1 availability draw; "
                 "Pass 2 faces the SNR gate only"
             )
+        if spec.kind is MissionPass.DELIVER and plan.not_ready:
+            raise ValueError(
+                "deliver_contact: not_ready is a Pass-1 mark (no update to collect); "
+                "a delivery needs none"
+            )
         clock_now = plan.clock()
         if clock_now != plan.arrival_ts or self.now_fn() != plan.arrival_ts:
             raise ValueError(
@@ -1288,6 +1302,11 @@ class HFLHostMission:
         self, did: DeviceID, adv: FLReadyAdv, ctx: _FerryContext, sink: _BufferSink,
     ) -> None:
         """Pass-1 ferry session with one answered target; records nothing itself."""
+        if did in ctx.not_ready:
+            # Exp 5 addendum (Study 5.12): no update ready on the fit clock.
+            # The device was told so in the solicit and waits for no push.
+            sink.put(did, _FerrySession(_NOT_READY))
+            return
         # S2B gate on arrival, as in legacy.
         if not adv.is_eligible() or adv.utility < ctx.min_utility:
             sink.put(did, _FerrySession(_REFUSED))
@@ -1411,6 +1430,9 @@ class HFLHostMission:
           once for the contact (critic C7). Missing means silent (no advert
           answered this contact's solicit, no push), uplink dropped, or pushed
           with no matching reply by the TTL or by the join deadline;
+        * a target the plan marks ``not_ready`` (Exp 5 addendum, Study 5.12)
+          costs nothing and is stamped at the current ``t``, as a refused one:
+          its advert came and nothing was pushed;
         * without a band the contact costs ``session_time_s`` once (critic A1)
           and every answered session ends there.
 
@@ -1460,6 +1482,7 @@ class HFLHostMission:
         stamps: Dict[DeviceID, float] = {}
         snrs: Dict[DeviceID, Optional[float]] = {}
         dwell_by_device: Dict[DeviceID, float] = {}
+        uplink_by_device: Dict[DeviceID, float] = {}
         missing: List[DeviceID] = []
 
         def charge(did: DeviceID, t: float, nbytes: int) -> float:
@@ -1482,7 +1505,7 @@ class HFLHostMission:
             elif kind == _SILENT:
                 snrs[did] = plan.snr_db[did] if banded else None
                 missing.append(did)
-            elif kind in (_REFUSED, _PUSH_FAILED):
+            elif kind in (_REFUSED, _PUSH_FAILED, _NOT_READY):
                 snrs[did] = plan.snr_at(did, t)
                 stamps[did] = t
             elif kind == _REPLIED:
@@ -1494,6 +1517,11 @@ class HFLHostMission:
                     nbytes = plan.session_bytes(push_bytes[did], 1)
                 t = charge(did, t, nbytes)
                 stamps[did] = t
+                if collect and banded:
+                    # Study 5.12: the update's own share, for the device's
+                    # transmit energy; read only, nothing is charged for it.
+                    uplink_by_device[did] = plan.session_dwell_s(
+                        plan.session_bytes(grad.byte_count, 1), snrs[did])
             else:  # _NO_REPLY: the push's airtime was spent, the reply never came
                 t = charge(did, t, plan.session_bytes(push_bytes[did], 1))
                 missing.append(did)
@@ -1581,6 +1609,15 @@ class HFLHostMission:
                 outcome = MissionOutcome.TIMEOUT
                 self._record_outcome(outcome=outcome, bytes_received=0,
                                      bytes_sent=0, **common)
+            elif kind == _NOT_READY:
+                # Exp 5 addendum (Study 5.12): the advert came, no update was
+                # ready, nothing was pushed. Recorded as a contact out of
+                # session and a TIMEOUT: the round got no update from it.
+                outcome = MissionOutcome.TIMEOUT
+                self._record_contact(adv, in_session=False, contact_ts=ts,
+                                     snr_at_contact=rec_snr)
+                self._record_outcome(outcome=outcome, bytes_received=0,
+                                     bytes_sent=0, **common)
             elif kind == _NO_REPLY:
                 outcome = MissionOutcome.TIMEOUT
                 self._record_contact(adv, in_session=True, contact_ts=ts,
@@ -1628,6 +1665,9 @@ class HFLHostMission:
             session_dwell_s=dict(dwell_by_device),
             stale_discarded=dict(stale),
             solicit_id=ctx.solicit_id,
+            not_ready=tuple(did for did in members if klass[did] == _NOT_READY),
+            pushed=tuple(did for did in members if klass[did] in (_REPLIED, _NO_REPLY)),
+            uplink_dwell_s=dict(uplink_by_device),
         )
         log.info(
             "ferry %s mule=%s round=%d band=%s members=%d targets=%d answered=%d "

@@ -580,7 +580,9 @@ def test_the_arm_lists():
     assert DEFAULT_ARMS == ("H0", "H1", "H2", "H3", "D1", "D2", "D3", "D4", "D5")
     assert PLAN_ARMS == ("F", "FX", "FB+wide", "FB+medium", "FB+narrow", "F-cov", "F-cap",
                          "F-prio")
-    assert ARMS == DEFAULT_ARMS + PLAN_ARMS + PHASE_5_ARMS and len(set(ARMS)) == len(ARMS)
+    # and the Exp 5 addendum's F+L1 (tests/unit/test_exp5_f_l1.py)
+    assert ARMS == DEFAULT_ARMS + PLAN_ARMS + PHASE_5_ARMS + ("F+L1",)
+    assert len(set(ARMS)) == len(ARMS)
 
 
 @pytest.mark.parametrize("arm", PLAN_ARMS)
@@ -913,10 +915,14 @@ def test_at_the_defaults_no_trace_gains_a_plan_field(name):
         drops = missions[i]["pass_1_policy_drops"]
         assert drops and all(d["widened"] is False for d in drops)
     configs = P3.added_keys(golden["configs"], case["configs"])
-    new_keys = PLAN_MULE_FIELDS + C.CHECKPOINT_MULE_FIELDS     # and Phase 5's six
+    # and Phase 5's six, and the Exp 5 addendum's fields
+    new_keys = PLAN_MULE_FIELDS + C.CHECKPOINT_MULE_FIELDS + C.ADDENDUM_MULE_FIELDS
     assert sorted(configs) == sorted(f"$.mule-exp4-mule.json.{f}" for f in new_keys)
     mule_json = json.loads(json.dumps(case["configs"]["mule-exp4-mule.json"], default=str))
     assert {f: mule_json[f] for f in PLAN_MULE_FIELDS} == PLAN_DEFAULTS
+    defaults = MuleConfig(mule_id="m")
+    assert {f: mule_json[f] for f in C.ADDENDUM_MULE_FIELDS} == {
+        f: getattr(defaults, f) for f in C.ADDENDUM_MULE_FIELDS}
 
 
 def test_a_recorded_path_loads_no_plan_module():

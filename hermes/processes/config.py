@@ -236,6 +236,11 @@ class ClusterConfig:
     # ``band`` index on a report line; None is the D1 default (wide, medium,
     # narrow). Must match the mules'.
     contact_band_classes: Optional[List[str]] = None
+    # Exp 5 addendum (Study 5.12): the IDS model's architecture
+    # (``experiments.exp4.model_task.MODEL_ARCHS``) the cluster evaluates;
+    # None is the canonical CICIoT model, every recorded run's. Written to the
+    # per-role JSON only when set (:data:`CONFIG_FIELDS_OMITTED_AT_NONE`).
+    model_arch: Optional[str] = None
 
 
 @dataclass
@@ -403,6 +408,11 @@ class MuleConfig:
     noise_bin_s: float = 1.0
     shadow_corr_s: float = 7.4
     shadow_keying: str = "time"
+    # Exp 5 addendum, Study 5.15: the contact regime's interference amplitude
+    # A and noise sigma_I (dB), overridden; None keeps the regime's own (the
+    # recorded run), and leaves each out of ``ferry_params``.
+    interference_amp_db: Optional[float] = None
+    interference_sigma_db: Optional[float] = None
     # D3 — flight and SIMULATED energy (Zeng-Xu-Zhang 2019 at the cruise
     # speed unless the powers are given; capacity None = no energy clause).
     cruise_speed_m_s: float = 5.0
@@ -424,6 +434,19 @@ class MuleConfig:
     # registration (``TCPRFLinkServer(link_token=...)``). None (every recorded
     # run) accepts any; one value per trial across its mules and devices.
     rf_link_token: Optional[str] = None
+    # Exp 5 addendum, Study 5.12 — the devices' local fits on the simulated
+    # clock (hermes/mule/fit_clock.py). ``device_train_time_s`` is each
+    # device's fit time in simulated seconds, {device_id: T_j}, the slice's
+    # ground truth, drawn by the topology builder from ``train_time_params``
+    # (experiments/exp4/compute.py: the median, the log-normal spread and the
+    # stragglers) and the trial seed. Set together or not at all; simulated
+    # clock only. None, every recorded run: every Pass-1 contact finds an
+    # update ready. ``ferry_params`` shows the settings, never the per-device
+    # times (as it never shows the availability). Declared here because tests
+    # pin the RF prior schedule, the checkpoints and the plan fields as the
+    # class's last fields.
+    device_train_time_s: Optional[Dict[str, float]] = None
+    train_time_params: Optional[Dict[str, float]] = None
     # Critic B4 — the causal RF prior under the recorded ``mission`` backhaul
     # model with the L1 channel (``--l1-channel``). Entry r - 1 is the SNR
     # (dB) the L1 trace gives the carrier chosen for mission round r's upload
@@ -544,6 +567,8 @@ FERRY_SPEC_FIELDS: Dict[str, str] = {
     "noise_bin_s": "noise_bin_s",
     "shadow_corr_s": "shadow_corr_s",
     "shadow_keying": "shadow_keying",
+    "interference_amp_db": "interference_amp_db",
+    "interference_sigma_db": "interference_sigma_db",
     "cruise_speed_m_s": "cruise_speed_m_s",
     "turnaround_s": "turnaround_s",
     "listen_s": "listen_s",
@@ -551,6 +576,26 @@ FERRY_SPEC_FIELDS: Dict[str, str] = {
     "p_move_w": "p_move_w",
     "p_hover_w": "p_hover_w",
 }
+
+#: Every ``MuleConfig`` field the Exp 5 addendum (Studies 5.11-5.15) adds, each
+#: at a default that is the recorded run, so a recorded trial's per-role JSON
+#: gains exactly these keys at their defaults; the tests that pin what it gains
+#: (Freeze Rule 1, additive fields only) name them beside Phase 4's plan fields
+#: and Phase 5's checkpoint fields.
+ADDENDUM_MULE_FIELDS: Tuple[str, ...] = (
+    "interference_amp_db", "interference_sigma_db",
+    "device_train_time_s", "train_time_params",
+)
+
+#: Study 5.12's mule fields: each device's fit time on the simulated clock and
+#: the settings it was drawn from (``MuleConfig``'s training-time block).
+TRAIN_TIME_MULE_FIELDS: Tuple[str, ...] = ("device_train_time_s", "train_time_params")
+
+#: Ferry fields a trial's ``ferry_params`` leaves out while they are None (the
+#: Exp 5 addendum): their None is the recorded run (the contact regime's own
+#: interference amplitude and noise, Study 5.15), so every recorded row keeps
+#: its string, and a run that sets one shows it.
+FERRY_PARAMS_OMITTED_AT_NONE: Tuple[str, ...] = ("interference_amp_db", "interference_sigma_db")
 
 #: ``MuleConfig``'s FeRRy Phase 4 plan fields: ``plan_mode`` and the plan
 #: options (:data:`PLAN_OPTION_FIELDS`). Not ferry-spec fields (the spec prices
@@ -587,7 +632,7 @@ CHECKPOINT_MULE_FIELDS: Tuple[str, ...] = PAIR_CHECKPOINT_FIELDS + POLICY_CHECKP
 #: law parameter on either clock.
 SIM_ONLY_MULE_FIELDS: Tuple[str, ...] = tuple(FERRY_SPEC_FIELDS) + (
     "trial_seed", "input_dim", "rf_prior_schedule_db",
-) + CHECKPOINT_MULE_FIELDS + PLAN_MULE_FIELDS
+) + CHECKPOINT_MULE_FIELDS + PLAN_MULE_FIELDS + TRAIN_TIME_MULE_FIELDS
 
 
 def _field_default(cls, name: str) -> Any:
@@ -695,6 +740,38 @@ def mule_config_errors(cfg: "MuleConfig") -> List[str]:
             )
     errors += _plan_config_errors(cfg)
     errors += _learned_config_errors(cfg)
+    errors += _train_time_config_errors(cfg)
+    return errors
+
+
+def _train_time_config_errors(cfg: "MuleConfig") -> List[str]:
+    """Study 5.12's two fields on the simulated clock: set together, the
+    times finite and >= 0 per device id, the settings a dict; and arm D2's
+    restored speed term needs T_nom (its T)."""
+    times = getattr(cfg, "device_train_time_s", None)
+    params = getattr(cfg, "train_time_params", None)
+    if times is None and params is None:
+        return []
+    errors: List[str] = []
+    if (times is None) != (params is None):
+        errors.append(
+            "device_train_time_s and train_time_params are set together (the times and "
+            "the settings they were drawn from), or not at all"
+        )
+    if times is not None:
+        if not isinstance(times, dict) or not all(
+                isinstance(k, str) and _finite_number(v) and float(v) >= 0.0
+                for k, v in times.items()):
+            errors.append(
+                f"device_train_time_s must map device ids to finite times >= 0 s, got {times!r}"
+            )
+    if params is not None and not isinstance(params, dict):
+        errors.append(f"train_time_params must be a dict, got {params!r}")
+    if getattr(cfg, "contact_policy", None) == "oort" and cfg.t_nom_s is None:
+        errors.append(
+            "contact_policy='oort' (arm D2) with train times restores Oort's system-speed "
+            "term, whose preferred round duration T is the cell's T_nom: set t_nom_s"
+        )
     return errors
 
 
@@ -1005,6 +1082,22 @@ class DeviceConfig:
     # trial share one value. None (every recorded run) sends no token; a mule
     # without one accepts any.
     rf_link_token: Optional[str] = None
+    # Exp 5 addendum (Study 5.12): the IDS model's architecture the device
+    # trains (``model_task.MODEL_ARCHS``); None is the canonical CICIoT model.
+    # Must match the cluster's. Written to the JSON only when set.
+    model_arch: Optional[str] = None
+
+
+#: ``ClusterConfig`` and ``DeviceConfig`` fields the Exp 5 addendum adds whose
+#: None is every recorded run: their per-role JSON leaves each out while it is
+#: None, so a recorded trial's JSON keeps its keys, and a reader takes the
+#: default for an absent key.
+CONFIG_FIELDS_OMITTED_AT_NONE: Tuple[str, ...] = ("model_arch",)
+
+
+def _set_fields(raw: Dict[str, Any]) -> Dict[str, Any]:
+    return {k: v for k, v in raw.items()
+            if not (k in CONFIG_FIELDS_OMITTED_AT_NONE and v is None)}
 
 
 class TopologyValidationError(ValueError):
@@ -1246,7 +1339,7 @@ class TopologyConfig:
 # device positions it has no need for.
 
 def cluster_config_to_json(cfg: ClusterConfig) -> str:
-    return json.dumps(asdict(cfg), indent=2)
+    return json.dumps(_set_fields(asdict(cfg)), indent=2)
 
 
 def cluster_config_from_json(payload: str) -> ClusterConfig:
@@ -1262,7 +1355,7 @@ def mule_config_from_json(payload: str) -> MuleConfig:
 
 
 def device_config_to_json(cfg: DeviceConfig) -> str:
-    raw = asdict(cfg)
+    raw = _set_fields(asdict(cfg))
     # asdict converts the position tuple to a list — preserve the
     # tuple-shape on the inverse via a custom decoder below.
     return json.dumps(raw, indent=2)

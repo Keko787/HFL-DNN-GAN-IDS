@@ -439,6 +439,8 @@ class FerrySpec:
         band_classes: Optional[Sequence[Any]] = None,
         contact_regime: str = "clean",
         interference_period_s: float = 60.0,
+        interference_amp_db: Optional[float] = None,
+        interference_sigma_db: Optional[float] = None,
         noise_bin_s: float = 1.0,
         shadow_corr_s: float = 7.4,
         shadow_keying: str = "time",
@@ -480,6 +482,12 @@ class FerrySpec:
         carrier means ``base + g_c`` alone (``BackhaulChannel.pred_snr_db``),
         which do not depend on the period. Then build the cell's spec with
         ``n_missions`` and ``t_nom_s``.
+
+        Exp 5 addendum (Study 5.15): ``interference_amp_db`` and
+        ``interference_sigma_db`` override the contact regime's interference
+        amplitude A and noise sigma_I (None keeps the regime's own: 1 and
+        0.4 dB clean, 5 and 1.5 dB jittery); they are the definition's only
+        change, forwarded to ``ContactChannel.from_link``.
         """
         _choice(backhaul_model, BACKHAUL_MODELS, "backhaul_model")
         classes = {} if band_classes is None else {"classes": tuple(band_classes)}
@@ -494,6 +502,8 @@ class FerrySpec:
                 link, salt=ferry_salt(seed, SALT_CONTACT), regime=contact_regime,
                 interference_period_s=interference_period_s, noise_bin_s=noise_bin_s,
                 shadow_corr_s=shadow_corr_s, shadow_keying=shadow_keying,
+                interference_amp_db=interference_amp_db,
+                interference_sigma_db=interference_sigma_db,
             )
         backhaul = None
         mission_upload_snr_db = None

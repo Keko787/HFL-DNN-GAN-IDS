@@ -64,6 +64,14 @@ go-ahead). The commands, in a campaign's order (the spec, other choices 12):
     why: a sweep off it, the calibration's for one, is read by the same rule
     and labelled, not refused (resolution R26).
 
+``pilot``
+    The Exp 5 addendum's budget pilot and decision cost
+    (``experiments.ferrysim.pilot``; Study 5.11 (a) and (c)), its own options
+    (``pilot --help``): every (cell, budget, policy) on the first episodes of
+    each cell's validation stream, with the served share per mission and the
+    episode's, the planner's and each flight decision's wall time; the
+    scale family's knee is read off its table.
+
 ``train`` and ``sweep`` refuse a dirty tree unless ``--allow-dirty`` is given,
 and the manifest records the tree's commit and dirty flag (other choices 6).
 They never overwrite a checkpoint unless ``--overwrite`` is given, and never
@@ -87,7 +95,7 @@ from experiments.ferrysim import cells as C
 from experiments.ferrysim.reward import REWARD_BYTES, REWARD_DERIVED, REWARD_HAND, RewardSpec
 
 PROG = "python -m experiments.ferrysim"
-COMMANDS = ("headroom", "train", "sweep", "evaluate", "report")
+COMMANDS = ("headroom", "train", "sweep", "evaluate", "report", "pilot")
 
 
 def _write_json(path: str, data: Any) -> None:
@@ -539,6 +547,8 @@ def parser() -> argparse.ArgumentParser:
     sub = ap.add_subparsers(dest="command", required=True, metavar="{" + ",".join(COMMANDS) + "}")
     sub.add_parser("headroom", help="The headroom report (its own options: headroom --help).",
                    add_help=False)
+    sub.add_parser("pilot", help="The Exp 5 addendum's budget pilot and decision cost (its own "
+                                 "options: pilot --help).", add_help=False)
     train = sub.add_parser("train", help="One training run.")
     _add_run_args(train)
     train.add_argument("--gamma", type=float, required=True, help="The run's γ, in [0, 1].")
@@ -604,6 +614,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         from experiments.ferrysim.headroom import main as headroom_main
 
         return headroom_main(argv[1:])
+    if argv and argv[0] == "pilot":
+        from experiments.ferrysim.pilot import main as pilot_main
+
+        return pilot_main(argv[1:])
     ap = parser()
     args = ap.parse_args(argv)
     command = {"train": _cmd_train, "sweep": _cmd_sweep, "evaluate": _cmd_evaluate,
