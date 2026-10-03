@@ -29,6 +29,21 @@ Pieces
 TensorFlow is imported lazily inside the functions that need it, so the
 data-loading path (numpy/pandas only) stays importable in environments
 without a GPU/TF warm-up cost.
+
+Exp 5 addendum (Study 5.13), all opt-in, the defaults the recorded task:
+
+* **Family labels** (``families=True``): each training and test row keeps its
+  CICIoT2023 attack family beside the binary label (``partition.FAMILIES``:
+  Benign and the seven families of the legacy loader's ``DICT_7CLASSES``,
+  Benign = 0), as ``CiciotTask.device_families`` and ``family_test``, and in
+  the ``.npz`` files as a ``family`` array (:func:`save_xy`), which the
+  devices never read. The model stays binary.
+* **Non-IID shards** (``partition``, ``alpha``; :mod:`experiments.exp4.partition`):
+  label skew over the families (or the binary label without them) or
+  quantity skew, every shard non-empty. ``iid`` is the recorded split.
+* **Detection metrics** (:func:`detection_metrics`): with the test set's
+  families, the evaluation adds the true- and false-positive rates,
+  precision, F1 and the recall of each family.
 """
 
 from __future__ import annotations
@@ -42,6 +57,7 @@ from typing import Callable, List, Optional, Sequence, Tuple
 import numpy as np
 
 from experiments.exp1.data_partition import partition_indices
+from experiments.exp4.partition import FAMILIES, PARTITION_IID, partition_rows
 
 log = logging.getLogger("experiments.exp4.model_task")
 
@@ -73,6 +89,11 @@ class CiciotTask:
     y_test: np.ndarray
     is_synthetic: bool
     feature_names: Tuple[str, ...] = field(default_factory=tuple)
+    #: Exp 5 addendum (Study 5.13): each row's family index (``FAMILIES``),
+    #: one array per device shard and one for the test set; None unless the
+    #: task was built with ``families=True``.
+    device_families: Optional[List[np.ndarray]] = None
+    family_test: Optional[np.ndarray] = None
 
     @property
     def n_devices(self) -> int:
@@ -261,11 +282,14 @@ def evaluate_theta(
     *,
     input_dim: Optional[int] = None,
     l2_alpha: float = 1e-3,
+    family: Optional[np.ndarray] = None,
 ) -> dict:
     """Accuracy / AUC / binary-cross-entropy of aggregated θ on held-out data.
 
     This is the per-round convergence signal for EX-4.1 — evaluated after
-    the cluster's cross-mule FedAvg produces θ' each round.
+    the cluster's cross-mule FedAvg produces θ' each round. With the test
+    rows' families (``family``; Exp 5 addendum, Study 5.13) the result also
+    holds ``detection``, :func:`detection_metrics` of the same predictions.
     """
     dim = int(input_dim if input_dim is not None else X_test.shape[1])
     model = build_ids_model(dim, l2_alpha=l2_alpha)
@@ -274,10 +298,12 @@ def evaluate_theta(
         model,
         np.asarray(X_test, dtype=np.float32),
         np.asarray(y_test, dtype=np.float32).reshape(-1),
+        family=family,
     )
 
 
-def _eval_with_model(model, X: np.ndarray, y: np.ndarray) -> dict:
+def _eval_with_model(model, X: np.ndarray, y: np.ndarray,
+                     family: Optional[np.ndarray] = None) -> dict:
     """Predict-based metrics — deterministic, independent of stateful
     Keras metric objects (BatchNorm/Dropout are inference-mode here)."""
     if len(y) == 0:
@@ -289,7 +315,57 @@ def _eval_with_model(model, X: np.ndarray, y: np.ndarray) -> dict:
     preds = (probs >= 0.5).astype(np.float32)
     accuracy = float(np.mean(preds == y))
     auc = _safe_auc(y, probs)
-    return {"accuracy": accuracy, "auc": auc, "loss": loss}
+    out = {"accuracy": accuracy, "auc": auc, "loss": loss}
+    if family is not None:
+        out["detection"] = detection_metrics(y, preds, family)
+    return out
+
+
+def _ratio(num: int, den: int) -> Optional[float]:
+    return None if den == 0 else float(num) / float(den)
+
+
+def detection_metrics(y: np.ndarray, preds: np.ndarray, family: np.ndarray) -> dict:
+    """The detector's own metrics (Exp 5 addendum, Study 5.13), from one prediction per row.
+
+    ``y`` is the binary label (attack 1), ``preds`` the predicted label (the
+    score >= 0.5, as accuracy reads it) and ``family`` each row's family index
+    (:data:`~experiments.exp4.partition.FAMILIES`, Benign 0). Returns the
+    confusion counts (``tp``, ``fp``, ``tn``, ``fn``); ``tpr`` (recall on
+    attacks), ``fpr``, ``precision`` and ``f1``, each None where its
+    denominator is 0; and per family present in the test set, its rows
+    (``n_by_family``) and the share classified correctly (``recall_by_family``:
+    flagged as an attack for an attack family, passed as benign for Benign,
+    so Benign's is 1 - FPR). Families are named, not indexed.
+    """
+    y = np.asarray(y, dtype=np.float32).reshape(-1)
+    preds = np.asarray(preds, dtype=np.float32).reshape(-1)
+    family = np.asarray(family).reshape(-1).astype(np.int64)
+    if not (len(y) == len(preds) == len(family)):
+        raise ValueError(f"y, preds and family differ in length: "
+                         f"{len(y)}, {len(preds)}, {len(family)}")
+    attack, flagged = y >= 0.5, preds >= 0.5
+    tp = int(np.sum(attack & flagged))
+    fp = int(np.sum(~attack & flagged))
+    tn = int(np.sum(~attack & ~flagged))
+    fn = int(np.sum(attack & ~flagged))
+    tpr = _ratio(tp, tp + fn)
+    precision = _ratio(tp, tp + fp)
+    f1 = (None if tpr is None or precision is None
+          else (0.0 if tpr + precision == 0.0 else 2.0 * tpr * precision / (tpr + precision)))
+    recall: dict = {}
+    counts: dict = {}
+    for index, name in enumerate(FAMILIES):
+        rows = family == index
+        n = int(np.sum(rows))
+        if n == 0:
+            continue
+        counts[name] = n
+        correct = flagged[rows] if index != 0 else ~flagged[rows]
+        recall[name] = float(np.mean(correct))
+    return {"tp": tp, "fp": fp, "tn": tn, "fn": fn, "tpr": tpr, "fpr": _ratio(fp, fp + tn),
+            "precision": precision, "f1": f1, "recall_by_family": recall,
+            "n_by_family": counts}
 
 
 def _safe_auc(y_true: np.ndarray, y_score: np.ndarray) -> float:
@@ -420,6 +496,9 @@ def load_ciciot_task_canonical(
     train_dataset_size: int = 20000,
     test_dataset_size: int = 8000,
     attack_eval_ratio: float = 0.5,
+    families: bool = False,
+    partition: str = PARTITION_IID,
+    alpha: Optional[float] = None,
 ) -> CiciotTask:
     """Paper-faithful CICIOT task via the **production** pipeline.
 
@@ -436,6 +515,17 @@ def load_ciciot_task_canonical(
     ``n_devices`` with the EX-1.2 deterministic index partition; the
     canonical held-out test split is the shared eval set. Falls back to
     :func:`synthetic_task` when the dataset is unavailable.
+
+    Exp 5 addendum (Study 5.13): ``families`` keeps each row's attack family
+    (the stratified loader's ``original_label`` through ``DICT_7CLASSES``)
+    beside the binary label. It travels by row: the frames get a fresh index
+    before the canonical preprocess, which shuffles and splits by position
+    and keeps the index, so the family is read back by it and never enters
+    the features. ``partition`` and ``alpha`` skew the shards
+    (:func:`~experiments.exp4.partition.partition_rows`: label skew over the
+    families when kept, else over the binary label); ``iid`` (the default) is
+    the recorded split, and with ``families`` off and ``iid`` this function
+    runs exactly as recorded.
     """
     data_dir = data_dir or default_ciciot_dir()
     if data_dir is None:
@@ -445,6 +535,7 @@ def load_ciciot_task_canonical(
         )
         return synthetic_task(
             n_devices=n_devices, rows_per_device=2000, test_rows=2000, seed=seed,
+            families=families, partition=partition, alpha=alpha,
         )
 
     import contextlib
@@ -457,6 +548,7 @@ def load_ciciot_task_canonical(
     # The fidelity-defining canonical helpers — reused verbatim.
     from Config.DatasetConfig.CICIOT2023_Sampling.ciciot2023DatasetLoadV2 import (
         DICT_2CLASSES,
+        DICT_7CLASSES,
         IRRELEVANT_FEATURES,
         load_and_balance_data_stratified,
         reduce_attack_samples,
@@ -485,8 +577,10 @@ def load_ciciot_task_canonical(
         for f in files:
             if benign >= benign_limit:
                 break
+            # Exp 5 addendum: keep the fine label only when the families are asked for.
+            extra = {"keep_original_label": True} if families else {}
             df, bc = load_and_balance_data_stratified(
-                f, DICT_2CLASSES, benign, benign_limit, verbose=False,
+                f, DICT_2CLASSES, benign, benign_limit, verbose=False, **extra,
             )
             pool = pd.concat([pool, df])
             benign += bc
@@ -495,6 +589,17 @@ def load_ciciot_task_canonical(
     train_df = _load_balanced(tr_files, benign_train_limit)
     test_df = _load_balanced(te_files, benign_test_limit)
     test_df = reduce_attack_samples(test_df, attack_eval_ratio)
+    fam_train = fam_test = None
+    if families:
+        # Each row's family, by a fresh index the preprocess keeps (it shuffles
+        # and splits by position), and out of the frame, so it is no feature.
+        index = {name: i for i, name in enumerate(FAMILIES)}
+        train_df = train_df.reset_index(drop=True)
+        test_df = test_df.reset_index(drop=True)
+        fam_train = train_df.pop("original_label").map(DICT_7CLASSES).map(index)
+        fam_test = test_df.pop("original_label").map(DICT_7CLASSES).map(index)
+        if fam_train.isna().any() or fam_test.isna().any():
+            raise ValueError("a CICIoT2023 label outside DICT_7CLASSES has no family")
 
     # The canonical preprocess is chatty — silence its prints.
     with contextlib.redirect_stdout(io.StringIO()):
@@ -508,7 +613,18 @@ def load_ciciot_task_canonical(
     X_test = X_te.to_numpy(dtype=_np.float32)
     y_test = y_te.to_numpy(dtype=_np.float32).reshape(-1)
 
-    shards = _partition_rows(X_train, y_train, n_devices=n_devices, seed=seed)
+    family_train = family_test = None
+    if families:
+        family_train = _np.concatenate([fam_train.loc[X_tr.index].to_numpy(),
+                                        fam_train.loc[X_val.index].to_numpy()]).astype(_np.int64)
+        family_test = fam_test.loc[X_te.index].to_numpy().astype(_np.int64)
+    if partition == PARTITION_IID and not families:
+        shards = _partition_rows(X_train, y_train, n_devices=n_devices, seed=seed)
+        device_families = None
+    else:
+        shards, device_families = _skewed_shards(
+            X_train, y_train, family_train, n_devices=n_devices, seed=seed,
+            partition=partition, alpha=alpha)
     return CiciotTask(
         input_dim=int(X_train.shape[1]),
         device_shards=shards,
@@ -516,6 +632,8 @@ def load_ciciot_task_canonical(
         y_test=y_test,
         is_synthetic=False,
         feature_names=tuple(X_tr.columns),
+        device_families=device_families,
+        family_test=family_test,
     )
 
 
@@ -527,6 +645,9 @@ def synthetic_task(
     seed: int,
     input_dim: int = INPUT_DIM,
     class_sep: float = 1.5,
+    families: bool = False,
+    partition: str = PARTITION_IID,
+    alpha: Optional[float] = None,
 ) -> CiciotTask:
     """Real-shaped, linearly-separable two-class Gaussian task.
 
@@ -536,6 +657,14 @@ def synthetic_task(
     *every* feature (a random sign per feature), so the signal is spread
     across all ``input_dim`` dimensions — strongly separable even for the
     heavily-regularized DNN-IDS (Dropout 0.4 on five layers). Balanced.
+
+    Exp 5 addendum (Study 5.13): the rows are drawn exactly as recorded
+    whatever the options. ``families`` then gives each row a family from a
+    stream of its own (Benign for class 0, one of the seven attack families
+    uniformly for class 1; labels only, the blobs do not depend on them).
+    ``partition``/``alpha`` other than ``iid`` pool the IID shards and re-cut
+    them (:func:`~experiments.exp4.partition.partition_rows`), so the test
+    set and the training rows are the IID task's, moved between devices.
     """
     rng = np.random.default_rng(_u32(seed, "synthetic", input_dim))
     # Per-feature class-mean offset: a random ±class_sep in each dimension.
@@ -552,13 +681,47 @@ def synthetic_task(
         _make(rows_per_device) for _ in range(n_devices)
     ]
     X_test, y_test = _make(test_rows)
+    names = tuple(f"f{i}" for i in range(input_dim))
+    if not families and partition == PARTITION_IID:
+        return CiciotTask(
+            input_dim=input_dim,
+            device_shards=shards,
+            X_test=X_test,
+            y_test=y_test,
+            is_synthetic=True,
+            feature_names=names,
+        )
+    fam_rng = np.random.default_rng(_u32(seed, "synthetic-family", input_dim))
+
+    def _families(y: np.ndarray) -> np.ndarray:
+        attack = fam_rng.integers(1, len(FAMILIES), size=len(y))
+        return np.where(y >= 0.5, attack, 0).astype(np.int64)
+
+    family_train = family_test = None
+    if families:
+        family_train = (np.concatenate([_families(y) for _, y in shards]) if shards
+                        else np.zeros(0, dtype=np.int64))
+        family_test = _families(y_test)
+    if partition == PARTITION_IID:
+        device_families = None
+        if families:
+            cuts = np.cumsum([len(y) for _, y in shards])[:-1]
+            device_families = list(np.split(family_train, cuts))
+    else:
+        X_pool = np.concatenate([X for X, _ in shards])
+        y_pool = np.concatenate([y for _, y in shards])
+        shards, device_families = _skewed_shards(
+            X_pool, y_pool, family_train, n_devices=n_devices, seed=seed,
+            partition=partition, alpha=alpha)
     return CiciotTask(
         input_dim=input_dim,
         device_shards=shards,
         X_test=X_test,
         y_test=y_test,
         is_synthetic=True,
-        feature_names=tuple(f"f{i}" for i in range(input_dim)),
+        feature_names=names,
+        device_families=device_families,
+        family_test=family_test,
     )
 
 
@@ -572,6 +735,20 @@ def _partition_rows(
     """Deterministic disjoint per-device shards via the EX-1.2 partition."""
     shards_idx = partition_indices(len(y), n_devices, seed=seed)
     return [(X[idx], y[idx]) for idx in shards_idx]
+
+
+def _skewed_shards(
+    X: np.ndarray, y: np.ndarray, family: Optional[np.ndarray], *, n_devices: int, seed: int,
+    partition: str, alpha: Optional[float],
+) -> Tuple[List[Tuple[np.ndarray, np.ndarray]], Optional[List[np.ndarray]]]:
+    """Exp 5 addendum: the shards of ``partition`` (label skew over the
+    families when given, else over the binary label), each non-empty, and
+    each shard's families (None without them)."""
+    labels = family if family is not None else y
+    idx = partition_rows(labels, n_devices=n_devices, seed=seed, partition=partition,
+                         alpha=alpha, min_rows=1)
+    shards = [(X[i], y[i]) for i in idx]
+    return shards, (None if family is None else [family[i] for i in idx])
 
 
 def _u32(base_seed: int, *parts) -> int:
@@ -620,13 +797,25 @@ def load_weights(path) -> Weights:
         return [np.array(d[f"w{i}"]) for i in range(n)]
 
 
-def save_xy(path, X: np.ndarray, y: np.ndarray) -> None:
-    """Serialize an ``(X, y)`` shard / test set to ``.npz`` (float32)."""
-    np.savez(
-        str(path),
-        X=np.asarray(X, dtype=np.float32),
-        y=np.asarray(y, dtype=np.float32).reshape(-1),
-    )
+def save_xy(path, X: np.ndarray, y: np.ndarray, family: Optional[np.ndarray] = None) -> None:
+    """Serialize an ``(X, y)`` shard / test set to ``.npz`` (float32).
+
+    Exp 5 addendum: ``family`` (each row's family index, int64) is stored
+    beside them when given; without it the file is the recorded one."""
+    arrays = dict(X=np.asarray(X, dtype=np.float32),
+                  y=np.asarray(y, dtype=np.float32).reshape(-1))
+    if family is not None:
+        family = np.asarray(family, dtype=np.int64).reshape(-1)
+        if len(family) != len(arrays["y"]):
+            raise ValueError(f"{len(family)} families for {len(arrays['y'])} rows")
+        arrays["family"] = family
+    np.savez(str(path), **arrays)
+
+
+def load_family(path) -> Optional[np.ndarray]:
+    """The ``family`` array :func:`save_xy` stored, or None for a file without one."""
+    with np.load(str(path)) as d:
+        return np.array(d["family"], dtype=np.int64) if "family" in d.files else None
 
 
 def load_xy(path) -> Tuple[np.ndarray, np.ndarray]:

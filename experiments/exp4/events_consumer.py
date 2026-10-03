@@ -409,6 +409,31 @@ class MissionRecord:
 
 
 @dataclass(frozen=True)
+class Detection:
+    """The detector's own metrics at one evaluation (Exp 5 addendum, Study 5.13).
+
+    From ``model_eval.detection``, which the cluster writes only when the
+    test set carries each row's attack family
+    (``experiments.exp4.model_task.detection_metrics``): the confusion counts,
+    TPR, FPR, precision and F1 (None where a denominator was 0), and per
+    family present in the test set its rows and its recall (the share
+    classified correctly: flagged for an attack family, passed for Benign).
+    A field not in the form the cluster writes reads as None (a map as empty).
+    """
+
+    tp: Optional[int] = None
+    fp: Optional[int] = None
+    tn: Optional[int] = None
+    fn: Optional[int] = None
+    tpr: Optional[float] = None
+    fpr: Optional[float] = None
+    precision: Optional[float] = None
+    f1: Optional[float] = None
+    recall_by_family: Mapping[str, float] = field(default_factory=dict)
+    n_by_family: Mapping[str, int] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
 class ModelEvalPoint:
     """One held-out convergence point (EX-4.1 ``model_eval`` event).
 
@@ -426,6 +451,9 @@ class ModelEvalPoint:
     #: latest simulated upload it had ingested (None on the wall clock, and
     #: for the seed model, evaluated before any upload).
     sim_ts: Optional[float] = None
+    #: Exp 5 addendum (Study 5.13): the detection metrics, None unless the
+    #: test set carried the attack families.
+    detection: Optional[Detection] = None
 
 
 @dataclass
@@ -717,6 +745,7 @@ def observation_from_rows(
                 n_test=int(r.get("n_test", 0) or 0),
                 ts=_opt_float(r.get("ts")),
                 sim_ts=_opt_float(r.get("sim_ts")),
+                detection=_detection(r.get("detection")),
             )
         )
     model_evals.sort(key=lambda p: p.cluster_round)
@@ -1656,6 +1685,29 @@ def _e3_calls(raw) -> Optional[Tuple[E3Call, ...]]:
             next_index=next_index,
         ))
     return tuple(calls)
+
+
+def _detection(raw) -> Optional[Detection]:
+    """``model_eval.detection`` → :class:`Detection`; None when absent or not a map."""
+    if not isinstance(raw, dict):
+        return None
+
+    def share(v) -> Optional[float]:
+        x = _opt_number(v)
+        return x if x is not None and 0.0 <= x <= 1.0 else None
+
+    recall = raw.get("recall_by_family")
+    counts = raw.get("n_by_family")
+    return Detection(
+        tp=_opt_count(raw.get("tp")), fp=_opt_count(raw.get("fp")),
+        tn=_opt_count(raw.get("tn")), fn=_opt_count(raw.get("fn")),
+        tpr=share(raw.get("tpr")), fpr=share(raw.get("fpr")),
+        precision=share(raw.get("precision")), f1=share(raw.get("f1")),
+        recall_by_family=({str(k): share(v) for k, v in recall.items() if share(v) is not None}
+                          if isinstance(recall, dict) else {}),
+        n_by_family=({str(k): _opt_count(v) for k, v in counts.items()
+                      if _opt_count(v) is not None} if isinstance(counts, dict) else {}),
+    )
 
 
 def _decision_walls(raw) -> Optional[Tuple[DecisionWall, ...]]:

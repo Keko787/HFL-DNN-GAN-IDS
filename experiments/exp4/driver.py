@@ -775,6 +775,19 @@ class Exp4Driver:
     # keeps the recorded fixed field. The kept traces hold the positions; the
     # row does not record it, so write each setting to its own CSV.
     h1_field_ref_n: Optional[int] = None
+    # Exp 5 addendum, Study 5.13: data heterogeneity (real model only; the
+    # stub trainer has no data). ``partition`` splits the training rows
+    # ("iid", the recorded split; "dirichlet", label skew over the attack
+    # families when ``family_labels`` keeps them, else over the binary label;
+    # "quantity", skewed shard sizes) with ``dirichlet_alpha``;
+    # ``family_labels`` keeps each row's CICIoT2023 attack family, so the
+    # cluster's model_eval adds the detection metrics (TPR, FPR, precision,
+    # F1, each family's recall). The kept trace's status marker records the
+    # settings and each device's shard size (``data``); the row does not, so
+    # write each setting to its own CSV.
+    partition: str = "iid"
+    dirichlet_alpha: Optional[float] = None
+    family_labels: bool = False
     # The runner's soft cap on a trial's run time, as the caller applies it
     # (runner_main sets it to the cap it hands TrialRunner: --timeout-s, else
     # the largest wall budget over the grid). On the mission clock a trial's
@@ -832,6 +845,7 @@ class Exp4Driver:
                 f"fedcs_value must be one of {VALUE_KINDS}, got {self.fedcs_value!r}"
             )
         self._check_footprint_probe()
+        self._check_data_settings()
         if self.h1_field_ref_n is not None:
             ref_n = self.h1_field_ref_n
             if isinstance(ref_n, bool) or not isinstance(ref_n, int) or ref_n < 1:
@@ -844,6 +858,9 @@ class Exp4Driver:
         self._check_multi_mule()
         #: T_nom per cell, computed once (:meth:`nominal_period_s`).
         self._t_nom_cache: Dict[str, float] = {}
+        #: Exp 5 addendum (Study 5.13): the running trial's ``data`` record for
+        #: its status marker (:meth:`_data_info`); None outside a trial.
+        self._trial_data: Optional[Dict[str, Any]] = None
         self._check_clock()
         self._check_plan()
         self._check_checkpoints()
@@ -1392,6 +1409,28 @@ class Exp4Driver:
             return float(self.h1_field_radius_m)
         return grown_field_radius_m(float(self.h1_field_radius_m), int(n_devices),
                                     int(self.h1_field_ref_n))
+
+    def _check_data_settings(self) -> None:
+        """Study 5.13's partition and family labels: drawable, and on the real model."""
+        from experiments.exp4.partition import PARTITION_IID, check_partition
+
+        check_partition(self.partition, self.dirichlet_alpha)
+        if not isinstance(self.family_labels, bool):
+            raise ValueError(f"family_labels must be a bool, got {self.family_labels!r}")
+        if (self.partition != PARTITION_IID or self.family_labels) and not self.real_model:
+            raise ValueError(
+                "a non-IID partition and the family labels split and label real training "
+                "rows: run them with real_model=True (--real-model); the stub trainer has "
+                "no data"
+            )
+
+    def _data_info(self) -> Optional[Dict[str, Any]]:
+        """The status marker's ``data`` record of a non-default data setting (None at the
+        defaults, when the marker keeps its keys)."""
+        if self.partition == "iid" and not self.family_labels:
+            return None
+        return {"partition": self.partition, "dirichlet_alpha": self.dirichlet_alpha,
+                "family_labels": bool(self.family_labels)}
 
     def _check_footprint_probe(self) -> None:
         """Study 5.11's footprint probe needs somewhere to write and psutil to read with."""
@@ -1949,11 +1988,15 @@ class Exp4Driver:
             )
 
         prep_dir: Optional[Path] = None
+        self._trial_data = None
+        shard_rows: Dict[str, int] = {}
         try:
             if self.real_model:
                 prep_dir = Path(tempfile.mkdtemp(prefix="exp4_prep_"))
                 task = self._build_task(n_devices, cell.seed)
                 prep = prepare_trial(prep_dir, task=task, theta_seed=self.theta_seed)
+                shard_rows = {path: int(len(y)) for path, (_X, y)
+                              in zip(prep.shard_paths, task.device_shards)}
                 log.info(
                     "exp4 real-model H1 trial cell=%s trial=%d regime=%s "
                     "realism=%s: source=%s input_dim=%d n_train=%d synthetic=%s",
@@ -2033,12 +2076,20 @@ class Exp4Driver:
                     topo.devices, int(self.n_mules), cell.seed, **carp_kwargs,
                 ))
 
+            data = self._data_info()
+            if data is not None:
+                # Exp 5 addendum: what the marker records of this trial's data.
+                data["shard_rows"] = {
+                    str(d.device_id): shard_rows.get(getattr(d, "train_shard_path", None))
+                    for d in topo.devices}
+                self._trial_data = data
             return self._run_topology(
                 topo, cell=cell, n_devices=n_devices,
                 rf_range_m=rf_range_m, n_missions=n_missions, started=started,
                 clock=clock,
             )
         finally:
+            self._trial_data = None
             if prep_dir is not None:
                 shutil.rmtree(prep_dir, ignore_errors=True)
 
@@ -2201,6 +2252,12 @@ class Exp4Driver:
     def _build_task(self, n_devices: int, seed: int):
         from .model_task import load_ciciot_task_canonical, synthetic_task
 
+        # Exp 5 addendum (Study 5.13): passed only when set, so the recorded
+        # task is built exactly as it was.
+        data_kw: Dict[str, Any] = {}
+        if self._data_info() is not None:
+            data_kw = dict(families=bool(self.family_labels), partition=self.partition,
+                           alpha=self.dirichlet_alpha)
         if self.data_source == "canonical":
             return load_ciciot_task_canonical(
                 n_devices=n_devices,
@@ -2210,6 +2267,7 @@ class Exp4Driver:
                 train_dataset_size=self.train_dataset_size,
                 test_dataset_size=self.test_dataset_size,
                 attack_eval_ratio=self.attack_eval_ratio,
+                **data_kw,
             )
         if self.data_source == "synthetic":
             return synthetic_task(
@@ -2217,6 +2275,7 @@ class Exp4Driver:
                 rows_per_device=self.synth_rows_per_device,
                 test_rows=self.synth_test_rows,
                 seed=seed,
+                **data_kw,
             )
         raise ValueError(
             f"unknown data_source {self.data_source!r}; "
@@ -2311,6 +2370,10 @@ class Exp4Driver:
                            else {"t_nom_computed": bool(t_nom_computed)}),
                         **({} if soft_cap_s is None
                            else {"soft_cap_s": float(soft_cap_s)}),
+                        # Exp 5 addendum (Study 5.13): the data settings and
+                        # each device's shard size, when not the recorded ones.
+                        **({} if getattr(self, "_trial_data", None) is None
+                           else {"data": self._trial_data}),
                     },
                     f,
                 )
