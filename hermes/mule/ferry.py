@@ -466,10 +466,7 @@ class FerrySpec:
         included); the losses stay the cluster's recorded schedule.
         ``p_move_w`` / ``p_hover_w`` override the Zeng model's powers at the
         cruise speed; ``energy_capacity_j`` switches the simulated energy
-        clause on (it binds only with a budget). ``interference_amp_db`` and
-        ``interference_sigma_db`` override the contact regime's interference
-        amplitude A and noise sigma_I (the Exp 5 addendum, Study 5.15; None
-        keeps the regime's own: 1 and 0.4 dB clean, 5 and 1.5 dB jittery).
+        clause on (it binds only with a budget).
 
         ``contact_reliability_source="channel"`` keeps ``device_availability``
         for the mule's keyed draw, and the cell's devices must then be built
@@ -485,6 +482,12 @@ class FerrySpec:
         carrier means ``base + g_c`` alone (``BackhaulChannel.pred_snr_db``),
         which do not depend on the period. Then build the cell's spec with
         ``n_missions`` and ``t_nom_s``.
+
+        Exp 5 addendum (Study 5.15): ``interference_amp_db`` and
+        ``interference_sigma_db`` override the contact regime's interference
+        amplitude A and noise sigma_I (None keeps the regime's own: 1 and
+        0.4 dB clean, 5 and 1.5 dB jittery); they are the definition's only
+        change, forwarded to ``ContactChannel.from_link``.
         """
         _choice(backhaul_model, BACKHAUL_MODELS, "backhaul_model")
         classes = {} if band_classes is None else {"classes": tuple(band_classes)}
