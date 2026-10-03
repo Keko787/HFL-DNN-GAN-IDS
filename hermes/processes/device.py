@@ -97,6 +97,7 @@ def _build_local_train(cfg: DeviceConfig, seed: int):
             cfg.device_id, cfg.train_shard_path, len(y),
             cfg.input_dim, cfg.local_epochs,
         )
+        arch = getattr(cfg, "model_arch", None)
         return make_local_train_fn(
             X, y,
             input_dim=cfg.input_dim,
@@ -104,6 +105,8 @@ def _build_local_train(cfg: DeviceConfig, seed: int):
             batch_size=cfg.local_batch_size,
             seed=seed,
             fedprox_rho=float(getattr(cfg, "fedprox_rho", 0.0) or 0.0),
+            # Exp 5 addendum (Study 5.12): the architecture, only when set.
+            **({} if arch is None else {"arch": arch}),
         )
     return _stub_train_factory(seed)
 

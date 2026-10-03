@@ -236,6 +236,11 @@ class ClusterConfig:
     # ``band`` index on a report line; None is the D1 default (wide, medium,
     # narrow). Must match the mules'.
     contact_band_classes: Optional[List[str]] = None
+    # Exp 5 addendum (Study 5.12): the IDS model's architecture
+    # (``experiments.exp4.model_task.MODEL_ARCHS``) the cluster evaluates;
+    # None is the canonical CICIoT model, every recorded run's. Written to the
+    # per-role JSON only when set (:data:`CONFIG_FIELDS_OMITTED_AT_NONE`).
+    model_arch: Optional[str] = None
 
 
 @dataclass
@@ -1025,6 +1030,22 @@ class DeviceConfig:
     # trial share one value. None (every recorded run) sends no token; a mule
     # without one accepts any.
     rf_link_token: Optional[str] = None
+    # Exp 5 addendum (Study 5.12): the IDS model's architecture the device
+    # trains (``model_task.MODEL_ARCHS``); None is the canonical CICIoT model.
+    # Must match the cluster's. Written to the JSON only when set.
+    model_arch: Optional[str] = None
+
+
+#: ``ClusterConfig`` and ``DeviceConfig`` fields the Exp 5 addendum adds whose
+#: None is every recorded run: their per-role JSON leaves each out while it is
+#: None, so a recorded trial's JSON keeps its keys, and a reader takes the
+#: default for an absent key.
+CONFIG_FIELDS_OMITTED_AT_NONE: Tuple[str, ...] = ("model_arch",)
+
+
+def _set_fields(raw: Dict[str, Any]) -> Dict[str, Any]:
+    return {k: v for k, v in raw.items()
+            if not (k in CONFIG_FIELDS_OMITTED_AT_NONE and v is None)}
 
 
 class TopologyValidationError(ValueError):
@@ -1266,7 +1287,7 @@ class TopologyConfig:
 # device positions it has no need for.
 
 def cluster_config_to_json(cfg: ClusterConfig) -> str:
-    return json.dumps(asdict(cfg), indent=2)
+    return json.dumps(_set_fields(asdict(cfg)), indent=2)
 
 
 def cluster_config_from_json(payload: str) -> ClusterConfig:
@@ -1282,7 +1303,7 @@ def mule_config_from_json(payload: str) -> MuleConfig:
 
 
 def device_config_to_json(cfg: DeviceConfig) -> str:
-    raw = asdict(cfg)
+    raw = _set_fields(asdict(cfg))
     # asdict converts the position tuple to a list — preserve the
     # tuple-shape on the inverse via a custom decoder below.
     return json.dumps(raw, indent=2)

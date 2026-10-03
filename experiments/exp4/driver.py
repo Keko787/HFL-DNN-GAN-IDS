@@ -788,6 +788,11 @@ class Exp4Driver:
     partition: str = "iid"
     dirichlet_alpha: Optional[float] = None
     family_labels: bool = False
+    # Exp 5 addendum, Study 5.12: the IDS architecture the real model trains
+    # (``model_task.MODEL_ARCHS``; None is the canonical CICIoT model, every
+    # recorded run's). The devices, the cluster and the seed θ all build it;
+    # its θ, and so the measured payload, has its own size. Real model only.
+    model_arch: Optional[str] = None
     # The runner's soft cap on a trial's run time, as the caller applies it
     # (runner_main sets it to the cap it hands TrialRunner: --timeout-s, else
     # the largest wall budget over the grid). On the mission clock a trial's
@@ -1423,6 +1428,21 @@ class Exp4Driver:
                 "rows: run them with real_model=True (--real-model); the stub trainer has "
                 "no data"
             )
+        if self.model_arch is not None:
+            from experiments.exp4.model_task import check_model_arch
+
+            check_model_arch(self.model_arch)
+            if not self.real_model:
+                raise ValueError(
+                    "model_arch selects the real IDS model's architecture: run it with "
+                    "real_model=True (--real-model); the stub trainer has no model"
+                )
+
+    def _arch_kw(self) -> Dict[str, Any]:
+        """``{"arch": ...}`` for the model builders when an architecture is set
+        (Exp 5 addendum, Study 5.12); empty otherwise, so every recorded call
+        is made as it was."""
+        return {} if self.model_arch is None else {"arch": self.model_arch}
 
     def _data_info(self) -> Optional[Dict[str, Any]]:
         """The status marker's ``data`` record of a non-default data setting (None at the
@@ -1994,7 +2014,8 @@ class Exp4Driver:
             if self.real_model:
                 prep_dir = Path(tempfile.mkdtemp(prefix="exp4_prep_"))
                 task = self._build_task(n_devices, cell.seed)
-                prep = prepare_trial(prep_dir, task=task, theta_seed=self.theta_seed)
+                prep = prepare_trial(prep_dir, task=task, theta_seed=self.theta_seed,
+                                     **self._arch_kw())
                 shard_rows = {path: int(len(y)) for path, (_X, y)
                               in zip(prep.shard_paths, task.device_shards)}
                 log.info(
@@ -2011,6 +2032,8 @@ class Exp4Driver:
                     init_theta_path=prep.init_theta_path,
                     eval_test_path=prep.test_path,
                 )
+                if self.model_arch is not None:
+                    model_kwargs["model_arch"] = self.model_arch
             else:
                 model_kwargs = {}
 
@@ -2162,13 +2185,14 @@ class Exp4Driver:
         )
 
         # Same seeded init θ as H1 so both arms start from the same model.
-        theta = initial_theta(input_dim, seed=self.theta_seed)
+        theta = initial_theta(input_dim, seed=self.theta_seed, **self._arch_kw())
         # Build a trainer only for reachable clients (dead ones never fit).
         client_fns = {
             i: make_local_train_fn(
                 task.device_shards[i][0], task.device_shards[i][1],
                 input_dim=input_dim, epochs=self.local_epochs,
                 batch_size=self.local_batch_size, seed=self.theta_seed,
+                **self._arch_kw(),
             )
             for i in reachable
         }
@@ -2240,7 +2264,8 @@ class Exp4Driver:
         from .events_consumer import ModelEvalPoint
         from .model_task import evaluate_theta
 
-        m = evaluate_theta(theta, task.X_test, task.y_test, input_dim=input_dim)
+        m = evaluate_theta(theta, task.X_test, task.y_test, input_dim=input_dim,
+                           **self._arch_kw())
         return ModelEvalPoint(
             cluster_round=int(cluster_round),
             accuracy=float(m["accuracy"]),

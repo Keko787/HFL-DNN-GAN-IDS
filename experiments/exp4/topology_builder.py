@@ -248,6 +248,9 @@ def build_exp4_topology(
     local_batch_size: int = 64,
     init_theta_path: Optional[str] = None,
     eval_test_path: Optional[str] = None,
+    # Exp 5 addendum (Study 5.12): the IDS architecture the devices train and
+    # the cluster evaluates; None, the canonical model, writes no field.
+    model_arch: Optional[str] = None,
     # EX-4.2 realism wiring (all optional; omitted -> ideal links).
     device_reliability: bool = False,
     reliabilities: Optional[List[float]] = None,
@@ -494,6 +497,7 @@ def build_exp4_topology(
                 local_batch_size=local_batch_size,
                 contact_reliability=contact_reliability,
                 fedprox_rho=float(fedprox_rho),
+                model_arch=model_arch,
                 **device_extra,
             )
         )
@@ -519,6 +523,7 @@ def build_exp4_topology(
         init_theta_path=init_theta_path,
         eval_test_path=eval_test_path,
         input_dim=input_dim,
+        model_arch=model_arch,
         backhaul_loss_pct=backhaul_loss_pct,
         backhaul_rng_seed=backhaul_rng_seed,
         backhaul_loss_schedule=backhaul_loss_schedule,

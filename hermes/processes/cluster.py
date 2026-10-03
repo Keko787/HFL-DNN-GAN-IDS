@@ -1516,6 +1516,10 @@ class ClusterService:
 
             theta = self.cluster.generator.get_global_disc_weights()
             extra = {} if self._eval_family is None else {"family": self._eval_family}
+            arch = getattr(self.cfg, "model_arch", None)
+            if arch is not None:
+                # Exp 5 addendum (Study 5.12): the architecture the trial trains.
+                extra["arch"] = arch
             m = evaluate_theta(
                 theta, self._eval_X, self._eval_y,
                 input_dim=self._eval_input_dim, **extra,

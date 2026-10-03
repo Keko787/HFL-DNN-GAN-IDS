@@ -108,24 +108,58 @@ class CiciotTask:
 # Model
 # --------------------------------------------------------------------------- #
 
+#: Exp 5 addendum (Study 5.12): the IDS architectures ``build_ids_model`` can
+#: build, each a binary classifier over ``(input_dim,)`` features with one
+#: sigmoid output, so the local training (FedProx included), the evaluation
+#: and the merge treat them alike; their weights (θ, and so the measured
+#: payload) differ in size. ``ciciot`` is the canonical model every recorded
+#: run trained (``create_CICIOT_Model``: dense 64-32-16-8-4-1, 18,756 B of θ
+#: at 21 inputs); the others are ``Config/modelStructures/NIDS/NIDS_Struct.py``'s
+#: builders, not wired before: ``optimized`` (a dense residual stack,
+#: ``create_optimized_model``), ``balanced`` (separable Conv1D + GRU,
+#: ``create_balanced_nids``) and ``high_performance`` (Conv1D + GRU + LSTM,
+#: about 200-250K parameters, ``create_high_performance_nids``).
+MODEL_ARCH_CICIOT = "ciciot"
+MODEL_ARCHS: Tuple[str, ...] = (MODEL_ARCH_CICIOT, "optimized", "balanced", "high_performance")
+
+
+def check_model_arch(arch: Optional[str]) -> str:
+    """``arch`` as a known architecture's name (None: the canonical one)."""
+    name = MODEL_ARCH_CICIOT if arch is None else arch
+    if name not in MODEL_ARCHS:
+        raise ValueError(f"model_arch must be one of {MODEL_ARCHS}, got {arch!r}")
+    return name
+
+
 def build_ids_model(
     input_dim: int = INPUT_DIM,
     *,
     l2_alpha: float = 1e-3,
     learning_rate: float = 1e-3,
     regularization: bool = True,
+    arch: Optional[str] = None,
 ):
-    """Return the compiled canonical CICIOT DNN-IDS (binary classifier)."""
+    """Return the compiled DNN-IDS (binary classifier): the canonical CICIOT
+    model, or ``arch``'s (:data:`MODEL_ARCHS`; Exp 5 addendum, Study 5.12),
+    compiled alike."""
     import tensorflow as tf  # lazy — heavy import
 
-    from Config.modelStructures.NIDS.NIDS_Struct import create_CICIOT_Model
+    from Config.modelStructures.NIDS import NIDS_Struct as S
 
-    model = create_CICIOT_Model(
-        input_dim=input_dim,
-        regularizationEnabled=regularization,
-        DP_enabled=False,
-        l2_alpha=l2_alpha,
-    )
+    name = check_model_arch(arch)
+    if name == MODEL_ARCH_CICIOT:
+        model = S.create_CICIOT_Model(
+            input_dim=input_dim,
+            regularizationEnabled=regularization,
+            DP_enabled=False,
+            l2_alpha=l2_alpha,
+        )
+    elif name == "optimized":
+        model = S.create_optimized_model(input_dim, l2_alpha=l2_alpha)
+    elif name == "balanced":
+        model = S.create_balanced_nids(input_dim=input_dim)
+    else:
+        model = S.create_high_performance_nids(input_dim=input_dim)
     model.compile(
         optimizer=tf.keras.optimizers.Adam(learning_rate=learning_rate),
         loss="binary_crossentropy",
@@ -134,18 +168,20 @@ def build_ids_model(
     return model
 
 
-def initial_theta(input_dim: int = INPUT_DIM, *, seed: int = 0) -> Weights:
+def initial_theta(input_dim: int = INPUT_DIM, *, seed: int = 0,
+                  arch: Optional[str] = None) -> Weights:
     """Deterministic seed weights for the global model.
 
     Every device and the cluster's broadcast θ share these shapes; that
     is a hard requirement of ``partial_fedavg`` (it rejects mismatched
     layer counts / shapes). Seeded so the same ``(input_dim, seed)``
-    reproduces the same initial model across runs / processes.
+    reproduces the same initial model across runs / processes. ``arch``
+    as :func:`build_ids_model`'s.
     """
     import tensorflow as tf  # lazy
 
     tf.keras.utils.set_random_seed(int(seed))
-    model = build_ids_model(input_dim)
+    model = build_ids_model(input_dim, arch=arch)
     return [w.copy() for w in model.get_weights()]
 
 
@@ -179,6 +215,7 @@ def make_local_train_fn(
     learning_rate: float = 1e-3,
     seed: int = 0,
     fedprox_rho: float = 0.0,
+    arch: Optional[str] = None,
 ) -> LocalTrainFn:
     """Build a ``local_train(theta, synth)`` callable over one device shard.
 
@@ -200,7 +237,7 @@ def make_local_train_fn(
 
     dim = int(input_dim if input_dim is not None else X.shape[1])
     tf.keras.utils.set_random_seed(int(seed))
-    model = build_ids_model(dim, l2_alpha=l2_alpha, learning_rate=learning_rate)
+    model = build_ids_model(dim, l2_alpha=l2_alpha, learning_rate=learning_rate, arch=arch)
 
     Xf = np.asarray(X, dtype=np.float32)
     yf = np.asarray(y, dtype=np.float32).reshape(-1)
@@ -283,6 +320,7 @@ def evaluate_theta(
     input_dim: Optional[int] = None,
     l2_alpha: float = 1e-3,
     family: Optional[np.ndarray] = None,
+    arch: Optional[str] = None,
 ) -> dict:
     """Accuracy / AUC / binary-cross-entropy of aggregated θ on held-out data.
 
@@ -292,7 +330,7 @@ def evaluate_theta(
     holds ``detection``, :func:`detection_metrics` of the same predictions.
     """
     dim = int(input_dim if input_dim is not None else X_test.shape[1])
-    model = build_ids_model(dim, l2_alpha=l2_alpha)
+    model = build_ids_model(dim, l2_alpha=l2_alpha, arch=arch)
     model.set_weights(theta)
     return _eval_with_model(
         model,

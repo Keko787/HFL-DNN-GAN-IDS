@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 from .model_task import CiciotTask, initial_theta, save_weights, save_xy
 
@@ -29,7 +29,8 @@ class TrialPrep:
     n_train: int
 
 
-def prepare_trial(prep_dir, *, task: CiciotTask, theta_seed: int) -> TrialPrep:
+def prepare_trial(prep_dir, *, task: CiciotTask, theta_seed: int,
+                  arch: Optional[str] = None) -> TrialPrep:
     """Serialize one trial's shards + test set + seed weights to ``prep_dir``.
 
     ``theta_seed`` seeds the deterministic initial model so every arm in a
@@ -61,7 +62,9 @@ def prepare_trial(prep_dir, *, task: CiciotTask, theta_seed: int) -> TrialPrep:
     save_xy(test_path, task.X_test, task.y_test, family=task.family_test)
 
     theta_path = prep_dir / "theta_init.npz"
-    save_weights(theta_path, initial_theta(task.input_dim, seed=theta_seed))
+    # Exp 5 addendum (Study 5.12): ``arch``'s seed weights, only when set.
+    save_weights(theta_path, initial_theta(task.input_dim, seed=theta_seed,
+                                           **({} if arch is None else {"arch": arch})))
 
     return TrialPrep(
         input_dim=task.input_dim,
