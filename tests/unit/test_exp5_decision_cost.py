@@ -163,7 +163,8 @@ def _result(**kw) -> MissionRunResult:
 
 
 def test_mission_completed_carries_the_walls_after_e3s_records_only_when_set():
-    assert SIM_MISSION_OPTIONAL_FIELDS[-2:] == ("pass_1_pairs_wall", "pass_1_e3_wall")
+    # Study 5.12's ``train_fits`` follows them (test_exp5_train_time.py).
+    assert SIM_MISSION_OPTIONAL_FIELDS[-3:-1] == ("pass_1_pairs_wall", "pass_1_e3_wall")
     wall = [{"decide_s": 0.002, "mask_s": 0.001}]
     paired = _sim_mission_fields(_result(pass_1_pairs=[{"t_s": E}], pass_1_pairs_wall=wall))
     assert list(paired)[-3:] == ["pass_1_pairs", "pass_1_pairs_wall", "energy_status"]

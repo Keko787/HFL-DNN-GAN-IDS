@@ -306,6 +306,20 @@ def plan_ferry_params(mule: Mapping[str, Any]) -> Dict[str, Any]:
     return {} if admission == MEMBER_ADMISSION_WHOLE else {"member_admission": admission}
 
 
+def train_time_ferry_params(mule: Mapping[str, Any]) -> Dict[str, Any]:
+    """The Exp 5 addendum's training-time key of a trial's ``ferry_params``.
+
+    Study 5.12: ``train_time_params`` (the settings each device's fit time was
+    drawn from) when the mule config holds them; {} otherwise, so every other
+    row keeps its string. Never the per-device times, as ``ferry_params``
+    never shows the availability. ``mule`` is a mule's config as a mapping, as
+    for :func:`plan_ferry_params`; the trace scorer derives the same key with
+    this function.
+    """
+    params = mule.get("train_time_params")
+    return {} if params is None else {"train_time_params": dict(params)}
+
+
 def learned_policy_params(mule: Mapping[str, Any]) -> Dict[str, Any]:
     """The FeRRy Phase 5 keys of a trial's ``policy_params`` column: arm E3's checkpoint.
 
@@ -793,6 +807,14 @@ class Exp4Driver:
     # recorded run's). The devices, the cluster and the seed θ all build it;
     # its θ, and so the measured payload, has its own size. Real model only.
     model_arch: Optional[str] = None
+    # Exp 5 addendum, Study 5.12: each device's local fit takes simulated time
+    # (mule arms on the simulated clock). The settings
+    # (``experiments/exp4/compute.py``: ``median_s``, ``sigma``,
+    # ``straggler_share``, ``straggler_factor``) draw one time per device from
+    # the trial seed; a Pass-1 contact before a device's fit ends finds no
+    # update ready (``hermes/mule/fit_clock.py``). None, every recorded run:
+    # updates are always ready. The row's ``ferry_params`` shows the settings.
+    train_time_params: Optional[Dict[str, float]] = None
     # The runner's soft cap on a trial's run time, as the caller applies it
     # (runner_main sets it to the cap it hands TrialRunner: --timeout-s, else
     # the largest wall budget over the grid). On the mission clock a trial's
@@ -869,6 +891,7 @@ class Exp4Driver:
         self._check_clock()
         self._check_plan()
         self._check_checkpoints()
+        self._check_train_time()
 
     @property
     def sim(self) -> bool:
@@ -1437,6 +1460,19 @@ class Exp4Driver:
                     "model_arch selects the real IDS model's architecture: run it with "
                     "real_model=True (--real-model); the stub trainer has no model"
                 )
+
+    def _check_train_time(self) -> None:
+        """Study 5.12's settings: drawable, and on the simulated clock."""
+        if self.train_time_params is None:
+            return
+        from experiments.exp4.compute import check_train_time_params
+
+        self.train_time_params = check_train_time_params(self.train_time_params)
+        if not self.sim:
+            raise ValueError(
+                "train_time_params times the devices' fits on the simulated mission clock: "
+                "run with mission_clock='sim' (--mission-clock sim)"
+            )
 
     def _arch_kw(self) -> Dict[str, Any]:
         """``{"arch": ...}`` for the model builders when an architecture is set
@@ -2059,6 +2095,9 @@ class Exp4Driver:
             clock_kwargs: Dict[str, Any] = {}
             if clock.sim:
                 clock_kwargs.update(mission_clock="sim", ferry_settings=clock.settings)
+                if self.train_time_params is not None:
+                    # Study 5.12: the builder draws each device's fit time.
+                    clock_kwargs["train_time_params"] = dict(self.train_time_params)
             if clock.deadline_time_scale != 1.0:
                 clock_kwargs["deadline_time_scale"] = clock.deadline_time_scale
             if clock.initial_window_s is not None:
@@ -2723,6 +2762,7 @@ class Exp4Driver:
             shown["t_nom_computed"] = bool(clock.t_nom_computed)
             fields = asdict(mule)
             shown.update(plan_ferry_params(fields))
+            shown.update(train_time_ferry_params(fields))
             row["ferry_params"] = json.dumps(shown, sort_keys=True, default=str)
             if getattr(mule, "plan_mode", "legacy") == "ferry":
                 row["contact_band"] = contact_band_column(fields)

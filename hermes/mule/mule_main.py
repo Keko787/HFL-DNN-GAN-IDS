@@ -74,12 +74,13 @@ so every recorded path is unchanged and loads no Phase 5 module.
 
 from __future__ import annotations
 
+import dataclasses
 import logging
 import math
 import threading
 import time
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, FrozenSet, List, Optional, Tuple
+from typing import Any, Callable, Dict, FrozenSet, List, Mapping, Optional, Tuple
 
 import numpy as np
 
@@ -328,6 +329,17 @@ class MissionRunResult:
     pass_1_pairs_wall: Optional[List[Dict[str, float]]] = None
     pass_1_e3_wall: Optional[List[Dict[str, float]]] = None
 
+    # Exp 5 addendum, Study 5.12: the devices' fits on the simulated clock
+    # (``hermes/mule/fit_clock.py``), set only when the mule has train times.
+    # ``train_fits`` is every fit this mission started, ``[device, start_s]``
+    # in the order they started (the first mission's begin with each device's
+    # first fit, at the trial's start); each Pass-1 stop of ``pass_1_flown``
+    # then also holds ``not_ready``, the targets found with no update ready,
+    # and ``uplink_s``, each collected update's uplink airtime (for the
+    # device's transmit energy; empty without a band).
+    # None without train times, so no recorded mission gains a key.
+    train_fits: Optional[List[List[Any]]] = None
+
 
 def _merged_device_ids(report, agg) -> List[DeviceID]:
     """CLEAN devices of a round report minus those its merge excluded."""
@@ -443,6 +455,8 @@ class _FerryLog:
         self.e3_unvisited: List[Dict[str, Any]] = []
         #: Study 5.11 (a): the wall time of each of E3's calls, in call order.
         self.e3_wall: List[Dict[str, float]] = []
+        #: Study 5.12: the fits this mission started, ``[device, start_s]``.
+        self.train_fits: List[List[Any]] = []
 
 
 class _PairDecision:
@@ -548,6 +562,7 @@ class MuleSupervisor:
         plan_options=None,
         t_nom_s: Optional[float] = None,
         pair_slot=None,
+        train_time_s: Optional[Mapping[str, float]] = None,
     ) -> None:
         self.mule_id = mule_id
         self.mule_pose = mule_pose
@@ -636,6 +651,19 @@ class MuleSupervisor:
             now_fn = mission_clock
             host_now = mission_clock
         self._now = now_fn
+        # Exp 5 addendum (Study 5.12): the devices' fits on the simulated clock
+        # (hermes/mule/fit_clock.py). None, every recorded mule: every Pass-1
+        # contact finds an update ready, and no record gains a key.
+        self._fits = None
+        if train_time_s is not None:
+            if mission_clock is None:
+                raise MuleSupervisorError(
+                    "train_time_s times the devices' fits on the simulated clock: pass "
+                    "mission_clock=MissionClock() as well"
+                )
+            from hermes.mule.fit_clock import FitClock
+
+            self._fits = FitClock(train_time_s)
         # FeRRy Phase 2 — several mules share one cluster. ``down_wait_s``
         # bounds how long the inter-pass dock waits for its DOWN, and makes
         # running out survivable (Pass 2 skipped, the mission's θ kept): with a
@@ -1575,6 +1603,10 @@ class MuleSupervisor:
         sim_start = clock()
         self.scheduler.start_mission()
         rec = _FerryLog()
+        fits = getattr(self, "_fits", None)
+        if fits is not None:
+            # Study 5.12: the first takeoff starts every device's first fit.
+            rec.train_fits.extend([d, t] for d, t in fits.take_off(sim_start))
 
         theta_pass_1 = self._next_theta
         synth_pass_1 = self._next_synth
@@ -2214,6 +2246,15 @@ class MuleSupervisor:
                 wp, positions, pass_kind=pass_kind, mission_round=mission_round,
                 band=self._ferry_band_at_arrival(slot, fx, wp, positions, pass_kind),
             )
+        fits = getattr(self, "_fits", None)
+        if fits is not None and collect:
+            # Study 5.12: the members whose fit has not finished at the arrival
+            # are marked not ready; none of them has an uplink to drop.
+            not_ready = fits.not_ready(wp.devices, plan.arrival_ts)
+            if not_ready:
+                plan = dataclasses.replace(
+                    plan, not_ready=not_ready, drop_uplink=plan.drop_uplink - not_ready,
+                )
         before = self.mission.last_contact
         outcomes: Dict[DeviceID, Any] = {}
         try:
@@ -2232,6 +2273,10 @@ class MuleSupervisor:
         commit = self.mission.last_contact
         if commit is before:
             commit = None
+        if fits is not None and commit is not None:
+            # Study 5.12: every target a model reached starts a fit at its stamp.
+            rec.train_fits.extend([d, t] for d, t in fits.received(commit.pushed,
+                                                                   commit.contact_ts))
         if decision is not None:
             decision.outcomes = dict(outcomes)
             decision.stamps = {} if commit is None else dict(commit.contact_ts)
@@ -2262,6 +2307,14 @@ class MuleSupervisor:
             "uplink_dropped": _ids(commit.uplink_dropped) if commit is not None else [],
             "l1_choice": l1_choice,
         })
+        if fits is not None and collect:
+            # Study 5.12: who had no update ready, and each collected update's
+            # uplink airtime (the device's transmit energy; empty without a band).
+            rec.flown[pass_kind][-1]["not_ready"] = (
+                _ids(commit.not_ready) if commit is not None else [])
+            rec.flown[pass_kind][-1]["uplink_s"] = (
+                {} if commit is None
+                else {str(d): float(s) for d, s in commit.uplink_dwell_s.items()})
         if l1_choice is not None:
             rec.choices[pass_kind].append(l1_choice)
         return outcomes
@@ -2667,6 +2720,8 @@ class MuleSupervisor:
             pass_1_pairs_wall=(None if pairs is None
                                else [d.wall for d in getattr(rec, "pairs", ())]),
             pass_1_e3_wall=list(getattr(rec, "e3_wall", ())) or None,
+            train_fits=(None if getattr(self, "_fits", None) is None
+                        else list(getattr(rec, "train_fits", ()))),
             **legacy,
         )
 

@@ -502,6 +502,24 @@ def _phase_5_driver_kwargs(
     return dict(pair_checkpoints=pair, policy_checkpoints=policy)
 
 
+def _train_time_params(args) -> Optional[Dict[str, float]]:
+    """Study 5.12's settings from the flags; None without ``--train-time-s``.
+
+    The spread and straggler flags each need the median; only those given are
+    passed (the rest take ``experiments/exp4/compute.py``'s defaults).
+    """
+    extra = {name: getattr(args, attr) for name, attr in (
+        ("sigma", "train_time_sigma"), ("straggler_share", "straggler_share"),
+        ("straggler_factor", "straggler_factor")) if getattr(args, attr) is not None}
+    if args.train_time_s is None:
+        if extra:
+            raise SystemExit(
+                f"--train-time-sigma, --straggler-share and --straggler-factor shape the "
+                f"fit times of --train-time-s; given without it: {sorted(extra)}")
+        return None
+    return {"median_s": float(args.train_time_s), **{k: float(v) for k, v in extra.items()}}
+
+
 def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = argparse.ArgumentParser(prog="experiments.exp4.runner_main")
     parser.add_argument("--csv", required=True, type=Path,
@@ -568,6 +586,30 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
              "(experiments.exp4.model_task.MODEL_ARCHS; default the canonical CICIoT "
              "model). Its weights, and so the measured payload, have their own size. "
              "Needs --real-model.",
+    )
+    parser.add_argument(
+        "--train-time-s", type=float, default=None, metavar="MEDIAN",
+        help="Exp 5 addendum (Study 5.12): each device's local fit takes simulated "
+             "time, MEDIAN seconds at the median (experiments/exp4/compute.py); a "
+             "Pass-1 contact before a device's fit ends finds no update ready. "
+             "Simulated clock only (--mission-clock sim). Default: off (updates are "
+             "always ready, every recorded run).",
+    )
+    parser.add_argument(
+        "--train-time-sigma", type=float, default=None,
+        help="Study 5.12: the log-normal spread of the fit times around the median "
+             "(default 0: every device the median). Needs --train-time-s.",
+    )
+    parser.add_argument(
+        "--straggler-share", type=float, default=None,
+        help="Study 5.12: the share of devices that are stragglers, exactly "
+             "round(share * N) of them (default 0). Needs --train-time-s.",
+    )
+    parser.add_argument(
+        "--straggler-factor", type=float, default=None,
+        help="Study 5.12: the stragglers' fit time as a multiple (default 1; the "
+             "plan's '20%% stragglers at 5x' is --straggler-share 0.2 "
+             "--straggler-factor 5). Needs --train-time-s.",
     )
     parser.add_argument(
         "--partition", choices=["iid", "dirichlet", "quantity"], default="iid",
@@ -1000,6 +1042,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if args.model_arch is not None:
         # Exp 5 addendum (Study 5.12); passed only when given.
         driver_kwargs.update(model_arch=args.model_arch)
+    train_time = _train_time_params(args)
+    if train_time is not None:
+        # Exp 5 addendum (Study 5.12); passed only when given.
+        driver_kwargs.update(train_time_params=train_time)
     if args.h1_field_ref_n is not None:
         # Exp 5 addendum; passed only when given, as the footprint probe is.
         driver_kwargs.update(h1_field_ref_n=int(args.h1_field_ref_n))

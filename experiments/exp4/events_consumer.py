@@ -252,6 +252,21 @@ class DecisionWall:
 
 
 @dataclass(frozen=True)
+class FitStop:
+    """One Pass-1 stop as the fit clock saw it (Exp 5 addendum, Study 5.12).
+
+    From ``mission_completed.pass_1_flown[]`` of a mule with train times:
+    the stop's ``targets`` (solicited members), those found with no update
+    ready (``not_ready``), and each collected update's uplink airtime
+    (``uplink_s``, simulated seconds; empty without a band).
+    """
+
+    targets: Tuple[str, ...]
+    not_ready: Tuple[str, ...]
+    uplink_s: Mapping[str, float]
+
+
+@dataclass(frozen=True)
 class MissionRecord:
     """One mule mission (= one FL round in the integrated stack).
 
@@ -381,6 +396,13 @@ class MissionRecord:
     pair_walls: Optional[Tuple[DecisionWall, ...]] = None
     #: ``pass_1_e3_wall``: one per call of ``pass_1_e3``.
     e3_walls: Optional[Tuple[DecisionWall, ...]] = None
+    # Exp 5 addendum, Study 5.12: the devices' fits on the simulated clock,
+    # from a mule with train times; None from every other mule.
+    #: ``train_fits``: every fit the mission started, ``(device, start_s)``.
+    train_fits: Optional[Tuple[Tuple[str, float], ...]] = None
+    #: ``pass_1_flown[]``'s ``targets``, ``not_ready`` and ``uplink_s``, in
+    #: flight order.
+    fit_stops: Optional[Tuple[FitStop, ...]] = None
 
     @property
     def has_plan(self) -> bool:
@@ -677,6 +699,8 @@ def observation_from_rows(
                 e3_unvisited=_e3_unvisited(r.get("pass_1_e3_unvisited")),
                 pair_walls=_decision_walls(r.get("pass_1_pairs_wall")),
                 e3_walls=_decision_walls(r.get("pass_1_e3_wall")),
+                train_fits=_train_fits(r.get("train_fits")),
+                fit_stops=_fit_stops(r.get("pass_1_flown")),
                 **_plan_fields(r.get("plan")),
             )
         )
@@ -1708,6 +1732,40 @@ def _detection(raw) -> Optional[Detection]:
         n_by_family=({str(k): _opt_count(v) for k, v in counts.items()
                       if _opt_count(v) is not None} if isinstance(counts, dict) else {}),
     )
+
+
+def _train_fits(raw) -> Optional[Tuple[Tuple[str, float], ...]]:
+    """``train_fits`` → ``(device, start_s)`` per fit, in order; None when
+    absent. An entry that is not a ``[device, finite start]`` pair is skipped."""
+    if not isinstance(raw, list):
+        return None
+    out = []
+    for e in raw:
+        if isinstance(e, (list, tuple)) and len(e) == 2 and isinstance(e[0], str):
+            t = _opt_number(e[1])
+            if t is not None:
+                out.append((e[0], t))
+    return tuple(out)
+
+
+def _fit_stops(raw) -> Optional[Tuple[FitStop, ...]]:
+    """``pass_1_flown`` → one :class:`FitStop` per stop, when the stops carry
+    the fit clock's ``not_ready`` (a mule with train times); None otherwise."""
+    if not isinstance(raw, list) or not any(
+            isinstance(e, dict) and "not_ready" in e for e in raw):
+        return None
+    out = []
+    for e in raw:
+        if not isinstance(e, dict):
+            continue
+        up = e.get("uplink_s") if isinstance(e.get("uplink_s"), dict) else {}
+        out.append(FitStop(
+            targets=_id_list(e.get("targets")) or (),
+            not_ready=_id_list(e.get("not_ready")) or (),
+            uplink_s={str(d): x for d, x in ((d, _opt_number(v)) for d, v in up.items())
+                      if x is not None and x >= 0.0},
+        ))
+    return tuple(out)
 
 
 def _decision_walls(raw) -> Optional[Tuple[DecisionWall, ...]]:
