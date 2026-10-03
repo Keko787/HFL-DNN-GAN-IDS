@@ -562,6 +562,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
              "real-shaped separable task (fast, no dataset needed).",
     )
     parser.add_argument(
+        "--model-arch", choices=["ciciot", "optimized", "balanced", "high_performance"],
+        default=None,
+        help="Exp 5 addendum (Study 5.12): the IDS architecture the real model trains "
+             "(experiments.exp4.model_task.MODEL_ARCHS; default the canonical CICIoT "
+             "model). Its weights, and so the measured payload, have their own size. "
+             "Needs --real-model.",
+    )
+    parser.add_argument(
         "--partition", choices=["iid", "dirichlet", "quantity"], default="iid",
         help="Exp 5 addendum (Study 5.13): how the training rows are split over the "
              "devices: 'iid' (default, the recorded split), 'dirichlet' (label skew, "
@@ -989,6 +997,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         # Exp 5 addendum (Study 5.13); passed only when set.
         driver_kwargs.update(partition=args.partition, dirichlet_alpha=args.dirichlet_alpha,
                              family_labels=bool(args.family_labels))
+    if args.model_arch is not None:
+        # Exp 5 addendum (Study 5.12); passed only when given.
+        driver_kwargs.update(model_arch=args.model_arch)
     if args.h1_field_ref_n is not None:
         # Exp 5 addendum; passed only when given, as the footprint probe is.
         driver_kwargs.update(h1_field_ref_n=int(args.h1_field_ref_n))

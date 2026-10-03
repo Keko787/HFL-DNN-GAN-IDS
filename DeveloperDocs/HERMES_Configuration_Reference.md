@@ -2413,6 +2413,36 @@ python -m experiments.exp4.runner_main --csv results/exp5/s513/dir01.csv --arms 
 python -m experiments.analysis.traces_scorer --traces results/exp5/s513/dir01_traces --detection-columns --csv results/exp5/s513/dir01_scored.csv
 ```
 
+### 20.8 The model's architecture (Study 5.12)
+
+`build_ids_model` built `create_CICIOT_Model` only. `model_task.MODEL_ARCHS` makes the architecture a
+setting; each is a binary classifier over the canonical inputs with one sigmoid output, so local
+training (FedProx included), the evaluation (the detection metrics included) and the merge treat
+them alike, and each is deterministic from the seed. θ at 21 inputs, float32:
+
+| `--model-arch` | Builder (`Config/modelStructures/NIDS/NIDS_Struct.py`) | θ |
+|---|---|---|
+| `ciciot` (default, None) | `create_CICIOT_Model`: dense 64-32-16-8-4-1, every recorded run's | 18,756 B |
+| `balanced` | `create_balanced_nids`: separable Conv1D + GRU | 41,360 B |
+| `optimized` | `create_optimized_model`: a dense residual stack | 92,676 B |
+| `high_performance` | `create_high_performance_nids`: Conv1D + GRU + LSTM | 347,396 B |
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `Exp4Driver.model_arch` (`--model-arch`) | None | The architecture the seed θ (`initial_theta`), every device's trainer (`make_local_train_fn`) and the cluster's evaluation (`evaluate_theta`) build. Real model only (refused otherwise, and an unknown name). The measured payload follows θ's size on the simulated clock, so the larger models' dwell and upload grow with them; `--payload-bytes` still declares one. |
+| `DeviceConfig.model_arch`, `ClusterConfig.model_arch` | None | Set by the topology builder; written to the per-role JSON only when set (`CONFIG_FIELDS_OMITTED_AT_NONE`), so a recorded trial's JSON keeps its keys. |
+
+At None every builder is called exactly as recorded (no `arch` keyword is passed). The row does not
+record the architecture: write each to its own CSV (the kept per-role JSON names it).
+
+**Still to build for Study 5.12** (the plan's estimates): per-device training time on the simulated
+clock with a "not ready" contact outcome (2–4 days), the devices' training and transmit energy
+(about a day, after it), and D2's restored speed term (after it).
+
+```bash
+python -m experiments.exp4.runner_main --csv results/exp5/s512/hp.csv --arms F FX H1 D5 D4 --real-model --model-arch high_performance --mission-clock sim --contact-band wide ...
+```
+
 ---
 
 ## Cross-references
