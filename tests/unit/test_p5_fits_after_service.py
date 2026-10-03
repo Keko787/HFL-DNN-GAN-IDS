@@ -641,10 +641,43 @@ def _shape(source: str):
     return top, defs
 
 
+def _build_ferry_plan_without_the_addendum(source: str) -> str:
+    """The live ``FLScheduler.build_ferry_plan`` with exactly the Exp 5
+    addendum's change taken out (Study 5.14's hover-stop switch): the one
+    ``if options.search.hover_stops:`` around the hover rule's call, replaced
+    by its body. Any other change is left in, so it still differs."""
+    tree = ast.parse(source)
+    (cls,) = [n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == "FLScheduler"]
+    (fn,) = [n for n in cls.body
+             if isinstance(n, ast.FunctionDef) and n.name == "build_ferry_plan"]
+    gates = 0
+    for node in ast.walk(fn):
+        for name in ("body", "orelse"):
+            stmts = getattr(node, name, None)
+            if not isinstance(stmts, list):
+                continue
+            out = []
+            for s in stmts:
+                if (isinstance(s, ast.If) and not s.orelse
+                        and ast.unparse(s.test) == "options.search.hover_stops"):
+                    (call,) = s.body
+                    assert ast.unparse(call.value.func) == "offer_hover_stops"
+                    out.append(call)
+                    gates += 1
+                else:
+                    out.append(s)
+            setattr(node, name, out)
+    assert gates == 1
+    return ast.dump(fn)
+
+
 def test_the_scheduler_gains_this_one_method_and_nothing_else():
     """Every statement and definition of 386c275's ``fl_scheduler.py``, the
     module's and the class's, is unchanged; the live module adds
-    ``FLScheduler.fits_after_service`` alone. Skipped without git history."""
+    ``FLScheduler.fits_after_service`` alone. Skipped without git history.
+    The Exp 5 addendum's hover-stop switch is the one allowed change to a
+    recorded definition, taken back out exactly
+    (:func:`_build_ferry_plan_without_the_addendum`)."""
     try:
         blob = subprocess.run(
             ["git", "show", f"{REF_COMMIT}:hermes/scheduler/fl_scheduler.py"], cwd=REPO,
@@ -652,8 +685,11 @@ def test_the_scheduler_gains_this_one_method_and_nothing_else():
     except (OSError, subprocess.SubprocessError) as e:          # pragma: no cover - no git
         pytest.skip(f"git cannot show {REF_COMMIT}'s fl_scheduler.py: {e}")
     ref_top, ref_defs = _shape(blob.decode("utf-8"))
-    live_top, live_defs = _shape((REPO / "hermes/scheduler/fl_scheduler.py").read_text(
-        encoding="utf-8"))
+    live_source = (REPO / "hermes/scheduler/fl_scheduler.py").read_text(encoding="utf-8")
+    live_top, live_defs = _shape(live_source)
+    assert live_defs["FLScheduler.build_ferry_plan"] != ref_defs["FLScheduler.build_ferry_plan"]
+    live_defs["FLScheduler.build_ferry_plan"] = _build_ferry_plan_without_the_addendum(
+        live_source)
     assert live_top == ref_top
     assert set(live_defs) - set(ref_defs) == {"FLScheduler.fits_after_service"}
     assert set(ref_defs) <= set(live_defs)
