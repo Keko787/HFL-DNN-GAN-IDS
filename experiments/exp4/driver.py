@@ -1691,6 +1691,9 @@ class Exp4Driver:
         decision 2 (b); an FQ arm too, as F); computed per cell when not given."""
         return self.sim and (
             is_plan_arm(arm)
+            # Exp 5 addendum (Study 5.12): D2's restored speed term measures
+            # each device's round time against T_nom.
+            or (arm == "D2" and self.train_time_params is not None)
             or (self.backhaul_model == "seconds" and self.backhaul_period_s is None)
             or self.deadline_time_scale == "t_nom"
             or self.initial_window_missions is not None

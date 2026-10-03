@@ -723,6 +723,16 @@ class MuleService:
             ),
             **sup_kwargs,
         )
+        # Exp 5 addendum (Study 5.12): a whole-scheduler baseline that reads the
+        # devices' update times (D5's readiness, D2's restored speed term, with
+        # T the cell's T_nom) gets the supervisor's fit clock. Nothing is bound
+        # without train times, so every recorded policy ranks as it did.
+        fits = getattr(self.supervisor, "_fits", None)
+        selector = getattr(self.supervisor.scheduler, "target_selector", None)
+        self._train_time_policy: Optional[str] = None
+        if fits is not None and callable(getattr(selector, "bind_fit_clock", None)):
+            selector.bind_fit_clock(fits, t_nom_s=cfg.t_nom_s)
+            self._train_time_policy = str(getattr(selector, "name", type(selector).__name__))
 
         # The settings the supervisor actually runs, read back from it rather
         # than from the config, so a trace shows what a study arm really ran
@@ -876,16 +886,22 @@ class MuleService:
         """``mule_ready``'s Study 5.12 fields: the fit clock the supervisor runs.
 
         ``train_time_params`` (the settings the slice's fit times were drawn
-        from) and ``train_time_n`` (how many devices the clock times), read
-        back from the supervisor (audit #15); never the per-device times, as
-        the availability map is never emitted. {} on a mule without train
+        from), ``train_time_n`` (how many devices the clock times) and, for a
+        baseline that reads the update times (D5, D2), ``train_time_policy``,
+        its name; read back from the supervisor (audit #15); never the
+        per-device times, as the availability map is never emitted. {} on a mule without train
         times, so a recorded ``mule_ready`` keeps its key set.
         """
         fits = getattr(self.supervisor, "_fits", None)
         if fits is None:
             return {}
-        return {"train_time_params": _jsonable(dict(self.cfg.train_time_params or {})),
-                "train_time_n": fits.n_devices}
+        out = {"train_time_params": _jsonable(dict(self.cfg.train_time_params or {})),
+               "train_time_n": fits.n_devices}
+        policy = getattr(self, "_train_time_policy", None)
+        if policy is not None:
+            # The baseline that reads the update times (D5, D2).
+            out["train_time_policy"] = policy
+        return out
 
     def _feed_rf_prior(self, result) -> None:
         """The causal RF prior under the recorded ``mission`` backhaul model (critic B4).
