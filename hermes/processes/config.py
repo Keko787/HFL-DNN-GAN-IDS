@@ -746,7 +746,8 @@ def mule_config_errors(cfg: "MuleConfig") -> List[str]:
 
 def _train_time_config_errors(cfg: "MuleConfig") -> List[str]:
     """Study 5.12's two fields on the simulated clock: set together, the
-    times finite and >= 0 per device id, the settings a dict."""
+    times finite and >= 0 per device id, the settings a dict; and arm D2's
+    restored speed term needs T_nom (its T)."""
     times = getattr(cfg, "device_train_time_s", None)
     params = getattr(cfg, "train_time_params", None)
     if times is None and params is None:
@@ -766,6 +767,11 @@ def _train_time_config_errors(cfg: "MuleConfig") -> List[str]:
             )
     if params is not None and not isinstance(params, dict):
         errors.append(f"train_time_params must be a dict, got {params!r}")
+    if getattr(cfg, "contact_policy", None) == "oort" and cfg.t_nom_s is None:
+        errors.append(
+            "contact_policy='oort' (arm D2) with train times restores Oort's system-speed "
+            "term, whose preferred round duration T is the cell's T_nom: set t_nom_s"
+        )
     return errors
 
 

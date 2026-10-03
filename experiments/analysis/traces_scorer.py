@@ -1331,6 +1331,7 @@ DETECTION_COLUMNS = (
 COMPUTE_COLUMNS = (
     "train_time_median_s", "train_time_sigma", "straggler_share", "straggler_factor",
     "pass_1_target_contacts", "not_ready_contacts", "not_ready_share", "pass_1_clean_share",
+    "policy_not_ready_drops",
     "device_train_busy_s", "device_uplink_s", "device_p_comp_w", "device_p_tx_w",
     "device_energy_j_total", "device_energy_j_max",
 )
@@ -1504,6 +1505,7 @@ class ComputeReport:
     not_ready_contacts: Optional[int] = None
     not_ready_share: Optional[float] = None
     pass_1_clean_share: Optional[float] = None
+    policy_not_ready_drops: Optional[int] = None
     device_train_busy_s: Optional[float] = None
     device_uplink_s: Optional[float] = None
     device_p_comp_w: Optional[float] = None
@@ -1543,7 +1545,10 @@ def compute_report(obs: Exp4Observation, mule_cfgs: Sequence[Mapping[str, object
     ``pass_1_target_contacts``, the targets solicited; ``not_ready_contacts``,
     those that found no update ready, and ``not_ready_share`` of the targets;
     ``pass_1_clean_share``, the CLEAN Pass-1 sessions per target contact (the
-    summary's ``update_yield`` is the plan's update yield). **The
+    summary's ``update_yield`` is the plan's update yield);
+    ``policy_not_ready_drops``, the devices arm D5's readiness test left out
+    before takeoff (its ``pass_1_policy_drops`` labelled ``not_ready``; 0 for
+    every other arm). **The
     devices**: ``device_train_busy_s``, the fits' seconds summed over the
     devices (:func:`device_busy_s`, each mule's fits ended at its last
     mission's end); ``device_uplink_s``, the collected updates' uplink
@@ -1594,6 +1599,9 @@ def compute_report(obs: Exp4Observation, mule_cfgs: Sequence[Mapping[str, object
         not_ready_contacts=not_ready,
         not_ready_share=(not_ready / targets) if targets else None,
         pass_1_clean_share=(clean / targets) if targets else None,
+        policy_not_ready_drops=sum(len(devices) for m in timed
+                                   for devices, reason in m.policy_drops or ()
+                                   if reason == "not_ready"),
         device_train_busy_s=float(sum(busy.values())),
         device_uplink_s=float(sum(uplink.values())),
         device_p_comp_w=float(p_comp_w),

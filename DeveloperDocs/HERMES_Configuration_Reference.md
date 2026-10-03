@@ -2492,6 +2492,7 @@ that contact's model, but the model times that fit from the basis it last receiv
 | `train_time_median_s`, `train_time_sigma`, `straggler_share`, `straggler_factor` | The settings, from the mule config. |
 | `pass_1_target_contacts`, `not_ready_contacts`, `not_ready_share` | Pass-1 targets solicited, those that found no update ready, and their share. |
 | `pass_1_clean_share` | CLEAN Pass-1 sessions per target contact. The summary's own `update_yield` is the plan's update yield. |
+| `policy_not_ready_drops` | The devices arm D5's readiness test left out before takeoff (0 for every other arm). |
 | `device_train_busy_s` | The devices' fit seconds. Each fit runs `T_j`, or until a newer model restarts it, or until its mule's last mission ends, whichever comes first. |
 | `device_uplink_s` | The collected updates' uplink airtime. |
 | `device_p_comp_w`, `device_p_tx_w` | The powers used: `--device-p-comp-w` (default 5.0 W) and `--device-p-tx-w` (default 1.0 W). These are placeholders for the modelled device. |
@@ -2499,8 +2500,28 @@ that contact's model, but the model times that fit from the basis it last receiv
 
 The study's "none" level is `--train-time-s 0`, so its rows carry the same columns.
 
-**Not yet built for Study 5.12** (it needs a decision on the port): D5 (FedCS) reading the training
-time, and D2's restored Oort system-speed term.
+**The baselines that read the update times** (the user's decisions of 2026-10-03). With train times,
+the mule process binds its fit clock to a whole-scheduler baseline that reads it
+(`bind_fit_clock`), and `mule_ready.train_time_policy` names it:
+
+* **D5, FedCS: a readiness test, no waiting** (deviation 3 of `policies/fedcs_degraded.py`). FedCS
+  counts each client's update time in the round. A mule cannot wait at a stop for an update without a
+  capability no other arm has, so the term becomes a test. At each step of Algorithm 3 the candidates
+  are the contacts with a member whose update is ready at the predicted arrival (`ready_at <= clock +
+  transit`). A contact none of whose members is ready stays for later steps, and the walk ends when no
+  remaining contact has one. Whole stops are priced whole; under member subsets a candidate is reduced
+  to its ready members. What the test left out is reported in `pass_1_policy_drops` with reason
+  `not_ready`; the scorer counts those devices as `policy_not_ready_drops`.
+* **D2, Oort: the system-speed term restored** (deviation 1 of `policies/oort.py`). Each explored
+  member's utility, staleness bonus included, is multiplied by `(T / t_i) ** alpha` when `t_i > T`
+  (Oort's Eq. 2 and Algorithm 1). `t_i` is the device's fit time plus its predicted dwell at the
+  contact: the shared feasibility model's per-member dwell, one session without a band, and `inf` for
+  a member predicted unreachable. `T` is the cell's T_nom, and `alpha` is Oort's default, 2. The
+  driver computes T_nom for D2 whenever train times are set, and `mule_config_errors` refuses D2 with
+  train times but no `t_nom_s`. Oort does not test readiness, so D2 still flies to a device whose
+  update is not ready; the term only ranks slow devices lower.
+
+Without train times nothing is bound, and both policies are the recorded ones.
 
 ```bash
 python -m experiments.exp4.runner_main --csv results/exp5/s512/strag.csv --arms F FX H1 D5 D4 --mission-clock sim --contact-band wide --train-time-s 60 --straggler-share 0.2 --straggler-factor 5 --keep-event-traces results/exp5/s512/traces ...

@@ -1686,6 +1686,15 @@ class MuleSupervisor:
              "deadline_ts": float(wp.deadline_ts), "reason": reason, "widened": False}
             for wp, reason in getattr(self.scheduler, "last_policy_drops", None) or ()
         ]
+        # Exp 5 addendum (Study 5.12): what D5's readiness test left out (no
+        # member's update ready at any arrival its walk could make) is labelled
+        # ``not_ready``, not with the clause the scheduler would name.
+        not_ready = getattr(getattr(self.scheduler, "target_selector", None),
+                            "last_not_ready", None)
+        if not_ready and getattr(self, "_fits", None) is not None:
+            for drop in rec.policy_drops:
+                if set(drop["devices"]) <= not_ready:
+                    drop["reason"] = "not_ready"
         planned_devices = mission_planned_devices(pass_1_queue, _feas)
         rec.no_insert = {d for wp in list(pass_1_queue) + dropped_pre for d in wp.devices}
         rec.deadlines = dict(planned_deadlines)
