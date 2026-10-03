@@ -2016,8 +2016,11 @@ class Exp4Driver:
                 task = self._build_task(n_devices, cell.seed)
                 prep = prepare_trial(prep_dir, task=task, theta_seed=self.theta_seed,
                                      **self._arch_kw())
-                shard_rows = {path: int(len(y)) for path, (_X, y)
-                              in zip(prep.shard_paths, task.device_shards)}
+                if self._data_info() is not None:
+                    # Study 5.13: each shard's rows, for the status marker's
+                    # ``data``; read only when a data setting is not the default.
+                    shard_rows = {path: int(len(y)) for path, (_X, y)
+                                  in zip(prep.shard_paths, task.device_shards)}
                 log.info(
                     "exp4 real-model H1 trial cell=%s trial=%d regime=%s "
                     "realism=%s: source=%s input_dim=%d n_train=%d synthetic=%s",
