@@ -630,6 +630,9 @@ class ClusterService:
         # service loop so it never delays port binding at startup.
         self._eval_X = None
         self._eval_y = None
+        #: Exp 5 addendum (Study 5.13): each test row's attack family, when the
+        #: test set carries them; ``model_eval`` then adds ``detection``.
+        self._eval_family = None
         self._eval_input_dim = getattr(cfg, "input_dim", None)
         # EX-4.2 — long-range backhaul (mule->BS) upload loss.
         self._backhaul_loss_pct = float(getattr(cfg, "backhaul_loss_pct", 0.0) or 0.0)
@@ -650,8 +653,9 @@ class ClusterService:
         # channel model; overrides the flat pct when set.
         self._backhaul_loss_schedule = getattr(cfg, "backhaul_loss_schedule", None)
         if getattr(cfg, "eval_test_path", None) and self._eval_input_dim:
-            from experiments.exp4.model_task import load_xy
+            from experiments.exp4.model_task import load_family, load_xy
             self._eval_X, self._eval_y = load_xy(cfg.eval_test_path)
+            self._eval_family = load_family(cfg.eval_test_path)
             log.info(
                 "cluster %s: loaded held-out eval set %s (rows=%d, dim=%s)",
                 cfg.cluster_id, cfg.eval_test_path,
@@ -1498,6 +1502,12 @@ class ClusterService:
         No-op when the real-model eval set was not configured (the stub
         integration path). Best-effort: a scoring failure logs and drops the
         sample rather than killing the cluster loop.
+
+        Exp 5 addendum (Study 5.13): when the test set carries each row's
+        attack family, the event adds ``detection``, the confusion counts,
+        TPR, FPR, precision, F1 and each family's recall
+        (``model_task.detection_metrics``); without them it is the recorded
+        event.
         """
         if self._eval_X is None:
             return
@@ -1505,10 +1515,12 @@ class ClusterService:
             from experiments.exp4.model_task import evaluate_theta
 
             theta = self.cluster.generator.get_global_disc_weights()
+            extra = {} if self._eval_family is None else {"family": self._eval_family}
             m = evaluate_theta(
                 theta, self._eval_X, self._eval_y,
-                input_dim=self._eval_input_dim,
+                input_dim=self._eval_input_dim, **extra,
             )
+            detection = {} if "detection" not in m else {"detection": m["detection"]}
             self.events.emit(
                 "model_eval",
                 cluster_round=int(cluster_round),
@@ -1517,6 +1529,7 @@ class ClusterService:
                 loss=float(m["loss"]),
                 n_test=int(len(self._eval_y)),
                 **self._sim_ts_fields(),
+                **detection,
             )
             self.metrics.observe("model_auc", float(m["auc"]))
             log.info(

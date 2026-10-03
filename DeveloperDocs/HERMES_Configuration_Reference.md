@@ -2361,6 +2361,58 @@ prices S3a's stops alone).
 python -m experiments.exp4.runner_main --csv results/exp5/s514/hover_off.csv --arms F --mission-clock sim --contact-band wide --plan-search-params '{"hover_stops": false}' ...
 ```
 
+### 20.7 Data heterogeneity and the detector's metrics (Study 5.13)
+
+Every recorded trial split its training rows IID (`partition_indices`: an even cut of a seeded
+permutation) and scored the global model by accuracy, AUC and loss only. All of the below is opt-in
+and needs `--real-model` (the stub trainer has no data); at the defaults the task, its files, the
+events and the rows are the recorded ones.
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `Exp4Driver.partition` (`--partition`) | `iid` | `iid`: the recorded split, exactly. `dirichlet`: label skew, each class's rows shared over the devices by Dir(α·1_N) (Hsu et al. 2019; the NIID-Bench rule), over the attack families with `family_labels`, else over the binary label. `quantity`: shard sizes Dir(α·1_N), each shard a mix as in IID. |
+| `Exp4Driver.dirichlet_alpha` (`--dirichlet-alpha`) | None | α > 0, finite (1 moderate, 0.1 strong); needed by `dirichlet` and `quantity`, refused with `iid` (α = ∞). |
+| `Exp4Driver.family_labels` (`--family-labels`) | off | Keep each row's CICIoT2023 attack family beside the binary label (`partition.FAMILIES`: Benign = 0 and the legacy loader's seven `DICT_7CLASSES` families), in the task and as a `family` array in the shard and test `.npz` files. The model stays binary and the devices never read the family. |
+
+**The partitioner** (`experiments/exp4/partition.py`). Every draw is a function of the trial seed,
+the partition and α (paired arms hold the same shards), and a skewed partition re-cuts the IID
+rows: the test set and the training rows are the IID task's, so an α sweep is paired too. **No shard
+is empty:** a draw that leaves a device short is drawn again (up to `MAX_DRAWS`, 1,000), and a
+partition that still cannot fill every device is refused; `prepare_trial` also refuses any task with
+an empty shard, which would train nothing and report zero metrics silently.
+
+**The family label on the canonical data.** `load_and_balance_data_stratified` keeps its
+`original_label` column when asked (`keep_original_label`, off by default, when it drops it as
+recorded); the loader maps it through `DICT_7CLASSES` and carries it by row index through the
+canonical `preprocess_dataset`, which shuffles and splits by position and keeps the index, so the
+family never enters the features. The synthetic task draws a family per row from a stream of its
+own (Benign for class 0, an attack family uniformly for class 1), moving no row.
+
+**The detector's metrics.** When the cluster's test set carries the families, `model_eval` adds
+`detection` (`model_task.detection_metrics`): the confusion counts (`tp`, `fp`, `tn`, `fn`), `tpr`
+(recall on attacks), `fpr`, `precision` and `f1` (null where a denominator is 0), and per family
+present its rows (`n_by_family`) and recall (`recall_by_family`: flagged for an attack family,
+passed for Benign, so Benign's is 1 − FPR). Without the families the event is the recorded one. The
+consumer reads it as `ModelEvalPoint.detection` (`Detection`). H0's in-process evaluation does not
+compute it.
+
+**The status marker** of a kept trace records a non-default data setting as `data`:
+`partition`, `dirichlet_alpha`, `family_labels` and `shard_rows`, each device's training rows by its
+id. The trial CSV's header is unchanged and its row does not record the setting: write each setting
+to its own CSV.
+
+**Scorer columns** (`traces_scorer.DETECTION_COLUMNS`, `--detection-columns`, last):
+`data_partition` and `data_alpha` (from the marker), `network_aou_shard_weighted_mean` (Network
+AoU with each device weighted by its shard's rows), and the final evaluation's `tpr_final`,
+`fpr_final`, `precision_final`, `f1_final`, `recall_by_family_final` (JSON) and
+`recall_family_min` (the worst attack family's, Benign left out). Blank where the trace cannot say;
+the final accuracy and AUC are the summary's own columns.
+
+```bash
+python -m experiments.exp4.runner_main --csv results/exp5/s513/dir01.csv --arms F FX H1 D3 --real-model --family-labels --partition dirichlet --dirichlet-alpha 0.1 --keep-event-traces ...
+python -m experiments.analysis.traces_scorer --traces results/exp5/s513/dir01_traces --detection-columns --csv results/exp5/s513/dir01_scored.csv
+```
+
 ---
 
 ## Cross-references

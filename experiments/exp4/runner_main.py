@@ -561,6 +561,26 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
              "(balanced, 21 features, paper-faithful); 'synthetic' = a "
              "real-shaped separable task (fast, no dataset needed).",
     )
+    parser.add_argument(
+        "--partition", choices=["iid", "dirichlet", "quantity"], default="iid",
+        help="Exp 5 addendum (Study 5.13): how the training rows are split over the "
+             "devices: 'iid' (default, the recorded split), 'dirichlet' (label skew, "
+             "Dir(alpha) per class over the devices; over the attack families with "
+             "--family-labels) or 'quantity' (shard sizes Dir(alpha)). Every shard "
+             "non-empty. Needs --real-model.",
+    )
+    parser.add_argument(
+        "--dirichlet-alpha", type=float, default=None,
+        help="The partition's alpha (> 0; 1 moderate, 0.1 strong skew). Needed by "
+             "'dirichlet' and 'quantity', refused with 'iid' (alpha = infinity).",
+    )
+    parser.add_argument(
+        "--family-labels", action="store_true",
+        help="Exp 5 addendum (Study 5.13): keep each row's CICIoT2023 attack family "
+             "beside the binary label, so the cluster's model_eval adds the detection "
+             "metrics (TPR, FPR, precision, F1, recall per family) and 'dirichlet' "
+             "skews over the families. Needs --real-model.",
+    )
     parser.add_argument("--local-epochs", type=int, default=1)
     parser.add_argument("--local-batch-size", type=int, default=64)
     parser.add_argument(
@@ -965,6 +985,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         whittle_weights=args.whittle_weights,
         fedcs_value=args.fedcs_value,
     )
+    if args.partition != "iid" or args.dirichlet_alpha is not None or args.family_labels:
+        # Exp 5 addendum (Study 5.13); passed only when set.
+        driver_kwargs.update(partition=args.partition, dirichlet_alpha=args.dirichlet_alpha,
+                             family_labels=bool(args.family_labels))
     if args.h1_field_ref_n is not None:
         # Exp 5 addendum; passed only when given, as the footprint probe is.
         driver_kwargs.update(h1_field_ref_n=int(args.h1_field_ref_n))

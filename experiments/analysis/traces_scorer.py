@@ -163,6 +163,15 @@ holds):
   memory in MiB, concurrent (``peak_rss_mib_total``) and per role
   (``peak_rss_mib_cluster``, ``_mule``, ``_device``: the largest process).
 
+Exp 5 addendum, Study 5.13: the data and the detector. With
+``detection_columns`` (``--detection-columns``) :data:`DETECTION_COLUMNS`
+follow the τ, pair and cost columns (:func:`detection_report`): the trial's
+partition and alpha and the Network AoU weighted by each device's shard size
+(from the status marker's ``data``, which a non-IID or family-labelled trial
+writes), and the final evaluation's TPR, FPR, precision, F1 and recall per
+attack family (``model_eval.detection``, which the cluster writes when the
+test set carries the families).
+
 Usage::
 
     python -m experiments.analysis.traces_scorer \\
@@ -1288,6 +1297,15 @@ COST_COLUMNS = (
 
 _MIB = float(1 << 20)
 
+#: The scorer's Study 5.13 columns (the build plan's addendum, metric
+#: "Detection quality"), in row order after the τ, pair and cost columns, and
+#: only with ``detection_columns`` (``--detection-columns``). Scorer-only.
+DETECTION_COLUMNS = (
+    "data_partition", "data_alpha", "network_aou_shard_weighted_mean",
+    "tpr_final", "fpr_final", "precision_final", "f1_final",
+    "recall_family_min", "recall_by_family_final",
+)
+
 
 @dataclass(frozen=True)
 class CostReport:
@@ -1418,6 +1436,71 @@ def _footprint_fields(footprint: Optional[Mapping[str, object]]) -> Dict[str, ob
     }
 
 
+@dataclass(frozen=True)
+class DetectionReport:
+    """One trial's :data:`DETECTION_COLUMNS`; None is a blank column."""
+
+    data_partition: Optional[str] = None
+    data_alpha: Optional[float] = None
+    network_aou_shard_weighted_mean: Optional[float] = None
+    tpr_final: Optional[float] = None
+    fpr_final: Optional[float] = None
+    precision_final: Optional[float] = None
+    f1_final: Optional[float] = None
+    recall_family_min: Optional[float] = None
+    recall_by_family_final: Optional[Dict[str, float]] = None
+
+    def to_row(self) -> Dict[str, object]:
+        row = {col: _blank(getattr(self, col)) for col in DETECTION_COLUMNS}
+        row["recall_by_family_final"] = _json_or_blank(self.recall_by_family_final)
+        return row
+
+
+def detection_report(obs: Exp4Observation, devices: Sequence[str],
+                     marker: Mapping[str, object]) -> DetectionReport:
+    """One trial's data and detector columns (Exp 5 addendum, Study 5.13).
+
+    **The data** (the status marker's ``data``, written only by a trial whose
+    partition or family labels were not the recorded ones; blank otherwise):
+    ``data_partition`` and ``data_alpha``, and
+    ``network_aou_shard_weighted_mean``, the Network AoU with each device
+    weighted by its shard's rows (``data.shard_rows``; :func:`age_profile`),
+    so under quantity skew a large shard left stale counts for more. Blank
+    when the marker does not name every device's rows.
+
+    **The detector** (the last ``model_eval`` that carries ``detection``,
+    which the cluster writes when the test set carries the attack families;
+    blank without one): ``tpr_final``, ``fpr_final``, ``precision_final``,
+    ``f1_final``; ``recall_by_family_final`` (JSON, every family the test set
+    holds, Benign's being 1 - FPR) and ``recall_family_min``, the worst attack
+    family's (Benign left out). The final accuracy and AUC are the summary's
+    own columns.
+    """
+    data = marker.get("data") if isinstance(marker.get("data"), Mapping) else {}
+    partition = data.get("partition") if isinstance(data.get("partition"), str) else None
+    alpha = _float_or_none(data.get("dirichlet_alpha"))
+    weighted = None
+    rows = data.get("shard_rows")
+    if isinstance(rows, Mapping) and devices and all(
+            isinstance(rows.get(d), int) and not isinstance(rows.get(d), bool)
+            for d in devices) and sum(rows[d] for d in devices) > 0:
+        weighted = age_profile(obs, devices, weights={d: float(rows[d]) for d in devices}
+                               ).network_aou_mean
+    final = next((e.detection for e in reversed(obs.model_evals)
+                  if e.detection is not None), None)
+    if final is None:
+        return DetectionReport(data_partition=partition, data_alpha=alpha,
+                               network_aou_shard_weighted_mean=weighted)
+    attacks = [v for k, v in final.recall_by_family.items() if k != "Benign"]
+    return DetectionReport(
+        data_partition=partition, data_alpha=alpha,
+        network_aou_shard_weighted_mean=weighted,
+        tpr_final=final.tpr, fpr_final=final.fpr, precision_final=final.precision,
+        f1_final=final.f1, recall_family_min=min(attacks) if attacks else None,
+        recall_by_family_final=dict(final.recall_by_family) or None,
+    )
+
+
 # --------------------------------------------------------------------------- #
 # One trial, and a whole trace root
 # --------------------------------------------------------------------------- #
@@ -1455,6 +1538,10 @@ class TrialScore:
     #: (:func:`cost_report`), after the τ and pair columns, when scored with
     #: ``cost_columns``; None leaves them out.
     costs: Optional[CostReport] = None
+    #: Exp 5 addendum, Study 5.13: :data:`DETECTION_COLUMNS`
+    #: (:func:`detection_report`), last, when scored with
+    #: ``detection_columns``; None leaves them out.
+    detection: Optional[DetectionReport] = None
 
     def provenance_key(self) -> Tuple[Tuple[str, object], ...]:
         """The provenance as a hashable, column-ordered tuple."""
@@ -1505,6 +1592,8 @@ class TrialScore:
             row.update(self.pairs.to_row())
         if self.costs is not None:
             row.update(self.costs.to_row())
+        if self.detection is not None:
+            row.update(self.detection.to_row())
         return row
 
 
@@ -1517,6 +1606,7 @@ def score_trial(
     age_cap_s: Optional[int] = None,
     pair_columns: bool = False,
     cost_columns: bool = False,
+    detection_columns: bool = False,
 ) -> TrialScore:
     """Score one retained trial directory.
 
@@ -1528,7 +1618,8 @@ def score_trial(
     ``pair_columns`` adds :data:`PHASE_5_COLUMNS` after the τ columns
     (:func:`pair_report`); without it the row has none of them.
     ``cost_columns`` adds :data:`COST_COLUMNS` after those
-    (:func:`cost_report`); without it the row has none of them.
+    (:func:`cost_report`), and ``detection_columns`` :data:`DETECTION_COLUMNS`
+    last (:func:`detection_report`); without them the row has none of them.
 
     Raises :class:`~experiments.exp4.events_consumer.ClockDomainError`,
     naming the trial, for a trace whose clocks disagree: in its events (see
@@ -1587,6 +1678,8 @@ def score_trial(
         pairs=pair_report(obs, mule_cfg=mule_cfg) if pair_columns else None,
         costs=(cost_report(obs, mule_cfg=mule_cfg, footprint=read_footprint(trace_dir))
                if cost_columns else None),
+        detection=(detection_report(obs, devices, _read_json(trace_dir / TRIAL_STATUS_FILE))
+                   if detection_columns else None),
     )
 
 
@@ -1613,6 +1706,7 @@ def score_traces(
     age_cap_s: Optional[int] = None,
     pair_columns: bool = False,
     cost_columns: bool = False,
+    detection_columns: bool = False,
 ) -> List[TrialScore]:
     """Score every trial directory under ``trace_root``, in name order.
 
@@ -1620,7 +1714,8 @@ def score_traces(
     ``include_failed``, are trials whose status is not ``ok`` (see
     :func:`trial_status`): a timed-out or ``no_eval`` trial is not a valid
     observation, and the trial CSV's analysis drops it too. ``age_cap_s``,
-    ``pair_columns`` and ``cost_columns`` as in :func:`score_trial`.
+    ``pair_columns``, ``cost_columns`` and ``detection_columns`` as in
+    :func:`score_trial`.
     """
     index = _status_index(status_csv)
     scores: List[TrialScore] = []
@@ -1628,13 +1723,14 @@ def score_traces(
         if not include_failed and trial_status(d, index).status != "ok":
             continue
         scores.append(score_trial(d, taus=taus, status_csv=index, age_cap_s=age_cap_s,
-                                  pair_columns=pair_columns, cost_columns=cost_columns))
+                                  pair_columns=pair_columns, cost_columns=cost_columns,
+                                  detection_columns=detection_columns))
     return scores
 
 
 def write_scores_csv(scores: Sequence[TrialScore], path) -> None:
     """One row per trial. The column set is fixed by the first score's τ list
-    and whether it carries the pair and cost columns."""
+    and whether it carries the pair, cost and detection columns."""
     if not scores:
         raise ValueError("no scores to write")
     rows = [s.to_row() for s in scores]
@@ -1683,6 +1779,12 @@ def main(argv=None) -> int:
                          "processes and peak memory where the runner's --footprint-probe "
                          "recorded them. Wall times: off by default, when the row is the "
                          "one without them.")
+    ap.add_argument("--detection-columns", action="store_true",
+                    help="Add Study 5.13's columns last: the trial's partition and alpha "
+                         "and the Network AoU weighted by shard size (from the status "
+                         "marker of a non-IID or family-labelled trial), and the final "
+                         "TPR, FPR, precision, F1 and recall per attack family (from "
+                         "model_eval's detection). Off by default.")
     args = ap.parse_args(argv)
     if args.age_cap_s is not None and args.age_cap_s < 1:
         ap.error(f"--age-cap-s must be >= 1, got {args.age_cap_s}")
@@ -1702,7 +1804,7 @@ def main(argv=None) -> int:
             root, taus=args.tau, arms=args.arms,
             include_failed=args.include_failed, status_csv=index,
             age_cap_s=args.age_cap_s, pair_columns=args.pair_columns,
-            cost_columns=args.cost_columns,
+            cost_columns=args.cost_columns, detection_columns=args.detection_columns,
         ))
         statuses.extend(trial_statuses(root, arms=args.arms, status_csv=index))
 
