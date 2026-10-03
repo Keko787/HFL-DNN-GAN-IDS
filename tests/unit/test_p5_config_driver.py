@@ -380,7 +380,9 @@ def test_the_phase_5_arm_lists_and_tags():
     assert PAIR_ARMS == ("FQ", "FQ-hand", "FQ-dwell", "FQ-cov", "FQ-g0", "FQ-g25", "FQ-g50",
                          "FQ-g75", "FQ-g90", "FQ-g99")
     assert LEARNED_ARMS == PAIR_ARMS + ("E3",) and PHASE_5_ARMS == LEARNED_ARMS + ("H1+L1",)
-    assert ARMS == DEFAULT_ARMS + PLAN_ARMS + PHASE_5_ARMS and len(set(ARMS)) == len(ARMS)
+    # and the Exp 5 addendum's F+L1 (tests/unit/test_exp5_f_l1.py)
+    assert ARMS == DEFAULT_ARMS + PLAN_ARMS + PHASE_5_ARMS + ("F+L1",)
+    assert len(set(ARMS)) == len(ARMS)
     assert CHECKPOINT_TAGS == {
         "FQ": "main", "FQ-hand": "hand", "FQ-dwell": "dwell", "FQ-cov": "cov", "FQ-g0": "g0",
         "FQ-g25": "g25", "FQ-g50": "g50", "FQ-g75": "g75", "FQ-g90": "g90", "FQ-g99": "g99",
@@ -388,7 +390,7 @@ def test_the_phase_5_arm_lists_and_tags():
     assert PAIR_CHECKPOINT_TAGS + POLICY_CHECKPOINT_TAGS == tuple(CHECKPOINT_TAGS.values())
     for tag in CHECKPOINT_TAGS.values():
         assert mule_config_errors(_fq(pair_checkpoint_tag=tag)) == []
-    assert [arm for arm in ARMS if is_plan_arm(arm)] == list(PLAN_ARMS + PAIR_ARMS)
+    assert [arm for arm in ARMS if is_plan_arm(arm)] == list(PLAN_ARMS + PAIR_ARMS) + ["F+L1"]
 
 
 @pytest.mark.parametrize("arm", PHASE_5_ARMS)
@@ -1072,8 +1074,10 @@ def test_fq_flies_a_stub_trial_from_its_checkpoint(ckpts):
         if not stops:
             assert set(e) == fx_keys
             continue
-        assert set(e) == fx_keys | {"pass_1_pairs"}
+        # Study 5.11 (a): each decision's wall time beside its record.
+        assert set(e) == fx_keys | {"pass_1_pairs", "pass_1_pairs_wall"}
         records = e["pass_1_pairs"]
+        assert len(e["pass_1_pairs_wall"]) == len(records)
         assert [r["devices"] for r in records] == [s["devices"] for s in stops]
         for r in records:
             assert set(r) == set(DECISION_KEYS + CLOSE_KEYS) and r["scorer"] == "pair_v1"
@@ -1102,7 +1106,8 @@ def test_e3_flies_a_stub_trial_from_its_checkpoint(ckpts):
     h_keys = set(h_events["mission_completed"][0]) - {"pass_1_policy_drops"}
     for e in events["mission_completed"]:
         assert "pass_1_policy_drops" not in e and "pass_1_pairs" not in e
-        assert set(e) - {"pass_1_e3", "pass_1_e3_unvisited"} == h_keys and "pass_1_e3" in e
+        assert set(e) - {"pass_1_e3", "pass_1_e3_unvisited", "pass_1_e3_wall"} == h_keys
+        assert "pass_1_e3" in e and len(e["pass_1_e3_wall"]) == len(e["pass_1_e3"])
         named = [c for c in e["pass_1_e3"] if c["next"] != "home"]
         assert [c["next"] for c in named] == [s["devices"] for s in e["pass_1_flown"]]
     assert row["policy_params"] == json.dumps(

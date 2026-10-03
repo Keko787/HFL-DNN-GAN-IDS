@@ -652,6 +652,13 @@ def ref_scorer(tmp_path_factory):
             finally:
                 sys.modules["experiments.exp4.events_consumer"] = live
             loaded[key] = module
+        # The live ferry fields, less the Exp 5 addendum's (Study 5.15), which
+        # this commit's config did not have: the reference writes the
+        # ferry_params it wrote then (the live scorer leaves them out at None).
+        from hermes.processes.config import FERRY_PARAMS_OMITTED_AT_NONE, FERRY_SPEC_FIELDS
+
+        loaded["scorer"].FERRY_SPEC_FIELDS = {
+            k: v for k, v in FERRY_SPEC_FIELDS.items() if k not in FERRY_PARAMS_OMITTED_AT_NONE}
         yield loaded["scorer"]
     finally:
         for name in names.values():

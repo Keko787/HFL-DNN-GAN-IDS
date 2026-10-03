@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 from .model_task import CiciotTask, initial_theta, save_weights, save_xy
 
@@ -29,26 +29,42 @@ class TrialPrep:
     n_train: int
 
 
-def prepare_trial(prep_dir, *, task: CiciotTask, theta_seed: int) -> TrialPrep:
+def prepare_trial(prep_dir, *, task: CiciotTask, theta_seed: int,
+                  arch: Optional[str] = None) -> TrialPrep:
     """Serialize one trial's shards + test set + seed weights to ``prep_dir``.
 
     ``theta_seed`` seeds the deterministic initial model so every arm in a
     paired cell starts from the same global θ.
+
+    Exp 5 addendum (Study 5.13): a task with families writes each row's
+    family beside it (``save_xy``'s ``family``: the shards, which the devices
+    never read, and the test set, from which the cluster's evaluation adds
+    the detection metrics); a task without them writes the recorded files.
+    A shard with no rows is refused: its device would train nothing and
+    report zero metrics silently.
     """
     prep_dir = Path(prep_dir)
     prep_dir.mkdir(parents=True, exist_ok=True)
 
+    empty = [i for i, (_X, y) in enumerate(task.device_shards) if len(y) == 0]
+    if empty:
+        raise ValueError(
+            f"device shard(s) {empty} hold no rows: such a device trains nothing and reports "
+            f"zero metrics; give the trial more rows or fewer devices")
     shard_paths: List[str] = []
     for i, (X, y) in enumerate(task.device_shards):
         p = prep_dir / f"shard-{i:03d}.npz"
-        save_xy(p, X, y)
+        family = None if task.device_families is None else task.device_families[i]
+        save_xy(p, X, y, family=family)
         shard_paths.append(str(p))
 
     test_path = prep_dir / "test.npz"
-    save_xy(test_path, task.X_test, task.y_test)
+    save_xy(test_path, task.X_test, task.y_test, family=task.family_test)
 
     theta_path = prep_dir / "theta_init.npz"
-    save_weights(theta_path, initial_theta(task.input_dim, seed=theta_seed))
+    # Exp 5 addendum (Study 5.12): ``arch``'s seed weights, only when set.
+    save_weights(theta_path, initial_theta(task.input_dim, seed=theta_seed,
+                                           **({} if arch is None else {"arch": arch})))
 
     return TrialPrep(
         input_dim=task.input_dim,

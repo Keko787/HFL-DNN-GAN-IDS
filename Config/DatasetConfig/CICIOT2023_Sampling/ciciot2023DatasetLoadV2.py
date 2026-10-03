@@ -144,7 +144,12 @@ def load_and_balance_data(file_path, label_class_dict, current_benign_size, beni
     return balanced_data, len(benign_samples)
 
 
-def load_and_balance_data_stratified(file_path, label_class_dict, current_benign_size, benign_size_limit, verbose=True):
+def load_and_balance_data_stratified(file_path, label_class_dict, current_benign_size, benign_size_limit, verbose=True,
+                                     keep_original_label=False):
+    # keep_original_label (Exp 5 addendum, Study 5.13): keep the fine CICIoT2023
+    # label in an 'original_label' column instead of dropping it at the end, so a
+    # caller can map it to the attack families (DICT_7CLASSES). Off by default:
+    # the recorded pipeline drops it.
     # Load the data
     data = pd.read_csv(file_path)
 
@@ -231,7 +236,8 @@ def load_and_balance_data_stratified(file_path, label_class_dict, current_benign
         print(f"  - Benign samples: {len(benign_samples)}")
 
     # Drop the temporary column
-    balanced_data = balanced_data.drop('original_label', axis=1)
+    if not keep_original_label:
+        balanced_data = balanced_data.drop('original_label', axis=1)
 
     return balanced_data, len(benign_samples)
 

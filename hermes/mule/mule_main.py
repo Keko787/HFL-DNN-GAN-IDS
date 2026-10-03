@@ -74,12 +74,13 @@ so every recorded path is unchanged and loads no Phase 5 module.
 
 from __future__ import annotations
 
+import dataclasses
 import logging
 import math
 import threading
 import time
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, FrozenSet, List, Optional, Tuple
+from typing import Any, Callable, Dict, FrozenSet, List, Mapping, Optional, Tuple
 
 import numpy as np
 
@@ -315,6 +316,30 @@ class MissionRunResult:
     pass_1_e3: Optional[List[Dict[str, Any]]] = None
     pass_1_e3_unvisited: Optional[List[Dict[str, Any]]] = None
 
+    # Exp 5 addendum, Study 5.11 (a): the decision cost in flight. The wall
+    # seconds each flight-clock decision took, kept outside the decision
+    # records above (which stay free of wall time) so that determinism
+    # comparisons drop them as they drop ``plan_wall_s``. ``pass_1_pairs_wall``
+    # holds one entry per record of ``pass_1_pairs``, in its order, and
+    # ``pass_1_e3_wall`` one per call of ``pass_1_e3``. Each entry is
+    # ``{"decide_s": ..., "mask_s": ...}``: the whole decision (the mask's
+    # predicate, the scorer or policy, and the pick) and the predicate's share
+    # of it. The view or observation a decision reads is built before it and
+    # is not timed. Each None when the record it pairs with is.
+    pass_1_pairs_wall: Optional[List[Dict[str, float]]] = None
+    pass_1_e3_wall: Optional[List[Dict[str, float]]] = None
+
+    # Exp 5 addendum, Study 5.12: the devices' fits on the simulated clock
+    # (``hermes/mule/fit_clock.py``), set only when the mule has train times.
+    # ``train_fits`` is every fit this mission started, ``[device, start_s]``
+    # in the order they started (the first mission's begin with each device's
+    # first fit, at the trial's start); each Pass-1 stop of ``pass_1_flown``
+    # then also holds ``not_ready``, the targets found with no update ready,
+    # and ``uplink_s``, each collected update's uplink airtime (for the
+    # device's transmit energy; empty without a band).
+    # None without train times, so no recorded mission gains a key.
+    train_fits: Optional[List[List[Any]]] = None
+
 
 def _merged_device_ids(report, agg) -> List[DeviceID]:
     """CLEAN devices of a round report minus those its merge excluded."""
@@ -428,6 +453,10 @@ class _FerryLog:
         #: Arm E3's next-stop calls, and the stops its pass left unvisited.
         self.e3: List[Dict[str, Any]] = []
         self.e3_unvisited: List[Dict[str, Any]] = []
+        #: Study 5.11 (a): the wall time of each of E3's calls, in call order.
+        self.e3_wall: List[Dict[str, float]] = []
+        #: Study 5.12: the fits this mission started, ``[device, start_s]``.
+        self.train_fits: List[List[Any]] = []
 
 
 class _PairDecision:
@@ -438,18 +467,22 @@ class _PairDecision:
     instant. The contact adds each member's outcome and stamp, and the
     departure check after the stop whether it trimmed the order the pair set
     (``trimmed_next``); the mission's close reads all of it
-    (:meth:`MuleSupervisor._ferry_close_pairs`).
+    (:meth:`MuleSupervisor._ferry_close_pairs`). ``wall`` is the decision's
+    wall time (Study 5.11 (a), ``pass_1_pairs_wall``), never part of the
+    record.
     """
 
-    __slots__ = ("choice", "stop", "arrival_s", "outcomes", "stamps", "trimmed_next")
+    __slots__ = ("choice", "stop", "arrival_s", "outcomes", "stamps", "trimmed_next", "wall")
 
-    def __init__(self, choice: Any, stop: ContactWaypoint, arrival_s: float) -> None:
+    def __init__(self, choice: Any, stop: ContactWaypoint, arrival_s: float,
+                 wall: Optional[Dict[str, float]] = None) -> None:
         self.choice = choice
         self.stop = stop
         self.arrival_s = float(arrival_s)
         self.outcomes: Dict[DeviceID, Any] = {}
         self.stamps: Dict[DeviceID, float] = {}
         self.trimmed_next = False
+        self.wall = wall
 
 
 class MuleSupervisor:
@@ -529,6 +562,7 @@ class MuleSupervisor:
         plan_options=None,
         t_nom_s: Optional[float] = None,
         pair_slot=None,
+        train_time_s: Optional[Mapping[str, float]] = None,
     ) -> None:
         self.mule_id = mule_id
         self.mule_pose = mule_pose
@@ -617,6 +651,19 @@ class MuleSupervisor:
             now_fn = mission_clock
             host_now = mission_clock
         self._now = now_fn
+        # Exp 5 addendum (Study 5.12): the devices' fits on the simulated clock
+        # (hermes/mule/fit_clock.py). None, every recorded mule: every Pass-1
+        # contact finds an update ready, and no record gains a key.
+        self._fits = None
+        if train_time_s is not None:
+            if mission_clock is None:
+                raise MuleSupervisorError(
+                    "train_time_s times the devices' fits on the simulated clock: pass "
+                    "mission_clock=MissionClock() as well"
+                )
+            from hermes.mule.fit_clock import FitClock
+
+            self._fits = FitClock(train_time_s)
         # FeRRy Phase 2 — several mules share one cluster. ``down_wait_s``
         # bounds how long the inter-pass dock waits for its DOWN, and makes
         # running out survivable (Pass 2 skipped, the mission's θ kept): with a
@@ -1556,6 +1603,10 @@ class MuleSupervisor:
         sim_start = clock()
         self.scheduler.start_mission()
         rec = _FerryLog()
+        fits = getattr(self, "_fits", None)
+        if fits is not None:
+            # Study 5.12: the first takeoff starts every device's first fit.
+            rec.train_fits.extend([d, t] for d, t in fits.take_off(sim_start))
 
         theta_pass_1 = self._next_theta
         synth_pass_1 = self._next_synth
@@ -1635,6 +1686,15 @@ class MuleSupervisor:
              "deadline_ts": float(wp.deadline_ts), "reason": reason, "widened": False}
             for wp, reason in getattr(self.scheduler, "last_policy_drops", None) or ()
         ]
+        # Exp 5 addendum (Study 5.12): what D5's readiness test left out (no
+        # member's update ready at any arrival its walk could make) is labelled
+        # ``not_ready``, not with the clause the scheduler would name.
+        not_ready = getattr(getattr(self.scheduler, "target_selector", None),
+                            "last_not_ready", None)
+        if not_ready and getattr(self, "_fits", None) is not None:
+            for drop in rec.policy_drops:
+                if set(drop["devices"]) <= not_ready:
+                    drop["reason"] = "not_ready"
         planned_devices = mission_planned_devices(pass_1_queue, _feas)
         rec.no_insert = {d for wp in list(pass_1_queue) + dropped_pre for d in wp.devices}
         rec.deadlines = dict(planned_deadlines)
@@ -2195,6 +2255,15 @@ class MuleSupervisor:
                 wp, positions, pass_kind=pass_kind, mission_round=mission_round,
                 band=self._ferry_band_at_arrival(slot, fx, wp, positions, pass_kind),
             )
+        fits = getattr(self, "_fits", None)
+        if fits is not None and collect:
+            # Study 5.12: the members whose fit has not finished at the arrival
+            # are marked not ready; none of them has an uplink to drop.
+            not_ready = fits.not_ready(wp.devices, plan.arrival_ts)
+            if not_ready:
+                plan = dataclasses.replace(
+                    plan, not_ready=not_ready, drop_uplink=plan.drop_uplink - not_ready,
+                )
         before = self.mission.last_contact
         outcomes: Dict[DeviceID, Any] = {}
         try:
@@ -2213,6 +2282,10 @@ class MuleSupervisor:
         commit = self.mission.last_contact
         if commit is before:
             commit = None
+        if fits is not None and commit is not None:
+            # Study 5.12: every target a model reached starts a fit at its stamp.
+            rec.train_fits.extend([d, t] for d, t in fits.received(commit.pushed,
+                                                                   commit.contact_ts))
         if decision is not None:
             decision.outcomes = dict(outcomes)
             decision.stamps = {} if commit is None else dict(commit.contact_ts)
@@ -2243,6 +2316,14 @@ class MuleSupervisor:
             "uplink_dropped": _ids(commit.uplink_dropped) if commit is not None else [],
             "l1_choice": l1_choice,
         })
+        if fits is not None and collect:
+            # Study 5.12: who had no update ready, and each collected update's
+            # uplink airtime (the device's transmit energy; empty without a band).
+            rec.flown[pass_kind][-1]["not_ready"] = (
+                _ids(commit.not_ready) if commit is not None else [])
+            rec.flown[pass_kind][-1]["uplink_s"] = (
+                {} if commit is None
+                else {str(d): float(s) for d, s in commit.uplink_dwell_s.items()})
         if l1_choice is not None:
             rec.choices[pass_kind].append(l1_choice)
         return outcomes
@@ -2305,6 +2386,12 @@ class MuleSupervisor:
         devices and the beacon hook's inserts, never the pre-flight drops that
         ``rec.no_insert`` also holds. The decision is appended to
         ``rec.pairs``; its class is the one the contact plan is built on.
+
+        Study 5.11 (a): the decision's wall time is measured here, outside
+        the slot, which reads no wall clock: ``decide_s`` from binding the
+        predicate to the slot's answer, and ``mask_s`` the time spent inside
+        the predicate. The view is built before and is not timed. It goes to
+        ``pass_1_pairs_wall``, never into the record.
         """
         from hermes.scheduler.plan.types import PairView, StopContext
         from hermes.scheduler.policies.pair_slot import bind_fits_pair
@@ -2364,15 +2451,27 @@ class MuleSupervisor:
             cap_s=commit.cap_s,
         )
         arrival = FlightState(tuple(self.mule_pose), t, energy, state.deliver_by)
+        wall_start = time.perf_counter()
+        fits = bind_fits_pair(sch, view, served_at=wp, state=arrival,
+                              budget_end=budget_end, deadlines=rec.deadlines)
+        mask_s = [0.0]
+
+        def timed_fits(band, index):
+            started = time.perf_counter()
+            try:
+                return fits(band, index)
+            finally:
+                mask_s[0] += time.perf_counter() - started
+
         choice = slot.pair_at_arrival(
             view,
-            fits_pair=bind_fits_pair(sch, view, served_at=wp, state=arrival,
-                                     budget_end=budget_end, deadlines=rec.deadlines),
+            fits_pair=timed_fits,
             pass_kind=collect,
             admitted=frozenset(commit.served) | inserted,
         )
+        wall = {"decide_s": time.perf_counter() - wall_start, "mask_s": mask_s[0]}
         self._pair_previous_offsets = (t, offsets)
-        decision = _PairDecision(choice, wp, t)
+        decision = _PairDecision(choice, wp, t, wall)
         rec.pairs.append(decision)
         return decision
 
@@ -2407,6 +2506,12 @@ class MuleSupervisor:
         (``pass_1_e3``); on None the stops left are recorded too
         (``pass_1_e3_unvisited``) and never widened, as a baseline's drops
         are not (the user's decision 6), and the mule flies home.
+
+        Study 5.11 (a): each call's wall time goes to ``rec.e3_wall``
+        (``pass_1_e3_wall``), never into the record: ``mask_s`` the
+        predicate over every stop left, and ``decide_s`` that plus the
+        policy's answer and its check. Chen's observation is built between
+        the two and is not timed, as the pair slot's view is not.
         """
         import numbers
 
@@ -2415,11 +2520,13 @@ class MuleSupervisor:
 
         stops = list(remainder)
         model = self.scheduler.feasibility_model
+        wall_start = time.perf_counter()
         mask = tuple(
             model.admit(state, wp, rule=RULE_BUDGET, budget_end=budget_end,
                         pass_kind=MissionPass.COLLECT).ok
             for wp in stops
         )
+        mask_s = time.perf_counter() - wall_start
 
         def admissible(i) -> bool:
             if isinstance(i, bool) or not isinstance(i, numbers.Integral) or not (
@@ -2436,9 +2543,14 @@ class MuleSupervisor:
             budget_end=budget_end, budget_s=self.scheduler.mission_budget_s,
             energy_j=state.energy_j, collected=frozenset(collected),
         )
+        policy_start = time.perf_counter()
         answer = policy.next_stop(list(stops), state, view=view, admissible=admissible,
                                   pass_kind=MissionPass.COLLECT, after_stop=after_stop)
         index = checked_choice(answer, stops, admissible=admissible)
+        walls = getattr(rec, "e3_wall", None)
+        if walls is not None:
+            walls.append({"decide_s": mask_s + (time.perf_counter() - policy_start),
+                          "mask_s": mask_s})
         rec.e3.append({
             "t_s": state.clock,
             "after_stop": after_stop,
@@ -2557,6 +2669,10 @@ class MuleSupervisor:
         ``pass_1_pairs``; critic B2), and arm E3's records are carried
         (``pass_1_e3``, ``pass_1_e3_unvisited``). All three stay None
         otherwise, so no other result changes.
+
+        Study 5.11 (a): beside the pair records and E3's calls, their wall
+        times (``pass_1_pairs_wall``, ``pass_1_e3_wall``), None exactly when
+        the records they pair with are.
         """
         from hermes.mule.ferry import backhaul_record
         from hermes.scheduler.stages.s3b_feasibility import DEADLINE_BOUNDS_DELIVERY
@@ -2610,6 +2726,11 @@ class MuleSupervisor:
             pass_1_pairs=pairs,
             pass_1_e3=list(getattr(rec, "e3", ())) or None,
             pass_1_e3_unvisited=list(getattr(rec, "e3_unvisited", ())) or None,
+            pass_1_pairs_wall=(None if pairs is None
+                               else [d.wall for d in getattr(rec, "pairs", ())]),
+            pass_1_e3_wall=list(getattr(rec, "e3_wall", ())) or None,
+            train_fits=(None if getattr(self, "_fits", None) is None
+                        else list(getattr(rec, "train_fits", ()))),
             **legacy,
         )
 

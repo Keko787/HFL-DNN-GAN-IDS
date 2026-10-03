@@ -63,6 +63,7 @@ from hermes.scheduler.policies.whittle import WEIGHT_MODES as WHITTLE_WEIGHTS
 from hermes.scheduler.stages.s3b_feasibility import DEADLINE_BOUNDS
 
 from .driver import (
+    ADDENDUM_ARMS,
     CHECKPOINT_TAGS,
     DEFAULT_ARMS,
     PAIR_CHECKPOINT_TAGS,
@@ -116,6 +117,12 @@ _PHYSICS_FLAGS = (
     ("contact_regime", str, "D2: contact interference regime, clean (default) or "
                             "jittery (test (c))."),
     ("interference_period_s", float, "D2: interference period P_c (s; default 60)."),
+    ("interference_amp_db", float, "Exp 5 addendum (Study 5.15): the contact channel's "
+                                   "interference amplitude A (dB; default the regime's, "
+                                   "1 clean and 5 jittery)."),
+    ("interference_sigma_db", float, "Exp 5 addendum (Study 5.15): the interference noise "
+                                     "sigma_I (dB; default the regime's, 0.4 clean and 1.5 "
+                                     "jittery)."),
     ("noise_bin_s", float, "D2: noise bin (s; default 1)."),
     ("shadow_corr_s", float, "D2: shadowing correlation time (s; default 7.4)."),
     ("shadow_keying", str, "D2: shadowing keyed by 'time' (default) or 'position'."),
@@ -495,6 +502,24 @@ def _phase_5_driver_kwargs(
     return dict(pair_checkpoints=pair, policy_checkpoints=policy)
 
 
+def _train_time_params(args) -> Optional[Dict[str, float]]:
+    """Study 5.12's settings from the flags; None without ``--train-time-s``.
+
+    The spread and straggler flags each need the median; only those given are
+    passed (the rest take ``experiments/exp4/compute.py``'s defaults).
+    """
+    extra = {name: getattr(args, attr) for name, attr in (
+        ("sigma", "train_time_sigma"), ("straggler_share", "straggler_share"),
+        ("straggler_factor", "straggler_factor")) if getattr(args, attr) is not None}
+    if args.train_time_s is None:
+        if extra:
+            raise SystemExit(
+                f"--train-time-sigma, --straggler-share and --straggler-factor shape the "
+                f"fit times of --train-time-s; given without it: {sorted(extra)}")
+        return None
+    return {"median_s": float(args.train_time_s), **{k: float(v) for k, v in extra.items()}}
+
+
 def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = argparse.ArgumentParser(prog="experiments.exp4.runner_main")
     parser.add_argument("--csv", required=True, type=Path,
@@ -510,7 +535,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                              f"{list(DEFAULT_ARMS)}). The FeRRy Phase 4 plan arms "
                              f"{list(PLAN_ARMS)} run only when named, with "
                              f"--mission-clock sim, and so do the FeRRy Phase 5 arms "
-                             f"{list(PHASE_5_ARMS)} (a learned arm with its checkpoint).")
+                             f"{list(PHASE_5_ARMS)} (a learned arm with its checkpoint) and "
+                             f"the Exp 5 addendum's {list(ADDENDUM_ARMS)}.")
     parser.add_argument("--N", nargs="+", type=int, default=[2],
                         help="Device-population sweep.")
     parser.add_argument("--rrf", nargs="+", type=float, default=[60.0],
@@ -552,6 +578,58 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         help="Real-model data: 'canonical' = the production CICIOT pipeline "
              "(balanced, 21 features, paper-faithful); 'synthetic' = a "
              "real-shaped separable task (fast, no dataset needed).",
+    )
+    parser.add_argument(
+        "--model-arch", choices=["ciciot", "optimized", "balanced", "high_performance"],
+        default=None,
+        help="Exp 5 addendum (Study 5.12): the IDS architecture the real model trains "
+             "(experiments.exp4.model_task.MODEL_ARCHS; default the canonical CICIoT "
+             "model). Its weights, and so the measured payload, have their own size. "
+             "Needs --real-model.",
+    )
+    parser.add_argument(
+        "--train-time-s", type=float, default=None, metavar="MEDIAN",
+        help="Exp 5 addendum (Study 5.12): each device's local fit takes simulated "
+             "time, MEDIAN seconds at the median (experiments/exp4/compute.py); a "
+             "Pass-1 contact before a device's fit ends finds no update ready. "
+             "Simulated clock only (--mission-clock sim). Default: off (updates are "
+             "always ready, every recorded run).",
+    )
+    parser.add_argument(
+        "--train-time-sigma", type=float, default=None,
+        help="Study 5.12: the log-normal spread of the fit times around the median "
+             "(default 0: every device the median). Needs --train-time-s.",
+    )
+    parser.add_argument(
+        "--straggler-share", type=float, default=None,
+        help="Study 5.12: the share of devices that are stragglers, exactly "
+             "round(share * N) of them (default 0). Needs --train-time-s.",
+    )
+    parser.add_argument(
+        "--straggler-factor", type=float, default=None,
+        help="Study 5.12: the stragglers' fit time as a multiple (default 1; the "
+             "plan's '20%% stragglers at 5x' is --straggler-share 0.2 "
+             "--straggler-factor 5). Needs --train-time-s.",
+    )
+    parser.add_argument(
+        "--partition", choices=["iid", "dirichlet", "quantity"], default="iid",
+        help="Exp 5 addendum (Study 5.13): how the training rows are split over the "
+             "devices: 'iid' (default, the recorded split), 'dirichlet' (label skew, "
+             "Dir(alpha) per class over the devices; over the attack families with "
+             "--family-labels) or 'quantity' (shard sizes Dir(alpha)). Every shard "
+             "non-empty. Needs --real-model.",
+    )
+    parser.add_argument(
+        "--dirichlet-alpha", type=float, default=None,
+        help="The partition's alpha (> 0; 1 moderate, 0.1 strong skew). Needed by "
+             "'dirichlet' and 'quantity', refused with 'iid' (alpha = infinity).",
+    )
+    parser.add_argument(
+        "--family-labels", action="store_true",
+        help="Exp 5 addendum (Study 5.13): keep each row's CICIoT2023 attack family "
+             "beside the binary label, so the cluster's model_eval adds the detection "
+             "metrics (TPR, FPR, precision, F1, recall per family) and 'dirichlet' "
+             "skews over the families. Needs --real-model.",
     )
     parser.add_argument("--local-epochs", type=int, default=1)
     parser.add_argument("--local-batch-size", type=int, default=64)
@@ -605,6 +683,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         help="H1 realism: device scatter radius (larger -> more contacts).",
     )
     parser.add_argument(
+        "--h1-field-ref-n", type=int, default=None,
+        help="Exp 5 addendum (Studies 5.9, 5.11): grow the realism field with N "
+             "at this size's density, half-width h1-field-radius-m * sqrt(N / "
+             "ref-n), so --N 6 12 24 with --h1-field-ref-n 6 keeps N = 6's density. "
+             "Needs --realism. The row does not record it: write each setting to "
+             "its own CSV. Default: the fixed field.",
+    )
+    parser.add_argument(
         "--selector-weights", type=Path, default=None,
         help="Arm H2: trained DDQN .npz (from experiments.exp3.train_a4). "
              "Omit for a random-init selector (H2 plumbing smoke only).",
@@ -644,6 +730,19 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "--trace-dir", type=Path, default=None,
         help="Where --keep-event-traces writes. Defaults to a '<csv-stem>_traces' "
              "directory beside the CSV.",
+    )
+    parser.add_argument(
+        "--footprint-probe", action="store_true",
+        help="Exp 5 addendum, Study 5.11: sample the resident memory of every "
+             "process a trial starts (the cluster, the mules, the devices) and "
+             "write footprint.json beside its kept trace: the processes, the "
+             "concurrent peak and each role's peak, which traces_scorer "
+             "--cost-columns reads. Reads only, so no trial changes. Needs "
+             "--keep-event-traces and psutil. Off by default.",
+    )
+    parser.add_argument(
+        "--footprint-interval-s", type=float, default=0.5,
+        help="The footprint probe's sampling interval in seconds (default 0.5).",
     )
     parser.add_argument(
         "--mission-window-adaptation", action="store_true",
@@ -936,6 +1035,25 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         whittle_weights=args.whittle_weights,
         fedcs_value=args.fedcs_value,
     )
+    if args.partition != "iid" or args.dirichlet_alpha is not None or args.family_labels:
+        # Exp 5 addendum (Study 5.13); passed only when set.
+        driver_kwargs.update(partition=args.partition, dirichlet_alpha=args.dirichlet_alpha,
+                             family_labels=bool(args.family_labels))
+    if args.model_arch is not None:
+        # Exp 5 addendum (Study 5.12); passed only when given.
+        driver_kwargs.update(model_arch=args.model_arch)
+    train_time = _train_time_params(args)
+    if train_time is not None:
+        # Exp 5 addendum (Study 5.12); passed only when given.
+        driver_kwargs.update(train_time_params=train_time)
+    if args.h1_field_ref_n is not None:
+        # Exp 5 addendum; passed only when given, as the footprint probe is.
+        driver_kwargs.update(h1_field_ref_n=int(args.h1_field_ref_n))
+    if args.footprint_probe:
+        # Exp 5 addendum, Study 5.11; passed only when asked, so the default
+        # driver is built exactly as before.
+        driver_kwargs.update(footprint_probe=True,
+                             footprint_interval_s=float(args.footprint_interval_s))
     driver_kwargs.update(_phase_3_driver_kwargs(args, parser))
     driver_kwargs.update(_phase_4_driver_kwargs(args, parser))
     driver_kwargs.update(_phase_5_driver_kwargs(args, parser, arms))
@@ -950,7 +1068,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         # is a learned arm without its checkpoint, an FQ arm without 'replan'
         # and H1+L1 without the adaptive backhaul it is named for.
         for arm in arms:
-            if arm in PLAN_ARMS or arm in PHASE_5_ARMS:
+            if arm in PLAN_ARMS or arm in PHASE_5_ARMS or arm in ADDENDUM_ARMS:
                 driver.check_arm(arm)
     except ValueError as e:
         # A combination the driver refuses (e.g. agg:plain with several mules

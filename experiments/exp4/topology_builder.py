@@ -97,6 +97,24 @@ def device_spread_m(
     return field_radius_m if field_radius_m is not None else min(rf_range_m * 0.4, 25.0)
 
 
+def grown_field_radius_m(radius_m: float, n_devices: int, ref_n: int) -> float:
+    """The realism field's half-width for ``n_devices`` at the density of ``ref_n``.
+
+    Exp 5 addendum (Studies 5.9 and 5.11): a field of half-width ``radius_m``
+    holds ``ref_n`` devices at the reference density; ``n_devices`` keep that
+    density on ``radius_m * sqrt(n_devices / ref_n)``, rounded to 0.1 m so
+    that a FerrySim cell can name the same field (``cells.FerryCell``). At
+    ``n_devices == ref_n`` it is ``radius_m``.
+    """
+    if isinstance(ref_n, bool) or not isinstance(ref_n, int) or ref_n < 1:
+        raise ValueError(f"ref_n must be an int >= 1, got {ref_n!r}")
+    if isinstance(n_devices, bool) or not isinstance(n_devices, int) or n_devices < 1:
+        raise ValueError(f"n_devices must be an int >= 1, got {n_devices!r}")
+    if n_devices == ref_n:
+        return float(radius_m)
+    return round(float(radius_m) * math.sqrt(n_devices / ref_n), 1)
+
+
 def device_positions(n_devices: int, seed: int, spread_m: float) -> List[Tuple[float, float]]:
     """The devices' (x, y), drawn exactly as every recorded trial drew them.
 
@@ -230,6 +248,9 @@ def build_exp4_topology(
     local_batch_size: int = 64,
     init_theta_path: Optional[str] = None,
     eval_test_path: Optional[str] = None,
+    # Exp 5 addendum (Study 5.12): the IDS architecture the devices train and
+    # the cluster evaluates; None, the canonical model, writes no field.
+    model_arch: Optional[str] = None,
     # EX-4.2 realism wiring (all optional; omitted -> ideal links).
     device_reliability: bool = False,
     reliabilities: Optional[List[float]] = None,
@@ -300,6 +321,10 @@ def build_exp4_topology(
     policy_checkpoint: Optional[str] = None,
     policy_checkpoint_sha256: Optional[str] = None,
     policy_checkpoint_tag: Optional[str] = None,
+    # Exp 5 addendum (Study 5.12): the devices' fit times on the simulated
+    # clock, drawn from these settings (experiments/exp4/compute.py). None
+    # builds the recorded mule.
+    train_time_params: Optional[Mapping[str, float]] = None,
 ) -> TopologyConfig:
     """Return a validated :class:`TopologyConfig` for one H1 trial.
 
@@ -394,6 +419,11 @@ def build_exp4_topology(
             f"ferry_settings {sorted(ferry)}: only on the simulated mission clock; "
             f"pass mission_clock='sim'"
         )
+    if train_time_params is not None and not sim:
+        raise ValueError(
+            "train_time_params times the devices' fits on the simulated mission clock; "
+            "pass mission_clock='sim'"
+        )
     if rf_prior_schedule_db is not None and not sim:
         raise ValueError(
             "rf_prior_schedule_db is the causal RF prior of the simulated mission "
@@ -476,6 +506,7 @@ def build_exp4_topology(
                 local_batch_size=local_batch_size,
                 contact_reliability=contact_reliability,
                 fedprox_rho=float(fedprox_rho),
+                model_arch=model_arch,
                 **device_extra,
             )
         )
@@ -501,6 +532,7 @@ def build_exp4_topology(
         init_theta_path=init_theta_path,
         eval_test_path=eval_test_path,
         input_dim=input_dim,
+        model_arch=model_arch,
         backhaul_loss_pct=backhaul_loss_pct,
         backhaul_rng_seed=backhaul_rng_seed,
         backhaul_loss_schedule=backhaul_loss_schedule,
@@ -518,6 +550,17 @@ def build_exp4_topology(
             }
         if rf_prior_schedule_db is not None:
             mule_extra["rf_prior_schedule_db"] = [float(v) for v in rf_prior_schedule_db]
+        if train_time_params is not None:
+            # Study 5.12: the trial's fit times, keyed by the seed and each
+            # device id, for every device of the trial (the mules' slices
+            # split them below).
+            from .compute import check_train_time_params, device_train_times
+
+            params = check_train_time_params(train_time_params)
+            mule_extra["train_time_params"] = params
+            mule_extra["device_train_time_s"] = device_train_times(
+                [dev.device_id for dev in devices], seed=int(seed), params=params,
+            )
     if isinstance(deadline_time_scale, bool) or deadline_time_scale != 1.0:
         mule_extra["deadline_time_scale"] = float(deadline_time_scale)
     if initial_window_s is not None:
@@ -604,6 +647,14 @@ def _split_between_mules(
             device_availability={
                 d: a for d, a in mule.device_availability.items() if d in slices[k]
             },
+            # Study 5.12: likewise its own slice's fit times.
+            device_train_time_s=(
+                None if mule.device_train_time_s is None
+                else {d: t for d, t in mule.device_train_time_s.items() if d in slices[k]}
+            ),
+            train_time_params=(
+                None if mule.train_time_params is None else dict(mule.train_time_params)
+            ),
             contact_band_classes=(
                 None if mule.contact_band_classes is None else list(mule.contact_band_classes)
             ),

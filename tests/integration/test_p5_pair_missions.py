@@ -213,7 +213,11 @@ def clean_lines(r):
 
 
 def _repeat(results):
-    return [_canon.canon(dataclasses.replace(r, plan_wall_s=None)) for r in results]
+    """The results with their wall times dropped: the planner's and, since the
+    Exp 5 addendum (Study 5.11 (a)), each flight decision's."""
+    return [_canon.canon(dataclasses.replace(r, plan_wall_s=None, pass_1_pairs_wall=None,
+                                             pass_1_e3_wall=None))
+            for r in results]
 
 
 #: Decision-rich cells: N = 12 in the 100 m field, 120 s, S = 3, the jittery

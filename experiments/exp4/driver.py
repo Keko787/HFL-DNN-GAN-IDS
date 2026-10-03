@@ -76,6 +76,11 @@ provenance names each checkpoint by tag and sha only, ``pair_tag`` and
 in ``policy_params``, for those arms only (:func:`plan_ferry_params`,
 :func:`learned_policy_params`, which the trace scorer shares); every other
 row reads as before, and the default arm list is still :data:`DEFAULT_ARMS`.
+
+**The Exp 5 addendum's arm** (:data:`ADDENDUM_ARMS`; Studies 5.14 and 5.15):
+``F+L1`` is F with H3's adaptive backhaul, as H1+L1 is H1 with it: a plan arm
+(:func:`is_plan_arm`, F's settings everywhere F has them), refused where the
+adaptive backhaul would not fly. It runs only when named.
 """
 
 from __future__ import annotations
@@ -108,6 +113,7 @@ from .topology_builder import (
     build_exp4_topology,
     device_positions,
     device_spread_m,
+    grown_field_radius_m,
 )
 
 log = logging.getLogger("experiments.exp4.driver")
@@ -167,8 +173,16 @@ LEARNED_ARMS = PAIR_ARMS + ("E3",)
 #: (a); critic A6). They run only when named.
 PHASE_5_ARMS = LEARNED_ARMS + ("H1+L1",)
 
+#: The Exp 5 addendum's arms (Studies 5.14 and 5.15): ``F+L1``, F's plan with
+#: H3's adaptive backhaul controller, the plan arms' counterpart of H1+L1. It is
+#: a plan arm (:data:`ADDENDUM_PLAN_ARMS`, :func:`is_plan_arm`), so it gets F's
+#: settings wherever F has them, while :data:`PLAN_ARMS` keeps its pinned
+#: value. It runs only when named.
+ADDENDUM_PLAN_ARMS = ("F+L1",)
+ADDENDUM_ARMS = ADDENDUM_PLAN_ARMS
+
 #: Every arm the driver runs.
-ARMS = DEFAULT_ARMS + PLAN_ARMS + PHASE_5_ARMS
+ARMS = DEFAULT_ARMS + PLAN_ARMS + PHASE_5_ARMS + ADDENDUM_ARMS
 
 #: Each learned arm's checkpoint tag (the Phase 5 spec, other choices 5): the
 #: runner's ``--pair-checkpoint TAG=PATH`` and ``--policy-checkpoint E3=PATH``
@@ -205,6 +219,7 @@ _PLAN_ARM = {
     "F-cap": {"age_cap_missions": None, "age_cap_lookahead": 0},
     "F-prio": {},
     **{arm: {"flight_slot": "pair_q"} for arm in PAIR_ARMS},
+    "F+L1": {},
 }
 
 #: F-cov's plan score settings, over the driver's own: the coverage term off,
@@ -228,13 +243,13 @@ _ARM_SCORE = {"F-cov": F_COV_SCORE, "FQ-cov": F_COV_SCORE, "FQ-dwell": FQ_DWELL_
 #: mule. FeRRy Phase 5: the FQ arms as F, H1+L1 as H1; E3 visits a stop for all
 #: its members, as D4 does, so it runs whole.
 _SUBSET_ARMS = frozenset(("H1", "H2", "H3", "D1", "D2", "D3", "D5") + PLAN_ARMS + PAIR_ARMS
-                         + ("H1+L1",))
+                         + ("H1+L1",) + ADDENDUM_PLAN_ARMS)
 
 #: The arms that fly H3's adaptive backhaul controller: on the simulated clock
 #: ``backhaul_policy="adaptive"``, and with ``l1_channel`` the adaptive
 #: per-mission loss schedule (``backhaul_plan(adaptive=True)``). FeRRy Phase 5
-#: adds H1+L1 (decision 8 (a); critic A6).
-_ADAPTIVE_BACKHAUL_ARMS = ("H3", "H1+L1")
+#: adds H1+L1 (decision 8 (a); critic A6), and the Exp 5 addendum F+L1.
+_ADAPTIVE_BACKHAUL_ARMS = ("H3", "H1+L1", "F+L1")
 
 
 def is_plan_arm(arm: str) -> bool:
@@ -244,9 +259,10 @@ def is_plan_arm(arm: str) -> bool:
     (the Phase 5 spec, other choices 5; critic A5): an FQ arm is F with the
     pair slot, so it gets F's settings wherever F has them (the trim fallback,
     member subsets, the miss priority, T_nom and the pre-trial check), while
-    :data:`PLAN_ARMS` keeps its pinned value.
+    :data:`PLAN_ARMS` keeps its pinned value. The Exp 5 addendum's F+L1
+    (:data:`ADDENDUM_PLAN_ARMS`) is F with the adaptive backhaul, so it is one too.
     """
-    return arm in PLAN_ARMS or arm in PAIR_ARMS
+    return arm in PLAN_ARMS or arm in PAIR_ARMS or arm in ADDENDUM_PLAN_ARMS
 
 
 def plan_ferry_params(mule: Mapping[str, Any]) -> Dict[str, Any]:
@@ -288,6 +304,20 @@ def plan_ferry_params(mule: Mapping[str, Any]) -> Dict[str, Any]:
         return out
     admission = value("member_admission")
     return {} if admission == MEMBER_ADMISSION_WHOLE else {"member_admission": admission}
+
+
+def train_time_ferry_params(mule: Mapping[str, Any]) -> Dict[str, Any]:
+    """The Exp 5 addendum's training-time key of a trial's ``ferry_params``.
+
+    Study 5.12: ``train_time_params`` (the settings each device's fit time was
+    drawn from) when the mule config holds them; {} otherwise, so every other
+    row keeps its string. Never the per-device times, as ``ferry_params``
+    never shows the availability. ``mule`` is a mule's config as a mapping, as
+    for :func:`plan_ferry_params`; the trace scorer derives the same key with
+    this function.
+    """
+    params = mule.get("train_time_params")
+    return {} if params is None else {"train_time_params": dict(params)}
 
 
 def learned_policy_params(mule: Mapping[str, Any]) -> Dict[str, Any]:
@@ -378,6 +408,8 @@ FERRY_PHYSICS_FIELDS = (
     "contact_regime", "interference_period_s", "noise_bin_s", "shadow_corr_s",
     "shadow_keying", "cruise_speed_m_s", "turnaround_s", "listen_s",
     "energy_capacity_j", "p_move_w", "p_hover_w",
+    # Exp 5 addendum (Study 5.15): the regime's interference amplitude and noise.
+    "interference_amp_db", "interference_sigma_db",
 )
 
 #: Marker written next to every kept trace: the ``status`` and ``error`` the
@@ -740,6 +772,49 @@ class Exp4Driver:
     # Declared before ``soft_cap_s``, the last field (see above).
     pair_checkpoints: Dict[str, Any] = field(default_factory=dict)
     policy_checkpoints: Dict[str, Any] = field(default_factory=dict)
+    # Exp 5 addendum, Study 5.11: the footprint probe. ``footprint_probe``
+    # samples the RSS of every process a real-process trial starts (the
+    # cluster, the mules, the devices) every ``footprint_interval_s`` and
+    # writes ``footprint.json`` beside the kept trace (FOOTPRINT_FILE), which
+    # the scorer reads into its cost columns. It reads only, so no trial
+    # changes; it needs a trace root to write to and psutil to read with. Off
+    # by default. Declared before ``soft_cap_s``, the last field.
+    footprint_probe: bool = False
+    footprint_interval_s: float = 0.5
+    # Exp 5 addendum, Studies 5.9 and 5.11: a field that grows with N. With
+    # ``h1_field_ref_n`` set, a realism trial of N devices scatters them over
+    # the half-width ``h1_field_radius_m * sqrt(N / h1_field_ref_n)``
+    # (``topology_builder.grown_field_radius_m``), so the device density is the
+    # reference size's at every N, T_nom's reference layouts included; None
+    # keeps the recorded fixed field. The kept traces hold the positions; the
+    # row does not record it, so write each setting to its own CSV.
+    h1_field_ref_n: Optional[int] = None
+    # Exp 5 addendum, Study 5.13: data heterogeneity (real model only; the
+    # stub trainer has no data). ``partition`` splits the training rows
+    # ("iid", the recorded split; "dirichlet", label skew over the attack
+    # families when ``family_labels`` keeps them, else over the binary label;
+    # "quantity", skewed shard sizes) with ``dirichlet_alpha``;
+    # ``family_labels`` keeps each row's CICIoT2023 attack family, so the
+    # cluster's model_eval adds the detection metrics (TPR, FPR, precision,
+    # F1, each family's recall). The kept trace's status marker records the
+    # settings and each device's shard size (``data``); the row does not, so
+    # write each setting to its own CSV.
+    partition: str = "iid"
+    dirichlet_alpha: Optional[float] = None
+    family_labels: bool = False
+    # Exp 5 addendum, Study 5.12: the IDS architecture the real model trains
+    # (``model_task.MODEL_ARCHS``; None is the canonical CICIoT model, every
+    # recorded run's). The devices, the cluster and the seed θ all build it;
+    # its θ, and so the measured payload, has its own size. Real model only.
+    model_arch: Optional[str] = None
+    # Exp 5 addendum, Study 5.12: each device's local fit takes simulated time
+    # (mule arms on the simulated clock). The settings
+    # (``experiments/exp4/compute.py``: ``median_s``, ``sigma``,
+    # ``straggler_share``, ``straggler_factor``) draw one time per device from
+    # the trial seed; a Pass-1 contact before a device's fit ends finds no
+    # update ready (``hermes/mule/fit_clock.py``). None, every recorded run:
+    # updates are always ready. The row's ``ferry_params`` shows the settings.
+    train_time_params: Optional[Dict[str, float]] = None
     # The runner's soft cap on a trial's run time, as the caller applies it
     # (runner_main sets it to the cap it hands TrialRunner: --timeout-s, else
     # the largest wall budget over the grid). On the mission clock a trial's
@@ -796,12 +871,27 @@ class Exp4Driver:
             raise ValueError(
                 f"fedcs_value must be one of {VALUE_KINDS}, got {self.fedcs_value!r}"
             )
+        self._check_footprint_probe()
+        self._check_data_settings()
+        if self.h1_field_ref_n is not None:
+            ref_n = self.h1_field_ref_n
+            if isinstance(ref_n, bool) or not isinstance(ref_n, int) or ref_n < 1:
+                raise ValueError(f"h1_field_ref_n must be an int >= 1 or None, got {ref_n!r}")
+            if not self.realism:
+                raise ValueError(
+                    "h1_field_ref_n scales the realism field: without realism the devices "
+                    "sit in the tight cluster and no field is drawn (--realism)"
+                )
         self._check_multi_mule()
         #: T_nom per cell, computed once (:meth:`nominal_period_s`).
         self._t_nom_cache: Dict[str, float] = {}
+        #: Exp 5 addendum (Study 5.13): the running trial's ``data`` record for
+        #: its status marker (:meth:`_data_info`); None outside a trial.
+        self._trial_data: Optional[Dict[str, Any]] = None
         self._check_clock()
         self._check_plan()
         self._check_checkpoints()
+        self._check_train_time()
 
     @property
     def sim(self) -> bool:
@@ -1222,21 +1312,25 @@ class Exp4Driver:
             raise ValueError(f"arm {arm}: its mule would refuse its checkpoint: {e}") from e
 
     def _check_adaptive_backhaul(self, arm: str) -> None:
-        """Refuse ``H1+L1`` where it would fly as H1 (FeRRy Phase 5; decision 8 (a)).
+        """Refuse ``H1+L1`` or ``F+L1`` where it would fly as H1 or F (FeRRy Phase 5;
+        decision 8 (a); the Exp 5 addendum).
 
         H1+L1 is H1's scheduler with H3's adaptive backhaul controller (critic
-        A6), which flies only with the L1 channel (``l1_channel``: the adaptive
-        per-mission loss schedule, on either clock) or, on the simulated clock,
-        the seconds-axis backhaul (``backhaul_model="seconds"``: the controller
-        at every upload). Anywhere else its trial would be H1's under another
-        label, so it is refused rather than run.
+        A6), and F+L1 F's plan with it, which flies only with the L1 channel
+        (``l1_channel``: the adaptive per-mission loss schedule, on either
+        clock) or, on the simulated clock, the seconds-axis backhaul
+        (``backhaul_model="seconds"``: the controller at every upload).
+        Anywhere else its trial would be the base arm's under another label,
+        so it is refused rather than run.
         """
         if self.l1_channel or (self.sim and self.backhaul_model == "seconds"):
             return
+        base = arm[:-len("+L1")]
+        reason = "decision 8 (a)" if arm == "H1+L1" else "the Exp 5 addendum"
         raise ValueError(
-            f"arm {arm} is H1 with H3's adaptive backhaul (decision 8 (a)), which flies only "
+            f"arm {arm} is {base} with H3's adaptive backhaul ({reason}), which flies only "
             f"with the L1 channel (--l1-channel) or, on the simulated clock, the seconds-axis "
-            f"backhaul (--backhaul-model seconds); here it would fly as H1"
+            f"backhaul (--backhaul-model seconds); here it would fly as {base}"
         )
 
     def check_arm(self, arm: str) -> None:
@@ -1263,17 +1357,20 @@ class Exp4Driver:
         random-init arm, and each checkpoint is loaded as its mule will load it
         (:meth:`_check_learned`), but no training state is checked: that is
         the runner's (critic B9). H1+L1 needs the adaptive backhaul it is named
-        for (:meth:`_check_adaptive_backhaul`).
+        for (:meth:`_check_adaptive_backhaul`). The Exp 5 addendum's F+L1 is
+        checked as F is, and needs the adaptive backhaul too.
         """
         if arm not in ARMS:
             raise ValueError(f"unknown arm {arm!r}; the driver runs {ARMS}")
         if arm == "H1+L1":
             self._check_adaptive_backhaul(arm)
             return
+        if arm in ADDENDUM_PLAN_ARMS and self.sim:
+            self._check_adaptive_backhaul(arm)
         if not is_plan_arm(arm) and arm not in LEARNED_ARMS:
             return
         if not self.sim:
-            if arm in PLAN_ARMS:
+            if arm in PLAN_ARMS or arm in ADDENDUM_PLAN_ARMS:
                 raise ValueError(
                     f"arm {arm} flies the plan clock (FeRRy Phase 4) on the simulated mission "
                     f"clock: run it with mission_clock='sim' (--mission-clock sim)"
@@ -1328,6 +1425,86 @@ class Exp4Driver:
             mission_clock="sim", trial_seed=int(seed), **dict(settings),
         )
         return cfg.ferry_spec_kwargs()
+
+    def field_radius_m(self, n_devices: int) -> float:
+        """The realism field's half-width for a trial of ``n_devices`` devices.
+
+        ``h1_field_radius_m``, the recorded fixed field; with ``h1_field_ref_n``
+        set, grown at the reference size's density (Exp 5 addendum,
+        ``topology_builder.grown_field_radius_m``). Used only when realism is on.
+        """
+        if self.h1_field_ref_n is None:
+            return float(self.h1_field_radius_m)
+        return grown_field_radius_m(float(self.h1_field_radius_m), int(n_devices),
+                                    int(self.h1_field_ref_n))
+
+    def _check_data_settings(self) -> None:
+        """Study 5.13's partition and family labels: drawable, and on the real model."""
+        from experiments.exp4.partition import PARTITION_IID, check_partition
+
+        check_partition(self.partition, self.dirichlet_alpha)
+        if not isinstance(self.family_labels, bool):
+            raise ValueError(f"family_labels must be a bool, got {self.family_labels!r}")
+        if (self.partition != PARTITION_IID or self.family_labels) and not self.real_model:
+            raise ValueError(
+                "a non-IID partition and the family labels split and label real training "
+                "rows: run them with real_model=True (--real-model); the stub trainer has "
+                "no data"
+            )
+        if self.model_arch is not None:
+            from experiments.exp4.model_task import check_model_arch
+
+            check_model_arch(self.model_arch)
+            if not self.real_model:
+                raise ValueError(
+                    "model_arch selects the real IDS model's architecture: run it with "
+                    "real_model=True (--real-model); the stub trainer has no model"
+                )
+
+    def _check_train_time(self) -> None:
+        """Study 5.12's settings: drawable, and on the simulated clock."""
+        if self.train_time_params is None:
+            return
+        from experiments.exp4.compute import check_train_time_params
+
+        self.train_time_params = check_train_time_params(self.train_time_params)
+        if not self.sim:
+            raise ValueError(
+                "train_time_params times the devices' fits on the simulated mission clock: "
+                "run with mission_clock='sim' (--mission-clock sim)"
+            )
+
+    def _arch_kw(self) -> Dict[str, Any]:
+        """``{"arch": ...}`` for the model builders when an architecture is set
+        (Exp 5 addendum, Study 5.12); empty otherwise, so every recorded call
+        is made as it was."""
+        return {} if self.model_arch is None else {"arch": self.model_arch}
+
+    def _data_info(self) -> Optional[Dict[str, Any]]:
+        """The status marker's ``data`` record of a non-default data setting (None at the
+        defaults, when the marker keeps its keys)."""
+        if self.partition == "iid" and not self.family_labels:
+            return None
+        return {"partition": self.partition, "dirichlet_alpha": self.dirichlet_alpha,
+                "family_labels": bool(self.family_labels)}
+
+    def _check_footprint_probe(self) -> None:
+        """Study 5.11's footprint probe needs somewhere to write and psutil to read with."""
+        if not self.footprint_probe:
+            return
+        from experiments.exp4.footprint import probe_available
+
+        if self.trace_root is None:
+            raise ValueError(
+                "footprint_probe writes footprint.json beside each kept trace: give a "
+                "trace_root (--keep-event-traces)"
+            )
+        if not self.footprint_interval_s > 0:
+            raise ValueError(
+                f"footprint_interval_s must be > 0, got {self.footprint_interval_s!r}"
+            )
+        if not probe_available():
+            raise ValueError("footprint_probe needs psutil (pip install psutil)")
 
     def _check_multi_mule(self) -> None:
         """Refuse a mule count and quorum that cannot run or would mis-measure."""
@@ -1514,6 +1691,9 @@ class Exp4Driver:
         decision 2 (b); an FQ arm too, as F); computed per cell when not given."""
         return self.sim and (
             is_plan_arm(arm)
+            # Exp 5 addendum (Study 5.12): D2's restored speed term measures
+            # each device's round time against T_nom.
+            or (arm == "D2" and self.train_time_params is not None)
             or (self.backhaul_model == "seconds" and self.backhaul_period_s is None)
             or self.deadline_time_scale == "t_nom"
             or self.initial_window_missions is not None
@@ -1555,13 +1735,13 @@ class Exp4Driver:
             "n": int(n_devices), "rrf": float(rf_range_m), "regime": regime,
             "settings": dict(settings), "theta": int(theta_bytes), "synth": int(synth_bytes),
             "k": int(self.n_mules), "layouts": int(self.t_nom_layouts),
-            "realism": bool(self.realism), "field": float(self.h1_field_radius_m),
+            "realism": bool(self.realism), "field": self.field_radius_m(n_devices),
         }, sort_keys=True, default=str)
         cached = self._t_nom_cache.get(key)
         if cached is not None:
             return cached
         spread = device_spread_m(
-            rf_range_m, field_radius_m=(self.h1_field_radius_m if self.realism else None),
+            rf_range_m, field_radius_m=(self.field_radius_m(n_devices) if self.realism else None),
         )
         base = dict(settings)
         base.update(contact_band="wide", backhaul_regime=regime)
@@ -1697,8 +1877,9 @@ class Exp4Driver:
         arm = cell.arm
         if arm not in ARMS:
             raise ValueError(f"unknown arm {arm!r}; the driver runs {ARMS}")
-        if arm in PLAN_ARMS or arm in PHASE_5_ARMS:
-            # FeRRy Phase 4 and 5: refused before anything is prepared or spawned.
+        if arm in PLAN_ARMS or arm in PHASE_5_ARMS or arm in ADDENDUM_ARMS:
+            # FeRRy Phase 4 and 5 and the Exp 5 addendum: refused before
+            # anything is prepared or spawned.
             self.check_arm(arm)
 
         n_devices = int(params.get("N", params.get("n_devices", self.default_n_devices)))
@@ -1736,7 +1917,7 @@ class Exp4Driver:
                 device_reliability=True,
                 reliabilities=device_reliabilities(cell.seed, n_devices),
                 world_radius_m=self.h1_world_radius_m,
-                field_radius_m=self.h1_field_radius_m,
+                field_radius_m=self.field_radius_m(n_devices),
                 backhaul_loss_pct=(
                     self.jittery_backhaul_loss_pct if regime == "jittery"
                     else self.clean_backhaul_loss_pct
@@ -1866,11 +2047,19 @@ class Exp4Driver:
             )
 
         prep_dir: Optional[Path] = None
+        self._trial_data = None
+        shard_rows: Dict[str, int] = {}
         try:
             if self.real_model:
                 prep_dir = Path(tempfile.mkdtemp(prefix="exp4_prep_"))
                 task = self._build_task(n_devices, cell.seed)
-                prep = prepare_trial(prep_dir, task=task, theta_seed=self.theta_seed)
+                prep = prepare_trial(prep_dir, task=task, theta_seed=self.theta_seed,
+                                     **self._arch_kw())
+                if self._data_info() is not None:
+                    # Study 5.13: each shard's rows, for the status marker's
+                    # ``data``; read only when a data setting is not the default.
+                    shard_rows = {path: int(len(y)) for path, (_X, y)
+                                  in zip(prep.shard_paths, task.device_shards)}
                 log.info(
                     "exp4 real-model H1 trial cell=%s trial=%d regime=%s "
                     "realism=%s: source=%s input_dim=%d n_train=%d synthetic=%s",
@@ -1885,6 +2074,8 @@ class Exp4Driver:
                     init_theta_path=prep.init_theta_path,
                     eval_test_path=prep.test_path,
                 )
+                if self.model_arch is not None:
+                    model_kwargs["model_arch"] = self.model_arch
             else:
                 model_kwargs = {}
 
@@ -1907,6 +2098,9 @@ class Exp4Driver:
             clock_kwargs: Dict[str, Any] = {}
             if clock.sim:
                 clock_kwargs.update(mission_clock="sim", ferry_settings=clock.settings)
+                if self.train_time_params is not None:
+                    # Study 5.12: the builder draws each device's fit time.
+                    clock_kwargs["train_time_params"] = dict(self.train_time_params)
             if clock.deadline_time_scale != 1.0:
                 clock_kwargs["deadline_time_scale"] = clock.deadline_time_scale
             if clock.initial_window_s is not None:
@@ -1950,12 +2144,20 @@ class Exp4Driver:
                     topo.devices, int(self.n_mules), cell.seed, **carp_kwargs,
                 ))
 
+            data = self._data_info()
+            if data is not None:
+                # Exp 5 addendum: what the marker records of this trial's data.
+                data["shard_rows"] = {
+                    str(d.device_id): shard_rows.get(getattr(d, "train_shard_path", None))
+                    for d in topo.devices}
+                self._trial_data = data
             return self._run_topology(
                 topo, cell=cell, n_devices=n_devices,
                 rf_range_m=rf_range_m, n_missions=n_missions, started=started,
                 clock=clock,
             )
         finally:
+            self._trial_data = None
             if prep_dir is not None:
                 shutil.rmtree(prep_dir, ignore_errors=True)
 
@@ -2028,13 +2230,14 @@ class Exp4Driver:
         )
 
         # Same seeded init θ as H1 so both arms start from the same model.
-        theta = initial_theta(input_dim, seed=self.theta_seed)
+        theta = initial_theta(input_dim, seed=self.theta_seed, **self._arch_kw())
         # Build a trainer only for reachable clients (dead ones never fit).
         client_fns = {
             i: make_local_train_fn(
                 task.device_shards[i][0], task.device_shards[i][1],
                 input_dim=input_dim, epochs=self.local_epochs,
                 batch_size=self.local_batch_size, seed=self.theta_seed,
+                **self._arch_kw(),
             )
             for i in reachable
         }
@@ -2106,7 +2309,8 @@ class Exp4Driver:
         from .events_consumer import ModelEvalPoint
         from .model_task import evaluate_theta
 
-        m = evaluate_theta(theta, task.X_test, task.y_test, input_dim=input_dim)
+        m = evaluate_theta(theta, task.X_test, task.y_test, input_dim=input_dim,
+                           **self._arch_kw())
         return ModelEvalPoint(
             cluster_round=int(cluster_round),
             accuracy=float(m["accuracy"]),
@@ -2118,6 +2322,12 @@ class Exp4Driver:
     def _build_task(self, n_devices: int, seed: int):
         from .model_task import load_ciciot_task_canonical, synthetic_task
 
+        # Exp 5 addendum (Study 5.13): passed only when set, so the recorded
+        # task is built exactly as it was.
+        data_kw: Dict[str, Any] = {}
+        if self._data_info() is not None:
+            data_kw = dict(families=bool(self.family_labels), partition=self.partition,
+                           alpha=self.dirichlet_alpha)
         if self.data_source == "canonical":
             return load_ciciot_task_canonical(
                 n_devices=n_devices,
@@ -2127,6 +2337,7 @@ class Exp4Driver:
                 train_dataset_size=self.train_dataset_size,
                 test_dataset_size=self.test_dataset_size,
                 attack_eval_ratio=self.attack_eval_ratio,
+                **data_kw,
             )
         if self.data_source == "synthetic":
             return synthetic_task(
@@ -2134,6 +2345,7 @@ class Exp4Driver:
                 rows_per_device=self.synth_rows_per_device,
                 test_rows=self.synth_test_rows,
                 seed=seed,
+                **data_kw,
             )
         raise ValueError(
             f"unknown data_source {self.data_source!r}; "
@@ -2228,6 +2440,10 @@ class Exp4Driver:
                            else {"t_nom_computed": bool(t_nom_computed)}),
                         **({} if soft_cap_s is None
                            else {"soft_cap_s": float(soft_cap_s)}),
+                        # Exp 5 addendum (Study 5.13): the data settings and
+                        # each device's shard size, when not the recorded ones.
+                        **({} if getattr(self, "_trial_data", None) is None
+                           else {"data": self._trial_data}),
                     },
                     f,
                 )
@@ -2237,6 +2453,25 @@ class Exp4Driver:
                 "(continuing; the trial itself is unaffected)",
                 cell.cell_id, cell.trial_index, cell.arm, TRIAL_STATUS_FILE,
                 exc_info=True,
+            )
+
+    def _write_footprint(self, cell, footprint) -> None:
+        """Write Study 5.11's footprint (``footprint.json``) beside the kept trace.
+
+        Called once the trace is captured, a timed-out trial's included. Never
+        raises: the footprint is a measurement of the trial, not part of it.
+        """
+        if self.trace_root is None:
+            return
+        try:
+            dest = Path(self.trace_root) / trace_dir_name(cell)
+            if dest.is_dir():
+                footprint.write(dest)
+        except Exception:  # noqa: BLE001
+            log.warning(
+                "exp4 trial cell=%s trial=%d arm=%s: could not write the footprint "
+                "(continuing; the trial itself is unaffected)",
+                cell.cell_id, cell.trial_index, cell.arm, exc_info=True,
             )
 
     def _run_topology(
@@ -2253,14 +2488,27 @@ class Exp4Driver:
                 down_wait_s=self.effective_down_wait_s,
             )
         budget_s = float(self.trial_budget_s if clock.budget_s is None else clock.budget_s)
-        orch = MultiProcessOrchestrator(topo, capture_output=True)
+        probe = footprint = None
+        if self.footprint_probe:
+            # Exp 5 addendum, Study 5.11: follow every process from the instant
+            # the orchestrator launches it until just before shutdown. Reads only.
+            from experiments.exp4.footprint import FootprintProbe
+
+            probe = FootprintProbe(interval_s=self.footprint_interval_s)
+            orch = MultiProcessOrchestrator(topo, capture_output=True, on_spawn=probe.on_spawn)
+        else:
+            orch = MultiProcessOrchestrator(topo, capture_output=True)
         captured = False
         try:
+            if probe is not None:
+                probe.start()
             orch.start_all(timeout=self.startup_timeout_s)
             timed_out = not self._await_mules(orch, budget_s)
             # Read before shutdown, which would give any mule still running a
             # non-zero status of its own making.
             failed = {} if timed_out else self._failed_mules(orch)
+            if probe is not None:
+                footprint, probe = probe.stop(), None
             orch.shutdown_all(
                 timeout=self.shutdown_timeout_s, cleanup_tmpdir=False,
             )
@@ -2270,6 +2518,8 @@ class Exp4Driver:
             # straight past this and be deleted in the `finally`.
             self._capture_traces(orch.tmpdir, cell)
             captured = True
+            if footprint is not None:
+                self._write_footprint(cell, footprint)
             if timed_out:
                 raise Exp4TrialTimeout(
                     f"exp4 trial exceeded {budget_s:.0f}s budget "
@@ -2377,6 +2627,13 @@ class Exp4Driver:
                 )
             raise
         finally:
+            if probe is not None:
+                # A raise between start and stop: end the thread, keep nothing.
+                try:
+                    probe.stop()
+                except Exception:  # noqa: BLE001 - never mask the trial's own error
+                    log.warning("exp4 trial cell=%s: footprint probe did not stop cleanly",
+                                cell.cell_id, exc_info=True)
             orch.cleanup()
 
     def _multi_mule_provenance(
@@ -2488,13 +2745,14 @@ class Exp4Driver:
             "input_dim": "" if clock.input_dim is None else int(clock.input_dim),
         }
         if clock.sim and mule is not None:
-            from hermes.processes.config import FERRY_SPEC_FIELDS
+            from hermes.processes.config import FERRY_PARAMS_OMITTED_AT_NONE, FERRY_SPEC_FIELDS
 
             shown = {
                 name: getattr(mule, name) for name in FERRY_SPEC_FIELDS
                 if name not in ("contact_band", "in_flight_response", "backhaul_model",
                                 "contact_reliability_source", "device_availability",
                                 "t_nom_s")
+                and not (name in FERRY_PARAMS_OMITTED_AT_NONE and getattr(mule, name) is None)
             }
             if (mule.backhaul_model == "seconds" and mule.backhaul_period_s is None
                     and clock.t_nom_s is not None):
@@ -2507,6 +2765,7 @@ class Exp4Driver:
             shown["t_nom_computed"] = bool(clock.t_nom_computed)
             fields = asdict(mule)
             shown.update(plan_ferry_params(fields))
+            shown.update(train_time_ferry_params(fields))
             row["ferry_params"] = json.dumps(shown, sort_keys=True, default=str)
             if getattr(mule, "plan_mode", "legacy") == "ferry":
                 row["contact_band"] = contact_band_column(fields)

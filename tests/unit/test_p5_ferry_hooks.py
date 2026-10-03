@@ -793,14 +793,59 @@ def _shape(source: str):
     return top, defs
 
 
+#: The Exp 5 addendum's one change to a recorded definition (Study 5.15):
+#: ``FerrySpec.from_config`` gains these keyword arguments, None by default, and
+#: forwards them to ``ContactChannel.from_link``, with a docstring paragraph that
+#: says so. At the defaults the runtime is 386c275's
+#: (test_the_runtime_at_its_defaults_is_386c275s).
+ADDENDUM_FROM_CONFIG_ARGS = ("interference_amp_db", "interference_sigma_db")
+
+
+def _from_config_without_the_addendum(source: str) -> str:
+    """The live ``FerrySpec.from_config`` with exactly the addendum's change taken
+    out: its two keyword arguments (each defaulting to None), the two keywords
+    it passes to ``ContactChannel.from_link``, and its docstring's last
+    paragraph. Any other change is left in, so it still differs."""
+    tree = ast.parse(source)
+    (cls,) = [n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == "FerrySpec"]
+    (fn,) = [n for n in cls.body if isinstance(n, ast.FunctionDef) and n.name == "from_config"]
+    args = fn.args
+    kept = [(a, d) for a, d in zip(args.kwonlyargs, args.kw_defaults)
+            if a.arg not in ADDENDUM_FROM_CONFIG_ARGS]
+    dropped = [d for a, d in zip(args.kwonlyargs, args.kw_defaults)
+               if a.arg in ADDENDUM_FROM_CONFIG_ARGS]
+    assert len(dropped) == 2 and all(isinstance(d, ast.Constant) and d.value is None
+                                     for d in dropped)
+    args.kwonlyargs, args.kw_defaults = [a for a, _ in kept], [d for _, d in kept]
+    forwarded = 0
+    for node in ast.walk(fn):
+        if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                and node.func.attr == "from_link"):
+            gone = [k for k in node.keywords if k.arg in ADDENDUM_FROM_CONFIG_ARGS]
+            assert all(isinstance(k.value, ast.Name) and k.value.id == k.arg for k in gone)
+            forwarded += len(gone)
+            node.keywords = [k for k in node.keywords if k.arg not in ADDENDUM_FROM_CONFIG_ARGS]
+    assert forwarded == 2
+    doc = fn.body[0].value
+    cut = doc.value.index("\n\n        Exp 5 addendum (Study 5.15)")
+    doc.value = doc.value[:cut] + "\n        "
+    return ast.dump(fn)
+
+
 def test_every_statement_386c275_had_is_unchanged():
     """Additive only: every definition is the recorded one; the module's other
     statements are too, except the docstring, the typing import, the
     type-checking block and ``__all__``, which only gain; and what is new is
-    the four readers and ``StopPrice``."""
+    the four readers and ``StopPrice``. The Exp 5 addendum's two keyword
+    arguments of ``FerrySpec.from_config`` are the one allowed change to a
+    recorded definition, taken back out exactly
+    (:func:`_from_config_without_the_addendum`)."""
     ref_top, ref_defs = _shape(_ref_blob().decode("utf-8"))
-    live_top, live_defs = _shape((REPO / "hermes/mule/ferry.py").read_text(encoding="utf-8"))
+    live_source = (REPO / "hermes/mule/ferry.py").read_text(encoding="utf-8")
+    live_top, live_defs = _shape(live_source)
     assert set(live_defs) - set(ref_defs) == {f"FerryRuntime.{r}" for r in READERS}
+    assert live_defs["FerrySpec.from_config"] != ref_defs["FerrySpec.from_config"]
+    live_defs["FerrySpec.from_config"] = _from_config_without_the_addendum(live_source)
     assert sorted(n for n in ref_defs if live_defs.get(n) != ref_defs[n]) == []
     new_classes = [s for s in live_top if isinstance(s, tuple) and s[0] == "class"
                    and s not in ref_top]
