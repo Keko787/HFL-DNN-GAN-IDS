@@ -2339,6 +2339,28 @@ runs only when named.
 python -m experiments.exp4.runner_main --csv results/exp5/s515/fl1.csv --arms F F+L1 H1 H1+L1 --mission-clock sim --contact-band wide --backhaul-model seconds ...
 ```
 
+### 20.6 The hover-stop switch (Study 5.14)
+
+The hover rule (§18.4, `plan/hover.py`) was unconditional in plan mode. `PlanSearchParams.hover_stops`
+switches it:
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `plan_search_params.hover_stops` (`--plan-search-params '{"hover_stops": false}'`) | true | True: the search runs over S3a's stops with the hover rule applied, as recorded. False: over S3a's stops alone, so a capped device its S3a stop cannot serve alone stays there, and the cap's `unplannable` reads S3a's stops. |
+
+It lives in the search settings, the stop family the search runs over, so it needs no new plan
+field: `PlanSearchParams.as_dict` leaves it out at True, so a plan's `mule_ready` and every pinned
+dict keep their keys, and the row's `ferry_params` records `plan_search_params` as given (`{}` at the
+defaults, `{"hover_stops": false}` when off). The build plan expected the switch to change every
+plan arm's `ferry_params` string; this way only a run that sets it shows it, and no recorded string
+moves. Study 5.14's "hover off" arm is F with this setting. The S\* tool prices the hover rule's
+stops (§18.7); a cap set for a hover-off run is the user's call (`layout_s_star(..., hover=False)`
+prices S3a's stops alone).
+
+```bash
+python -m experiments.exp4.runner_main --csv results/exp5/s514/hover_off.csv --arms F --mission-clock sim --contact-band wide --plan-search-params '{"hover_stops": false}' ...
+```
+
 ---
 
 ## Cross-references

@@ -1618,12 +1618,14 @@ class FLScheduler:
                 rf_range_m=c.radius_m,
             )
             # The hover rule (step 5): only capped devices move, and only
-            # those their S3a stop cannot serve alone on this class.
-            stops = offer_hover_stops(
-                stops, model=c.model, reach_m=c.radius_m, movable=cap.capped, start=start,
-                budget_end=budget_end, deadlines=deadlines, device_states=self._device_states,
-                capped=cap.capped,
-            )
+            # those their S3a stop cannot serve alone on this class. The Exp 5
+            # addendum's switch (Study 5.14) can turn it off; on by default.
+            if options.search.hover_stops:
+                stops = offer_hover_stops(
+                    stops, model=c.model, reach_m=c.radius_m, movable=cap.capped, start=start,
+                    budget_end=budget_end, deadlines=deadlines,
+                    device_states=self._device_states, capped=cap.capped,
+                )
             pass_2 = price_pass_2(c.model, self.build_pass_2_queue(
                 rf_range_m=c.radius_m, now=_now, mule_pose=dock,  # type: ignore[arg-type]
             ))
