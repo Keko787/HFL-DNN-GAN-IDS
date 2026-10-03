@@ -2435,12 +2435,76 @@ them alike, and each is deterministic from the seed. θ at 21 inputs, float32:
 At None every builder is called exactly as recorded (no `arch` keyword is passed). The row does not
 record the architecture: write each to its own CSV (the kept per-role JSON names it).
 
-**Still to build for Study 5.12** (the plan's estimates): per-device training time on the simulated
-clock with a "not ready" contact outcome (2–4 days), the devices' training and transmit energy
-(about a day, after it), and D2's restored speed term (after it).
-
 ```bash
 python -m experiments.exp4.runner_main --csv results/exp5/s512/hp.csv --arms F FX H1 D5 D4 --real-model --model-arch high_performance --mission-clock sim --contact-band wide ...
+```
+
+### 20.9 Training time on the simulated clock, and the device energy (Study 5.12)
+
+Every recorded run charged a device's local fit nothing on the simulated clock: an update was always
+ready when the mule came. With `--train-time-s`, each device's fit takes simulated time and a Pass-1
+contact can find no update ready.
+
+**The draw** (`experiments/exp4/compute.py`). Each device's fit time `T_j` comes from four settings
+and the trial seed. A device's draws are keyed by the seed and its id, so every arm of a trial holds
+the same times:
+
+| Setting (flag) | Default | Meaning |
+|---|---|---|
+| `median_s` (`--train-time-s`) | off | The median fit time, simulated s (>= 0). 0 is the sweep's "none" level. It flies exactly as a recorded run (no contact is ever not ready), but it records the fits and uplinks for the device energy. |
+| `sigma` (`--train-time-sigma`) | 0 | The log-normal spread: `T_j = median_s * exp(sigma * z_j)`, with `z_j` a standard normal. |
+| `straggler_share` (`--straggler-share`) | 0 | Exactly `round(share * N)` devices (half up) straggle; the plan's "20 % stragglers at 5×" is 0.2 with factor 5. |
+| `straggler_factor` (`--straggler-factor`) | 1 | The stragglers' time multiple (>= 1). |
+
+`Exp4Driver.train_time_params` holds them (the simulated clock only; refused otherwise). The topology
+builder draws `T_j` for every device and gives each mule its slice's times in two fields.
+`MuleConfig.device_train_time_s` holds the per-device times, the ground truth, never shown in
+`ferry_params`, as the availability is not. `MuleConfig.train_time_params` holds the settings, and
+the row's `ferry_params` shows them as `train_time_params`.
+
+**The model** (`hermes/mule/fit_clock.py`, the mule's `FitClock`). It lives on the mule, as the
+availability draw does:
+
+* Each device starts its first fit at the mule's first takeoff: it was deployed with the seed model.
+* A device starts a new fit each time a model reaches it: a Pass-1 push (collected, uplink dropped
+  or unanswered) or a Pass-2 delivery, at that session's stamp (`ContactCommit.pushed`).
+* A Pass-1 contact at time t finds an update ready iff `t >= start_j + T_j`.
+
+A target that is not ready is named in the solicit (`FLOpenSolicit.not_ready`) and answers with its
+advert. Nothing is pushed to it, so its fit runs on and its basis is kept. It costs no airtime and no
+listen window, and is recorded as a TIMEOUT (`ContactPlan.not_ready`, `ContactCommit.not_ready`). The
+device code trains after a delivery, and after a Pass-1 push when asked to train ahead, so the model
+times its fits exactly there. One case is optimistic: a device that adopts a Pass-1 basis without
+training ahead (an unbudgeted Pass 2) and then misses its delivery. It fits at its next contact, on
+that contact's model, but the model times that fit from the basis it last received.
+
+**The records**, only when the mule has train times, so no recorded trace gains a key:
+
+* `mission_completed.train_fits`: every fit the mission started, `[device, start_s]`.
+* Each Pass-1 stop's `not_ready`: the targets found with no update ready.
+* Each Pass-1 stop's `uplink_s`: each collected update's own uplink airtime (`ContactCommit.uplink_dwell_s`: its bytes at its session's SNR; empty without a band).
+* `mule_ready.train_time_params` and `train_time_n`: the settings and how many devices the clock times (never the per-device times).
+
+**The scorer** (`traces_scorer --compute-columns`, last in the row; `compute_report`):
+
+| Column | Meaning |
+|---|---|
+| `train_time_median_s`, `train_time_sigma`, `straggler_share`, `straggler_factor` | The settings, from the mule config. |
+| `pass_1_target_contacts`, `not_ready_contacts`, `not_ready_share` | Pass-1 targets solicited, those that found no update ready, and their share. |
+| `pass_1_clean_share` | CLEAN Pass-1 sessions per target contact. The summary's own `update_yield` is the plan's update yield. |
+| `device_train_busy_s` | The devices' fit seconds. Each fit runs `T_j`, or until a newer model restarts it, or until its mule's last mission ends, whichever comes first. |
+| `device_uplink_s` | The collected updates' uplink airtime. |
+| `device_p_comp_w`, `device_p_tx_w` | The powers used: `--device-p-comp-w` (default 5.0 W) and `--device-p-tx-w` (default 1.0 W). These are placeholders for the modelled device. |
+| `device_energy_j_total`, `device_energy_j_max` | Per device, `P_comp × busy + P_tx × uplink`, as the total and for the most loaded device. |
+
+The study's "none" level is `--train-time-s 0`, so its rows carry the same columns.
+
+**Not yet built for Study 5.12** (it needs a decision on the port): D5 (FedCS) reading the training
+time, and D2's restored Oort system-speed term.
+
+```bash
+python -m experiments.exp4.runner_main --csv results/exp5/s512/strag.csv --arms F FX H1 D5 D4 --mission-clock sim --contact-band wide --train-time-s 60 --straggler-share 0.2 --straggler-factor 5 --keep-event-traces results/exp5/s512/traces ...
+python -m experiments.analysis.traces_scorer --traces results/exp5/s512/traces --compute-columns --csv results/exp5/s512/scored.csv
 ```
 
 ---

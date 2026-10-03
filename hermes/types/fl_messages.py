@@ -54,6 +54,12 @@ class FLOpenSolicit:
     # the contact it is gathering for (critic B1). 0 means "not numbered": the
     # legacy broadcast, whose adverts carry no reference to their solicit.
     solicit_id: int = 0
+    # Exp 5 addendum (Study 5.12): the targets of this Pass-1 contact whose
+    # local fit has not finished on the simulated clock (the mule's fit clock,
+    # ``hermes/mule/fit_clock.py``). Each answers with its advert and waits for
+    # no push: it has no update ready, and its fit runs on. Empty in every
+    # recorded run.
+    not_ready: Tuple[DeviceID, ...] = ()
 
 
 @dataclass(frozen=True)

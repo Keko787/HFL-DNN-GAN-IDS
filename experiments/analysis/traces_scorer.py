@@ -172,6 +172,19 @@ writes), and the final evaluation's TPR, FPR, precision, F1 and recall per
 attack family (``model_eval.detection``, which the cluster writes when the
 test set carries the families).
 
+Exp 5 addendum, Study 5.12: compute and device energy. With
+``compute_columns`` (``--compute-columns``) :data:`COMPUTE_COLUMNS` follow the
+others (:func:`compute_report`), from a trace whose mules had train times
+(``mission_completed.train_fits`` and the Pass-1 stops' ``not_ready`` and
+``uplink_s``; blank otherwise): the training-time settings; the Pass-1 target
+contacts, those that found no update ready and their share, and the CLEAN
+sessions per target contact (the summary's own ``update_yield`` is the
+plan's update yield); and each device's busy seconds
+(its fits, each cut short where a newer model restarted it or the trial
+ended) and uplink seconds, with the device energy at the scorer's powers
+``P_comp`` and ``P_tx`` (``--device-p-comp-w``, ``--device-p-tx-w``), in
+total and for the most loaded device.
+
 Usage::
 
     python -m experiments.analysis.traces_scorer \\
@@ -210,6 +223,7 @@ from experiments.exp4.driver import (
     contact_band_column,
     learned_policy_params,
     plan_ferry_params,
+    train_time_ferry_params,
 )
 from experiments.exp4.events_consumer import (
     ClockDomainError,
@@ -519,6 +533,8 @@ def _format_ferry_params(mule: Mapping[str, object], marker: Mapping[str, object
         shown["backhaul_period_s"] = backhaul_period_s(int(mule.get("n_missions") or 0), t_nom)
     shown["t_nom_computed"] = _t_nom_computed(mule, marker)
     shown.update(plan_ferry_params(mule))
+    # Exp 5 addendum (Study 5.12): the training-time settings, when set.
+    shown.update(train_time_ferry_params(mule))
     return json.dumps(shown, sort_keys=True, default=str)
 
 
@@ -1307,6 +1323,26 @@ DETECTION_COLUMNS = (
 )
 
 
+#: The scorer's Study 5.12 columns (the build plan's addendum: contacts that
+#: found no update ready and device training energy; the update yield is the
+#: summary's own ``update_yield``), in row order
+#: after every other group, and only with ``compute_columns``
+#: (``--compute-columns``). Scorer-only.
+COMPUTE_COLUMNS = (
+    "train_time_median_s", "train_time_sigma", "straggler_share", "straggler_factor",
+    "pass_1_target_contacts", "not_ready_contacts", "not_ready_share", "pass_1_clean_share",
+    "device_train_busy_s", "device_uplink_s", "device_p_comp_w", "device_p_tx_w",
+    "device_energy_j_total", "device_energy_j_max",
+)
+
+#: The scorer's default device powers (W) for the device energy: placeholders
+#: for an edge device under a full CPU load and its radio transmitting, to be
+#: set to the device the paper models. The row records the powers used, and
+#: the busy and uplink seconds, so the energy can be recomputed at any others.
+DEVICE_P_COMP_W = 5.0
+DEVICE_P_TX_W = 1.0
+
+
 @dataclass(frozen=True)
 class CostReport:
     """One trial's :data:`COST_COLUMNS`; None is a blank column."""
@@ -1456,6 +1492,117 @@ class DetectionReport:
         return row
 
 
+@dataclass(frozen=True)
+class ComputeReport:
+    """One trial's :data:`COMPUTE_COLUMNS`; None is a blank column."""
+
+    train_time_median_s: Optional[float] = None
+    train_time_sigma: Optional[float] = None
+    straggler_share: Optional[float] = None
+    straggler_factor: Optional[float] = None
+    pass_1_target_contacts: Optional[int] = None
+    not_ready_contacts: Optional[int] = None
+    not_ready_share: Optional[float] = None
+    pass_1_clean_share: Optional[float] = None
+    device_train_busy_s: Optional[float] = None
+    device_uplink_s: Optional[float] = None
+    device_p_comp_w: Optional[float] = None
+    device_p_tx_w: Optional[float] = None
+    device_energy_j_total: Optional[float] = None
+    device_energy_j_max: Optional[float] = None
+
+    def to_row(self) -> Dict[str, object]:
+        return {col: _blank(getattr(self, col)) for col in COMPUTE_COLUMNS}
+
+
+def device_busy_s(fits: Sequence[Tuple[str, float]], train_time_s: Mapping[str, float],
+                  end_s: float) -> Dict[str, float]:
+    """Each device's busy seconds from its fits ``(device, start)`` (in start
+    order): every fit runs ``T_j`` or until the device's next fit restarts it,
+    the last until ``end_s``, whichever is first."""
+    starts: Dict[str, List[float]] = {}
+    for did, t in fits:
+        starts.setdefault(did, []).append(float(t))
+    out: Dict[str, float] = {}
+    for did, ts in starts.items():
+        t_j = float(train_time_s.get(did, 0.0))
+        ts = sorted(ts)
+        ends = ts[1:] + [max(float(end_s), ts[-1])]
+        out[did] = float(sum(min(t_j, e - s) for s, e in zip(ts, ends)))
+    return out
+
+
+def compute_report(obs: Exp4Observation, mule_cfgs: Sequence[Mapping[str, object]], *,
+                   p_comp_w: float = DEVICE_P_COMP_W,
+                   p_tx_w: float = DEVICE_P_TX_W) -> ComputeReport:
+    """One trial's compute and device-energy columns (Exp 5 addendum, Study 5.12).
+
+    ``mule_cfgs`` are every mule's config (each holds its slice's train
+    times). **The settings**: the first config's ``train_time_params``.
+    **The contacts** (the Pass-1 stops of missions with fit records):
+    ``pass_1_target_contacts``, the targets solicited; ``not_ready_contacts``,
+    those that found no update ready, and ``not_ready_share`` of the targets;
+    ``pass_1_clean_share``, the CLEAN Pass-1 sessions per target contact (the
+    summary's ``update_yield`` is the plan's update yield). **The
+    devices**: ``device_train_busy_s``, the fits' seconds summed over the
+    devices (:func:`device_busy_s`, each mule's fits ended at its last
+    mission's end); ``device_uplink_s``, the collected updates' uplink
+    airtime; and the energy at ``p_comp_w`` and ``p_tx_w``, per device
+    ``P_comp * busy + P_tx * uplink``, in total and for the most loaded device.
+    Blank without fit records (a trace whose mules had no train times).
+    """
+    params = next((c.get("train_time_params") for c in mule_cfgs
+                   if isinstance(c.get("train_time_params"), Mapping)), None)
+    settings = {} if params is None else dict(
+        train_time_median_s=_float_or_none(params.get("median_s")),
+        train_time_sigma=_float_or_none(params.get("sigma")),
+        straggler_share=_float_or_none(params.get("straggler_share")),
+        straggler_factor=_float_or_none(params.get("straggler_factor")),
+    )
+    timed = [m for m in obs.missions if m.train_fits is not None]
+    if not timed:
+        return ComputeReport(**settings)
+    times: Dict[str, float] = {}
+    for c in mule_cfgs:
+        raw = c.get("device_train_time_s")
+        if isinstance(raw, Mapping):
+            times.update({str(d): float(t) for d, t in raw.items()
+                          if _float_or_none(t) is not None})
+    targets = not_ready = 0
+    uplink: Dict[str, float] = {}
+    for m in timed:
+        for stop in m.fit_stops or ():
+            targets += len(stop.targets)
+            not_ready += len(stop.not_ready)
+            for did, sec in stop.uplink_s.items():
+                uplink[did] = uplink.get(did, 0.0) + float(sec)
+    clean = sum(1 for m in timed for (_d, outcome, _t) in (m.pass_1_outcomes or ())
+                if outcome == "clean")
+    busy: Dict[str, float] = {}
+    for mule in sorted({m.mule_id for m in timed}, key=str):
+        own = [m for m in timed if m.mule_id == mule]
+        end = max((m.sim_end_s for m in own if m.sim_end_s is not None), default=None)
+        fits = [f for m in own for f in m.train_fits]
+        if end is None or not fits:
+            continue
+        busy.update(device_busy_s(fits, times, end))
+    devices = sorted(set(busy) | set(uplink))
+    energy = {d: p_comp_w * busy.get(d, 0.0) + p_tx_w * uplink.get(d, 0.0) for d in devices}
+    return ComputeReport(
+        **settings,
+        pass_1_target_contacts=targets,
+        not_ready_contacts=not_ready,
+        not_ready_share=(not_ready / targets) if targets else None,
+        pass_1_clean_share=(clean / targets) if targets else None,
+        device_train_busy_s=float(sum(busy.values())),
+        device_uplink_s=float(sum(uplink.values())),
+        device_p_comp_w=float(p_comp_w),
+        device_p_tx_w=float(p_tx_w),
+        device_energy_j_total=float(sum(energy.values())),
+        device_energy_j_max=max(energy.values()) if energy else None,
+    )
+
+
 def detection_report(obs: Exp4Observation, devices: Sequence[str],
                      marker: Mapping[str, object]) -> DetectionReport:
     """One trial's data and detector columns (Exp 5 addendum, Study 5.13).
@@ -1539,9 +1686,13 @@ class TrialScore:
     #: ``cost_columns``; None leaves them out.
     costs: Optional[CostReport] = None
     #: Exp 5 addendum, Study 5.13: :data:`DETECTION_COLUMNS`
-    #: (:func:`detection_report`), last, when scored with
-    #: ``detection_columns``; None leaves them out.
+    #: (:func:`detection_report`), when scored with ``detection_columns``;
+    #: None leaves them out.
     detection: Optional[DetectionReport] = None
+    #: Exp 5 addendum, Study 5.12: :data:`COMPUTE_COLUMNS`
+    #: (:func:`compute_report`), last, when scored with ``compute_columns``;
+    #: None leaves them out.
+    compute: Optional[ComputeReport] = None
 
     def provenance_key(self) -> Tuple[Tuple[str, object], ...]:
         """The provenance as a hashable, column-ordered tuple."""
@@ -1594,6 +1745,8 @@ class TrialScore:
             row.update(self.costs.to_row())
         if self.detection is not None:
             row.update(self.detection.to_row())
+        if self.compute is not None:
+            row.update(self.compute.to_row())
         return row
 
 
@@ -1607,6 +1760,9 @@ def score_trial(
     pair_columns: bool = False,
     cost_columns: bool = False,
     detection_columns: bool = False,
+    compute_columns: bool = False,
+    device_p_comp_w: float = DEVICE_P_COMP_W,
+    device_p_tx_w: float = DEVICE_P_TX_W,
 ) -> TrialScore:
     """Score one retained trial directory.
 
@@ -1618,8 +1774,11 @@ def score_trial(
     ``pair_columns`` adds :data:`PHASE_5_COLUMNS` after the τ columns
     (:func:`pair_report`); without it the row has none of them.
     ``cost_columns`` adds :data:`COST_COLUMNS` after those
-    (:func:`cost_report`), and ``detection_columns`` :data:`DETECTION_COLUMNS`
-    last (:func:`detection_report`); without them the row has none of them.
+    (:func:`cost_report`), ``detection_columns`` :data:`DETECTION_COLUMNS`
+    (:func:`detection_report`), and ``compute_columns``
+    :data:`COMPUTE_COLUMNS` last (:func:`compute_report`, at the device powers
+    ``device_p_comp_w`` and ``device_p_tx_w``); without them the row has none
+    of them.
 
     Raises :class:`~experiments.exp4.events_consumer.ClockDomainError`,
     naming the trial, for a trace whose clocks disagree: in its events (see
@@ -1680,6 +1839,9 @@ def score_trial(
                if cost_columns else None),
         detection=(detection_report(obs, devices, _read_json(trace_dir / TRIAL_STATUS_FILE))
                    if detection_columns else None),
+        compute=(compute_report(obs, [_read_json(p) for p in sorted(trace_dir.glob("mule-*.json"))],
+                                p_comp_w=device_p_comp_w, p_tx_w=device_p_tx_w)
+                 if compute_columns else None),
     )
 
 
@@ -1707,6 +1869,9 @@ def score_traces(
     pair_columns: bool = False,
     cost_columns: bool = False,
     detection_columns: bool = False,
+    compute_columns: bool = False,
+    device_p_comp_w: float = DEVICE_P_COMP_W,
+    device_p_tx_w: float = DEVICE_P_TX_W,
 ) -> List[TrialScore]:
     """Score every trial directory under ``trace_root``, in name order.
 
@@ -1714,8 +1879,8 @@ def score_traces(
     ``include_failed``, are trials whose status is not ``ok`` (see
     :func:`trial_status`): a timed-out or ``no_eval`` trial is not a valid
     observation, and the trial CSV's analysis drops it too. ``age_cap_s``,
-    ``pair_columns``, ``cost_columns`` and ``detection_columns`` as in
-    :func:`score_trial`.
+    ``pair_columns``, ``cost_columns``, ``detection_columns``,
+    ``compute_columns`` and the device powers as in :func:`score_trial`.
     """
     index = _status_index(status_csv)
     scores: List[TrialScore] = []
@@ -1724,7 +1889,10 @@ def score_traces(
             continue
         scores.append(score_trial(d, taus=taus, status_csv=index, age_cap_s=age_cap_s,
                                   pair_columns=pair_columns, cost_columns=cost_columns,
-                                  detection_columns=detection_columns))
+                                  detection_columns=detection_columns,
+                                  compute_columns=compute_columns,
+                                  device_p_comp_w=device_p_comp_w,
+                                  device_p_tx_w=device_p_tx_w))
     return scores
 
 
@@ -1785,6 +1953,20 @@ def main(argv=None) -> int:
                          "marker of a non-IID or family-labelled trial), and the final "
                          "TPR, FPR, precision, F1 and recall per attack family (from "
                          "model_eval's detection). Off by default.")
+    ap.add_argument("--compute-columns", action="store_true",
+                    help="Add Study 5.12's columns last, from a trace whose mules had "
+                         "train times (--train-time-s): the training-time settings, the "
+                         "Pass-1 target contacts, those that found no update ready and "
+                         "their share, the CLEAN sessions per target, and the devices' "
+                         "busy and uplink seconds with their energy (total, and the most "
+                         "loaded device). "
+                         "Off by default.")
+    ap.add_argument("--device-p-comp-w", type=float, default=DEVICE_P_COMP_W,
+                    help=f"With --compute-columns: the device's power while it trains, W "
+                         f"(default {DEVICE_P_COMP_W}, a placeholder; the row records it).")
+    ap.add_argument("--device-p-tx-w", type=float, default=DEVICE_P_TX_W,
+                    help=f"With --compute-columns: the device's power while it transmits, W "
+                         f"(default {DEVICE_P_TX_W}, a placeholder; the row records it).")
     args = ap.parse_args(argv)
     if args.age_cap_s is not None and args.age_cap_s < 1:
         ap.error(f"--age-cap-s must be >= 1, got {args.age_cap_s}")
@@ -1805,6 +1987,8 @@ def main(argv=None) -> int:
             include_failed=args.include_failed, status_csv=index,
             age_cap_s=args.age_cap_s, pair_columns=args.pair_columns,
             cost_columns=args.cost_columns, detection_columns=args.detection_columns,
+            compute_columns=args.compute_columns, device_p_comp_w=args.device_p_comp_w,
+            device_p_tx_w=args.device_p_tx_w,
         ))
         statuses.extend(trial_statuses(root, arms=args.arms, status_csv=index))
 

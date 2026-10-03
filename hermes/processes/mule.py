@@ -506,11 +506,13 @@ SIM_MISSION_FIELDS = (
 #: addendum (Study 5.11 (a)) adds two after them the same way: the wall time of
 #: each pair decision (``pass_1_pairs_wall``) and of each of E3's calls
 #: (``pass_1_e3_wall``), kept outside the records so that determinism
-#: comparisons drop them as they drop ``plan_wall_s``.
+#: comparisons drop them as they drop ``plan_wall_s``. Study 5.12 adds one
+#: after them, left out when None only: the fits the mission started
+#: (``train_fits``), set exactly when the mule has train times, empty or not.
 SIM_MISSION_OPTIONAL_FIELDS = (
     "delivery_overrun_s", "plan", "plan_wall_s", "pass_1_policy_drops",
     "pass_1_pairs", "pass_1_e3", "pass_1_e3_unvisited",
-    "pass_1_pairs_wall", "pass_1_e3_wall",
+    "pass_1_pairs_wall", "pass_1_e3_wall", "train_fits",
 )
 
 #: Optional fields left out when empty too, not only when None.
@@ -705,6 +707,11 @@ class MuleService:
                 sup_kwargs["pair_slot"] = pair_slot
         elif admission != MEMBER_ADMISSION_WHOLE:
             sup_kwargs["member_admission"] = admission
+        # Exp 5 addendum (Study 5.12): the slice's train times, passed only when
+        # set, so a recorded mule builds its supervisor with the same arguments.
+        train_times = getattr(cfg, "device_train_time_s", None)
+        if train_times is not None:
+            sup_kwargs["train_time_s"] = dict(train_times)
         self.supervisor = MuleSupervisor(
             mule_id=MuleID(cfg.mule_id),
             rf=self.rf,
@@ -744,6 +751,7 @@ class MuleService:
             **self._sim_ready_fields(),
             **self._plan_ready_fields(),
             **self._learned_ready_fields(),
+            **self._train_time_ready_fields(),
             **self._wall_time_unit_fields(),
         )
 
@@ -863,6 +871,21 @@ class MuleService:
                 fields["policy_checkpoint"] = _checkpoint_provenance(
                     policy.manifest, cfg.policy_checkpoint_tag)
         return fields
+
+    def _train_time_ready_fields(self) -> dict:
+        """``mule_ready``'s Study 5.12 fields: the fit clock the supervisor runs.
+
+        ``train_time_params`` (the settings the slice's fit times were drawn
+        from) and ``train_time_n`` (how many devices the clock times), read
+        back from the supervisor (audit #15); never the per-device times, as
+        the availability map is never emitted. {} on a mule without train
+        times, so a recorded ``mule_ready`` keeps its key set.
+        """
+        fits = getattr(self.supervisor, "_fits", None)
+        if fits is None:
+            return {}
+        return {"train_time_params": _jsonable(dict(self.cfg.train_time_params or {})),
+                "train_time_n": fits.n_devices}
 
     def _feed_rf_prior(self, result) -> None:
         """The causal RF prior under the recorded ``mission`` backhaul model (critic B4).

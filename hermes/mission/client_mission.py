@@ -272,6 +272,16 @@ class ClientMission:
         adv = self.build_ready_adv(in_reply_to=solicit_id)
         self.rf.send_ready_adv(adv)
 
+        if self.device_id in getattr(solicit, "not_ready", ()):
+            # Exp 5 addendum (Study 5.12): the mule's fit clock says this
+            # device's local fit has not finished at this contact. No push
+            # follows: the device keeps its basis and its fit, and sends nothing.
+            log.info(
+                "device=%s: no update ready for mule=%s (its fit runs on)",
+                self.device_id, solicit.mule_id,
+            )
+            return None
+
         if not adv.is_eligible() or adv.utility < self.fl_threshold:
             log.info(
                 "device=%s refused solicit from mule=%s state=%s util=%.3f",

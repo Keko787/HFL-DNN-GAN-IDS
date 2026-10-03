@@ -434,6 +434,19 @@ class MuleConfig:
     # registration (``TCPRFLinkServer(link_token=...)``). None (every recorded
     # run) accepts any; one value per trial across its mules and devices.
     rf_link_token: Optional[str] = None
+    # Exp 5 addendum, Study 5.12 — the devices' local fits on the simulated
+    # clock (hermes/mule/fit_clock.py). ``device_train_time_s`` is each
+    # device's fit time in simulated seconds, {device_id: T_j}, the slice's
+    # ground truth, drawn by the topology builder from ``train_time_params``
+    # (experiments/exp4/compute.py: the median, the log-normal spread and the
+    # stragglers) and the trial seed. Set together or not at all; simulated
+    # clock only. None, every recorded run: every Pass-1 contact finds an
+    # update ready. ``ferry_params`` shows the settings, never the per-device
+    # times (as it never shows the availability). Declared here because tests
+    # pin the RF prior schedule, the checkpoints and the plan fields as the
+    # class's last fields.
+    device_train_time_s: Optional[Dict[str, float]] = None
+    train_time_params: Optional[Dict[str, float]] = None
     # Critic B4 — the causal RF prior under the recorded ``mission`` backhaul
     # model with the L1 channel (``--l1-channel``). Entry r - 1 is the SNR
     # (dB) the L1 trace gives the carrier chosen for mission round r's upload
@@ -569,7 +582,14 @@ FERRY_SPEC_FIELDS: Dict[str, str] = {
 #: gains exactly these keys at their defaults; the tests that pin what it gains
 #: (Freeze Rule 1, additive fields only) name them beside Phase 4's plan fields
 #: and Phase 5's checkpoint fields.
-ADDENDUM_MULE_FIELDS: Tuple[str, ...] = ("interference_amp_db", "interference_sigma_db")
+ADDENDUM_MULE_FIELDS: Tuple[str, ...] = (
+    "interference_amp_db", "interference_sigma_db",
+    "device_train_time_s", "train_time_params",
+)
+
+#: Study 5.12's mule fields: each device's fit time on the simulated clock and
+#: the settings it was drawn from (``MuleConfig``'s training-time block).
+TRAIN_TIME_MULE_FIELDS: Tuple[str, ...] = ("device_train_time_s", "train_time_params")
 
 #: Ferry fields a trial's ``ferry_params`` leaves out while they are None (the
 #: Exp 5 addendum): their None is the recorded run (the contact regime's own
@@ -612,7 +632,7 @@ CHECKPOINT_MULE_FIELDS: Tuple[str, ...] = PAIR_CHECKPOINT_FIELDS + POLICY_CHECKP
 #: law parameter on either clock.
 SIM_ONLY_MULE_FIELDS: Tuple[str, ...] = tuple(FERRY_SPEC_FIELDS) + (
     "trial_seed", "input_dim", "rf_prior_schedule_db",
-) + CHECKPOINT_MULE_FIELDS + PLAN_MULE_FIELDS
+) + CHECKPOINT_MULE_FIELDS + PLAN_MULE_FIELDS + TRAIN_TIME_MULE_FIELDS
 
 
 def _field_default(cls, name: str) -> Any:
@@ -720,6 +740,32 @@ def mule_config_errors(cfg: "MuleConfig") -> List[str]:
             )
     errors += _plan_config_errors(cfg)
     errors += _learned_config_errors(cfg)
+    errors += _train_time_config_errors(cfg)
+    return errors
+
+
+def _train_time_config_errors(cfg: "MuleConfig") -> List[str]:
+    """Study 5.12's two fields on the simulated clock: set together, the
+    times finite and >= 0 per device id, the settings a dict."""
+    times = getattr(cfg, "device_train_time_s", None)
+    params = getattr(cfg, "train_time_params", None)
+    if times is None and params is None:
+        return []
+    errors: List[str] = []
+    if (times is None) != (params is None):
+        errors.append(
+            "device_train_time_s and train_time_params are set together (the times and "
+            "the settings they were drawn from), or not at all"
+        )
+    if times is not None:
+        if not isinstance(times, dict) or not all(
+                isinstance(k, str) and _finite_number(v) and float(v) >= 0.0
+                for k, v in times.items()):
+            errors.append(
+                f"device_train_time_s must map device ids to finite times >= 0 s, got {times!r}"
+            )
+    if params is not None and not isinstance(params, dict):
+        errors.append(f"train_time_params must be a dict, got {params!r}")
     return errors
 
 

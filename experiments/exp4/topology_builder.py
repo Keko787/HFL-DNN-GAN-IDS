@@ -321,6 +321,10 @@ def build_exp4_topology(
     policy_checkpoint: Optional[str] = None,
     policy_checkpoint_sha256: Optional[str] = None,
     policy_checkpoint_tag: Optional[str] = None,
+    # Exp 5 addendum (Study 5.12): the devices' fit times on the simulated
+    # clock, drawn from these settings (experiments/exp4/compute.py). None
+    # builds the recorded mule.
+    train_time_params: Optional[Mapping[str, float]] = None,
 ) -> TopologyConfig:
     """Return a validated :class:`TopologyConfig` for one H1 trial.
 
@@ -414,6 +418,11 @@ def build_exp4_topology(
         raise ValueError(
             f"ferry_settings {sorted(ferry)}: only on the simulated mission clock; "
             f"pass mission_clock='sim'"
+        )
+    if train_time_params is not None and not sim:
+        raise ValueError(
+            "train_time_params times the devices' fits on the simulated mission clock; "
+            "pass mission_clock='sim'"
         )
     if rf_prior_schedule_db is not None and not sim:
         raise ValueError(
@@ -541,6 +550,17 @@ def build_exp4_topology(
             }
         if rf_prior_schedule_db is not None:
             mule_extra["rf_prior_schedule_db"] = [float(v) for v in rf_prior_schedule_db]
+        if train_time_params is not None:
+            # Study 5.12: the trial's fit times, keyed by the seed and each
+            # device id, for every device of the trial (the mules' slices
+            # split them below).
+            from .compute import check_train_time_params, device_train_times
+
+            params = check_train_time_params(train_time_params)
+            mule_extra["train_time_params"] = params
+            mule_extra["device_train_time_s"] = device_train_times(
+                [dev.device_id for dev in devices], seed=int(seed), params=params,
+            )
     if isinstance(deadline_time_scale, bool) or deadline_time_scale != 1.0:
         mule_extra["deadline_time_scale"] = float(deadline_time_scale)
     if initial_window_s is not None:
@@ -627,6 +647,14 @@ def _split_between_mules(
             device_availability={
                 d: a for d, a in mule.device_availability.items() if d in slices[k]
             },
+            # Study 5.12: likewise its own slice's fit times.
+            device_train_time_s=(
+                None if mule.device_train_time_s is None
+                else {d: t for d, t in mule.device_train_time_s.items() if d in slices[k]}
+            ),
+            train_time_params=(
+                None if mule.train_time_params is None else dict(mule.train_time_params)
+            ),
             contact_band_classes=(
                 None if mule.contact_band_classes is None else list(mule.contact_band_classes)
             ),
