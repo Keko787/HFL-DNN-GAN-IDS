@@ -441,6 +441,7 @@ class FerrySpec:
         interference_period_s: float = 60.0,
         interference_amp_db: Optional[float] = None,
         interference_sigma_db: Optional[float] = None,
+        narrow_range_ratio: Optional[float] = None,
         noise_bin_s: float = 1.0,
         shadow_corr_s: float = 7.4,
         shadow_keying: str = "time",
@@ -488,13 +489,18 @@ class FerrySpec:
         amplitude A and noise sigma_I (None keeps the regime's own: 1 and
         0.4 dB clean, 5 and 1.5 dB jittery); they are the definition's only
         change, forwarded to ``ContactChannel.from_link``.
+
+        Exp 5 addendum (unit U10, Study 5.4): ``narrow_range_ratio`` sets the
+        narrow class's planar reach to that multiple of ``rf_range_m`` (None
+        keeps the derivation's, 3.87 at the defaults); forwarded to
+        ``ContactLink``.
         """
         _choice(backhaul_model, BACKHAUL_MODELS, "backhaul_model")
         classes = {} if band_classes is None else {"classes": tuple(band_classes)}
         link = ContactLink(
             anchor_planar_m=float(rf_range_m), snr_floor_db=snr_floor_db, altitude_m=altitude_m,
             n_pl=n_pl, shadow_sigma_db=shadow_sigma_db, margin_quantile=margin_quantile,
-            **classes,
+            **classes, narrow_range_ratio=narrow_range_ratio,
         )
         channel = None
         if contact_band is not None:

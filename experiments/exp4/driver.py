@@ -410,6 +410,8 @@ FERRY_PHYSICS_FIELDS = (
     "energy_capacity_j", "p_move_w", "p_hover_w",
     # Exp 5 addendum (Study 5.15): the regime's interference amplitude and noise.
     "interference_amp_db", "interference_sigma_db",
+    # Exp 5 addendum (unit U10, Study 5.4): the narrow class's reach / rf_range_m.
+    "narrow_range_ratio",
 )
 
 #: Marker written next to every kept trace: the ``status`` and ``error`` the
@@ -789,6 +791,12 @@ class Exp4Driver:
     # keeps the recorded fixed field. The kept traces hold the positions; the
     # row does not record it, so write each setting to its own CSV.
     h1_field_ref_n: Optional[int] = None
+    # Exp 5 addendum, unit U10 (Study 5.4): the share of a realism trial's
+    # devices placed beyond rf_range_m of the dock (wide's reach), T_nom's
+    # reference layouts included (``topology_builder.device_positions``); None
+    # keeps the recorded draw. The row does not record it: write each setting
+    # to its own CSV (the kept traces hold the positions).
+    far_share: Optional[float] = None
     # Exp 5 addendum, Study 5.13: data heterogeneity (real model only; the
     # stub trainer has no data). ``partition`` splits the training rows
     # ("iid", the recorded split; "dirichlet", label skew over the attack
@@ -881,6 +889,16 @@ class Exp4Driver:
                 raise ValueError(
                     "h1_field_ref_n scales the realism field: without realism the devices "
                     "sit in the tight cluster and no field is drawn (--realism)"
+                )
+        if self.far_share is not None:
+            share = self.far_share
+            if (isinstance(share, bool) or not isinstance(share, (int, float))
+                    or not 0.0 <= float(share) <= 1.0):
+                raise ValueError(f"far_share must be a number in [0, 1] or None, got {share!r}")
+            if not self.realism:
+                raise ValueError(
+                    "far_share places devices on the realism field: without realism the "
+                    "devices sit in the tight cluster (--realism)"
                 )
         self._check_multi_mule()
         #: T_nom per cell, computed once (:meth:`nominal_period_s`).
@@ -1736,6 +1754,7 @@ class Exp4Driver:
             "settings": dict(settings), "theta": int(theta_bytes), "synth": int(synth_bytes),
             "k": int(self.n_mules), "layouts": int(self.t_nom_layouts),
             "realism": bool(self.realism), "field": self.field_radius_m(n_devices),
+            "far_share": self.far_share,
         }, sort_keys=True, default=str)
         cached = self._t_nom_cache.get(key)
         if cached is not None:
@@ -1751,7 +1770,11 @@ class Exp4Driver:
         periods = []
         for k in range(int(self.t_nom_layouts)):
             ref_seed = _u32(int(n_devices), "t_nom", k)
-            xy = device_positions(int(n_devices), ref_seed, spread)
+            if self.realism and self.far_share is not None:
+                xy = device_positions(int(n_devices), ref_seed, spread,
+                                      far_share=self.far_share, far_radius_m=rf_range_m)
+            else:
+                xy = device_positions(int(n_devices), ref_seed, spread)
             spec = FerrySpec.from_config(**self._spec_kwargs(
                 base, rf_range_m=rf_range_m, seed=ref_seed, n_missions=1,
             ))
@@ -1918,6 +1941,7 @@ class Exp4Driver:
                 reliabilities=device_reliabilities(cell.seed, n_devices),
                 world_radius_m=self.h1_world_radius_m,
                 field_radius_m=self.field_radius_m(n_devices),
+                **({} if self.far_share is None else {"far_share": self.far_share}),
                 backhaul_loss_pct=(
                     self.jittery_backhaul_loss_pct if regime == "jittery"
                     else self.clean_backhaul_loss_pct

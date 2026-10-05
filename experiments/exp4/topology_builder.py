@@ -115,18 +115,55 @@ def grown_field_radius_m(radius_m: float, n_devices: int, ref_n: int) -> float:
     return round(float(radius_m) * math.sqrt(n_devices / ref_n), 1)
 
 
-def device_positions(n_devices: int, seed: int, spread_m: float) -> List[Tuple[float, float]]:
+def far_count(n_devices: int, far_share: float) -> int:
+    """How many of ``n_devices`` a layout places far at ``far_share`` (half up)."""
+    return int(math.floor(float(far_share) * int(n_devices) + 0.5))
+
+
+def device_positions(
+    n_devices: int, seed: int, spread_m: float, *,
+    far_share: Optional[float] = None, far_radius_m: Optional[float] = None,
+) -> List[Tuple[float, float]]:
     """The devices' (x, y), drawn exactly as every recorded trial drew them.
 
     ``random.Random(seed)``, then x and y per device in index order, each
     uniform on [-spread_m, spread_m]. The Exp 4 driver draws its T_nom
     reference layouts with it (FeRRy Phase 3).
+
+    Exp 5 addendum, unit U10 (Study 5.4's share of devices beyond the widest
+    class's reach): with ``far_share`` set, exactly ``far_count(n, share)``
+    devices, chosen by the same seeded generator, lie beyond ``far_radius_m``
+    of the dock at the origin in the plane (the trace scorer's
+    ``far_devices``), and the rest within it; each is drawn uniformly on the
+    square until it lands on its side. None, the default, is the recorded draw.
     """
     rng = random.Random(seed)
     out: List[Tuple[float, float]] = []
-    for _ in range(n_devices):
-        x = rng.uniform(-spread_m, spread_m)
-        y = rng.uniform(-spread_m, spread_m)
+    if far_share is None:
+        for _ in range(n_devices):
+            x = rng.uniform(-spread_m, spread_m)
+            y = rng.uniform(-spread_m, spread_m)
+            out.append((float(x), float(y)))
+        return out
+    share = float(far_share)
+    if isinstance(far_share, bool) or not (math.isfinite(share) and 0.0 <= share <= 1.0):
+        raise ValueError(f"far_share must be a number in [0, 1], got {far_share!r}")
+    if far_radius_m is None or not float(far_radius_m) > 0.0:
+        raise ValueError(f"far_share needs far_radius_m > 0, got {far_radius_m!r}")
+    radius = float(far_radius_m)
+    k_far = far_count(n_devices, share)
+    if k_far and not spread_m * math.sqrt(2.0) > radius:
+        raise ValueError(
+            f"no point of the {spread_m} m half-width field lies beyond {radius} m of the "
+            f"dock, so a far share of {share} cannot be placed"
+        )
+    far = set(rng.sample(range(n_devices), k_far))
+    for i in range(n_devices):
+        while True:
+            x = rng.uniform(-spread_m, spread_m)
+            y = rng.uniform(-spread_m, spread_m)
+            if (math.hypot(x, y) > radius) == (i in far):
+                break
         out.append((float(x), float(y)))
     return out
 
@@ -256,6 +293,9 @@ def build_exp4_topology(
     reliabilities: Optional[List[float]] = None,
     world_radius_m: float = 100.0,
     field_radius_m: Optional[float] = None,
+    # Exp 5 addendum, unit U10 (Study 5.4): the share of devices placed beyond
+    # rf_range_m of the dock (``device_positions``); None is the recorded draw.
+    far_share: Optional[float] = None,
     backhaul_loss_pct: float = 0.0,
     backhaul_rng_seed: Optional[int] = None,
     # EX-4.2 arm H2 — RL target selector on the mule.
@@ -478,7 +518,10 @@ def build_exp4_topology(
         device_extra["rf_link_token"] = str(rf_link_token)
 
     devices: List[DeviceConfig] = []
-    for i, (x, y) in enumerate(device_positions(n_devices, seed, spread_m)):
+    layout = (device_positions(n_devices, seed, spread_m) if far_share is None else
+              device_positions(n_devices, seed, spread_m, far_share=far_share,
+                               far_radius_m=rf_range_m))
+    for i, (x, y) in enumerate(layout):
         contact_reliability: Optional[float] = None
         if device_reliability and not channel_source:
             # Short-range device<->mule completion: p = reliability x rf_factor

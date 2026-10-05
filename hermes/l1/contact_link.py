@@ -443,6 +443,13 @@ class ContactLink:
 
     Instances are immutable, and every method is a pure function of its
     arguments, so one link can be shared across threads and arms.
+
+    ``narrow_range_ratio`` (the Exp 5 addendum's unit U10, Study 5.4's sweep of
+    the classes' range-rate trade): the narrow class reaches this multiple of
+    the anchor's planar range instead of the physics' (232.2 / 60 = 3.87 at the
+    defaults). The class's mean SNR curve moves with its reach, since the edge
+    is defined by the floor plus the margin at the reach: its implied EIRP is
+    then no longer the other classes'. None, the default, is the derivation.
     """
 
     anchor_planar_m: float
@@ -453,6 +460,7 @@ class ContactLink:
     margin_quantile: float = 0.9
     classes: Tuple[BandClass, ...] = DEFAULT_BAND_CLASSES
     anchor_class: str = "wide"
+    narrow_range_ratio: Optional[float] = None
 
     def __post_init__(self) -> None:
         anchor = _finite(self.anchor_planar_m, "anchor_planar_m")
@@ -487,6 +495,17 @@ class ContactLink:
             raise ValueError(f"band class names must be unique, got {names}")
         if self.anchor_class not in names:
             raise ValueError(f"anchor_class {self.anchor_class!r} is not one of {names}")
+        ratio = self.narrow_range_ratio
+        if ratio is not None:
+            ratio = _finite(ratio, "narrow_range_ratio")
+            if ratio <= 0.0:
+                raise ValueError(f"narrow_range_ratio must be positive, got {ratio}")
+            if NARROW.name not in names or self.anchor_class == NARROW.name:
+                raise ValueError(
+                    f"narrow_range_ratio needs a {NARROW.name!r} class that is not the anchor, "
+                    f"got classes {names} anchored at {self.anchor_class!r}"
+                )
+            object.__setattr__(self, "narrow_range_ratio", ratio)
 
         for attr, value in (
             ("anchor_planar_m", anchor),
@@ -509,6 +528,10 @@ class ContactLink:
         for i, cls in enumerate(classes):
             if i == anchor_index:
                 reach, reach_planar = anchor_slant, anchor
+            elif ratio is not None and cls.name == NARROW.name:
+                # Unit U10: the narrow class's reach is set, not derived.
+                reach_planar = ratio * anchor
+                reach = math.hypot(reach_planar, altitude)
             else:
                 reach = anchor_slant * (anchor_occupied / cls.occupied_hz) ** (1.0 / n_pl)
                 if reach <= altitude:

@@ -123,6 +123,9 @@ _PHYSICS_FLAGS = (
     ("interference_sigma_db", float, "Exp 5 addendum (Study 5.15): the interference noise "
                                      "sigma_I (dB; default the regime's, 0.4 clean and 1.5 "
                                      "jittery)."),
+    ("narrow_range_ratio", float, "Exp 5 addendum (unit U10, Study 5.4): the narrow class's "
+                                  "planar reach as a multiple of --rrf (default the D1 "
+                                  "derivation's, 3.87); its mean SNR curve moves with it."),
     ("noise_bin_s", float, "D2: noise bin (s; default 1)."),
     ("shadow_corr_s", float, "D2: shadowing correlation time (s; default 7.4)."),
     ("shadow_keying", str, "D2: shadowing keyed by 'time' (default) or 'position'."),
@@ -691,6 +694,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
              "its own CSV. Default: the fixed field.",
     )
     parser.add_argument(
+        "--far-share", type=float, default=None,
+        help="Exp 5 addendum (unit U10, Study 5.4): place exactly round(share x N) "
+             "devices beyond --rrf of the dock (wide's reach; the trace scorer's far "
+             "devices) and the rest within it, in every trial and in T_nom's reference "
+             "layouts. Needs --realism. The row does not record it: write each setting "
+             "to its own CSV. Default: the recorded uniform draw.",
+    )
+    parser.add_argument(
         "--selector-weights", type=Path, default=None,
         help="Arm H2: trained DDQN .npz (from experiments.exp3.train_a4). "
              "Omit for a random-init selector (H2 plumbing smoke only).",
@@ -1049,6 +1060,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if args.h1_field_ref_n is not None:
         # Exp 5 addendum; passed only when given, as the footprint probe is.
         driver_kwargs.update(h1_field_ref_n=int(args.h1_field_ref_n))
+    if args.far_share is not None:
+        # Exp 5 addendum, unit U10; passed only when given.
+        driver_kwargs.update(far_share=float(args.far_share))
     if args.footprint_probe:
         # Exp 5 addendum, Study 5.11; passed only when asked, so the default
         # driver is built exactly as before.

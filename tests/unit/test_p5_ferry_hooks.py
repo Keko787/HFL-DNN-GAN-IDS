@@ -793,19 +793,22 @@ def _shape(source: str):
     return top, defs
 
 
-#: The Exp 5 addendum's one change to a recorded definition (Study 5.15):
-#: ``FerrySpec.from_config`` gains these keyword arguments, None by default, and
-#: forwards them to ``ContactChannel.from_link``, with a docstring paragraph that
-#: says so. At the defaults the runtime is 386c275's
+#: The Exp 5 addendum's one change to a recorded definition (Studies 5.15 and
+#: 5.4): ``FerrySpec.from_config`` gains these keyword arguments, None by
+#: default, and forwards the first two to ``ContactChannel.from_link`` and the
+#: third (unit U10) to ``ContactLink``, with docstring paragraphs that say so.
+#: At the defaults the runtime is 386c275's
 #: (test_the_runtime_at_its_defaults_is_386c275s).
-ADDENDUM_FROM_CONFIG_ARGS = ("interference_amp_db", "interference_sigma_db")
+ADDENDUM_FROM_CONFIG_ARGS = ("interference_amp_db", "interference_sigma_db",
+                             "narrow_range_ratio")
 
 
 def _from_config_without_the_addendum(source: str) -> str:
     """The live ``FerrySpec.from_config`` with exactly the addendum's change taken
-    out: its two keyword arguments (each defaulting to None), the two keywords
-    it passes to ``ContactChannel.from_link``, and its docstring's last
-    paragraph. Any other change is left in, so it still differs."""
+    out: its three keyword arguments (each defaulting to None), the keywords it
+    passes to ``ContactChannel.from_link`` and ``ContactLink``, and its
+    docstring's last paragraphs. Any other change is left in, so it still
+    differs."""
     tree = ast.parse(source)
     (cls,) = [n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == "FerrySpec"]
     (fn,) = [n for n in cls.body if isinstance(n, ast.FunctionDef) and n.name == "from_config"]
@@ -814,18 +817,19 @@ def _from_config_without_the_addendum(source: str) -> str:
             if a.arg not in ADDENDUM_FROM_CONFIG_ARGS]
     dropped = [d for a, d in zip(args.kwonlyargs, args.kw_defaults)
                if a.arg in ADDENDUM_FROM_CONFIG_ARGS]
-    assert len(dropped) == 2 and all(isinstance(d, ast.Constant) and d.value is None
+    assert len(dropped) == 3 and all(isinstance(d, ast.Constant) and d.value is None
                                      for d in dropped)
     args.kwonlyargs, args.kw_defaults = [a for a, _ in kept], [d for _, d in kept]
     forwarded = 0
     for node in ast.walk(fn):
-        if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
-                and node.func.attr == "from_link"):
+        if isinstance(node, ast.Call) and (
+                (isinstance(node.func, ast.Attribute) and node.func.attr == "from_link")
+                or (isinstance(node.func, ast.Name) and node.func.id == "ContactLink")):
             gone = [k for k in node.keywords if k.arg in ADDENDUM_FROM_CONFIG_ARGS]
             assert all(isinstance(k.value, ast.Name) and k.value.id == k.arg for k in gone)
             forwarded += len(gone)
             node.keywords = [k for k in node.keywords if k.arg not in ADDENDUM_FROM_CONFIG_ARGS]
-    assert forwarded == 2
+    assert forwarded == 3
     doc = fn.body[0].value
     cut = doc.value.index("\n\n        Exp 5 addendum (Study 5.15)")
     doc.value = doc.value[:cut] + "\n        "

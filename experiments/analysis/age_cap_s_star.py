@@ -187,19 +187,26 @@ def device_name(i: int) -> str:
 
 def reference_layouts(
     n_devices: int, *, count: int, spread_m: float, tag: str = LAYOUT_TAG, offset: int = 0,
+    far_share: Optional[float] = None, far_radius_m: Optional[float] = None,
 ) -> Tuple[Layout, ...]:
     """The tool's reference layouts: layout k from the seed ``_u32(N, tag, offset + k)``.
 
     Drawn as a trial's devices are (``device_positions``). ``tag`` and
     ``offset`` exist to reproduce other probes' layouts (the design probe drew
     ``_u32(N, "t_nom", 1000 + k)``); the tool's own are ``"s_star"`` from 0.
+    ``far_share`` (unit U10) places that share beyond ``far_radius_m`` of the
+    dock, as the trials of a ``--far-share`` cell do; None is the recorded draw.
     """
     if int(n_devices) < 1 or int(count) < 1:
         raise ValueError(f"need at least one device and one layout, got {n_devices}, {count}")
     out = []
     for k in range(int(count)):
         seed = _u32(int(n_devices), tag, int(offset) + k)
-        xy = device_positions(int(n_devices), seed, float(spread_m))
+        if far_share is None:
+            xy = device_positions(int(n_devices), seed, float(spread_m))
+        else:
+            xy = device_positions(int(n_devices), seed, float(spread_m),
+                                  far_share=far_share, far_radius_m=far_radius_m)
         out.append(Layout(
             index=k, seed=seed,
             positions=tuple((device_name(i), (float(x), float(y), 0.0))
@@ -663,8 +670,10 @@ def s_star_report(
     worlds = [
         planning_world(driver, layout, rf_range_m=rf_range_m, regime=regime,
                        theta_bytes=int(theta_bytes), synth_bytes=int(synth_bytes))
-        for layout in reference_layouts(n_devices, count=layouts, spread_m=spread,
-                                        tag=layout_tag, offset=layout_offset)
+        for layout in reference_layouts(
+            n_devices, count=layouts, spread_m=spread, tag=layout_tag, offset=layout_offset,
+            far_share=(driver.far_share if driver.realism else None),
+            far_radius_m=float(rf_range_m))
     ]
     names = worlds[0].class_names
     fams = tuple(families) if families is not None else (
@@ -780,6 +789,10 @@ def main(argv=None) -> int:
                     help="Exp 5 addendum: grow the field with N at this size's density "
                          "(half-width field-radius-m * sqrt(N / ref-n); the driver's "
                          "h1_field_ref_n). Default: the fixed field.")
+    ap.add_argument("--far-share", type=float, default=None,
+                    help="Exp 5 addendum (unit U10): the share of each layout's devices "
+                         "placed beyond --rrf of the dock (the driver's far_share). "
+                         "Default: the recorded uniform draw.")
     ap.add_argument("--member-admission", choices=MEMBER_ADMISSIONS,
                     default=MEMBER_ADMISSION_SUBSET,
                     help="subset (the F family's, default) or whole stops.")
@@ -806,6 +819,8 @@ def main(argv=None) -> int:
         field_kw["h1_field_radius_m"] = float(args.field_radius_m)
     if args.field_ref_n is not None:
         field_kw["h1_field_ref_n"] = args.field_ref_n
+    if args.far_share is not None:
+        field_kw["far_share"] = float(args.far_share)
     try:
         driver = Exp4Driver(
             mission_clock="sim", realism=not args.no_realism, contact_band=args.contact_band,

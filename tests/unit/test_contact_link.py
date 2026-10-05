@@ -735,6 +735,7 @@ def test_link_is_immutable_and_replace_recomputes():
         "margin_quantile",
         "classes",
         "anchor_class",
+        "narrow_range_ratio",       # the Exp 5 addendum's unit U10, None by default
     ]
     # Class names resolve to the predefined classes, and numbers normalise.
     assert _link(anchor_planar_m=60, classes=list(CLASSES)) == link

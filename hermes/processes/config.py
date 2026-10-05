@@ -413,6 +413,10 @@ class MuleConfig:
     # recorded run), and leaves each out of ``ferry_params``.
     interference_amp_db: Optional[float] = None
     interference_sigma_db: Optional[float] = None
+    # Exp 5 addendum, unit U10 (Study 5.4): the narrow class's planar reach as a
+    # multiple of rf_range_m; None keeps the D1 derivation (the recorded run),
+    # and leaves it out of ``ferry_params``.
+    narrow_range_ratio: Optional[float] = None
     # D3 — flight and SIMULATED energy (Zeng-Xu-Zhang 2019 at the cruise
     # speed unless the powers are given; capacity None = no energy clause).
     cruise_speed_m_s: float = 5.0
@@ -569,6 +573,7 @@ FERRY_SPEC_FIELDS: Dict[str, str] = {
     "shadow_keying": "shadow_keying",
     "interference_amp_db": "interference_amp_db",
     "interference_sigma_db": "interference_sigma_db",
+    "narrow_range_ratio": "narrow_range_ratio",
     "cruise_speed_m_s": "cruise_speed_m_s",
     "turnaround_s": "turnaround_s",
     "listen_s": "listen_s",
@@ -585,6 +590,7 @@ FERRY_SPEC_FIELDS: Dict[str, str] = {
 ADDENDUM_MULE_FIELDS: Tuple[str, ...] = (
     "interference_amp_db", "interference_sigma_db",
     "device_train_time_s", "train_time_params",
+    "narrow_range_ratio",
 )
 
 #: Study 5.12's mule fields: each device's fit time on the simulated clock and
@@ -593,9 +599,12 @@ TRAIN_TIME_MULE_FIELDS: Tuple[str, ...] = ("device_train_time_s", "train_time_pa
 
 #: Ferry fields a trial's ``ferry_params`` leaves out while they are None (the
 #: Exp 5 addendum): their None is the recorded run (the contact regime's own
-#: interference amplitude and noise, Study 5.15), so every recorded row keeps
-#: its string, and a run that sets one shows it.
-FERRY_PARAMS_OMITTED_AT_NONE: Tuple[str, ...] = ("interference_amp_db", "interference_sigma_db")
+#: interference amplitude and noise, Study 5.15; the narrow class's derived
+#: reach, unit U10), so every recorded row keeps its string, and a run that
+#: sets one shows it.
+FERRY_PARAMS_OMITTED_AT_NONE: Tuple[str, ...] = (
+    "interference_amp_db", "interference_sigma_db", "narrow_range_ratio",
+)
 
 #: ``MuleConfig``'s FeRRy Phase 4 plan fields: ``plan_mode`` and the plan
 #: options (:data:`PLAN_OPTION_FIELDS`). Not ferry-spec fields (the spec prices

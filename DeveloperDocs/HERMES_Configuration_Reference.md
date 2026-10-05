@@ -2528,6 +2528,43 @@ python -m experiments.exp4.runner_main --csv results/exp5/s512/strag.csv --arms 
 python -m experiments.analysis.traces_scorer --traces results/exp5/s512/traces --compute-columns --csv results/exp5/s512/scored.csv
 ```
 
+### 20.10 Study 5.4's sweep knobs (unit U10)
+
+Study 5.4 sweeps the classes' range–rate trade and the share of devices beyond the widest class's
+reach (build plan, 5.4). Unit U10 adds one setting for each, decided on 2026-10-05; at their
+defaults every range, layout, row and trace is the recorded one.
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `MuleConfig.narrow_range_ratio` (`--narrow-range-ratio`, `ferry_physics`) | None | The narrow class's planar reach as a multiple of `rf_range_m` (wide's), in place of D1's derivation (232.2 / 60 = 3.87 at the defaults, §17.1). Study 5.4 sweeps 2, 3 and the derivation. |
+| `Exp4Driver.far_share` (`--far-share`; the S\* tool's `--far-share`) | None | Exactly `far_count(N, share)` = ⌊share·N + ½⌋ devices of every realism layout lie beyond `rf_range_m` of the dock and the rest within it. Study 5.4 sweeps 0.25, 0.5 and 0.75. |
+
+**The narrow reach.** `ContactLink.narrow_range_ratio` sets the class's planar reach; its slant
+reach follows (`hypot(reach, altitude)`), and so does its mean SNR curve, because a class's edge is
+defined as the floor plus the 90 % shadowing margin at its reach (§17.1). So a ratio below the
+derivation's lowers the narrow class's implied EIRP below the others'; the edge keeps its meaning,
+and wide and medium are untouched. It needs a narrow class that is not the anchor. It is a
+ferry-spec field (`FERRY_SPEC_FIELDS` → `FerrySpec.from_config` → `ContactLink`), simulated-clock
+only, in `FERRY_PHYSICS_FIELDS` and `ADDENDUM_MULE_FIELDS`, and `ferry_params` leaves it out at None
+(`FERRY_PARAMS_OMITTED_AT_NONE`) as it does §20.4's fields.
+
+**The far share.** `topology_builder.device_positions(..., far_share=, far_radius_m=)` chooses the
+far devices with the layout's own seeded generator, then draws each device uniformly on the field
+until it lands on its side of `far_radius_m` (the dock is at the origin; the trace scorer's
+`far_devices` reads the same set, so `far_served_share` is its served share). The driver needs
+realism and applies it to the trial's devices and to T_nom's reference layouts (and T_nom's cache
+key), and the S\* tool's reference layouts take it, so the knee, S\* and T_nom of a far-share cell
+are measured on its own layouts. A share that the field cannot hold (no point beyond the radius) is
+refused. The row does not record it: write each setting to its own CSV (the kept traces hold the
+positions; the launcher's `.argv.json` holds the flag).
+
+```bash
+python -m experiments.exp4.runner_main --csv results/exp5/s54/far50_ratio2.csv --arms F FB+wide FB+medium FB+narrow --mission-clock sim --contact-band wide --realism --far-share 0.5 --narrow-range-ratio 2 ...
+python -m experiments.analysis.age_cap_s_star --budgets 90 45 --far-share 0.5 --ferry-physics '{"narrow_range_ratio": 2}' --payload-bytes 1000000 --contact-band wide --regime jittery
+```
+
+Tests: `tests/unit/test_exp5_u10.py`.
+
 ---
 
 ## Cross-references
