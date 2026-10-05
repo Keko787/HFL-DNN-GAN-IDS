@@ -64,7 +64,8 @@ Then the studies that wait for the verdict, and those with pilots of their own:
 
     batch2   5.1, 5.2, the rest of 5.3, 5.4 (with O1), 5.5's stack check, 5.6,
              5.7, 5.8, the rest of 5.9, 5.13
-    pilot3   5.15's interference levels and 5.11 (c)'s FerrySim budget sweeps
+    pilot3   5.15's interference levels, 5.12's training-time levels (p512) and
+             5.11 (c)'s FerrySim budget sweeps
     batch3   5.12, 5.15, 5.11 (c)
 
 And, apart from the campaign, a reviewer's reproduction of batch 1:
@@ -875,12 +876,26 @@ class Builder:
             if budgets is None:
                 job.blocked = [f"p511c.budgets_s.{cell}"]
             self.jobs.append(job)
+        # 5.12's training-time levels: H1 at the knee, the median fit time at multiples
+        # of the mission cycle (the knee budget plus the turnaround), a fixed spread.
+        n = int(s.get("p512.N"))
+        knee = s.get(f"pilot_outputs.knee_s.{n}", None)       # unset: _arm_job blocks
+        cycle = None if knee is None else float(knee) + float(s.get("p512.turnaround_s"))
+        for factor in s.get("p512.cycle_factors") or []:
+            median = None if cycle is None else float(round(float(factor) * cycle))
+            self.jobs.append(self._arm_job(
+                "pilot3", "p512", arm="H1", n=n, k=1, level="knee",
+                payload=s.get("p512.payload_bytes"), n_trials=int(s.get("p512.n_trials")),
+                extra=["--train-time-s", _fmt(median),
+                       "--train-time-sigma", _fmt(float(s.get("p512.sigma")))],
+                tag_extra=f"_cyc{_fmt(float(factor))}", footprint=False))
 
     def batch3(self) -> None:
         s = self.s
         st = "batch3"
-        # 5.12: training time on the simulated clock x payload (x model).
-        levels = s.get("s512.train_levels", None)
+        # 5.12: training time on the simulated clock x payload (x model), at the
+        # levels pilot3's p512 set.
+        levels = s.get("pilot_outputs.train_levels", None)
         n512 = int(s.get("s512.N"))
         for arch in s.get("s512.model_archs") or ["ciciot"]:
             arch_extra = [] if arch == "ciciot" else ["--model-arch", str(arch)]
@@ -900,7 +915,8 @@ class Builder:
                                       + ("" if arch == "ciciot" else f"_{arch}"),
                             footprint=True)
                         if levels is None:
-                            job.blocked = sorted(set(job.blocked) | {"s512.train_levels"})
+                            job.blocked = sorted(set(job.blocked)
+                                                 | {"pilot_outputs.train_levels"})
                         self.jobs.append(job)
         # 5.15: one radio axis at a time from the jittery default, on the seconds backhaul.
         n515 = int(s.get("s515.N"))
@@ -1856,6 +1872,55 @@ def pilot_tau(best_by_n: Dict[int, List[float]], share: float, step: float
     return (min(per_n.values()) if per_n else None), per_n
 
 
+def pick_spread(levels: Sequence[Tuple[float, Optional[float]]], band: Sequence[float]
+                ) -> Optional[float]:
+    """p512's rule: of (median_s, mean not-ready share) per level, the median whose
+    share lies in ``band``, the one nearest the band's middle if several."""
+    lo, hi = float(band[0]), float(band[1])
+    inside = [(abs(share - (lo + hi) / 2), median) for median, share in levels
+              if share is not None and lo <= share <= hi]
+    return min(inside)[1] if inside else None
+
+
+def p512_levels(s: Settings, jobs: List[Job], problems: List[str]) -> Optional[str]:
+    """5.12's training-time levels from pilot3's p512 trials, as the TOML inline
+    table pilot_outputs.train_levels takes (None while there is no pick)."""
+    p512 = [j for j in jobs if j.study == "p512" and not j.blocked]
+    if not p512:
+        return None
+    if str(REPO) not in sys.path:
+        sys.path.insert(0, str(REPO))
+    from experiments.analysis.traces_scorer import load_status_csv, score_traces
+    band = s.get("p512.not_ready_band")
+    print(f"  p512: share of H1's Pass-1 contacts that found no update ready, by median "
+          f"fit time (band {band[0]:g}-{band[1]:g})")
+    levels: List[Tuple[float, Optional[float]]] = []
+    for j in p512:
+        median = float(j.args[j.args.index("--train-time-s") + 1])
+        csv_path, traces = REPO / j.out, REPO / (j.out[:-4] + "_traces")
+        shares: List[float] = []
+        if csv_path.exists() and traces.is_dir():
+            for sc in score_traces(traces, compute_columns=True,
+                                   status_csv=load_status_csv(csv_path)):
+                if sc.compute is not None and sc.compute.not_ready_share is not None:
+                    shares.append(float(sc.compute.not_ready_share))
+        share = sum(shares) / len(shares) if shares else None
+        levels.append((median, share))
+        print(f"    median {median:6.0f} s: " + ("no scored trials" if share is None else
+                                                 f"{share:5.1%} not ready (n = {len(shares)})"))
+    median = pick_spread(levels, band)
+    if median is None:
+        problems.append(f"p512: no level's not-ready share lies in {band}; change "
+                        f"p512.cycle_factors and run pilot3 again")
+        return None
+    sigma = float(s.get("p512.sigma"))
+    share, factor = float(s.get("p512.straggler_share")), float(s.get("p512.straggler_factor"))
+    print(f"    -> spread: median {median:.0f} s, sigma {sigma:g}; stragglers: the same with "
+          f"{share:.0%} of devices at {factor:g}x")
+    return (f"{{ none = [0.0, 0.0, 0.0, 1.0], spread = [{median:.1f}, {sigma}, 0.0, 1.0], "
+            f"stragglers = [{median:.1f}, {sigma}, {share}, {factor}] }}")
+
+
 #: The trial-CSV columns `report quick` sets beside the recorded run's.
 REPRO_COLUMNS = ("final_accuracy", "final_auc", "update_yield", "round_close_rate_kmin1",
                  "rounds_closed", "pass1_contacts_mean", "mission_duration_s_mean")
@@ -2152,7 +2217,11 @@ def cmd_report(stage: str, s: Settings, jobs: List[Job],
             if j.study == "p511c":
                 print(f"    {j.name}: {'written' if (REPO / j.out).exists() else 'not yet'} "
                       f"({j.out})")
-        print("\n  set [s515] harsher_amp_db, lossier_n_pl and [s511c] knee_s in params.toml")
+        levels = p512_levels(s, jobs, problems)
+        if levels is not None:
+            outputs["train_levels"] = levels
+        print("\n  set [s515] harsher_amp_db, lossier_n_pl and [s511c] knee_s in params.toml "
+              "by hand; --apply writes 5.12's levels")
     elif stage == "quick":
         return report_quick(s, jobs)
     elif stage in RL_STAGES:
@@ -2182,7 +2251,7 @@ def cmd_report(stage: str, s: Settings, jobs: List[Job],
             print(f"{key} = {_inline(per_n)}")
     if apply_to is None:
         return 0
-    if stage not in ("ttl", "knee", "sstar"):
+    if stage not in ("ttl", "knee", "sstar", "pilot3"):
         print(f"\n--apply: stage {stage}'s values are a reading, not a rule; set them by hand")
         return 1
     unfinished = [j.name for j in jobs if not j.blocked and j.alias_of is None and not done(j)]
@@ -2675,8 +2744,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                    help="Run with uncommitted changes under hermes/ or experiments/.")
     g.add_argument("--show-commands", action="store_true", help="plan: print each command.")
     g.add_argument("--apply", action="store_true",
-                   help="report (ttl, knee, sstar): write the pilot's outputs into the "
-                        "params file, once every job is finished and the report is clean.")
+                   help="report (ttl, knee, sstar, pilot3): write the pilot's outputs into "
+                        "the params file, once every job is finished and the report is clean.")
     g.add_argument("--rescore", action="store_true",
                    help="score: score every file again, current or not.")
     g.add_argument("--compare-only", action="store_true",

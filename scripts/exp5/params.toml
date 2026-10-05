@@ -97,6 +97,8 @@ session_ttl_s = { "6" = 36.0, "12" = 34.0, "18" = 34.0, "24" = 23.0 }
 # stress_meas_s = { "6" = 0.0 }
 # From stage knee, by [score]'s pilot_tau rule: the primary accuracy threshold.
 # tau           = 0.70
+# From stage pilot3 (p512's rule): Study 5.12's training-time levels.
+# train_levels  = { none = [0.0, 0.0, 0.0, 1.0], spread = [60.0, 0.5, 0.0, 1.0], stragglers = [60.0, 0.5, 0.2, 5.0] }
 
 # --------------------------------------------------------------------------
 # Stage ttl: the session-TTL pilot (fit_time_probe.py at each N, with as many
@@ -250,9 +252,10 @@ seeds = [0, 1, 2, 3, 4]
 # Chen's settings (decided 5 Oct 2026: E3 reproduces a published method): lr 5e-4,
 # epsilon from 1.0. "pair" would be the pair learner's defaults (lr 1e-3, epsilon 0.3 to 0.05).
 settings = "chen"
-# UNSET until decided: E3's gamma (Chen's own is not recorded in the repository;
-# R16 asks for it). rl-e3 stays blocked until it is set.
-# gamma = 0.9
+# E3's gamma: Chen's own, the default of his published code (decided 5 Oct 2026;
+# github.com/Cirrick/Multi_UAV_Data_Harvesting, common/arguments.py: --gamma 0.99,
+# beside the lr 5e-4 and epsilon from 1.0 above; no training script overrides it).
+gamma = 0.99
 
 [rl.s57]                      # Study 5.7's scores, at gamma_star
 seeds = [0, 1, 2, 3, 4]       # F-hand and the dwell and cov ablations
@@ -287,8 +290,10 @@ relaxed_factor = 2.0          # 5.3's third budget (the build plan's 30, 60, 120
 [s51]                         # aggregation with age: rules on a fixed route
 rules = ["agg:plain", "agg:cutoff", "agg:cutoff+fedprox", "agg:fedbuff", "agg:asynchfl"]
 # agg:seq is out: it needs in-session training, a protocol change (decided 5 Oct 2026)
-# UNSET: FedProx's proximal coefficient rho for agg:cutoff+fedprox.
-# fedprox_rho = 0.01
+# FedProx's proximal coefficient rho for agg:cutoff+fedprox (decided 5 Oct 2026): a
+# standard value from the middle of the FedProx paper's grid {0.001, 0.01, 0.1, 1};
+# 5.1's data are IID, where FedProx stays close to plain averaging.
+fedprox_rho = 0.01
 budgets = ["knee", "stress"]
 pass_2 = ["unbudgeted", "budgeted"]   # budgeted Pass 2 on H1's route only (plan arms refuse it)
 routes = ["H1", "F"]
@@ -333,8 +338,9 @@ payload_bytes = 1000000
 
 [s56]                         # test (c): when learning helps, at the 5.6 cells' periods
 arms = ["FQ", "FX", "E3"]
-# UNSET: trials per cell, fixed when 5.6 is re-costed (Run Guide 2.8's N_56).
-# n_trials = 40
+# Trials per cell (Run Guide 2.8's N_56; decided 5 Oct 2026): 40, as 5.5's stack
+# check and 5.7 fly on the same N = 12 cells. 6 cells x 3 arms: 720 trials.
+n_trials = 40
 N = 12
 payload_bytes = 1000000
 
@@ -380,6 +386,24 @@ amps_db = [8.0, 11.0, 14.0, 17.0]
 n_trials = 10
 N = 6
 
+[p512]                        # 5.12's training-time levels (decided 5 Oct 2026: set by this pilot)
+# H1 at the N = 6 knee at 1 MB, with the median fit time (simulated s) at each
+# multiple of the mission cycle (the knee budget plus the ferry's 30 s turnaround)
+# and a fixed log-normal sigma. `report pilot3` picks "spread": the level whose
+# mean share of Pass-1 contacts that found no update ready lies in not_ready_band,
+# the one nearest the band's middle if several. "stragglers" is spread with
+# straggler_share of the devices at straggler_factor; "none" is no training time.
+# `report pilot3 --apply` writes the three as pilot_outputs.train_levels.
+N = 6
+cycle_factors = [0.25, 0.5, 1.0, 2.0]
+turnaround_s = 30.0
+sigma = 0.5
+not_ready_band = [0.1, 0.3]
+straggler_share = 0.2
+straggler_factor = 5.0
+n_trials = 10
+payload_bytes = 1000000
+
 [p511c]                       # 5.11 (c): FerrySim budget sweeps at N = 24, 48, 96 (the scale family)
 cells = ["scl-n24-350", "scl-n48-680", "scl-n96-1330"]
 budgets_s = { "scl-n24-350" = [175, 262, 350, 437, 525, 700], "scl-n48-680" = [340, 510, 680, 850, 1020, 1360], "scl-n96-1330" = [665, 1000, 1330, 1660, 1995, 2660] }
@@ -391,9 +415,9 @@ workers = 8
 arms = ["F", "FX", "H1", "D5", "D4"]
 payloads = ["measured", 1000000, 10000000]
 model_archs = ["ciciot"]      # add "high_performance" for the larger model
-# UNSET: the training-time levels (the build plan: "set by a pilot"). Each is
+# The training-time levels are pilot_outputs.train_levels, set by pilot3's p512
+# (the build plan: "set by a pilot"; decided 5 Oct 2026). Each is
 # [median_s, sigma, straggler_share, straggler_factor]; "none" is median 0.
-# train_levels = { none = [0.0, 0.0, 0.0, 1.0], spread = [30.0, 0.5, 0.0, 1.0], stragglers = [30.0, 0.5, 0.2, 5.0] }
 budget = "knee"               # knee_meas at the measured payload
 N = 6
 n_trials = 20
