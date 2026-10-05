@@ -455,7 +455,7 @@ exp5 score batch1 --rescore
 
 ## 11. Status and open decisions
 
-*As of 5 Oct 2026.*
+*As of 5 Oct 2026.* What each stage still waits on, and the steps left before the sweep, are in [Experiment_5_Readiness.md](Experiment_5_Readiness.md).
 
 - **Done:**
   - the TTL pilot: `session_ttl_s` 36, 34, 34 and 23 s at N = 6, 12, 18 and 24;
