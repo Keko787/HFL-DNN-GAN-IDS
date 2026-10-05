@@ -1,0 +1,190 @@
+{
+ "stage": "knee",
+ "archive": "knee_traces.tar.gz",
+ "sha256": "a94ed05dc42998afef0330ad5dc6eb72c0cb1d0ea8e46d5d934d14fa17254890",
+ "bytes": 8302395,
+ "created": "2026-10-05T18:31:16",
+ "commit": "ac37a73bf96d3de909a39c307d23bb74931ed411",
+ "folders": [
+  {
+   "path": "knee/knee/n12_1mb_b0060_traces",
+   "trials": 20,
+   "files": 580,
+   "bytes": 1216647
+  },
+  {
+   "path": "knee/knee/n12_1mb_b0090_traces",
+   "trials": 20,
+   "files": 580,
+   "bytes": 1456903
+  },
+  {
+   "path": "knee/knee/n12_1mb_b0120_traces",
+   "trials": 20,
+   "files": 580,
+   "bytes": 1533862
+  },
+  {
+   "path": "knee/knee/n12_1mb_b0150_traces",
+   "trials": 20,
+   "files": 580,
+   "bytes": 1603483
+  },
+  {
+   "path": "knee/knee/n12_1mb_b0180_traces",
+   "trials": 20,
+   "files": 580,
+   "bytes": 1653118
+  },
+  {
+   "path": "knee/knee/n12_1mb_b0240_traces",
+   "trials": 20,
+   "files": 580,
+   "bytes": 1686140
+  },
+  {
+   "path": "knee/knee/n18_1mb_b0120_traces",
+   "trials": 20,
+   "files": 820,
+   "bytes": 1950372
+  },
+  {
+   "path": "knee/knee/n18_1mb_b0180_traces",
+   "trials": 20,
+   "files": 820,
+   "bytes": 2134994
+  },
+  {
+   "path": "knee/knee/n18_1mb_b0240_traces",
+   "trials": 20,
+   "files": 820,
+   "bytes": 2198916
+  },
+  {
+   "path": "knee/knee/n18_1mb_b0300_traces",
+   "trials": 20,
+   "files": 820,
+   "bytes": 2206166
+  },
+  {
+   "path": "knee/knee/n18_1mb_b0360_traces",
+   "trials": 20,
+   "files": 820,
+   "bytes": 2206172
+  },
+  {
+   "path": "knee/knee/n18_1mb_b0450_traces",
+   "trials": 20,
+   "files": 820,
+   "bytes": 2206136
+  },
+  {
+   "path": "knee/knee/n24_1mb_b0175_traces",
+   "trials": 20,
+   "files": 1060,
+   "bytes": 2547617
+  },
+  {
+   "path": "knee/knee/n24_1mb_b0262_traces",
+   "trials": 20,
+   "files": 1060,
+   "bytes": 2704379
+  },
+  {
+   "path": "knee/knee/n24_1mb_b0350_traces",
+   "trials": 20,
+   "files": 1060,
+   "bytes": 2707455
+  },
+  {
+   "path": "knee/knee/n24_1mb_b0437_traces",
+   "trials": 20,
+   "files": 1060,
+   "bytes": 2707406
+  },
+  {
+   "path": "knee/knee/n24_1mb_b0525_traces",
+   "trials": 20,
+   "files": 1060,
+   "bytes": 2708150
+  },
+  {
+   "path": "knee/knee/n24_1mb_b0700_traces",
+   "trials": 20,
+   "files": 1060,
+   "bytes": 2707820
+  },
+  {
+   "path": "knee/knee/n6_1mb_b0030_traces",
+   "trials": 20,
+   "files": 340,
+   "bytes": 754408
+  },
+  {
+   "path": "knee/knee/n6_1mb_b0045_traces",
+   "trials": 20,
+   "files": 340,
+   "bytes": 841327
+  },
+  {
+   "path": "knee/knee/n6_1mb_b0060_traces",
+   "trials": 20,
+   "files": 340,
+   "bytes": 870218
+  },
+  {
+   "path": "knee/knee/n6_1mb_b0090_traces",
+   "trials": 20,
+   "files": 340,
+   "bytes": 995976
+  },
+  {
+   "path": "knee/knee/n6_1mb_b0120_traces",
+   "trials": 20,
+   "files": 340,
+   "bytes": 1067591
+  },
+  {
+   "path": "knee/knee/n6_1mb_b0150_traces",
+   "trials": 20,
+   "files": 340,
+   "bytes": 1084352
+  },
+  {
+   "path": "knee/knee/n6_meas_b0030_traces",
+   "trials": 20,
+   "files": 340,
+   "bytes": 814852
+  },
+  {
+   "path": "knee/knee/n6_meas_b0045_traces",
+   "trials": 20,
+   "files": 340,
+   "bytes": 871529
+  },
+  {
+   "path": "knee/knee/n6_meas_b0060_traces",
+   "trials": 20,
+   "files": 340,
+   "bytes": 891798
+  },
+  {
+   "path": "knee/knee/n6_meas_b0090_traces",
+   "trials": 20,
+   "files": 340,
+   "bytes": 1018697
+  },
+  {
+   "path": "knee/knee/n6_meas_b0120_traces",
+   "trials": 20,
+   "files": 340,
+   "bytes": 1071640
+  },
+  {
+   "path": "knee/knee/n6_meas_b0150_traces",
+   "trials": 20,
+   "files": 340,
+   "bytes": 1085183
+  }
+ ]
+}
