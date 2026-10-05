@@ -277,6 +277,9 @@ class Builder:
             "--n-trials", str(n_trials), "--base-seed", _fmt(seed),
             "--mission-budget-s", _fmt(budget_s), "--session-ttl-s", _fmt(ttl),
         ] + COMMON_FLAGS
+        contact = s.get("campaign.contact_regime", None)
+        if contact and "--contact-regime" not in extra:
+            args += ["--contact-regime", str(contact)]
         if payload != "measured":
             args += ["--payload-bytes", _fmt(payload)]
         if k > 1:

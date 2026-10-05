@@ -24,7 +24,14 @@
 # studies' arms paired.
 base_seed = 20261005
 n_missions = 4                # the headline's mission count (build plan, Experiments)
-regime = "jittery"
+regime = "jittery"            # the network (backhaul) regime: --regime
+# The contact channel's regime (--contact-regime). The runner's default is
+# clean whatever --regime says (D2). Decided 5 Oct 2026: the whole campaign,
+# the knee included, flies the jittery contact channel (interference 5 dB, P_c
+# 60 s), as the learned score's FerrySim cells do (Phase 5 decision 3), so the
+# re-pin reads a knee measured on the cells' own channel; a study that sweeps
+# the channel (5.6's clean control, 5.15) sets it per job.
+contact_regime = "jittery"
 # 0 = the fixed 100 m realism field (the recorded behaviour; density rises with N).
 # 6 = grow the field with N at N = 6's density (--h1-field-ref-n 6; 5.9 and 5.11).
 # One value for the whole campaign: the knee and S* must be measured on the
