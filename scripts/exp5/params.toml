@@ -89,14 +89,20 @@ OPENBLAS_NUM_THREADS = "1"
 # From stage ttl, 5 Oct 2026 (results/exp5/ttl): 2 x p95 fit time, rounded up. The p95 is the
 # first fit (TensorFlow's tracing, ~17 s with 36 processes at once); later fits ~1.6 s.
 session_ttl_s = { "6" = 36.0, "12" = 34.0, "18" = 34.0, "24" = 23.0 }
-# knee_s        = { "6" = 0.0, "12" = 0.0, "18" = 0.0, "24" = 0.0 }
-# stress_s      = { "6" = 0.0, "12" = 0.0, "18" = 0.0, "24" = 0.0 }
+# From stage knee, 5 Oct 2026 (results/exp5/knee; 600 trials, the jittery contact
+# channel), by the [knee] rule. N = 6's knee (1 MB) is the grid's largest budget,
+# 150 s (update yield 3.26 at 120 s, 3.46 at 150 s), so the report warned that
+# the plateau may lie beyond it; accepted as is, without extending the grid
+# (decided 5 Oct 2026), and written by hand since --apply refuses on a warning.
+knee_s = { "6" = 150.0, "12" = 180.0, "18" = 240.0, "24" = 262.0 }
+stress_s = { "6" = 75.0, "12" = 90.0, "18" = 120.0, "24" = 130.0 }
 # s_star        = { "6" = 2, "12" = 2, "18" = 2, "24" = 2 }
 # At the measured payload (18.8 KB), for Study 5.4:
-# knee_meas_s   = { "6" = 0.0 }
-# stress_meas_s = { "6" = 0.0 }
-# From stage knee, by [score]'s pilot_tau rule: the primary accuracy threshold.
-# tau           = 0.70
+knee_meas_s = { "6" = 120.0 }
+stress_meas_s = { "6" = 60.0 }
+# From stage knee, by [score]'s pilot_tau rule: the primary accuracy threshold
+# (by N at the knee: 6 -> 0.82, 12 -> 0.72, 18 and 24 -> 0.71; the smallest).
+tau = 0.71
 # From stage pilot3 (p512's rule): Study 5.12's training-time levels.
 # train_levels  = { none = [0.0, 0.0, 0.0, 1.0], spread = [60.0, 0.5, 0.0, 1.0], stragglers = [60.0, 0.5, 0.2, 5.0] }
 
