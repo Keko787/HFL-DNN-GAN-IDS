@@ -1,0 +1,7 @@
+  N =  6: fit p50 1.83 s, p95 17.99 s, max 18.23 s over 36 workers -> TTL 36 s
+  N = 12: fit p50 1.46 s, p95 16.74 s, max 17.64 s over 36 workers -> TTL 34 s
+  N = 18: fit p50 1.21 s, p95 16.64 s, max 17.12 s over 36 workers -> TTL 34 s
+  N = 24: fit p50 0.69 s, p95 11.14 s, max 12.40 s over 24 workers -> TTL 23 s
+
+[pilot_outputs]
+session_ttl_s = { "6" = 36.0, "12" = 34.0, "18" = 34.0, "24" = 23.0 }
