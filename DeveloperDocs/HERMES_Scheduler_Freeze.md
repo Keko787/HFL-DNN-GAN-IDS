@@ -2068,6 +2068,25 @@ and the six deliberate edits.
    the sweep and its evaluation, the committed checkpoints, Study 5.5's verdict, the stack trials.
 8. *R14's candidate amendment.*
 
+## 5m. Amendment 11 — a trial that fails before its shutdown shuts its processes down (2026-10-05)
+
+Resolution R14 (§5l) found a driver leak and left its fix to the user as a candidate amendment;
+the user accepted it on 2026-10-05 with the Exp 5 campaign's other decisions. `Exp4Driver._run_topology`
+shut the topology down only on the path that reaches its own `shutdown_all`. A raise before that
+point, chiefly from `start_all` when a mule or a device fails at startup, went straight to the
+`finally`, whose `orch.cleanup()` only removes the tmpdir, so every process `start_all` had
+launched kept running, the cluster among them, and could hold its port into the next trial.
+
+**The change.** The `finally` now calls `shutdown_all(cleanup_tmpdir=False)` when the trial raised
+before its own shutdown, then cleans up as before. A shutdown that fails there is logged and never
+replaces the trial's error, which the runner still records as `status=error`. A trial that
+reaches its shutdown is shut down once, as recorded.
+
+**What it changes.** Only the error path: no row, event or trace of a trial that starts changes,
+and the goldens and the three test baselines are unaffected. No recorded run and no Exp 5 pilot
+took this path with a leak that changed a result; a leaked process could only have slowed or
+port-blocked a later trial. Tests: `tests/unit/test_exp5_r14_startup_shutdown.py`.
+
 ## 6. Unfreezing
 
 Amend this document with the reason, the changed files, and which recorded sweeps are invalidated.

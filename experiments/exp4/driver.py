@@ -2499,6 +2499,7 @@ class Exp4Driver:
         else:
             orch = MultiProcessOrchestrator(topo, capture_output=True)
         captured = False
+        shut_down = False
         try:
             if probe is not None:
                 probe.start()
@@ -2512,6 +2513,7 @@ class Exp4Driver:
             orch.shutdown_all(
                 timeout=self.shutdown_timeout_s, cleanup_tmpdir=False,
             )
+            shut_down = True
             # Capture BEFORE the timeout check below, so a timed-out trial keeps
             # its trace too — those are the runs whose events are most worth
             # having, and they are exactly the ones that would otherwise raise
@@ -2634,6 +2636,16 @@ class Exp4Driver:
                 except Exception:  # noqa: BLE001 - never mask the trial's own error
                     log.warning("exp4 trial cell=%s: footprint probe did not stop cleanly",
                                 cell.cell_id, exc_info=True)
+            if not shut_down:
+                # Scheduler Freeze Amendment 11 (resolution R14): a raise before the
+                # shutdown above (a mule or a device that fails at startup, say) used
+                # to leave every process start_all had launched running, the cluster
+                # among them, since cleanup only removes the tmpdir.
+                try:
+                    orch.shutdown_all(timeout=self.shutdown_timeout_s, cleanup_tmpdir=False)
+                except Exception:  # noqa: BLE001 - never mask the trial's own error
+                    log.warning("exp4 trial cell=%s: shutdown after a failed trial did not "
+                                "complete", cell.cell_id, exc_info=True)
             orch.cleanup()
 
     def _multi_mule_provenance(
