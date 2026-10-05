@@ -7,3 +7,9 @@ tmp/
 datasets/
 .venv*/
 results/exp5/.launcher.lock
+# Exp 5's kept event traces stay out of git (decided 5 Oct 2026): `exp5 pack <stage>`
+# archives them; archives/SHA256SUMS and the listings are committed, the archives
+# go to a release.
+results/exp5/**/*_traces/
+results/exp5/archives/*.tar.gz
+results/exp5/archives/*.part

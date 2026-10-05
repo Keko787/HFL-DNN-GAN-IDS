@@ -19,6 +19,9 @@ with the right interpreter):
     score     a batch's trials through the trace scorer, then each study's
               paired comparisons by params.toml [score] (scoring.py), written
               to <out_root>/scores/<stage dir>/ (index.md first)
+    pack      a stage's kept traces (which git leaves out) into one archive,
+              <out_root>/archives/<stage dir>_traces.tar.gz, its SHA-256 in
+              archives/SHA256SUMS; unpack checks it and puts them back
     campaign  every stage in order, skipping those done; it stops before a stage
               whose settings are unset, after a stage whose report a person
               reads (the pilots, the calibration, Study 5.5's verdict), and at
@@ -1813,6 +1816,46 @@ def _round_to(x: float, step: float) -> float:
     return max(step, step * round(x / step))
 
 
+def trial_best_accuracy(traces: Path) -> Dict[int, float]:
+    """trial_index -> the highest accuracy any evaluation after the first (the
+    initial model) reached, from each kept trial's cluster trace: a trial
+    reaches tau exactly when this is at least tau, as the scorer counts it."""
+    out: Dict[int, float] = {}
+    if not traces.is_dir():
+        return out
+    for trial in traces.iterdir():
+        m = re.search(r"__t(\d+)__s", trial.name)
+        log = next(trial.glob("cluster-*.jsonl"), None) if trial.is_dir() else None
+        if m is None or log is None:
+            continue
+        best = None
+        for line in log.read_text(encoding="utf-8").splitlines():
+            if '"model_eval"' not in line:
+                continue
+            e = json.loads(line)
+            if int(e.get("cluster_round", 0)) == 0:
+                continue
+            best = float(e["accuracy"]) if best is None else max(best, float(e["accuracy"]))
+        if best is not None:
+            out[int(m.group(1))] = best
+    return out
+
+
+def pilot_tau(best_by_n: Dict[int, List[float]], share: float, step: float
+              ) -> Tuple[Optional[float], Dict[int, float]]:
+    """The largest tau on the grid (multiples of ``step``) that at least ``share``
+    of the trials reach, per N, and the smallest of those over N: the tau every
+    N's knee reaches in at least that share of its trials."""
+    per_n: Dict[int, float] = {}
+    for n, values in best_by_n.items():
+        if not values:
+            continue
+        k = math.ceil(share * len(values))              # trials that must reach tau
+        kth = sorted(values, reverse=True)[k - 1]       # tau <= this keeps k of them
+        per_n[n] = round(math.floor(round(kth / step, 9)) * step, 6)
+    return (min(per_n.values()) if per_n else None), per_n
+
+
 #: The trial-CSV columns `report quick` sets beside the recorded run's.
 REPRO_COLUMNS = ("final_accuracy", "final_auc", "update_yield", "round_close_rate_kmin1",
                  "rounds_closed", "pass1_contacts_mean", "mission_duration_s_mean")
@@ -1894,8 +1937,11 @@ def report_quick(s: Settings, jobs: List[Job], recorded_root: str = "results/exp
     return 0
 
 
-def _inline(per_n: Dict[str, Any]) -> str:
-    """A TOML inline table, as params.toml writes them ({ "6" = 90.0, ... })."""
+def _inline(per_n: Any) -> str:
+    """A pilot output as params.toml writes it: an inline table per N
+    ({ "6" = 90.0, ... }), or one value (tau = 0.7)."""
+    if not isinstance(per_n, dict):
+        return f"{per_n:g}" if isinstance(per_n, float) else str(per_n)
     return "{ " + ", ".join(
         f'"{k}" = {v:.1f}' if isinstance(v, float) else f'"{k}" = {v}'
         for k, v in per_n.items()) + " }"
@@ -1948,7 +1994,7 @@ def cmd_report(stage: str, s: Settings, jobs: List[Job],
     """A finished pilot's pilot_outputs lines for params.toml, by the pre-registered
     rules; with ``apply_to`` (report --apply), written into that file."""
     out: Dict[str, Any] = {"stage": stage}
-    outputs: Dict[str, Dict[str, Any]] = collections.OrderedDict()   # key -> {N: value}
+    outputs: Dict[str, Any] = collections.OrderedDict()   # key -> {N: value}, or a value
     problems: List[str] = []
     if stage == "ttl":
         ttl = {}
@@ -1969,13 +2015,16 @@ def cmd_report(stage: str, s: Settings, jobs: List[Job],
         metric = str(s.get("knee.metric"))
         share = float(s.get("knee.plateau_share"))
         cells: Dict[Tuple[int, str], Dict[float, List[float]]] = collections.OrderedDict()
-        # Beside the knee: the final accuracy, and the share of trials that end at
-        # or above the scoring plan's tau (time to tau is blank in a trial that
-        # never gets there, so this says how far the studies' primary metric
-        # will reach at these budgets and this mission count).
+        # Beside the knee: the final accuracy, and how many trials reach each fixed
+        # tau of the scoring plan within the trial (the highest accuracy after any
+        # round, from the kept traces: the scorer's own "reached"). Time to tau is
+        # blank in a trial that never gets there. The knees' highest accuracies
+        # also give the pilot's tau ([score] pilot_tau_*).
         accuracy: Dict[Tuple[int, str, float], List[float]] = {}
+        reached: Dict[Tuple[int, str, float], List[float]] = {}
         taus = s.get("score.tau", [0.82])
-        tau = float(taus[0] if isinstance(taus, list) else taus)
+        fixed_taus = [float(t) for t in (taus if isinstance(taus, list) else [taus])
+                      if t != "pilot"]
         not_ok = 0
         for j in jobs:
             path = REPO / j.out
@@ -1986,6 +2035,8 @@ def cmd_report(stage: str, s: Settings, jobs: List[Job],
                        if "--payload-bytes" in j.args else "measured")
             values = cells.setdefault((j.n, payload), {}).setdefault(budget, [])
             accs = accuracy.setdefault((j.n, payload, budget), [])
+            highs = reached.setdefault((j.n, payload, budget), [])
+            best = trial_best_accuracy(REPO / (j.out[:-4] + "_traces"))
             with path.open(newline="", encoding="utf-8") as f:
                 for row in csv.DictReader(f):
                     if row.get("status", "ok") != "ok":
@@ -1999,6 +2050,9 @@ def cmd_report(stage: str, s: Settings, jobs: List[Job],
                         accs.append(float(row["final_accuracy"]))
                     except (KeyError, ValueError):
                         pass
+                    t = int(row.get("trial_index", -1))
+                    if t in best:
+                        highs.append(best[t])
         knees: Dict[str, Dict[str, float]] = {}
         for (n, payload), by_budget in cells.items():
             means = {b: sum(v) / len(v) for b, v in sorted(by_budget.items()) if v}
@@ -2021,9 +2075,10 @@ def cmd_report(stage: str, s: Settings, jobs: List[Job],
                 half = 1.96 * sd / math.sqrt(len(v))
                 mark = "  <- knee" if b == knee else ""
                 accs = accuracy.get((n, payload, b), [])
-                acc = (f"; final accuracy {sum(accs) / len(accs):.3f}, "
-                       f"{sum(1 for x in accs if x >= tau)}/{len(accs)} at tau {tau:g}"
-                       if accs else "")
+                highs = reached.get((n, payload, b), [])
+                acc = f"; final accuracy {sum(accs) / len(accs):.3f}" if accs else ""
+                for t in fixed_taus if highs else []:
+                    acc += f", {sum(1 for x in highs if x >= t)}/{len(highs)} reach {t:g}"
                 print(f"    {b:7.0f} s   {m:6.3f} ± {half:5.3f}  (n = {len(v)}, served share "
                       f"{m / n:5.1%}{acc}){mark}")
             budgets = sorted(by_budget)
@@ -2043,6 +2098,27 @@ def cmd_report(stage: str, s: Settings, jobs: List[Job],
                          ("meas", "knee_meas_s"), ("meas_stress", "stress_meas_s")):
             if tag in knees:
                 outputs[key] = {k: float(v) for k, v in knees[tag].items()}
+        # The pilot's tau, by the rule in [score] (decided 5 Oct 2026, before the
+        # knee pilot finished): the largest tau on the grid that at least `share`
+        # of H1's trials reach at each N's knee at 1 MB, the smallest over N.
+        tau_share = float(s.get("score.pilot_tau_share", 0.8))
+        tau_step = float(s.get("score.pilot_tau_step", 0.01))
+        at_knee = {n: reached.get((n, p, float(knees["1mb"][str(n)])), [])
+                   for (n, p) in cells if p == "1000000" and str(n) in knees.get("1mb", {})}
+        tau, per_n = pilot_tau(at_knee, tau_share, tau_step)
+        if at_knee:
+            print(f"\n  the pilot's tau: the largest tau (steps of {tau_step:g}) that at least "
+                  f"{tau_share:.0%} of H1's trials reach at each N's knee, the smallest over N")
+            for n, vals in at_knee.items():
+                print(f"    N = {n:2d}: {len(vals):2d} trials with traces -> "
+                      + (f"tau {per_n[n]:.2f}" if n in per_n else "no traces"))
+            missing = [n for n, vals in at_knee.items() if not vals]
+            if missing:
+                problems.append(f"no kept traces at the knee for N = {missing}: the pilot's "
+                                f"tau needs every N")
+            elif tau is not None:
+                print(f"    -> tau = {tau:.2f}")
+                outputs["tau"] = tau
     elif stage == "sstar":
         stars = {}
         for j in jobs:
@@ -2220,6 +2296,113 @@ def cmd_score(stage: str, s: Settings, text: str, jobs: List[Job], a: argparse.N
     path = SC.write_index(out_dir, stage, index, tools, plan)
     print(f"\nscores in {out_dir} (start at {path.name})")
     return rc
+
+
+# --------------------------------------------------------------------------- #
+# Trace archives: the kept traces stay out of git (decided 5 Oct 2026); each
+# stage's go into one archive whose checksum is committed, for a release
+# --------------------------------------------------------------------------- #
+
+ARCHIVES = "archives"          # under the out root
+SUMS = "SHA256SUMS"
+
+
+def archive_name(stage: str) -> str:
+    return STAGE_DIR[stage].replace("/", "_") + "_traces.tar.gz"
+
+
+def _sha256(path: Path) -> str:
+    h = hashlib.sha256()
+    with path.open("rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _read_sums(path: Path) -> Dict[str, str]:
+    if not path.exists():
+        return {}
+    sums = {}
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if line.strip():
+            digest, name = line.split(None, 1)
+            sums[name.strip().lstrip("*")] = digest
+    return sums
+
+
+def cmd_pack(stage: str, a: argparse.Namespace) -> int:
+    """Every kept-trace folder of a stage into <out_root>/archives/<stage
+    dir>_traces.tar.gz, its SHA-256 into archives/SHA256SUMS (committed) and a
+    listing beside it (folders, trials, files, bytes, the commit)."""
+    import tarfile
+    root = REPO / a.out_root
+    src = root / STAGE_DIR[stage]
+    lock = root / ".launcher.lock"
+    if lock.exists():
+        try:
+            held = json.loads(lock.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            held = {}
+        if held.get("stage") == stage:
+            sys.exit(f"stage {stage} is running (pid {held.get('pid')}): pack it once it ends")
+    dirs = sorted(p for p in src.rglob("*_traces") if p.is_dir()) if src.is_dir() else []
+    if not dirs:
+        print(f"{stage}: no kept traces under {src}")
+        return 0
+    out = root / ARCHIVES
+    out.mkdir(parents=True, exist_ok=True)
+    name = archive_name(stage)
+    part = out / (name + ".part")
+    listing = []
+    with tarfile.open(part, "w:gz", compresslevel=9) as tar:
+        for d in dirs:
+            files = [f for f in d.rglob("*") if f.is_file()]
+            listing.append({"path": d.relative_to(root).as_posix(),
+                            "trials": sum(1 for x in d.iterdir() if x.is_dir()),
+                            "files": len(files), "bytes": sum(f.stat().st_size for f in files)})
+            tar.add(d, arcname=d.relative_to(root).as_posix())
+    part.replace(out / name)
+    digest = _sha256(out / name)
+    sums = _read_sums(out / SUMS)
+    sums[name] = digest
+    (out / SUMS).write_text("".join(f"{v}  {k}\n" for k, v in sorted(sums.items())),
+                            encoding="utf-8")
+    size = (out / name).stat().st_size
+    raw = sum(x["bytes"] for x in listing)
+    (out / (name[: -len(".tar.gz")] + ".json")).write_text(json.dumps({
+        "stage": stage, "archive": name, "sha256": digest, "bytes": size,
+        "created": dt.datetime.now().isoformat(timespec="seconds"),
+        "commit": git("rev-parse", "HEAD").strip(), "folders": listing}, indent=1),
+        encoding="utf-8")
+    print(f"{stage}: {len(dirs)} trace folders, {sum(x['trials'] for x in listing)} trials, "
+          f"{raw / 1e6:.1f} MB -> {out / name} ({size / 1e6:.1f} MB), sha256 {digest[:16]}...")
+    return 0
+
+
+def cmd_unpack(stage: str, a: argparse.Namespace) -> int:
+    """A stage's trace archive back into place, after checking its SHA-256
+    against archives/SHA256SUMS."""
+    import tarfile
+    root = REPO / a.out_root
+    arch = root / ARCHIVES / archive_name(stage)
+    if not arch.exists():
+        print(f"{stage}: {arch} is not here (download it from the release into "
+              f"{arch.parent})")
+        return 1
+    want = _read_sums(root / ARCHIVES / SUMS).get(arch.name)
+    if want is None:
+        sys.exit(f"{arch.name} has no checksum in {ARCHIVES}/{SUMS}")
+    if _sha256(arch) != want:
+        sys.exit(f"{arch.name} does not match its recorded SHA-256: a damaged or other file")
+    prefix = STAGE_DIR[stage] + "/"
+    with tarfile.open(arch, "r:gz") as tar:
+        bad = [m.name for m in tar.getmembers() if not m.name.startswith(prefix)]
+        if bad:
+            sys.exit(f"{arch.name} holds files outside {prefix}: {bad[0]}")
+        tar.extractall(root, filter="data")
+        n = sum(1 for m in tar.getmembers() if m.isfile())
+    print(f"{stage}: {n} trace files into {root / STAGE_DIR[stage]}")
+    return 0
 
 
 # --------------------------------------------------------------------------- #
@@ -2411,7 +2594,7 @@ def cmd_check(s: Settings, a: argparse.Namespace) -> int:
     probe = root if root.exists() else REPO
     free = shutil.disk_usage(probe).free / 2**30
     line(True if free > 20 else None, "disk", f"{free:.0f} GB free at {probe} "
-                                              f"(the whole campaign keeps about 1.5 GB of traces)")
+                                              f"(the whole campaign keeps about 1 GB of traces)")
     lock = root / ".launcher.lock"
     if lock.exists():
         try:
@@ -2436,7 +2619,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                                  formatter_class=argparse.RawDescriptionHelpFormatter,
                                  epilog=__doc__.split("\n\n", 1)[1])
     ap.add_argument("command", choices=("check", "plan", "validate", "run", "status", "report",
-                                        "score", "campaign"))
+                                        "score", "pack", "unpack", "campaign"))
     groups = "; ".join(f"{k}: {' '.join(v)}" for k, v in GROUPS.items() if k != "all")
     ap.add_argument("stage", choices=STAGES + tuple(GROUPS), nargs="?", default=None,
                     metavar="stage",
@@ -2520,6 +2703,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         stages = tuple(st for st in stages if st in SCORED)
     rc = 0
     for stage in stages:
+        if a.command in ("pack", "unpack"):
+            rc |= (cmd_pack if a.command == "pack" else cmd_unpack)(stage, a)
+            continue
         if len(stages) > 1:
             print(f"\n=== {stage} ===")
         jobs = jobs_for(stage, s, a)

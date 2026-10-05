@@ -176,6 +176,61 @@ def test_report_apply_refuses_an_unfinished_pilot(tmp_path, capsys):
     assert p.read_text(encoding="utf-8") == L.PARAMS.read_text(encoding="utf-8-sig")
 
 
+def test_pilot_tau_is_the_largest_every_n_reaches_in_the_share():
+    tau, per_n = L.pilot_tau({6: [0.80] * 8 + [0.60, 0.65],      # 8 of 10 reach 0.80
+                              12: [0.7] * 8 + [0.50, 0.55],      # exactly 0.70: kept
+                              24: [0.7349] * 9 + [0.1]},         # floors to 0.73
+                             share=0.8, step=0.01)
+    assert per_n == {6: 0.8, 12: 0.7, 24: 0.73}
+    assert tau == 0.7
+    assert L.pilot_tau({6: []}, 0.8, 0.01) == (None, {})
+
+
+def _cluster_trace(d: Path, trial: int, accuracies):
+    t = d / f"N=6-x__H1__t{trial}__s{100 + trial}"
+    t.mkdir(parents=True)
+    lines = [json.dumps({"event": "model_eval", "cluster_round": r, "accuracy": acc})
+             for r, acc in enumerate(accuracies)]
+    lines.insert(1, json.dumps({"event": "round_closed", "cluster_round": 1}))
+    (t / "cluster-exp4-cluster.jsonl").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def test_trial_best_accuracy_skips_the_initial_model(tmp_path):
+    d = tmp_path / "x_traces"
+    _cluster_trace(d, 0, [0.95, 0.60, 0.72, 0.70])   # round 0 is the initial model
+    _cluster_trace(d, 3, [0.36, 0.81])
+    assert L.trial_best_accuracy(d) == {0: 0.72, 3: 0.81}
+    assert L.trial_best_accuracy(tmp_path / "absent") == {}
+
+
+def test_pack_and_unpack_round_trip(tmp_path, capsys):
+    a = _ns(out_root=str(tmp_path))
+    traces = tmp_path / "knee" / "knee" / "n6_1mb_b0090_traces"
+    _cluster_trace(traces, 0, [0.36, 0.7])
+    _cluster_trace(traces, 1, [0.36, 0.75])
+    (tmp_path / "knee" / "knee" / "n6_1mb_b0090.csv").write_text("x\n", encoding="utf-8")
+    assert L.cmd_pack("knee", a) == 0
+    arch = tmp_path / "archives" / "knee_traces.tar.gz"
+    sums = (tmp_path / "archives" / "SHA256SUMS").read_text(encoding="utf-8")
+    assert arch.exists() and "knee_traces.tar.gz" in sums
+    listing = json.loads((tmp_path / "archives" / "knee_traces.json").read_text("utf-8"))
+    assert listing["folders"][0]["trials"] == 2
+    import shutil
+    shutil.rmtree(traces)
+    assert L.cmd_unpack("knee", a) == 0
+    assert L.trial_best_accuracy(traces) == {0: 0.7, 1: 0.75}
+
+
+def test_unpack_refuses_a_damaged_archive(tmp_path):
+    a = _ns(out_root=str(tmp_path))
+    _cluster_trace(tmp_path / "knee" / "knee" / "c_traces", 0, [0.36, 0.7])
+    L.cmd_pack("knee", a)
+    arch = tmp_path / "archives" / "knee_traces.tar.gz"
+    arch.write_bytes(arch.read_bytes() + b"x")
+    with pytest.raises(SystemExit, match="SHA-256"):
+        L.cmd_unpack("knee", a)
+
+
 def test_report_quick_never_pairs_different_seeds(tmp_path):
     s = _filled_settings()
     root = str(tmp_path)

@@ -69,7 +69,7 @@ On a smaller machine, lower them with levers ([§6](#6-levers-changing-a-run-wit
 
 **Run every stage of a campaign on one machine.** A few planner values computed through `math.erfc` differ in the last bit between Windows builds, which can flip rare near-ties ([§9](#9-determinism-what-matches-across-machines)). Arms are compared only within one host. During a long stage, keep the machine awake and pause operating-system updates.
 
-**Disk:** the dataset takes 13.8 GB. The kept event traces take roughly 60–120 KB per trial, about 1.5 GB for the whole campaign.
+**Disk:** the dataset takes 13.8 GB. The kept event traces take roughly 60–120 KB per trial, about 1 GB in some 300,000 files for the whole campaign ([§8.1](#81-trace-archives)).
 
 ### 2.2 Python
 
@@ -156,6 +156,7 @@ exp5 <command> [stage or group] [options]
 | `status [stage]` | Jobs done and trials written. With no stage, one line per stage. |
 | `report <stage>` | A pilot's outputs by the pre-registered rules (`ttl`, `knee`, `sstar`). Also: what `pilot3` measured, the RL verdicts, and the reproduction check (`quick`). `--apply` writes a pilot's outputs into `params.toml`. |
 | `score <stage>` | The studies' paired comparisons ([§7](#7-scoring-and-the-analysis-plan)). |
+| `pack <stage>` / `unpack <stage>` | A stage's kept traces into one checksummed archive, and back ([§8.1](#81-trace-archives)). |
 | `campaign` | The same as `run all`. |
 
 **Stopping and resuming.** Stop a run with Ctrl+C: the running jobs are stopped, and running the same command again resumes. Each runner job skips the trials already in its CSV, and RL stages skip checkpoints that exist. A trial that failed keeps its row (status `error` or `timeout`) and is not retried; `status` counts those rows as "not ok".
@@ -225,7 +226,7 @@ This runs `ttl`, then pauses for its report. Each pilot fills in what the next o
 | Pilot | Rule (pre-registered in `params.toml`) | Writes |
 |---|---|---|
 | `ttl` | 2 × the p95 fit time, rounded up | `session_ttl_s` |
-| `knee` | The smallest budget whose mean update yield reaches 95% of the grid's best; stress is half of it, rounded to 5 s | `knee_s`, `stress_s` (and `knee_meas_s`, `stress_meas_s` at the measured payload) |
+| `knee` | The smallest budget whose mean update yield reaches 95% of the grid's best; stress is half of it, rounded to 5 s. τ: the largest τ (in steps of 0.01) that at least 80% of H1's trials reach within the trial at each N's knee at 1 MB, the smallest over N | `knee_s`, `stress_s` (and `knee_meas_s`, `stress_meas_s` at the measured payload), `tau` |
 | `sstar` | The S\* tool's S for F | `s_star` |
 
 After each pilot, write its outputs and commit, then run the group again:
@@ -238,7 +239,7 @@ exp5 run pilots --yes
 
 `--apply` replaces only those keys' lines in `[pilot_outputs]` and keeps every other line. It refuses while a job is unfinished, or when the report warns (for example, a knee at the edge of its budget grid, which means the grid should be extended).
 
-The knee report also gives each budget's mean final accuracy and how many trials reach the analysis plan's τ. Time to τ is most studies' primary metric, so read this before batch 1 ([§11](#11-status-and-open-decisions)).
+The knee pilot also sets **τ**, the accuracy threshold of most studies' primary metric (time to τ). At 4 missions, few trials reach the build plan's τ = 0.82. So τ is set from the pilot, by the rule in the table, fixed on 5 Oct 2026 before the pilot finished; 0.82 stays as a second τ, and its reach rate is still reported. A trial "reaches" τ when its highest accuracy after any round is at least τ, which is how the scorer counts it. The report reads this from the kept traces, and for each budget it also gives the mean final accuracy and how many trials reach 0.82.
 
 ### 5.3 The re-pin
 
@@ -332,7 +333,7 @@ exp5 run quick --jobs 2 --devices 12 --mem-gb 16 --yes
    - Then Holm's adjustment is applied across the study.
    - **A claim needs the CI to exclude zero and a Holm-adjusted p below α.**
 
-The analysis plan is `[score]` in `params.toml`, fixed before the studies run. It gives τ, α, the Holm family (`study` or `cell`), and per study: the primary metric and which direction is better, the reference variant, any variant compared with a different reference (`versus`), the columns reported beside the primary metric (`also`), and what the scorer adds.
+The analysis plan is `[score]` in `params.toml`, fixed before the studies run. Its `tau = ["pilot", 0.82]` makes the knee pilot's τ (`pilot_outputs.tau`) the primary threshold and keeps 0.82 as the second; `score` refuses until the pilot's τ is set. The plan also gives α, the Holm family (`study` or `cell`), and per study: the primary metric and which direction is better, the reference variant, any variant compared with a different reference (`versus`), the columns reported beside the primary metric (`also`), and what the scorer adds.
 
 **Missing values.** Pairs are complete cases, as in Exp 4's analysis:
 - a trial whose status is not ok drops out of every comparison it is in;
@@ -364,6 +365,9 @@ results/exp5/
     _logs/<job>.log                        every job's output
   checkpoints/<study>/<tag>/g<γ>_s<seed>.npz (+ .json)   RL checkpoints with manifests
   scores/<stage dir>/                      the comparisons (§7)
+  archives/<stage dir>_traces.tar.gz       a stage's kept traces (exp5 pack; not in git)
+  archives/<stage dir>_traces.json         what each archive holds
+  archives/SHA256SUMS                      every archive's checksum
 ```
 
 **The manifest** of every run records:
@@ -377,7 +381,30 @@ results/exp5/
 
 To reproduce any stage exactly: check out its commit, recreate the environment ([§2.2](#22-python)), check the dataset's fingerprint, and run the same stage with the manifest's `params.toml` and overrides.
 
-**What is committed.** `params.toml` with its decisions, the trial CSVs and sidecars, the manifests, the scores and the RL checkpoints. Exp 4 also committed its event traces (20 MB); Exp 5's traces (about 1.5 GB) are a decision still open ([§11](#11-status-and-open-decisions)). They are needed only to re-score, not to check a reproduction.
+**What is committed:**
+- `params.toml` with its decisions;
+- the trial CSVs and their sidecars, the scored CSVs, the manifests and the scores;
+- the RL checkpoints;
+- the archives' checksums and listings.
+
+The kept event traces are not committed: about 1 GB in some 300,000 files over the campaign, against the 20 MB Exp 4 committed. Git ignores them (`.gitignore`); they go into per-stage archives instead ([§8.1](#81-trace-archives)). The analysis needs only the scored CSVs. The traces are needed only to re-score, for example with another τ or a new metric.
+
+### 8.1 Trace archives
+
+```bash
+exp5 pack batch1
+```
+
+`pack` puts every kept-trace folder of a stage (or a group: `exp5 pack all`) into `results/exp5/archives/<stage dir>_traces.tar.gz`. The traces compress about 6×. It records the archive's SHA-256 in `archives/SHA256SUMS` and writes a listing beside it, `<stage dir>_traces.json`, with the folders, trial counts, sizes and the commit. Commit the checksums and listings; the archives themselves go to a release of the repository, and to a Zenodo deposit with a DOI for the paper's artifact.
+
+To re-score from someone else's traces, download the archive into `results/exp5/archives/`, then:
+
+```bash
+exp5 unpack batch1
+exp5 score batch1 --rescore
+```
+
+`unpack` refuses an archive whose checksum doesn't match `SHA256SUMS`, or one that holds files outside its stage's folder.
 
 ---
 
@@ -419,11 +446,6 @@ To reproduce any stage exactly: check out its commit, recreate the environment (
   - a smoke run of every stage;
   - the RL campaign;
   - the batches.
-- **Open: τ and the mission count.** In the knee pilot's first cells, H1 reached τ = 0.82 within 4 missions in few trials: 5 of the first 49 at N = 12, and none at N = 24, where accuracy plateaus near 0.71 at every budget. Time to τ is the primary metric of 5.1, 5.3, 5.6, 5.9, 5.11, 5.12, 5.13 and 5.15. Before batch 1, decide one of:
-  - more missions;
-  - a τ set from the pilot by a rule written down in advance;
-  - final accuracy as the primary metric, with time to τ reported beside it.
-
-  The knee report prints the evidence.
-- **Open: the traces.** Commit Exp 5's event traces (about 1.5 GB), or archive them separately.
+- **Decided: τ.** In the knee pilot's first cells, H1 reached τ = 0.82 within 4 missions in few trials: 5 of the first 49 at N = 12, and none at N = 24, where accuracy levels off near 0.71 at every budget. The missions stay at 4, and τ is set from the knee pilot by the rule in [§5.2](#52-the-pilots), with 0.82 kept as a second τ. On the pilot's partial data, the rule gives about 0.71.
+- **Decided: the traces.** Per-stage archives (`exp5 pack`), with their checksums committed; the archives go to a release and to Zenodo. Nothing has been published yet.
 - **Not built:** 5.1's `agg:seq` (decided out: it needs a protocol change); 5.1's hand-set merge weights; FX-dwell and FX-cov, or M1, depending on the 5.5 verdict; Study 5.10 (needs AERPAW access).
