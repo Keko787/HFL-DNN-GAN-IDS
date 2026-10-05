@@ -223,3 +223,162 @@ seeds = [0, 1, 2, 3, 4]       # F-hand and the dwell and cov ablations
 grid_c_t = [0.03, 0.1, 0.3]   # the reward grid; (0.1, 1) is 5.5's own and is not retrained
 grid_c_cov = [0.25, 1.0, 4.0]
 grid_seeds = [0, 1, 2]
+
+# The checkpoints the learned arms fly in batch 2, set after the RL stages
+# (launch.py report rl-sweep prints the verdict's stack_check picks). Paths are
+# repo-relative, results/exp5/checkpoints/<study>/<tag>/g<gamma>_s<seed>.npz.
+[rl.checkpoints]
+# main  = ""                  # FQ: the verdict's best gamma at its median-validation seed
+# best_tag = "g90"            # 5.5's stack check: the best gamma's tag (FQ-g<..>) ...
+# best  = ""                  # ... and its checkpoint (the same file as main)
+# g0    = ""                  # 5.5's stack check: gamma = 0 at its median-validation seed
+# hand  = ""                  # 5.7: FQ-hand, FQ-dwell and FQ-cov at gamma_star
+# dwell = ""
+# cov   = ""
+# e3    = ""                  # E3 (5.3, 5.6)
+
+# ==========================================================================
+# Batch 2 (stage batch2): the studies that run once the RL verdict has decided
+# F's in-flight slot. FQ arms run only with [rl] keep_learned = true (left out
+# when it is false); E3 needs [rl.checkpoints] e3. Cells shared with batch 1
+# (same arguments) are not run again: they read batch 1's CSV.
+# Budget levels: knee, stress, relaxed (relaxed_factor x knee), and, at the
+# measured payload, knee_meas and stress_meas.
+# ==========================================================================
+[batch2]
+relaxed_factor = 2.0          # 5.3's third budget (the build plan's 30, 60, 120 s)
+
+[s51]                         # aggregation with age: rules on a fixed route
+rules = ["agg:plain", "agg:cutoff", "agg:cutoff+fedprox", "agg:fedbuff", "agg:asynchfl"]
+# agg:seq is out: it needs in-session training, a protocol change (decided 5 Oct 2026)
+# UNSET: FedProx's proximal coefficient rho for agg:cutoff+fedprox.
+# fedprox_rho = 0.01
+budgets = ["knee", "stress"]
+pass_2 = ["unbudgeted", "budgeted"]   # budgeted Pass 2 on H1's route only (plan arms refuse it)
+routes = ["H1", "F"]
+N = 6
+n_trials = 40
+payload_bytes = 1000000
+
+[s52]                         # deadline form
+arms = ["F", "F-add", "F-round", "F-pref"]   # F-add: F with the additive law
+budgets = ["knee", "stress"]
+N = 6
+n_trials = 40
+payload_bytes = 1000000
+
+[s53x]                        # 5.3 beyond batch 1's core: D5, H0, E3, FQ, and the relaxed budget
+arms = ["F", "FX", "FQ", "H1", "D1", "D2", "D3", "D4", "D5", "E3"]
+d4_faithful = true
+budgets = ["knee", "stress", "relaxed"]
+K = [1, 3]
+N = 6
+n_trials = 40
+payload_bytes = 1000000
+h0 = true                     # H0, the live-link reference, on the wall clock only (one cell per K = 1)
+
+[s54]                         # test (a): reach
+arms = ["F", "FB+wide", "FB+medium", "FB+narrow"]
+narrow_range_ratios = [2.0, 3.0]          # beside the derivation's 3.87 (the base cell)
+far_shares = [0.25, 0.5, 0.75]            # beside the uniform draw (the base cell)
+payloads = ["measured", 1000000]
+budget = "knee"               # knee_meas at the measured payload
+N = 6
+n_trials = 20
+o1 = true                     # O1's gap on FerrySim's N = 6 cells, at the base and at each setting
+o1_episodes = 30
+o1_workers = 8
+
+[s55]                         # test (b): the stack check of the verdict's picks
+budgets = ["stress", "knee"]  # at N = 12, the re-pinned cells' budgets
+N = 12
+n_trials = 40
+payload_bytes = 1000000
+
+[s56]                         # test (c): when learning helps, at the 5.6 cells' periods
+arms = ["FQ", "FX", "E3"]
+# UNSET: trials per cell, fixed when 5.6 is re-costed (Run Guide 2.8's N_56).
+# n_trials = 40
+N = 12
+payload_bytes = 1000000
+
+[s57]                         # one objective (only with the learned score kept)
+arms = ["FQ", "FQ-dwell", "FQ-cov", "FQ-hand", "D4"]
+budgets = ["stress", "knee"]
+N = 12
+n_trials = 40
+payload_bytes = 1000000
+
+[s58]                         # fairness under physical cost
+arms = ["F", "F-cov", "F-cap", "F-prio", "FB+wide", "D3", "D4", "D1"]
+budgets = ["knee", "stress"]
+missions = [4, 8]             # the cap binds only from mission S on
+N = 6
+n_trials = 20
+payload_bytes = 1000000
+
+[s59x]                        # 5.9 beyond batch 1's core: K = 2, 3, the stress budget, the clean channel
+arms = ["F", "FX", "FQ", "H1", "D3", "D4"]
+N = [6, 12, 24]
+K = [1, 2, 3]
+budgets = ["knee", "stress"]
+contact_regimes = ["jittery", "clean"]
+n_trials = 20
+payload_bytes = 1000000
+
+[s513]                        # data heterogeneity (real model, family labels)
+route_arms = ["F", "FX", "H1", "D3"]
+plain_on_route = "F"          # agg:plain against agg:cutoff on F's route
+partitions = [["iid", 0.0], ["dirichlet", 1.0], ["dirichlet", 0.1], ["quantity", 1.0]]
+budget = "knee"
+N = 6
+n_trials = 20
+payload_bytes = 1000000
+
+# ==========================================================================
+# Batch 3: studies that need a pilot of their own first (stage pilot3, then
+# batch3). Their levels stay unset until the pilot reports.
+# ==========================================================================
+[p515]                        # 5.15's harsher interference level: H1's served share by amplitude
+amps_db = [8.0, 11.0, 14.0, 17.0]
+n_trials = 10
+N = 6
+
+[p511c]                       # 5.11 (c): FerrySim budget sweeps at N = 24, 48, 96 (the scale family)
+cells = ["scl-n24-350", "scl-n48-680", "scl-n96-1330"]
+budgets_s = { "scl-n24-350" = [175, 262, 350, 437, 525, 700], "scl-n48-680" = [340, 510, 680, 850, 1020, 1360], "scl-n96-1330" = [665, 1000, 1330, 1660, 1995, 2660] }
+policies = ["FX"]
+episodes = 20
+workers = 8
+
+[s512]                        # compute and model-size heterogeneity
+arms = ["F", "FX", "H1", "D5", "D4"]
+payloads = ["measured", 1000000, 10000000]
+model_archs = ["ciciot"]      # add "high_performance" for the larger model
+# UNSET: the training-time levels (the build plan: "set by a pilot"). Each is
+# [median_s, sigma, straggler_share, straggler_factor]; "none" is median 0.
+# train_levels = { none = [0.0, 0.0, 0.0, 1.0], spread = [30.0, 0.5, 0.0, 1.0], stragglers = [30.0, 0.5, 0.2, 5.0] }
+budget = "knee"               # knee_meas at the measured payload
+N = 6
+n_trials = 20
+
+[s515]                        # radio layer: one axis at a time from the jittery default
+arms = ["F", "FX", "H1", "H1+L1", "F+L1"]
+backhaul = "seconds"          # every cell, so the L1 arms fly their adaptive backhaul
+shadow_sigmas_db = [8.0]      # beside the default 4
+amps_db = [1.0]               # beside the jittery default 5 (plus the harsher level below)
+# UNSET until p515 reports: the harsher amplitude, and the lossier path-loss exponent.
+# harsher_amp_db = 11.0
+# lossier_n_pl = 2.7
+mission_backhaul_arms = ["F", "FX", "H1"]   # also once on the recorded mission backhaul
+budget = "knee"
+N = 6
+n_trials = 20
+payload_bytes = 1000000
+
+[s511c]                       # 5.11 (c): FerrySim beyond the stack, at the pilot's knees
+policies = ["F", "FX", "greedy_1", "hyb"]
+episodes = 30
+workers = 8
+# UNSET until p511c reports: each scale cell's knee (s).
+# knee_s = { "scl-n24-350" = 350.0, "scl-n48-680" = 680.0, "scl-n96-1330" = 1330.0 }
