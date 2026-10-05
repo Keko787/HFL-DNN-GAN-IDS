@@ -243,7 +243,23 @@ The knee pilot also sets **τ**, the accuracy threshold of most studies' primary
 
 ### 5.3 The re-pin
 
-FerrySim's training cells are pinned to the stack's measured N = 12 knee. This is a code change made once, after the knee pilot, and committed with the repository. It moves the cells, the 5.6 lags, the P_c constants and the `jittery56` hash together. A reproduction checks out a commit that already contains it. A fresh campaign with different knees must redo it, as described in the [Exp 4 Run Guide](Experiment_4_Run_Guide.md) §2.8 ("The re-pin"). Then set `[rl] repinned = true`; every RL stage refuses until it is set.
+FerrySim's training cells fly placeholder budgets until the stack's pilots measure them: Phase 4's priors at N = 6, stand-ins at N = 12. The re-pin moves them to the measured stress and knee budgets, so the learned score trains on the budgets the stack flies. It runs once, after the knee and S\* pilots, and is committed with the repository. A reproduction checks out a commit that already contains it; a fresh campaign with different knees redoes it.
+
+```bash
+python scripts/exp5/repin.py --dry-run
+python scripts/exp5/repin.py --workers 8
+```
+
+From `params.toml`'s pilot outputs, `repin.py`:
+- rewrites the re-pin block in `experiments/ferrysim/cells.py` (each size's budgets, the caps and Study 5.6's lags), from which every cell is built;
+- renames the cells across the code and tests, since each name carries its budget (`jit-n12-120` becomes `jit-n12-<stress>`);
+- computes each cell's cap with the S\* tool;
+- re-measures Study 5.6's lag with FX on the same 200-episode sample, and derives the lag ratio test's bounds from the same sample;
+- rewrites the tests' pinned values (the family hashes, lags, periods and lag sample).
+
+It stops if the quarter-period and half-period cells' ratio ranges would meet, or if a Study 5.6 cell's S\* differs from its base cell's cap. About 3 minutes with 2 workers.
+
+Then run the FerrySim tests it prints, review the documents it lists (their records are history, so it leaves them alone), commit, and set `[rl] repinned = true`. Every RL stage refuses until that is set. See also the [Exp 4 Run Guide](Experiment_4_Run_Guide.md) §2.8 ("The re-pin").
 
 ### 5.4 The learned score (RL)
 

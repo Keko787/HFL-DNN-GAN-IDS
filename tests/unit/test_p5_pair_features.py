@@ -888,16 +888,28 @@ def test_a_scorer_that_reads_the_channel_ahead_is_caught():
 #: headroom report flew them), flown by fx_pair with a trainer at ε = 0, which
 #: flies exactly as no trainer and keeps each decision's view.
 SAMPLE = (("jit-n12-120", 4), ("jit-n12-180", 2), ("jit-n6-45", 3))
+#: Rows the pooled sample needs; the N = 12 cells fly one more episode each
+#: until it has them (at most SAMPLE_ROUNDS more), so the sample holds at any
+#: budget the cells are re-pinned to.
+SAMPLE_ROWS = 250
+SAMPLE_ROUNDS = 10
 
 
 @pytest.fixture(scope="module")
 def ferrysim_sample():
-    out = []
-    for name, count in SAMPLE:
-        cell = FC.cell_named(name)
-        for i, seed in enumerate(FC.stream_seeds(FC.VAL_STREAM, name, count)):
-            out.append((name, run_episode(cell, seed, Policy.scripted("fx_pair"), trial_index=i,
-                                          trainer=Trainer())))
+    def fly(name, i):
+        seed = FC.stream_seeds(FC.VAL_STREAM, name, 1, start=i)[0]
+        return name, run_episode(FC.cell_named(name), seed, Policy.scripted("fx_pair"),
+                                 trial_index=i, trainer=Trainer())
+
+    out = [fly(name, i) for name, count in SAMPLE for i in range(count)]
+    flown = dict(SAMPLE)
+    for _ in range(SAMPLE_ROUNDS):
+        if len(_sample_rows(out)) > SAMPLE_ROWS:
+            break
+        for name in (c.name for c in FC.STUDY_5_5_CELLS):
+            out.append(fly(name, flown[name]))
+            flown[name] += 1
     return out
 
 
@@ -914,7 +926,7 @@ def test_no_column_is_constant_on_a_ferrysim_sample_but_the_declared_sparse_ones
     declared rare event."""
     assert set(SPARSE_COLUMNS) <= set(SCHEMA.columns)
     rows = _sample_rows(ferrysim_sample)
-    assert len(rows) > 250
+    assert len(rows) > SAMPLE_ROWS
     constant = [name for j, name in enumerate(SCHEMA.columns) if len(set(rows[:, j])) == 1]
     assert constant == []
     for name, _ in SAMPLE:
@@ -954,11 +966,15 @@ def test_a_cells_interference_period_reaches_the_phase_columns():
     a FerrySim cell at P_c = 30 s flies views of that period, and every phase
     column is its formula at 30 s, the previous reading being the last
     decision's across the trial's missions, its age capped at 4 x 30 s."""
-    cell = dataclasses.replace(FC.cell_named("jit-n12-120"), name="jit-n12-120-p30",
-                               interference_period_s=30.0)
-    seed = FC.stream_seeds(FC.VAL_STREAM, cell.name, 1)[0]
-    ep = run_episode(cell, seed, Policy.scripted("fx_pair"), trainer=Trainer())
-    views = [step.view for steps in ep.steps for step in steps]
+    def flown(base, index):                      # a decision-rich episode, at any budget
+        cell = dataclasses.replace(base, name=f"{base.name}-p30", interference_period_s=30.0)
+        seed = FC.stream_seeds(FC.VAL_STREAM, cell.name, 1, start=index)[0]
+        ep = run_episode(cell, seed, Policy.scripted("fx_pair"), trainer=Trainer())
+        return ep, [step.view for steps in ep.steps for step in steps]
+
+    for ep, views in (flown(base, i) for i in range(12) for base in FC.STUDY_5_5_CELLS):
+        if len(views) >= 8 and sum(1 for steps in ep.steps if steps) >= 3:
+            break
     assert len(views) >= 8 and sum(1 for steps in ep.steps if steps) >= 3
     assert {view.period_s for view in views} == {30.0}
     capped = 0

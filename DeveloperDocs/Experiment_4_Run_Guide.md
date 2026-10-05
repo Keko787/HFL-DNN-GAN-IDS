@@ -736,10 +736,15 @@ python -m experiments.ferrysim evaluate --checkpoints results/exp5/checkpoints/5
 
 *The re-pin* (go-ahead item 5). After the N = 12 pilot, the cells' budgets, `STUDY_5_6_LAGS_S`, the
 four P_c constants, the `jittery56` hash and the test literals move together (R29), and the lag is
-re-measured on the same sample and statistic (a code edit, not a flag):
+re-measured on the same sample and statistic (a code edit, not a flag). `scripts/exp5/repin.py`
+makes it from params.toml's pilot outputs: it rewrites `experiments/ferrysim/cells.py`'s re-pin
+block (the N = 6 and N = 12 budgets, the caps, the lags) and the tests' re-pin pins, renames the
+cells (whose names carry the budget) across the code and tests, re-measures the lag with
+`evaluate.fx_lag_median`'s sample and statistic, derives the ratio check's bounds from the same
+sample, and checks each Study 5.6 cell's S* at its own period; `--dry-run` shows the plan:
 
 ```bash
-python -c "from experiments.ferrysim.evaluate import fx_lag_median; print(fx_lag_median('jit-n12-120', workers=8), fx_lag_median('jit-n12-180', workers=8))"
+python scripts/exp5/repin.py --workers 8
 ```
 
 **Stack trials** (go-ahead item 6; NOT RUN, each study re-costed first: the spec estimated 320
