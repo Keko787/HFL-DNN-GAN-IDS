@@ -197,10 +197,12 @@ jittery56 = 400
 [rl.e3]                       # E3, after Chen et al. (go-ahead item 2, R16)
 family = "jittery"            # Run Guide 2.8
 seeds = [0, 1, 2, 3, 4]
-# UNSET until decided: E3's gamma, and its settings: "pair" (the pair learner's
-# defaults) or "chen" (Chen's lr 5e-4 and epsilon from 1.0).
+# Chen's settings (decided 5 Oct 2026: E3 reproduces a published method): lr 5e-4,
+# epsilon from 1.0. "pair" would be the pair learner's defaults (lr 1e-3, epsilon 0.3 to 0.05).
+settings = "chen"
+# UNSET until decided: E3's gamma (Chen's own is not recorded in the repository;
+# R16 asks for it). rl-e3 stays blocked until it is set.
 # gamma = 0.9
-# settings = "chen"
 
 [rl.s57]                      # Study 5.7's scores, at gamma_star
 seeds = [0, 1, 2, 3, 4]       # F-hand and the dwell and cov ablations
