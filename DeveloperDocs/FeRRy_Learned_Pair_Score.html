@@ -1,0 +1,246 @@
+<title>FeRRy Learned Pair Score</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,500;6..72,600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one reading column (~72ch) with full-width tables and a formula panel; FeRRy's house style (Newsreader / IBM Plex, orange = ours, teal = baselines) */
+:root{
+  --bg:#fbfbf9; --surface:#f1f2ee; --ink:#1d2126; --ink2:#4c535b; --ink3:#7b838c; --rule:#dcdfd9;
+  --hermes:#c2410c; --hermes-soft:#fbe7dc; --prior:#0f766e; --prior-soft:#dcefeb; --warn:#a16207;
+  --serif:"Newsreader",Georgia,"Times New Roman",serif;
+  --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#15181c; --surface:#1d2127; --ink:#e7e9ec; --ink2:#b3b9c1; --ink3:#868e98; --rule:#2e343c;
+  --hermes:#f08a52; --hermes-soft:#3a2418; --prior:#4cc2b5; --prior-soft:#15302d; --warn:#e0b04a; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#15181c; --surface:#1d2127; --ink:#e7e9ec; --ink2:#b3b9c1; --ink3:#868e98; --rule:#2e343c;
+  --hermes:#f08a52; --hermes-soft:#3a2418; --prior:#4cc2b5; --prior-soft:#15302d; --warn:#e0b04a; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font:15.5px/1.6 var(--sans);margin:0}
+.wrap{max-width:860px;margin:0 auto;padding-inline:20px;padding-block:40px 72px}
+header{border-bottom:1px solid var(--rule);padding-bottom:24px;margin-bottom:8px}
+.eyebrow{font:500 11.5px/1.4 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3)}
+h1{font:600 clamp(30px,5vw,42px)/1.12 var(--serif);margin:10px 0 12px;text-wrap:balance}
+h2{font:600 26px/1.2 var(--serif);margin:48px 0 10px;text-wrap:balance}
+h3{font:600 15px/1.4 var(--sans);margin:26px 0 6px}
+p,li{max-width:72ch}
+p{margin:10px 0}
+.lede{font-size:17.5px;color:var(--ink2)}
+.meta{font:13px/1.5 var(--mono);color:var(--ink3);margin-top:14px}
+code{font:13.5px var(--mono);background:var(--surface);border:1px solid var(--rule);border-radius:3px;padding:0 4px}
+a{color:var(--hermes)}
+a:focus-visible{outline:2px solid var(--hermes);outline-offset:2px}
+nav.toc{display:flex;flex-wrap:wrap;gap:6px 16px;margin:18px 0 0;font-size:13.5px}
+nav.toc a{color:var(--ink2);text-decoration:none;border-bottom:1px solid var(--rule)}
+nav.toc a:hover{color:var(--hermes);border-color:var(--hermes)}
+.scroll{overflow-x:auto;margin:14px 0}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th{font:500 11px/1.4 var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink3);text-align:left;padding:8px 10px;border-bottom:1px solid var(--ink3)}
+td{padding:8px 10px;border-bottom:1px solid var(--rule);vertical-align:top}
+td.name{font-family:var(--mono);font-size:13px;white-space:nowrap;color:var(--ink)}
+td.n{font-variant-numeric:tabular-nums;white-space:nowrap}
+tr.group td{background:var(--surface);font:600 13px/1.4 var(--sans);color:var(--ink);padding-top:10px}
+tr.group td span{font:400 12.5px var(--mono);color:var(--ink3);margin-left:8px}
+.formula{background:var(--surface);border:1px solid var(--rule);border-radius:6px;padding:18px 22px;margin:16px 0;overflow-x:auto}
+.formula .eq{font:500 17px/1.8 var(--mono);white-space:nowrap}
+.formula .eq b{color:var(--hermes);font-weight:500}
+.terms{display:grid;grid-template-columns:max-content 1fr;gap:8px 18px;margin:14px 0}
+.terms dt{font:500 14px var(--mono);color:var(--hermes)}
+.terms dd{margin:0;min-width:0}
+.facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:1px;background:var(--rule);border:1px solid var(--rule);border-radius:6px;overflow:hidden;margin:16px 0}
+.facts div{background:var(--bg);padding:12px 14px;min-width:0}
+.facts .k{font:500 11px/1.4 var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink3)}
+.facts .v{font:500 15px/1.4 var(--sans);margin-top:4px;font-variant-numeric:tabular-nums}
+.note{border-left:3px solid var(--prior);background:var(--prior-soft);padding:10px 16px;margin:18px 0;max-width:76ch;font-size:14.5px}
+.note.ours{border-left-color:var(--hermes);background:var(--hermes-soft)}
+figure{margin:22px 0}
+figure svg{max-width:100%;height:auto;display:block}
+figcaption{font-size:13.5px;color:var(--ink2);margin-top:8px;max-width:72ch}
+.cmp td:first-child{font-weight:600;white-space:nowrap}
+.tag{display:inline-block;font:500 11px/1.5 var(--mono);padding:0 6px;border-radius:3px;border:1px solid currentColor}
+.tag.ours{color:var(--hermes)} .tag.base{color:var(--prior)}
+ol.steps{padding-left:22px} ol.steps li{margin:6px 0}
+footer{margin-top:56px;border-top:1px solid var(--rule);padding-top:16px;font-size:13px;color:var(--ink3)}
+@media (max-width:520px){.terms{grid-template-columns:1fr}.terms dt{margin-top:6px}}
+</style>
+
+<div class="wrap">
+<header>
+  <div class="eyebrow">FeRRy · Phase 5 · design note</div>
+  <h1>The learned pair score (FQ)</h1>
+  <p class="lede">What FeRRy's learned model decides during a flight, what it sees, what it is rewarded for, how it is trained, and how Study 5.5 decides whether to keep it.</p>
+  <div class="meta">As built on main (code 9694775, Phase 5) · 3 Oct 2026 · not yet trained: training campaigns await the go-ahead</div>
+  <nav class="toc" aria-label="Contents">
+    <a href="#where">Where it sits</a><a href="#decision">The decision</a><a href="#inputs">Inputs</a><a href="#output">Output and network</a><a href="#reward">Reward</a><a href="#training">Training</a><a href="#judging">How it is judged</a><a href="#compare">Against the alternatives</a>
+  </nav>
+</header>
+
+<h2 id="where">Where it sits in a mission</h2>
+<p>FeRRy flies a drone (the "mule") from a dock to a set of hover points ("stops"), collects federated-learning updates from the IoT devices near each stop, returns to merge them, and flies a second pass to deliver the new model. The flight is straight legs between stops at cruise speed and a fixed 25 m altitude: FeRRy does no motion planning. Its "trajectory" is which stops, in what order, on which radio band.</p>
+<p>Two clocks make those choices:</p>
+<ul>
+  <li><b>The plan clock, at the dock.</b> FeRRy chooses a band class and a route together: it clusters devices into stops for each class, scores each (class, route) on mission time plus a penalty for devices left out, keeps only routes that fit the deadlines, budget and battery, and commits the best.</li>
+  <li><b>The flight clock, at each stop of Pass 1.</b> The drone measures the real signal and makes one choice: which band to serve this stop on, and which stop to fly to next. <b>This is the choice the learned score makes.</b></li>
+</ul>
+
+<figure>
+<svg viewBox="0 0 760 210" role="img" aria-label="One Pass-1 decision: at stop k the score rates every allowed (band, next stop) pair, the mask removes pairs that would break the plan, and the drone flies the highest-scoring pair.">
+  <defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="currentColor"/></marker></defs>
+  <g fill="none" stroke="currentColor" stroke-width="1.3" style="color:var(--ink3)">
+    <rect x="12" y="78" width="70" height="44" rx="4"/>
+    <line x1="82" y1="100" x2="150" y2="100" marker-end="url(#ar)"/>
+  </g>
+  <text x="47" y="104" text-anchor="middle" font-size="13" fill="var(--ink2)" font-family="IBM Plex Sans, sans-serif">dock</text>
+  <circle cx="178" cy="100" r="26" fill="var(--hermes-soft)" stroke="var(--hermes)" stroke-width="1.6"/>
+  <text x="178" y="104" text-anchor="middle" font-size="13" fill="var(--ink)" font-family="IBM Plex Sans, sans-serif">stop k</text>
+  <text x="178" y="150" text-anchor="middle" font-size="11.5" fill="var(--ink3)" font-family="IBM Plex Mono, monospace">observe SNR</text>
+  <g font-family="IBM Plex Mono, monospace" font-size="12">
+    <line x1="206" y1="100" x2="262" y2="100" stroke="var(--ink3)" stroke-width="1.3" marker-end="url(#ar)" style="color:var(--ink3)"/>
+    <rect x="266" y="20" width="236" height="170" rx="6" fill="var(--surface)" stroke="var(--rule)"/>
+    <text x="280" y="42" fill="var(--ink3)" font-size="11">(band, next stop)      Q</text>
+    <text x="280" y="66" fill="var(--ink)">(wide,   s3)        0.41</text>
+    <text x="280" y="88" fill="var(--hermes)" font-weight="500">(medium, s5)        0.57 ◀</text>
+    <text x="280" y="110" fill="var(--ink3)" text-decoration="line-through">(narrow, s5)   masked</text>
+    <text x="280" y="132" fill="var(--ink)">(medium, s3)        0.38</text>
+    <text x="280" y="154" fill="var(--ink3)" text-decoration="line-through">(wide,   s9)   masked</text>
+    <text x="280" y="176" fill="var(--ink)">(wide,   home)      0.12</text>
+  </g>
+  <line x1="502" y1="88" x2="584" y2="88" stroke="var(--hermes)" stroke-width="1.6" marker-end="url(#ar)" style="color:var(--hermes)"/>
+  <text x="543" y="78" text-anchor="middle" font-size="11.5" fill="var(--hermes)" font-family="IBM Plex Mono, monospace">argmax</text>
+  <circle cx="614" cy="88" r="26" fill="none" stroke="var(--ink3)" stroke-width="1.3"/>
+  <text x="614" y="92" text-anchor="middle" font-size="13" fill="var(--ink)" font-family="IBM Plex Sans, sans-serif">s5</text>
+  <text x="680" y="92" font-size="12" fill="var(--ink3)" font-family="IBM Plex Sans, sans-serif">serve k on</text>
+  <text x="680" y="108" font-size="12" fill="var(--ink3)" font-family="IBM Plex Sans, sans-serif">medium, fly</text>
+  <text x="680" y="124" font-size="12" fill="var(--ink3)" font-family="IBM Plex Sans, sans-serif">to s5</text>
+</svg>
+<figcaption>One Pass-1 decision (illustrative values). Every allowed pair gets a score; pairs that would break the plan are masked out; the drone serves stop k on the winning band and flies to the winning stop. The same thing happens at the next stop, with the next stop's measurements.</figcaption>
+</figure>
+
+<h2 id="decision">The decision</h2>
+<p>At each Pass-1 arrival the options are pairs: <b>a band class</b> to serve this stop on, and <b>a next stop</b> from the plan's remaining stops, or home once none is left. The count is the classes that cover the plan times the stops left: the probes saw up to 15 pairs at N = 12 and 21 at N = 24.</p>
+<h3>The mask: what the score may choose (decision 1 (a))</h3>
+<p>A pair is allowed only if all three hold:</p>
+<ol class="steps">
+  <li><b>The band covers the plan.</b> It reaches every device the plan's band reaches at this stop, at the measured signal.</li>
+  <li><b>The next stop is in the plan.</b> The score reorders the plan; it never invents stops.</li>
+  <li><b>The rest of the flight still fits.</b> After serving this stop on that band and flying to that stop, the whole remaining route, priced at the observed signal, still meets the deadlines, the time budget and the energy limit.</li>
+</ol>
+<p>If no pair is allowed, the drone flies the fixed rule FX's pair and logs it. Ties go to the lowest row, so with one class the plan's order wins. After the choice, the chosen stop moves to the front of the remaining route, and the normal departure check still runs: if the route no longer fits, stops are trimmed (overdue devices kept first). The score never runs in Pass 2, which flies the committed order on the committed band.</p>
+
+<h2 id="inputs">Inputs: 36 numbers per pair</h2>
+<p>Each allowed pair becomes one row of 36 numbers (feature schema <code>pair_v1</code>, with three band classes). Some columns depend on the band only, some on the next stop only, some on both, and some describe the whole situation and are the same in every row. Every value is something the drone has measured or knows at the moment of arrival; nothing is read from the future. Times are scaled by T, the nominal mission length, and N is the number of devices in the mission.</p>
+<div class="scroll">
+<table>
+  <thead><tr><th>Column</th><th>What it says</th><th>Scaling</th></tr></thead>
+  <tbody>
+    <tr class="group"><td colspan="3">This stop, on this band <span>7 columns</span></td></tr>
+    <tr><td class="name">band[c] ×3</td><td>Which band this pair uses (one-hot over wide, medium, narrow)</td><td>0 / 1</td></tr>
+    <tr><td class="name">snr_here</td><td>The band's median measured signal over this stop's devices, now</td><td>÷ 30 dB</td></tr>
+    <tr><td class="name">dwell_here</td><td>How long collecting here takes on this band at that signal</td><td>÷ T</td></tr>
+    <tr><td class="name">gain_here</td><td>Devices this band reaches here beyond the plan's band</td><td>÷ N</td></tr>
+    <tr><td class="name">reach_here</td><td>Devices the plan's band reaches here (the stop's own collection)</td><td>÷ N</td></tr>
+
+    <tr class="group"><td colspan="3">The next stop <span>12 columns</span></td></tr>
+    <tr><td class="name">travel</td><td>The flight time from here to that stop (to the dock for home)</td><td>÷ T</td></tr>
+    <tr><td class="name">snr_next[c] ×3</td><td>That stop's expected signal on each band (median over its devices)</td><td>÷ 30 dB</td></tr>
+    <tr><td class="name">dwell_next</td><td>Its predicted collection time on the plan's band</td><td>÷ T</td></tr>
+    <tr><td class="name">slack_next</td><td>Time to spare before its devices' deadline if it is served next (signed, log-scaled)</td><td>sign·log1p(|x| / T)</td></tr>
+    <tr><td class="name">exempt_next</td><td>No deadline can bind there</td><td>0 / 1</td></tr>
+    <tr><td class="name">age_next</td><td>How long, in missions, its devices have gone without a merged update</td><td>÷ cap S</td></tr>
+    <tr><td class="name">on_time_next</td><td>How reliably its devices have been available (0.5 for a new device)</td><td>0–1</td></tr>
+    <tr><td class="name">members_next</td><td>How many devices it has</td><td>÷ N</td></tr>
+    <tr><td class="name">capped_next</td><td>Some device there has hit the age cap (badly overdue)</td><td>0 / 1</td></tr>
+    <tr><td class="name">home</td><td>This option is "fly home"</td><td>0 / 1</td></tr>
+
+    <tr class="group"><td colspan="3">The situation <span>5 columns</span></td></tr>
+    <tr><td class="name">clock_left</td><td>Time budget left after this move</td><td>÷ budget, −1 to 1</td></tr>
+    <tr><td class="name">energy_left</td><td>Battery left</td><td>−1 to 1</td></tr>
+    <tr><td class="name">remainder_share</td><td>Share of devices still to visit</td><td>÷ N</td></tr>
+    <tr><td class="name">least_slack</td><td>The tightest deadline slack among the remaining stops</td><td>as slack_next</td></tr>
+    <tr><td class="name">weight_share</td><td>Share of the plan's value still uncollected</td><td>0–1</td></tr>
+
+    <tr class="group"><td colspan="3">The interference cycle (the "phase" block, can be switched off) <span>12 columns</span></td></tr>
+    <tr><td class="name">offset[c] ×3</td><td>How much better or worse each band is right now than its average</td><td>÷ 10 dB</td></tr>
+    <tr><td class="name">prev_offset[c] ×3</td><td>The same reading at the previous stop</td><td>÷ 10 dB</td></tr>
+    <tr><td class="name">has_prev</td><td>A previous reading exists in this trial</td><td>0 / 1</td></tr>
+    <tr><td class="name">prev_age</td><td>How long ago that reading was (capped at 4 periods)</td><td>÷ P_c</td></tr>
+    <tr><td class="name">prev_sin, prev_cos</td><td>Where that gap falls in the interference cycle</td><td>sin, cos of 2π·age / P_c</td></tr>
+    <tr><td class="name">arrival_sin, arrival_cos</td><td>Where in the cycle the drone will arrive at the next stop</td><td>sin, cos of 2π·(dwell + travel) / P_c</td></tr>
+  </tbody>
+</table>
+</div>
+<p>Without the phase block the row has 24 numbers. The phase block exists because the contact channel's interference is a regular wave with period P_c: one reading cannot tell a rising signal from a falling one, so the score gets two readings and their timing. Two inputs the design once had are gone: a per-stop "value" (it equalled members ÷ N under equal data) and a clipped slack (it saturated).</p>
+
+<h2 id="output">Output and network</h2>
+<div class="facts">
+  <div><div class="k">Output</div><div class="v">One score Q per allowed pair</div></div>
+  <div><div class="k">Action</div><div class="v">The highest Q</div></div>
+  <div><div class="k">Network</div><div class="v">36 → 64 → 64 → 1, tanh</div></div>
+  <div><div class="k">Library</div><div class="v">numpy (no torch)</div></div>
+</div>
+<p>The same small network scores every row, so it handles any number of pairs: rows can come and go as stops are visited. The situation and phase columns repeat in every row, which is how the shared context reaches each pair's score. The chosen pair is the masked argmax; the drone serves this stop on its band and flies to its stop. Each decision is logged in the trace (<code>mission_completed.pass_1_pairs</code>) with the pair chosen, the mask, whether it agreed with FX, and optionally the Q values.</p>
+
+<h2 id="reward">Reward</h2>
+<p>Each decision at stop k earns (decision 4 (a)):</p>
+<div class="formula">
+  <div class="eq">r<sub>k</sub> = <b>G<sub>k</sub></b> − c<sub>t</sub> · Δt<sub>k</sub> / T</div>
+  <div class="eq">and at the flight's last decision, also − c<sub>cov</sub> · <b>U</b></div>
+</div>
+<dl class="terms">
+  <dt>G_k</dt><dd>The value of the updates collected at stop k: each update's merge weight (examples × value × age discount, 0 past the cutoff), divided by n_ref·N, so one fresh device of standard size is worth 1/N. With equal data on every device, as in training, it is simply devices collected ÷ N.</dd>
+  <dt>Δt_k</dt><dd>Time from arriving at k to arriving at the next stop (after the last decision, to the end of the upload home).</dd>
+  <dt>T</dt><dd>The nominal mission length, the plan's own time unit.</dd>
+  <dt>U</dt><dd>The share of the plan's devices, weighted by the plan's coverage weights, left uncollected when the flight ends.</dd>
+  <dt>c_t, c_cov</dt><dd>0.1 and 1 by default. Study 5.7 sweeps c_t ∈ {0.03, 0.1, 0.3} × c_cov ∈ {0.25, 1, 4}.</dd>
+</dl>
+<p>So the score is paid for collecting updates, charged a little for time, and penalised at the end for skipping planned devices. There is no energy term (energy tracks time) and no lateness term (none of 1,148 probed collections was late). A "sortie" (one Pass 1, dock to dock) is the score's horizon.</p>
+<div class="note"><b>Training uses expected availability.</b> Whether a device answers is a random draw that does not depend on the pair chosen, and its noise is 10 to 100 times the time signal a decision moves. During training each targeted device is credited its probability of answering instead of the draw; evaluation and every reported number use the real draws.</div>
+<p>Two other rewards exist for comparison: <b>F·hand</b>, the older hand-set reward ported from ContactSim and labelled as such (arm FQ-hand), and <b>bytes</b>, devices collected ÷ N, which is E3's reward.</p>
+
+<h2 id="training">Training</h2>
+<p>The score trains in <b>FerrySim</b>: the real FeRRy stack (driver, cluster, mule and device services) run in one process on a virtual clock, with a stand-in for the devices' local training. It is a double DQN whose replay stores each transition's next rows and mask, so the target takes a real maximum over the next decision's allowed pairs.</p>
+<div class="scroll">
+<table>
+  <thead><tr><th>Setting</th><th>Value</th></tr></thead>
+  <tbody>
+    <tr><td>Episodes per training</td><td class="n">10,000, validated every 1,000 on 200 episodes; stops after 3 validations without improvement and keeps the best</td></tr>
+    <tr><td>Replay</td><td class="n">50,000 transitions; batch 64; no update before 1,000 transitions, then one per decision</td></tr>
+    <tr><td>Optimiser and loss</td><td class="n">Adam, learning rate 0.001; Huber loss (δ = 1); gradient clipping at 10</td></tr>
+    <tr><td>Target network</td><td class="n">Hard sync every 500 updates</td></tr>
+    <tr><td>Look-ahead γ</td><td class="n">Set per training; Study 5.5 sweeps 0, 0.25, 0.5, 0.75, 0.9, 0.99</td></tr>
+    <tr><td>Exploration</td><td class="n">First 500 episodes ε-greedy around FX's pair at ε = 0.3; then ε-greedy on Q, ε falling from 0.3 to 0.05 over the first half of the run</td></tr>
+    <tr><td>Practice cells</td><td class="n">1 MB payload, jittery contact channel, N = 6 and 12, stand-in budgets 45/90 s (N = 6) and 120/180 s (N = 12); a clean-channel family as the negative control. One score per channel regime</td></tr>
+    <tr><td>Determinism</td><td class="n">Same seed, same weights, bit for bit; train, validation and held-out seed streams are disjoint</td></tr>
+  </tbody>
+</table>
+</div>
+<p>A trained score is saved as a checkpoint (arrays plus a JSON manifest). Its sha256 covers the arrays and a header holding the feature schema, the network, γ, the purpose and the learner revision. The mule checks the sha before flying it, and the runner refuses a checkpoint that is untrained, unscored, from a dirty tree, trained on another plan, or whose γ or reward does not match the arm's tag.</p>
+
+<h2 id="judging">How it is judged: Study 5.5</h2>
+<p>The question is whether this choice needs to look ahead at all, or whether a one-step rule is enough. The rule was fixed before any training (decision 5 (a)):</p>
+<ol class="steps">
+  <li><b>Sanity check.</b> At γ = 0 the score must do at least as well as the better one-step rule (FX or <code>greedy_1</code>), within ε. The learner may be revised once at most.</li>
+  <li><b>The sweep.</b> 10 training seeds for each γ ∈ {0, 0.25, 0.5, 0.75, 0.9, 0.99}, each judged on the same 1,000 unseen episodes per N = 12 cell.</li>
+  <li><b>Verdict.</b> "Rising" if the best γ beats γ = 0 by ε with the confidence interval above 0 and Holm-adjusted p &lt; 0.05; "flat" if every γ is within ±ε (equivalence test); otherwise "inconclusive".</li>
+  <li><b>Replace FX only if</b> the curve rises <i>and</i> the best γ beats the best fixed rule (FX, F, <code>hyb</code>, <code>greedy_1</code>) by ε. ε = max(0.01, 0.1 × the validation headroom) = 0.01 from the build's headroom check.</li>
+</ol>
+<div class="note ours"><b>If the curve is flat,</b> FX stays as FeRRy's in-flight rule and the null result is published. One signal to watch: on validation runs the one-step rule <code>greedy_1</code> already beats FX in 5 of 6 cells (significantly at N = 12, 120 s), so the one-step baseline is strong.</div>
+
+<h2 id="compare">Against the alternatives</h2>
+<div class="scroll">
+<table class="cmp">
+  <thead><tr><th>Arm</th><th>Who decides in flight</th><th>Sees</th><th>Rewarded for</th></tr></thead>
+  <tbody>
+    <tr><td>F <span class="tag ours">ours</span></td><td>Nobody: the plan's committed order and band</td><td>—</td><td>—</td></tr>
+    <tr><td>FX <span class="tag ours">ours</span></td><td>A fixed rule: the nearest stop that keeps the rest feasible, on the fastest band that covers the plan</td><td>Distances, measured signal</td><td>— (no learning)</td></tr>
+    <tr><td>FQ <span class="tag ours">ours</span></td><td>The learned pair score, inside the same mask</td><td>The 36 columns above</td><td>Merge weight minus time, coverage penalty</td></tr>
+    <tr><td>E3 <span class="tag base">baseline</span></td><td>A DQN after Chen et al.: next stop at each arrival, no FeRRy plan</td><td>Chen's per-stop observation</td><td>Bytes (updates collected)</td></tr>
+  </tbody>
+</table>
+</div>
+<p>FQ never leaves FeRRy's plan: the plan decides which devices and band class the mission is for, and the score only reorders the remaining stops and picks a band within that plan. E3 is the learned baseline without that structure, and M1 (one network over every pair, no plan) is built only if Study 5.5 keeps a learned score.</p>
+
+<footer>Sources: <code>hermes/scheduler/selector/pair_features.py</code>, <code>pair_q.py</code>, <code>pair_replay.py</code>; <code>hermes/scheduler/policies/pair_slot.py</code>; <code>experiments/ferrysim/reward.py</code>, <code>train.py</code>, <code>report.py</code>; the FeRRy build plan, Phase 5 and Study 5.5. Values are the code's defaults on main.</footer>
+</div>
