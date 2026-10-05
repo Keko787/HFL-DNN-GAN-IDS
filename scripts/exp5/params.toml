@@ -382,3 +382,114 @@ episodes = 30
 workers = 8
 # UNSET until p511c reports: each scale cell's knee (s).
 # knee_s = { "scl-n24-350" = 350.0, "scl-n48-680" = 680.0, "scl-n96-1330" = 1330.0 }
+
+# ==========================================================================
+# Scoring (launch.py score <batch>; scoring.py): the analysis plan, fixed
+# before the studies run. Per study: the primary metric (the build plan's,
+# Study overview) and which way is better, the reference variant every other
+# variant in a cell is compared with, the columns reported beside it, and what
+# the scorer adds. A variant is the job tag after "__": the arm with "+" as "p"
+# (F+L1 -> FpL1, FB+wide -> FBpwide), or the study's own label (5.14's switch,
+# 5.1's rule, D4fedex, Fplain). A metric name ending in "tau" takes the first
+# tau (sim_s_to_tau -> sim_s_to_tau0.82). Comparisons are paired by trial on
+# complete pairs; Holm across the family; a claim needs the bootstrap CI to
+# exclude 0 and Holm p < alpha.
+# ==========================================================================
+[score]
+tau = [0.82]                  # the build plan's tau; the first is the primary
+alpha = 0.05
+family = "study"              # Holm across every comparison of a study ("cell": per cell)
+n_bootstraps = 2000
+also = ["reached_tau", "sim_s_to_tau", "round_close_rate_kmin1", "network_aou_mean",
+        "deadline_miss_rate", "update_yield", "final_accuracy", "final_auc"]
+
+[score.s53]                   # 5.3 core: time to tau, with the reach rate where runs fall short
+metric = "sim_s_to_tau"
+reference = "F"
+
+[score.s53x]                  # 5.3 in full (H0 flies the wall clock: its own cell, described)
+metric = "sim_s_to_tau"
+reference = "F"
+also = ["reached_tau", "sim_s_to_tau", "wall_s_to_tau", "round_close_rate_kmin1",
+        "deadline_miss_rate", "network_aou_mean", "update_yield", "final_accuracy"]
+
+[score.s59]
+metric = "sim_s_to_tau"
+reference = "F"
+
+[score.s59x]
+metric = "sim_s_to_tau"
+reference = "F"
+
+[score.s511b]                 # 5.11 (b): time to tau per mule; the footprint beside it
+metric = "sim_s_to_tau"
+reference = "F"
+also = ["reached_tau", "sim_s_to_tau", "update_yield", "plan_wall_s_mean", "plan_wall_s_p95",
+        "pair_wall_s_mean", "trial_processes", "peak_rss_mib_total"]
+
+[score.s514]                  # 5.14: F (cap S*) against F with one switch flipped
+metric = "network_aou_mean"
+reference = "capS"
+versus = { secF = "", secFL1 = "secF" }   # F+L1 against F, both on the seconds backhaul
+age_cap = true                # every variant scored at the study's S (pilot_outputs.s_star)
+also = ["cap_violations", "age_max", "age_p95", "round_close_rate_kmin1", "reached_tau",
+        "sim_s_to_tau"]
+
+[score.s51]                   # 5.1: each rule against agg:cutoff on the same route and Pass 2
+metric = "sim_s_to_tau"
+reference = "cutoff"
+also = ["reached_tau", "sim_s_to_tau", "final_accuracy", "final_auc", "round_close_rate_kmin1",
+        "network_aou_mean"]
+
+[score.s52]
+metric = "deadline_miss_rate"
+reference = "F"
+also = ["round_close_rate_kmin1", "network_aou_mean", "reached_tau", "sim_s_to_tau"]
+
+[score.s54]
+metric = "network_aou_mean"
+reference = "F"
+also = ["far_served_share", "round_close_rate_kmin1", "reached_tau", "sim_s_to_tau"]
+
+[score.s55]                   # the verdict's picks on the stack, against the one-step FX
+metric = "sim_s_to_tau"
+reference = "FX"
+also = ["reached_tau", "sim_s_to_tau", "round_close_rate_kmin1", "pair_fx_agree_share"]
+
+[score.s56]
+metric = "sim_s_to_tau"
+reference = "FX"
+also = ["reached_tau", "sim_s_to_tau", "round_close_rate_kmin1", "pass1_contacts_mean",
+        "update_yield"]
+
+[score.s57]
+metric = "round_close_rate_kmin1"
+better = "higher"
+reference = "FQ"
+also = ["reached_tau", "sim_s_to_tau", "network_aou_mean"]
+
+[score.s58]
+metric = "network_aou_mean"
+reference = "F"
+age_cap = true
+also = ["age_max", "age_p95", "jain_merged", "cap_violations", "round_close_rate_kmin1",
+        "reached_tau", "sim_s_to_tau"]
+
+[score.s512]
+metric = "sim_s_to_tau"
+reference = "F"
+scorer_flags = ["--compute-columns"]
+also = ["reached_tau", "sim_s_to_tau", "update_yield", "not_ready_share",
+        "round_close_rate_kmin1", "device_energy_j_total"]
+
+[score.s513]
+metric = "sim_s_to_tau"
+reference = "F"
+scorer_flags = ["--detection-columns"]
+also = ["reached_tau", "sim_s_to_tau", "final_accuracy", "final_auc", "tpr_final", "fpr_final",
+        "f1_final", "recall_family_min", "network_aou_shard_weighted_mean"]
+
+[score.s515]                  # H1+L1 against H1 (does the adaptive backhaul pay off); the rest against F
+metric = "sim_s_to_tau"
+reference = "F"
+versus = { H1pL1 = "H1" }

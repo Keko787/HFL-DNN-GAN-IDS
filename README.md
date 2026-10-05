@@ -550,9 +550,9 @@ python scripts/exp5/launch.py run batch3
 ```
 `python scripts/exp5/launch.py campaign` walks every stage in this order and stops at each decision point; `--smoke` on `run`, `plan` or `campaign` flies every job at one trial into `../exp5_smoke` as a dry run.
 
-**8. Scoring.** Score the kept traces per study with the trace scorer (one or more `*_traces` folders), with `--cost-columns` for 5.11 and the per-study columns the Run Guide names, then compare arms with `experiments/analysis/stats.py` (`compare_to_reference`: paired bootstrap CIs, Wilcoxon with Cliff's δ, Holm across each study's family):
+**8. Scoring.** `score` runs the trace scorer over every job's kept traces, then compares each study's variants with its reference variant, using paired seeds, a bootstrap CI, Wilcoxon with Cliff's δ, and Holm correction across the study. The analysis plan (τ, each study's primary metric, its reference and the columns reported beside it) is `[score]` in `params.toml`, fixed before the studies run. Results go to `results/exp5/scores/<batch>/`; start at `index.md`. Scoring a batch again rescores only the trial CSVs that changed.
 ```bash
-python -m experiments.analysis.traces_scorer --traces results/exp5/b1/s514/n6k1_knee__capS_traces --tau 0.82 --cost-columns --csv results/exp5/b1/s514_capS_scored.csv
+python scripts/exp5/launch.py score batch1
 ```
 
 **9. The learned score (batch 2).** In this order, with the exact commands in the Run Guide §2.8 and the decisions it needs in the Scheduler Freeze §5l:
