@@ -534,6 +534,22 @@ python scripts/exp5/launch.py status batch1
 ```
 Jobs run side by side under the limits in `params.toml` (on 8 cores and 95 GB: six N = 6 trials at once, one N = 24 trial). A stopped run resumes by running the same command again; a CSV written under other settings is refused. Cells shared between studies run once (for example, 5.3's F at N = 6 reads the first 20 of 5.14's 40 trials); `plan` and the manifest list each alias. Outputs go to `results/exp5/<stage>/<study>/<cell>__<arm>.csv`, with the kept traces beside each CSV (`*_traces/`), the job logs in `_logs/` and the manifests in `_launcher/`.
 
+**7b. Batches 2 and 3.** Batch 2 is the studies that wait for Study 5.5's verdict (step 9), which decides F's in-flight slot: 5.1, 5.2, the rest of 5.3, 5.4 (with the O1 oracle), 5.5's stack check, 5.6, 5.7, 5.8, the rest of 5.9 and 5.13. Batch 3 is the studies that need a pilot of their own first: 5.12, 5.15 and 5.11 (c). A cell that batch 1 already flew is not flown again (a later batch reads batch 1's CSV, or adds its extra trials to it). After the verdict, set `[rl] keep_learned` and `[rl.checkpoints]` in `params.toml` (FQ arms are left out when the learned score is not kept), then:
+```bash
+python scripts/exp5/launch.py run batch2
+```
+```bash
+python scripts/exp5/launch.py run pilot3
+```
+```bash
+python scripts/exp5/launch.py report pilot3
+```
+Set what the report gives (`[s515]` `harsher_amp_db` and `lossier_n_pl`, `[s511c]` `knee_s`) and the settings each study leaves open (`[s51]` `fedprox_rho`, `[s56]` `n_trials`, `[s512]` `train_levels`), then:
+```bash
+python scripts/exp5/launch.py run batch3
+```
+`python scripts/exp5/launch.py campaign` walks every stage in this order and stops at each decision point; `--smoke` on `run`, `plan` or `campaign` flies every job at one trial into `../exp5_smoke` as a dry run.
+
 **8. Scoring.** Score the kept traces per study with the trace scorer (one or more `*_traces` folders), with `--cost-columns` for 5.11 and the per-study columns the Run Guide names, then compare arms with `experiments/analysis/stats.py` (`compare_to_reference`: paired bootstrap CIs, Wilcoxon with Cliff's δ, Holm across each study's family):
 ```bash
 python -m experiments.analysis.traces_scorer --traces results/exp5/b1/s514/n6k1_knee__capS_traces --tau 0.82 --cost-columns --csv results/exp5/b1/s514_capS_scored.csv

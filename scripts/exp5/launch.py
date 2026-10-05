@@ -106,9 +106,12 @@ REPO = HERE.parents[1]
 PARAMS = HERE / "params.toml"
 RUNNER = ["-m", "experiments.exp4.runner_main"]
 RL_STAGES = ("rl-headroom", "rl-calibrate", "rl-sweep", "rl-e3", "rl-s57")
-STAGES = ("ttl", "knee", "sstar", "batch1") + RL_STAGES
+STAGES = ("ttl", "knee", "sstar", "batch1") + RL_STAGES + ("batch2", "pilot3", "batch3")
 STAGE_DIR = {"ttl": "ttl", "knee": "knee", "sstar": "sstar", "batch1": "b1",
-             **{st: "rl/" + st[3:] for st in RL_STAGES}}
+             **{st: "rl/" + st[3:] for st in RL_STAGES},
+             "batch2": "b2", "pilot3": "p3", "batch3": "b3"}
+#: The stages whose jobs may read batch 1's CSV for a cell they share with it.
+REUSES_BATCH1 = ("batch2", "batch3")
 FERRYSIM = ["-m", "experiments.ferrysim"]
 
 #: The plan arms take the age cap (--age-cap-missions); the H and D arms do not.
@@ -240,6 +243,14 @@ def _arm_tag(arm: str) -> str:
     return arm.replace("+", "p")
 
 
+def _ferrysim_cells():
+    """FerrySim's cell registry (Study 5.6's cells and periods follow the re-pin)."""
+    if str(REPO) not in sys.path:
+        sys.path.insert(0, str(REPO))
+    from experiments.ferrysim import cells
+    return cells
+
+
 class Builder:
     """Expands one stage of params.toml into jobs."""
 
@@ -264,15 +275,17 @@ class Builder:
 
     def _runner(self, stage: str, study: str, tag: str, *, arm: str, n: int, k: int,
                 budget_s: Any, payload: Any, n_trials: int, extra: Sequence[str] = (),
-                cap: Any = None, footprint: bool = False) -> Job:
+                cap: Any = None, footprint: bool = False,
+                n_missions: Optional[int] = None) -> Job:
         s = self.s
         before = len(s.missing)
         out = f"{self.root}/{STAGE_DIR[stage]}/{study}/{tag}.csv"
         ttl = s.per_n("pilot_outputs.session_ttl_s", n)
         seed = s.get("campaign.base_seed")
+        missions = n_missions if n_missions is not None else s.get("campaign.n_missions")
         args = RUNNER + [
             "--csv", out, "--arms", arm, "--N", str(n),
-            "--n-missions", _fmt(s.get("campaign.n_missions")),
+            "--n-missions", _fmt(missions),
             "--regime", str(s.get("campaign.regime")),
             "--n-trials", str(n_trials), "--base-seed", _fmt(seed),
             "--mission-budget-s", _fmt(budget_s), "--session-ttl-s", _fmt(ttl),
@@ -310,7 +323,12 @@ class Builder:
         return job
 
     def _budget(self, level: str, n: int) -> Any:
-        key = {"knee": "knee_s", "stress": "stress_s"}[level]
+        if level == "relaxed":              # 5.3's third budget, a multiple of the knee
+            knee = self.s.per_n("pilot_outputs.knee_s", n)
+            factor = self.s.get("batch2.relaxed_factor")
+            return None if knee is None or factor is None else float(knee) * float(factor)
+        key = {"knee": "knee_s", "stress": "stress_s", "knee_meas": "knee_meas_s",
+               "stress_meas": "stress_meas_s"}[level]
         return self.s.per_n(f"pilot_outputs.{key}", n)
 
     def _cap(self, cap: Optional[str], n: int) -> Any:
@@ -324,18 +342,79 @@ class Builder:
     def _arm_job(self, stage: str, study: str, *, arm: str, n: int, k: int, level: str,
                  payload: Any, n_trials: int, extra: Sequence[str] = (),
                  cap: Optional[str] = "S", tag_arm: Optional[str] = None,
-                 footprint: bool = False) -> Job:
+                 footprint: bool = False, n_missions: Optional[int] = None,
+                 tag_extra: str = "", budget_s: Any = None) -> Job:
         before = len(self.s.missing)
-        budget = self._budget(level, n)
-        cap_value = self._cap(cap, n) if arm in PLAN_ARMS else None
-        missing = self.s.missing[before:]
+        budget = self._budget(level, n) if budget_s is None else budget_s
+        cap_value = self._cap(cap, n) if arm in PLAN_ARMS or arm.startswith("FQ") else None
+        learned, learned_missing = self._learned(arm)
+        missing = self.s.missing[before:] + learned_missing
         del self.s.missing[before:]
-        tag = f"n{n}k{k}_{level}__{tag_arm or _arm_tag(arm)}"
+        tag = f"n{n}k{k}_{level}{tag_extra}__{tag_arm or _arm_tag(arm)}"
         job = self._runner(stage, study, tag, arm=arm, n=n, k=k, budget_s=budget,
-                           payload=payload, n_trials=n_trials, extra=extra,
-                           cap=cap_value, footprint=footprint)
+                           payload=payload, n_trials=n_trials, extra=list(extra) + learned,
+                           cap=cap_value, footprint=footprint, n_missions=n_missions)
         job.blocked = sorted(set(job.blocked) | set(missing))
         return job
+
+    # -- learned arms (batch 2): the checkpoint each flies ---------------------- #
+
+    _PAIR_TAG = {"FQ": "main", "FQ-hand": "hand", "FQ-dwell": "dwell", "FQ-cov": "cov"}
+
+    def keeps(self, arm: str) -> Optional[bool]:
+        """Whether a study flies ``arm``: an FQ arm only when the 5.5 verdict kept
+        the learned score (None: not decided yet); every other arm always."""
+        if not arm.startswith("FQ"):
+            return True
+        return self.s.get("rl.keep_learned", None)
+
+    def _learned(self, arm: str) -> Tuple[List[str], List[str]]:
+        """The checkpoint flag ``arm`` flies with, and the settings it still needs."""
+        s = self.s
+        if arm == "E3":
+            path = s.get("rl.checkpoints.e3", None)
+            return (["--policy-checkpoint", f"E3={path}"], []) if path else (
+                [], ["rl.checkpoints.e3"])
+        if not arm.startswith("FQ"):
+            return [], []
+        if arm in self._PAIR_TAG:
+            tag = self._PAIR_TAG[arm]
+            key = "main" if tag == "main" else tag
+        else:                               # FQ-g<X>: the 5.5 stack check's picks
+            tag = arm[3:]
+            key = "g0" if tag == "g0" else "best"
+        path = s.get(f"rl.checkpoints.{key}", None)
+        return (["--pair-checkpoint", f"{tag}={path}"], []) if path else (
+            [], [f"rl.checkpoints.{key}"])
+
+    def _arms(self, arms: Sequence[str]) -> Tuple[List[str], List[str]]:
+        """The arms a batch-2 study flies, and what decides the rest: FQ arms are
+        dropped when the verdict did not keep the learned score, blocked while
+        it is undecided."""
+        flown, undecided = [], []
+        for arm in arms:
+            keep = self.keeps(arm)
+            if keep is None:
+                undecided.append(arm)
+                flown.append(arm)
+            elif keep:
+                flown.append(arm)
+        return flown, (["rl.keep_learned"] if undecided else [])
+
+    def _study_jobs(self, stage: str, study: str, *, arms: Sequence[str], n: int, k: int,
+                    level: str, payload: Any, n_trials: int, extra: Sequence[str] = (),
+                    tag_extra: str = "", n_missions: Optional[int] = None,
+                    budget_s: Any = None, fp: bool = True) -> None:
+        """One job per arm of one cell, with the batch-2 arm rules applied."""
+        flown, undecided = self._arms(arms)
+        for arm in flown:
+            job = self._arm_job(stage, study, arm=arm, n=n, k=k, level=level, payload=payload,
+                                n_trials=n_trials, extra=extra, tag_extra=tag_extra,
+                                n_missions=n_missions, budget_s=budget_s, footprint=fp,
+                                tag_arm=None)
+            if arm.startswith("FQ") and undecided:
+                job.blocked = sorted(set(job.blocked) | set(undecided))
+            self.jobs.append(job)
 
     # -- stages --------------------------------------------------------- #
 
@@ -453,6 +532,285 @@ class Builder:
             self.jobs.append(Job("batch1", "s511a", f"s511a/{mode}", args, base + ".json",
                                  "tool", n=0, mem_gb=light * (1 + 2 * workers)))
 
+
+    # -- batch 2: the studies after the RL verdict ----------------------------- #
+
+    def batch2(self) -> None:
+        s = self.s
+        st = "batch2"
+        # 5.1: the merge rules, each on a fixed route.
+        rho = s.get("s51.fedprox_rho", None)
+        n51 = int(s.get("s51.N"))
+        for route in s.get("s51.routes") or []:
+            for rule in s.get("s51.rules") or []:
+                extra: List[str] = []
+                missing: List[str] = []
+                if rule == "agg:cutoff+fedprox":
+                    extra = ["--aggregation", "agg:cutoff", "--fedprox-rho", _fmt(rho)]
+                    if rho is None:
+                        missing = ["s51.fedprox_rho"]
+                elif rule == "agg:fedbuff":
+                    extra = ["--aggregation", rule, "--agg-buffer-k", str(n51)]
+                elif rule != "agg:cutoff":
+                    extra = ["--aggregation", rule]
+                rtag = rule.replace("agg:", "").replace("+", "_")
+                for p2 in (s.get("s51.pass_2") or []) if route == "H1" else ["unbudgeted"]:
+                    p2_extra = ["--pass-2-budget"] if p2 == "budgeted" else []
+                    for level in s.get("s51.budgets") or []:
+                        job = self._arm_job(
+                            st, "s51", arm=route, n=n51, k=1, level=level,
+                            payload=s.get("s51.payload_bytes"),
+                            n_trials=int(s.get("s51.n_trials")), extra=extra + p2_extra,
+                            tag_extra=f"_{rtag}_{p2[:5]}", footprint=True)
+                        job.blocked = sorted(set(job.blocked) | set(missing))
+                        self.jobs.append(job)
+        # 5.2: the deadline forms (F-add is F with the additive law).
+        for level in s.get("s52.budgets") or []:
+            for arm in s.get("s52.arms") or []:
+                real, extra = (("F", ["--deadline-law", "additive"]) if arm == "F-add"
+                               else (arm, []))
+                self.jobs.append(self._arm_job(
+                    st, "s52", arm=real, n=int(s.get("s52.N")), k=1, level=level,
+                    payload=s.get("s52.payload_bytes"), n_trials=int(s.get("s52.n_trials")),
+                    extra=extra, tag_arm=_arm_tag(arm), footprint=True))
+        # 5.3 beyond batch 1's core (cells it shares with batch 1 read batch 1's CSV).
+        for k in s.get("s53x.K") or []:
+            for level in s.get("s53x.budgets") or []:
+                self._study_jobs(st, "s53x", arms=s.get("s53x.arms") or [],
+                                 n=int(s.get("s53x.N")), k=int(k), level=level,
+                                 payload=s.get("s53x.payload_bytes"),
+                                 n_trials=int(s.get("s53x.n_trials")))
+                if s.get("s53x.d4_faithful", False):
+                    self.jobs.append(self._arm_job(
+                        st, "s53x", arm="D4", n=int(s.get("s53x.N")), k=int(k), level=level,
+                        payload=s.get("s53x.payload_bytes"),
+                        n_trials=int(s.get("s53x.n_trials")),
+                        extra=("--aggregation", "agg:fedex"), tag_arm="D4fedex",
+                        footprint=True))
+        if s.get("s53x.h0", False):
+            self.jobs.append(self._h0_job(st, "s53x", n=int(s.get("s53x.N")),
+                                          n_trials=int(s.get("s53x.n_trials"))))
+        # 5.4: F against FB+ pinned to each class, one U10 axis at a time.
+        n54 = int(s.get("s54.N"))
+        settings: List[Tuple[str, List[str], Dict[str, Any], Dict[str, Any]]] = [
+            ("", [], {}, {})]
+        for r in s.get("s54.narrow_range_ratios") or []:
+            settings.append((f"_ratio{_fmt(r)}", ["--narrow-range-ratio", _fmt(r)],
+                             {"narrow_range_ratio": float(r)}, {}))
+        for f in s.get("s54.far_shares") or []:
+            settings.append((f"_far{int(round(float(f) * 100))}", ["--far-share", _fmt(f)],
+                             {}, {"far_share": float(f)}))
+        for payload in s.get("s54.payloads") or []:
+            level = s.get("s54.budget") + ("_meas" if payload == "measured" else "")
+            for tag, extra, _phys, _drv in settings:
+                for arm in s.get("s54.arms") or []:
+                    self.jobs.append(self._arm_job(
+                        st, "s54", arm=arm, n=n54, k=1, level=level, payload=payload,
+                        n_trials=int(s.get("s54.n_trials")), extra=extra,
+                        tag_extra=f"_{_payload_tag(payload)}{tag}", footprint=True))
+        if s.get("s54.o1", False):
+            cells6 = [c.name for c in _ferrysim_cells().FAMILIES["jittery"] if c.n_devices == 6]
+            w = int(s.get("s54.o1_workers"))
+            for tag, _extra, phys, drv in settings:
+                out = f"{self.root}/b2/s54/o1{tag or '_base'}.json"
+                args = ["-m", "experiments.analysis.o1_oracle", "--cells", *cells6,
+                        "--episodes", str(int(s.get("s54.o1_episodes"))), "--workers", str(w),
+                        "--out", out]
+                if phys:
+                    args += ["--physics", json.dumps(phys)]
+                if drv:
+                    args += ["--driver", json.dumps(drv)]
+                self.jobs.append(Job(st, "s54", f"s54/o1{tag or '_base'}", args, out, "tool",
+                                     mem_gb=float(s.get("machine.gb_per_light_process")) * (1 + w),
+                                     slots=w))
+        # 5.5's stack check: the verdict's best gamma and gamma = 0, beside FX and F.
+        best = s.get("rl.checkpoints.best_tag", None)
+        arms55 = [f"FQ-{best}" if best else "FQ-gbest", "FQ-g0", "FX", "F"]
+        for level in s.get("s55.budgets") or []:
+            for arm in arms55:
+                job = self._arm_job(st, "s55", arm=arm, n=int(s.get("s55.N")), k=1,
+                                    level=level, payload=s.get("s55.payload_bytes"),
+                                    n_trials=int(s.get("s55.n_trials")), footprint=True)
+                if arm == "FQ-gbest":
+                    job.blocked = sorted(set(job.blocked) | {"rl.checkpoints.best_tag"})
+                self.jobs.append(job)
+        # 5.6: the cells at each interference period, and the clean control.
+        n56 = s.get("s56.n_trials", None)
+        cells = _ferrysim_cells().STUDY_5_6_CELLS
+        for cell in cells:
+            self._study_jobs(st, "s56", arms=s.get("s56.arms") or [], n=int(s.get("s56.N")),
+                             k=1, level="cell", payload=s.get("s56.payload_bytes"),
+                             n_trials=int(n56 or 1), budget_s=cell.budget_s,
+                             extra=["--interference-period-s",
+                                    _fmt(float(cell.interference_period_s))],
+                             tag_extra=f"_{_fmt(cell.budget_s)}s_p{_fmt(cell.interference_period_s)}")
+        for budget in sorted({c.budget_s for c in cells}):
+            self._study_jobs(st, "s56", arms=s.get("s56.arms") or [], n=int(s.get("s56.N")),
+                             k=1, level="cell", payload=s.get("s56.payload_bytes"),
+                             n_trials=int(n56 or 1), budget_s=budget,
+                             extra=["--contact-regime", "clean"],
+                             tag_extra=f"_{_fmt(budget)}s_clean")
+        if n56 is None:
+            for j in self.jobs:
+                if j.study == "s56":
+                    j.blocked = sorted(set(j.blocked) | {"s56.n_trials"})
+        # 5.7: the plan terms and the reward (learned score only).
+        for level in s.get("s57.budgets") or []:
+            self._study_jobs(st, "s57", arms=s.get("s57.arms") or [], n=int(s.get("s57.N")),
+                             k=1, level=level, payload=s.get("s57.payload_bytes"),
+                             n_trials=int(s.get("s57.n_trials")))
+        # 5.8: fairness under cost, at 4 and 8 missions.
+        for missions in s.get("s58.missions") or []:
+            for level in s.get("s58.budgets") or []:
+                self._study_jobs(st, "s58", arms=s.get("s58.arms") or [], n=int(s.get("s58.N")),
+                                 k=1, level=level, payload=s.get("s58.payload_bytes"),
+                                 n_trials=int(s.get("s58.n_trials")), n_missions=int(missions),
+                                 tag_extra=f"_m{int(missions)}")
+        # 5.9 beyond batch 1's core.
+        for regime in s.get("s59x.contact_regimes") or []:
+            extra = [] if regime == s.get("campaign.contact_regime", None) else [
+                "--contact-regime", str(regime)]
+            for n in s.get("s59x.N") or []:
+                for k in s.get("s59x.K") or []:
+                    for level in s.get("s59x.budgets") or []:
+                        self._study_jobs(st, "s59x", arms=s.get("s59x.arms") or [], n=int(n),
+                                         k=int(k), level=level,
+                                         payload=s.get("s59x.payload_bytes"),
+                                         n_trials=int(s.get("s59x.n_trials")), extra=extra,
+                                         tag_extra="" if not extra else f"_{regime}")
+        # 5.13: data heterogeneity, with family labels throughout.
+        n513 = int(s.get("s513.N"))
+        for part, alpha in s.get("s513.partitions") or []:
+            extra = ["--family-labels"]
+            if part != "iid":
+                extra += ["--partition", str(part), "--dirichlet-alpha", _fmt(alpha)]
+            ptag = f"_{part}" + ("" if part == "iid" else f"{_fmt(alpha)}")
+            self._study_jobs(st, "s513", arms=s.get("s513.route_arms") or [], n=n513, k=1,
+                             level=s.get("s513.budget"), payload=s.get("s513.payload_bytes"),
+                             n_trials=int(s.get("s513.n_trials")), extra=extra, tag_extra=ptag)
+            route = s.get("s513.plain_on_route")
+            self.jobs.append(self._arm_job(
+                st, "s513", arm=route, n=n513, k=1, level=s.get("s513.budget"),
+                payload=s.get("s513.payload_bytes"), n_trials=int(s.get("s513.n_trials")),
+                extra=extra + ["--aggregation", "agg:plain"], tag_extra=ptag,
+                tag_arm=f"{_arm_tag(route)}plain", footprint=True))
+
+    def _h0_job(self, stage: str, study: str, *, n: int, n_trials: int) -> Job:
+        """H0, the live-link reference: no mule, the wall clock only (Phase 3
+        deviations), the network regime and the real model as the rest."""
+        s = self.s
+        before = len(s.missing)
+        out = f"{self.root}/{STAGE_DIR[stage]}/{study}/n{n}_wall__H0.csv"
+        args = RUNNER + ["--csv", out, "--arms", "H0", "--N", str(n),
+                         "--n-missions", _fmt(s.get("campaign.n_missions")),
+                         "--regime", str(s.get("campaign.regime")),
+                         "--n-trials", str(n_trials),
+                         "--base-seed", _fmt(s.get("campaign.base_seed")),
+                         "--real-model", "--realism", "--keep-event-traces"]
+        job = Job(stage, study, f"{study}/n{n}_wall__H0", args, out, "runner", n=n,
+                  mem_gb=self._mem_runner(n, 0), trials=n_trials)
+        job.blocked = sorted(set(s.missing[before:]))
+        del s.missing[before:]
+        return job
+
+    # -- batch 3's pilots, and batch 3 ----------------------------------------- #
+
+    def pilot3(self) -> None:
+        s = self.s
+        # 5.15's harsher interference: H1's service by amplitude, at the knee.
+        n = int(s.get("p515.N"))
+        for amp in s.get("p515.amps_db") or []:
+            self.jobs.append(self._arm_job(
+                "pilot3", "p515", arm="H1", n=n, k=1, level="knee", payload=1000000,
+                n_trials=int(s.get("p515.n_trials")),
+                extra=["--interference-amp-db", _fmt(amp)], tag_extra=f"_amp{_fmt(amp)}",
+                footprint=False))
+        # 5.11 (c): FerrySim's budget sweep per scale cell.
+        w = int(s.get("p511c.workers"))
+        for cell in s.get("p511c.cells") or []:
+            budgets = s.get(f"p511c.budgets_s.{cell}", None)
+            out = f"{self.root}/p3/p511c/{cell}.json"
+            args = FERRYSIM + ["pilot", "--cells", str(cell),
+                               "--budgets", *[_fmt(b) for b in (budgets or [])],
+                               "--policies", *[str(p) for p in s.get("p511c.policies") or []],
+                               "--episodes", str(int(s.get("p511c.episodes"))),
+                               "--workers", str(w), "--out", out]
+            job = Job("pilot3", "p511c", f"p511c/{cell}", args, out, "tool",
+                      mem_gb=float(s.get("machine.gb_per_light_process")) * (1 + w), slots=w)
+            if budgets is None:
+                job.blocked = [f"p511c.budgets_s.{cell}"]
+            self.jobs.append(job)
+
+    def batch3(self) -> None:
+        s = self.s
+        st = "batch3"
+        # 5.12: training time on the simulated clock x payload (x model).
+        levels = s.get("s512.train_levels", None)
+        n512 = int(s.get("s512.N"))
+        for arch in s.get("s512.model_archs") or ["ciciot"]:
+            arch_extra = [] if arch == "ciciot" else ["--model-arch", str(arch)]
+            for name, vals in (levels or {"unset": [0, 0, 0, 1]}).items():
+                median, sigma, share, factor = (float(v) for v in vals)
+                extra = arch_extra + ["--train-time-s", _fmt(median)]
+                if median > 0:
+                    extra += ["--train-time-sigma", _fmt(sigma), "--straggler-share",
+                              _fmt(share), "--straggler-factor", _fmt(factor)]
+                for payload in s.get("s512.payloads") or []:
+                    level = s.get("s512.budget") + ("_meas" if payload == "measured" else "")
+                    for arm in s.get("s512.arms") or []:
+                        job = self._arm_job(
+                            st, "s512", arm=arm, n=n512, k=1, level=level, payload=payload,
+                            n_trials=int(s.get("s512.n_trials")), extra=extra,
+                            tag_extra=f"_{_payload_tag(payload)}_{name}"
+                                      + ("" if arch == "ciciot" else f"_{arch}"),
+                            footprint=True)
+                        if levels is None:
+                            job.blocked = sorted(set(job.blocked) | {"s512.train_levels"})
+                        self.jobs.append(job)
+        # 5.15: one radio axis at a time from the jittery default, on the seconds backhaul.
+        n515 = int(s.get("s515.N"))
+        base = ["--backhaul-model", str(s.get("s515.backhaul"))]
+        harsher = s.get("s515.harsher_amp_db", None)
+        lossier = s.get("s515.lossier_n_pl", None)
+        axes: List[Tuple[str, List[str], List[str]]] = [("_base", [], [])]
+        for a in s.get("s515.amps_db") or []:
+            axes.append((f"_amp{_fmt(a)}", ["--interference-amp-db", _fmt(a)], []))
+        axes.append(("_ampharsh", ["--interference-amp-db", _fmt(harsher)],
+                     [] if harsher is not None else ["s515.harsher_amp_db"]))
+        axes.append(("_npl", ["--n-pl", _fmt(lossier)],
+                     [] if lossier is not None else ["s515.lossier_n_pl"]))
+        for sg in s.get("s515.shadow_sigmas_db") or []:
+            axes.append((f"_sigma{_fmt(sg)}", ["--shadow-sigma-db", _fmt(sg)], []))
+        for tag, extra, missing in axes:
+            for arm in s.get("s515.arms") or []:
+                job = self._arm_job(st, "s515", arm=arm, n=n515, k=1,
+                                    level=s.get("s515.budget"),
+                                    payload=s.get("s515.payload_bytes"),
+                                    n_trials=int(s.get("s515.n_trials")), extra=base + extra,
+                                    tag_extra=tag, footprint=True)
+                job.blocked = sorted(set(job.blocked) | set(missing))
+                self.jobs.append(job)
+        for arm in s.get("s515.mission_backhaul_arms") or []:
+            self.jobs.append(self._arm_job(
+                st, "s515", arm=arm, n=n515, k=1, level=s.get("s515.budget"),
+                payload=s.get("s515.payload_bytes"), n_trials=int(s.get("s515.n_trials")),
+                tag_extra="_missionbh", footprint=True))
+        # 5.11 (c): FerrySim at each scale cell's knee, every policy.
+        knees = s.get("s511c.knee_s", None)
+        w = int(s.get("s511c.workers"))
+        for cell in s.get("p511c.cells") or []:
+            knee = None if knees is None else knees.get(cell)
+            out = f"{self.root}/b3/s511c/{cell}.json"
+            args = FERRYSIM + ["pilot", "--cells", str(cell), "--budgets", _fmt(knee),
+                               "--policies", *[str(p) for p in s.get("s511c.policies") or []],
+                               "--episodes", str(int(s.get("s511c.episodes"))),
+                               "--workers", str(w), "--trace-root", out[:-5] + "_traces",
+                               "--out", out]
+            job = Job(st, "s511c", f"s511c/{cell}", args, out, "tool",
+                      mem_gb=float(s.get("machine.gb_per_light_process")) * (1 + w), slots=w)
+            if knee is None:
+                job.blocked = [f"s511c.knee_s.{cell}"]
+            self.jobs.append(job)
 
     # -- the learned score's FerrySim campaign (Run Guide 2.8) --------------- #
 
@@ -670,7 +1028,35 @@ def build(stage: str, s: Settings, studies: Optional[Sequence[str]] = None,
     jobs = b.jobs
     if studies:
         jobs = [j for j in jobs if j.study in studies]
-    return dedupe(jobs)
+    jobs = dedupe(jobs)
+    if stage in REUSES_BATCH1:
+        reuse_batch1(jobs, s, root)
+    return jobs
+
+
+def reuse_batch1(jobs: List[Job], s: Settings, root: str) -> None:
+    """A later batch's cell that batch 1 already flies (the same arguments but
+    --csv and --n-trials) is not flown again: with no more trials than batch 1
+    it reads batch 1's CSV; with more, it writes the extra trials into that same
+    CSV (the runner skips the rows there), so every trial of the cell stays in
+    one file with the same seeds."""
+    b1 = Builder(Settings(s.data), root)
+    b1.batch1()
+    primary = {_key(j): j for j in dedupe(b1.jobs)
+               if j.kind == "runner" and not j.blocked and j.alias_of is None}
+    for j in jobs:
+        if j.kind != "runner" or j.blocked or j.alias_of is not None:
+            continue
+        p = primary.get(_key(j))
+        if p is None:
+            continue
+        if (j.trials or 0) <= (p.trials or 0):
+            j.alias_of = f"batch1:{p.name}"
+            j.out = p.out
+        else:
+            j.args[j.args.index("--csv") + 1] = p.out
+            j.out = p.out
+            j.aliases.append(f"extends batch1:{p.name} ({p.trials} -> {j.trials} trials)")
 
 
 def _key(job: Job) -> Tuple[str, ...]:
@@ -944,6 +1330,8 @@ def cmd_plan(stage: str, s: Settings, jobs: List[Job], show: bool,
                 blocked.update(j.blocked)
             elif j.alias_of:
                 note = f"= {j.alias_of}"
+            elif any(a.startswith("extends") for a in j.aliases):
+                note = next(a for a in j.aliases if a.startswith("extends"))
             elif checked and j.name in checked and not checked[j.name]["ok"]:
                 note = "INVALID: " + checked[j.name]["error"]
             if j.kind == "runner" and not j.alias_of:
@@ -1335,6 +1723,27 @@ def cmd_report(stage: str, s: Settings, jobs: List[Job]) -> int:
         out["s_star"] = stars
         print("\n[pilot_outputs]\ns_star = { " + ", ".join(f'"{k}" = {v}' for k, v in stars.items())
               + " }")
+    elif stage == "pilot3":
+        print("  p515: H1's served share by interference amplitude (5.15's harsher level)")
+        for j in jobs:
+            if j.study != "p515":
+                continue
+            path = REPO / j.out
+            amp = j.args[j.args.index("--interference-amp-db") + 1]
+            vals: List[float] = []
+            if path.exists():
+                with path.open(newline="", encoding="utf-8") as f:
+                    vals = [float(r["update_yield"]) for r in csv.DictReader(f)
+                            if r.get("status", "ok") == "ok" and r.get("update_yield")]
+            share = (sum(vals) / len(vals) / j.n) if vals else None
+            print(f"    amp {amp:>5} dB: " + ("no ok rows" if share is None else
+                                               f"served share {share:5.1%} (n = {len(vals)})"))
+        print("  p511c: each scale cell's table (served share by budget) is in its JSON:")
+        for j in jobs:
+            if j.study == "p511c":
+                print(f"    {j.name}: {'written' if (REPO / j.out).exists() else 'not yet'} "
+                      f"({j.out})")
+        print("\n  set [s515] harsher_amp_db, lossier_n_pl and [s511c] knee_s in params.toml")
     elif stage in RL_STAGES:
         trained = [j for j in jobs if j.kind == "rl-train"]
         print(f"  trainings: {sum(1 for j in trained if done(j))}/{len(trained)} saved")
@@ -1368,11 +1777,11 @@ SMOKE_ROOT = REPO.parent / "exp5_smoke"
 
 #: The stages in the order the campaign runs them (batch 2 joins once built).
 CAMPAIGN = ("ttl", "knee", "sstar", "rl-headroom", "rl-calibrate", "rl-sweep", "rl-e3",
-            "rl-s57", "batch1")
+            "rl-s57", "batch1", "batch2", "pilot3", "batch3")
 
 #: Stages after which a person reads a report and sets params.toml: the pilots'
-#: outputs, the calibration's sanity check and Study 5.5's verdict.
-PAUSE_AFTER = ("ttl", "knee", "sstar", "rl-calibrate", "rl-sweep")
+#: outputs, the calibration's sanity check, Study 5.5's verdict and batch 3's pilots.
+PAUSE_AFTER = ("ttl", "knee", "sstar", "rl-calibrate", "rl-sweep", "pilot3")
 
 
 def _set_flag(args: List[str], flag: str, value: str) -> None:
