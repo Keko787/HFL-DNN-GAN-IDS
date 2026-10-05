@@ -12,6 +12,9 @@ the FeRRy flags. This launcher turns a stage into jobs, one runner process per
     report    a finished pilot's pilot_outputs lines for params.toml, by the
               pre-registered rules (ttl: 2 x p95 rounded up; knee: params
               [knee] metric and plateau_share; sstar: the tool's S for F)
+    score     a batch's trials through the trace scorer, then each study's
+              paired comparisons by params.toml [score] (scoring.py), written
+              to <out_root>/scores/<stage dir>/ (index.md first)
     campaign  every stage in order, skipping those done; it stops before a stage
               whose settings are unset, after a stage whose report a person
               reads (the pilots, the calibration, Study 5.5's verdict), and at
@@ -37,6 +40,13 @@ The learned score's FerrySim campaign (Run Guide 2.8), after the re-pin
     rl-e3         E3's trainings and evaluate --reward bytes --record
     rl-s57        Study 5.7's scores (F-hand, the dwell and cov ablations, the
                   reward grid), only if the 5.5 verdict keeps the learned score
+
+Then the studies that wait for the verdict, and those with pilots of their own:
+
+    batch2   5.1, 5.2, the rest of 5.3, 5.4 (with O1), 5.5's stack check, 5.6,
+             5.7, 5.8, the rest of 5.9, 5.13
+    pilot3   5.15's interference levels and 5.11 (c)'s FerrySim budget sweeps
+    batch3   5.12, 5.15, 5.11 (c)
 
 Each training is one `ferrysim train` job with an explicit tag, so a stopped
 stage resumes by skipping the checkpoints that exist (`ferrysim sweep`
@@ -112,6 +122,10 @@ STAGE_DIR = {"ttl": "ttl", "knee": "knee", "sstar": "sstar", "batch1": "b1",
              "batch2": "b2", "pilot3": "p3", "batch3": "b3"}
 #: The stages whose jobs may read batch 1's CSV for a cell they share with it.
 REUSES_BATCH1 = ("batch2", "batch3")
+#: The stages `score` reads (the pilots have `report`); each scores into
+#: <out_root>/scores/<stage dir>/, with its scorer runs' logs there too.
+SCORED = ("batch1", "batch2", "batch3")
+STAGE_DIR.update({f"score-{st}": f"scores/{STAGE_DIR[st]}" for st in SCORED})
 FERRYSIM = ["-m", "experiments.ferrysim"]
 
 #: The plan arms take the age cap (--age-cap-missions); the H and D arms do not.
@@ -215,7 +229,7 @@ class Job:
     name: str                     # unique within the stage: <study>/<tag>
     args: List[str]               # after the interpreter
     out: str                      # the CSV, JSON or checkpoint it writes, relative to REPO
-    kind: str                     # "runner", "tool" or "rl-train"
+    kind: str                     # "runner", "tool", "rl-train" or "score"
     n: int = 0                    # devices (for cost)
     mem_gb: float = 0.0
     trials: Optional[int] = None  # rows it should write (runner jobs)
@@ -557,11 +571,13 @@ class Builder:
                 for p2 in (s.get("s51.pass_2") or []) if route == "H1" else ["unbudgeted"]:
                     p2_extra = ["--pass-2-budget"] if p2 == "budgeted" else []
                     for level in s.get("s51.budgets") or []:
+                        # The cell is the route and Pass 2; the variant compared is the rule.
                         job = self._arm_job(
                             st, "s51", arm=route, n=n51, k=1, level=level,
                             payload=s.get("s51.payload_bytes"),
                             n_trials=int(s.get("s51.n_trials")), extra=extra + p2_extra,
-                            tag_extra=f"_{rtag}_{p2[:5]}", footprint=True)
+                            tag_extra=f"_{_arm_tag(route)}_{p2[:5]}", tag_arm=rtag,
+                            footprint=True)
                         job.blocked = sorted(set(job.blocked) | set(missing))
                         self.jobs.append(job)
         # 5.2: the deadline forms (F-add is F with the additive law).
@@ -1293,6 +1309,13 @@ def done(job: Job) -> bool:
     if job.kind == "rl-train":
         # A training saves its arrays and then the manifest beside them.
         return path.exists() and path.with_suffix(".json").exists()
+    if job.kind == "score":
+        # Current: newer than its trial CSV, and scored under these arguments.
+        src = REPO / job.args[job.args.index("--status-csv") + 1]
+        side = path.with_suffix(path.suffix + ".argv.json")
+        return (path.exists() and src.exists() and side.exists()
+                and path.stat().st_mtime >= src.stat().st_mtime
+                and json.loads(side.read_text(encoding="utf-8")) == job.args)
     rows, _ = csv_rows(path)
     return rows >= (job.trials or 0)
 
@@ -1405,13 +1428,14 @@ def cmd_run(stage: str, s: Settings, params_text: str, jobs: List[Job], *,
         except ImportError:
             sys.exit("--footprint-probe needs psutil")
 
-    checked = cmd_validate(jobs)
-    if any(not v["ok"] for v in checked.values()):
-        sys.exit("the runner refuses the jobs above; nothing ran")
+    if any(j.kind in ("runner", "rl-train") for j in jobs):
+        checked = cmd_validate(jobs)
+        if any(not v["ok"] for v in checked.values()):
+            sys.exit("the runner refuses the jobs above; nothing ran")
 
     # Resume guard: a CSV written under other arguments is refused.
     for j in jobs:
-        if j.alias_of:
+        if j.alias_of or j.kind == "score":
             continue
         side = (REPO / j.out).with_suffix((REPO / j.out).suffix + ".argv.json")
         if side.exists():
@@ -1529,7 +1553,9 @@ def _run_jobs(stage: str, s: Settings, params_text: str, jobs: List[Job], todo: 
                     continue
                 out = REPO / j.out
                 out.parent.mkdir(parents=True, exist_ok=True)
-                if j.kind == "runner":
+                if j.kind == "score":
+                    out.unlink(missing_ok=True)    # never an old score under new arguments
+                if j.kind in ("runner", "score"):
                     side = out.with_suffix(out.suffix + ".argv.json")
                     side.write_text(json.dumps(j.args, indent=1), encoding="utf-8")
                 logf = (root / "_logs" / (j.name.replace("/", "__") + ".log")).open(
@@ -1769,6 +1795,107 @@ def cmd_report(stage: str, s: Settings, jobs: List[Job]) -> int:
 
 
 # --------------------------------------------------------------------------- #
+# Scoring (scoring.py says what each step does)
+# --------------------------------------------------------------------------- #
+
+def _scoring():
+    if str(REPO) not in sys.path:
+        sys.path.insert(0, str(REPO))
+    if str(HERE) not in sys.path:
+        sys.path.insert(0, str(HERE))
+    import scoring
+    return scoring
+
+
+def score_plan(stage: str, s: Settings, jobs: List[Job]):
+    """(the scorer jobs, each study's entries, the tool outputs, the plan) of a stage.
+
+    A job that aliases another reads the other's CSV (batch 1's, or the
+    stage's own primary), and keeps its own cell and variant in its study.
+    Scorer runs are one per scored file: studies that share a CSV and score
+    it alike share the run."""
+    SC = _scoring()
+    plan, problems = SC.plan_from(s.data)
+    if problems:
+        sys.exit("params.toml [score]: " + "; ".join(problems))
+    # An alias's primary may itself read batch 1's CSV (reuse_batch1 set its out).
+    by_name = {j.name: j for j in jobs}
+    entries: Dict[str, List[Any]] = collections.OrderedDict()
+    runs: Dict[str, Job] = collections.OrderedDict()
+    tools: List[Tuple[str, str, bool]] = []
+    light = float(s.get("machine.gb_per_light_process"))
+    for j in jobs:
+        if j.kind == "tool":
+            tools.append((j.name, j.out, (REPO / j.out).exists()))
+        if j.kind != "runner" or j.blocked:
+            continue
+        src = j
+        if j.alias_of and not j.alias_of.startswith("batch1:"):
+            src = by_name[j.alias_of]
+        spec = plan.specs.get(j.study)
+        s_star = s.get(f"pilot_outputs.s_star.{j.n}", None)
+        args, scored, missing = SC.scorer_call(src.out, plan, spec, s_star)
+        arm = j.args[j.args.index("--arms") + 1]
+        cell, variant = SC.labels(j.name, arm)
+        entries.setdefault(j.study, []).append(SC.Entry(
+            j.study, cell, variant, arm, REPO / src.out, REPO / scored, int(j.trials or 0)))
+        if scored in runs or missing:
+            continue
+        rows, _ = csv_rows(REPO / src.out)
+        if rows and (REPO / SC.traces_dir(src.out)).is_dir():
+            runs[scored] = Job(f"score-{stage}", j.study, f"{j.study}/{Path(scored).stem}",
+                               args, scored, "score", mem_gb=2 * light)
+    return list(runs.values()), entries, tools, plan
+
+
+def cmd_score(stage: str, s: Settings, text: str, jobs: List[Job], a: argparse.Namespace) -> int:
+    """Score a stage's trials, then write each study's comparisons."""
+    if stage not in SCORED:
+        sys.exit(f"score reads the studies' trials: one of {', '.join(SCORED)} "
+                 f"(a pilot has `report`)")
+    SC = _scoring()
+    runs, entries, tools, plan = score_plan(stage, s, jobs)
+    rc = 0
+    if not a.compare_only:
+        if a.rescore:
+            for j in runs:
+                p = REPO / j.out
+                p.with_suffix(p.suffix + ".argv.json").unlink(missing_ok=True)
+        todo = [j for j in runs if not done(j)]
+        print(f"score {stage}: {len(runs)} scored files, {len(todo)} to (re)score")
+        if todo:
+            # A file that failed to score leaves its study's rows out; the
+            # comparisons below use what is scored, and say how much that is.
+            rc = cmd_run(f"score-{stage}", s, text, todo, allow_dirty=a.allow_dirty,
+                         skip_blocked=True, yes=a.yes, max_jobs=a.max_jobs,
+                         out_root=a.out_root)
+    out_dir = REPO / a.out_root / "scores" / STAGE_DIR[stage]
+    results = collections.OrderedDict()
+    comparisons = []
+    for study, members in entries.items():
+        spec = plan.specs.get(study) or SC.Spec(study, None)
+        arms, cmps = SC.study_results(study, members, spec, plan)
+        results[study] = (spec, arms, cmps)
+        comparisons += cmps
+    SC.holm(comparisons, plan)
+    index = []
+    for study, (spec, arms, cmps) in results.items():
+        SC.write_study(out_dir, study, spec, plan, arms, cmps)
+        index.append({"study": study,
+                      "metric": SC.column(spec.metric, plan.tau) if spec.metric else "",
+                      "variants": len(arms), "comparisons": len(cmps),
+                      "claims": sum(1 for c in cmps if c.claim),
+                      "scored": sum(a_["scored"] for a_ in arms),
+                      "trials": sum(a_["trials"] for a_ in arms)})
+        print(f"  {study:6s} {len(arms):3d} variants, {len(cmps):3d} comparisons, "
+              f"{sum(1 for c in cmps if c.claim):3d} claims; "
+              f"{sum(a_['scored'] for a_ in arms)}/{sum(a_['trials'] for a_ in arms)} trials scored")
+    path = SC.write_index(out_dir, stage, index, tools, plan)
+    print(f"\nscores in {out_dir} (start at {path.name})")
+    return rc
+
+
+# --------------------------------------------------------------------------- #
 # Smoke runs and the campaign
 # --------------------------------------------------------------------------- #
 
@@ -1859,7 +1986,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                                  formatter_class=argparse.RawDescriptionHelpFormatter,
                                  epilog=__doc__.split("\n\n", 1)[1])
     ap.add_argument("command", choices=("plan", "validate", "run", "status", "report",
-                                        "campaign"))
+                                        "score", "campaign"))
     ap.add_argument("stage", choices=STAGES, nargs="?", default=None,
                     help="The stage (every command but campaign, which walks them all).")
     ap.add_argument("--smoke", action="store_true",
@@ -1879,6 +2006,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     ap.add_argument("--out-root", default="results/exp5",
                     help="Where the stages write (default results/exp5; for a dry test, "
                          "a scratch folder).")
+    ap.add_argument("--rescore", action="store_true",
+                    help="score: score every file again, current or not.")
+    ap.add_argument("--compare-only", action="store_true",
+                    help="score: only rewrite the comparisons from the scored files there are.")
     a = ap.parse_args(argv)
     if a.smoke and a.out_root == "results/exp5":
         a.out_root = str(SMOKE_ROOT)           # a smoke run never writes the results tree
@@ -1901,6 +2032,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return cmd_status(a.stage, jobs)
     if a.command == "report":
         return cmd_report(a.stage, s, jobs)
+    if a.command == "score":
+        return cmd_score(a.stage, s, text, jobs, a)
     return cmd_run(a.stage, s, text, jobs, allow_dirty=a.allow_dirty,
                    skip_blocked=a.skip_blocked, yes=a.yes, max_jobs=a.max_jobs,
                    out_root=a.out_root)
