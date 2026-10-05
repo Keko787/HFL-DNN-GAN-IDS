@@ -72,7 +72,9 @@ OPENBLAS_NUM_THREADS = "1"
 # Pilot outputs. Fill these from the pilots' reports, then commit.
 # --------------------------------------------------------------------------
 [pilot_outputs]
-# session_ttl_s = { "6" = 0.0, "12" = 0.0, "18" = 0.0, "24" = 0.0 }
+# From stage ttl, 5 Oct 2026 (results/exp5/ttl): 2 x p95 fit time, rounded up. The p95 is the
+# first fit (TensorFlow's tracing, ~17 s with 36 processes at once); later fits ~1.6 s.
+session_ttl_s = { "6" = 36.0, "12" = 34.0, "18" = 34.0, "24" = 23.0 }
 # knee_s        = { "6" = 0.0, "12" = 0.0, "18" = 0.0, "24" = 0.0 }
 # stress_s      = { "6" = 0.0, "12" = 0.0, "18" = 0.0, "24" = 0.0 }
 # s_star        = { "6" = 2, "12" = 2, "18" = 2, "24" = 2 }
@@ -162,3 +164,46 @@ payload_bytes = 1000000       # held fixed at 1 MB by the study
 # The variants are fixed in launch.py (S514_VARIANTS): cap S*, whole stops,
 # local search, weighted coverage rank, cap S* + 1, cap off, hover off, and
 # F / F+L1 on the seconds backhaul (F+L1 needs the adaptive backhaul).
+
+# --------------------------------------------------------------------------
+# The learned score's FerrySim campaign (Run Guide 2.8; Scheduler Freeze 5l).
+# Stages rl-headroom, rl-calibrate, rl-sweep, rl-e3, rl-s57, in that order.
+# Checkpoints go to results/exp5/checkpoints/<study>/<tag>/g<gamma>_s<seed>.npz.
+# --------------------------------------------------------------------------
+[rl]
+# Every RL stage refuses until this is true. Set it only after the re-pin is
+# committed: FerrySim's N = 12 cells, the 5.6 lags, the four P_c constants, the
+# jittery56 hash and the test literals moved to the stack's measured N = 12
+# knee (Run Guide 2.8, "The re-pin"; go-ahead item 5).
+repinned = false
+max_jobs = 14                 # trainings side by side (one core each; 8 cores, 16 threads)
+gb_per_training = 0.6
+workers = 8                   # evaluate and headroom worker processes
+headroom_episodes = 200
+family = "jittery56"          # the jittery score's family (go-ahead item 3, the recommended one)
+calibration_families = ["jittery56", "clean"]
+calibration_gammas = [0.0, 0.9]
+calibration_seeds = [0, 1, 2]
+sweep_gammas = [0.0, 0.25, 0.5, 0.75, 0.9, 0.99]   # Study 5.5
+sweep_seeds = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+# Set from rl-sweep's verdict (launch.py report rl-sweep): the best gamma and
+# whether the learned score is kept (5.7's scores train only then).
+# gamma_star = 0.9
+# keep_learned = true
+
+[rl.val_episodes]             # validation episodes per family; the default (200) elsewhere
+jittery56 = 400
+
+[rl.e3]                       # E3, after Chen et al. (go-ahead item 2, R16)
+family = "jittery"            # Run Guide 2.8
+seeds = [0, 1, 2, 3, 4]
+# UNSET until decided: E3's gamma, and its settings: "pair" (the pair learner's
+# defaults) or "chen" (Chen's lr 5e-4 and epsilon from 1.0).
+# gamma = 0.9
+# settings = "chen"
+
+[rl.s57]                      # Study 5.7's scores, at gamma_star
+seeds = [0, 1, 2, 3, 4]       # F-hand and the dwell and cov ablations
+grid_c_t = [0.03, 0.1, 0.3]   # the reward grid; (0.1, 1) is 5.5's own and is not retrained
+grid_c_cov = [0.25, 1.0, 4.0]
+grid_seeds = [0, 1, 2]
