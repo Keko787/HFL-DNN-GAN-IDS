@@ -733,6 +733,28 @@ class MuleService:
         if fits is not None and callable(getattr(selector, "bind_fit_clock", None)):
             selector.bind_fit_clock(fits, t_nom_s=cfg.t_nom_s)
             self._train_time_policy = str(getattr(selector, "name", type(selector).__name__))
+        # Exp 5 addendum, unit U11 (F-pref, after Oort): the plan's coverage
+        # weights take each device's speed factor (T / t_j) ** alpha, T the
+        # plan's T_nom and t_j the device's fit time (none without train times)
+        # plus its dwell at its own position on the reference class. The
+        # scheduler reads ``plan_speed`` in build_ferry_plan; unset, as for
+        # every other arm, it weighs as recorded.
+        alpha = getattr(cfg, "plan_speed_alpha", None)
+        setup = getattr(self.supervisor.scheduler, "_plan", None)
+        if alpha is not None and setup is not None:
+            import functools
+
+            from hermes.scheduler.plan.plan_score import oort_speed_factors
+            from hermes.types.scheduler import MissionPass
+
+            ref = setup.class_named(setup.reference)
+            dwell0 = ref.model.ferry.member_dwell_s(0.0, MissionPass.COLLECT, 0.0)
+            self.supervisor.scheduler.plan_speed = functools.partial(
+                oort_speed_factors,
+                fit_s=None if fits is None else fits.train_time_s,
+                dwell_s=float("inf") if dwell0 is None else float(dwell0),
+                t_ref_s=float(setup.t_ref_s), alpha=float(alpha),
+            )
 
         # The settings the supervisor actually runs, read back from it rather
         # than from the config, so a trace shows what a study arm really ran

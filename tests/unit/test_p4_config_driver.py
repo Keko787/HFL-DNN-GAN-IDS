@@ -580,8 +580,8 @@ def test_the_arm_lists():
     assert DEFAULT_ARMS == ("H0", "H1", "H2", "H3", "D1", "D2", "D3", "D4", "D5")
     assert PLAN_ARMS == ("F", "FX", "FB+wide", "FB+medium", "FB+narrow", "F-cov", "F-cap",
                          "F-prio")
-    # and the Exp 5 addendum's F+L1 (tests/unit/test_exp5_f_l1.py)
-    assert ARMS == DEFAULT_ARMS + PLAN_ARMS + PHASE_5_ARMS + ("F+L1",)
+    # and the Exp 5 addendum's F+L1, F-round and F-pref (test_exp5_f_l1.py, test_exp5_u11.py)
+    assert ARMS == DEFAULT_ARMS + PLAN_ARMS + PHASE_5_ARMS + ("F+L1", "F-round", "F-pref")
     assert len(set(ARMS)) == len(ARMS)
 
 

@@ -260,7 +260,8 @@ def age_cap(spec: AggregationSpec, window_s: Optional[float] = None) -> Optional
     caps: List[int] = []
     if spec.a_max is not None:
         caps.append(int(spec.a_max))
-    if spec.period_s is not None and window_s is not None:
+    # An infinite window (unit U11's Oort-style ``pref`` law) cuts nothing.
+    if spec.period_s is not None and window_s is not None and math.isfinite(float(window_s)):
         caps.append(max(0, int(math.floor(float(window_s) / spec.period_s))))
     return min(caps) if caps else None
 

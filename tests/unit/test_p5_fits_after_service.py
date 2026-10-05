@@ -643,13 +643,25 @@ def _shape(source: str):
 
 def _build_ferry_plan_without_the_addendum(source: str) -> str:
     """The live ``FLScheduler.build_ferry_plan`` with exactly the Exp 5
-    addendum's change taken out (Study 5.14's hover-stop switch): the one
+    addendum's changes taken out: Study 5.14's hover-stop switch (the one
     ``if options.search.hover_stops:`` around the hover rule's call, replaced
-    by its body. Any other change is left in, so it still differs."""
+    by its body) and unit U11's Oort speed factor (the one keyword
+    ``speed=getattr(self, "plan_speed", None)`` of the ``demand_weights`` call;
+    Scheduler Freeze section 5n). Any other change is left in, so it still
+    differs."""
     tree = ast.parse(source)
     (cls,) = [n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == "FLScheduler"]
     (fn,) = [n for n in cls.body
              if isinstance(n, ast.FunctionDef) and n.name == "build_ferry_plan"]
+    speeds = 0
+    for node in ast.walk(fn):
+        if isinstance(node, ast.Call) and ast.unparse(node.func) == "demand_weights":
+            kept = [k for k in node.keywords
+                    if not (k.arg == "speed"
+                            and ast.unparse(k.value) == "getattr(self, 'plan_speed', None)")]
+            speeds += len(node.keywords) - len(kept)
+            node.keywords = kept
+    assert speeds == 1
     gates = 0
     for node in ast.walk(fn):
         for name in ("body", "orelse"):

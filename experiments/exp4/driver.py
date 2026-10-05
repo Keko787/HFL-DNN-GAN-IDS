@@ -177,8 +177,12 @@ PHASE_5_ARMS = LEARNED_ARMS + ("H1+L1",)
 #: H3's adaptive backhaul controller, the plan arms' counterpart of H1+L1. It is
 #: a plan arm (:data:`ADDENDUM_PLAN_ARMS`, :func:`is_plan_arm`), so it gets F's
 #: settings wherever F has them, while :data:`PLAN_ARMS` keeps its pinned
-#: value. It runs only when named.
-ADDENDUM_PLAN_ARMS = ("F+L1",)
+#: value. It runs only when named. Unit U11 (Study 5.2) adds ``F-round`` (one
+#: deadline for every device, the round's, after FedCS) and ``F-pref`` (no
+#: per-device cutoff; Oort's speed factor on the coverage weights): F with
+#: the selection literature's deadline in place of its per-device one
+#: (:data:`_ARM_LAW`).
+ADDENDUM_PLAN_ARMS = ("F+L1", "F-round", "F-pref")
 ADDENDUM_ARMS = ADDENDUM_PLAN_ARMS
 
 #: Every arm the driver runs.
@@ -220,7 +224,14 @@ _PLAN_ARM = {
     "F-prio": {},
     **{arm: {"flight_slot": "pair_q"} for arm in PAIR_ARMS},
     "F+L1": {},
+    "F-round": {},
+    "F-pref": {"plan_speed_alpha": 2.0},       # Oort's alpha (oort.DEFAULT_SPEED_ALPHA)
 }
+
+#: Unit U11 (Study 5.2): the arms that fly the selection literature's deadline
+#: (``s3_deadline.LAW_ROUND`` / ``LAW_PREF``) in place of the driver's law, with
+#: the round's length the cell's mission budget (:meth:`Exp4Driver.arm_deadline_law`).
+_ARM_LAW = {"F-round": "round", "F-pref": "pref"}
 
 #: F-cov's plan score settings, over the driver's own: the coverage term off,
 #: c2 = c3 = 0 (``PlanScoreParams``: c3 = c2 unless set; unit U0's F-cov).
@@ -317,7 +328,13 @@ def train_time_ferry_params(mule: Mapping[str, Any]) -> Dict[str, Any]:
     this function.
     """
     params = mule.get("train_time_params")
-    return {} if params is None else {"train_time_params": dict(params)}
+    out = {} if params is None else {"train_time_params": dict(params)}
+    # Unit U11 (F-pref): Oort's speed exponent, shown only when set, so every
+    # other row keeps its string.
+    alpha = mule.get("plan_speed_alpha")
+    if alpha is not None:
+        out["plan_speed_alpha"] = float(alpha)
+    return out
 
 
 def learned_policy_params(mule: Mapping[str, Any]) -> Dict[str, Any]:
@@ -1140,6 +1157,25 @@ class Exp4Driver:
             return self.member_admission
         return "subset" if is_plan_arm(arm) else "whole"
 
+    def arm_deadline_law(self, arm: str):
+        """The deadline law a trial of ``arm`` runs and its row records.
+
+        The driver's law for every arm but unit U11's (Study 5.2): F-round and
+        F-pref fly the ``round`` and ``pref`` laws, with the round's length
+        the cell's mission budget, so they need one."""
+        from hermes.scheduler.stages.s3_deadline import DeadlineLaw
+
+        form = _ARM_LAW.get(arm)
+        if form is None:
+            return self._deadline_law
+        if self.mission_budget_s is None:
+            raise ValueError(
+                f"arm {arm} gives every device the round's deadline, the mission budget: "
+                f"run it with mission_budget_s (--mission-budget-s)"
+            )
+        return DeadlineLaw(form=form, round_s=float(self.mission_budget_s),
+                           time_scale=self._deadline_law.time_scale)
+
     def effective_miss_priority(self, arm: str) -> bool:
         """``miss_priority`` for a trial of ``arm``, as its mule runs and its row records it.
 
@@ -1383,8 +1419,10 @@ class Exp4Driver:
         if arm == "H1+L1":
             self._check_adaptive_backhaul(arm)
             return
-        if arm in ADDENDUM_PLAN_ARMS and self.sim:
+        if arm == "F+L1" and self.sim:
             self._check_adaptive_backhaul(arm)
+        if arm in _ARM_LAW:
+            self.arm_deadline_law(arm)          # unit U11: the round needs a budget
         if not is_plan_arm(arm) and arm not in LEARNED_ARMS:
             return
         if not self.sim:
@@ -2005,10 +2043,10 @@ class Exp4Driver:
             aggregation_params=self._aggregation_spec.to_params(),
             fedprox_rho=float(self.fedprox_rho),
             pass_2_budget=bool(self.pass_2_budget),
-            deadline_law=self._deadline_law.form,
+            deadline_law=self.arm_deadline_law(arm).form,
             deadline_params=(
-                {} if self._deadline_law.is_recorded
-                else self._deadline_law.to_params()
+                {} if self.arm_deadline_law(arm).is_recorded
+                else self.arm_deadline_law(arm).to_params()
             ),
             # FeRRy Phase 4: a plan arm runs its own (the configured value for
             # every other arm, as recorded).
@@ -2593,7 +2631,7 @@ class Exp4Driver:
             )
             row["fedprox_rho"] = float(self.fedprox_rho)
             row["pass_2_budget"] = int(bool(self.pass_2_budget))
-            law = self._deadline_law
+            law = self.arm_deadline_law(getattr(cell, "arm", ""))
             row["deadline_law"] = law.form
             row["deadline_params"] = (
                 "" if law.is_recorded

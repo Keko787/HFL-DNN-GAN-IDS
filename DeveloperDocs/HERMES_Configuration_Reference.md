@@ -2609,6 +2609,52 @@ python -m experiments.analysis.o1_oracle --cells jit-n6-45 jit-n6-90 --episodes 
 
 Tests: `tests/unit/test_exp5_o1_oracle.py`.
 
+### 20.12 Study 5.2's deadline forms: F-round and F-pref (unit U11)
+
+Study 5.2 asks whether FeRRy's per-device deadline (admit, order, cut off) beats the deadlines the
+selection literature uses. F flies the multiplicative law and F·add the additive one (§15); unit U11
+adds the other two arms, decided on 2026-10-05 with the whole deadline form varied (option A): the
+admission, the order and the merge cutoff all follow the arm's form.
+
+| Arm | Deadline law | Admission and order | Merge cutoff (`agg:cutoff`) | Weights |
+|---|---|---|---|---|
+| `F-round` (after FedCS) | `round`, `round_s` = the cell's mission budget | every device's deadline is the plan's time + `round_s`, the round's end; S3a's anchoring ties, so it keeps S1's order | Φ = `round_s`, so `a_max = ⌊round_s / T⌋`: about one round | F's |
+| `F-pref` (after Oort) | `pref`, `round_s` = the budget | as F-round: no per-device cutoff (the round's end, which the budget clause already enforces) | Φ = ∞: no cutoff (`age_cap` reads an infinite window as none) | × Oort's `(T / t_j)^α` for `t_j > T` |
+
+**The laws** (`hermes/scheduler/stages/s3_deadline.py`): `LAW_ROUND` and `LAW_PREF` take
+`round_s` (refused elsewhere, left out of `to_params` when None, so every recorded and multiplicative
+row keeps its string); `compute_deadline` returns `now + round_s` for every device; neither moves a
+window with outcomes; `effective_window` is `round_s` or ∞. The arms set their own law
+(`Exp4Driver.arm_deadline_law`; `_ARM_LAW`), whatever `--deadline-law` says, and need
+`--mission-budget-s`; every other arm keeps the driver's law. The row's `deadline_law` and
+`deadline_params` are the arm's, and the scorer rebuilds them the same way.
+
+**Oort's factor** (`plan_score.oort_speed_factors`, D2's `speed_penalty` with α = 2): T is the plan's
+T_nom and `t_j` the device's round time as D2 reads it, its fit time (none without
+`--train-time-s`) plus its predicted dwell, here at its own position on the reference class (the
+plan weighs devices before it groups them). A device that never finishes keeps a weight of
+`MIN_SPEED_FACTOR` (1e-12), as a weight must stay positive. `MuleConfig.plan_speed_alpha` (F-pref:
+2; sim-only, plan mode only, needs `t_nom_s`) makes the mule bind the factor as the scheduler's
+`plan_speed`, and `demand_weights(..., speed=)` multiplies each weight by it; `ferry_params` shows
+`plan_speed_alpha` only when set. Without training times `t_j` is a dwell of seconds, under T, so
+the factor is 1: in Study 5.2's default cells F-pref then differs from F-round in its cutoff alone,
+as D2's speed term is inert there too; with `--train-time-s` (Study 5.12's settings) it binds.
+
+**The merge period.** `agg:cutoff` cuts by age only with a period T (`--agg-period-t-nom`, or
+`--agg-period-s`); without one the window term is off for every arm. The campaign's stages after
+the knee pilot pass `--agg-period-t-nom` (`scripts/exp5/params.toml`, `campaign.merge_period_t_nom`).
+
+**The change inside a pinned definition.** `build_ferry_plan` passes
+`speed=getattr(self, "plan_speed", None)` to `demand_weights`; at None, every arm but F-pref, the
+weights are the recorded ones. `tests/unit/test_p5_fits_after_service.py` strips exactly that
+keyword before comparing the definition with 386c275's (Scheduler Freeze §5n).
+
+```bash
+python -m experiments.exp4.runner_main --csv results/exp5/s52/round.csv --arms F-round --mission-clock sim --contact-band wide --mission-budget-s 90 --aggregation agg:cutoff --agg-period-t-nom ...
+```
+
+Tests: `tests/unit/test_exp5_u11.py`.
+
 ---
 
 ## Cross-references
