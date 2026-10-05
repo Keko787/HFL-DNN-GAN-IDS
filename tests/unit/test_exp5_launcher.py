@@ -231,6 +231,36 @@ def test_unpack_refuses_a_damaged_archive(tmp_path):
         L.cmd_unpack("knee", a)
 
 
+def test_decided_values_are_set():
+    s, _ = L.load_settings(L.PARAMS)
+    assert s.get("rl.e3.gamma") == 0.99 and s.get("rl.e3.settings") == "chen"
+    assert s.get("s51.fedprox_rho") == 0.01 and s.get("s56.n_trials") == 40
+
+
+def test_p512_flies_h1_at_multiples_of_the_mission_cycle(tmp_path):
+    s = _filled_settings()                                  # knee_s 90 s at every N
+    jobs = [j for j in L.build("pilot3", s, None, str(tmp_path)) if j.study == "p512"]
+    cycle = 90.0 + s.get("p512.turnaround_s")
+    medians = [float(j.args[j.args.index("--train-time-s") + 1]) for j in jobs]
+    assert medians == [round(f * cycle) for f in s.get("p512.cycle_factors")]
+    assert all(j.args[j.args.index("--arms") + 1] == "H1" and not j.blocked for j in jobs)
+    unset, _ = L.load_settings(L.PARAMS)                    # no knee yet: blocked, by name
+    blocked = [j for j in L.build("pilot3", unset, None, str(tmp_path)) if j.study == "p512"]
+    assert blocked and all("pilot_outputs.knee_s.6" in j.blocked for j in blocked)
+
+
+def test_p512_rule_picks_the_level_nearest_the_bands_middle():
+    levels = [(30.0, 0.02), (60.0, 0.12), (120.0, 0.25), (240.0, 0.6)]
+    assert L.pick_spread(levels, [0.1, 0.3]) == 120.0           # 0.25 is nearer 0.2
+    assert L.pick_spread([(30.0, 0.02), (60.0, None)], [0.1, 0.3]) is None
+
+
+def test_batch3_waits_for_the_pilots_levels(tmp_path):
+    unset, _ = L.load_settings(L.PARAMS)
+    jobs = [j for j in L.build("batch3", unset, None, str(tmp_path)) if j.study == "s512"]
+    assert jobs and all("pilot_outputs.train_levels" in j.blocked for j in jobs)
+
+
 def test_report_quick_never_pairs_different_seeds(tmp_path):
     s = _filled_settings()
     root = str(tmp_path)

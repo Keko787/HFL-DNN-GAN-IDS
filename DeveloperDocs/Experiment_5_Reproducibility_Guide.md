@@ -43,7 +43,7 @@ The launcher, [`scripts/exp5/launch.py`](../scripts/exp5/launch.py), turns each 
 | `batch1` | 5.3 core, 5.9 core, 5.11 (a) and (b), 5.14 | 1,760 | 4.6 h | `sstar` |
 | `sens` | 5.3's F, FX and H1 at the session timeout × 0.75 and × 1.5 (× 1 is batch 1's own cell) | 120 | 0.2 h | `batch1` |
 | `batch2` | 5.1, 5.2, the rest of 5.3, 5.4 with the O1 oracle, 5.5's stack check, 5.6, 5.7, 5.8, the rest of 5.9, 5.13 | about 9,100–10,100² | 35 h | the RL verdict |
-| `pilot3` | Batch 3's own pilots: 5.15's interference levels, 5.11 (c)'s FerrySim budget sweeps | 40 | minutes | `knee` |
+| `pilot3` | Batch 3's own pilots: 5.15's interference levels, 5.12's training-time levels, 5.11 (c)'s FerrySim budget sweeps | 80 | under an hour | `knee` |
 | `batch3` | 5.12, 5.15, 5.11 (c) | 1,060 | 1.5 h | `pilot3` |
 | `quick` | **Not part of the campaign:** a reviewer's reproduction of 5.3's headline cell ([§4](#4-path-a--reproduce-the-headline)) | 320 | 0.5 h | committed pilot outputs |
 
@@ -255,7 +255,7 @@ The RL stages are listed below, with the decisions they need from the Scheduler 
 - `rl-headroom`;
 - `rl-calibrate`: γ ∈ {0, 0.9} × 3 seeds per family; pauses for the sanity check;
 - `rl-sweep`: Study 5.5, 6 γ × 10 seeds, `evaluate --record` and the pre-registered verdict; pauses;
-- `rl-e3`: E3's trainings, which need `[rl.e3] gamma`;
+- `rl-e3`: E3's trainings, at Chen's settings: γ = 0.99, lr 5e-4, ε from 1.0, the defaults of his published code;
 - `rl-s57`: 5.7's scores, only if the verdict keeps the learned score.
 
 Each training is one `ferrysim train` job with one BLAS thread. Train from a clean tree: a checkpoint's manifest records its commit, and the runner refuses to fly a checkpoint trained from a dirty tree.
@@ -270,9 +270,12 @@ exp5 run batches --yes
 
 This runs `batch1`, `sens`, `batch2`, `pilot3` and `batch3` in order:
 - A cell that batch 1 already ran is not run again: a later batch reads batch 1's CSV, or appends its extra trials to it with the same seeds.
-- `pilot3` pauses for its report. Set `[s515] harsher_amp_db` and `lossier_n_pl`, and `[s511c] knee_s`, from it.
-- Some studies leave a setting open until you decide it: `[s51] fedprox_rho`, `[s56] n_trials` and `[s512] train_levels`. Their jobs are blocked, and named, until it is set.
+- `pilot3` pauses for its report:
+  - `report pilot3 --apply` writes 5.12's training-time levels (`pilot_outputs.train_levels`) by p512's rule. p512 flies H1 at the N = 6 knee with the median fit time at 0.25, 0.5, 1 and 2 times the mission cycle (the knee budget plus the 30 s turnaround). "Spread" is the level at which 10–30% of contacts find no update ready, the one nearest 20% if several; "stragglers" is spread with 20% of the devices at 5×.
+  - Set `[s515] harsher_amp_db` and `lossier_n_pl`, and `[s511c] knee_s`, by hand from the same report.
 - `--skip-blocked` runs a stage's other jobs first.
+
+The study settings once left open are decided: FedProx's ρ is 0.01 (`[s51]`), 5.6 flies 40 trials per cell (`[s56]`), and 5.12's levels come from the pilot.
 
 ### 5.6 Scoring
 
@@ -448,4 +451,9 @@ exp5 score batch1 --rescore
   - the batches.
 - **Decided: τ.** In the knee pilot's first cells, H1 reached τ = 0.82 within 4 missions in few trials: 5 of the first 49 at N = 12, and none at N = 24, where accuracy levels off near 0.71 at every budget. The missions stay at 4, and τ is set from the knee pilot by the rule in [§5.2](#52-the-pilots), with 0.82 kept as a second τ. On the pilot's partial data, the rule gives about 0.71.
 - **Decided: the traces.** Per-stage archives (`exp5 pack`), with their checksums committed; the archives go to a release and to Zenodo. Nothing has been published yet.
+- **Decided: the study settings.**
+  - E3's γ is 0.99, Chen's published code default.
+  - FedProx's ρ in 5.1 is 0.01.
+  - 5.6 flies 40 trials per cell, as 5.5's stack check and 5.7 do.
+  - 5.12's training-time levels are set by a pilot (p512, in `pilot3`).
 - **Not built:** 5.1's `agg:seq` (decided out: it needs a protocol change); 5.1's hand-set merge weights; FX-dwell and FX-cov, or M1, depending on the 5.5 verdict; Study 5.10 (needs AERPAW access).

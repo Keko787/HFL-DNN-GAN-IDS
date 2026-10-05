@@ -224,9 +224,8 @@ def _filled_settings():
     d["rl"]["checkpoints"] = {k: f"ck/{k}.npz" for k in
                               ("main", "best", "g0", "hand", "dwell", "cov", "e3")}
     d["rl"]["checkpoints"]["best_tag"] = "g90"
-    d["s51"]["fedprox_rho"] = 0.01
-    d["s56"]["n_trials"] = 20
-    d["s512"]["train_levels"] = {"none": [0.0, 0.0, 0.0, 1.0], "spread": [30.0, 0.5, 0.0, 1.0]}
+    d["pilot_outputs"]["train_levels"] = {"none": [0.0, 0.0, 0.0, 1.0],
+                                          "spread": [30.0, 0.5, 0.0, 1.0]}
     d["s515"].update(harsher_amp_db=11.0, lossier_n_pl=2.7)
     d["s511c"]["knee_s"] = {c: 1.0 for c in d["p511c"]["cells"]}
     return L.Settings(d)
