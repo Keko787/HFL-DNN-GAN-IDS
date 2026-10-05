@@ -14,6 +14,15 @@
 #   pip install -r AppSetup/requirements_exp4.txt
 #   pip install pytest                    # test runner (markers in pytest.ini)
 #
+# On Windows, prefer an interpreter that is not a venv for Exp 5: a venv's
+# python.exe there is a launcher stub that starts the real interpreter as a
+# child, so every trial process appears twice and the Study 5.11 footprint
+# probe reads the stub (test_exp5_footprint fails 4 tests). A conda env is the
+# interpreter itself:
+#
+#   conda create -p <env> python==3.11.9
+#   <env>\python.exe -m pip install -r AppSetup/requirements_exp4.txt pytest
+#
 # Data: place CICIOT-2023 at ../datasets/CICIOT2023 or set HERMES_CICIOT_DIR;
 # or pass `--data-source synthetic` to run without the dataset.
 #
@@ -27,6 +36,12 @@
 #   keras         - Keras 3 backend that tf.keras routes to under tensorflow>=2.16
 #   psutil        - optional: the footprint probe only (Exp 5 addendum, Study 5.11,
 #                   --footprint-probe); nothing else imports it
+#   flwr          - not used by exp4, but the canonical loader's preprocess module
+#                   (Config/DatasetConfig/Dataset_Preprocessing/datasetPreprocess.py)
+#                   imports it at load time, so `--data-source canonical` fails without
+#                   it. Added 2026-10-05; it moves protobuf to 6.33.6, inside tensorflow's
+#                   range (>=6.31.1,<8). requirements_core.txt's flwr==1.9.0 needs
+#                   protobuf<5 and does not fit this stack.
 
 numpy==1.26.4
 pandas==2.2.2
@@ -36,3 +51,4 @@ matplotlib==3.8.4
 tensorflow==2.21.0
 keras==3.14.1
 psutil==5.9.8
+flwr==1.39.0

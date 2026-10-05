@@ -6,7 +6,7 @@ The repo ships:
 - The legacy single-server Flower training pipeline (`App/TrainingApp/`), kept for backwards compatibility.
 - The HERMES multi-process system (`hermes/`) with a deterministic FL scheduler, a DDQN-based intra-bucket target selector, partial cross-mule FedAvg, RF / dock / cloud transports, and a TCP-backed orchestrator that brings the whole topology up on a single laptop.
 - AC-GAN / DNN-IDS model code with the mode-collapse fixes from the September 2025 analysis.
-- A paper-experiment harness (`experiments/`) that drives Experiments 1 and 3 (federated-vs-centralized and the A1–A4 scheduler ablation) and writes resumable per-trial CSVs.
+- A paper-experiment harness (`experiments/`) that drives Experiments 1, 3, 4 and 5 (federated-vs-centralized, the A1–A4 scheduler ablation, the integrated HERMES stack, and the FeRRy studies) and writes resumable per-trial CSVs.
 
 ## Table of Contents
 
@@ -24,6 +24,7 @@ The repo ships:
 - [Quick start (HERMES local emulation)](#quick-start-hermes-local-emulation)
 - [Legacy training pipeline](#legacy-training-pipeline)
 - [Experiments](#experiments)
+  - [Experiment 5 — FeRRy](#experiment-5--ferry-ipdps-2027)
 - [Tests](#tests)
 - [Operations & Configuration](#operations--configuration)
 - [Developer documentation](#developer-documentation)
@@ -327,15 +328,17 @@ The paper-experiment harness is under [`experiments/`](experiments/). It owns th
 | **1** | Federated vs Centralized at fixed radio (10 Mbps shaped link) | **complete** (results in [`results/exp1_chameleon*.csv`](results/)) |
 | **2** | Traditional vs adaptive radio (RL channel selection) | deferred — telemetry-side, not FL |
 | **3** | Centralized FL vs mule heuristics vs HERMES scheduling (A1–A4 ablation) | in-flight |
-| **4** | Integrated HERMES vs traditional FL — all metrics | blocked on Exp 1 + 3 closing |
+| **4** | Integrated HERMES vs traditional FL — all metrics | run (results in [`results/exp4_*`](results/)); some budgeted cells owe a re-run before they are cited ([pre-re-run checklist](DeveloperDocs/HERMES_PreRerun_Checklist.md)) |
+| **5** | FeRRy: Studies 5.1–5.15 on the real-process stack (IPDPS 2027) | built; pilots next, nothing run yet ([steps below](#experiment-5--ferry-ipdps-2027)) |
 
 Per-experiment drivers, sim envs, arm definitions (`arm_a1.py`, `arm_mule.py`, `train_a4.py`), metrics, and analysis notebooks live under `experiments/exp1/`, `experiments/exp3/`, and `experiments/analysis/`. See [`DeveloperDocs/HERMES_Experiments_Implementation_Plan.md`](DeveloperDocs/HERMES_Experiments_Implementation_Plan.md) for the full design and Definition of Done per chunk; [`DeveloperDocs/Exp3_Future_Energy_Models.md`](DeveloperDocs/Exp3_Future_Energy_Models.md) covers the Option B / Option C propulsion-energy extensions kept in the back pocket.
 
 **Standalone run guides** (full prerequisites, topology, knobs, resume, troubleshooting):
 - [`DeveloperDocs/Experiment_1_Run_Guide.md`](DeveloperDocs/Experiment_1_Run_Guide.md)
 - [`DeveloperDocs/Experiment_3_Run_Guide.md`](DeveloperDocs/Experiment_3_Run_Guide.md)
+- [`DeveloperDocs/Experiment_4_Run_Guide.md`](DeveloperDocs/Experiment_4_Run_Guide.md) (Exp 4, and in §2.6–2.8 every Exp 5 flag)
 
-The two subsections below are quick-reference distillations of those guides.
+The subsections below are quick-reference distillations of those guides; [Experiment 5](#experiment-5--ferry-ipdps-2027) is the full procedure.
 
 ### Experiment 1 — Federated vs Centralized at fixed radio
 
@@ -475,6 +478,77 @@ python -m experiments.analysis.exp3 --csv results/exp3.csv \
     --figures-dir DeveloperDocs/figures/exp3_jittery --jittery-filter jittery
 ```
 The panel writes six figures (A2-vs-A1, A3-vs-A2, A4-vs-A3, β-sweep, rrf-sweep, ρ_contact bar chart) plus `exp3_paired_tests.csv` for paper-table reproducibility. Sensitivity TOMLs under [`experiments/calibration_sensitivity/`](experiments/calibration_sensitivity/) swap the energy / idle priors for the calibration sweep. See [`DeveloperDocs/Experiment_3_Run_Guide.md` §9](DeveloperDocs/Experiment_3_Run_Guide.md) for the end-to-end procedure.
+
+### Experiment 5 — FeRRy (IPDPS 2027)
+
+**What it is.** Exp 5 evaluates FeRRy, the HERMES build of contributions C1–C5, in fifteen studies (5.1–5.15) on the real-process stack: one cluster, K mules and N device processes over loopback TCP, real Keras training on CICIoT2023, on a simulated mission clock. It reuses Exp 4's harness: every trial is `python -m experiments.exp4.runner_main` with the FeRRy flags, and [`scripts/exp5/launch.py`](scripts/exp5/launch.py) turns each stage of the campaign into those runs from [`scripts/exp5/params.toml`](scripts/exp5/params.toml). The studies and their arms are in [`FeRRy_Build_Plan.html`](DeveloperDocs/FeRRy_Build_Plan.html) (Experiments); every flag is in the [Run Guide](DeveloperDocs/Experiment_4_Run_Guide.md) §2.6–2.8 and the [Configuration Reference](DeveloperDocs/HERMES_Configuration_Reference.md) §17–20.
+
+**Does the experiment train the RL score?** No. A stack trial only *flies* a learned score: the FQ arms take `--pair-checkpoint` and E3 takes `--policy-checkpoint`, and the runner refuses a checkpoint that is untrained, unscored on the held-out runs, or trained from a dirty tree. Training is a separate FerrySim campaign (step 9) that must come *after* the knee pilot. Batch 1 (the 8 Oct 2026 split: the pilots, the cores of 5.3, 5.9 and 5.11, and 5.14) needs no training: FX flies the in-flight slot. The learned score is needed for 5.5, 5.6, 5.7 and E3 in 5.3.
+
+**1. Environment (once).** Python 3.11.9 with the pinned Exp 4 packages. On Windows use a conda environment, not a venv: a venv's `python.exe` there is a launcher stub that starts the real interpreter as a child, so every trial process appears twice and the Study 5.11 footprint probe measures the stub (the launcher refuses a venv interpreter).
+```bash
+conda create -n ferry311 python==3.11.9
+conda activate ferry311
+python -m pip install -r AppSetup/requirements_exp4.txt pytest
+```
+Every command below runs from the repository root in that environment.
+
+**2. Dataset (once).** Unzip all 169 `part-*.csv` files of CICIoT2023 (12.8 GB), flat, into `../datasets/CICIOT2023/` beside the repository, or point `HERMES_CICIOT_DIR` at them. Each trial draws 3 training files and 1 test file by its seed, so the whole set is needed. The loader alone falls back to a synthetic task when it finds no CSV; the launcher refuses to start instead.
+
+**3. The machine.** Run the whole campaign on one machine: a few planner values computed through `math.erfc` differ in the last bit between Windows builds, which flips rare near-ties, so arms are only paired within one host. Keep it awake and pause Windows Update for the campaign. With Windows long paths off, keep the repository path short (the launcher checks the deepest trace path).
+
+**4. The code gate.** The full suite against the three recorded baselines (about 23 min on 8 cores):
+```bash
+python -m pytest tests -p no:cacheprovider -q -rfE --junitxml=run.xml
+```
+```bash
+python tests/golden/make_baseline.py compare run.xml
+```
+The compare must show only: the five known failures with their recorded signatures (the selector's decision-dense cell and four `test_mode_switch` subprocess tests); the load-sensitive real-model smoke test, which it allows; and, on any host but the one that recorded the baselines, the five last-bit `erfc` differences (`test_golden_feasibility::test_random_instances`, three `test_golden_p4_plan` `mission_completed` pins, `test_p3_legacy_equivalence::test_the_one_predicate_reproduces_every_recorded_walk`).
+
+**5. Settings.** In `scripts/exp5/params.toml` set `campaign.base_seed` (a seed of the campaign's own; Exp 4 used 42) and `knee.budgets_s` (the budgets to sweep per N), and review the defaults: arms, cells, payload, trial counts, thread caps and the parallelism limits. Commit before each stage: the manifest records the commit, and the launcher refuses uncommitted changes under `hermes/` or `experiments/`. A stage whose settings are unset is refused, with the missing names.
+
+**6. The pilots.** Each stage fills in what the next one needs; commit `params.toml` after each.
+```bash
+python scripts/exp5/launch.py run ttl
+```
+The session-TTL pilot (`scripts/exp5/fit_time_probe.py` at N = 6, 12, 18, 24, with as many trials side by side as the sweep will run). Set `pilot_outputs.session_ttl_s` per N to each report's `ttl_floor_s` (2 × the p95 fit time), rounded up.
+```bash
+python scripts/exp5/launch.py run knee
+```
+H1 budget sweeps on the wide band per N (20 trials per point). Set `pilot_outputs.knee_s` per N to the budget where the served share stops rising (Run Guide §2.6), and `stress_s` to half of it, rounded to 5 s.
+```bash
+python scripts/exp5/launch.py run sstar
+```
+The age cap S\* per N at the knee and stress budgets. Set `pilot_outputs.s_star` per N.
+
+**7. Batch 1.** List the jobs (and what each still needs), then run them:
+```bash
+python scripts/exp5/launch.py plan batch1
+```
+```bash
+python scripts/exp5/launch.py run batch1
+```
+```bash
+python scripts/exp5/launch.py status batch1
+```
+Jobs run side by side under the limits in `params.toml` (on 8 cores and 95 GB: six N = 6 trials at once, one N = 24 trial). A stopped run resumes by running the same command again; a CSV written under other settings is refused. Cells shared between studies run once (for example, 5.3's F at N = 6 reads the first 20 of 5.14's 40 trials); `plan` and the manifest list each alias. Outputs go to `results/exp5/<stage>/<study>/<cell>__<arm>.csv`, with the kept traces beside each CSV (`*_traces/`), the job logs in `_logs/` and the manifests in `_launcher/`.
+
+**8. Scoring.** Score the kept traces per study with the trace scorer (one or more `*_traces` folders), with `--cost-columns` for 5.11 and the per-study columns the Run Guide names, then compare arms with `experiments/analysis/stats.py` (`compare_to_reference`: paired bootstrap CIs, Wilcoxon with Cliff's δ, Holm across each study's family):
+```bash
+python -m experiments.analysis.traces_scorer --traces results/exp5/b1/s514/n6k1_knee__capS_traces --tau 0.82 --cost-columns --csv results/exp5/b1/s514_capS_scored.csv
+```
+
+**9. The learned score (batch 2).** In this order, with the exact commands in the Run Guide §2.8 and the decisions it needs in the Scheduler Freeze §5l:
+1. After the N = 12 knee pilot, re-pin FerrySim's cells to the measured budgets (a code edit that moves the cells, the 5.6 lags, the P_c constants and the `jittery56` hash together), so the score trains on the budgets the stack flies.
+2. `python -m experiments.ferrysim headroom`, then the calibration sweeps (γ ∈ {0, 0.9} × 3 seeds per family), `evaluate` and `report`.
+3. Study 5.5's sweep (6 γ × 10 seeds), `evaluate --record` (writes each checkpoint's held-out score into its manifest) and `report` (Study 5.5's pre-registered verdict).
+4. E3's trainings (`sweep --kind chen_dqn`), and 5.7's scores if 5.5 keeps the learned score.
+5. The stack trials that fly them (`--pair-checkpoint TAG=PATH`, `--policy-checkpoint E3=PATH`).
+
+Train from a clean tree: `train` and `sweep` refuse a dirty one unless `--allow-dirty`, each checkpoint's manifest records its commit, and the runner refuses to fly a checkpoint trained from a dirty tree. Checkpoints go to `results/exp5/checkpoints/`; committing them needs the repository's LICENSE in place. The campaign is 77–119 trainings, about 1–2 h each on one core; it shares the CPU with stack trials, so run it when the stack is idle.
+
+**Reproducing a run.** Every `run` writes `results/exp5/<stage>/_launcher/manifest_<time>.json`: the commit and any uncommitted change, the interpreter and package versions, the thread caps, the dataset's fingerprint (file count, bytes, a hash of names and sizes), the host, the launcher's hash, the full `params.toml`, and every job's command. To reproduce a stage, check out that commit, recreate the environment (step 1), check the dataset's fingerprint, and run the same stage with the manifest's `params.toml`. Every trial's seed is `sha256(base_seed | cell | trial)`, so the same settings fly the same layouts and draws; results are bit-identical on the same OS build and CPU class (step 3).
 
 ---
 
