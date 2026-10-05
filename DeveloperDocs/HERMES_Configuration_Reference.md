@@ -2565,6 +2565,50 @@ python -m experiments.analysis.age_cap_s_star --budgets 90 45 --far-share 0.5 --
 
 Tests: `tests/unit/test_exp5_u10.py`.
 
+### 20.11 The O1 oracle (Study 5.4's optimality gap)
+
+`experiments/analysis/o1_oracle.py` is the build plan's O1 (after Zhai et al., TWC 2025; decided
+2026-10-05): an offline, planning-level search that is never flown. F flies FerrySim episodes in
+process, and an `on_mule` hook wraps the scheduler's `build_ferry_plan`: each mission F plans as it
+always does, then the oracle searches on exactly that plan's inputs (`capture`: the demand,
+weights, S3 deadlines, the age cap, the start state, the budget's end, each class's model and Pass
+2, the score settings). So the gap is read on F's own mission states, ages and caps included.
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `--cells` | `jit-n6-45 jit-n6-90` | FerrySim cells at N ≤ 6 (the build plan's bound; a larger cell is refused). |
+| `--episodes`, `--stream` | 30, `ferrysim-val` | Episodes per cell, from the validation stream. |
+| `--arm` | F | The arm whose plans are judged. |
+| `--physics`, `--driver` | none | Overrides on the cells, e.g. Study 5.4's `'{"narrow_range_ratio": 2}'` or `'{"far_share": 0.5}'` (§20.10). |
+
+**The family.** A plan is an ordered sequence of disjoint groups of demanded devices, each served
+at one position on one class whose planar reach covers every member from there (a member beyond it
+would count as served at outage 1 with no dwell, so it is refused). A group is offered its centroid,
+each member's position (S3a's two rules), and the position of every stop F was offered on any class
+that holds all its members (S3a's and the hover rule's). So F's own family, the offered stops and
+their member subsets on one class, lies inside the oracle's, and per-stop bands, any grouping and
+any order are added. Each stop is admitted by its class's predicate (S3b's deadline-and-budget
+rule, an exempt stop protected) from the state the route has reached; the classes share the dock,
+speed and hover power, so one state threads through them. The committed class b̄ prices Pass 2.
+
+**The score and the gap.** Exactly F's: `plan_score.score` and `cap_key`, each member's outage on
+its own stop's class. Two optima per mission: the best under F's own plan key (the cap key, then
+the served share under the default lexicographic rank, then V), and the best V. The report gives
+`gap_v` (best V − F's V ≥ 0), `gap_v_at_key` and `gap_share_at_key`, whether the key-best flies a
+stop off its committed class, and the search's size. Two checks run on every mission: the oracle
+prices F's committed plan at F's own V (else it raises: the two disagree on pricing), and its best
+is never worse than F's under F's key. A branch is pruned when one already met served the same
+devices from the same position no later, on no more energy and no more link loss, or when a bound
+on every extension's V (its home, energy and link with nothing left uncovered, on the cheapest Pass
+2; F's default Δ only) cannot beat either optimum; a test checks that the bound changes neither.
+About 1 minute per N = 6 mission on one core.
+
+```bash
+python -m experiments.analysis.o1_oracle --cells jit-n6-45 jit-n6-90 --episodes 30 --workers 8 --out results/exp5/s54/o1_gap.json
+```
+
+Tests: `tests/unit/test_exp5_o1_oracle.py`.
+
 ---
 
 ## Cross-references
