@@ -482,7 +482,7 @@ The panel writes six figures (A2-vs-A1, A3-vs-A2, A4-vs-A3, β-sweep, rrf-sweep,
 
 ### Experiment 5 — FeRRy (IPDPS 2027)
 
-**Full procedure: [`DeveloperDocs/Experiment_5_Reproducibility_Guide.md`](DeveloperDocs/Experiment_5_Reproducibility_Guide.md)** covers setup, every stage, the levers, scoring, outputs and provenance, determinism, troubleshooting, and the open decisions.
+**Full procedure: [`DeveloperDocs/Experiment_5_Reproducibility_Guide.md`](DeveloperDocs/Experiment_5_Reproducibility_Guide.md)** covers setup, every stage, the levers, scoring, outputs and provenance, determinism, troubleshooting, and the open decisions. **What is ready to run, and what is not and why:** [`DeveloperDocs/Experiment_5_Readiness.md`](DeveloperDocs/Experiment_5_Readiness.md).
 
 **What it is.** Exp 5 evaluates FeRRy, the HERMES build of contributions C1–C5, in fifteen studies (5.1–5.15). It runs on the real-process stack: one cluster, K mules and N device processes over loopback TCP, with real Keras training on CICIoT2023, on a simulated mission clock.
 
