@@ -80,7 +80,8 @@ def test_a_negative_strength_is_refused():
 
 
 def test_the_config_carries_them_as_sim_only_ferry_fields():
-    assert ADDENDUM_MULE_FIELDS[:2] == FIELDS == FERRY_PARAMS_OMITTED_AT_NONE
+    # Unit U10's narrow_range_ratio follows them in the omitted-at-None list.
+    assert ADDENDUM_MULE_FIELDS[:2] == FIELDS == FERRY_PARAMS_OMITTED_AT_NONE[:2]
     defaults = MuleConfig(mule_id="m")
     assert {f: getattr(defaults, f) for f in FIELDS} == {f: None for f in FIELDS}
     for f in FIELDS:
