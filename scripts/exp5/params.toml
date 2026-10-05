@@ -95,6 +95,8 @@ session_ttl_s = { "6" = 36.0, "12" = 34.0, "18" = 34.0, "24" = 23.0 }
 # At the measured payload (18.8 KB), for Study 5.4:
 # knee_meas_s   = { "6" = 0.0 }
 # stress_meas_s = { "6" = 0.0 }
+# From stage knee, by [score]'s pilot_tau rule: the primary accuracy threshold.
+# tau           = 0.70
 
 # --------------------------------------------------------------------------
 # Stage ttl: the session-TTL pilot (fit_time_probe.py at each N, with as many
@@ -430,7 +432,19 @@ workers = 8
 # exclude 0 and Holm p < alpha.
 # ==========================================================================
 [score]
-tau = [0.82]                  # the build plan's tau; the first is the primary
+# The accuracy thresholds; the first is the primary. "pilot" is the knee
+# pilot's tau (pilot_outputs.tau, by the rule below); 0.82, the build plan's,
+# stays as the second so its reach rate is still reported. Decided 5 Oct 2026,
+# before the knee pilot finished: at 4 missions few trials reach 0.82 (H1 in
+# the first knee cells: 5 of 49 at N = 12, none at N = 24, where accuracy
+# levels off near 0.71), so time to 0.82 would be blank in most trials.
+tau = ["pilot", 0.82]
+# The rule `report knee` applies (and --apply writes as pilot_outputs.tau): the
+# largest tau, in steps of pilot_tau_step, that at least pilot_tau_share of
+# H1's ok trials reach within the trial (the highest accuracy after any round)
+# at each N's knee at 1 MB; the smallest of those over N.
+pilot_tau_share = 0.8
+pilot_tau_step = 0.01
 alpha = 0.05
 family = "study"              # Holm across every comparison of a study ("cell": per cell)
 n_bootstraps = 2000

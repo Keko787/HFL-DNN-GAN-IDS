@@ -530,7 +530,9 @@ exp5 run batches --yes
 ```bash
 exp5 score batches
 ```
-Between the pilots and the RL stages, FerrySim's cells are re-pinned to the measured knee (a one-time code change).
+Between the pilots and the RL stages, FerrySim's cells are re-pinned to the measured knee (a one-time code change). The knee pilot also sets τ, the accuracy threshold for time to τ, by a rule fixed in advance; 0.82 is kept as a second τ.
+
+Git leaves the event traces out. `exp5 pack <stage>` archives a stage's traces with a checksum for a release, and `exp5 unpack <stage>` restores them for re-scoring.
 
 **Levers.** These change a setting for one run without editing `params.toml`:
 - `--trials`, `--seed`, `--missions`, `--contact-regime`, `--tau`, `--dataset`;

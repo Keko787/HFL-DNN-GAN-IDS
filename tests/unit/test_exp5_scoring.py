@@ -66,12 +66,19 @@ def _entry(tmp: Path, variant: str, values, *, seeds=None, status=None, trials=N
     return SC.Entry("sx", "n6k1_knee", variant, variant, c, s, trials or len(values))
 
 
-def test_params_plan_parses_and_names_known_flags():
+def test_params_plan_waits_for_the_pilots_tau():
     s, _ = L.load_settings(L.PARAMS)
-    plan, problems = SC.plan_from(s.data)
+    _, problems = SC.plan_from(s.data)
+    assert len(problems) == 1 and "pilot_outputs.tau" in problems[0]
+    plan, problems = SC.plan_from(_filled_settings().data)
+    assert problems == [] and plan.taus == [0.7, 0.82]
+
+
+def test_params_plan_parses_and_names_known_flags():
+    plan, problems = SC.plan_from(_filled_settings().data)
     assert problems == []
-    assert plan.tau == 0.82 and plan.family == "study"
-    assert SC.column("sim_s_to_tau", 0.82) == "sim_s_to_tau0.82"
+    assert plan.tau == 0.7 and plan.family == "study"
+    assert SC.column("sim_s_to_tau", 0.7) == "sim_s_to_tau0.7"
     assert SC.column("network_aou_mean", 0.82) == "network_aou_mean"
     assert plan.specs["s514"].reference_of("secFL1") == "secF"
     assert plan.specs["s514"].reference_of("secF") is None
@@ -79,8 +86,7 @@ def test_params_plan_parses_and_names_known_flags():
 
 
 def test_scorer_call_suffixes_and_missing_s_star():
-    s, _ = L.load_settings(L.PARAMS)
-    plan, _ = SC.plan_from(s.data)
+    plan, _ = SC.plan_from(_filled_settings().data)
     args, out, missing = SC.scorer_call("r/b2/s58/x.csv", plan, plan.specs["s58"], 2)
     assert out == "r/b2/s58/x_scored_cap2.csv" and missing == []
     assert args[args.index("--age-cap-s") + 1] == "2"
@@ -212,7 +218,7 @@ def _filled_settings():
     d = copy.deepcopy(s.data)
     per_n = lambda v: {str(n): v for n in (6, 12, 18, 24)}   # noqa: E731
     d["pilot_outputs"].update(knee_s=per_n(90.0), stress_s=per_n(45.0), s_star=per_n(2),
-                              knee_meas_s={"6": 60.0}, stress_meas_s={"6": 30.0})
+                              knee_meas_s={"6": 60.0}, stress_meas_s={"6": 30.0}, tau=0.7)
     d["rl"].update(keep_learned=True, gamma_star=0.9, repinned=True)
     d["rl"]["e3"]["gamma"] = 0.9
     d["rl"]["checkpoints"] = {k: f"ck/{k}.npz" for k in

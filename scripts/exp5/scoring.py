@@ -100,8 +100,18 @@ def plan_from(data: Dict[str, Any]) -> Tuple[Plan, List[str]]:
     """The scoring plan from params.toml's data, and the problems found in it."""
     problems: List[str] = []
     top = dict(data.get("score") or {})
-    taus = top.get("tau", [0.82])
-    taus = [float(t) for t in (taus if isinstance(taus, list) else [taus])]
+    raw = top.get("tau", [0.82])
+    taus: List[float] = []
+    for t in raw if isinstance(raw, list) else [raw]:
+        if t == "pilot":                  # the knee pilot's tau, by [score] pilot_tau_*
+            value = (data.get("pilot_outputs") or {}).get("tau")
+            if value is None:
+                problems.append('score.tau starts with "pilot", but pilot_outputs.tau is '
+                                'unset: `exp5 report knee --apply` sets it')
+                continue
+            taus.append(float(value))
+        else:
+            taus.append(float(t))
     family = str(top.get("family", "study"))
     if family not in ("study", "cell"):
         problems.append(f"score.family must be \"study\" or \"cell\", not {family!r}")
@@ -125,7 +135,7 @@ def plan_from(data: Dict[str, Any]) -> Tuple[Plan, List[str]]:
             reference=t.get("reference"), versus=versus,
             also=list(t.get("also", default_also)), scorer_flags=flags,
             age_cap=bool(t.get("age_cap", False)), note=str(t.get("note", "")))
-    plan = Plan(taus=taus, alpha=float(top.get("alpha", 0.05)), family=family,
+    plan = Plan(taus=taus or [0.82], alpha=float(top.get("alpha", 0.05)), family=family,
                 n_bootstraps=int(top.get("n_bootstraps", 2000)), specs=specs)
     return plan, problems
 
