@@ -1676,6 +1676,13 @@ def cmd_report(stage: str, s: Settings, jobs: List[Job]) -> int:
         metric = str(s.get("knee.metric"))
         share = float(s.get("knee.plateau_share"))
         cells: Dict[Tuple[int, str], Dict[float, List[float]]] = collections.OrderedDict()
+        # Beside the knee: the final accuracy, and the share of trials that end at
+        # or above the scoring plan's tau (time to tau is blank in a trial that
+        # never gets there, so this says how far the studies' primary metric
+        # will reach at these budgets and this mission count).
+        accuracy: Dict[Tuple[int, str, float], List[float]] = {}
+        taus = s.get("score.tau", [0.82])
+        tau = float(taus[0] if isinstance(taus, list) else taus)
         not_ok = 0
         for j in jobs:
             path = REPO / j.out
@@ -1685,6 +1692,7 @@ def cmd_report(stage: str, s: Settings, jobs: List[Job]) -> int:
             payload = (j.args[j.args.index("--payload-bytes") + 1]
                        if "--payload-bytes" in j.args else "measured")
             values = cells.setdefault((j.n, payload), {}).setdefault(budget, [])
+            accs = accuracy.setdefault((j.n, payload, budget), [])
             with path.open(newline="", encoding="utf-8") as f:
                 for row in csv.DictReader(f):
                     if row.get("status", "ok") != "ok":
@@ -1692,6 +1700,10 @@ def cmd_report(stage: str, s: Settings, jobs: List[Job]) -> int:
                         continue
                     try:
                         values.append(float(row[metric]))
+                    except (KeyError, ValueError):
+                        pass
+                    try:
+                        accs.append(float(row["final_accuracy"]))
                     except (KeyError, ValueError):
                         pass
         knees: Dict[str, Dict[str, float]] = {}
@@ -1715,8 +1727,12 @@ def cmd_report(stage: str, s: Settings, jobs: List[Job]) -> int:
                 sd = (sum((x - m) ** 2 for x in v) / (len(v) - 1)) ** 0.5 if len(v) > 1 else 0.0
                 half = 1.96 * sd / math.sqrt(len(v))
                 mark = "  <- knee" if b == knee else ""
+                accs = accuracy.get((n, payload, b), [])
+                acc = (f"; final accuracy {sum(accs) / len(accs):.3f}, "
+                       f"{sum(1 for x in accs if x >= tau)}/{len(accs)} at tau {tau:g}"
+                       if accs else "")
                 print(f"    {b:7.0f} s   {m:6.3f} ± {half:5.3f}  (n = {len(v)}, served share "
-                      f"{m / n:5.1%}){mark}")
+                      f"{m / n:5.1%}{acc}){mark}")
             budgets = sorted(by_budget)
             if knee == budgets[-1]:
                 print("    WARNING: the knee is the grid's largest budget; the grid may not "
