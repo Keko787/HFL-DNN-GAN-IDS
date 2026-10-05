@@ -1,0 +1,5 @@
+# Shell scripts keep LF line endings on every checkout (a CRLF one fails on Linux);
+# Windows command scripts keep CRLF.
+*.sh  text eol=lf
+*.cmd text eol=crlf
+*.bat text eol=crlf
