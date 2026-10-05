@@ -2087,6 +2087,22 @@ and the goldens and the three test baselines are unaffected. No recorded run and
 took this path with a leak that changed a result; a leaked process could only have slowed or
 port-blocked a later trial. Tests: `tests/unit/test_exp5_r14_startup_shutdown.py`.
 
+## 5n. Unit U11 behind switches, no amendment (2026-10-05)
+
+Study 5.2's arms F-round (one deadline for every device, the round's, after FedCS) and F-pref (no
+per-device cutoff; Oort's speed factor on the coverage weights) land behind the arms themselves
+(Configuration Reference §20.12): the deadline law gains the `round` and `pref` forms, which only
+these arms fly; `age_cap` reads an infinite window (`pref`) as no cutoff, a value no other law
+produces; `demand_weights` gains an optional `speed` factor, None by default. At the defaults no
+row, event or trace changes.
+
+The one change to a pinned definition: `FLScheduler.build_ferry_plan` passes
+`speed=getattr(self, "plan_speed", None)` to `demand_weights`. The scheduler holds `plan_speed`
+only when a mule binds it (`MuleConfig.plan_speed_alpha`, F-pref alone), so every other arm's plan
+is 386c275's. `test_p5_fits_after_service` strips exactly that keyword, as it strips Study 5.14's
+hover gate, before comparing the definition. Approved by the user on 2026-10-05 with the design
+(option A: the merge cutoff follows the deadline form).
+
 ## 6. Unfreezing
 
 Amend this document with the reason, the changed files, and which recorded sweeps are invalidated.

@@ -1604,7 +1604,8 @@ class FLScheduler:
                            spec=options.cap)
         weights = demand_weights(demand, self._device_states, ages=cap.ages,
                                  miss_priority=self._miss_priority,
-                                 mode=options.score.coverage_weights)
+                                 mode=options.score.coverage_weights,
+                                 speed=getattr(self, "plan_speed", None))
         start = FlightState(dock, float(_now))  # type: ignore[arg-type]
         origin = self._mission_start_ts if self._mission_start_ts is not None else _now
         budget_end = None if self._mission_budget_s is None else origin + self._mission_budget_s

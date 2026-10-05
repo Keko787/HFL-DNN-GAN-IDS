@@ -82,7 +82,18 @@ NEW_BUCKET_ATTEMPT_LIMIT: int = 3
 
 LAW_ADDITIVE = "additive"
 LAW_MULTIPLICATIVE = "multiplicative"
-DEADLINE_LAWS = (LAW_ADDITIVE, LAW_MULTIPLICATIVE)
+#: The Exp 5 addendum's unit U11 (Study 5.2): the selection literature's
+#: deadlines in place of FeRRy's per-device one. ``round`` (after FedCS): every
+#: device is due by the round's end, ``round_s`` after the plan, and its merge
+#: window is the round, so updates older than about one round are cut.
+#: ``pref`` (after Oort): no per-device cutoff at all (due by the round's end,
+#: which the budget already enforces, and no merge cutoff); the arm weighs
+#: slow devices down instead (``plan_score.demand_weights``' speed factor).
+#: Neither moves a device's window with its outcomes.
+LAW_ROUND = "round"
+LAW_PREF = "pref"
+ROUND_LAWS = (LAW_ROUND, LAW_PREF)
+DEADLINE_LAWS = (LAW_ADDITIVE, LAW_MULTIPLICATIVE) + ROUND_LAWS
 
 
 class DeadlineLawError(ValueError):
@@ -158,12 +169,27 @@ class DeadlineLaw:
     phi_max: float = 300.0
     expire_overrides: Optional[bool] = None
     time_scale: float = 1.0
+    #: Unit U11: the round's length (s), every device's deadline after the plan
+    #: under ``round`` and ``pref`` (the arm's mission budget); None otherwise.
+    round_s: Optional[float] = None
 
     def __post_init__(self) -> None:
         if self.form not in DEADLINE_LAWS:
             raise DeadlineLawError(
                 f"unknown deadline law {self.form!r}; choose one of {DEADLINE_LAWS}"
             )
+        if self.form in ROUND_LAWS:
+            r = self.round_s
+            if (isinstance(r, bool) or not isinstance(r, (int, float))
+                    or not math.isfinite(r) or r <= 0.0):
+                raise DeadlineLawError(
+                    f"the {self.form!r} law needs round_s, the round's length > 0 "
+                    f"(the arm's mission budget), got {r!r}"
+                )
+            object.__setattr__(self, "round_s", float(r))
+        elif self.round_s is not None:
+            raise DeadlineLawError(
+                f"round_s belongs to the {ROUND_LAWS} laws, not {self.form!r}")
         if not 0.0 < self.beta_on < 1.0:
             raise DeadlineLawError(f"beta_on must be in (0, 1), got {self.beta_on}")
         if not 1.0 <= self.beta_partial <= self.beta_timeout:
@@ -189,6 +215,11 @@ class DeadlineLaw:
         return self.form == LAW_ADDITIVE
 
     @property
+    def is_round(self) -> bool:
+        """Unit U11's ``round`` or ``pref``: one deadline for every device."""
+        return self.form in ROUND_LAWS
+
+    @property
     def is_recorded(self) -> bool:
         """Exactly the law every recorded run used: additive, sticky overrides,
         recorded time unit."""
@@ -197,7 +228,7 @@ class DeadlineLaw:
     @property
     def expires_overrides(self) -> bool:
         if self.expire_overrides is None:
-            return self.form == LAW_MULTIPLICATIVE
+            return self.form == LAW_MULTIPLICATIVE or self.form in ROUND_LAWS
         return bool(self.expire_overrides)
 
     # The law's time constants in its own unit (the recorded ones at 1.0).
@@ -228,7 +259,10 @@ class DeadlineLaw:
         return replace(self, time_scale=time_scale)
 
     def clamp(self, phi: float) -> float:
-        """Bound a window: the 5 s floor alone under the additive law."""
+        """Bound a window: the 5 s floor alone under the additive law (unit U11's
+        laws keep the stored window as it is: they never read it)."""
+        if self.is_round:
+            return float(phi)
         if self.is_additive:
             return max(self.floor_s, float(phi))
         lo, hi = self.phi_bounds
@@ -243,8 +277,11 @@ class DeadlineLaw:
         device was reachable — a PARTIAL, or a TIMEOUT after its advert
         arrived (``answered``, e.g. an uplink dropped mid-session) — and by
         β_timeout when it never answered. The step scales the clamped window,
-        the Φ the deadline actually used, not the raw stored value.
+        the Φ the deadline actually used, not the raw stored value. Unit U11's
+        laws do not move it.
         """
+        if self.is_round:
+            return float(phi)
         if self.is_additive:
             if outcome is MissionOutcome.CLEAN:
                 return max(self.floor_s, phi - self.on_time_shrink_s)
@@ -280,6 +317,8 @@ class DeadlineLaw:
         raw.pop("form")
         if raw.get("time_scale") == 1.0:
             raw.pop("time_scale")
+        if raw.get("round_s") is None:
+            raw.pop("round_s")              # unit U11's, only under its laws
         return raw
 
     @classmethod
@@ -355,6 +394,9 @@ def compute_deadline(
         )
         if not expired:
             return state.deadline_override_ts
+    if law is not None and law.is_round:
+        # Unit U11: one deadline for every device, the round's end.
+        return now + law.round_s
     fulfilment = effective_window(state, law=law)
     return now + fulfilment * window_scale - compute_idle_time(state, now)
 
@@ -371,6 +413,10 @@ def effective_window(
     """
     if law is None or law.is_additive:
         return max(_floor(law), state.deadline_fulfilment_s)
+    if law.form == LAW_ROUND:
+        return law.round_s          # unit U11 (FedCS): the merge window is the round
+    if law.form == LAW_PREF:
+        return math.inf             # unit U11 (Oort): no cutoff
     return law.clamp(state.deadline_fulfilment_s)
 
 

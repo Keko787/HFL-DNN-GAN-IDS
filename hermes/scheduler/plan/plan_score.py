@@ -366,6 +366,43 @@ def coverage_weight(
     return base * (1 + streak) if miss_priority else base
 
 
+#: The smallest speed factor: Oort's penalty is 0 for a device that never
+#: finishes, and a coverage weight must stay positive (:func:`score`).
+MIN_SPEED_FACTOR = 1e-12
+
+
+def oort_speed_factors(
+    demand: Iterable[DeviceID],
+    *,
+    fit_s: Optional[Callable[[DeviceID], Optional[float]]],
+    dwell_s: float,
+    t_ref_s: float,
+    alpha: float,
+) -> Dict[DeviceID, float]:
+    """Unit U11 (arm F-pref): Oort's system-speed factor for each demanded device.
+
+    ``(T / t_j) ** alpha`` when ``t_j > T``, else 1 (Lai et al., OSDI 2021; the
+    D2 port's ``speed_penalty``), with ``T = t_ref_s`` (the cell's T_nom) and
+    ``t_j`` the device's round time as D2 reads it: its fit time (``fit_s``;
+    0 without training times, or with no clock) plus its predicted dwell,
+    here at its own position on the reference class (``dwell_s``: the plan
+    weighs devices before it groups them into stops). A device that never
+    finishes gets :data:`MIN_SPEED_FACTOR`, so its weight stays positive.
+    """
+    out: Dict[DeviceID, float] = {}
+    t_ref = float(t_ref_s)
+    for did in demand:
+        fit = 0.0 if fit_s is None else float(fit_s(did) or 0.0)
+        t = fit + float(dwell_s)
+        if t <= t_ref:
+            out[did] = 1.0
+        elif math.isinf(t):
+            out[did] = MIN_SPEED_FACTOR
+        else:
+            out[did] = max(MIN_SPEED_FACTOR, (t_ref / t) ** float(alpha))
+    return out
+
+
 def demand_weights(
     demand: Iterable[DeviceID],
     device_states: Mapping[DeviceID, Any],
@@ -373,6 +410,7 @@ def demand_weights(
     ages: Optional[Mapping[DeviceID, int]],
     miss_priority: bool,
     mode: str,
+    speed: Optional[Any] = None,
 ) -> Dict[DeviceID, float]:
     """Every demanded device's :func:`coverage_weight`, in demand order.
 
@@ -383,6 +421,11 @@ def demand_weights(
     ``miss_priority`` is the arm's (``FLScheduler.miss_priority``) and
     ``mode`` is ``PlanScoreParams.coverage_weights``. The result is both the
     commit's ``weights`` and :func:`score`'s.
+
+    ``speed`` (the Exp 5 addendum's unit U11, arm F-pref after Oort): None, the
+    default, leaves every weight as above; else a mapping of device to factor
+    in (0, 1], or a callable of the demand that returns one, and each weight is
+    multiplied by its device's factor (1 for a device it leaves out).
     """
     if isinstance(demand, str):
         raise TypeError(f"demand is a collection of device ids, not one string: {demand!r}")
@@ -413,6 +456,13 @@ def demand_weights(
         out[did] = coverage_weight(
             age, state.miss_streak, miss_priority=miss_priority, mode=mode,
         )
+    if speed is not None:
+        factors = speed(devices) if callable(speed) else speed
+        for did in devices:
+            f = float(factors.get(did, 1.0))
+            if not (math.isfinite(f) and 0.0 < f <= 1.0):
+                raise ValueError(f"a speed factor is in (0, 1], got {f!r} for {did!r}")
+            out[did] *= f
     return out
 
 

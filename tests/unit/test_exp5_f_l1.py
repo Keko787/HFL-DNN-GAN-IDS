@@ -41,9 +41,10 @@ from tests.unit.test_p5_config_driver import _cell, _plain, _refused_before_anyt
 SECONDS = dict(UG5.PLAN_PILOT, backhaul_model="seconds", t_nom_layouts=4)
 
 
-def test_f_l1_is_the_addendums_one_arm_and_a_plan_arm():
-    assert ADDENDUM_ARMS == ADDENDUM_PLAN_ARMS == ("F+L1",)
-    assert ARMS[-1] == "F+L1" and "F+L1" not in PLAN_ARMS
+def test_f_l1_is_the_addendums_first_arm_and_a_plan_arm():
+    # Unit U11's F-round and F-pref follow it (tests/unit/test_exp5_u11.py).
+    assert ADDENDUM_ARMS == ADDENDUM_PLAN_ARMS == ("F+L1", "F-round", "F-pref")
+    assert ARMS[-3] == "F+L1" and "F+L1" not in PLAN_ARMS
     assert is_plan_arm("F+L1")
     name = trace_dir_name(_cell("F+L1", seed=2191267877, trial=3))
     assert "__F+L1__" in name

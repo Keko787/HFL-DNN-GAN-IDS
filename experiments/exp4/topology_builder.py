@@ -365,6 +365,9 @@ def build_exp4_topology(
     # clock, drawn from these settings (experiments/exp4/compute.py). None
     # builds the recorded mule.
     train_time_params: Optional[Mapping[str, float]] = None,
+    # Exp 5 addendum, unit U11 (F-pref): Oort's speed exponent on the plan's
+    # coverage weights. None builds the recorded mule.
+    plan_speed_alpha: Optional[float] = None,
 ) -> TopologyConfig:
     """Return a validated :class:`TopologyConfig` for one H1 trial.
 
@@ -434,6 +437,8 @@ def build_exp4_topology(
         plan_score_params=dict(plan_score_params or {}),
         plan_search_params=dict(plan_search_params or {}),
     )
+    if plan_speed_alpha is not None:
+        plan["plan_speed_alpha"] = float(plan_speed_alpha)
     # FeRRy Phase 5: a learned arm's checkpoint fields go to every mule as
     # given (None, the recorded mule's); the validation refuses misplaced ones.
     checkpoints = dict(

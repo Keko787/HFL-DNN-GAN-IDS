@@ -451,6 +451,13 @@ class MuleConfig:
     # class's last fields.
     device_train_time_s: Optional[Dict[str, float]] = None
     train_time_params: Optional[Dict[str, float]] = None
+    # Exp 5 addendum, unit U11 (Study 5.2's F-pref, after Oort): the exponent
+    # alpha of the speed factor (T / t_j) ** alpha on a plan arm's coverage
+    # weights for a device slower than T (T the cell's T_nom; t_j the device's
+    # fit time plus its dwell at its own position on the reference class, D2's
+    # round time). None, every other arm and every recorded run, weighs as
+    # recorded.
+    plan_speed_alpha: Optional[float] = None
     # Critic B4 — the causal RF prior under the recorded ``mission`` backhaul
     # model with the L1 channel (``--l1-channel``). Entry r - 1 is the SNR
     # (dB) the L1 trace gives the carrier chosen for mission round r's upload
@@ -590,7 +597,7 @@ FERRY_SPEC_FIELDS: Dict[str, str] = {
 ADDENDUM_MULE_FIELDS: Tuple[str, ...] = (
     "interference_amp_db", "interference_sigma_db",
     "device_train_time_s", "train_time_params",
-    "narrow_range_ratio",
+    "narrow_range_ratio", "plan_speed_alpha",
 )
 
 #: Study 5.12's mule fields: each device's fit time on the simulated clock and
@@ -641,7 +648,9 @@ CHECKPOINT_MULE_FIELDS: Tuple[str, ...] = PAIR_CHECKPOINT_FIELDS + POLICY_CHECKP
 #: law parameter on either clock.
 SIM_ONLY_MULE_FIELDS: Tuple[str, ...] = tuple(FERRY_SPEC_FIELDS) + (
     "trial_seed", "input_dim", "rf_prior_schedule_db",
-) + CHECKPOINT_MULE_FIELDS + PLAN_MULE_FIELDS + TRAIN_TIME_MULE_FIELDS
+) + CHECKPOINT_MULE_FIELDS + PLAN_MULE_FIELDS + TRAIN_TIME_MULE_FIELDS + (
+    "plan_speed_alpha",                     # unit U11: plan mode's, so the sim clock's
+)
 
 
 def _field_default(cls, name: str) -> Any:
@@ -750,6 +759,16 @@ def mule_config_errors(cfg: "MuleConfig") -> List[str]:
     errors += _plan_config_errors(cfg)
     errors += _learned_config_errors(cfg)
     errors += _train_time_config_errors(cfg)
+    alpha = getattr(cfg, "plan_speed_alpha", None)
+    if alpha is not None:
+        # Unit U11: Oort's speed factor weighs a plan's coverage, so plan mode only.
+        if (isinstance(alpha, bool) or not isinstance(alpha, (int, float))
+                or not math.isfinite(alpha) or alpha <= 0.0):
+            errors.append(f"plan_speed_alpha must be a finite number > 0, got {alpha!r}")
+        if getattr(cfg, "plan_mode", None) != PLAN_MODE_FERRY:
+            errors.append("plan_speed_alpha weighs a plan's coverage: it needs plan_mode='ferry'")
+        if getattr(cfg, "t_nom_s", None) is None:
+            errors.append("plan_speed_alpha needs t_nom_s, Oort's preferred duration T")
     return errors
 
 
