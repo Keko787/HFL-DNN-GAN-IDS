@@ -598,6 +598,11 @@ class Builder:
                     "--budgets", _fmt(knee), _fmt(stress), "--payload-bytes", _fmt(payload),
                     "--contact-band", "wide", "--regime", str(s.get("campaign.regime")),
                     "--json", out]
+            # The contact channel the studies fly: the tool's, like the runner's, is
+            # clean unless told (--regime is the backhaul's), as FerrySim's cells pass it.
+            contact = s.get("campaign.contact_regime", None)
+            if contact:
+                args += ["--ferry-physics", json.dumps({"contact_regime": str(contact)})]
             if ref_n:
                 args += ["--field-ref-n", str(ref_n)]
             job = Job("sstar", "sstar", f"sstar/n{n}", args, out, "tool", n=n,

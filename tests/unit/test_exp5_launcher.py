@@ -231,6 +231,14 @@ def test_unpack_refuses_a_damaged_archive(tmp_path):
         L.cmd_unpack("knee", a)
 
 
+def test_sstar_measures_on_the_campaigns_contact_channel(tmp_path):
+    s = _filled_settings()
+    for j in L.build("sstar", s, None, str(tmp_path)):
+        physics = json.loads(j.args[j.args.index("--ferry-physics") + 1])
+        assert physics == {"contact_regime": s.get("campaign.contact_regime")} == {
+            "contact_regime": "jittery"}
+
+
 def test_decided_values_are_set():
     s, _ = L.load_settings(L.PARAMS)
     assert s.get("rl.e3.gamma") == 0.99 and s.get("rl.e3.settings") == "chen"
