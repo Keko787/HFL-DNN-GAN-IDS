@@ -40,10 +40,10 @@ from experiments.ferrysim import pilot as P
 from experiments.ferrysim.episode import Policy, run_episode
 
 REPO = Path(__file__).resolve().parents[2]
-#: The families' hashes before the scale family (test_p5_ferrysim_runner.py's).
-JITTERY_SHA256 = "32b5cb6bc119f1e2b13423dd178cef81c4f7032f24bd199b732f53bd296d3e91"
-CLEAN_SHA256 = "76955c9b637ab875c761bf0ce21181ce1983d9c5df02b6183e74abbfc2915902"
-JITTERY56_SHA256 = "0079de11cdbe8b3fc71f7f6bdd1cf1d859e600031dd625b7996b35b7767fac66"
+#: The other families' hashes: test_p5_ferrysim_runner.py's re-pin pins, which
+#: scripts/exp5/repin.py rewrites with the cells.
+from tests.unit.test_p5_ferrysim_runner import (  # noqa: E402
+    CLEAN_SHA256, JITTERY56_SHA256, JITTERY_SHA256)
 SCALE_SHA256 = "d410f0d105186a376c1830721dd3bee7d46b49c159e9ff30a0ab46d8c8f770ad"
 #: (N, field, binding edge, 1.5 x edge), the cells' module docstring.
 SCALE = ((24, 200.0, 350.0, 525.0), (48, 282.8, 680.0, 1020.0), (96, 400.0, 1330.0, 1995.0))

@@ -134,6 +134,26 @@ def _episode(cell_name, index, label):
     return E.run_episode(cell, _seed(cell, index), policy, trial_index=index)
 
 
+def _qualifying(pick, tries=12):
+    """The first (cell, validation index) of the Study 5.5 cells, index by index and
+    the stress budget first, whose episode ``pick(cell, index)`` accepts: a test
+    that needs a decision-rich episode finds one at whatever budgets the cells are
+    re-pinned to (scripts/exp5/repin.py)."""
+    for index in range(tries):
+        for cell in C.STUDY_5_5_CELLS:
+            if pick(cell, index):
+                return cell, index
+    raise AssertionError(f"no Study 5.5 validation episode qualifies in {tries} tries")
+
+
+@functools.lru_cache(maxsize=None)
+def _decisions(cell, index):
+    """The pair slot's decisions in a validation episode (fx_pair, a trainer at 0)."""
+    ep = E.run_episode(cell, _seed(cell, index), E.Policy.scripted("fx_pair"),
+                       trainer=E.Trainer())
+    return sum(len(steps) for steps in ep.steps)
+
+
 # --------------------------------------------------------------------------- #
 # The cells and the seed streams
 # --------------------------------------------------------------------------- #
@@ -141,19 +161,24 @@ def _episode(cell_name, index, label):
 def test_the_cells_are_decision_3s_on_phase_4s_pilot_flags():
     assert [c.name for c in C.CELLS] == [
         "jit-n6-45", "jit-n6-90", "jit-n12-120", "jit-n12-180", "cln-n12-120", "cln-n12-180"]
-    table = {c.name: (c.family, c.role, c.n_devices, c.budget_s, c.contact_regime)
-             for c in C.CELLS}
+    table = {c.name: (c.family, c.role, c.n_devices, c.budget_s, c.budget_role,
+                      c.contact_regime) for c in C.CELLS}
+    (s6, k6), (s12, k12) = C.BUDGETS_S[6], C.BUDGETS_S[12]
+    (rs6, rk6), (rs12, rk12) = C.BUDGET_ROLES[6], C.BUDGET_ROLES[12]
     assert table == {
-        "jit-n6-45": ("jittery", "control", 6, 45.0, "jittery"),
-        "jit-n6-90": ("jittery", "control", 6, 90.0, "jittery"),
-        "jit-n12-120": ("jittery", "decision-rich", 12, 120.0, "jittery"),
-        "jit-n12-180": ("jittery", "decision-rich", 12, 180.0, "jittery"),
-        "cln-n12-120": ("clean", "negative-control", 12, 120.0, "clean"),
-        "cln-n12-180": ("clean", "negative-control", 12, 180.0, "clean"),
+        "jit-n6-45": ("jittery", "control", 6, s6, rs6, "jittery"),
+        "jit-n6-90": ("jittery", "control", 6, k6, rk6, "jittery"),
+        "jit-n12-120": ("jittery", "decision-rich", 12, s12, rs12, "jittery"),
+        "jit-n12-180": ("jittery", "decision-rich", 12, k12, rk12, "jittery"),
+        "cln-n12-120": ("clean", "negative-control", 12, s12, rs12, "clean"),
+        "cln-n12-180": ("clean", "negative-control", 12, k12, rk12, "clean"),
     }
+    # each name carries its size and budget, each size's stress budget first
+    assert all(c.name == C.cell_label(c.name[:3], c.n_devices, c.budget_s) for c in C.CELLS)
+    assert s6 < k6 and s12 < k12
     for c in C.CELLS:
         assert (c.payload_bytes, c.n_missions, c.network_regime, c.cap_s) == (
-            1_000_000, 4, "jittery", 2)
+            1_000_000, 4, "jittery", C.CAP_S[(c.n_devices, c.contact_regime)])
         # UG5's pilot flags (Experiment_4_Run_Guide.md 2.7), the cell's own budget,
         # cap and contact channel on top
         assert c.driver_settings() == dict(
@@ -188,19 +213,19 @@ def test_a_cell_can_set_the_interference_period_for_study_5_6():
         dataclasses.replace(N12, interference_period_s=0.0)
 
 
-@pytest.mark.parametrize("n, budgets, contact", [
-    (6, (90.0, 45.0), "jittery"), (12, (120.0, 180.0), "jittery"), (12, (120.0, 180.0), "clean"),
-])
-def test_each_cells_cap_is_the_s_star_tools_at_its_budgets(n, budgets, contact):
+@pytest.mark.parametrize("n, contact", [(6, "jittery"), (12, "jittery"), (12, "clean")])
+def test_each_cells_cap_is_the_s_star_tools_at_its_budgets(n, contact):
+    """S* at the size's two budgets, never below 2 (decision 1 of Phase 4)."""
     from experiments.analysis.age_cap_s_star import s_star_report
 
+    budgets = C.BUDGETS_S[n]
     driver = Exp4Driver(mission_clock="sim", realism=True, contact_band="wide",
                         payload_bytes=1_000_000, ferry_physics={"contact_regime": contact})
     report = s_star_report(driver, n_devices=n, budgets=budgets, regime="jittery",
                            families=("F",))
     cells = [c for c in C.CELLS if c.n_devices == n and c.contact_regime == contact]
     assert sorted(c.budget_s for c in cells) == sorted(budgets)
-    assert {c.cap_s for c in cells} == {report.s("F")}
+    assert {c.cap_s for c in cells} == {max(2, report.s("F"))} == {C.CAP_S[(n, contact)]}
 
 
 def test_the_seed_streams_are_disjoint_and_checked():
@@ -267,42 +292,54 @@ def test_a_training_run_draws_its_familys_cells_from_its_own_stream():
 # Study 5.6's cells (decision 6 (a); critic A3; resolution R22)
 # --------------------------------------------------------------------------- #
 
-#: Study 5.6's cells: the name, the Study 5.5 cell it copies, and its P_c (s).
-STUDY_5_6 = (("jit-n12-120-q", "jit-n12-120", 104.0), ("jit-n12-120-h", "jit-n12-120", 52.0),
-             ("jit-n12-180-q", "jit-n12-180", 136.0), ("jit-n12-180-h", "jit-n12-180", 68.0))
-
-#: The families' hashes (a manifest's ``cell_family_sha256``): ``jittery`` and
-#: ``clean`` as they were before Study 5.6's cells existed, and ``jittery56``.
+# >>> re-pin pins: scripts/exp5/repin.py rewrites these with the cells' re-pin
+# block (experiments/ferrysim/cells.py), from what it measures; they pin it.
+#: The families' hashes (a manifest's ``cell_family_sha256``): ``jittery``,
+#: ``clean`` and ``jittery56``.
 JITTERY_SHA256 = "32b5cb6bc119f1e2b13423dd178cef81c4f7032f24bd199b732f53bd296d3e91"
 CLEAN_SHA256 = "76955c9b637ab875c761bf0ce21181ce1983d9c5df02b6183e74abbfc2915902"
 JITTERY56_SHA256 = "0079de11cdbe8b3fc71f7f6bdd1cf1d859e600031dd625b7996b35b7767fac66"
+#: Study 5.6's lags (s) by Study 5.5 cell, and their periods (s): the quarter and
+#: half at the stress budget, then at the knee.
+LAGS_S = {"jit-n12-120": 26, "jit-n12-180": 34}
+P_C_S = (104, 52, 136, 68)
+#: The lags' sample: (lags, pooled median to 3 places) per Study 5.5 cell.
+LAG_SAMPLE = {"jit-n12-120": (1397, 26.418), "jit-n12-180": (397, 34.106)}
+#: The ratio check's bounds by budget (stress, knee): the 0.5 and 99.5 % points
+#: of a RATIO_EPISODES-episode median in the lag's 200-episode measurement
+#: (episodes resampled whole, since one layout's lags move together), as a
+#: multiple of the measured median, widened by 5 % for the lag's rounding to the
+#: second and its move with P_c, and rounded outward. At the stand-ins: 0.86 to
+#: 1.17 x at 120 s and 0.70 to 1.38 x at 180 s before widening.
+RATIO_BOUNDS_BY_BUDGET = ((0.81, 1.23), (0.66, 1.45))
+# <<< re-pin pins
+
+#: Study 5.6's cells: the name, the Study 5.5 cell it copies, and its P_c (s).
+STUDY_5_6 = (("jit-n12-120-q", "jit-n12-120", float(P_C_S[0])),
+             ("jit-n12-120-h", "jit-n12-120", float(P_C_S[1])),
+             ("jit-n12-180-q", "jit-n12-180", float(P_C_S[2])),
+             ("jit-n12-180-h", "jit-n12-180", float(P_C_S[3])))
 
 #: The ratio check: FX's median lag / P_c over the first RATIO_EPISODES
-#: validation episodes of a Study 5.6 cell lies within these factors of its
-#: target (0.25 or 0.5), by budget. They are the 0.5 and 99.5 % points of a
-#: 24-episode median in the lag's 200-episode measurement (fix B's lag probe;
-#: episodes resampled whole, since one layout's lags move together), 0.86 to
-#: 1.17 x the median at 120 s and 0.70 to 1.38 x at 180 s, widened by 5 % for
-#: the lag's rounding to the second (at most 1.6 %) and its move with P_c (at
-#: most 3.1 %, the same 60 seeds flown at 60 s and at each 5.6 period). 24 is
-#: the fewest episodes probed at which the 180 s cells' 99 % ranges of lag / P_c
-#: stay apart (0.17 to 0.35 and 0.35 to 0.69): a 12-episode median spreads 0.64
-#: to 1.63 x there.
+#: validation episodes of a Study 5.6 cell lies within RATIO_BOUNDS of its
+#: target (0.25 or 0.5). 24 is the fewest episodes probed at which the
+#: stand-ins' 180 s cells' 99 % ranges of lag / P_c stayed apart (0.17 to 0.35
+#: and 0.35 to 0.69); the re-pin checks the ranges stay apart at the new budgets.
 RATIO_EPISODES = 24
-RATIO_BOUNDS = {120.0: (0.81, 1.23), 180.0: (0.66, 1.45)}
+RATIO_BOUNDS = dict(zip(C.BUDGETS_S[12], RATIO_BOUNDS_BY_BUDGET))
 
 
 def test_study_5_6s_cells_are_study_5_5s_at_a_quarter_and_a_half_of_the_lag():
     """P_c = 4 x and 2 x the lag pinned from FX's median arrival-to-arrival time on
-    the validation stream of the matching Study 5.5 cell (26 s at 120 s, 34 s at
-    180 s); otherwise each is that Study 5.5 cell, the S* tool's cap at its own
-    period included. The control is the clean N = 12 cells; the cells keep out
-    of decision 3's, and fly their own seed streams."""
+    the validation stream of the matching Study 5.5 cell; otherwise each is that
+    Study 5.5 cell, the S* tool's cap at its own period included. The control is
+    the clean N = 12 cells; the cells keep out of decision 3's, and fly their own
+    seed streams."""
     from experiments.analysis.age_cap_s_star import s_star_report
 
-    assert C.STUDY_5_6_LAGS_S == {"jit-n12-120": 26, "jit-n12-180": 34}
-    assert (C.P_C_QUARTER_120_S, C.P_C_HALF_120_S, C.P_C_QUARTER_180_S, C.P_C_HALF_180_S) == (
-        104, 52, 136, 68)
+    assert C.STUDY_5_6_LAGS_S == LAGS_S
+    assert (C.P_C_QUARTER_STRESS_S, C.P_C_HALF_STRESS_S, C.P_C_QUARTER_KNEE_S,
+            C.P_C_HALF_KNEE_S) == P_C_S
     assert [c.name for c in C.STUDY_5_6_CELLS] == [name for name, _, _ in STUDY_5_6]
     for (name, base, period), cell in zip(STUDY_5_6, C.STUDY_5_6_CELLS):
         assert period == {"q": 4, "h": 2}[name[-1]] * C.STUDY_5_6_LAGS_S[base]
@@ -319,9 +356,9 @@ def test_study_5_6s_cells_are_study_5_5s_at_a_quarter_and_a_half_of_the_lag():
         driver = Exp4Driver(mission_clock="sim", realism=True, contact_band="wide",
                             payload_bytes=1_000_000,
                             ferry_physics=cell.driver_settings()["ferry_physics"])
-        report = s_star_report(driver, n_devices=12, budgets=(120.0, 180.0), regime="jittery",
-                               families=("F",))
-        assert report.s("F") == cell.cap_s == 2
+        report = s_star_report(driver, n_devices=12, budgets=C.BUDGETS_S[12],
+                               regime="jittery", families=("F",))
+        assert max(2, report.s("F")) == cell.cap_s == C.CAP_S[(12, "jittery")]
     assert not set(C.STUDY_5_6_CELLS) & set(C.CELLS)
     assert C.STUDY_5_6_CONTROL_CELLS == (C.cell_named("cln-n12-120"), C.cell_named("cln-n12-180"))
     C.check_disjoint([(stream, C.stream_seeds(stream, c.name, count))
@@ -366,7 +403,9 @@ def test_arrival_lags_run_from_one_pass_1_arrival_to_the_next_in_a_sortie():
 
     assert C.arrival_lags([sortie(10.0, 25.0, 47.5), sortie(), sortie(90.0),
                            sortie(100.0, 130.0)]) == [15.0, 22.5, 30.0]
-    ep = _episode("jit-n12-120", 0, "FX")
+    cell, index = _qualifying(                   # an episode with two stops in a sortie
+        lambda c, i: len(C.arrival_lags(_episode(c.name, i, "FX").sorties)) >= 2)
+    ep = _episode(cell.name, index, "FX")
     lags = C.arrival_lags(ep.sorties)
     assert len(lags) >= 2
     assert lags == [s.stops[k].t_next_s - s.stops[k].t_s
@@ -395,13 +434,12 @@ def test_the_lag_is_fxs_arrival_lags_pooled_over_its_first_validation_episodes()
 def test_the_pinned_lags_are_measured_again_on_their_own_sample(name):
     """Resolution R22's pinned lags (RB-1, RB-2): FX's pooled median over the first
     200 validation episodes of each Study 5.5 cell, flown in worker processes, is
-    the fix round's measurement, lag for lag in count, and rounds to the pinned
-    integer. Slow: about 400 episodes in all."""
+    the measurement the lags were pinned on, lag for lag in count, and rounds to
+    the pinned integer. Slow: about 400 episodes in all."""
     lags = EV.fx_lags(name, workers=4)
     median = statistics.median(lags)
-    assert (len(lags), round(median, 3)) == {"jit-n12-120": (1397, 26.418),
-                                             "jit-n12-180": (397, 34.106)}[name]
-    assert round(median) == C.STUDY_5_6_LAGS_S[name]
+    assert (len(lags), round(median, 3)) == LAG_SAMPLE[name]
+    assert round(median) == C.STUDY_5_6_LAGS_S[name] == LAGS_S[name]
 
 
 @pytest.mark.slow
@@ -592,7 +630,9 @@ def _sorties(ep):
     (E.Policy.scripted("greedy_1"), E.Trainer(epsilon=0.5, rng_seed=11)),
 ])
 def test_t3_an_episode_is_a_function_of_its_inputs(policy, trainer):
-    a, b = (E.run_episode(N12, _seed(), policy, trainer=trainer, keep_case=True)
+    cell, index = _qualifying(lambda c, i: _decisions(c, i) >= 6)
+    seed = _seed(cell, index)
+    a, b = (E.run_episode(cell, seed, policy, trainer=trainer, keep_case=True)
             for _ in range(2))
     assert a.summary() == b.summary()
     assert [list(s) for s in a.rewards] == [list(s) for s in b.rewards]
@@ -602,18 +642,20 @@ def test_t3_an_episode_is_a_function_of_its_inputs(policy, trainer):
     # the planner's wall time is the only wall stamp, and it is masked
     for e in a.case["mission_completed"]["exp4-mule"]:
         assert e["plan_wall_s"] == IP.WALL_TOKEN
-    other = E.run_episode(N12, _seed(index=1), policy, trainer=trainer)
+    other = E.run_episode(cell, _seed(cell, index + 1), policy, trainer=trainer)
     assert _sorties(other) != _sorties(a) and other.ret != a.ret
     if trainer is not None:
-        explored = E.run_episode(N12, _seed(), policy,
+        explored = E.run_episode(cell, seed, policy,
                                  trainer=dataclasses.replace(trainer, rng_seed=12))
         assert explored.pair_records != a.pair_records
 
 
 def test_a_trainer_at_epsilon_0_flies_as_none_and_collects_each_missions_decisions():
-    plain = E.run_episode(N12, _seed(), E.Policy.scripted("fx_pair"))
+    cell, index = _qualifying(lambda c, i: _decisions(c, i) >= 6)
+    plain = E.run_episode(cell, _seed(cell, index), E.Policy.scripted("fx_pair"))
     sunk = []
-    trained = E.run_episode(N12, _seed(), E.Policy.scripted("fx_pair"), trainer=E.Trainer(),
+    trained = E.run_episode(cell, _seed(cell, index), E.Policy.scripted("fx_pair"),
+                            trainer=E.Trainer(),
                             sink=lambda steps, records: sunk.append((steps, records)))
     assert trained.summary() == plain.summary()
     assert len(trained.steps) == len(trained.sorties) == len(sunk)
@@ -773,10 +815,18 @@ def test_a_kept_trace_is_filed_under_its_cell_and_policy(tmp_path):
     seed, which the FX arm and every pair slot of one seed share (each flies FX's
     configuration), as do FerrySim cells of one size; under one trace root each
     episode's trace is kept whole, under its FerrySim cell and policy."""
-    seed = _seed(index=1)                        # FX and greedy_1 fly differently here
+    def differs(cell, index):                    # FX and committed_pair fly differently
+        seed = _seed(cell, index)
+        return _sorties(E.run_episode(cell, seed, E.Policy.of_arm("FX"))) != _sorties(
+            E.run_episode(cell, seed, E.Policy.scripted("committed_pair")))
+
+    rich, index = _qualifying(differs)
+    other_cell = next(c for c in C.STUDY_5_5_CELLS if c != rich)
+    seed = _seed(rich, index)
     kept = {}
-    for cell, policy in ((N12, E.Policy.of_arm("FX")), (N12, E.Policy.scripted("greedy_1")),
-                         (C.cell_named("jit-n12-180"), E.Policy.of_arm("FX"))):
+    for cell, policy in ((rich, E.Policy.of_arm("FX")),
+                         (rich, E.Policy.scripted("committed_pair")),
+                         (other_cell, E.Policy.of_arm("FX"))):
         ep = E.run_episode(cell, seed, policy, trial_index=1, keep_case=True,
                            driver_overrides={"trace_root": tmp_path})
         root = tmp_path / cell.name / policy.label
@@ -785,7 +835,7 @@ def test_a_kept_trace_is_filed_under_its_cell_and_policy(tmp_path):
         assert trace.name == trace_dir_name(cell.cell("FX", seed, 1))
         kept[cell.name, policy.label] = _kept_arrivals(trace)
         assert kept[cell.name, policy.label] == [[s.t_s for s in x.stops] for x in ep.sorties]
-    assert kept["jit-n12-120", "FX"] != kept["jit-n12-120", "greedy_1"]
+    assert kept[rich.name, "FX"] != kept[rich.name, "committed_pair"]
     assert len(list(tmp_path.rglob("mule-*.jsonl"))) == 3
     unsafe = E.Policy(label="greedy/1", scorer=E.Policy.scripted("greedy_1").scorer)
     with pytest.raises(ValueError, match="plain path component"):

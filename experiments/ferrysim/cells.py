@@ -22,6 +22,13 @@ contact regime and its payload (critic A9), and the cells are:
   same budgets (critic C3: at the measured payload the slot would be vacuous,
   so that control could not fail).
 
+The budgets each size flies, their caps and Study 5.6's lags are in the
+re-pin block below (:data:`BUDGETS_S`, :data:`CAP_S`, :data:`STUDY_5_6_LAGS_S`).
+Once the stack's pilots measure the N = 6 and N = 12 knee and stress budgets,
+``scripts/exp5/repin.py`` moves them there: the cells, their names (which carry
+the budget), the caps, the lags and Study 5.6's periods, and the families'
+hashes move together.
+
 The cap S of every cell is the S* tool's at the cell's two budgets
 (``experiments.analysis.age_cap_s_star``; the user's decision 1 of Phase 4:
 F's S* on 90 % of 30 layouts at every budget given, never below 2), run at
@@ -133,10 +140,13 @@ ROLE_NEGATIVE_CONTROL = "negative-control"
 ROLES: Tuple[str, ...] = (ROLE_CONTROL, ROLE_DECISION_RICH, ROLE_NEGATIVE_CONTROL)
 
 #: Where a cell's budget comes from: Phase 4's priors at N = 6, the stand-in
-#: budgets at N = 12 until a pilot measures that cell's knee (critic B6).
+#: budgets at N = 12 until a pilot measures that cell's knee (critic B6), and
+#: after the re-pin the stack's measured knee and stress budgets.
 BUDGET_KNEE_PRIOR = "knee-prior"
 BUDGET_STRESS_PRIOR = "stress-prior"
 BUDGET_STAND_IN = "stand-in"
+BUDGET_KNEE = "knee"
+BUDGET_STRESS = "stress"
 
 FAMILY_JITTERY = "jittery"
 FAMILY_CLEAN = "clean"
@@ -253,61 +263,80 @@ class FerryCell:
         return out
 
 
-#: The cells (decision 3 (a)). S = 2 everywhere: the S* tool's S at each
-#: size's two budgets (module docstring).
-CELLS: Tuple[FerryCell, ...] = (
-    FerryCell("jit-n6-45", FAMILY_JITTERY, ROLE_CONTROL, 6, 45.0, BUDGET_STRESS_PRIOR, 2,
-              "jittery"),
-    FerryCell("jit-n6-90", FAMILY_JITTERY, ROLE_CONTROL, 6, 90.0, BUDGET_KNEE_PRIOR, 2,
-              "jittery"),
-    FerryCell("jit-n12-120", FAMILY_JITTERY, ROLE_DECISION_RICH, 12, 120.0, BUDGET_STAND_IN, 2,
-              "jittery"),
-    FerryCell("jit-n12-180", FAMILY_JITTERY, ROLE_DECISION_RICH, 12, 180.0, BUDGET_STAND_IN, 2,
-              "jittery"),
-    FerryCell("cln-n12-120", FAMILY_CLEAN, ROLE_NEGATIVE_CONTROL, 12, 120.0, BUDGET_STAND_IN, 2,
-              "clean"),
-    FerryCell("cln-n12-180", FAMILY_CLEAN, ROLE_NEGATIVE_CONTROL, 12, 180.0, BUDGET_STAND_IN, 2,
-              "clean"),
-)
-
+# --------------------------------------------------------------------------- #
+# The re-pin block: what moves when the stack's pilots measure the budgets (the
+# run guide's "The re-pin"; go-ahead item 5; R29). scripts/exp5/repin.py
+# rewrites it, between the markers, and every cell below is built from it, so
+# the cells, their names (which carry the budget), the caps, Study 5.6's lags
+# and periods and the families' hashes move together.
+# --------------------------------------------------------------------------- #
+# >>> re-pin block
+#: The (stress, knee) budgets (s) of each size's cells, and where each comes from
+#: (BUDGET_*): at N = 6 Phase 4's priors, at N = 12 the stand-ins.
+BUDGETS_S: Dict[int, Tuple[float, float]] = {6: (45.0, 90.0), 12: (120.0, 180.0)}
+BUDGET_ROLES: Dict[int, Tuple[str, str]] = {
+    6: (BUDGET_STRESS_PRIOR, BUDGET_KNEE_PRIOR), 12: (BUDGET_STAND_IN, BUDGET_STAND_IN)}
+#: The cap S per (size, contact regime): the S* tool's S at the size's two
+#: budgets, never below 2 (module docstring).
+CAP_S: Dict[Tuple[int, str], int] = {(6, "jittery"): 2, (12, "jittery"): 2, (12, "clean"): 2}
 #: Study 5.6's lags (s), A3's from one Pass-1 arrival to the next in the same
 #: sortie (:func:`arrival_lags`), by the Study 5.5 cell they were measured on
 #: (decision 6 (a); critic A3's rule; resolution R22): FX's median over the
 #: first 200 episodes of that cell's validation stream (``ferrysim-val``) at the
 #: default P_c of 60 s, pooled over every lag of the sample, rounded to the
-#: nearest second. ``experiments.ferrysim.evaluate.fx_lag_median(cell)`` measures
-#: it (the FX arm itself, no training; a slow test re-measures both cells). The
-#: Phase 5 fix round measured, at jit-n12-120, 26.42 s over 1,397 lags (IQR 20.1
-#: to 34.0 s; the sample's halves 26.76 and 26.27 s) and, at jit-n12-180, 34.11 s
-#: over 397 lags (IQR 26.6 to 47.6 s; halves 32.85 and 36.06 s). The integers
-#: are a pre-registration convention fixed by this sample and statistic, not a
-#: measurement to the second: the pooled median's 95 % interval (episodes
-#: resampled whole) is about 25.4 to 27.5 s and 32.2 to 36.9 s, and the first
-#: 400 episodes give 26.80 s and 35.12 s, which round to 27 and 35. The cells are
-#: re-pinned with the N = 12 pilot's budgets, measured again on the same sample
-#: and statistic.
+#: nearest second; ``experiments.ferrysim.evaluate.fx_lag_median(cell)``
+#: measures it, and a slow test measures it again. The integers are a
+#: pre-registration convention fixed by this sample and statistic, not a
+#: measurement to the second. Measured in the Phase 5 fix round: 26.42 s over
+#: 1,397 lags (IQR 20.1 to 34.0 s) at jit-n12-120, 34.11 s over 397 lags (IQR 26.6
+#: to 47.6 s) at jit-n12-180; the pooled medians' 95 % intervals (episodes
+#: resampled whole) about 25.4 to 27.5 s and 32.2 to 36.9 s.
 STUDY_5_6_LAGS_S: Dict[str, int] = {"jit-n12-120": 26, "jit-n12-180": 34}
+# <<< re-pin block
+
+
+def cell_label(prefix: str, n_devices: int, budget_s: float) -> str:
+    """A cell's name: its contact family's prefix, its size and its budget."""
+    return f"{prefix}-n{n_devices}-{float(budget_s):g}"
+
+
+def _size_cells(prefix: str, family: str, role: str, n: int, regime: str
+                ) -> Tuple[FerryCell, ...]:
+    return tuple(FerryCell(cell_label(prefix, n, budget), family, role, n, float(budget),
+                           budget_role, CAP_S[(n, regime)], regime)
+                 for budget, budget_role in zip(BUDGETS_S[n], BUDGET_ROLES[n]))
+
+
+#: The cells (decision 3 (a)), each size's stress budget first: the control at
+#: N = 6, the decision-rich cells at N = 12 and their clean negative control.
+CELLS: Tuple[FerryCell, ...] = (
+    _size_cells("jit", FAMILY_JITTERY, ROLE_CONTROL, 6, "jittery")
+    + _size_cells("jit", FAMILY_JITTERY, ROLE_DECISION_RICH, 12, "jittery")
+    + _size_cells("cln", FAMILY_CLEAN, ROLE_NEGATIVE_CONTROL, 12, "clean"))
+
+#: The Study 5.5 cells' names (decision 5: N = 12, the jittery regime), stress
+#: budget first.
+_N12_STRESS, _N12_KNEE = (cell_label("jit", 12, b) for b in BUDGETS_S[12])
+
 #: Study 5.6's interference periods P_c (s): the quarter cells fly 4 x the lag
-#: (lag / P_c = 0.25), the half cells 2 x (0.5). The half cells follow the rule
-#: too, though their 52 s and 68 s lie near the default 60 s.
-P_C_QUARTER_120_S = 4 * STUDY_5_6_LAGS_S["jit-n12-120"]     # 104 s
-P_C_HALF_120_S = 2 * STUDY_5_6_LAGS_S["jit-n12-120"]        # 52 s
-P_C_QUARTER_180_S = 4 * STUDY_5_6_LAGS_S["jit-n12-180"]     # 136 s
-P_C_HALF_180_S = 2 * STUDY_5_6_LAGS_S["jit-n12-180"]        # 68 s
+#: (lag / P_c = 0.25), the half cells 2 x (0.5), at each N = 12 budget. The half
+#: cells follow the rule too, though their periods lie near the default 60 s.
+P_C_QUARTER_STRESS_S = 4 * STUDY_5_6_LAGS_S[_N12_STRESS]
+P_C_HALF_STRESS_S = 2 * STUDY_5_6_LAGS_S[_N12_STRESS]
+P_C_QUARTER_KNEE_S = 4 * STUDY_5_6_LAGS_S[_N12_KNEE]
+P_C_HALF_KNEE_S = 2 * STUDY_5_6_LAGS_S[_N12_KNEE]
+
+_BY_NAME_5_5 = {c.name: c for c in CELLS}
 
 #: Study 5.6's cells (decision 6 (a); resolution R22): each is the Study 5.5 cell
 #: of its budget, but for its name and its interference period, the quarter
 #: cell (``-q``) and the half cell (``-h``).
-STUDY_5_6_CELLS: Tuple[FerryCell, ...] = (
-    FerryCell("jit-n12-120-q", FAMILY_JITTERY, ROLE_DECISION_RICH, 12, 120.0, BUDGET_STAND_IN, 2,
-              "jittery", interference_period_s=float(P_C_QUARTER_120_S)),
-    FerryCell("jit-n12-120-h", FAMILY_JITTERY, ROLE_DECISION_RICH, 12, 120.0, BUDGET_STAND_IN, 2,
-              "jittery", interference_period_s=float(P_C_HALF_120_S)),
-    FerryCell("jit-n12-180-q", FAMILY_JITTERY, ROLE_DECISION_RICH, 12, 180.0, BUDGET_STAND_IN, 2,
-              "jittery", interference_period_s=float(P_C_QUARTER_180_S)),
-    FerryCell("jit-n12-180-h", FAMILY_JITTERY, ROLE_DECISION_RICH, 12, 180.0, BUDGET_STAND_IN, 2,
-              "jittery", interference_period_s=float(P_C_HALF_180_S)),
-)
+STUDY_5_6_CELLS: Tuple[FerryCell, ...] = tuple(
+    dataclasses.replace(_BY_NAME_5_5[base], name=f"{base}-{suffix}",
+                        interference_period_s=float(period))
+    for base, periods in ((_N12_STRESS, (P_C_QUARTER_STRESS_S, P_C_HALF_STRESS_S)),
+                          (_N12_KNEE, (P_C_QUARTER_KNEE_S, P_C_HALF_KNEE_S)))
+    for suffix, period in zip(("q", "h"), periods))
 
 #: The scale family's field half-widths (m), N = 6's density in the realism
 #: field's 100 m: ``topology_builder.grown_field_radius_m(100.0, N, 6)``,
@@ -349,12 +378,12 @@ FAMILIES: Dict[str, Tuple[FerryCell, ...]] = {
 #: The cells Study 5.5 is read on (decision 5: N = 12, the jittery regime), by
 #: name: Study 5.6's cells are decision-rich N = 12 jittery cells too, and the
 #: rule reads these two whichever family trained the score (resolution R22).
-STUDY_5_5_CELLS: Tuple[FerryCell, ...] = (CELLS_BY_NAME["jit-n12-120"],
-                                         CELLS_BY_NAME["jit-n12-180"])
+STUDY_5_5_CELLS: Tuple[FerryCell, ...] = (CELLS_BY_NAME[_N12_STRESS],
+                                         CELLS_BY_NAME[_N12_KNEE])
 
 #: Study 5.6's control: the clean N = 12 cells, at the default P_c (resolution R22).
-STUDY_5_6_CONTROL_CELLS: Tuple[FerryCell, ...] = (CELLS_BY_NAME["cln-n12-120"],
-                                                 CELLS_BY_NAME["cln-n12-180"])
+STUDY_5_6_CONTROL_CELLS: Tuple[FerryCell, ...] = tuple(
+    CELLS_BY_NAME[cell_label("cln", 12, b)] for b in BUDGETS_S[12])
 
 
 def cell_named(name: Union[str, FerryCell]) -> FerryCell:
@@ -535,6 +564,9 @@ def train_episode(run_seed: int, family: str, index: int) -> Tuple[FerryCell, in
 
 
 __all__ = [
+    "BUDGETS_S",
+    "BUDGET_ROLES",
+    "CAP_S",
     "CELLS",
     "CELLS_BY_NAME",
     "FAMILIES",
@@ -545,10 +577,10 @@ __all__ = [
     "HELDOUT_STREAM",
     "N_MISSIONS",
     "PAYLOAD_BYTES",
-    "P_C_HALF_120_S",
-    "P_C_HALF_180_S",
-    "P_C_QUARTER_120_S",
-    "P_C_QUARTER_180_S",
+    "P_C_HALF_KNEE_S",
+    "P_C_HALF_STRESS_S",
+    "P_C_QUARTER_KNEE_S",
+    "P_C_QUARTER_STRESS_S",
     "ROLES",
     "STREAM_HELDOUT",
     "STREAM_KINDS",
@@ -561,6 +593,7 @@ __all__ = [
     "STUDY_5_6_LAGS_S",
     "VAL_STREAM",
     "arrival_lags",
+    "cell_label",
     "cell_named",
     "check_disjoint",
     "family_sha256",

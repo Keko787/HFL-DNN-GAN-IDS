@@ -447,18 +447,36 @@ def test_a_runs_plan_reaches_every_training_and_validation_episode(monkeypatch, 
 # Transitions and rewards
 # --------------------------------------------------------------------------- #
 
-def _pair_episode(index=0):
+def _pair_episode(index=0, cell=N12):
     spec = T.pair_spec(0.9, 0)
     schema = spec.schema()
     net = PairQNet(schema.dim, spec.network, seed=7)
-    episode = T.fly_pair_episode(net, schema, N12, _val_seed(index=index), index=index,
+    episode = T.fly_pair_episode(net, schema, cell, _val_seed(cell, index=index), index=index,
                                  reward=T.TRAINING_REWARD,
                                  trainer=E.Trainer(epsilon=0.3, rng_seed=index))
     return schema, episode
 
 
+def _qualifying(pick, tries=12):
+    """The first (cell, validation index) of the Study 5.5 cells, index by index and
+    the stress budget first, whose episode ``pick(cell, index)`` accepts: a test
+    that needs a decision-rich episode finds one at whatever budgets the cells are
+    re-pinned to (scripts/exp5/repin.py)."""
+    for index in range(tries):
+        for cell in C.STUDY_5_5_CELLS:
+            if pick(cell, index):
+                return cell, index
+    raise AssertionError(f"no Study 5.5 validation episode qualifies in {tries} tries")
+
+
 def test_pair_transitions_carry_the_next_decisions_rows_and_mask():
-    schema, ep = _pair_episode()
+    def rich(cell, index):                       # what the checks below need to see
+        ep = _pair_episode(index, cell)[1]
+        return (ep.decisions >= 8 and any(len(steps) >= 3 for steps in ep.steps)
+                and any(not any(nxt.mask) for steps in ep.steps for nxt in steps[1:]))
+
+    cell, index = _qualifying(rich)
+    schema, ep = _pair_episode(index, cell)
     transitions = T.pair_transitions(ep, schema)
     assert len(transitions) == ep.decisions >= 8
     at = 0
@@ -737,11 +755,6 @@ def test_checkpoints_are_scored_alike_in_worker_processes(smoke):
 # One checkpoint, two paths; the real orchestrator
 # --------------------------------------------------------------------------- #
 
-#: Where FQ-dwell's and FQ-cov's plans change the smoke checkpoint's flight: the
-#: first validation episode of jit-n12-180 (the final check's F1 probe used that
-#: cell; at jit-n12-120 the dwell change leaves the first one as it is).
-ABLATION_CELL = C.cell_named("jit-n12-180")
-
 
 @pytest.mark.parametrize("arm", ["FQ", "FQ-dwell", "FQ-cov"])
 def test_the_install_path_flies_as_the_config_path(arm, smoke, tmp_path):
@@ -754,14 +767,25 @@ def test_the_install_path_flies_as_the_config_path(arm, smoke, tmp_path):
     flight."""
     tag = CHECKPOINT_TAGS[arm]
     if arm == "FQ":
-        cell, path, plan = N12, Path(smoke.path), {}
+        path, plan = Path(smoke.path), {}
     else:
-        cell, plan = ABLATION_CELL, T.ABLATIONS[tag]
+        plan = T.ABLATIONS[tag]
         path = _planned_copy(smoke.path, tmp_path, plan)
-    seed = _val_seed(cell)
     policy, overrides = K.checkpoint_flight(path)
     assert overrides == ({"plan_score_params": plan} if plan else {})
     assert policy.arm == "FX" and policy.pair_slot
+    need = 8 if arm == "FQ" else 4
+
+    def flies(cell, index):                      # enough decisions; the plan matters
+        seed = _val_seed(cell, index)
+        ep = E.run_episode(cell, seed, policy, driver_overrides=overrides)
+        if len([r for rs in ep.pair_records if rs for r in rs]) < need:
+            return False
+        return not plan or ([s.to_json() for s in E.run_episode(cell, seed, policy).sorties]
+                            != [s.to_json() for s in ep.sorties])
+
+    cell, index = _qualifying(flies)
+    seed = _val_seed(cell, index)
     install = E.run_episode(cell, seed, policy, keep_case=True, driver_overrides=overrides)
     config = E.run_episode(cell, seed, E.Policy.of_arm(arm), keep_case=True,
                            driver_overrides={"pair_checkpoints": {tag: str(path)}})
@@ -769,7 +793,7 @@ def test_the_install_path_flies_as_the_config_path(arm, smoke, tmp_path):
     assert install.pair_records == config.pair_records
     # FQ-cov's plan can be empty (a mission with no Pass-1 stop holds no record)
     records = [r for rs in install.pair_records if rs for r in rs]
-    assert len(records) >= (8 if arm == "FQ" else 4) and all(
+    assert len(records) >= need and all(
         r["scorer"] == "pair_v1" and r["q"] is not None for r in records)
     if plan:
         # the plan matters here: the cells' own plan flies this checkpoint otherwise
