@@ -1,0 +1,57 @@
+
+  N = 6, payload 1000000: update_yield by budget (knee: first mean >= 95% of the best, 3.462)
+         30 s    0.912 ± 0.247  (n = 20, served share 15.2%; final accuracy 0.726, 7/17 reach 0.82)
+         45 s    1.438 ± 0.339  (n = 20, served share 24.0%; final accuracy 0.801, 12/20 reach 0.82)
+         60 s    1.688 ± 0.407  (n = 20, served share 28.1%; final accuracy 0.781, 12/19 reach 0.82)
+         90 s    2.675 ± 0.412  (n = 20, served share 44.6%; final accuracy 0.834, 16/20 reach 0.82)
+        120 s    3.263 ± 0.401  (n = 20, served share 54.4%; final accuracy 0.831, 18/20 reach 0.82)
+        150 s    3.462 ± 0.406  (n = 20, served share 57.7%; final accuracy 0.829, 18/20 reach 0.82)  <- knee
+    WARNING: the knee is the grid's largest budget; the grid may not reach the plateau. Extend it before using this knee.
+
+  N = 12, payload 1000000: update_yield by budget (knee: first mean >= 95% of the best, 6.650)
+         60 s    2.225 ± 0.570  (n = 20, served share 18.5%; final accuracy 0.696, 0/19 reach 0.82)
+         90 s    4.100 ± 0.744  (n = 20, served share 34.2%; final accuracy 0.742, 2/20 reach 0.82)
+        120 s    5.213 ± 0.760  (n = 20, served share 43.4%; final accuracy 0.756, 4/20 reach 0.82)
+        150 s    5.800 ± 0.694  (n = 20, served share 48.3%; final accuracy 0.763, 3/20 reach 0.82)
+        180 s    6.338 ± 0.483  (n = 20, served share 52.8%; final accuracy 0.752, 1/20 reach 0.82)  <- knee
+        240 s    6.650 ± 0.388  (n = 20, served share 55.4%; final accuracy 0.758, 3/20 reach 0.82)
+
+  N = 18, payload 1000000: update_yield by budget (knee: first mean >= 95% of the best, 10.188)
+        120 s    7.075 ± 0.692  (n = 20, served share 39.3%; final accuracy 0.710, 0/20 reach 0.82)
+        180 s    9.475 ± 0.581  (n = 20, served share 52.6%; final accuracy 0.708, 0/20 reach 0.82)
+        240 s   10.062 ± 0.579  (n = 20, served share 55.9%; final accuracy 0.707, 0/20 reach 0.82)  <- knee
+        300 s   10.188 ± 0.611  (n = 20, served share 56.6%; final accuracy 0.707, 0/20 reach 0.82)
+        360 s   10.188 ± 0.611  (n = 20, served share 56.6%; final accuracy 0.707, 0/20 reach 0.82)
+        450 s   10.188 ± 0.611  (n = 20, served share 56.6%; final accuracy 0.707, 0/20 reach 0.82)
+
+  N = 24, payload 1000000: update_yield by budget (knee: first mean >= 95% of the best, 13.188)
+        175 s   11.625 ± 0.733  (n = 20, served share 48.4%; final accuracy 0.709, 0/20 reach 0.82)
+        262 s   13.137 ± 0.647  (n = 20, served share 54.7%; final accuracy 0.711, 0/20 reach 0.82)  <- knee
+        350 s   13.188 ± 0.637  (n = 20, served share 54.9%; final accuracy 0.711, 0/20 reach 0.82)
+        437 s   13.188 ± 0.637  (n = 20, served share 54.9%; final accuracy 0.711, 0/20 reach 0.82)
+        525 s   13.188 ± 0.637  (n = 20, served share 54.9%; final accuracy 0.711, 0/20 reach 0.82)
+        700 s   13.188 ± 0.637  (n = 20, served share 54.9%; final accuracy 0.711, 0/20 reach 0.82)
+
+  N = 6, payload measured: update_yield by budget (knee: first mean >= 95% of the best, 3.450)
+         30 s    1.238 ± 0.281  (n = 20, served share 20.6%; final accuracy 0.781, 10/19 reach 0.82)
+         45 s    1.650 ± 0.340  (n = 20, served share 27.5%; final accuracy 0.817, 13/20 reach 0.82)
+         60 s    1.913 ± 0.480  (n = 20, served share 31.9%; final accuracy 0.787, 12/19 reach 0.82)
+         90 s    2.812 ± 0.434  (n = 20, served share 46.9%; final accuracy 0.834, 16/20 reach 0.82)
+        120 s    3.312 ± 0.400  (n = 20, served share 55.2%; final accuracy 0.829, 18/20 reach 0.82)  <- knee
+        150 s    3.450 ± 0.408  (n = 20, served share 57.5%; final accuracy 0.827, 18/20 reach 0.82)
+
+  rows not ok (left out): 0
+
+  the pilot's tau: the largest tau (steps of 0.01) that at least 80% of H1's trials reach at each N's knee, the smallest over N
+    N =  6: 20 trials with traces -> tau 0.82
+    N = 12: 20 trials with traces -> tau 0.72
+    N = 18: 20 trials with traces -> tau 0.71
+    N = 24: 20 trials with traces -> tau 0.71
+    -> tau = 0.71
+
+[pilot_outputs]
+knee_s = { "6" = 150.0, "12" = 180.0, "18" = 240.0, "24" = 262.0 }
+stress_s = { "6" = 75.0, "12" = 90.0, "18" = 120.0, "24" = 130.0 }
+knee_meas_s = { "6" = 120.0 }
+stress_meas_s = { "6" = 60.0 }
+tau = 0.71
