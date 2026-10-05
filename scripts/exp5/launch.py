@@ -20,6 +20,21 @@ Stages, in order (each fills in settings the next one needs; see params.toml):
     sstar    the S* tool per N at the knee and the stress budget
     batch1   5.3 core, 5.9 core, 5.11 (a) and (b), 5.14 (the 8 Oct split)
 
+The learned score's FerrySim campaign (Run Guide 2.8), after the re-pin
+(params.toml [rl] repinned; every stage refuses until it is set):
+
+    rl-headroom   the headroom report, which every verdict reads epsilon from
+    rl-calibrate  gamma in {0, 0.9} x 3 seeds per family, evaluate, report
+    rl-sweep      Study 5.5: 6 gammas x 10 seeds, evaluate --record, the verdict
+    rl-e3         E3's trainings and evaluate --reward bytes --record
+    rl-s57        Study 5.7's scores (F-hand, the dwell and cov ablations, the
+                  reward grid), only if the 5.5 verdict keeps the learned score
+
+Each training is one `ferrysim train` job with an explicit tag, so a stopped
+stage resumes by skipping the checkpoints that exist (`ferrysim sweep`
+refuses outright once any of its checkpoints exists). A stage's evaluate and
+report jobs wait for its trainings. Trainings run with one BLAS thread.
+
     ..\\py311.cmd scripts\\exp5\\launch.py plan batch1
     ..\\py311.cmd scripts\\exp5\\launch.py run ttl
     ..\\py311.cmd scripts\\exp5\\launch.py status knee
@@ -48,6 +63,9 @@ What it keeps to:
 * The real interpreter. A Windows venv's python.exe is a launcher stub that
   starts the real interpreter as a child, which doubles every process and
   hides it from the 5.11 footprint probe; run this through ..\\py311.cmd.
+* One run at a time. `run` holds results/exp5/.launcher.lock while it works, so
+  a second stage started beside it (stack trials and trainings would share the
+  cores and skew both) is refused rather than slowing the first.
 
 Nothing here decides a study's design: the arms, cells, budgets and counts are
 params.toml's, and a stage whose settings are unset is refused.
@@ -79,8 +97,11 @@ HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 PARAMS = HERE / "params.toml"
 RUNNER = ["-m", "experiments.exp4.runner_main"]
-STAGES = ("ttl", "knee", "sstar", "batch1")
-STAGE_DIR = {"ttl": "ttl", "knee": "knee", "sstar": "sstar", "batch1": "b1"}
+RL_STAGES = ("rl-headroom", "rl-calibrate", "rl-sweep", "rl-e3", "rl-s57")
+STAGES = ("ttl", "knee", "sstar", "batch1") + RL_STAGES
+STAGE_DIR = {"ttl": "ttl", "knee": "knee", "sstar": "sstar", "batch1": "b1",
+             **{st: "rl/" + st[3:] for st in RL_STAGES}}
+FERRYSIM = ["-m", "experiments.ferrysim"]
 
 #: The plan arms take the age cap (--age-cap-missions); the H and D arms do not.
 PLAN_ARMS = {"F", "FX", "FB+wide", "FB+medium", "FB+narrow", "F-cov", "F-prio", "F+L1"}
@@ -175,14 +196,16 @@ class Job:
     study: str
     name: str                     # unique within the stage: <study>/<tag>
     args: List[str]               # after the interpreter
-    out: str                      # the CSV or JSON it writes, relative to REPO
-    kind: str                     # "runner" or "tool"
+    out: str                      # the CSV, JSON or checkpoint it writes, relative to REPO
+    kind: str                     # "runner", "tool" or "rl-train"
     n: int = 0                    # devices (for cost)
     mem_gb: float = 0.0
     trials: Optional[int] = None  # rows it should write (runner jobs)
     blocked: List[str] = field(default_factory=list)
     aliases: List[str] = field(default_factory=list)
     alias_of: Optional[str] = None
+    deps: List[str] = field(default_factory=list)   # jobs of this stage it waits for
+    slots: int = 1                # scheduler slots (an evaluate with W workers takes W)
 
 
 def _fmt(x: Any) -> str:
@@ -405,10 +428,219 @@ class Builder:
                                  "tool", n=0, mem_gb=light * (1 + 2 * workers)))
 
 
+    # -- the learned score's FerrySim campaign (Run Guide 2.8) --------------- #
+
+    def _rl_gate(self) -> List[str]:
+        """Every RL stage waits for the re-pin (Run Guide 2.8, go-ahead item 5)."""
+        if self.s.get("rl.repinned", False) is not True:
+            return ["rl.repinned (set true after the re-pin commit)"]
+        return []
+
+    def _ckpt_root(self) -> str:
+        return f"{self.root}/checkpoints"
+
+    def _train(self, stage: str, study: str, *, kind: str, family: str, gamma: float,
+               seed: int, tag: Optional[str] = None, ablation: Optional[str] = None,
+               extra: Sequence[str] = ()) -> Job:
+        s = self.s
+        own_tag = ablation or tag
+        ckpt = f"{self._ckpt_root()}/{study}/{own_tag}/g{float(gamma):g}_s{seed}.npz"
+        args = FERRYSIM + ["train", "--kind", kind, "--family", family, "--study", study,
+                           "--gamma", _fmt(float(gamma)), "--seed", str(seed),
+                           "--root", self._ckpt_root()]
+        args += ["--ablation", ablation] if ablation else ["--tag", str(tag)]
+        val = s.get(f"rl.val_episodes.{family}", None)
+        if val is not None:
+            args += ["--val-episodes", str(int(val))]
+        # FerrySim's own defaults (10,000 episodes, a validation every 1,000) unless set;
+        # a smaller count is for testing the launcher, never for a campaign checkpoint.
+        for key, flag in (("rl.episodes", "--episodes"), ("rl.eval_every", "--eval-every")):
+            value = s.get(key, None)
+            if value is not None:
+                args += [flag, str(int(value))]
+        args += list(extra)
+        job = Job(stage, study, f"{study}/{own_tag}/g{float(gamma):g}_s{seed}", args, ckpt,
+                  "rl-train", mem_gb=float(s.get("rl.gb_per_training")))
+        job.blocked = self._rl_gate()
+        return job
+
+    def _rl_tool(self, stage: str, study: str, name: str, args: List[str], out: str,
+                 deps: Sequence[str] = (), workers: int = 1) -> Job:
+        episodes = self.s.get("rl.eval_episodes", None)   # evaluate's default: 1,000 per cell
+        if episodes is not None and args[:1] == ["evaluate"]:
+            args = args + ["--episodes", str(int(episodes))]
+        job = Job(stage, study, f"{study}/{name}", FERRYSIM + args, out, "tool",
+                  mem_gb=float(self.s.get("rl.gb_per_training")) * (1 + workers),
+                  deps=list(deps), slots=workers)
+        job.blocked = self._rl_gate()
+        return job
+
+    def _headroom(self) -> str:
+        return f"{self.root}/rl/headroom/headroom.json"
+
+    def _verdict_inputs(self, job: Job) -> None:
+        """A report reads epsilon from the headroom report, which rl-headroom writes."""
+        if not (REPO / self._headroom()).exists():
+            job.blocked = sorted(set(job.blocked) | {"the rl-headroom stage's report"})
+
+    @staticmethod
+    def _gtag(gamma: float) -> str:
+        return f"g{round(float(gamma) * 100)}"
+
+    def rl_headroom(self) -> None:
+        s = self.s
+        w = int(s.get("rl.workers"))
+        self.jobs.append(self._rl_tool(
+            "rl-headroom", "headroom", "headroom",
+            ["headroom", "--episodes", str(int(s.get("rl.headroom_episodes"))),
+             "--workers", str(w), "--out", self._headroom()],
+            self._headroom(), workers=w))
+
+    def rl_calibrate(self) -> None:
+        s = self.s
+        w = int(s.get("rl.workers"))
+        for fam in s.get("rl.calibration_families") or []:
+            study = f"5.5-calibration-{fam}"
+            names = []
+            for g in s.get("rl.calibration_gammas") or []:
+                for seed in s.get("rl.calibration_seeds") or []:
+                    job = self._train("rl-calibrate", study, kind="pair_q", family=fam,
+                                      gamma=g, seed=int(seed), tag=self._gtag(g))
+                    self.jobs.append(job)
+                    names.append(job.name)
+            cells = (["--cells", "cln-n12-120", "cln-n12-180"] if fam == "clean" else [])
+            ev = f"{self.root}/rl/calibration/{fam}_evaluation.json"
+            evaluate = self._rl_tool(
+                "rl-calibrate", study, "evaluate",
+                ["evaluate", "--checkpoints", f"{self._ckpt_root()}/{study}", *cells,
+                 "--workers", str(w), "--out", ev], ev, deps=names, workers=w)
+            self.jobs.append(evaluate)
+            verdict = f"{self.root}/rl/calibration/{fam}_verdict.json"
+            report = self._rl_tool(
+                "rl-calibrate", study, "report",
+                ["report", "--evaluation", ev, "--headroom", self._headroom(), *cells,
+                 "--out", verdict], verdict, deps=[evaluate.name])
+            self._verdict_inputs(report)
+            self.jobs.append(report)
+
+    def rl_sweep(self) -> None:
+        s = self.s
+        w = int(s.get("rl.workers"))
+        fam = str(s.get("rl.family"))
+        study = f"5.5-{fam}"
+        names = []
+        for g in s.get("rl.sweep_gammas") or []:
+            for seed in s.get("rl.sweep_seeds") or []:
+                job = self._train("rl-sweep", study, kind="pair_q", family=fam, gamma=g,
+                                  seed=int(seed), tag=self._gtag(g))
+                self.jobs.append(job)
+                names.append(job.name)
+        ev = f"{self.root}/rl/s55/evaluation.json"
+        evaluate = self._rl_tool(
+            "rl-sweep", study, "evaluate",
+            ["evaluate", "--checkpoints", f"{self._ckpt_root()}/{study}", "--record",
+             "--workers", str(w), "--out", ev], ev, deps=names, workers=w)
+        self.jobs.append(evaluate)
+        verdict = f"{self.root}/rl/s55/verdict.json"
+        report = self._rl_tool(
+            "rl-sweep", study, "report",
+            ["report", "--evaluation", ev, "--headroom", self._headroom(), "--out", verdict],
+            verdict, deps=[evaluate.name])
+        self._verdict_inputs(report)
+        self.jobs.append(report)
+
+    def rl_e3(self) -> None:
+        s = self.s
+        w = int(s.get("rl.workers"))
+        before = len(s.missing)
+        fam = str(s.get("rl.e3.family"))
+        gamma = s.get("rl.e3.gamma")
+        settings = s.get("rl.e3.settings")
+        missing = sorted(set(s.missing[before:]))
+        del s.missing[before:]
+        if settings not in (None, "pair", "chen"):
+            missing.append("rl.e3.settings (\"pair\" or \"chen\")")
+        extra = ["--lr", "5e-4", "--epsilon-start", "1.0"] if settings == "chen" else []
+        study = "5.3-e3"
+        names = []
+        for seed in s.get("rl.e3.seeds") or []:
+            job = self._train("rl-e3", study, kind="chen_dqn", family=fam,
+                              gamma=float(gamma or 0.0), seed=int(seed), tag="e3", extra=extra)
+            job.blocked = sorted(set(job.blocked) | set(missing))
+            self.jobs.append(job)
+            names.append(job.name)
+        ev = f"{self.root}/rl/e3/evaluation.json"
+        evaluate = self._rl_tool(
+            "rl-e3", study, "evaluate",
+            ["evaluate", "--checkpoints", f"{self._ckpt_root()}/{study}", "--reward", "bytes",
+             "--record", "--workers", str(w), "--out", ev], ev, deps=names, workers=w)
+        evaluate.blocked = sorted(set(evaluate.blocked) | set(missing))
+        self.jobs.append(evaluate)
+
+    def rl_s57(self) -> None:
+        s = self.s
+        w = int(s.get("rl.workers"))
+        fam = str(s.get("rl.family"))
+        before = len(s.missing)
+        gamma = s.get("rl.gamma_star")
+        keep = s.get("rl.keep_learned")
+        missing = sorted(set(s.missing[before:]))
+        del s.missing[before:]
+        if keep is False:
+            print("rl-s57: the 5.5 verdict did not keep the learned score (rl.keep_learned = "
+                  "false); 5.7 then compares FX-dwell and FX-cov, which are not built")
+            return
+        study = f"5.7-{fam}"
+        g = float(gamma or 0.0)
+
+        def add(job: Job) -> Job:
+            job.blocked = sorted(set(job.blocked) | set(missing))
+            self.jobs.append(job)
+            return job
+
+        groups: Dict[str, List[str]] = {"hand": [], "dwell": [], "cov": []}
+        for seed in s.get("rl.s57.seeds") or []:
+            groups["hand"].append(add(self._train(
+                "rl-s57", study, kind="pair_q", family=fam, gamma=g, seed=int(seed),
+                tag="hand", extra=["--reward", "hand"])).name)
+            for ab in ("dwell", "cov"):
+                groups[ab].append(add(self._train(
+                    "rl-s57", study, kind="pair_q", family=fam, gamma=g, seed=int(seed),
+                    ablation=ab)).name)
+        ev = f"{self.root}/rl/s57"
+        add(self._rl_tool("rl-s57", study, "evaluate-hand",
+                          ["evaluate", "--checkpoints", f"{self._ckpt_root()}/{study}/hand",
+                           "--reward", "hand", "--record", "--workers", str(w),
+                           "--out", f"{ev}/hand_evaluation.json"],
+                          f"{ev}/hand_evaluation.json", deps=groups["hand"], workers=w))
+        add(self._rl_tool("rl-s57", study, "evaluate-ablations",
+                          ["evaluate", "--checkpoints", f"{self._ckpt_root()}/{study}/dwell",
+                           f"{self._ckpt_root()}/{study}/cov", "--no-references", "--record",
+                           "--workers", str(w), "--out", f"{ev}/ablations_evaluation.json"],
+                          f"{ev}/ablations_evaluation.json",
+                          deps=groups["dwell"] + groups["cov"], workers=w))
+        # The reward grid: one tag per (c_t, c_cov) point that no arm flies.
+        default = (0.1, 1.0)
+        for c_t in s.get("rl.s57.grid_c_t") or []:
+            for c_cov in s.get("rl.s57.grid_c_cov") or []:
+                if (float(c_t), float(c_cov)) == default:
+                    continue   # the derived reward's own weights: 5.5's checkpoints
+                tag = f"ct{float(c_t):g}-cc{float(c_cov):g}"
+                names = [add(self._train(
+                    "rl-s57", study, kind="pair_q", family=fam, gamma=g, seed=int(seed),
+                    tag=tag, extra=["--c-t", _fmt(float(c_t)), "--c-cov", _fmt(float(c_cov))])).name
+                    for seed in s.get("rl.s57.grid_seeds") or []]
+                add(self._rl_tool("rl-s57", study, f"evaluate-{tag}",
+                                  ["evaluate", "--checkpoints", f"{self._ckpt_root()}/{study}/{tag}",
+                                   "--c-t", _fmt(float(c_t)), "--c-cov", _fmt(float(c_cov)),
+                                   "--workers", str(w), "--out", f"{ev}/{tag}_evaluation.json"],
+                                  f"{ev}/{tag}_evaluation.json", deps=names, workers=w))
+
+
 def build(stage: str, s: Settings, studies: Optional[Sequence[str]] = None,
           root: str = "results/exp5") -> List[Job]:
     b = Builder(s, root)
-    getattr(b, stage)()
+    getattr(b, stage.replace("-", "_"))()
     jobs = b.jobs
     if studies:
         jobs = [j for j in jobs if j.study in studies]
@@ -534,10 +766,12 @@ def environment(threads: Dict[str, str]) -> Dict[str, Any]:
 
 def validate(jobs: List[Job]) -> Dict[str, Dict[str, Any]]:
     """Each runner job's arguments through runner_main's usage checks (no trial)."""
-    todo = [j for j in jobs if j.kind == "runner" and not j.blocked and j.alias_of is None]
+    todo = [j for j in jobs if j.kind in ("runner", "rl-train") and not j.blocked
+            and j.alias_of is None and not done(j)]
     if not todo:
         return {}
-    payload = json.dumps([{"name": j.name, "args": j.args} for j in todo])
+    payload = json.dumps([{"name": j.name, "args": j.args, "kind": j.kind,
+                           "out": str((REPO / j.out).resolve())} for j in todo])
     proc = subprocess.run([sys.executable, str(Path(__file__)), "_validate"], cwd=REPO,
                           input=payload, capture_output=True, text=True, encoding="utf-8")
     line = proc.stdout.strip().splitlines()[-1] if proc.stdout.strip() else ""
@@ -572,6 +806,9 @@ def _validate_child() -> int:
     results = {}
     with tempfile.TemporaryDirectory(prefix="exp5_validate_") as tmp:
         for job in jobs:
+            if job["kind"] == "rl-train":
+                results[job["name"]] = _validate_training(job)
+                continue
             argv = list(job["args"][len(RUNNER):])
             argv[argv.index("--csv") + 1] = str(Path(tmp) / "v.csv")
             seen.clear()
@@ -589,6 +826,35 @@ def _validate_child() -> int:
                 results[job["name"]] = {"ok": False, "error": f"{type(e).__name__}: {e}"}
     print(json.dumps(results))
     return 0
+
+
+def _validate_training(job: Dict[str, Any]) -> Dict[str, Any]:
+    """A training job through `ferrysim train`'s own checks, up to the training:
+    the parser, the run's spec (tag, reward, plan), the tree and the path's
+    refusals; then the path it would save to must be the one the launcher
+    skips on resume."""
+    import contextlib
+    import io
+
+    from experiments.ferrysim import __main__ as FM
+
+    argv = list(job["args"][len(FERRYSIM):])
+    err = io.StringIO()
+    try:
+        with contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()):
+            ap = FM.parser()
+            args = ap.parse_args(argv)
+            spec = FM._spec(args, args.gamma, args.seed, FM._run_plan(args, ap))
+            path = FM._path(args, spec)
+            FM._tree(args, ap)
+    except SystemExit as e:
+        lines = [l for l in err.getvalue().splitlines() if l.strip()]
+        return {"ok": False, "error": lines[-1] if lines else f"exit {e.code}"}
+    except (TypeError, ValueError) as e:
+        return {"ok": False, "error": str(e)}
+    if Path(path).resolve() != Path(job["out"]):
+        return {"ok": False, "error": f"saves to {path}, not {job['out']}"}
+    return {"ok": True, "trials": None}
 
 
 # --------------------------------------------------------------------------- #
@@ -612,6 +878,9 @@ def done(job: Job) -> bool:
     path = REPO / job.out
     if job.kind == "tool":
         return path.exists()
+    if job.kind == "rl-train":
+        # A training saves its arrays and then the manifest beside them.
+        return path.exists() and path.with_suffix(".json").exists()
     rows, _ = csv_rows(path)
     return rows >= (job.trials or 0)
 
@@ -654,7 +923,10 @@ def cmd_plan(stage: str, s: Settings, jobs: List[Job], show: bool,
             if j.kind == "runner" and not j.alias_of:
                 conc = b.concurrency(j.n) if j.n else 1
                 hours += (j.trials or 0) * seconds_per_trial(j.n) / conc / 3600
-            size = f"{j.trials} trials" if j.kind == "runner" else "tool"
+            if j.kind == "rl-train" and not done(j):
+                # Rough: 1-2 h per training on one core (5 Oct 2026 probe), side by side.
+                hours += 1.5 / max(1, int(s.get("rl.max_jobs", 1)))
+            size = {"runner": f"{j.trials} trials", "rl-train": "training"}.get(j.kind, "tool")
             print(f"    {j.name:34s} {size:>10s} {j.mem_gb:6.1f} GB  {state:4s} {note}")
             if show and not j.alias_of:
                 print("      " + subprocess.list2cmdline(["python"] + j.args))
@@ -675,7 +947,7 @@ def cmd_validate(jobs: List[Job]) -> Dict[str, Dict[str, Any]]:
     for j in jobs:
         if j.name in checked and checked[j.name]["ok"] and checked[j.name]["trials"] is not None:
             j.trials = int(checked[j.name]["trials"])
-    print(f"validated {len(checked)} runner jobs: {len(checked) - len(bad)} ok, {len(bad)} refused")
+    print(f"validated {len(checked)} jobs: {len(checked) - len(bad)} ok, {len(bad)} refused")
     for name, v in bad.items():
         print(f"  {name}: {v['error']}")
     return checked
@@ -744,7 +1016,48 @@ def cmd_run(stage: str, s: Settings, params_text: str, jobs: List[Job], *,
         if input("start? [y/N] ").strip().lower() not in ("y", "yes"):
             print("nothing started")
             return 1
+    lock = acquire_lock(REPO / out_root, stage)
+    try:
+        return _run_jobs(stage, s, params_text, jobs, todo, prov, data, max_jobs, out_root)
+    finally:
+        lock.unlink(missing_ok=True)
 
+
+def acquire_lock(out_root: Path, stage: str) -> Path:
+    """results/exp5/.launcher.lock, held while a stage runs; a stale one is replaced."""
+    out_root.mkdir(parents=True, exist_ok=True)
+    lock = out_root / ".launcher.lock"
+    for _ in range(2):
+        try:
+            fd = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        except FileExistsError:
+            try:
+                held = json.loads(lock.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                held = {}
+            pid = int(held.get("pid", -1))
+            alive = False
+            try:
+                import psutil
+                alive = pid > 0 and psutil.pid_exists(pid)
+            except ImportError:
+                alive = True
+            if alive:
+                sys.exit(f"stage {held.get('stage')} is running (pid {pid}, since "
+                         f"{held.get('since')}): one stage at a time, so stack trials and "
+                         f"trainings never share the cores. Wait for it, or stop it.")
+            lock.unlink(missing_ok=True)   # stale: its launcher is gone
+            continue
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump({"pid": os.getpid(), "stage": stage,
+                       "since": dt.datetime.now().isoformat(timespec="seconds")}, f)
+        return lock
+    sys.exit(f"could not take {lock}")
+
+
+def _run_jobs(stage: str, s: Settings, params_text: str, jobs: List[Job], todo: List[Job],
+              prov: Dict[str, Any], data: Dict[str, Any], max_jobs: Optional[int],
+              out_root: str) -> int:
     root = (REPO / out_root / STAGE_DIR[stage]).resolve()
     (root / "_launcher").mkdir(parents=True, exist_ok=True)
     (root / "_logs").mkdir(parents=True, exist_ok=True)
@@ -770,19 +1083,32 @@ def cmd_run(stage: str, s: Settings, params_text: str, jobs: List[Job], *,
     env = dict(os.environ)
     env.update(threads)
     env["PYTHONIOENCODING"] = "utf-8"
-    cap_jobs = max_jobs or int(s.get("machine.max_jobs"))
+    default_cap = "rl.max_jobs" if stage in RL_STAGES else "machine.max_jobs"
+    cap_jobs = max_jobs or int(s.get(default_cap))
     mem_budget = float(s.get("machine.mem_budget_gb"))
     cap_devices = int(s.get("machine.max_device_processes"))
     pending = sorted(todo, key=lambda j: -j.mem_gb)   # largest first: no long tail
     running: Dict[str, Tuple[Job, subprocess.Popen, float, Any]] = {}
     failed: List[str] = []
+    skipped: List[str] = []
+    todo_names = {j.name for j in todo}
+    finished_ok = {j.name for j in jobs if j.name not in todo_names}
     try:
         while pending or running:
             used = sum(r[0].mem_gb for r in running.values())
             devices = sum(r[0].n for r in running.values() if r[0].kind == "runner")
+            slots = sum(r[0].slots for r in running.values())
             for j in list(pending):
-                if len(running) >= cap_jobs:
-                    break
+                if any(d in failed or d in skipped for d in j.deps):
+                    pending.remove(j)
+                    skipped.append(j.name)
+                    log_event(event="skipped", job=j.name, reason="a job it waits for failed")
+                    print(f"[{time.strftime('%H:%M:%S')}] skip {j.name}: a job it waits for failed")
+                    continue
+                if any(d not in finished_ok for d in j.deps):
+                    continue
+                if running and slots + j.slots > cap_jobs:
+                    continue
                 if running and used + j.mem_gb > mem_budget:
                     continue
                 if running and j.kind == "runner" and devices + j.n > cap_devices:
@@ -805,9 +1131,20 @@ def cmd_run(stage: str, s: Settings, params_text: str, jobs: List[Job], *,
                 pending.remove(j)
                 used += j.mem_gb
                 devices += j.n if j.kind == "runner" else 0
+                slots += j.slots
                 log_event(event="start", job=j.name, pid=proc.pid)
                 print(f"[{time.strftime('%H:%M:%S')}] start {j.name} "
                       f"({len(running)} running, {len(pending)} waiting)")
+            if pending and not running:
+                # Nothing runs and nothing could start: what is left waits for a job
+                # that is not in this run (left out with --study, or blocked).
+                for j in pending:
+                    skipped.append(j.name)
+                    log_event(event="skipped", job=j.name, reason="waits for a job not run")
+                    print(f"[{time.strftime('%H:%M:%S')}] skip {j.name}: it waits for "
+                          f"{', '.join(d for d in j.deps if d not in finished_ok)}")
+                pending.clear()
+                break
             time.sleep(2.0)
             for name, (j, proc, t0, logf) in list(running.items()):
                 rc = proc.poll()
@@ -824,6 +1161,8 @@ def cmd_run(stage: str, s: Settings, params_text: str, jobs: List[Job], *,
                 print(f"[{time.strftime('%H:%M:%S')}] {mark} {name} in {wall / 60:.1f} min{extra}")
                 if rc != 0:
                     failed.append(name)
+                else:
+                    finished_ok.add(name)
     except KeyboardInterrupt:
         print("\ninterrupted: stopping the running jobs (each CSV resumes on the next run)")
         for name, (j, proc, _, logf) in running.items():
@@ -835,12 +1174,14 @@ def cmd_run(stage: str, s: Settings, params_text: str, jobs: List[Job], *,
     events.close()
     manifest["finished"] = dt.datetime.now().isoformat(timespec="seconds")
     manifest["failed"] = failed
+    manifest["skipped"] = skipped
     manifest_path.write_text(json.dumps(manifest, indent=1), encoding="utf-8")
-    print(f"\nstage {stage}: {len(todo) - len(failed)} jobs ok, {len(failed)} failed; "
+    ok = len(todo) - len(failed) - len(skipped)
+    print(f"\nstage {stage}: {ok} jobs ok, {len(failed)} failed, {len(skipped)} skipped; "
           f"manifest {manifest_path}")
     for name in failed:
         print(f"  failed: {name} (log in {root / '_logs'})")
-    return 1 if failed else 0
+    return 1 if failed or skipped else 0
 
 
 def _key_args(args: Sequence[str]) -> Tuple[str, ...]:
@@ -968,6 +1309,24 @@ def cmd_report(stage: str, s: Settings, jobs: List[Job]) -> int:
         out["s_star"] = stars
         print("\n[pilot_outputs]\ns_star = { " + ", ".join(f'"{k}" = {v}' for k, v in stars.items())
               + " }")
+    elif stage in RL_STAGES:
+        trained = [j for j in jobs if j.kind == "rl-train"]
+        print(f"  trainings: {sum(1 for j in trained if done(j))}/{len(trained)} saved")
+        for j in jobs:
+            if j.kind != "tool":
+                continue
+            path = REPO / j.out
+            if not path.exists():
+                print(f"  {j.name}: not written yet")
+                continue
+            if j.name.endswith("/report"):
+                r = json.loads(path.read_text(encoding="utf-8"))
+                keys = ("outcome", "replace_fx", "greedy_1_beats_fx", "stack_check", "epsilon")
+                shown = {k: r[k] for k in keys if k in r}
+                print(f"  {j.name}: " + (json.dumps(shown) if shown else
+                                         f"see {j.out} (keys: {', '.join(list(r)[:10])})"))
+            else:
+                print(f"  {j.name}: written ({j.out})")
     else:
         print(f"no report for stage {stage}")
         return 1
@@ -978,6 +1337,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     if argv[:1] == ["_validate"]:
         return _validate_child()
+    # A stage runs for hours, often with its output going to a file: show each line.
+    sys.stdout.reconfigure(line_buffering=True)
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0],
                                  formatter_class=argparse.RawDescriptionHelpFormatter,
                                  epilog=__doc__.split("\n\n", 1)[1])
