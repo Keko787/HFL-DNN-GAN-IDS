@@ -38,6 +38,13 @@ field_ref_n = 0
 # so the launcher passes it per job: the H and D arms keep the driver's default
 # (additive, the recorded law). Decided 5 Oct 2026.
 ferry_arm_deadline_law = "multiplicative"
+# agg:cutoff's merge period T. agg:cutoff cuts an update by age only with a
+# period (a_max = floor(window / T)); without one the cutoff never applies, for
+# any arm. On the simulated clock the documented setting is T = T_nom
+# (--agg-period-t-nom; Configuration Reference 14 and 20.12). Every stage after
+# the knee pilot passes it (the knee measures service, which the merge does not
+# change, and its recorded commands must stay as they ran). Decided 5 Oct 2026.
+merge_period_t_nom = true
 # --footprint-probe on every batch-1 trial (processes and peak memory, 5.11). It
 # only reads memory, so a trial is the same with it; it is on everywhere so the
 # studies' shared cells (5.3, 5.9, 5.11 (b), 5.14 at N = 6) are one job.

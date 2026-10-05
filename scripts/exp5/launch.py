@@ -12,6 +12,14 @@ the FeRRy flags. This launcher turns a stage into jobs, one runner process per
     report    a finished pilot's pilot_outputs lines for params.toml, by the
               pre-registered rules (ttl: 2 x p95 rounded up; knee: params
               [knee] metric and plateau_share; sstar: the tool's S for F)
+    campaign  every stage in order, skipping those done; it stops before a stage
+              whose settings are unset, after a stage whose report a person
+              reads (the pilots, the calibration, Study 5.5's verdict), and at
+              a failure. Run it again after setting what it asked for.
+
+``--smoke`` (with run, plan or campaign) shrinks every job to its smallest (one
+trial; RL at 30 episodes) and writes beside the repository (../exp5_smoke): a
+dry run that checks every job starts and ends, never a result.
 
 Stages, in order (each fills in settings the next one needs; see params.toml):
 
@@ -104,12 +112,19 @@ STAGE_DIR = {"ttl": "ttl", "knee": "knee", "sstar": "sstar", "batch1": "b1",
 FERRYSIM = ["-m", "experiments.ferrysim"]
 
 #: The plan arms take the age cap (--age-cap-missions); the H and D arms do not.
-PLAN_ARMS = {"F", "FX", "FB+wide", "FB+medium", "FB+narrow", "F-cov", "F-prio", "F+L1"}
+PLAN_ARMS = {"F", "FX", "FB+wide", "FB+medium", "FB+narrow", "F-cov", "F-prio", "F+L1",
+             "F-round", "F-pref"}
+
+#: Unit U11's arms fly their own deadline law (the round's, after FedCS or Oort),
+#: whatever --deadline-law says, so the campaign's law is not passed to them.
+OWN_LAW_ARMS = {"F-round", "F-pref"}
 
 
 def is_ferry_arm(arm: str) -> bool:
     """The arms that fly campaign.ferry_arm_deadline_law: the plan arms, F-cap
-    (F with no cap) and the learned FQ arms."""
+    (F with no cap) and the learned FQ arms, less unit U11's own-law arms."""
+    if arm in OWN_LAW_ARMS:
+        return False
     return arm in PLAN_ARMS or arm == "F-cap" or arm.startswith("FQ")
 
 #: The Phase 4 pilots' common settings (Run Guide 2.7), every runner job's base.
@@ -274,6 +289,14 @@ class Builder:
         law = s.get("campaign.ferry_arm_deadline_law", None)
         if law and is_ferry_arm(arm) and "--deadline-law" not in extra:
             args += ["--deadline-law", str(law)]
+        # agg:cutoff cuts by age only with a merge period (Configuration
+        # Reference 14 and 20.12); every stage after the knee pilot passes T_nom,
+        # to every job whose merge is agg:cutoff (not, say, D4's own agg:fedex).
+        merge = (list(extra)[list(extra).index("--aggregation") + 1]
+                 if "--aggregation" in extra else "agg:cutoff")
+        if (stage != "knee" and merge == "agg:cutoff"
+                and s.get("campaign.merge_period_t_nom", False)):
+            args += ["--agg-period-t-nom"]
         if footprint:
             args += ["--footprint-probe"]
         args += list(extra)
@@ -1333,6 +1356,87 @@ def cmd_report(stage: str, s: Settings, jobs: List[Job]) -> int:
     return 0
 
 
+# --------------------------------------------------------------------------- #
+# Smoke runs and the campaign
+# --------------------------------------------------------------------------- #
+
+#: Where --smoke writes unless told otherwise: beside the repository, never in it.
+SMOKE_ROOT = REPO.parent / "exp5_smoke"
+
+#: The stages in the order the campaign runs them (batch 2 joins once built).
+CAMPAIGN = ("ttl", "knee", "sstar", "rl-headroom", "rl-calibrate", "rl-sweep", "rl-e3",
+            "rl-s57", "batch1")
+
+#: Stages after which a person reads a report and sets params.toml: the pilots'
+#: outputs, the calibration's sanity check and Study 5.5's verdict.
+PAUSE_AFTER = ("ttl", "knee", "sstar", "rl-calibrate", "rl-sweep")
+
+
+def _set_flag(args: List[str], flag: str, value: str) -> None:
+    if flag in args:
+        args[args.index(flag) + 1] = value
+    else:
+        args += [flag, value]
+
+
+def smoke(jobs: List[Job]) -> None:
+    """Every job at its smallest: a check that each starts and ends, not a result."""
+    for j in jobs:
+        a = j.args
+        if j.kind == "runner":
+            _set_flag(a, "--n-trials", "1")
+            j.trials = 1
+        elif j.kind == "rl-train":
+            for flag, value in (("--episodes", "30"), ("--eval-every", "15"),
+                                ("--val-episodes", "8")):
+                _set_flag(a, flag, value)
+        elif a and a[0].endswith("fit_time_probe.py"):
+            _set_flag(a, "--fits", "1")
+            _set_flag(a, "--trials", "1")
+        elif "experiments.analysis.age_cap_s_star" in a:
+            _set_flag(a, "--layouts", "3")
+        elif "pilot" in a:
+            _set_flag(a, "--episodes", "1")
+        elif "evaluate" in a:
+            _set_flag(a, "--episodes", "3")
+        elif "headroom" in a:
+            _set_flag(a, "--episodes", "4")
+
+
+def cmd_campaign(s: Settings, text: str, a: argparse.Namespace) -> int:
+    """Run the stages in order, skipping those done, until a decision point.
+
+    It stops before a stage whose settings are unset (and names them), after a
+    stage whose report a person reads (the pilots, the calibration, Study 5.5's
+    verdict: it prints the report), and at any failure. Run it again once the
+    settings are in params.toml and committed."""
+    for stage in CAMPAIGN:
+        jobs = build(stage, s, None, a.out_root)
+        if a.smoke:
+            smoke(jobs)
+        live = [j for j in jobs if j.alias_of is None]
+        blocked = sorted({b for j in jobs for b in j.blocked})
+        if live and not blocked and all(done(j) for j in live):
+            print(f"[campaign] {stage}: done")
+            continue
+        if blocked:
+            print(f"[campaign] stops before {stage}: params.toml needs {', '.join(blocked)}")
+            return 2
+        print(f"[campaign] {stage}: running")
+        rc = cmd_run(stage, s, text, jobs, allow_dirty=a.allow_dirty, skip_blocked=False,
+                     yes=a.yes, max_jobs=a.max_jobs, out_root=a.out_root)
+        if rc != 0:
+            print(f"[campaign] stops: stage {stage} did not finish cleanly (rc {rc})")
+            return rc
+        if stage in PAUSE_AFTER:
+            cmd_report(stage, s, jobs)
+            print(f"[campaign] pauses after {stage}: set what the report gives in params.toml, "
+                  f"commit, and run the campaign again")
+            return 0
+    print("[campaign] every stage is done")
+    return 0
+
+
 def main(argv: Optional[Sequence[str]] = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     if argv[:1] == ["_validate"]:
@@ -1342,8 +1446,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0],
                                  formatter_class=argparse.RawDescriptionHelpFormatter,
                                  epilog=__doc__.split("\n\n", 1)[1])
-    ap.add_argument("command", choices=("plan", "validate", "run", "status", "report"))
-    ap.add_argument("stage", choices=STAGES)
+    ap.add_argument("command", choices=("plan", "validate", "run", "status", "report",
+                                        "campaign"))
+    ap.add_argument("stage", choices=STAGES, nargs="?", default=None,
+                    help="The stage (every command but campaign, which walks them all).")
+    ap.add_argument("--smoke", action="store_true",
+                    help="run, plan, campaign: every job at its smallest (1 trial; RL at 30 "
+                         "episodes), written to ../exp5_smoke unless --out-root says "
+                         "otherwise. A check that every job starts and ends, not a result.")
     ap.add_argument("--study", nargs="+", default=None,
                     help="Only these studies of the stage (e.g. s53 s514).")
     ap.add_argument("--params", type=Path, default=PARAMS)
@@ -1358,9 +1468,17 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                     help="Where the stages write (default results/exp5; for a dry test, "
                          "a scratch folder).")
     a = ap.parse_args(argv)
+    if a.smoke and a.out_root == "results/exp5":
+        a.out_root = str(SMOKE_ROOT)           # a smoke run never writes the results tree
 
     s, text = load_settings(a.params)
+    if a.command == "campaign":
+        return cmd_campaign(s, text, a)
+    if a.stage is None:
+        ap.error(f"{a.command} needs a stage: one of {', '.join(STAGES)}")
     jobs = build(a.stage, s, a.study, a.out_root)
+    if a.smoke:
+        smoke(jobs)
     if a.command == "plan":
         return cmd_plan(a.stage, s, jobs, a.show_commands)
     if a.command == "validate":
