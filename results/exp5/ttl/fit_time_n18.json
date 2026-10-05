@@ -1,0 +1,25 @@
+{
+ "N": 18,
+ "trials_side_by_side": 2,
+ "workers": 36,
+ "fits_each": 4,
+ "arch": "ciciot",
+ "rows_per_device": [
+  1111,
+  1112
+ ],
+ "fit_s": {
+  "p50": 1.212,
+  "p95": 16.642,
+  "max": 17.116,
+  "mean_after_first": 1.116
+ },
+ "ttl_floor_s": 33.28,
+ "threads": {
+  "OMP_NUM_THREADS": "2",
+  "TF_NUM_INTRAOP_THREADS": "2",
+  "TF_NUM_INTEROP_THREADS": "1",
+  "OPENBLAS_NUM_THREADS": "1"
+ },
+ "probe_wall_s": 47.9
+}

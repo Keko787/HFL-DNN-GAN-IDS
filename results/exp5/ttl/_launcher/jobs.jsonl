@@ -1,0 +1,8 @@
+{"event": "start", "job": "ttl/n6", "pid": 5908, "at": "2026-10-05T12:37:22"}
+{"event": "end", "job": "ttl/n6", "rc": 0, "wall_s": 92.7, "rows": null, "rows_not_ok": null, "at": "2026-10-05T12:38:54"}
+{"event": "start", "job": "ttl/n12", "pid": 49052, "at": "2026-10-05T12:38:54"}
+{"event": "end", "job": "ttl/n12", "rc": 0, "wall_s": 72.8, "rows": null, "rows_not_ok": null, "at": "2026-10-05T12:40:07"}
+{"event": "start", "job": "ttl/n18", "pid": 45712, "at": "2026-10-05T12:40:07"}
+{"event": "end", "job": "ttl/n18", "rc": 0, "wall_s": 66.7, "rows": null, "rows_not_ok": null, "at": "2026-10-05T12:41:14"}
+{"event": "start", "job": "ttl/n24", "pid": 23380, "at": "2026-10-05T12:41:14"}
+{"event": "end", "job": "ttl/n24", "rc": 0, "wall_s": 46.2, "rows": null, "rows_not_ok": null, "at": "2026-10-05T12:42:00"}
