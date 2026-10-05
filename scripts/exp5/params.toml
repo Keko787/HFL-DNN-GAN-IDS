@@ -180,6 +180,40 @@ payload_bytes = 1000000       # held fixed at 1 MB by the study
 # F / F+L1 on the seconds backhaul (F+L1 needs the adaptive backhaul).
 
 # --------------------------------------------------------------------------
+# Stage sens (after batch 1): does 5.3's core comparison depend on the session
+# TTL pilot's value? The budget is varied by the studies themselves (stress,
+# knee, relaxed) and S* by 5.14 (S + 1, off); the TTL nowhere else. Factor 1
+# is batch 1's own cell (read from batch 1, not flown again).
+# --------------------------------------------------------------------------
+[sens]
+arms = ["F", "FX", "H1"]
+ttl_factors = [0.75, 1.0, 1.5]
+budgets = ["knee"]
+N = 6
+K = 1
+n_trials = 20
+payload_bytes = 1000000
+
+# --------------------------------------------------------------------------
+# Stage quick (not part of the campaign): a reviewer's reproduction of 5.3's
+# headline cell, the core arms at one mule (320 trials: about half an hour on
+# this 8-core machine, a few hours on a laptop). Batch 1's own jobs (same
+# arguments, so trial i has the same seed as batch 1's trial i), written to
+# results/exp5/quick, never over batch 1's CSVs. `report quick` sets each
+# trial beside the recorded one; `score quick` compares the arms as 5.3 does.
+# Needs the pilot outputs above (committed), not the pilots. Fewer trials
+# (n_trials) keep the seeds: trial i is batch 1's trial i whatever the count.
+# --------------------------------------------------------------------------
+[quick]
+arms = ["F", "FX", "H1", "D1", "D2", "D3", "D4"]
+d4_faithful = true            # and D4 with its own merge, as batch 1
+budgets = ["knee", "stress"]
+N = 6
+K = [1]                       # [1, 3] is the whole of batch 1's 5.3 core
+n_trials = 20
+payload_bytes = 1000000
+
+# --------------------------------------------------------------------------
 # The learned score's FerrySim campaign (Run Guide 2.8; Scheduler Freeze 5l).
 # Stages rl-headroom, rl-calibrate, rl-sweep, rl-e3, rl-s57, in that order.
 # Checkpoints go to results/exp5/checkpoints/<study>/<tag>/g<gamma>_s<seed>.npz.
@@ -414,6 +448,10 @@ also = ["reached_tau", "sim_s_to_tau", "wall_s_to_tau", "round_close_rate_kmin1"
         "deadline_miss_rate", "network_aou_mean", "update_yield", "final_accuracy"]
 
 [score.s59]
+metric = "sim_s_to_tau"
+reference = "F"
+
+[score.ttl]                   # stage sens: 5.3's comparison at each TTL factor (a cell each)
 metric = "sim_s_to_tau"
 reference = "F"
 
