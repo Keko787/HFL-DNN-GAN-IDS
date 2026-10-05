@@ -10,6 +10,8 @@ import csv
 import json
 from pathlib import Path
 
+import pytest
+
 from tests.unit.test_exp5_scoring import L, _filled_settings
 
 
@@ -95,6 +97,83 @@ def test_report_quick_pairs_trials_by_seed(tmp_path, capsys):
     assert abs(rh["columns"]["final_accuracy"]["max_abs_diff"] - 0.02) < 1e-12
     assert rh["columns"]["update_yield"]["max_abs_diff"] == 0.0
     assert "10 trials paired" in capsys.readouterr().out
+
+
+def _ns(**kw):
+    import argparse
+    base = dict(trials=None, seed=None, missions=None, contact_regime=None, tau=None,
+                mem_gb=None, devices=None, set=None, dataset=None, study=None, arms=None,
+                smoke=False, out_root="results/exp5")
+    base.update(kw)
+    return argparse.Namespace(**base)
+
+
+def test_levers_change_the_settings_and_are_recorded():
+    s, _ = L.load_settings(L.PARAMS)
+    L.apply_levers(s, _ns(trials=3, seed=7, missions=8, tau=[0.75, 0.8],
+                          set=["s58.missions=[4,8,12]", "campaign.regime=clean",
+                               "pilot_outputs.knee_s={ \"6\" = 90.0 }"]))
+    assert s.get("s53.n_trials") == 3 and s.get("knee.n_trials") == 3
+    assert s.get("campaign.base_seed") == 7 and s.get("campaign.n_missions") == 8
+    assert s.get("score.tau") == [0.75, 0.8]
+    assert s.get("s58.missions") == [4, 8, 12]
+    assert s.get("campaign.regime") == "clean"                 # a bare word is a string
+    assert s.get("pilot_outputs.knee_s.6") == 90.0
+    assert len(s.overrides) == 1 + 3 + 3
+    assert any("--trials 3" in o for o in s.overrides)
+
+
+def test_set_refuses_an_unknown_table_and_a_missing_value():
+    s, _ = L.load_settings(L.PARAMS)
+    with pytest.raises(SystemExit):
+        L.apply_levers(s, _ns(set=["quik.n_trials=5"]))
+    with pytest.raises(SystemExit):
+        L.apply_levers(s, _ns(set=["s53.n_trials"]))
+
+
+def test_arms_keep_only_those_stack_trials(tmp_path):
+    s = _filled_settings()
+    jobs = L.jobs_for("batch1", s, _ns(arms=["F", "H1"], out_root=str(tmp_path)))
+    assert jobs and all(j.kind == "runner" for j in jobs)
+    assert {j.args[j.args.index("--arms") + 1] for j in jobs} == {"F", "H1"}
+
+
+def test_groups_cover_the_campaign():
+    assert L.GROUPS["all"] == L.CAMPAIGN
+    grouped = [st for k, v in L.GROUPS.items() if k != "all" for st in v]
+    assert sorted(grouped) == sorted(L.CAMPAIGN)
+
+
+def test_write_pilot_outputs_edits_only_its_keys(tmp_path):
+    p = tmp_path / "params.toml"
+    original = L.PARAMS.read_text(encoding="utf-8-sig")
+    p.write_text(original, encoding="utf-8")
+    changes = L.write_pilot_outputs(p, {
+        "knee_s": '{ "6" = 90.0, "12" = 120.0 }',              # commented out: replaced
+        "session_ttl_s": '{ "6" = 30.0 }',                     # set: replaced
+        "extra_s": '{ "6" = 1.0 }',                            # new: appended to the table
+    })
+    assert [old.lstrip().startswith("#") for old, _ in changes] == [True, False, False]
+    import tomllib
+    data = tomllib.loads(p.read_text(encoding="utf-8"))
+    assert data["pilot_outputs"]["knee_s"] == {"6": 90.0, "12": 120.0}
+    assert data["pilot_outputs"]["session_ttl_s"] == {"6": 30.0}
+    assert data["pilot_outputs"]["extra_s"] == {"6": 1.0}
+    assert "stress_s" not in data["pilot_outputs"]            # still commented out
+    before = [l for l in original.splitlines() if "knee_s " not in l and "session_ttl_s" not in l]
+    after = [l for l in p.read_text(encoding="utf-8").splitlines()
+             if "knee_s " not in l and "session_ttl_s" not in l and "extra_s" not in l]
+    assert before == after                                    # every other line kept
+
+
+def test_report_apply_refuses_an_unfinished_pilot(tmp_path, capsys):
+    s = _filled_settings()
+    p = tmp_path / "params.toml"
+    p.write_text(L.PARAMS.read_text(encoding="utf-8-sig"), encoding="utf-8")
+    jobs = L.build("knee", s, None, str(tmp_path))
+    assert L.cmd_report("knee", s, jobs, apply_to=p) == 1
+    assert "nothing written" in capsys.readouterr().out
+    assert p.read_text(encoding="utf-8") == L.PARAMS.read_text(encoding="utf-8-sig")
 
 
 def test_report_quick_never_pairs_different_seeds(tmp_path):

@@ -2,8 +2,12 @@
 
 Exp 5 runs on the Exp 4 harness (python -m experiments.exp4.runner_main) with
 the FeRRy flags. This launcher turns a stage into jobs, one runner process per
-(study, cell, arm), and runs them side by side:
+(study, cell, arm), and runs them side by side (exp5.cmd and exp5.sh call it
+with the right interpreter):
 
+    check     is the machine ready (interpreter, packages, dataset, code, memory,
+              disk), and what each stage still needs; status with no stage
+              gives the second half alone
     plan      list the jobs, what each still needs, the trial count and the cost
     validate  run every job's arguments through the runner's own usage checks
               (runner_main.main with the trial loop stubbed out: no trial runs)
@@ -23,6 +27,17 @@ the FeRRy flags. This launcher turns a stage into jobs, one runner process per
 ``--smoke`` (with run, plan or campaign) shrinks every job to its smallest (one
 trial; RL at 30 episodes) and writes beside the repository (../exp5_smoke): a
 dry run that checks every job starts and ends, never a result.
+
+A stage may be a group instead: pilots (ttl knee sstar), rl (the five RL
+stages), batches (batch1 sens batch2 pilot3 batch3) or all (the campaign);
+`run` on a group goes through it as the campaign does. `report <pilot>
+--apply` writes a finished, clean pilot's outputs into params.toml.
+
+Levers change a setting for one run without editing params.toml: --trials,
+--seed, --missions, --contact-regime, --tau, --dataset, --jobs, --mem-gb,
+--devices, and --set KEY=VALUE for any other key. Each is printed, and
+recorded in the manifest of every stage the run starts. --study and --arms
+narrow which jobs run.
 
 Stages, in order (each fills in settings the next one needs; see params.toml):
 
@@ -60,9 +75,12 @@ stage resumes by skipping the checkpoints that exist (`ferrysim sweep`
 refuses outright once any of its checkpoints exists). A stage's evaluate and
 report jobs wait for its trainings. Trainings run with one BLAS thread.
 
-    ..\\py311.cmd scripts\\exp5\\launch.py plan batch1
-    ..\\py311.cmd scripts\\exp5\\launch.py run ttl
-    ..\\py311.cmd scripts\\exp5\\launch.py status knee
+    scripts\\exp5\\exp5 check
+    scripts\\exp5\\exp5 plan batch1
+    scripts\\exp5\\exp5 run pilots
+    scripts\\exp5\\exp5 report knee --apply
+    scripts\\exp5\\exp5 run quick --trials 5
+    scripts\\exp5\\exp5 status
 
 What it keeps to:
 
@@ -107,6 +125,7 @@ import json
 import math
 import os
 import platform
+import re
 import subprocess
 import sys
 import time
@@ -203,6 +222,7 @@ class Settings:
     def __init__(self, data: Dict[str, Any]):
         self.data = data
         self.missing: List[str] = []
+        self.overrides: List[str] = []     # the command line's changes, for the manifest
 
     def get(self, key: str, default: Any = KeyError) -> Any:
         node: Any = self.data
@@ -225,6 +245,90 @@ def load_settings(path: Path) -> Tuple[Settings, str]:
     # utf-8-sig: Windows editors (Notepad, PowerShell 5.1) may write a BOM.
     text = path.read_text(encoding="utf-8-sig")
     return Settings(tomllib.loads(text)), text
+
+
+# --------------------------------------------------------------------------- #
+# Levers: the command line's changes to params.toml, for this run only
+# --------------------------------------------------------------------------- #
+
+def toml_value(raw: str) -> Any:
+    """A value as TOML reads it (5, 0.5, true, [1, 2], { "6" = 90.0 }, "x");
+    anything TOML refuses is taken as a bare string (jittery)."""
+    try:
+        return tomllib.loads(f"v = {raw}")["v"]
+    except tomllib.TOMLDecodeError:
+        return raw
+
+
+def set_dotted(data: Dict[str, Any], key: str, value: Any) -> None:
+    node = data
+    parts = key.split(".")
+    for part in parts[:-1]:
+        node = node.setdefault(part, {})
+        if not isinstance(node, dict):
+            raise ValueError(f"{key}: {part} is a value, not a table")
+    node[parts[-1]] = value
+
+
+def set_everywhere(data: Dict[str, Any], name: str, value: Any) -> int:
+    """Set ``name`` in every table that has it; returns how many."""
+    count = 0
+    for v in data.values():
+        if isinstance(v, dict):
+            if name in v:
+                v[name] = value
+                count += 1
+            count += set_everywhere(v, name, value)
+    return count
+
+
+#: Named levers: (option, params.toml key, type). Each is shorthand for
+#: --set KEY=VALUE, and the manifest records it the same way.
+LEVERS: Tuple[Tuple[str, str, Any], ...] = (
+    ("seed", "campaign.base_seed", int),
+    ("missions", "campaign.n_missions", int),
+    ("contact_regime", "campaign.contact_regime", str),
+    ("tau", "score.tau", float),
+    ("mem_gb", "machine.mem_budget_gb", float),
+    ("devices", "machine.max_device_processes", int),
+)
+
+
+def apply_levers(s: Settings, a: argparse.Namespace) -> None:
+    """The levers and --set changes, applied to the settings this run reads.
+
+    params.toml stays as it is; the manifest of every stage run records each
+    change (and the settings as changed), and a CSV written under other
+    arguments is still refused on resume, so a run that changes a job's
+    arguments needs its own --out-root."""
+    changes: List[str] = []
+    if a.trials is not None:
+        n = set_everywhere(s.data, "n_trials", int(a.trials))
+        changes.append(f"--trials {a.trials} ({n} tables' n_trials)")
+    for option, key, kind in LEVERS:
+        value = getattr(a, option, None)
+        if value is None:
+            continue
+        value = [kind(v) for v in value] if isinstance(value, list) else kind(value)
+        set_dotted(s.data, key, value)
+        changes.append(f"{key} = {json.dumps(value)} (--{option.replace('_', '-')})")
+    for item in a.set or []:
+        key, sep, raw = item.partition("=")
+        key = key.strip()
+        if not sep or not key:
+            sys.exit(f"--set takes KEY=VALUE (a dotted params.toml key), not {item!r}")
+        if key.split(".")[0] not in s.data:
+            sys.exit(f"--set {key}: params.toml has no [{key.split('.')[0]}] table")
+        value = toml_value(raw.strip())
+        set_dotted(s.data, key, value)
+        changes.append(f"{key} = {json.dumps(value)} (--set)")
+    if a.dataset:
+        d = Path(a.dataset).resolve()
+        os.environ["HERMES_CICIOT_DIR"] = str(d)        # the jobs inherit it
+        changes.append(f"HERMES_CICIOT_DIR = {d} (--dataset)")
+    s.overrides = changes
+    for c in changes:
+        print(f"[lever] {c}")
 
 
 # --------------------------------------------------------------------------- #
@@ -1491,8 +1595,10 @@ def cmd_run(stage: str, s: Settings, params_text: str, jobs: List[Job], *,
         if side.exists():
             before = json.loads(side.read_text(encoding="utf-8"))
             if _key_args(before) != _key_args(j.args):
-                sys.exit(f"{j.out} was written under other arguments ({side.name}); "
-                         f"write the new setting to a fresh path")
+                changed = sorted(set(_key_args(j.args)) ^ set(_key_args(before)))
+                sys.exit(f"{j.out} was written under other arguments ({side.name}; they "
+                         f"differ in {' '.join(changed[:6])}). A run with changed "
+                         f"settings writes to a fresh place: give it --out-root.")
 
     todo = [j for j in jobs if j.alias_of is None and not done(j)]
     runner_trials = sum(j.trials or 0 for j in todo if j.kind == "runner")
@@ -1558,6 +1664,9 @@ def _run_jobs(stage: str, s: Settings, params_text: str, jobs: List[Job], todo: 
         "launcher_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
         "params_sha256": hashlib.sha256(params_text.encode()).hexdigest(),
         "params_toml": params_text,
+        # The command line's levers and --set changes, and the settings as changed.
+        "overrides": s.overrides,
+        "settings": json.loads(json.dumps(s.data, default=str)),
         "jobs": [asdict(j) for j in jobs],
     }
     manifest_path.write_text(json.dumps(manifest, indent=1), encoding="utf-8")
@@ -1785,9 +1894,62 @@ def report_quick(s: Settings, jobs: List[Job], recorded_root: str = "results/exp
     return 0
 
 
-def cmd_report(stage: str, s: Settings, jobs: List[Job]) -> int:
-    """A finished pilot's pilot_outputs lines for params.toml, by the pre-registered rules."""
+def _inline(per_n: Dict[str, Any]) -> str:
+    """A TOML inline table, as params.toml writes them ({ "6" = 90.0, ... })."""
+    return "{ " + ", ".join(
+        f'"{k}" = {v:.1f}' if isinstance(v, float) else f'"{k}" = {v}'
+        for k, v in per_n.items()) + " }"
+
+
+def write_pilot_outputs(path: Path, values: Dict[str, str]) -> List[Tuple[str, str]]:
+    """Set keys of params.toml's [pilot_outputs] in place, every other line kept:
+    a key's line (set, or commented out as unset) is replaced; a new key goes at
+    the table's end. Returns (old, new) per key; refuses a file that would no
+    longer parse."""
+    raw = path.read_bytes().decode("utf-8-sig")
+    nl = "\r\n" if "\r\n" in raw else "\n"
+    lines = raw.split(nl)
+    start = next((i for i, l in enumerate(lines) if l.strip() == "[pilot_outputs]"), None)
+    if start is None:
+        sys.exit(f"{path} has no [pilot_outputs] table")
+    end = next((i for i in range(start + 1, len(lines)) if lines[i].lstrip().startswith("[")),
+               len(lines))
+    insert_at = end
+    while insert_at > start + 1 and (not lines[insert_at - 1].strip()
+                                     or lines[insert_at - 1].lstrip().startswith("#")):
+        insert_at -= 1
+    changes = []
+    for key, value in values.items():
+        new = f"{key} = {value}"
+        pattern = re.compile(rf"^\s*#?\s*{re.escape(key)}\s*=")
+        hit = next((i for i in range(start + 1, end) if pattern.match(lines[i])), None)
+        if hit is None:
+            lines.insert(insert_at, new)
+            insert_at += 1
+            end += 1
+            changes.append(("", new))
+        else:
+            changes.append((lines[hit], new))
+            lines[hit] = new
+    text = nl.join(lines)
+    try:
+        parsed = tomllib.loads(text)["pilot_outputs"]
+    except (tomllib.TOMLDecodeError, KeyError) as e:
+        sys.exit(f"not written: the edited {path.name} would not parse ({e})")
+    for key, value in values.items():
+        if parsed.get(key) != tomllib.loads(f"v = {value}")["v"]:
+            sys.exit(f"not written: {key} would not read back as {value}")
+    path.write_bytes(text.encode("utf-8"))
+    return changes
+
+
+def cmd_report(stage: str, s: Settings, jobs: List[Job],
+               apply_to: Optional[Path] = None) -> int:
+    """A finished pilot's pilot_outputs lines for params.toml, by the pre-registered
+    rules; with ``apply_to`` (report --apply), written into that file."""
     out: Dict[str, Any] = {"stage": stage}
+    outputs: Dict[str, Dict[str, Any]] = collections.OrderedDict()   # key -> {N: value}
+    problems: List[str] = []
     if stage == "ttl":
         ttl = {}
         for j in jobs:
@@ -1801,8 +1963,8 @@ def cmd_report(stage: str, s: Settings, jobs: List[Job]) -> int:
                   f"max {r['fit_s']['max']:.2f} s over {r['workers']} workers "
                   f"-> TTL {ttl[str(j.n)]:.0f} s")
         out["session_ttl_s"] = ttl
-        print("\n[pilot_outputs]\nsession_ttl_s = { "
-              + ", ".join(f'"{k}" = {v:.1f}' for k, v in ttl.items()) + " }")
+        if ttl:
+            outputs["session_ttl_s"] = ttl
     elif stage == "knee":
         metric = str(s.get("knee.metric"))
         share = float(s.get("knee.plateau_share"))
@@ -1866,23 +2028,21 @@ def cmd_report(stage: str, s: Settings, jobs: List[Job]) -> int:
                       f"{m / n:5.1%}{acc}){mark}")
             budgets = sorted(by_budget)
             if knee == budgets[-1]:
+                problems.append(f"N = {n}, payload {payload}: the knee is the grid's largest "
+                                f"budget; the grid may not reach the plateau. Extend it.")
                 print("    WARNING: the knee is the grid's largest budget; the grid may not "
                       "reach the plateau. Extend it before using this knee.")
             if knee == budgets[0]:
+                problems.append(f"N = {n}, payload {payload}: the knee is the grid's smallest "
+                                f"budget. Extend the grid down.")
                 print("    WARNING: the knee is the grid's smallest budget; extend the grid down.")
         out["knees"] = knees
         out["rows_not_ok"] = not_ok
         print(f"\n  rows not ok (left out): {not_ok}")
-        if "1mb" in knees:
-            print("\n[pilot_outputs]")
-            print("knee_s   = { " + ", ".join(f'"{k}" = {v:.1f}' for k, v in knees["1mb"].items()) + " }")
-            print("stress_s = { " + ", ".join(
-                f'"{k}" = {v:.1f}' for k, v in knees["1mb_stress"].items()) + " }")
-        if "meas" in knees:
-            print("knee_meas_s   = { " + ", ".join(
-                f'"{k}" = {v:.1f}' for k, v in knees["meas"].items()) + " }")
-            print("stress_meas_s = { " + ", ".join(
-                f'"{k}" = {v:.1f}' for k, v in knees["meas_stress"].items()) + " }")
+        for tag, key in (("1mb", "knee_s"), ("1mb_stress", "stress_s"),
+                         ("meas", "knee_meas_s"), ("meas_stress", "stress_meas_s")):
+            if tag in knees:
+                outputs[key] = {k: float(v) for k, v in knees[tag].items()}
     elif stage == "sstar":
         stars = {}
         for j in jobs:
@@ -1894,8 +2054,8 @@ def cmd_report(stage: str, s: Settings, jobs: List[Job]) -> int:
             stars[str(j.n)] = int(r["families"]["F"]["s"])
             print(f"  N = {j.n:2d}: S = {stars[str(j.n)]} at budgets {r['budgets']}")
         out["s_star"] = stars
-        print("\n[pilot_outputs]\ns_star = { " + ", ".join(f'"{k}" = {v}' for k, v in stars.items())
-              + " }")
+        if stars:
+            outputs["s_star"] = stars
     elif stage == "pilot3":
         print("  p515: H1's served share by interference amplitude (5.15's harsher level)")
         for j in jobs:
@@ -1940,6 +2100,24 @@ def cmd_report(stage: str, s: Settings, jobs: List[Job]) -> int:
     else:
         print(f"no report for stage {stage}")
         return 1
+    if outputs:
+        print("\n[pilot_outputs]")
+        for key, per_n in outputs.items():
+            print(f"{key} = {_inline(per_n)}")
+    if apply_to is None:
+        return 0
+    if stage not in ("ttl", "knee", "sstar"):
+        print(f"\n--apply: stage {stage}'s values are a reading, not a rule; set them by hand")
+        return 1
+    unfinished = [j.name for j in jobs if not j.blocked and j.alias_of is None and not done(j)]
+    if unfinished:
+        problems.append(f"{len(unfinished)} jobs not finished (e.g. {unfinished[0]})")
+    if problems or not outputs:
+        print("\n--apply: nothing written:\n  " + "\n  ".join(problems or ["no outputs yet"]))
+        return 1
+    for old, new in write_pilot_outputs(apply_to, {k: _inline(v) for k, v in outputs.items()}):
+        print(f"\n  {apply_to.name}: {old.strip() or '(new)'}\n      -> {new}")
+    print(f"\nwritten to {apply_to}; review the change and commit it before the next stage")
     return 0
 
 
@@ -2092,38 +2270,160 @@ def smoke(jobs: List[Job]) -> None:
             _set_flag(a, "--episodes", "4")
 
 
-def cmd_campaign(s: Settings, text: str, a: argparse.Namespace) -> int:
-    """Run the stages in order, skipping those done, until a decision point.
+#: Named groups of stages; any command that takes a stage takes a group. `run`
+#: on a group goes through its stages as the campaign does.
+GROUPS: Dict[str, Tuple[str, ...]] = {
+    "pilots": ("ttl", "knee", "sstar"),
+    "rl": RL_STAGES,
+    "batches": ("batch1", "sens", "batch2", "pilot3", "batch3"),
+    "all": CAMPAIGN,
+}
 
-    It stops before a stage whose settings are unset (and names them), after a
-    stage whose report a person reads (the pilots, the calibration, Study 5.5's
-    verdict: it prints the report), and at any failure. Run it again once the
-    settings are in params.toml and committed."""
-    for stage in CAMPAIGN:
-        jobs = build(stage, s, None, a.out_root)
-        if a.smoke:
-            smoke(jobs)
+
+def jobs_for(stage: str, s: Settings, a: argparse.Namespace) -> List[Job]:
+    """A stage's jobs with the command line's selection: --study, then --arms
+    (stack trials of those arms only; every other kind of job is left out),
+    then --smoke."""
+    jobs = build(stage, s, a.study, a.out_root)
+    if a.arms:
+        jobs = [j for j in jobs if j.kind == "runner"
+                and j.args[j.args.index("--arms") + 1] in a.arms]
+    if a.smoke:
+        smoke(jobs)
+    return jobs
+
+
+def cmd_sequence(name: str, stages: Sequence[str], s: Settings, text: str,
+                 a: argparse.Namespace) -> int:
+    """Run stages in order, skipping those done, until a decision point.
+
+    It stops before a stage whose settings are unset (and names them; with
+    --skip-blocked it runs that stage's other jobs first), after a stage whose
+    report a person reads (the pilots, the calibration, Study 5.5's verdict,
+    batch 3's pilots: it prints the report), and at any failure. Run it again
+    once the settings are in params.toml and committed."""
+    for stage in stages:
+        jobs = jobs_for(stage, s, a)
+        if not jobs:
+            print(f"[{name}] {stage}: no jobs (left out by --study or --arms)")
+            continue
         live = [j for j in jobs if j.alias_of is None]
         blocked = sorted({b for j in jobs for b in j.blocked})
         if live and not blocked and all(done(j) for j in live):
-            print(f"[campaign] {stage}: done")
+            print(f"[{name}] {stage}: done")
             continue
-        if blocked:
-            print(f"[campaign] stops before {stage}: params.toml needs {', '.join(blocked)}")
+        if blocked and not a.skip_blocked:
+            print(f"[{name}] stops before {stage}: params.toml needs {', '.join(blocked)}")
             return 2
-        print(f"[campaign] {stage}: running")
-        rc = cmd_run(stage, s, text, jobs, allow_dirty=a.allow_dirty, skip_blocked=False,
+        print(f"[{name}] {stage}: running")
+        rc = cmd_run(stage, s, text, jobs, allow_dirty=a.allow_dirty, skip_blocked=True,
                      yes=a.yes, max_jobs=a.max_jobs, out_root=a.out_root)
         if rc != 0:
-            print(f"[campaign] stops: stage {stage} did not finish cleanly (rc {rc})")
+            print(f"[{name}] stops: stage {stage} did not finish cleanly (rc {rc})")
             return rc
+        if blocked:
+            print(f"[{name}] stops after {stage}'s runnable jobs: params.toml needs "
+                  f"{', '.join(blocked)} for the rest")
+            return 2
         if stage in PAUSE_AFTER:
             cmd_report(stage, s, jobs)
-            print(f"[campaign] pauses after {stage}: set what the report gives in params.toml, "
-                  f"commit, and run the campaign again")
+            how = (f"`report {stage} --apply` writes them" if stage in ("ttl", "knee", "sstar")
+                   else "set them by hand")
+            print(f"[{name}] pauses after {stage}: put what the report gives in params.toml "
+                  f"({how}), commit, and run again")
             return 0
-    print("[campaign] every stage is done")
+    print(f"[{name}] every stage is done")
     return 0
+
+
+def cmd_status_all(s: Settings, a: argparse.Namespace) -> int:
+    """One line per stage: jobs done, trials written, what is unset."""
+    for stage in CAMPAIGN + ("quick",):
+        jobs = jobs_for(stage, s, a)
+        live = [j for j in jobs if j.alias_of is None and not j.blocked]
+        n_done = sum(1 for j in live if done(j))
+        rows = expected = 0
+        for j in live:
+            if j.kind == "runner":
+                rows += min(csv_rows(REPO / j.out)[0], j.trials or 0)
+                expected += j.trials or 0
+        blocked = sorted({b for j in jobs for b in j.blocked})
+        line = f"  {stage:13s} jobs {n_done:3d}/{len(live):<3d}"
+        if expected:
+            line += f"  trials {rows:5d}/{expected:<5d}"
+        if blocked:
+            line += f"  needs {', '.join(blocked[:3])}" + (" ..." if len(blocked) > 3 else "")
+        print(line)
+    return 0
+
+
+def cmd_check(s: Settings, a: argparse.Namespace) -> int:
+    """Is this machine ready, and what does each stage still need?"""
+    from importlib import metadata
+    import shutil
+    failed = []
+
+    def line(state: Optional[bool], what: str, detail: str) -> None:
+        mark = {True: " ok ", None: "warn", False: "FAIL"}[state]
+        if state is False:
+            failed.append(what)
+        print(f"  [{mark}] {what:22s} {detail}")
+
+    print("Machine")
+    line(sys.version_info >= (3, 11), "Python", f"{sys.version.split()[0]} ({sys.executable})")
+    problem = interpreter_problem()
+    line(problem is None, "interpreter", problem or "the interpreter itself, not a venv stub")
+    req = REPO / "AppSetup" / "requirements_exp4.txt"
+    for raw in req.read_text(encoding="utf-8").splitlines():
+        spec = raw.split("#", 1)[0].strip()
+        if "==" not in spec:
+            continue
+        name, pinned = (x.strip() for x in spec.split("==", 1))
+        try:
+            have: Optional[str] = metadata.version(name)
+        except metadata.PackageNotFoundError:
+            have = None
+        line(False if have is None else (True if have == pinned else None), name,
+             f"{have or 'missing'} (requirements_exp4.txt pins {pinned})")
+    data = dataset_fingerprint()
+    line(bool(data["csv_files"]), "CICIoT2023",
+         f"{data['csv_files']} CSV files, {data.get('bytes', 0) / 1e9:.1f} GB in {data['dir']}"
+         if data["csv_files"] else "not found: ../datasets/CICIOT2023, or --dataset DIR")
+    line(True if long_paths_enabled() else None, "long paths",
+         "on" if long_paths_enabled() else f"off: kept traces must stay under {MAX_PATH} chars")
+    prov = provenance()
+    line(None if prov["code_dirty"] else True, "code",
+         f"commit {prov['commit'][:10]} on {prov['branch']}"
+         + (f"; uncommitted under hermes/ or experiments/: {len(prov['code_dirty'])} files "
+            f"(run refuses without --allow-dirty)" if prov["code_dirty"] else ""))
+    try:
+        import psutil
+        ram = psutil.virtual_memory().total / 2**30
+        cores = psutil.cpu_count(logical=False) or os.cpu_count()
+        budget = float(s.get("machine.mem_budget_gb"))
+        line(True if budget <= 0.9 * ram else None, "memory",
+             f"{ram:.0f} GB; params machine.mem_budget_gb {budget:g} (--mem-gb to change)")
+        line(True, "cores", f"{cores} physical, {os.cpu_count()} logical; machine.max_jobs "
+                            f"{s.get('machine.max_jobs')} (--jobs to change)")
+    except ImportError:
+        line(False, "psutil", "missing (the footprint probe and the lock need it)")
+    root = REPO / a.out_root
+    probe = root if root.exists() else REPO
+    free = shutil.disk_usage(probe).free / 2**30
+    line(True if free > 20 else None, "disk", f"{free:.0f} GB free at {probe} "
+                                              f"(the whole campaign keeps about 1.5 GB of traces)")
+    lock = root / ".launcher.lock"
+    if lock.exists():
+        try:
+            held = json.loads(lock.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            held = {}
+        line(None, "running", f"stage {held.get('stage')} holds the lock (pid {held.get('pid')}, "
+                              f"since {held.get('since')})")
+    print("\nStages (in campaign order; quick is a reviewer's reproduction)")
+    cmd_status_all(s, a)
+    print("\n" + ("ready" if not failed else "not ready: " + ", ".join(failed)))
+    return 1 if failed else 0
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
@@ -2135,58 +2435,111 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0],
                                  formatter_class=argparse.RawDescriptionHelpFormatter,
                                  epilog=__doc__.split("\n\n", 1)[1])
-    ap.add_argument("command", choices=("plan", "validate", "run", "status", "report",
+    ap.add_argument("command", choices=("check", "plan", "validate", "run", "status", "report",
                                         "score", "campaign"))
-    ap.add_argument("stage", choices=STAGES, nargs="?", default=None,
-                    help="The stage (every command but campaign, which walks them all).")
-    ap.add_argument("--smoke", action="store_true",
-                    help="run, plan, campaign: every job at its smallest (1 trial; RL at 30 "
-                         "episodes), written to ../exp5_smoke unless --out-root says "
-                         "otherwise. A check that every job starts and ends, not a result.")
-    ap.add_argument("--study", nargs="+", default=None,
-                    help="Only these studies of the stage (e.g. s53 s514).")
-    ap.add_argument("--params", type=Path, default=PARAMS)
-    ap.add_argument("--show-commands", action="store_true", help="plan: print each command.")
-    ap.add_argument("--allow-dirty", action="store_true",
-                    help="run: allow uncommitted changes under hermes/ or experiments/.")
-    ap.add_argument("--skip-blocked", action="store_true",
-                    help="run: leave out the jobs whose settings are unset.")
-    ap.add_argument("--max-jobs", type=int, default=None, help="run: override machine.max_jobs.")
-    ap.add_argument("--yes", action="store_true", help="run: start without asking.")
-    ap.add_argument("--out-root", default="results/exp5",
-                    help="Where the stages write (default results/exp5; for a dry test, "
-                         "a scratch folder).")
-    ap.add_argument("--rescore", action="store_true",
-                    help="score: score every file again, current or not.")
-    ap.add_argument("--compare-only", action="store_true",
-                    help="score: only rewrite the comparisons from the scored files there are.")
+    groups = "; ".join(f"{k}: {' '.join(v)}" for k, v in GROUPS.items() if k != "all")
+    ap.add_argument("stage", choices=STAGES + tuple(GROUPS), nargs="?", default=None,
+                    metavar="stage",
+                    help=f"A stage ({', '.join(STAGES)}) or a group of them ({groups}; "
+                         f"all: the campaign). check, campaign and status need none.")
+    g = ap.add_argument_group("what runs")
+    g.add_argument("--study", nargs="+", default=None, metavar="STUDY",
+                   help="Only these studies of the stage (e.g. s53 s514).")
+    g.add_argument("--arms", nargs="+", default=None, metavar="ARM",
+                   help="Only the stack trials of these arms (e.g. F FX H1); every other job "
+                        "(FerrySim, tools, trainings) is left out.")
+    g.add_argument("--smoke", action="store_true",
+                   help="Every job at its smallest (1 trial; RL at 30 episodes), written to "
+                        "../exp5_smoke unless --out-root says otherwise: a check that every "
+                        "job starts and ends, never a result.")
+    g.add_argument("--out-root", default="results/exp5", metavar="DIR",
+                   help="Where the stages write, relative to the repository (default "
+                        "results/exp5). A run with changed settings needs its own.")
+    g.add_argument("--params", type=Path, default=PARAMS, metavar="FILE",
+                   help="The settings file (default scripts/exp5/params.toml).")
+    g = ap.add_argument_group(
+        "levers (this run only: params.toml is not changed, and every stage's manifest "
+        "records each one)")
+    g.add_argument("--trials", type=int, default=None, metavar="N",
+                   help="Trials per cell, in every study (n_trials). Trial i keeps its seed "
+                        "whatever the count, so fewer trials are the first ones of a full run.")
+    g.add_argument("--seed", type=int, default=None, metavar="N",
+                   help="campaign.base_seed: a fresh draw of every layout and channel (a "
+                        "replication; give it its own --out-root).")
+    g.add_argument("--missions", type=int, default=None, metavar="N", help="campaign.n_missions.")
+    g.add_argument("--contact-regime", choices=("clean", "jittery"), default=None,
+                   help="campaign.contact_regime: the contact channel of every job that "
+                        "does not set its own.")
+    g.add_argument("--tau", type=float, nargs="+", default=None, metavar="TAU",
+                   help="score.tau: the accuracy thresholds; the first is the primary.")
+    g.add_argument("--dataset", default=None, metavar="DIR",
+                   help="Where CICIoT2023's CSVs are (default ../datasets/CICIOT2023).")
+    g.add_argument("--set", action="append", default=None, metavar="KEY=VALUE",
+                   help="Any params.toml setting by its dotted key, the value as TOML "
+                        "(--set s58.missions=[4,8] --set s53.n_trials=40); repeatable.")
+    g = ap.add_argument_group("the machine")
+    g.add_argument("--jobs", "--max-jobs", dest="max_jobs", type=int, default=None, metavar="N",
+                   help="Jobs side by side (machine.max_jobs; rl.max_jobs for RL stages).")
+    g.add_argument("--mem-gb", type=float, default=None, metavar="GB",
+                   help="machine.mem_budget_gb: the memory the running jobs may take.")
+    g.add_argument("--devices", type=int, default=None, metavar="N",
+                   help="machine.max_device_processes: training processes at once.")
+    g = ap.add_argument_group("run control")
+    g.add_argument("--yes", action="store_true", help="Start without asking.")
+    g.add_argument("--skip-blocked", action="store_true",
+                   help="Run the jobs whose settings are set, and leave out the rest.")
+    g.add_argument("--allow-dirty", action="store_true",
+                   help="Run with uncommitted changes under hermes/ or experiments/.")
+    g.add_argument("--show-commands", action="store_true", help="plan: print each command.")
+    g.add_argument("--apply", action="store_true",
+                   help="report (ttl, knee, sstar): write the pilot's outputs into the "
+                        "params file, once every job is finished and the report is clean.")
+    g.add_argument("--rescore", action="store_true",
+                   help="score: score every file again, current or not.")
+    g.add_argument("--compare-only", action="store_true",
+                   help="score: only rewrite the comparisons from the scored files there are.")
     a = ap.parse_args(argv)
     if a.smoke and a.out_root == "results/exp5":
         a.out_root = str(SMOKE_ROOT)           # a smoke run never writes the results tree
 
     s, text = load_settings(a.params)
+    apply_levers(s, a)
+    if a.command == "check":
+        return cmd_check(s, a)
     if a.command == "campaign":
-        return cmd_campaign(s, text, a)
+        return cmd_sequence("campaign", CAMPAIGN, s, text, a)
+    if a.command == "status" and a.stage is None:
+        return cmd_status_all(s, a)
     if a.stage is None:
-        ap.error(f"{a.command} needs a stage: one of {', '.join(STAGES)}")
-    jobs = build(a.stage, s, a.study, a.out_root)
-    if a.smoke:
-        smoke(jobs)
-    if a.command == "plan":
-        return cmd_plan(a.stage, s, jobs, a.show_commands)
-    if a.command == "validate":
-        checked = cmd_validate(jobs)
-        cmd_plan(a.stage, s, jobs, False, checked)
-        return 1 if any(not v["ok"] for v in checked.values()) else 0
-    if a.command == "status":
-        return cmd_status(a.stage, jobs)
-    if a.command == "report":
-        return cmd_report(a.stage, s, jobs)
-    if a.command == "score":
-        return cmd_score(a.stage, s, text, jobs, a)
-    return cmd_run(a.stage, s, text, jobs, allow_dirty=a.allow_dirty,
-                   skip_blocked=a.skip_blocked, yes=a.yes, max_jobs=a.max_jobs,
-                   out_root=a.out_root)
+        ap.error(f"{a.command} needs a stage or a group: one of "
+                 f"{', '.join(STAGES + tuple(GROUPS))}")
+    if a.command == "run" and a.stage in GROUPS:
+        return cmd_sequence(a.stage, GROUPS[a.stage], s, text, a)
+    stages = GROUPS.get(a.stage, (a.stage,))
+    if a.command == "score" and a.stage in GROUPS:
+        stages = tuple(st for st in stages if st in SCORED)
+    rc = 0
+    for stage in stages:
+        if len(stages) > 1:
+            print(f"\n=== {stage} ===")
+        jobs = jobs_for(stage, s, a)
+        if a.command == "plan":
+            rc |= cmd_plan(stage, s, jobs, a.show_commands)
+        elif a.command == "validate":
+            checked = cmd_validate(jobs)
+            cmd_plan(stage, s, jobs, False, checked)
+            rc |= 1 if any(not v["ok"] for v in checked.values()) else 0
+        elif a.command == "status":
+            rc |= cmd_status(stage, jobs)
+        elif a.command == "report":
+            rc |= cmd_report(stage, s, jobs, apply_to=a.params if a.apply else None)
+        elif a.command == "score":
+            rc |= cmd_score(stage, s, text, jobs, a)
+        else:
+            rc = cmd_run(stage, s, text, jobs, allow_dirty=a.allow_dirty,
+                         skip_blocked=a.skip_blocked, yes=a.yes, max_jobs=a.max_jobs,
+                         out_root=a.out_root)
+    return rc
 
 
 if __name__ == "__main__":
