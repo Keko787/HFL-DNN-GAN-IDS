@@ -457,15 +457,16 @@ exp5 score batch1 --rescore
 
 *As of 5 Oct 2026.*
 
-- **Done:** the TTL pilot (`session_ttl_s` 36, 34, 34 and 23 s at N = 6, 12, 18 and 24, committed).
-- **Running:** the knee pilot, on the jittery contact channel.
+- **Done:**
+  - the TTL pilot: `session_ttl_s` 36, 34, 34 and 23 s at N = 6, 12, 18 and 24;
+  - the knee pilot, on the jittery contact channel (600 trials, none failed): knees 150, 180, 240 and 262 s at N = 6, 12, 18 and 24 (stress half of each), 120 s at N = 6 with the measured payload, and τ = 0.71. N = 6's knee is the grid's largest budget; it was accepted as is rather than extending the grid. At N = 18 and 24 accuracy levels off near 0.71 at every budget.
 - **Next:**
   - S\*;
-  - the re-pin;
+  - the re-pin (`scripts/exp5/repin.py`);
   - a smoke run of every stage;
   - the RL campaign;
   - the batches.
-- **Decided: τ.** In the knee pilot's first cells, H1 reached τ = 0.82 within 4 missions in few trials: 5 of the first 49 at N = 12, and none at N = 24, where accuracy levels off near 0.71 at every budget. The missions stay at 4, and τ is set from the knee pilot by the rule in [§5.2](#52-the-pilots), with 0.82 kept as a second τ. On the pilot's partial data, the rule gives about 0.71.
+- **Decided: τ.** In the knee pilot's first cells, H1 reached τ = 0.82 within 4 missions in few trials: 5 of the first 49 at N = 12, and none at N = 24, where accuracy levels off near 0.71 at every budget. The missions stay at 4, and τ is set from the knee pilot by the rule in [§5.2](#52-the-pilots), with 0.82 kept as a second τ. The rule gave 0.71 (0.82 at N = 6, 0.72 at N = 12, 0.71 at N = 18 and 24).
 - **Decided: the traces.** Per-stage archives (`exp5 pack`), with their checksums committed; the archives go to a release and to Zenodo. Nothing has been published yet.
 - **Decided: the study settings.**
   - E3's γ is 0.99, Chen's published code default.

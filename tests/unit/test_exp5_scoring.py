@@ -68,7 +68,9 @@ def _entry(tmp: Path, variant: str, values, *, seeds=None, status=None, trials=N
 
 def test_params_plan_waits_for_the_pilots_tau():
     s, _ = L.load_settings(L.PARAMS)
-    _, problems = SC.plan_from(s.data)
+    unset = copy.deepcopy(s.data)
+    unset["pilot_outputs"].pop("tau", None)                  # before the knee pilot
+    _, problems = SC.plan_from(unset)
     assert len(problems) == 1 and "pilot_outputs.tau" in problems[0]
     plan, problems = SC.plan_from(_filled_settings().data)
     assert problems == [] and plan.taus == [0.7, 0.82]

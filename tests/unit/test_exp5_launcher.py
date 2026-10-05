@@ -6,6 +6,7 @@ session TTL for the others; `report quick` must pair trials by seed."""
 
 from __future__ import annotations
 
+import copy
 import csv
 import json
 from pathlib import Path
@@ -144,9 +145,24 @@ def test_groups_cover_the_campaign():
     assert sorted(grouped) == sorted(L.CAMPAIGN)
 
 
+#: A params file's [pilot_outputs] before its pilots, and the table after it.
+SAMPLE_PARAMS = """[pilot_outputs]
+# From stage ttl.
+session_ttl_s = { "6" = 36.0, "12" = 34.0 }
+# knee_s        = { "6" = 0.0, "12" = 0.0 }
+# stress_s      = { "6" = 0.0, "12" = 0.0 }
+
+# --------------------------------------------------------------------------
+# Stage ttl.
+# --------------------------------------------------------------------------
+[ttl]
+N = [6, 12]
+"""
+
+
 def test_write_pilot_outputs_edits_only_its_keys(tmp_path):
     p = tmp_path / "params.toml"
-    original = L.PARAMS.read_text(encoding="utf-8-sig")
+    original = SAMPLE_PARAMS
     p.write_text(original, encoding="utf-8")
     changes = L.write_pilot_outputs(p, {
         "knee_s": '{ "6" = 90.0, "12" = 120.0 }',              # commented out: replaced
@@ -164,6 +180,7 @@ def test_write_pilot_outputs_edits_only_its_keys(tmp_path):
     after = [l for l in p.read_text(encoding="utf-8").splitlines()
              if "knee_s " not in l and "session_ttl_s" not in l and "extra_s" not in l]
     assert before == after                                    # every other line kept
+    assert data["ttl"] == {"N": [6, 12]}                      # the next table untouched
 
 
 def test_report_apply_refuses_an_unfinished_pilot(tmp_path, capsys):
@@ -252,7 +269,8 @@ def test_p512_flies_h1_at_multiples_of_the_mission_cycle(tmp_path):
     medians = [float(j.args[j.args.index("--train-time-s") + 1]) for j in jobs]
     assert medians == [round(f * cycle) for f in s.get("p512.cycle_factors")]
     assert all(j.args[j.args.index("--arms") + 1] == "H1" and not j.blocked for j in jobs)
-    unset, _ = L.load_settings(L.PARAMS)                    # no knee yet: blocked, by name
+    unset = L.Settings(copy.deepcopy(s.data))               # no knee yet: blocked, by name
+    unset.data["pilot_outputs"].pop("knee_s")
     blocked = [j for j in L.build("pilot3", unset, None, str(tmp_path)) if j.study == "p512"]
     assert blocked and all("pilot_outputs.knee_s.6" in j.blocked for j in blocked)
 
@@ -264,7 +282,8 @@ def test_p512_rule_picks_the_level_nearest_the_bands_middle():
 
 
 def test_batch3_waits_for_the_pilots_levels(tmp_path):
-    unset, _ = L.load_settings(L.PARAMS)
+    unset = _filled_settings()
+    unset.data["pilot_outputs"].pop("train_levels")         # before pilot3
     jobs = [j for j in L.build("batch3", unset, None, str(tmp_path)) if j.study == "s512"]
     assert jobs and all("pilot_outputs.train_levels" in j.blocked for j in jobs)
 
