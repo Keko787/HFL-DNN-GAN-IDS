@@ -30,6 +30,7 @@ Stages, in order (each fills in settings the next one needs; see params.toml):
     knee     H1 budget sweeps on wide, per N and payload
     sstar    the S* tool per N at the knee and the stress budget
     batch1   5.3 core, 5.9 core, 5.11 (a) and (b), 5.14 (the 8 Oct split)
+    sens     5.3's core arms at the session TTL x 0.75 and x 1.5 (x 1 is batch 1's)
 
 The learned score's FerrySim campaign (Run Guide 2.8), after the re-pin
 (params.toml [rl] repinned; every stage refuses until it is set):
@@ -47,6 +48,12 @@ Then the studies that wait for the verdict, and those with pilots of their own:
              5.7, 5.8, the rest of 5.9, 5.13
     pilot3   5.15's interference levels and 5.11 (c)'s FerrySim budget sweeps
     batch3   5.12, 5.15, 5.11 (c)
+
+And, apart from the campaign, a reviewer's reproduction of batch 1:
+
+    quick    5.3's core at the knee, batch 1's own jobs at fewer trials, in a
+             folder of their own; `report quick` sets each trial beside the
+             recorded one with the same seed
 
 Each training is one `ferrysim train` job with an explicit tag, so a stopped
 stage resumes by skipping the checkpoints that exist (`ferrysim sweep`
@@ -116,15 +123,17 @@ REPO = HERE.parents[1]
 PARAMS = HERE / "params.toml"
 RUNNER = ["-m", "experiments.exp4.runner_main"]
 RL_STAGES = ("rl-headroom", "rl-calibrate", "rl-sweep", "rl-e3", "rl-s57")
-STAGES = ("ttl", "knee", "sstar", "batch1") + RL_STAGES + ("batch2", "pilot3", "batch3")
-STAGE_DIR = {"ttl": "ttl", "knee": "knee", "sstar": "sstar", "batch1": "b1",
+STAGES = (("ttl", "knee", "sstar", "batch1", "sens") + RL_STAGES
+          + ("batch2", "pilot3", "batch3", "quick"))
+STAGE_DIR = {"ttl": "ttl", "knee": "knee", "sstar": "sstar", "batch1": "b1", "sens": "sens",
              **{st: "rl/" + st[3:] for st in RL_STAGES},
-             "batch2": "b2", "pilot3": "p3", "batch3": "b3"}
+             "batch2": "b2", "pilot3": "p3", "batch3": "b3", "quick": "quick"}
 #: The stages whose jobs may read batch 1's CSV for a cell they share with it.
-REUSES_BATCH1 = ("batch2", "batch3")
+#: Never quick: a reproduction flies its trials again.
+REUSES_BATCH1 = ("sens", "batch2", "batch3")
 #: The stages `score` reads (the pilots have `report`); each scores into
 #: <out_root>/scores/<stage dir>/, with its scorer runs' logs there too.
-SCORED = ("batch1", "batch2", "batch3")
+SCORED = ("batch1", "sens", "batch2", "batch3", "quick")
 STAGE_DIR.update({f"score-{st}": f"scores/{STAGE_DIR[st]}" for st in SCORED})
 FERRYSIM = ["-m", "experiments.ferrysim"]
 
@@ -290,11 +299,13 @@ class Builder:
     def _runner(self, stage: str, study: str, tag: str, *, arm: str, n: int, k: int,
                 budget_s: Any, payload: Any, n_trials: int, extra: Sequence[str] = (),
                 cap: Any = None, footprint: bool = False,
-                n_missions: Optional[int] = None) -> Job:
+                n_missions: Optional[int] = None, ttl_factor: float = 1.0) -> Job:
         s = self.s
         before = len(s.missing)
         out = f"{self.root}/{STAGE_DIR[stage]}/{study}/{tag}.csv"
         ttl = s.per_n("pilot_outputs.session_ttl_s", n)
+        if ttl is not None and ttl_factor != 1.0:      # the sensitivity stage's TTLs
+            ttl = float(ttl) * ttl_factor
         seed = s.get("campaign.base_seed")
         missions = n_missions if n_missions is not None else s.get("campaign.n_missions")
         args = RUNNER + [
@@ -357,7 +368,7 @@ class Builder:
                  payload: Any, n_trials: int, extra: Sequence[str] = (),
                  cap: Optional[str] = "S", tag_arm: Optional[str] = None,
                  footprint: bool = False, n_missions: Optional[int] = None,
-                 tag_extra: str = "", budget_s: Any = None) -> Job:
+                 tag_extra: str = "", budget_s: Any = None, ttl_factor: float = 1.0) -> Job:
         before = len(self.s.missing)
         budget = self._budget(level, n) if budget_s is None else budget_s
         cap_value = self._cap(cap, n) if arm in PLAN_ARMS or arm.startswith("FQ") else None
@@ -367,7 +378,8 @@ class Builder:
         tag = f"n{n}k{k}_{level}{tag_extra}__{tag_arm or _arm_tag(arm)}"
         job = self._runner(stage, study, tag, arm=arm, n=n, k=k, budget_s=budget,
                            payload=payload, n_trials=n_trials, extra=list(extra) + learned,
-                           cap=cap_value, footprint=footprint, n_missions=n_missions)
+                           cap=cap_value, footprint=footprint, n_missions=n_missions,
+                           ttl_factor=ttl_factor)
         job.blocked = sorted(set(job.blocked) | set(missing))
         return job
 
@@ -827,6 +839,43 @@ class Builder:
             if knee is None:
                 job.blocked = [f"s511c.knee_s.{cell}"]
             self.jobs.append(job)
+
+    # -- the quick reproduction, and the sensitivity to a pilot's value -------- #
+
+    def quick(self) -> None:
+        """A reproduction of 5.3's core in a few hours, for an artifact reviewer:
+        batch 1's own jobs (same arguments, hence the same seeds) at fewer
+        trials, written to CSVs of their own, never batch 1's. `report quick`
+        then sets each trial beside the recorded one with the same seed."""
+        s = self.s
+        fp = bool(s.get("campaign.footprint", True))
+        n, payload, trials = int(s.get("quick.N")), s.get("quick.payload_bytes"), int(
+            s.get("quick.n_trials"))
+        for k in s.get("quick.K") or []:
+            for level in s.get("quick.budgets") or []:
+                for arm in s.get("quick.arms") or []:
+                    self.jobs.append(self._arm_job(
+                        "quick", "s53", arm=arm, n=n, k=int(k), level=level, payload=payload,
+                        n_trials=trials, footprint=fp))
+                if s.get("quick.d4_faithful", False):
+                    self.jobs.append(self._arm_job(
+                        "quick", "s53", arm="D4", n=n, k=int(k), level=level, payload=payload,
+                        n_trials=trials, extra=("--aggregation", "agg:fedex"),
+                        tag_arm="D4fedex", footprint=fp))
+
+    def sens(self) -> None:
+        """5.3's core arms at the session TTL times each factor. Factor 1 is batch
+        1's own cell, which this stage reads from batch 1 (REUSES_BATCH1)."""
+        s = self.s
+        fp = bool(s.get("campaign.footprint", True))
+        for factor in s.get("sens.ttl_factors") or []:
+            for level in s.get("sens.budgets") or []:
+                for arm in s.get("sens.arms") or []:
+                    self.jobs.append(self._arm_job(
+                        "sens", "ttl", arm=arm, n=int(s.get("sens.N")), k=int(s.get("sens.K")),
+                        level=level, payload=s.get("sens.payload_bytes"),
+                        n_trials=int(s.get("sens.n_trials")), footprint=fp,
+                        ttl_factor=float(factor), tag_extra=f"_ttl{_fmt(float(factor))}"))
 
     # -- the learned score's FerrySim campaign (Run Guide 2.8) --------------- #
 
@@ -1414,7 +1463,8 @@ def cmd_run(stage: str, s: Settings, params_text: str, jobs: List[Job], *,
         sys.exit("hermes/ or experiments/ has uncommitted changes:\n  "
                  + "\n  ".join(prov["code_dirty"]) + "\ncommit them, or pass --allow-dirty")
     data = dataset_fingerprint()
-    if stage in ("ttl", "knee", "batch1") and not data["csv_files"]:
+    needs_data = stage == "ttl" or any("--real-model" in j.args for j in jobs)
+    if needs_data and not data["csv_files"]:
         sys.exit("CICIoT2023 not found (../datasets/CICIOT2023 or HERMES_CICIOT_DIR): the "
                  "loader would fall back to a synthetic task")
     if not long_paths_enabled():
@@ -1654,6 +1704,87 @@ def _round_to(x: float, step: float) -> float:
     return max(step, step * round(x / step))
 
 
+#: The trial-CSV columns `report quick` sets beside the recorded run's.
+REPRO_COLUMNS = ("final_accuracy", "final_auc", "update_yield", "round_close_rate_kmin1",
+                 "rounds_closed", "pass1_contacts_mean", "mission_duration_s_mean")
+
+
+def _ok_rows(path: Path) -> Dict[Tuple[str, str], Dict[str, str]]:
+    """(trial_index, seed) -> row, for a trial CSV's ok rows."""
+    if not path.exists():
+        return {}
+    with path.open(newline="", encoding="utf-8") as f:
+        return {(r["trial_index"], r["seed"]): r for r in csv.DictReader(f)
+                if r.get("status", "ok") == "ok"}
+
+
+def report_quick(s: Settings, jobs: List[Job], recorded_root: str = "results/exp5") -> int:
+    """Each reproduced trial beside the recorded batch-1 trial with the same seed.
+
+    quick's jobs are batch 1's own (the same arguments), so trial i of each
+    is the same draw: the same layout, shards and channel. Across hosts the
+    numbers may still differ in their last bits (the math library) and
+    through scheduling (the real processes run over TCP); the report says how
+    many trials match to 1e-9 and how far apart the rest are, per column."""
+    rec = Builder(Settings(s.data), recorded_root)
+    rec.batch1()
+    recorded = {_key(j): j for j in dedupe(rec.jobs)
+                if j.kind == "runner" and not j.blocked and j.alias_of is None}
+    out: Dict[str, Any] = {"recorded_root": recorded_root, "columns": list(REPRO_COLUMNS),
+                           "jobs": {}}
+    print(f"  each reproduced trial beside the recorded batch-1 trial with the same seed "
+          f"(recorded under {recorded_root})")
+    for j in jobs:
+        if j.kind != "runner":
+            continue
+        p = recorded.get(_key(j))
+        if p is None:
+            print(f"\n  {j.name}: batch 1 has no job with these arguments")
+            continue
+        mine, theirs = _ok_rows(REPO / j.out), _ok_rows(REPO / p.out)
+        common = sorted(set(mine) & set(theirs), key=lambda k: int(k[0]))
+        same = 0
+        cols: Dict[str, Dict[str, Any]] = {}
+        for c in REPRO_COLUMNS:
+            pairs = []
+            for key in common:
+                try:
+                    pairs.append((float(theirs[key][c]), float(mine[key][c])))
+                except (KeyError, ValueError):
+                    continue
+            if pairs:
+                cols[c] = {"recorded_mean": sum(a for a, _ in pairs) / len(pairs),
+                           "reproduced_mean": sum(b for _, b in pairs) / len(pairs),
+                           "max_abs_diff": max(abs(a - b) for a, b in pairs), "n": len(pairs)}
+
+        def close(a: str, b: str) -> bool:
+            try:
+                x, y = float(a), float(b)
+            except ValueError:
+                return a == b
+            return abs(x - y) <= 1e-9 * max(1.0, abs(x))
+        for key in common:
+            if all(close(theirs[key].get(c, ""), mine[key].get(c, "")) for c in REPRO_COLUMNS):
+                same += 1
+        out["jobs"][j.name] = {"recorded": p.out, "reproduced": j.out, "pairs": len(common),
+                               "identical": same, "columns": cols}
+        print(f"\n  {j.name}: {len(common)} trials paired with {p.name}, {same} identical "
+              f"in every column")
+        if not common:
+            print(f"    (reproduced rows: {len(mine)} in {j.out}; recorded rows: "
+                  f"{len(theirs)} in {p.out})")
+        for c, v in cols.items():
+            print(f"    {c:24s} recorded {v['recorded_mean']:9.4f}  reproduced "
+                  f"{v['reproduced_mean']:9.4f}  largest |difference| {v['max_abs_diff']:.3g}")
+    runner = [j for j in jobs if j.kind == "runner"]
+    if runner:
+        path = (REPO / runner[0].out).parent.parent / "reproduction.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(out, indent=1), encoding="utf-8")
+        print(f"\n  written to {path}; `score quick` compares the arms as batch 1's 5.3 does")
+    return 0
+
+
 def cmd_report(stage: str, s: Settings, jobs: List[Job]) -> int:
     """A finished pilot's pilot_outputs lines for params.toml, by the pre-registered rules."""
     out: Dict[str, Any] = {"stage": stage}
@@ -1786,6 +1917,8 @@ def cmd_report(stage: str, s: Settings, jobs: List[Job]) -> int:
                 print(f"    {j.name}: {'written' if (REPO / j.out).exists() else 'not yet'} "
                       f"({j.out})")
         print("\n  set [s515] harsher_amp_db, lossier_n_pl and [s511c] knee_s in params.toml")
+    elif stage == "quick":
+        return report_quick(s, jobs)
     elif stage in RL_STAGES:
         trained = [j for j in jobs if j.kind == "rl-train"]
         print(f"  trainings: {sum(1 for j in trained if done(j))}/{len(trained)} saved")
@@ -1918,9 +2051,10 @@ def cmd_score(stage: str, s: Settings, text: str, jobs: List[Job], a: argparse.N
 #: Where --smoke writes unless told otherwise: beside the repository, never in it.
 SMOKE_ROOT = REPO.parent / "exp5_smoke"
 
-#: The stages in the order the campaign runs them (batch 2 joins once built).
+#: The stages in the order the campaign runs them. quick is not one: it is a
+#: reviewer's reproduction of batch 1, run on its own.
 CAMPAIGN = ("ttl", "knee", "sstar", "rl-headroom", "rl-calibrate", "rl-sweep", "rl-e3",
-            "rl-s57", "batch1", "batch2", "pilot3", "batch3")
+            "rl-s57", "batch1", "sens", "batch2", "pilot3", "batch3")
 
 #: Stages after which a person reads a report and sets params.toml: the pilots'
 #: outputs, the calibration's sanity check, Study 5.5's verdict and batch 3's pilots.
