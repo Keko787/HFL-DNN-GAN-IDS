@@ -2498,6 +2498,7 @@ that contact's model, but the model times that fit from the basis it last receiv
 |---|---|
 | `train_time_median_s`, `train_time_sigma`, `straggler_share`, `straggler_factor` | The settings, from the mule config. |
 | `pass_1_target_contacts`, `not_ready_contacts`, `not_ready_share` | Pass-1 targets solicited, those that found no update ready, and their share. |
+| `pass_1_target_contacts_after_first`, `not_ready_contacts_after_first`, `not_ready_share_after_first` | The same over each mule's missions after its first. Every fit starts at the first takeoff, so the first mission's contacts, seconds later, find few updates ready at any train time. `pilot3`'s p512 rule reads this share (decided 6 Oct 2026). |
 | `pass_1_clean_share` | CLEAN Pass-1 sessions per target contact. The summary's own `update_yield` is the plan's update yield. |
 | `policy_not_ready_drops` | The devices arm D5's readiness test left out before takeoff (0 for every other arm). |
 | `device_train_busy_s` | The devices' fit seconds. Each fit runs `T_j`, or until a newer model restarts it, or until its mule's last mission ends, whichever comes first. |
