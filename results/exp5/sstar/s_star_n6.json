@@ -1,0 +1,6115 @@
+{
+ "admission": "subset",
+ "budgets": [
+  150.0,
+  75.0
+ ],
+ "families": {
+  "F": {
+   "budgets": {
+    "150.0": [
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 0,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 1,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 2,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 3,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 4,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 5,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 6,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 7,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 8,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 9,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 10,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 11,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 12,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 13,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 14,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 15,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 16,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 17,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 18,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 19,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 20,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 21,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 22,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 23,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 24,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 25,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 26,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 27,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 28,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 29,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     }
+    ],
+    "75.0": [
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004"
+       ],
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 0,
+      "s_star": 2,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 1,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 2,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 3,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 4,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-005"
+       ],
+       [
+        "exp4-dev-000",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 5,
+      "s_star": 2,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 6,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-004"
+       ],
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-003",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 7,
+      "s_star": 2,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 8,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 9,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004"
+       ],
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 10,
+      "s_star": 2,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004"
+       ],
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 11,
+      "s_star": 2,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 12,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004"
+       ],
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 13,
+      "s_star": 2,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 14,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ],
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003"
+       ]
+      ],
+      "exact": true,
+      "layout": 15,
+      "s_star": 2,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 16,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 17,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 18,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 19,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 20,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 21,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004"
+       ],
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 22,
+      "s_star": 2,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 23,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 24,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003"
+       ],
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 25,
+      "s_star": 2,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-005"
+       ],
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-004"
+       ]
+      ],
+      "exact": true,
+      "layout": 26,
+      "s_star": 2,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004"
+       ],
+       [
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 27,
+      "s_star": 2,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 28,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004"
+       ],
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 29,
+      "s_star": 2,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     }
+    ]
+   },
+   "s": 2,
+   "s_plus_1": 3
+  },
+  "FB+medium": {
+   "budgets": {
+    "150.0": [
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 0,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 1,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 2,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 3,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 4,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 5,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 6,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 7,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 8,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 9,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 10,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 11,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 12,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 13,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 14,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 15,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 16,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 17,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 18,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 19,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 20,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 21,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 22,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 23,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 24,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 25,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 26,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 27,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 28,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 29,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     }
+    ],
+    "75.0": [
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-005"
+       ],
+       [
+        "exp4-dev-000",
+        "exp4-dev-004"
+       ]
+      ],
+      "exact": true,
+      "layout": 0,
+      "s_star": 2,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 1,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 2,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 3,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 4,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-005"
+       ],
+       [
+        "exp4-dev-000",
+        "exp4-dev-004"
+       ]
+      ],
+      "exact": true,
+      "layout": 5,
+      "s_star": 2,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 6,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-003",
+        "exp4-dev-004"
+       ],
+       [
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 7,
+      "s_star": 2,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 8,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 9,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004"
+       ],
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 10,
+      "s_star": 2,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ],
+       [
+        "exp4-dev-000",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 11,
+      "s_star": 2,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004"
+       ],
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 12,
+      "s_star": 2,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-005"
+       ],
+       [
+        "exp4-dev-002",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 13,
+      "s_star": 2,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 14,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ],
+       [
+        "exp4-dev-000",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 15,
+      "s_star": 2,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 16,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 17,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 18,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 19,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 20,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 21,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002"
+       ],
+       [
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 22,
+      "s_star": 2,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 23,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ],
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 24,
+      "s_star": 2,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-003",
+        "exp4-dev-004"
+       ],
+       [
+        "exp4-dev-002",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 25,
+      "s_star": 2,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-005"
+       ],
+       [
+        "exp4-dev-004"
+       ]
+      ],
+      "exact": true,
+      "layout": 26,
+      "s_star": 2,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-004"
+       ],
+       [
+        "exp4-dev-001",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 27,
+      "s_star": 2,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 28,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004"
+       ],
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 29,
+      "s_star": 2,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     }
+    ]
+   },
+   "s": 2,
+   "s_plus_1": 3
+  },
+  "FB+narrow": {
+   "budgets": {
+    "150.0": [
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 0,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 1,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 2,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 3,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 4,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 5,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 6,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 7,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 8,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 9,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 10,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 11,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 12,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 13,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 14,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 15,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 16,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 17,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 18,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 19,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 20,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 21,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 22,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 23,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 24,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 25,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 26,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 27,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 28,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 29,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     }
+    ],
+    "75.0": [
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004"
+       ],
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 0,
+      "s_star": 2,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004"
+       ],
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 1,
+      "s_star": 2,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004"
+       ],
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 2,
+      "s_star": 2,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 3,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004"
+       ],
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 4,
+      "s_star": 2,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-005"
+       ],
+       [
+        "exp4-dev-000",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 5,
+      "s_star": 2,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 6,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-004"
+       ],
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-003",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 7,
+      "s_star": 2,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 8,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 9,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004"
+       ],
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 10,
+      "s_star": 2,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004"
+       ],
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 11,
+      "s_star": 2,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 12,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004"
+       ],
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 13,
+      "s_star": 2,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 14,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ],
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003"
+       ]
+      ],
+      "exact": true,
+      "layout": 15,
+      "s_star": 2,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 16,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 17,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 18,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 19,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 20,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 21,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004"
+       ],
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 22,
+      "s_star": 2,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004"
+       ],
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 23,
+      "s_star": 2,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 24,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003"
+       ],
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 25,
+      "s_star": 2,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-005"
+       ],
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-004"
+       ]
+      ],
+      "exact": true,
+      "layout": 26,
+      "s_star": 2,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004"
+       ],
+       [
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 27,
+      "s_star": 2,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 28,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004"
+       ],
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 29,
+      "s_star": 2,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     }
+    ]
+   },
+   "s": 2,
+   "s_plus_1": 3
+  },
+  "FB+wide": {
+   "budgets": {
+    "150.0": [
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 0,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 1,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 2,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 3,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 4,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 5,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 6,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 7,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 8,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 9,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 10,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 11,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 12,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 13,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 14,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 15,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 16,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 17,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 18,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 19,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 20,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 21,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 22,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 23,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 24,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 25,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 26,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 27,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 28,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 29,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     }
+    ],
+    "75.0": [
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-005"
+       ],
+       [
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 0,
+      "s_star": 2,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-003",
+        "exp4-dev-004"
+       ],
+       [
+        "exp4-dev-000",
+        "exp4-dev-002",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 1,
+      "s_star": 2,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ],
+       [
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 2,
+      "s_star": 2,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ],
+       [
+        "exp4-dev-000",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 3,
+      "s_star": 2,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ],
+       [
+        "exp4-dev-000",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 4,
+      "s_star": 2,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-005"
+       ],
+       [
+        "exp4-dev-000",
+        "exp4-dev-004"
+       ]
+      ],
+      "exact": true,
+      "layout": 5,
+      "s_star": 2,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 6,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-003",
+        "exp4-dev-004"
+       ],
+       [
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 7,
+      "s_star": 2,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ],
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003"
+       ]
+      ],
+      "exact": true,
+      "layout": 8,
+      "s_star": 2,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004"
+       ],
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 9,
+      "s_star": 2,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-004"
+       ],
+       [
+        "exp4-dev-003",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 10,
+      "s_star": 2,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ],
+       [
+        "exp4-dev-001",
+        "exp4-dev-002"
+       ]
+      ],
+      "exact": true,
+      "layout": 11,
+      "s_star": 2,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ],
+       [
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 12,
+      "s_star": 2,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003"
+       ],
+       [
+        "exp4-dev-002",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 13,
+      "s_star": 2,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 14,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ],
+       [
+        "exp4-dev-002",
+        "exp4-dev-003"
+       ]
+      ],
+      "exact": true,
+      "layout": 15,
+      "s_star": 2,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004"
+       ],
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 16,
+      "s_star": 2,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 17,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 18,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 19,
+      "s_star": 1,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-004"
+       ],
+       [
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 20,
+      "s_star": 2,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ],
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-004"
+       ]
+      ],
+      "exact": true,
+      "layout": 21,
+      "s_star": 2,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002"
+       ],
+       [
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 22,
+      "s_star": 2,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003"
+       ],
+       [
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 23,
+      "s_star": 2,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ],
+       [
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 24,
+      "s_star": 2,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-003",
+        "exp4-dev-004"
+       ],
+       [
+        "exp4-dev-000",
+        "exp4-dev-002",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 25,
+      "s_star": 2,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-005"
+       ],
+       [
+        "exp4-dev-004"
+       ]
+      ],
+      "exact": true,
+      "layout": 26,
+      "s_star": 2,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ],
+       [
+        "exp4-dev-000",
+        "exp4-dev-003"
+       ]
+      ],
+      "exact": true,
+      "layout": 27,
+      "s_star": 2,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004"
+       ],
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-005"
+       ]
+      ],
+      "exact": true,
+      "layout": 28,
+      "s_star": 2,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     },
+     {
+      "cover": [
+       [
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003",
+        "exp4-dev-004",
+        "exp4-dev-005"
+       ],
+       [
+        "exp4-dev-000",
+        "exp4-dev-001",
+        "exp4-dev-002",
+        "exp4-dev-003"
+       ]
+      ],
+      "exact": true,
+      "layout": 29,
+      "s_star": 2,
+      "servable": [
+       "exp4-dev-000",
+       "exp4-dev-001",
+       "exp4-dev-002",
+       "exp4-dev-003",
+       "exp4-dev-004",
+       "exp4-dev-005"
+      ],
+      "unservable": []
+     }
+    ]
+   },
+   "s": 2,
+   "s_plus_1": 3
+  }
+ }
+}
