@@ -1,0 +1,2 @@
+{"event": "start", "job": "headroom/headroom", "pid": 89432, "at": "2026-10-06T06:42:27"}
+{"event": "end", "job": "headroom/headroom", "rc": 0, "wall_s": 2084.3, "rows": null, "rows_not_ok": null, "at": "2026-10-06T07:17:12"}

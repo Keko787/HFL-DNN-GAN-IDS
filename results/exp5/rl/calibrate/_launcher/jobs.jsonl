@@ -1,0 +1,32 @@
+{"event": "start", "job": "5.5-calibration-jittery56/g0/g0_s0", "pid": 81520, "at": "2026-10-06T07:17:13"}
+{"event": "start", "job": "5.5-calibration-jittery56/g0/g0_s1", "pid": 41608, "at": "2026-10-06T07:17:13"}
+{"event": "start", "job": "5.5-calibration-jittery56/g0/g0_s2", "pid": 39400, "at": "2026-10-06T07:17:13"}
+{"event": "start", "job": "5.5-calibration-jittery56/g90/g0.9_s0", "pid": 90496, "at": "2026-10-06T07:17:13"}
+{"event": "start", "job": "5.5-calibration-jittery56/g90/g0.9_s1", "pid": 18320, "at": "2026-10-06T07:17:13"}
+{"event": "start", "job": "5.5-calibration-jittery56/g90/g0.9_s2", "pid": 114628, "at": "2026-10-06T07:17:13"}
+{"event": "start", "job": "5.5-calibration-clean/g0/g0_s0", "pid": 53708, "at": "2026-10-06T07:17:13"}
+{"event": "start", "job": "5.5-calibration-clean/g0/g0_s1", "pid": 102948, "at": "2026-10-06T07:17:13"}
+{"event": "start", "job": "5.5-calibration-clean/g0/g0_s2", "pid": 9440, "at": "2026-10-06T07:17:13"}
+{"event": "start", "job": "5.5-calibration-clean/g90/g0.9_s0", "pid": 93476, "at": "2026-10-06T07:17:13"}
+{"event": "start", "job": "5.5-calibration-clean/g90/g0.9_s1", "pid": 17612, "at": "2026-10-06T07:17:13"}
+{"event": "start", "job": "5.5-calibration-clean/g90/g0.9_s2", "pid": 69784, "at": "2026-10-06T07:17:13"}
+{"event": "end", "job": "5.5-calibration-clean/g0/g0_s0", "rc": 0, "wall_s": 2366.5, "rows": null, "rows_not_ok": null, "at": "2026-10-06T07:56:40"}
+{"event": "end", "job": "5.5-calibration-clean/g0/g0_s2", "rc": 0, "wall_s": 2366.4, "rows": null, "rows_not_ok": null, "at": "2026-10-06T07:56:40"}
+{"event": "end", "job": "5.5-calibration-clean/g90/g0.9_s0", "rc": 0, "wall_s": 2366.4, "rows": null, "rows_not_ok": null, "at": "2026-10-06T07:56:40"}
+{"event": "end", "job": "5.5-calibration-clean/g90/g0.9_s1", "rc": 0, "wall_s": 2366.4, "rows": null, "rows_not_ok": null, "at": "2026-10-06T07:56:40"}
+{"event": "end", "job": "5.5-calibration-jittery56/g90/g0.9_s1", "rc": 0, "wall_s": 2488.5, "rows": null, "rows_not_ok": null, "at": "2026-10-06T07:58:42"}
+{"event": "end", "job": "5.5-calibration-jittery56/g90/g0.9_s2", "rc": 0, "wall_s": 3008.6, "rows": null, "rows_not_ok": null, "at": "2026-10-06T08:07:22"}
+{"event": "end", "job": "5.5-calibration-clean/g0/g0_s1", "rc": 0, "wall_s": 3374.6, "rows": null, "rows_not_ok": null, "at": "2026-10-06T08:13:28"}
+{"event": "end", "job": "5.5-calibration-clean/g90/g0.9_s2", "rc": 0, "wall_s": 3856.7, "rows": null, "rows_not_ok": null, "at": "2026-10-06T08:21:30"}
+{"event": "start", "job": "5.5-calibration-clean/evaluate", "pid": 65300, "at": "2026-10-06T08:21:30"}
+{"event": "end", "job": "5.5-calibration-jittery56/g0/g0_s2", "rc": 0, "wall_s": 4052.8, "rows": null, "rows_not_ok": null, "at": "2026-10-06T08:24:46"}
+{"event": "end", "job": "5.5-calibration-jittery56/g0/g0_s1", "rc": 0, "wall_s": 4076.8, "rows": null, "rows_not_ok": null, "at": "2026-10-06T08:25:10"}
+{"event": "end", "job": "5.5-calibration-clean/evaluate", "rc": 0, "wall_s": 1324.2, "rows": null, "rows_not_ok": null, "at": "2026-10-06T08:43:34"}
+{"event": "start", "job": "5.5-calibration-clean/report", "pid": 80844, "at": "2026-10-06T08:43:34"}
+{"event": "end", "job": "5.5-calibration-clean/report", "rc": 0, "wall_s": 6.0, "rows": null, "rows_not_ok": null, "at": "2026-10-06T08:43:40"}
+{"event": "end", "job": "5.5-calibration-jittery56/g0/g0_s0", "rc": 0, "wall_s": 5225.0, "rows": null, "rows_not_ok": null, "at": "2026-10-06T08:44:18"}
+{"event": "end", "job": "5.5-calibration-jittery56/g90/g0.9_s0", "rc": 0, "wall_s": 5225.0, "rows": null, "rows_not_ok": null, "at": "2026-10-06T08:44:18"}
+{"event": "start", "job": "5.5-calibration-jittery56/evaluate", "pid": 66892, "at": "2026-10-06T08:44:18"}
+{"event": "end", "job": "5.5-calibration-jittery56/evaluate", "rc": 0, "wall_s": 1996.3, "rows": null, "rows_not_ok": null, "at": "2026-10-06T09:17:34"}
+{"event": "start", "job": "5.5-calibration-jittery56/report", "pid": 14476, "at": "2026-10-06T09:17:34"}
+{"event": "end", "job": "5.5-calibration-jittery56/report", "rc": 0, "wall_s": 2.0, "rows": null, "rows_not_ok": null, "at": "2026-10-06T09:17:36"}
