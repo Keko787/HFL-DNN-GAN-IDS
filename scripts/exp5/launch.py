@@ -2009,22 +2009,34 @@ def p512_levels(s: Settings, jobs: List[Job], problems: List[str]) -> Optional[s
         sys.path.insert(0, str(REPO))
     from experiments.analysis.traces_scorer import load_status_csv, score_traces
     band = s.get("p512.not_ready_band")
-    print(f"  p512: share of H1's Pass-1 contacts that found no update ready, by median "
-          f"fit time (band {band[0]:g}-{band[1]:g})")
+    # The band is read after each mule's first mission (decided 6 Oct 2026): every
+    # fit starts at the first takeoff, so the first mission's contacts, seconds
+    # later, find few updates ready at any level (the smoke run: 5 of 6 at 45 s),
+    # which would add about 20 points to every level. The share over every
+    # mission is printed beside it.
+    print(f"  p512: share of H1's Pass-1 contacts after the first mission that found no "
+          f"update ready, by median fit time (band {band[0]:g}-{band[1]:g}); every "
+          f"mission's in brackets")
     levels: List[Tuple[float, Optional[float]]] = []
     for j in p512:
         median = float(j.args[j.args.index("--train-time-s") + 1])
         csv_path, traces = REPO / j.out, REPO / (j.out[:-4] + "_traces")
         shares: List[float] = []
+        overall: List[float] = []
         if csv_path.exists() and traces.is_dir():
             for sc in score_traces(traces, compute_columns=True,
                                    status_csv=load_status_csv(csv_path)):
-                if sc.compute is not None and sc.compute.not_ready_share is not None:
-                    shares.append(float(sc.compute.not_ready_share))
+                c = sc.compute
+                if c is not None and c.not_ready_share_after_first is not None:
+                    shares.append(float(c.not_ready_share_after_first))
+                if c is not None and c.not_ready_share is not None:
+                    overall.append(float(c.not_ready_share))
         share = sum(shares) / len(shares) if shares else None
         levels.append((median, share))
+        every = f" [{sum(overall) / len(overall):5.1%}]" if overall else ""
         print(f"    median {median:6.0f} s: " + ("no scored trials" if share is None else
-                                                 f"{share:5.1%} not ready (n = {len(shares)})"))
+                                                 f"{share:5.1%} not ready{every} "
+                                                 f"(n = {len(shares)})"))
     median = pick_spread(levels, band)
     if median is None:
         problems.append(f"p512: no level's not-ready share lies in {band}; change "
