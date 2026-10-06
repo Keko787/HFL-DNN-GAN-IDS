@@ -181,4 +181,11 @@ Mean held-out return over each family's cells (the four jittery cells above; the
 
 ## Decision
 
-*Open as of 6 Oct 2026, about 10:00. The machine is idle meanwhile. Record the choice here, with its date, before the RL campaign goes on.*
+**Decided 6 Oct 2026, 13:58: option A.** The sweep runs as pre-registered, with the default learner settings, and `rl-e3` runs right after it.
+
+**Why:**
+- It is the pre-registered test, so its verdict counts in the paper.
+- It lands before the 8 Oct deadline.
+- FeRRy's lead over the state-of-the-art baselines comes from batch 1 (F and FX against H1 and D1–D4), so it does not depend on the sweep's outcome.
+
+Option B's screen stays fixed above. If the sweep reads flat and the copy-FX diagnosis matters to the paper or its reviewers, it can run in the revision window.
