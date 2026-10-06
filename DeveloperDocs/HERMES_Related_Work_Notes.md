@@ -16,6 +16,81 @@ a stronger position than pretending it does.
 **Status:** findings verified where marked; citation-readiness tracked in §7. Nothing here is
 drafted prose yet.
 
+**Updated 6 Oct 2026 for FeRRy and IPDPS 2027: §0 below.** §§1–8 are the August notes for HERMES,
+kept as written. Their arm names `B1` (MAX-AoI) and `B2` (Oort) are `D1` and `D2` now, and §5's S3c
+honesty note belongs to HERMES, not to FeRRy's mechanisms. The arms themselves, with their ports and
+batch 1's numbers, are in [`HERMES_SOTA_Baseline_Candidates.md`](HERMES_SOTA_Baseline_Candidates.md) §0.
+
+---
+
+## 0. Current state — FeRRy (6 Oct 2026)
+
+### 0.1 What changed since August
+
+- **The system is now FeRRy.** It makes five claims (the build plan's ledger):
+  - **C1 — reach is a decision:** the band class chosen before takeoff sets range and rate.
+  - **C2 — one derived objective:** FedEx's bound plus a coverage term, used as the plan score, the reward and the merge weight.
+  - **C3 — one deadline, three roles:** it admits, orders, and cuts off the merge.
+  - **C4 — two clocks:** a plan at the dock, and the (band, stop) choice re-decided at each stop.
+  - **C5 — fairness under physical cost.**
+- **The comparison widened.** It was Oort, FedCS and MAX-AoI. It now adds a mobile-transporter prior (FedEx), a value-weighted freshness index (Cui), asynchronous-FL merge rules, UAV asynchronous FL (Zhai, Ho), and a learned UAV planner (Chen).
+- **§1's taxonomy still holds, with one amendment.** The mule role is no longer nearly empty: FedEx (mobile transporters), Mestoukirdi (discrete stops) and Zhai (UAV-enabled asynchronous FL) work in or near it. The thesis, that most UAV-FL work restores connectivity while FeRRy substitutes for it, still frames the field. **But FedEx is a direct competitor, not an outsider, and must be treated as one** (§0.3).
+
+### 0.2 Each claim and the work it answers
+
+| Claim | The work it engages | The arm or study that tests it |
+|---|---|---|
+| C1 Reach is a decision | FedEx and most mule work fix reach (one link model); Zhai's oracle optimises band and route offline | FB+ (band pinned), O1 (oracle gap): Study 5.4 |
+| C2 One derived objective | FedEx's convergence bound (the Δ term), Zhai's coverage term; hand-set rewards in DRL work (Ho, Chen) | F−dwell, F−cov, F·hand: Study 5.7 |
+| C3 One deadline, three roles | FedCS (one round deadline), Oort (preferred duration), FedAsync and Yang (staleness cutoff), FedBuff, Async-HFL | F·round, F·pref, F·add: Study 5.2. The merge rules: Study 5.1 |
+| C4 Two clocks | Chen (a learned per-step next stop), Ho (a monolithic DDPG agent) | E3, M1, FX against FQ: Studies 5.5 and 5.6 |
+| C5 Fairness under physical cost | MAX-AoI, Oort's staleness bonus, Cui's Whittle index on value-weighted AoU | D1, D2, D3, F−cap, F−prio: Study 5.8 |
+
+### 0.3 New threads
+
+**Mobile-transporter FL — FedEx** (Bian, Shen, Chen, Xu, IEEE TMC 24(6), 2025).
+- **The closest prior.** Transporters carry updates between devices and the server.
+- **It assigns devices to transporters** (Gibbs sampling) and **plans each tour** (CARP, a 2-OPT visit-all tour).
+- **It merges by 1/N accumulation** on return, under a travel-only convergence bound.
+- **It has no deadlines, band choice, admission gate or re-plan, and it never skips a device.**
+- **FeRRy's difference, stated as testable properties:** reach chosen per mission (C1); a bound extended with dwell, upload and coverage (C2); deadlines that admit and cut off (C3); per-stop re-decision (C4); an age cap under a budget (C5).
+- **Batch 1's evidence, to be written as found (arm D4 is FedEx's route with FeRRy's merge; D4fedex has its own merge):**
+  - At N = 6 with one mule, F reaches τ sooner than D4 at both budgets: 26% at the knee (194 against 264 s) and 33% under stress (178 against 264 s).
+  - At N = 12 and 24, D4 ties F.
+  - FedEx's own merge (D4fedex) is what falls behind: it takes 101 s against F's 52 s with three mules.
+  - So the honest claim is about the merge, and about small fleets under binding budgets, **not** "FeRRy beats FedEx" in general.
+
+**Value-weighted freshness — Cui et al.** (IEEE TMC 23(6), 2024).
+- **What it is:** data-value-based asynchronous FL for UAV swarms under unstable links. Its Whittle index on value-weighted AoU is optimal when selection is free.
+- **Ported as D3,** the fairness reference. Its sequential merge (`agg:seq`) was decided out, since it needs a protocol change.
+- **The claim:** F stays within a stated margin of D3's Network AoU while closing rounds under a travel budget. **Never "fairer than Cui":** in Cui's model the index is optimal.
+
+**Asynchronous FL and staleness-aware merging.**
+- **FedAsync** (Xie et al., 2019): the staleness hinge FeRRy's `agg:cutoff` starts from.
+- **Yang et al.** (IEEE JSAC 2025): the cutoff.
+- **Shen et al.** (IEEE IoTJ 2024): the proximal term.
+- **FedBuff** (Nguyen et al., AISTATS 2022): count-triggered buffering.
+- **Async-HFL** (Yu et al., IoTDI 2023): hierarchical staleness decay.
+- **Where this thread lives in the paper:** C3's merge role, tested in Study 5.1. FeRRy's angle is that the deadline that admits a device also sets its merge cutoff (one deadline, three roles), rather than a separately tuned staleness function.
+
+**UAV-enabled asynchronous FL.**
+- **Zhai, Yuan, Wang, Yang** (IEEE TWC 24(3), 2025): a coverage term for devices the deadline excludes, which FeRRy's objective adopts (C2), and an offline joint design that the O1 oracle follows for the optimality gap.
+- **Ho et al.** (IAAA 2025): an energy-efficient DDPG agent for UAV-assisted asynchronous FL, which M1 follows as "one agent over everything, no gates".
+
+**Learned UAV planning — Chen et al.** (IEEE GLOBECOM Workshops 2023).
+- **What it is:** model-aided federated RL for multi-UAV trajectory planning.
+- **Ported as E3:** a single-agent DQN choosing the next stop. The port has stops instead of grid moves, one agent, and no model-aided learning, and **it is never called FedQMIX.**
+- **The context it sits in:** Study 5.5's calibration found FeRRy's own learned score at FX's level, not above it ([findings](Experiment_5_RL_Calibration_Findings.md)). The paper's learning claim depends on the sweep's verdict.
+
+### 0.4 Guardrails added for FeRRy (on top of §6)
+
+- **Do not claim** FeRRy beats FedEx across the board. Claim what batch 1 shows: F leads at N = 6 with one mule; FedEx's route ties it from N = 12; FedEx's own merge falls behind.
+- **Do not say** "fairer than Cui". Say "within a margin of the index that is optimal in Cui's model, while paying for travel".
+- **Do not call** E3 FedQMIX, or D5 FedCS without "degraded", or D2 Oort without "statistical utility" and its deviations.
+- **Do not claim** that learning helps in flight unless Study 5.5's verdict reads rising. The calibration read flat, and FX is FeRRy's filling if the sweep agrees.
+- **Do not claim** Byzantine robustness (a stated non-goal), or results from studies not yet run: H0, E3, O1, D5 and the aggregation rules are in batches 2–3.
+- **Do not cite** the newer papers from the build plan's summaries alone. §7's new rows are not full-text checked here.
+
 ---
 
 ## 1. The organizing distinction — use this as the section's spine
@@ -201,8 +276,30 @@ Guardrails, so the revision does not overreach in either direction:
 | Privacy-Preserving FL for UAV (A3C) | — | ⚠ **not cleared** |
 | Contribution-Based Resource Allocation | — | ⚠ **not cleared** |
 | Broad UAV-FL sweep (client / relay / aggregation / Byzantine) | — | ⚠ triaged **by architecture class** from abstracts — enough to exclude as arms, **not** to cite |
+| **Added for FeRRy (Oct 2026)** — from the build plan's Sources (the novelty audit, 23 Sep 2026); this document records no full-text check | | |
+| FedEx — Bian, Shen, Chen, Xu | IEEE TMC 24(6), 2025 | ⚠ read before citing (the closest prior; arm D4) |
+| Data Value Based Async FL for UAV Swarm — Cui, Yang, Wu, Feng, Hu | IEEE TMC 23(6), 2024 | ⚠ read before citing (arm D3) |
+| Model-Aided Federated RL for Multi-UAV Trajectory Planning — Chen, Esrafilian, Bayerlein, Gesbert, Caccamo | IEEE GLOBECOM Workshops 2023 | ⚠ read before citing (arm E3; a comparison note, `HERMES_vs_Chen2023_Model-Aided_FedQMIX.md`, is not in the repository) |
+| UAV-Enabled Asynchronous FL — Zhai, Yuan, Wang, Yang | IEEE TWC 24(3), 2025 | ⚠ read before citing (coverage term; arm O1) |
+| Energy-Efficient DDPG-Based UAV-Assisted Async FL — Ho et al. | IAAA 2025 | ⚠ read before citing (arm M1) |
+| FedAsync — Xie et al. | 2019 (arXiv) | ⚠ read before citing |
+| FedBuff — Nguyen et al. | AISTATS 2022 | ⚠ read before citing |
+| Async-HFL — Yu et al. | IoTDI 2023 | ⚠ read before citing |
+| Yang et al. (age cutoff; contextual bandit) | IEEE JSAC 2025 | ⚠ read before citing; full title not held here |
+| Shen et al. (proximal term) | IEEE IoTJ 2024 | ⚠ read before citing; full title not held here |
+| Chen et al. (mobility as mixing, the theory track) | IEEE TVT 2025 | ⚠ the full reference is not held in the repository |
 
 ## 8. Open items for the revision
+
+**Added 6 Oct 2026 (FeRRy):**
+
+- [ ] Read the new papers in §7 in full before citing any, starting with FedEx, the closest prior, and Cui. Record what each check changes, as §2 did for Oort and FedCS.
+- [ ] Recover the novelty audit (Revision 3, 23 Sep 2026) and `HERMES_vs_Chen2023_Model-Aided_FedQMIX.md`. Both are cited by the build plan and absent from the repository.
+- [ ] Find the full references for Yang (JSAC 2025), Shen (IoTJ 2024) and Chen (TVT 2025).
+- [ ] Write §0.3's FedEx paragraph from batch 1's numbers. Revisit it once batch 2 adds E3, H0 and the aggregation rules.
+- [ ] Re-check §0.4's learning guardrail against Study 5.5's verdict.
+
+**From August:**
 
 - [ ] Confirm the `rpow-d` naming appears in the AISTATS version (§7) — our timing-boundary argument
       names it.

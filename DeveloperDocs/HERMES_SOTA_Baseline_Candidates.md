@@ -1,9 +1,83 @@
 # SOTA baseline candidates — full-text verified
 
-**Status: VERIFIED for every candidate that affects the decision.** The first pass was
+**Current state (6 Oct 2026): §0 below.** FeRRy's Exp 5 runs nine state-of-the-art arms (H0, D1–D5,
+E3, O1, M1) and six aggregation rules, chosen in the build plan's Baselines section
+([`FeRRy_Build_Plan.html`](FeRRy_Build_Plan.html)). Batch 1 has measured D1–D4 against FeRRy. **§§1–7
+record the August 2026 selection for Exp 4, kept as written:** the arms named `B1` and `B2` there are
+`D1` (MAX-AoI) and `D2` (Oort) now.
+
+**Status of the August pass: VERIFIED for every candidate that affected the decision then.** The first pass was
 abstract-level; this revision checked the load-bearing rules against the papers themselves. **It
 overturned the central conclusion.** Candidates that do not affect the choice are marked
 ⚠ *still abstract-level* and must not be cited without reading them.
+
+---
+
+## 0. Current state — FeRRy / Exp 5 (6 Oct 2026)
+
+### 0.1 Three families of arms
+
+The build plan's rule:
+- **SOTA arms** reproduce a published method as faithfully as a mule allows.
+- **FeRRy arms** are the system with one mechanism switched off, so each contribution (C1–C5) has a test that removes it.
+- **Aggregation arms** vary the merge (L3) with the route held fixed.
+
+**Attribution rule:** scheduler arms vary the route with the merge fixed at `agg:cutoff`, and aggregation arms vary the merge with the route fixed, never both at once. D4 runs twice, with its own merge and with FeRRy's, so that its route and its merge are judged separately.
+
+### 0.2 The SOTA arms
+
+**Verification column:** the August pass (§2, §6) checked FedCS, Oort and Power-of-Choice against full text. The newer arms' rules are as the build plan describes them, taken from the novelty audit of 23 Sep 2026 (not in this repository); **this document does not record a full-text check of them.** Read each before citing it.
+
+| Arm | Method and source | What it decides | The port, and its deviations | What it isolates against FeRRy | Built / run | Verified |
+|---|---|---|---|---|---|---|
+| **H0** | Synchronous FedAvg over a live link, every client every round | Nothing | A `dead_zone` share of clients is unreachable under jitter; the rest succeed with probability rel × link quality | Whether muling pays when links fail (under jitter its AUC fell from 0.943 to 0.587 while H1 held 0.922–0.933) | built; Study 5.3 in batch 2, on the wall clock only | n/a |
+| **D1** | MAX-AoI greedy, the standard AoI comparator (was `B1`) | Who is served, and in what order | Oldest contact first, admitted through the budget walk; age runs from the last CLEAN (Phase 0 fix) | Value- and deadline-blind fairness | built; **run in batch 1** | named comparator (§6) |
+| **D2** | Oort's statistical utility, Lai et al., OSDI 2021 (was `B2`) | Who is served, and in what order | \|B_i\|·\|loss\| plus the staleness bonus; no system-speed term; mean, not RMS, loss; L(i) is the last CLEAN round. The utility is not normalised before the bonus, and the bonus is 0.1·log R/√L rather than √(0.1·log R/L), so it is about 1e-4 of the utility | A learned-utility selector with an exploration bonus, the direct rival to window widening | built; **run in batch 1** | ✅ full text (§2) |
+| **D3** | Whittle index on weighted AoU, Cui et al., IEEE TMC 23(6), 2024 | Who is served | Closed-form index over (age, connected); ω_i from Oort's utility instead of a Shapley estimate; ρ_i from reachability history | The fairness reference: optimal for value-weighted age when selection is free. FeRRy should match it while paying for travel | built; **run in batch 1** | ⚠ not recorded |
+| **D4** | FedEx-Async with CARP, Bian, Shen, Chen, Xu, IEEE TMC 24(6), 2025 | Device-to-mule assignment and each mule's tour | Gibbs assignment, a 2-OPT visit-all tour, 1/N accumulation applied on return; no gates, band, deadline or re-plan. Runs as `D4fedex` (its own merge, `agg:fedex`) and `D4` (route-only, `agg:cutoff`) | **The closest prior:** a travel-only bound, fixed reach, never skips. Report how often its tour overruns the budget | built; **run in batch 1** (both forms) | ⚠ not recorded |
+| **D5** | FedCS, degraded, Nishio and Yonetani, ICC 2019 | Who joins this round | The largest set that fits one round deadline, with last-known state in place of the Resource Request; labelled degraded. Reads device training time once it exists (5.12) | Admission by one round deadline against per-device deadlines | built; Study 5.12 in batch 3 | ✅ full text (§2) |
+| **E3** | DQN over the contact graph, after Chen et al., IEEE GLOBECOM Workshops 2023 | The next stop, at each arrival | Single agent; Chen's observation design; feasibility mask; bytes reward. **Never labelled FedQMIX**; scored on update yield and round closure, never bytes. As built: a numpy port trained in FerrySim, a whole scheduler picking each next stop among those S3b's budget admits; deviations: stops, not grid moves; one agent; no model-aided learning; the pair learner's masked double DQN | A learned per-step policy with none of FeRRy's deadline, plan-time or coverage machinery | built; trains in `rl-e3` (6 Oct); stack trials in batch 2 | ⚠ not recorded |
+| **O1** | Offline oracle, after Zhai, Yuan, Wang, Yang, IEEE TWC 24(3), 2025 | Everything, offline | Exhaustive band class × clustering × route × per-stop band for N ≤ 6 under visit-within-S | The optimality gap for Study 5.4 | built; Study 5.4 in batch 2 | ⚠ not recorded |
+| **M1** | Monolithic agent, after Ho et al., IAAA 2025 | (band, stop), with no gates | One DDQN over the full product, with a positions-plus-phase state; no plan, no mask | Whether the gates earn their keep | **not built**: only if Study 5.5 keeps a learned score | ⚠ not recorded |
+| cite only | Mestoukirdi et al., GLOBECOM 2022; Power-of-Choice `pow-d`, `rpow-d`; Yang et al., JSAC 2025 (contextual bandit) | — | Mestoukirdi optimises scheduling and trajectory jointly, so it cannot be ported into a fixed router; `pow-d` needs a loss query before selection. `rpow-d` and Yang's bandit are optional selection-only arms if a reviewer asks | — | citation | Mestoukirdi and Power-of-Choice ✅ (§6) |
+
+### 0.3 The aggregation arms (Study 5.1, batch 2)
+
+| Rule | Merge | Source | Role |
+|---|---|---|---|
+| `agg:plain` | `num_examples`-weighted mean | HERMES | The baseline every rule must beat |
+| `agg:cutoff` | n_i·v_i·s(age_i), zero past a_max; FedProx on devices | FedAsync's hinge (Xie et al., 2019) with Yang et al.'s cutoff (JSAC 2025); Shen et al.'s proximal term (IoTJ 2024) | FeRRy's rule |
+| `agg:fedbuff` | Apply after K updates arrive, K = slice size | Nguyen et al., AISTATS 2022 | Count-triggered against deadline-triggered |
+| `agg:asynchfl` | Exponential staleness decay at the mule and at the cluster, plus a proximal term | Yu et al., Async-HFL, IoTDI 2023 | A hierarchical-decay reference |
+| `agg:seq` | Carry the model device to device; the route is the SGD sequence | After Cui et al., TMC 2024 | **Decided out** (it needs a protocol change) |
+| `agg:fedex` | 1/N accumulation, applied when the mule returns | FedEx-Async | D4's faithful merge |
+
+### 0.4 What batch 1 measured (6 Oct 2026)
+
+Time to τ = 0.71 in simulated seconds, lower is better. Twenty paired trials per cell; Holm within each study. The scores are in [`results/exp5/scores/b1/`](../results/exp5/scores/b1/index.md); the arm in bold is the faster one where the difference is a claim.
+
+| Cell | F (FeRRy) | H1 | D1 | D2 | D3 | D4 (FedEx route) | D4fedex (FedEx route and merge) |
+|---|---|---|---|---|---|---|---|
+| N = 6, 1 mule, knee | **194** | 282 | 282 | 266 | 280 | 264 | 281 (n.s.) |
+| N = 6, 1 mule, stress | **178** against D4 | 220 (n.s.) | 238 (n.s.) | 229 (n.s.) | 209 (n.s.) | 264 | 281 (n.s.) |
+| N = 6, 3 mules (both budgets) | **52** against D4fedex | 64–65 (n.s.) | 64–65 (n.s.) | 64–65 (n.s.) | 64–65 (n.s.) | 55 (n.s.) | 101 |
+| N = 12, 1 mule, knee | 486 | 589 (n.s.) | — | — | 526 (n.s.) | 459 (n.s.) | — |
+| N = 24, 1 mule, knee | **749** against H1, D3 | 951 | — | — | 911 | 752 (n.s.) | — |
+| N = 12, 2 mules | 226 | 263 (n.s.) | — | — | — | 222 (n.s.) | — |
+| N = 12, 3 mules | 151 (FX 102, a claim for FX) | 165 (n.s.) | — | — | — | 128 (n.s.) | — |
+| N = 18, 3 mules | 186 | 149 (n.s.) | — | — | — | 186 (n.s.) | — |
+
+**How to read it:**
+- **FeRRy beats every SOTA arm only at N = 6 with one mule at the knee budget**, by 26–31%.
+- **At N = 12 and 24, D4 (FedEx's route with FeRRy's merge) ties F.** F still beats H1 and D3 at N = 24, by 18–21%.
+- **Under the stress budget, only D4 is beaten.**
+- **With three mules, nothing separates,** except FedEx's own merge (D4fedex), which loses to F. The budget never binds there, since each mule serves two devices.
+- **So FedEx's route is competitive as N grows, and its merge is what costs it.** That is the attribution the D4/D4fedex pair was built for. Write it as found.
+- **Not run yet:**
+  - H0, E3 and O1 are in batch 2.
+  - D5 is in batch 3.
+  - The aggregation arms are Study 5.1, in batch 2.
+  - M1 is built only if 5.5 keeps a learned score; the calibration read flat ([findings](Experiment_5_RL_Calibration_Findings.md)).
 
 **Bottom line up front:** the first pass recommended **FedCS** and dismissed **Oort** as
 un-implementable. The full text says the opposite. FedCS polls clients before selecting; Oort is
@@ -172,13 +246,14 @@ table is the evidence that it generalises beyond the three Tier A papers.
       So **retroactive scoring is impossible for any policy**, not just Oort — there is no trace to
       replay. MAX-AoI is affected identically: last-served time exists at runtime and is discarded.
 
-- [ ] ⚠ **Retain event traces BEFORE the matrix runs.** This is the load-bearing action. The
+- [x] **Done since:** `--keep-event-traces` keeps each trial's run-dir, and every Exp 5 stage passes it. The trace scorer re-parses them, and the traces are archived per stage (`exp5 pack`). *(The August text follows.)*
+      ⚠ **Retain event traces BEFORE the matrix runs.** This is the load-bearing action. The
       driver already calls `shutdown_all(cleanup_tmpdir=False)` and only deletes in the `finally`,
       so preserving the JSONL is a small, opt-in change (`--keep-event-traces` → copy the run-dir
       alongside the CSV). **Without it we will pay for the entire matrix and still be unable to
       score any new baseline against it** — forcing a third full re-run the first time a reviewer
       asks for another comparator. With it, every future baseline is a re-parse.
-- [ ] Fairness statement: same mobility, seeds, budget, metrics — written down before running.
+- [x] Fairness statement: same mobility, seeds, budget, metrics — written down before running. **Done for Exp 5:** every arm of a cell flies the same seeds (sha256 of base seed, cell and trial, never the arm), the same budgets and the same metrics, all fixed in `scripts/exp5/params.toml` before each stage ran.
 - [ ] ⚠ The three candidates still at abstract level (Data-Efficient Energy-Aware, A3C
       Privacy-Preserving, Contribution-Based) are **not** cleared for citation. They are not
       recommended, so this does not block Phase 2 — but do not cite them without reading them.
@@ -218,6 +293,20 @@ Checked 2026-08-13 against full text, not abstracts:
   point somewhere that label appears.
 - **UAV-Aided Multi-Community FL** — Mestoukirdi, Esrafilian, Gesbert & Li. **IEEE GLOBECOM 2022**
   (SAC Aerial Communications) · [arXiv:2206.02043](https://arxiv.org/abs/2206.02043)
+
+**Added for FeRRy (Sep–Oct 2026), as the build plan's Sources list them.** ⚠ This document records no full-text check of these; read each before citing it.
+
+- **FedEx** — Bian, Shen, Chen, Xu, *Indirect-Communication Federated Learning via Mobile Transporters*. **IEEE TMC 24(6), 2025.** The closest prior (arm D4).
+- **Cui et al.** — Cui, Yang, Wu, Feng, Hu, *Data Value Based Asynchronous FL for UAV Swarm Under Unstable Communication*. **IEEE TMC 23(6), 2024.** The Whittle index (arm D3) and the sequential merge (`agg:seq`, decided out).
+- **Chen et al.** — Chen, Esrafilian, Bayerlein, Gesbert, Caccamo, *Model-Aided Federated RL for Multi-UAV Trajectory Planning in IoT Networks*. **IEEE GLOBECOM Workshops 2023.** The source of arm E3; never label E3 "FedQMIX".
+- **Zhai et al.** — Zhai, Yuan, Wang, Yang, *UAV-Enabled Asynchronous FL*. **IEEE TWC 24(3), 2025.** The coverage term and the offline oracle (arm O1).
+- **Ho et al.** — *Energy-Efficient DDPG-Based UAV-Assisted Asynchronous FL*. **IAAA 2025.** The monolithic agent (arm M1, built only if 5.5 keeps a learned score).
+- **FedAsync** — Xie et al., 2019. The staleness hinge in `agg:cutoff`.
+- **FedBuff** — Nguyen et al., **AISTATS 2022**. `agg:fedbuff`.
+- **Async-HFL** — Yu et al., **IoTDI 2023**. `agg:asynchfl`.
+- **Yang et al.** — **IEEE JSAC 2025**: the age cutoff in `agg:cutoff`, and a contextual-bandit selector (cite only).
+- **Shen et al.** — **IEEE IoTJ 2024**: the proximal term in `agg:cutoff`.
+- **Chen et al.** — **IEEE TVT 2025**: the theory track's citation for mobility as mixing. The full reference is not held in the repository.
 
 **Other sources:**
 
