@@ -42,6 +42,12 @@ Levers change a setting for one run without editing params.toml: --trials,
 recorded in the manifest of every stage the run starts. --study and --arms
 narrow which jobs run.
 
+The machine limits (params.toml [machine] max_jobs, max_device_processes,
+mem_budget_gb, and [rl] max_jobs) may be "auto": sized for the host that runs,
+by scaling the host the campaign was sized on (resolve_machine). `check`
+prints what they come to and each manifest records it. `check` also warns
+when the session timeouts were measured on another host.
+
 Stages, in order (each fills in settings the next one needs; see params.toml):
 
     ttl      the session-TTL pilot: fit_time_probe.py at each N
@@ -227,6 +233,7 @@ class Settings:
         self.data = data
         self.missing: List[str] = []
         self.overrides: List[str] = []     # the command line's changes, for the manifest
+        self.auto: List[str] = []          # the "auto" limits as sized for this host
 
     def get(self, key: str, default: Any = KeyError) -> Any:
         node: Any = self.data
@@ -248,7 +255,75 @@ class Settings:
 def load_settings(path: Path) -> Tuple[Settings, str]:
     # utf-8-sig: Windows editors (Notepad, PowerShell 5.1) may write a BOM.
     text = path.read_text(encoding="utf-8-sig")
-    return Settings(tomllib.loads(text)), text
+    s = Settings(tomllib.loads(text))
+    resolve_machine(s)
+    return s, text
+
+
+#: "auto" limits scale the host the campaign was sized on (5 Oct 2026: 8 physical
+#: cores, 16 logical, 94.7 GB), where six N = 6 jobs (36 training processes), a
+#: 75 GB budget and 14 RL trainings side by side ran cleanly; there they give
+#: exactly those values.
+AUTO_DEVICES_PER_CORE = 36 / 8       # training processes per physical core
+AUTO_DEVICES_PER_THREAD = 36 / 16    # and per logical CPU; the smaller binds
+AUTO_JOB_DEVICES = 6                 # max_jobs: as many N = 6 jobs as the devices allow
+AUTO_MEM_SHARE = 0.8                 # mem_budget_gb: of the RAM, the rest left to the OS
+AUTO_RL_SPARE = 2                    # rl.max_jobs: one training per logical CPU, less these
+
+
+def host_info() -> Dict[str, Any]:
+    """This host as the manifests record it (physical CPUs and RAM need psutil)."""
+    host: Dict[str, Any] = {"platform": platform.platform(), "machine": platform.machine(),
+                            "processor": platform.processor(), "logical_cpus": os.cpu_count()}
+    try:
+        import psutil
+        host["physical_cpus"] = psutil.cpu_count(logical=False)
+        host["ram_gb"] = round(psutil.virtual_memory().total / 2**30, 1)
+    except ImportError:
+        pass
+    return host
+
+
+def resolve_machine(s: Settings, host: Optional[Dict[str, Any]] = None) -> None:
+    """Size each "auto" limit of [machine] (and [rl] max_jobs) for this host.
+
+    A number is kept as it is. Each value sized here is noted in ``s.auto``,
+    which `check` prints and the manifest records beside params.toml's text.
+    The levers (--jobs, --mem-gb, --devices) and --set apply after this, and
+    win. The limits only pace the scheduler: no job's arguments depend on them,
+    except the TTL probe's side-by-side count (the load it measures)."""
+    host = host if host is not None else host_info()
+    logical = int(host.get("logical_cpus") or 1)
+    physical = int(host.get("physical_cpus") or logical)
+
+    def auto(key: str) -> bool:
+        value = s.get(key, None)
+        return isinstance(value, str) and value.strip().lower() == "auto"
+
+    def size(key: str, value: Any, why: str) -> None:
+        set_dotted(s.data, key, value)
+        s.auto.append(f"{key} = {value:g} ({why})")
+
+    if auto("machine.max_device_processes"):
+        n = max(AUTO_JOB_DEVICES, int(min(AUTO_DEVICES_PER_CORE * physical,
+                                          AUTO_DEVICES_PER_THREAD * logical)))
+        size("machine.max_device_processes", n,
+             f"the smaller of {AUTO_DEVICES_PER_CORE:g} x {physical} physical cores and "
+             f"{AUTO_DEVICES_PER_THREAD:g} x {logical} logical CPUs")
+    if auto("machine.max_jobs"):
+        devices = int(s.get("machine.max_device_processes"))
+        size("machine.max_jobs", max(1, devices // AUTO_JOB_DEVICES),
+             f"{devices} training processes // {AUTO_JOB_DEVICES}, one N = 6 job's")
+    if auto("machine.mem_budget_gb"):
+        ram = host.get("ram_gb")
+        if not ram:
+            sys.exit('machine.mem_budget_gb = "auto" reads the RAM through psutil, which is '
+                     'missing: install it, or give a number (--mem-gb GB)')
+        size("machine.mem_budget_gb", float(math.floor(AUTO_MEM_SHARE * float(ram))),
+             f"{AUTO_MEM_SHARE:g} x {float(ram):.1f} GB of RAM, rounded down")
+    if auto("rl.max_jobs"):
+        size("rl.max_jobs", max(1, logical - AUTO_RL_SPARE),
+             f"{logical} logical CPUs less {AUTO_RL_SPARE}")
 
 
 # --------------------------------------------------------------------------- #
@@ -1357,16 +1432,47 @@ def environment(threads: Dict[str, str]) -> Dict[str, Any]:
             versions[name] = metadata.version(name)
         except metadata.PackageNotFoundError:
             versions[name] = None
-    host: Dict[str, Any] = {"platform": platform.platform(), "machine": platform.machine(),
-                            "processor": platform.processor(), "logical_cpus": os.cpu_count()}
-    try:
-        import psutil
-        host["physical_cpus"] = psutil.cpu_count(logical=False)
-        host["ram_gb"] = round(psutil.virtual_memory().total / 2**30, 1)
-    except ImportError:
-        pass
     return {"python": sys.version, "executable": sys.executable, "packages": versions,
-            "threads": threads, "host": host}
+            "threads": threads, "host": host_info()}
+
+
+def _host_text(host: Dict[str, Any]) -> str:
+    return (f"{host.get('physical_cpus', '?')} physical / {host.get('logical_cpus', '?')} "
+            f"logical CPUs, {host.get('ram_gb', '?')} GB, {host.get('processor') or '?'}, "
+            f"{host.get('platform', '?')}")
+
+
+def pilot_host_note(out_root: str) -> Optional[str]:
+    """Whether the session timeouts in use were measured on another host.
+
+    The TTL pilot's timeouts are wall-clock fit times on the CPU that ran it, so
+    stack trials on another host fly timeouts that host never measured. Reads
+    the host from the TTL stage's latest manifest under out_root (else under
+    results/exp5, where params.toml's timeouts came from); None when it is
+    this host, or when no TTL manifest is found."""
+    manifests: List[Path] = []
+    for root in dict.fromkeys((out_root, "results/exp5")):
+        manifests = sorted((REPO / root / STAGE_DIR["ttl"] / "_launcher").glob("manifest_*.json"))
+        if manifests:
+            break
+    if not manifests:
+        return None
+    try:
+        there = json.loads(manifests[-1].read_text(encoding="utf-8"))["environment"]["host"]
+    except (OSError, KeyError, json.JSONDecodeError):
+        return None
+    here = host_info()
+
+    def key(h: Dict[str, Any]) -> Tuple[Any, ...]:
+        return (h.get("processor"), h.get("physical_cpus"), h.get("logical_cpus"),
+                round(float(h.get("ram_gb") or 0)))
+
+    if key(there) == key(here):
+        return None
+    return (f"the session timeouts (stage ttl) were measured on another host "
+            f"({_host_text(there)}); this is {_host_text(here)}. Stack trials here fly "
+            f"those timeouts. For a campaign of this host's own, run ttl and knee here "
+            f"under a fresh --out-root; either way, compare arms only within one host.")
 
 
 def validate(jobs: List[Job]) -> Dict[str, Dict[str, Any]]:
@@ -1630,6 +1736,10 @@ def cmd_run(stage: str, s: Settings, params_text: str, jobs: List[Job], *,
           f"{len(jobs) - len(todo)} done or shared; commit {prov['commit'][:10]}")
     if not todo:
         return 0
+    if stage != "ttl" and any(j.kind == "runner" for j in todo):
+        note = pilot_host_note(out_root)
+        if note:
+            print(f"note: {note}")
     if not yes:
         if input("start? [y/N] ").strip().lower() not in ("y", "yes"):
             print("nothing started")
@@ -1690,6 +1800,8 @@ def _run_jobs(stage: str, s: Settings, params_text: str, jobs: List[Job], todo: 
         "params_toml": params_text,
         # The command line's levers and --set changes, and the settings as changed.
         "overrides": s.overrides,
+        # The "auto" limits of [machine] and [rl] as sized for this host.
+        "auto": s.auto,
         "settings": json.loads(json.dumps(s.data, default=str)),
         "jobs": [asdict(j) for j in jobs],
     }
@@ -2659,11 +2771,18 @@ def cmd_check(s: Settings, a: argparse.Namespace) -> int:
         cores = psutil.cpu_count(logical=False) or os.cpu_count()
         budget = float(s.get("machine.mem_budget_gb"))
         line(True if budget <= 0.9 * ram else None, "memory",
-             f"{ram:.0f} GB; params machine.mem_budget_gb {budget:g} (--mem-gb to change)")
+             f"{ram:.0f} GB; machine.mem_budget_gb {budget:g} (--mem-gb to change)")
         line(True, "cores", f"{cores} physical, {os.cpu_count()} logical; machine.max_jobs "
-                            f"{s.get('machine.max_jobs')} (--jobs to change)")
+                            f"{s.get('machine.max_jobs')}, max_device_processes "
+                            f"{s.get('machine.max_device_processes')} (--jobs, --devices "
+                            f"to change)")
     except ImportError:
         line(False, "psutil", "missing (the footprint probe and the lock need it)")
+    for note in s.auto:
+        line(True, "auto limit", note)
+    note = pilot_host_note(a.out_root)
+    line(None if note else True, "pilot host", note or "the session timeouts were measured "
+                                                       "on this host (or not yet)")
     root = REPO / a.out_root
     probe = root if root.exists() else REPO
     free = shutil.disk_usage(probe).free / 2**30
