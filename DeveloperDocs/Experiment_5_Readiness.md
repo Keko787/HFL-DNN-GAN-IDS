@@ -36,7 +36,7 @@ The code, the launcher, every stage's definition, the scoring and the documentat
 | `batch1` | ▶️ Ready | — | See above. |
 | `sens` | ⏳ After batch 1 | Batch 1's CSVs | 5.3's F, FX and H1 at the session timeout × 0.75 and × 1.5. × 1 is batch 1's own cell. |
 | `rl-headroom`, `rl-calibrate` | ✅ Done, 6 Oct | — | ε = 0.01 everywhere (headroom 0.012–0.042). Calibration: `jittery56` flat, `clean` sanity-failed by 0.0005; the learned score sits at FX's level, below greedy_1. See [the findings](Experiment_5_RL_Calibration_Findings.md). |
-| `rl-sweep`, `rl-e3` | ⏸️ Paused | The decision after the calibration (below) | The campaign pauses here by design. |
+| `rl-sweep`, `rl-e3` | ▶️ Running from 6 Oct 13:58 | — | Option A, decided 6 Oct: the sweep as pre-registered, then E3's trainings ([findings](Experiment_5_RL_Calibration_Findings.md#decision)). |
 | `rl-s57` | ❌ Blocked | Study 5.5's verdict (`rl.gamma_star`, `rl.keep_learned`) | 5.7's scores train only if the verdict keeps the learned score. |
 | `batch2` | ❌ Blocked | The RL verdict (`rl.keep_learned`, the `rl.checkpoints` paths); the 5.1 weights decision (below) | 5.1, 5.2, the rest of 5.3, 5.4, 5.5's stack check, 5.6–5.8, the rest of 5.9, 5.13: about 11,300 trials, roughly 50 h. FQ and E3 arms fly checkpoints that don't exist yet. |
 | `pilot3` | ▶️ Ready | — | 5.15's interference levels, 5.12's training-time levels (p512) and 5.11 (c)'s FerrySim sweeps: 80 trials plus FerrySim. Its stack jobs fly H1 (no cap) and its FerrySim jobs the scale cells, which the re-pin leaves alone. |
@@ -75,12 +75,11 @@ The TTL and knee pilots ran on the first host: 8 physical cores, 16 logical, 95 
 |---|---|---|
 | **5.1's bound-derived merge weights.** `agg:cutoff`'s age weights are FedAsync's hinge with hand-set constants; the "derived from the bound" side is a theory-track derivation not yet done. 5.7 cites it too. | Batch 2 (5.1 and 5.7) | Drop the derivation and add a small sensitivity check on the hand-set constants (~240 trials, launcher settings only); drop it with nothing added; or do the derivation (research work), after which it becomes a weight mode and a 5.1 variant. |
 | **Batch 1 before or after RL** | Step 5 | After RL, as the campaign orders it; or right after the re-pin and smoke test. See "Order choice" above. |
-| **How the RL campaign goes on** after the calibration: run the sweep as planned; screen one learner revision on the clean cells first (the one the plan allows); or keep FX without the sweep | `rl-sweep` | The options with their pros and cons, and the screen's pre-set rule, are in [the findings](Experiment_5_RL_Calibration_Findings.md). |
 | **The verdict's follow-ups:** γ\*, keep the learned score or not, the checkpoints; FX-dwell/FX-cov or M1 | Batch 2 | Read from `exp5 report rl-sweep`. |
 | **pilot3's hand-set values:** 5.15's harsher interference amplitude and higher path-loss exponent, 5.11 (c)'s knees | Batch 3 | Read from `exp5 report pilot3`. |
 | **Publishing the trace archives** (a GitHub release, Zenodo for the paper's artifact) | The paper | Nothing is published without your go-ahead. |
 
-Decided already, for reference: τ from the knee pilot (0.71; 0.82 kept as a second τ); 4 missions per trial; the jittery contact channel everywhere; N = 6's knee accepted at 150 s; E3's γ = 0.99 (Chen's code); FedProx ρ = 0.01; 5.6 at 40 trials per cell; 5.12's levels from the p512 pilot; traces in per-stage archives, outside git; `agg:seq` out; p512's band read after the first mission.
+Decided already, for reference: τ from the knee pilot (0.71; 0.82 kept as a second τ); 4 missions per trial; the jittery contact channel everywhere; N = 6's knee accepted at 150 s; E3's γ = 0.99 (Chen's code); FedProx ρ = 0.01; 5.6 at 40 trials per cell; 5.12's levels from the p512 pilot; traces in per-stage archives, outside git; `agg:seq` out; p512's band read after the first mission; after the calibration, the 5.5 sweep as pre-registered (option A).
 
 ---
 
