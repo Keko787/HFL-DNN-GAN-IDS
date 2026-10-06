@@ -60,14 +60,24 @@ The groups `pilots` (ttl, knee, sstar), `rl` (the five RL stages), `batches` (ba
 
 ### 2.1 The machine
 
-The campaign was sized on one Windows 10 Pro machine with 8 physical cores (16 logical) and 95 GB of RAM. The limits in `params.toml` `[machine]` match it:
+The campaign was sized on one Windows 10 Pro machine with 8 physical cores (16 logical) and 95 GB of RAM, where these limits ran cleanly:
 - 6 jobs at once (`max_jobs`);
 - 36 training processes at once (`max_device_processes`; that is six N = 6 trials, or one N = 24 trial with an N = 12 one);
-- a 75 GB memory budget (`mem_budget_gb`).
+- a 75 GB memory budget (`mem_budget_gb`);
+- 14 RL trainings at once (`[rl] max_jobs`).
 
-On a smaller machine, lower them with levers ([§6](#6-levers-changing-a-run-without-editing-files)); the jobs are the same, they just take longer. No GPU is used.
+These limits are `"auto"` in `params.toml`, which scales them to the host that runs:
 
-**Run every stage of a campaign on one machine.** A few planner values computed through `math.erfc` differ in the last bit between Windows builds, which can flip rare near-ties ([§9](#9-determinism-what-matches-across-machines)). Arms are compared only within one host. During a long stage, keep the machine awake and pause operating-system updates.
+| Limit | `"auto"` | Sized-on host | 12 cores (20 logical), 64 GB |
+|---|---|---|---|
+| `max_device_processes` | the smaller of 4.5 × physical cores and 2.25 × logical CPUs | 36 | 45 |
+| `max_jobs` | `max_device_processes` ÷ 6 (whole N = 6 jobs) | 6 | 7 |
+| `mem_budget_gb` | 0.8 × RAM, rounded down | 75 | 51 |
+| `[rl] max_jobs` | logical CPUs − 2 | 14 | 18 |
+
+`check` prints what each limit comes to on your machine, and every manifest records it under `auto`. To fix a limit, give a number in `params.toml`, or use a lever for one run ([§6](#6-levers-changing-a-run-without-editing-files)). The limits only pace the scheduler. No trial's arguments depend on them, except the TTL probe's count of trials side by side, which is the load it measures. On a smaller machine the jobs are the same; they just take longer. No GPU is used.
+
+**Run every stage of a campaign on one machine.** A few planner values computed through `math.erfc` differ in the last bit between Windows builds, which can flip rare near-ties ([§9](#9-determinism-what-matches-across-machines)). The session timeouts are wall-clock fit times on the CPU that ran the TTL pilot. Arms are compared only within one host. `check` warns (`pilot host`) when the TTL pilot's manifest names a different host, and `run` repeats the warning before any stage with stack trials. For a campaign of the new host's own, run `ttl` and `knee` there under a fresh `--out-root`. During a long stage, keep the machine awake and pause operating-system updates.
 
 **Disk:** the dataset takes 13.8 GB. The kept event traces take roughly 60–120 KB per trial, about 1 GB in some 300,000 files for the whole campaign ([§8.1](#81-trace-archives)).
 
@@ -117,7 +127,8 @@ scripts/exp5/exp5.sh check
 - the dataset, with its file count and size;
 - Windows long paths;
 - uncommitted code;
-- memory and cores against `[machine]`;
+- memory and cores against `[machine]`, and what each `"auto"` limit comes to;
+- whether the session timeouts were measured on this host (`pilot host`);
 - free disk space;
 - a stage already running (it holds `results/exp5/.launcher.lock`).
 
@@ -257,9 +268,9 @@ From `params.toml`'s pilot outputs, `repin.py`:
 - re-measures Study 5.6's lag with FX on the same 200-episode sample, and derives the lag ratio test's bounds from the same sample;
 - rewrites the tests' pinned values (the family hashes, lags, periods and lag sample).
 
-It stops if the quarter-period and half-period cells' ratio ranges would meet, or if a Study 5.6 cell's S\* differs from its base cell's cap. About 3 minutes with 2 workers.
+It stops if the quarter-period and half-period cells' ratio ranges would meet, or if a Study 5.6 cell's S\* differs from its base cell's cap. About 3 minutes with 2 workers (26 s with 8 on the second host).
 
-Then run the FerrySim tests it prints, review the documents it lists (their records are history, so it leaves them alone), commit, and set `[rl] repinned = true`. Every RL stage refuses until that is set. See also the [Exp 4 Run Guide](Experiment_4_Run_Guide.md) §2.8 ("The re-pin").
+Then run the FerrySim tests it prints, review the documents it lists (their records are history, so it leaves them alone; references such as the Configuration Reference's cell table and the guides' commands are updated by hand), commit, and set `[rl] repinned = true`. A test that holds a renamed cell's budget as a bare number fails here, since the script renames names, not numbers. Every RL stage refuses until that is set. See also the [Exp 4 Run Guide](Experiment_4_Run_Guide.md) §2.8 ("The re-pin").
 
 ### 5.4 The learned score (RL)
 
@@ -315,7 +326,7 @@ Levers change a setting **for one command only**. `params.toml` is not edited. E
 | `--contact-regime clean\|jittery` | `campaign.contact_regime` | The contact channel, for every job that does not set its own. |
 | `--tau T [T …]` | `score.tau` | The accuracy thresholds; the first is the primary. |
 | `--dataset DIR` | `HERMES_CICIOT_DIR` | Where CICIoT2023 is. |
-| `--jobs N` | `machine.max_jobs` (`rl.max_jobs` for RL stages) | Jobs side by side. |
+| `--jobs N` | `machine.max_jobs` (`rl.max_jobs` for RL stages) | Jobs side by side. This lever and the next two replace the `"auto"` value ([§2.1](#21-the-machine)). |
 | `--mem-gb GB` | `machine.mem_budget_gb` | The memory the running jobs may take. |
 | `--devices N` | `machine.max_device_processes` | Training processes at once. |
 | `--set KEY=VALUE` | Any dotted key; the value is read as TOML | Anything else, for example `--set s58.missions=[4,8]`, `--set s53.arms='["F","H1"]'` or `--set score.family=cell`. Repeatable. A table `params.toml` does not have is refused. |
@@ -459,10 +470,11 @@ exp5 score batch1 --rescore
 
 - **Done:**
   - the TTL pilot: `session_ttl_s` 36, 34, 34 and 23 s at N = 6, 12, 18 and 24;
-  - the knee pilot, on the jittery contact channel (600 trials, none failed): knees 150, 180, 240 and 262 s at N = 6, 12, 18 and 24 (stress half of each), 120 s at N = 6 with the measured payload, and τ = 0.71. N = 6's knee is the grid's largest budget; it was accepted as is rather than extending the grid. At N = 18 and 24 accuracy levels off near 0.71 at every budget.
+  - the knee pilot, on the jittery contact channel (600 trials, none failed): knees 150, 180, 240 and 262 s at N = 6, 12, 18 and 24 (stress half of each), 120 s at N = 6 with the measured payload, and τ = 0.71. N = 6's knee is the grid's largest budget; it was accepted as is rather than extending the grid. At N = 18 and 24 accuracy levels off near 0.71 at every budget;
+  - the S\* pilot (`6e4b6c3`): `s_star` 2 at every N. One mission covers 90% of layouts at each knee, and two at each stress budget; N ≥ 12 by the tool's greedy bound. It ran on a second host (12 physical cores, 20 logical, 64 GB). The TTL and knee pilots ran on the first (8, 16, 95 GB). S\* is a planning-level calculation with no timing in it, so the host does not change it.
+- **Host.** From S\* on, the campaign runs on the second host, by choice (5 Oct 2026). Its machine limits are `"auto"` ([§2.1](#21-the-machine)). The session timeouts and knees are still the first host's; `check` and `run` warn about it.
+- **The re-pin, 5 Oct 2026 (`77880dc`):** FerrySim's N = 6 cells moved to 75 and 150 s (`jit-n6-75`, `jit-n6-150`), and N = 12 to 90 and 180 s (`jit-n12-90`, `cln-n12-90` and Study 5.6's `jit-n12-90-q`/`-h`; the 180 s cells kept their names). Caps 2; Study 5.6's lags 27 and 34 s, so P_c 108/54 and 136/68 s; ratio bounds 0.83–1.26 and 0.67–1.48.
 - **Next:**
-  - S\*;
-  - the re-pin (`scripts/exp5/repin.py`);
   - a smoke run of every stage;
   - the RL campaign;
   - the batches.

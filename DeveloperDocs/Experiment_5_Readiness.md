@@ -2,26 +2,25 @@
 
 What is left before the Exp 5 sweep can run, stage by stage: what is ready, what is not, and why.
 
-*As of 5 Oct 2026, after the knee pilot (commit `25721608`). The live view is `exp5 status` (or `exp5 check`); the full procedure is the [reproducibility guide](Experiment_5_Reproducibility_Guide.md).*
+*As of 5 Oct 2026, after the S\* pilot (commit `6e4b6c3`) and the re-pin (`77880dc`); the `"auto"` machine limits are `4b78194`. The live view is `exp5 status` (or `exp5 check`); the full procedure is the [reproducibility guide](Experiment_5_Reproducibility_Guide.md).*
 
 ---
 
 ## In one paragraph
 
-The code, the launcher, every stage's definition, the scoring and the documentation are built. The first two pilots are done: the session timeout (TTL) and the budget knees, including τ. **Only the next pilots can run yet:** S\* and batch 3's `pilot3`. Every stage that flies the planner needs the age cap S\*, whose pilot takes minutes. The RL stages need the FerrySim re-pin, which is scripted and takes about 3 minutes plus tests. Batch 2 needs the RL verdict, and batch 3 needs its own pilot. No stage beyond the pilots has had a smoke run yet.
+The code, the launcher, every stage's definition, the scoring and the documentation are built. The first three pilots are done: the session timeout (TTL), the budget knees with τ, and the age cap S\* (2 at every N). **Batch 1 and batch 3's `pilot3` have every setting they need.** The FerrySim re-pin is done, so the RL stages can run: FerrySim's cells now fly the stack's budgets. Batch 2 needs the RL verdict, and batch 3 needs its own pilot. No stage beyond the pilots has had a smoke run yet. From S\* on, the campaign runs on a second host; see "The host" below.
 
 ---
 
 ## Is batch 1 ready?
 
-**Not yet: it is one short stage away.**
+**Yes, after a smoke run.**
 
 | | |
 |---|---|
-| What it needs | `pilot_outputs.s_star` at N = 6, 12, 18 and 24. Every plan arm (F, FX, F+L1, …) flies the age cap S\*, which is unset until the `sstar` stage runs and `exp5 report sstar --apply` writes it. |
-| What it already has | The knee and stress budgets per N, the session timeouts, τ = 0.71, and every other batch 1 setting. With placeholder pilot values, all of its jobs pass the runner's argument checks. |
-| Size | 1,920 trials (5.3 core, 5.9 core, 5.11 (b), 5.14) plus 3 FerrySim jobs (5.11 (a)). About 6.5 h on this machine (the launcher estimates 4.9 h; the knee ran about 1.3 times its estimate). |
-| Do first | The re-pin (5.11 (a) flies FerrySim's cells by name, which the re-pin renames) and a smoke run. |
+| What it has | The knee and stress budgets per N, the session timeouts, τ = 0.71, S\* = 2 at every N, and every other batch 1 setting. All 70 of its stack jobs pass the runner's argument checks with the real values (`exp5 validate batch1`). |
+| Size | 1,920 trials (5.3 core, 5.9 core, 5.11 (b), 5.14) plus 3 FerrySim jobs (5.11 (a)). About 6 h on the second host (the launcher estimates 4.4 h at its `"auto"` limits, 4.9 h at the first host's; the knee ran about 1.3 times its estimate). |
+| Do first | A smoke run. The re-pin, which renamed the FerrySim cells that 5.11 (a) flies, is done. |
 | Order choice | The campaign runs batch 1 after the RL verdict. That is not because its runs could become invalid: F, FX and FQ are separate arms, and batch 2 adds FQ to batch 1's own cells on the same seeds. The verdict decides which arm the paper calls FeRRy. If the learned score is kept, 5.3 and 5.9 get FQ in batch 2, while 5.11 (b) and 5.14 would show only F and FX unless extended. Batch 1 can therefore also run right after the re-pin and smoke test, before RL. |
 
 ---
@@ -32,15 +31,15 @@ The code, the launcher, every stage's definition, the scoring and the documentat
 |---|---|---|---|
 | `ttl` | ✅ Done | — | Session timeouts 36, 34, 34, 23 s at N = 6, 12, 18, 24. |
 | `knee` | ✅ Done | — | Knees 150, 180, 240, 262 s (stress half of each); 120 s at N = 6 with the measured payload; τ = 0.71. N = 6's knee is the grid's largest budget, accepted as is. |
-| `sstar` | ▶️ Ready | — | 4 S\* tool runs, minutes. Then `exp5 report sstar --apply`. |
-| `quick` | ⏳ After S\* | `pilot_outputs.s_star.6`, and batch 1's recorded CSVs to compare against | A reviewer's reproduction of 5.3's headline cell (320 trials). It needs a recorded batch 1 to compare with. |
-| `batch1` | ⏳ After S\* | `pilot_outputs.s_star` | See above. Best after the re-pin and a smoke run. |
-| `sens` | ⏳ After batch 1 | `pilot_outputs.s_star.6`, batch 1's CSVs | 5.3's F, FX and H1 at the session timeout × 0.75 and × 1.5. × 1 is batch 1's own cell. |
-| `rl-headroom`, `rl-calibrate`, `rl-sweep`, `rl-e3` | ❌ Blocked | The re-pin (`[rl] repinned = true`) | The learned score must train on the budgets the stack flies. FerrySim's cells still fly placeholders (45/90 s at N = 6, 120/180 s at N = 12). `rl-calibrate` and `rl-sweep` also need `rl-headroom`'s report. |
-| `rl-s57` | ❌ Blocked | The re-pin; Study 5.5's verdict (`rl.gamma_star`, `rl.keep_learned`) | 5.7's scores train only if the verdict keeps the learned score. |
-| `batch2` | ❌ Blocked | S\*; the RL verdict (`rl.keep_learned`, the `rl.checkpoints` paths); the 5.1 weights decision (below) | 5.1, 5.2, the rest of 5.3, 5.4, 5.5's stack check, 5.6–5.8, the rest of 5.9, 5.13: about 11,300 trials, roughly 50 h. FQ and E3 arms fly checkpoints that don't exist yet. |
+| `sstar` | ✅ Done | — | S\* = 2 at N = 6, 12, 18 and 24: one mission covers 90% of layouts at each knee, two at each stress budget (N ≥ 12 by the tool's greedy bound). Ran on the second host; the tool has no timing in it. |
+| `quick` | ⏳ After batch 1 | Batch 1's recorded CSVs to compare against | A reviewer's reproduction of 5.3's headline cell (320 trials). It needs a recorded batch 1 to compare with. |
+| `batch1` | ▶️ Ready | A smoke run (recommended) | See above. |
+| `sens` | ⏳ After batch 1 | Batch 1's CSVs | 5.3's F, FX and H1 at the session timeout × 0.75 and × 1.5. × 1 is batch 1's own cell. |
+| `rl-headroom`, `rl-calibrate`, `rl-sweep`, `rl-e3` | ▶️ Ready | `rl-headroom`'s report, for `rl-calibrate` and `rl-sweep` | Since the re-pin, FerrySim's cells fly the stack's budgets: 75 and 150 s at N = 6, 90 and 180 s at N = 12. |
+| `rl-s57` | ❌ Blocked | Study 5.5's verdict (`rl.gamma_star`, `rl.keep_learned`) | 5.7's scores train only if the verdict keeps the learned score. |
+| `batch2` | ❌ Blocked | The RL verdict (`rl.keep_learned`, the `rl.checkpoints` paths); the 5.1 weights decision (below) | 5.1, 5.2, the rest of 5.3, 5.4, 5.5's stack check, 5.6–5.8, the rest of 5.9, 5.13: about 11,300 trials, roughly 50 h. FQ and E3 arms fly checkpoints that don't exist yet. |
 | `pilot3` | ▶️ Ready | — | 5.15's interference levels, 5.12's training-time levels (p512) and 5.11 (c)'s FerrySim sweeps: 80 trials plus FerrySim. Its stack jobs fly H1 (no cap) and its FerrySim jobs the scale cells, which the re-pin leaves alone. |
-| `batch3` | ❌ Blocked | `pilot3`'s outputs (`pilot_outputs.train_levels` by `--apply`; `[s515] harsher_amp_db`, `lossier_n_pl` and `[s511c] knee_s` by hand); S\* | 5.12, 5.15, 5.11 (c): about 1,460 trials, roughly 3 h. |
+| `batch3` | ❌ Blocked | `pilot3`'s outputs (`pilot_outputs.train_levels` by `--apply`; `[s515] harsher_amp_db`, `lossier_n_pl` and `[s511c] knee_s` by hand) | 5.12, 5.15, 5.11 (c): about 1,460 trials, roughly 3 h. |
 | Study 5.10 | ❌ Not here | AERPAW access | Real radios; validation, not a statistical study. |
 
 ---
@@ -49,8 +48,8 @@ The code, the launcher, every stage's definition, the scoring and the documentat
 
 | # | Step | Command or action | Time |
 |---|---|---|---|
-| 1 | The S\* pilot, then write its output and commit | `exp5 run sstar --yes`, `exp5 report sstar --apply` | minutes |
-| 2 | The re-pin: FerrySim's N = 6 cells to (75, 150) s and N = 12 to (90, 180) s, the caps, the 5.6 lags and periods, the hashes and the test pins | `python scripts/exp5/repin.py --dry-run`, then `--workers 8`; the FerrySim tests; commit; set `[rl] repinned = true` | ~3 min, then ~10 min of tests |
+| 1 | ✅ The S\* pilot and its output (S\* = 2 at every N); commit it | `exp5 run sstar --yes`, `exp5 report sstar --apply` | done |
+| 2 | ✅ The re-pin: FerrySim's N = 6 cells to (75, 150) s and N = 12 to (90, 180) s; caps 2; Study 5.6's lags 27 and 34 s (periods 108/54 and 136/68 s); the hashes and the test pins. Two tests that held the old budgets as literals were fixed. Commit it, with `[rl] repinned = true` | `python scripts/exp5/repin.py --dry-run`, then `--workers 8`; the FerrySim tests | done (26 s, then about 5 min of tests) |
 | 3 | A smoke run of every stage: one trial per job (RL trainings at 30 episodes), into `../exp5_smoke`, with placeholders for the values still undecided | `exp5 run <stage> --smoke --yes`, stage by stage, with `--set` placeholders for the RL decisions and pilot3's values | ~1–2 h |
 | 4 | The code gate: the full suite against the recorded baselines | `python -m pytest tests …` then `tests/golden/make_baseline.py compare` | ~25 min |
 | 5 | Batch 1, then `sens` (or after step 6; see the order choice) | `exp5 run batch1 --yes`, `exp5 run sens --yes` | ~7 h |
@@ -61,7 +60,11 @@ The code, the launcher, every stage's definition, the scoring and the documentat
 | 10 | Batch 3 | `exp5 run batch3 --yes` | ~3 h |
 | 11 | Score each batch, archive each stage's traces, commit; publish the archives (with your go-ahead) | `exp5 score batches`, `exp5 pack all` | ~1 h |
 
-Machine time from step 1 to step 11 is about 3.5–4 days, plus the pauses for reading reports and deciding. Every stage runs on this machine: the session timeout was measured on its CPU, and arms are compared within one host ([guide §9](Experiment_5_Reproducibility_Guide.md#9-determinism-what-matches-across-machines)). Keep it awake and pause Windows Update for the long stages.
+Machine time from step 1 to step 11 is about 3.5–4 days, plus the pauses for reading reports and deciding. Every remaining stage runs on one host, the second ([guide §9](Experiment_5_Reproducibility_Guide.md#9-determinism-what-matches-across-machines)). Keep it awake and pause Windows Update for the long stages.
+
+### The host
+
+The TTL and knee pilots ran on the first host: 8 physical cores, 16 logical, 95 GB, Windows 10. From S\* on, the campaign runs on a second host by choice (5 Oct 2026): 12 physical cores, 20 logical (8 performance and 4 efficiency cores), 64 GB, Windows 11. The launcher's machine limits are now `"auto"`. On this host they come to 7 jobs, 45 training processes, a 51 GB memory budget and 18 RL trainings ([guide §2.1](Experiment_5_Reproducibility_Guide.md#21-the-machine)). Stack trials here fly the first host's session timeouts and knees, and `check` and `run` say so. Comparisons between arms stay valid, since every arm runs on this host. Only the timeouts and budgets were measured elsewhere. To make them this host's own, run `ttl` and `knee` here under a fresh `--out-root`, then S\* again: about 4 h, since the knee took 4 h and the TTL pilot 5 min on the first host.
 
 ---
 
@@ -81,7 +84,9 @@ Decided already, for reference: τ from the knee pilot (0.71; 0.82 kept as a sec
 
 ## What could still go wrong
 
+- **The session timeouts and knees came from another host.** This CPU's cores are faster, so its fits are likely shorter and the timeouts more lenient than measured. That is a guess, not a measurement. See "The host" above.
 - **The smoke run has not happened.** Every job passes the runner's argument checks, but none past the pilots has run. Expect it to find a few runtime problems.
-- **A pilot rule can come back empty.** p512 refuses if no training-time level gives 10–30% not-ready contacts (change `[p512] cycle_factors` and rerun). `repin.py` refuses if Study 5.6's quarter and half cells' ratio ranges would meet, which was tight at 180 s in the trial (1.48 against 1.5).
+- **A pilot rule can come back empty.** p512 refuses if no training-time level gives 10–30% not-ready contacts (change `[p512] cycle_factors` and rerun). (The re-pin's own check passed, narrowly: at 180 s the ratio bound is 1.48 against 1.5.)
 - **τ = 0.71 is set by the larger sizes.** At N = 18 and 24, accuracy levels off near 0.71 whatever the budget. At N = 6, where 80% of trials reach 0.82, most trials reach 0.71 early, so time to τ separates the arms less there. Final accuracy and reach at 0.82 are reported beside it.
+- **The N = 6 cells leave the learned score little to decide.** At their measured budgets one stop serves all six devices in most missions. At 150 s, every pair FX's in-flight slot weighed over 24 episodes was the dock. They are controls, so that is their role, but they add little training signal to the `jittery` family.
 - **The code gate** must be rerun after the re-pin; host-specific differences are listed in the [guide §2.7](Experiment_5_Reproducibility_Guide.md#27-the-code-gate-path-b-and-before-reporting-results).
