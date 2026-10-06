@@ -1,0 +1,7 @@
+  N =  6: S = 2 at budgets [150.0, 75.0]
+  N = 12: S = 2 at budgets [180.0, 90.0]
+  N = 18: S = 2 at budgets [240.0, 120.0]
+  N = 24: S = 2 at budgets [262.0, 130.0]
+
+[pilot_outputs]
+s_star = { "6" = 2, "12" = 2, "18" = 2, "24" = 2 }

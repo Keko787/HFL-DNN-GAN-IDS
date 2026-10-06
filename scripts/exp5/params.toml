@@ -103,7 +103,11 @@ session_ttl_s = { "6" = 36.0, "12" = 34.0, "18" = 34.0, "24" = 23.0 }
 # (decided 5 Oct 2026), and written by hand since --apply refuses on a warning.
 knee_s = { "6" = 150.0, "12" = 180.0, "18" = 240.0, "24" = 262.0 }
 stress_s = { "6" = 75.0, "12" = 90.0, "18" = 120.0, "24" = 130.0 }
-# s_star        = { "6" = 2, "12" = 2, "18" = 2, "24" = 2 }
+# From stage sstar, 5 Oct 2026 (results/exp5/sstar; run on the 12-core, 64 GB host,
+# not the pilots' own, which the planning-level tool does not depend on): F's S*
+# on 90 % of 30 layouts at the knee and stress budgets, at least 2. At every N one
+# mission covers the knee and two the stress budget (N >= 12 by the greedy bound).
+s_star = { "6" = 2, "12" = 2, "18" = 2, "24" = 2 }
 # At the measured payload (18.8 KB), for Study 5.4:
 knee_meas_s = { "6" = 120.0 }
 stress_meas_s = { "6" = 60.0 }

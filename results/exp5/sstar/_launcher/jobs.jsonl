@@ -1,0 +1,8 @@
+{"event": "start", "job": "sstar/n6", "pid": 68992, "at": "2026-10-05T19:56:24"}
+{"event": "start", "job": "sstar/n12", "pid": 75096, "at": "2026-10-05T19:56:24"}
+{"event": "start", "job": "sstar/n18", "pid": 3160, "at": "2026-10-05T19:56:24"}
+{"event": "start", "job": "sstar/n24", "pid": 29536, "at": "2026-10-05T19:56:24"}
+{"event": "end", "job": "sstar/n6", "rc": 0, "wall_s": 2.0, "rows": null, "rows_not_ok": null, "at": "2026-10-05T19:56:26"}
+{"event": "end", "job": "sstar/n12", "rc": 0, "wall_s": 2.0, "rows": null, "rows_not_ok": null, "at": "2026-10-05T19:56:26"}
+{"event": "end", "job": "sstar/n18", "rc": 0, "wall_s": 2.0, "rows": null, "rows_not_ok": null, "at": "2026-10-05T19:56:26"}
+{"event": "end", "job": "sstar/n24", "rc": 0, "wall_s": 2.0, "rows": null, "rows_not_ok": null, "at": "2026-10-05T19:56:26"}
