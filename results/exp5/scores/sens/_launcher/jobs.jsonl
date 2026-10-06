@@ -1,0 +1,12 @@
+{"event": "start", "job": "ttl/n6k1_knee_ttl0.75__F_scored", "pid": 47324, "at": "2026-10-06T06:42:01"}
+{"event": "start", "job": "ttl/n6k1_knee_ttl0.75__FX_scored", "pid": 32616, "at": "2026-10-06T06:42:01"}
+{"event": "start", "job": "ttl/n6k1_knee_ttl0.75__H1_scored", "pid": 106944, "at": "2026-10-06T06:42:01"}
+{"event": "start", "job": "ttl/n6k1_knee_ttl1.5__F_scored", "pid": 50644, "at": "2026-10-06T06:42:01"}
+{"event": "start", "job": "ttl/n6k1_knee_ttl1.5__FX_scored", "pid": 101360, "at": "2026-10-06T06:42:01"}
+{"event": "start", "job": "ttl/n6k1_knee_ttl1.5__H1_scored", "pid": 105932, "at": "2026-10-06T06:42:01"}
+{"event": "end", "job": "ttl/n6k1_knee_ttl0.75__F_scored", "rc": 0, "wall_s": 4.0, "rows": null, "rows_not_ok": null, "at": "2026-10-06T06:42:05"}
+{"event": "end", "job": "ttl/n6k1_knee_ttl0.75__FX_scored", "rc": 0, "wall_s": 4.0, "rows": null, "rows_not_ok": null, "at": "2026-10-06T06:42:05"}
+{"event": "end", "job": "ttl/n6k1_knee_ttl0.75__H1_scored", "rc": 0, "wall_s": 4.0, "rows": null, "rows_not_ok": null, "at": "2026-10-06T06:42:05"}
+{"event": "end", "job": "ttl/n6k1_knee_ttl1.5__F_scored", "rc": 0, "wall_s": 4.0, "rows": null, "rows_not_ok": null, "at": "2026-10-06T06:42:05"}
+{"event": "end", "job": "ttl/n6k1_knee_ttl1.5__FX_scored", "rc": 0, "wall_s": 4.0, "rows": null, "rows_not_ok": null, "at": "2026-10-06T06:42:05"}
+{"event": "end", "job": "ttl/n6k1_knee_ttl1.5__H1_scored", "rc": 0, "wall_s": 4.0, "rows": null, "rows_not_ok": null, "at": "2026-10-06T06:42:05"}
