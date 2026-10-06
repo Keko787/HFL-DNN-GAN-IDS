@@ -152,6 +152,11 @@ def _add_run_args(ap: argparse.ArgumentParser) -> None:
                     help="The behaviour's last ε (default 0.05).")
     ap.add_argument("--reference-episodes", type=int, default=None,
                     help="Episodes flown around FX's pair (pair_q only; default 500).")
+    ap.add_argument("--warmup-transitions", type=int, default=None,
+                    help="Transitions stored before the first update (default the "
+                         "learner's, 1,000; at least its batch, 64). For the launcher's "
+                         "smoke runs, whose 30 episodes store about 150, so that each run "
+                         "updates its network; a real training keeps the default.")
     ap.add_argument("--no-phase", action="store_true",
                     help="Leave the pair rows' phase block out (pair_q only).")
     ap.add_argument("--ablation", choices=sorted(T.ABLATIONS), default=None,
@@ -219,8 +224,10 @@ def _spec(args: argparse.Namespace, gamma: float, seed: int,
                                         ("epsilon_end", args.epsilon_end),
                                         ("reference_episodes", args.reference_episodes))
         if value is not None})
+    warmup = ({} if args.warmup_transitions is None
+              else {"warmup_transitions": args.warmup_transitions})
     common = dict(family=args.family, network=network, reward=_reward(args),
-                  learner=LearnerSettings(behaviour=behaviour), episodes=args.episodes,
+                  learner=LearnerSettings(behaviour=behaviour, **warmup), episodes=args.episodes,
                   eval_every=args.eval_every, val_episodes=args.val_episodes,
                   patience=args.patience, plan_score_params=dict(plan or {}))
     if args.kind == "chen_dqn":

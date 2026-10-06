@@ -372,3 +372,31 @@ def test_pilot_host_note_names_another_host(tmp_path, monkeypatch):
         encoding="utf-8")
     note = L.pilot_host_note("out")                         # the latest manifest's host
     assert note and "there-cpu" in note and "here-cpu" in note and "--out-root" in note
+
+
+def test_smoke_trainings_get_past_the_learners_warmup(tmp_path):
+    s = _filled_settings()
+    jobs = [j for j in L.build("rl-e3", L.Settings(s.data), None, str(tmp_path))
+            if j.kind == "rl-train"]
+    L.smoke(jobs)
+    assert jobs and all(j.args[j.args.index("--warmup-transitions") + 1]
+                        == str(L.SMOKE_WARMUP) for j in jobs)
+    assert all(int(j.args[j.args.index("--episodes") + 1]) == 30 for j in jobs)
+
+
+def test_rl_report_shows_the_verdict_the_report_file_nests(tmp_path, capsys):
+    """ferrysim report writes {epsilon_source, evaluation, verdict}; the launcher
+    prints the verdict's outcome, its picks and the greedy_1 flag."""
+    s = L.Settings(_filled_settings().data)
+    jobs = L.build("rl-sweep", s, None, str(tmp_path))
+    report = next(j for j in jobs if j.kind == "tool" and j.name.endswith("/report"))
+    out = L.REPO / report.out
+    out.parent.mkdir(parents=True, exist_ok=True)
+    verdict = {"outcome": "rising", "replace_fx": False, "greedy_1_flag": True,
+               "stack_check": {"best_gamma": 0.25}, "epsilon": 0.01, "curves": {}}
+    out.write_text(json.dumps({"epsilon_source": "x", "evaluation": "y",
+                               "verdict": verdict}), encoding="utf-8")
+    L.cmd_report("rl-sweep", s, jobs)
+    shown = capsys.readouterr().out
+    assert '"outcome": "rising"' in shown and '"greedy_1_flag": true' in shown
+    assert '"best_gamma": 0.25' in shown and "curves" not in shown

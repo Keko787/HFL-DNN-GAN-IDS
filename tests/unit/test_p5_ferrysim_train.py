@@ -1652,6 +1652,26 @@ def test_the_cli_trains_with_the_learner_settings_it_is_given(monkeypatch, tmp_p
                                        expected_availability=True).to_json()
 
 
+def test_the_cli_takes_a_warmup_for_smoke_runs_and_keeps_the_learners_otherwise(
+        monkeypatch, tmp_path):
+    """``--warmup-transitions`` (the launcher's smoke runs: 30 episodes store about
+    150 transitions, under the learner's 1,000, so no update would run and every
+    run of one seed and γ would save the same network) reaches the run as its
+    manifest records it; without it the learner's default stands."""
+    _fly_nothing(monkeypatch)
+    monkeypatch.setattr(K, "tree_state", lambda: TREE)
+    assert CLI.main(_cli_train(tmp_path, "--warmup-transitions", "64")) == 0
+    m = verify_checkpoint(tmp_path / "smoke" / "g90" / "g0.9_s0.npz")
+    assert m["training"]["spec"]["learner"]["warmup_transitions"] == 64
+    assert CLI.main(_cli_train(tmp_path, "--kind", "chen_dqn", "--warmup-transitions",
+                               "64")) == 0
+    m = verify_checkpoint(tmp_path / "smoke" / "e3" / "g0.9_s0.npz")
+    assert m["training"]["spec"]["learner"]["warmup_transitions"] == 64
+    assert CLI.main(_cli_train(tmp_path, "--reward", "hand")) == 0
+    m = verify_checkpoint(tmp_path / "smoke" / "hand" / "g0.9_s0.npz")
+    assert m["training"]["spec"]["learner"]["warmup_transitions"] == (
+        LearnerSettings().warmup_transitions)
+
 def test_the_cli_names_each_checkpoint_by_its_arms_tag():
     """The layout's tag is the arm's (``experiments.exp4.driver.CHECKPOINT_TAGS``):
     ``g<100 γ>`` for Study 5.5's sweep, ``hand`` for F·hand, ``e3`` for E3; Study
