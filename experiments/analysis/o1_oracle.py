@@ -36,7 +36,7 @@ earlier one served the same devices, stands at the same position, and is no
 later, on no more energy, with no more link loss (and, where Delta leaves dwell
 out, no more dwell): every extension of the pruned branch is then no better.
 
-    python -m experiments.analysis.o1_oracle --cells jit-n6-45 jit-n6-90 --episodes 30 --out o1.json
+    python -m experiments.analysis.o1_oracle --cells jit-n6-75 jit-n6-150 --episodes 30 --out o1.json
 """
 
 from __future__ import annotations
@@ -487,7 +487,7 @@ def summarise(rows: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
     ap = argparse.ArgumentParser(prog="o1_oracle", description=__doc__.split("\n\n")[0])
-    ap.add_argument("--cells", nargs="+", default=["jit-n6-45", "jit-n6-90"],
+    ap.add_argument("--cells", nargs="+", default=["jit-n6-75", "jit-n6-150"],
                     help="FerrySim cells at N <= 6 (default the N = 6 controls).")
     ap.add_argument("--episodes", type=int, default=30, help="Episodes per cell (default 30).")
     ap.add_argument("--stream", default="ferrysim-val",

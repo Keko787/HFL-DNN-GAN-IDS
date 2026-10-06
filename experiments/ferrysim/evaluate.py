@@ -34,7 +34,7 @@ the number of workers.
 
 Command line (validation stream, the references, four workers)::
 
-    python -m experiments.ferrysim.evaluate --cells jit-n12-120 --stream val \\
+    python -m experiments.ferrysim.evaluate --cells jit-n12-90 --stream val \\
         --episodes 50 --workers 4 --out returns.json
 """
 

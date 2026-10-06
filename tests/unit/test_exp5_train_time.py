@@ -506,7 +506,7 @@ def test_a_kept_trace_scores_the_settings_and_the_columns_last(tmp_path):
     from experiments.ferrysim import cells as C
     from experiments.ferrysim.episode import Policy, run_episode
 
-    cell = C.cell_named("jit-n6-90")
+    cell = C.cell_named("jit-n6-150")
     logging.disable(logging.WARNING)
     try:
         result = run_episode(cell, C.stream_seeds(C.VAL_STREAM, cell.name, 1)[0],

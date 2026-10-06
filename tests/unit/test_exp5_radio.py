@@ -123,7 +123,7 @@ def test_the_runner_passes_them_only_when_given(tmp_path, monkeypatch):
 
 
 def _episode(tmp_path, physics):
-    cell = C.cell_named("jit-n6-90")
+    cell = C.cell_named("jit-n6-150")
     settings = dict(cell.driver_settings()["ferry_physics"], **physics)
     logging.disable(logging.WARNING)
     try:

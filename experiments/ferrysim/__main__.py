@@ -54,7 +54,7 @@ go-ahead). The commands, in a campaign's order (the spec, other choices 12):
     trained on theirs, so one file reads its policies on one plan.
 ``report``
     Study 5.5's rule on an evaluation file (``experiments.ferrysim.report``),
-    read on ``--cells`` (by default Study 5.5's two N = 12 cells, jit-n12-120
+    read on ``--cells`` (by default Study 5.5's two N = 12 cells, jit-n12-90
     and jit-n12-180, whichever family trained the score: resolution R22), with
     ε given (``--epsilon``) or read from the headroom report (``--headroom``),
     which must have flown the plan the evaluation's policies flew (resolution
@@ -602,7 +602,7 @@ def parser() -> argparse.ArgumentParser:
                              "evaluation's plan (headroom --plan-score-params).")
     report.add_argument("--cells", nargs="+", default=[c.name for c in C.STUDY_5_5_CELLS],
                         help="The cells the rule is read on (default: Study 5.5's, "
-                             "jit-n12-120 and jit-n12-180, decision 5, whichever family "
+                             "jit-n12-90 and jit-n12-180, decision 5, whichever family "
                              "trained the score).")
     report.add_argument("--out", default=None, help="Write the verdict here (JSON).")
     return ap

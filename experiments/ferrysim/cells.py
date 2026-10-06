@@ -272,10 +272,11 @@ class FerryCell:
 # --------------------------------------------------------------------------- #
 # >>> re-pin block
 #: The (stress, knee) budgets (s) of each size's cells, and where each comes from
-#: (BUDGET_*): at N = 6 Phase 4's priors, at N = 12 the stand-ins.
-BUDGETS_S: Dict[int, Tuple[float, float]] = {6: (45.0, 90.0), 12: (120.0, 180.0)}
+#: (BUDGET_*): the stack's knee and stress pilots (params.toml [pilot_outputs]),
+#: re-pinned 2026-10-05 by scripts/exp5/repin.py.
+BUDGETS_S: Dict[int, Tuple[float, float]] = {6: (75.0, 150.0), 12: (90.0, 180.0)}
 BUDGET_ROLES: Dict[int, Tuple[str, str]] = {
-    6: (BUDGET_STRESS_PRIOR, BUDGET_KNEE_PRIOR), 12: (BUDGET_STAND_IN, BUDGET_STAND_IN)}
+    6: (BUDGET_STRESS, BUDGET_KNEE), 12: (BUDGET_STRESS, BUDGET_KNEE)}
 #: The cap S per (size, contact regime): the S* tool's S at the size's two
 #: budgets, never below 2 (module docstring).
 CAP_S: Dict[Tuple[int, str], int] = {(6, "jittery"): 2, (12, "jittery"): 2, (12, "clean"): 2}
@@ -287,11 +288,8 @@ CAP_S: Dict[Tuple[int, str], int] = {(6, "jittery"): 2, (12, "jittery"): 2, (12,
 #: nearest second; ``experiments.ferrysim.evaluate.fx_lag_median(cell)``
 #: measures it, and a slow test measures it again. The integers are a
 #: pre-registration convention fixed by this sample and statistic, not a
-#: measurement to the second. Measured in the Phase 5 fix round: 26.42 s over
-#: 1,397 lags (IQR 20.1 to 34.0 s) at jit-n12-120, 34.11 s over 397 lags (IQR 26.6
-#: to 47.6 s) at jit-n12-180; the pooled medians' 95 % intervals (episodes
-#: resampled whole) about 25.4 to 27.5 s and 32.2 to 36.9 s.
-STUDY_5_6_LAGS_S: Dict[str, int] = {"jit-n12-120": 26, "jit-n12-180": 34}
+#: measurement to the second. Measured 2026-10-05: jit-n12-90: 26.94 s over 672 lags (IQR 22.1 to 34.4 s); jit-n12-180: 34.11 s over 397 lags (IQR 26.6 to 47.6 s).
+STUDY_5_6_LAGS_S: Dict[str, int] = {"jit-n12-90": 27, "jit-n12-180": 34}
 # <<< re-pin block
 
 

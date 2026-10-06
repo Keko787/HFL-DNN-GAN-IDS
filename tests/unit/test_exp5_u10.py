@@ -100,7 +100,7 @@ def test_the_spec_and_the_config_carry_it():
 
 
 def _episode(tmp_path, physics):
-    cell = C.cell_named("jit-n6-90")
+    cell = C.cell_named("jit-n6-150")
     settings = dict(cell.driver_settings()["ferry_physics"], **physics)
     logging.disable(logging.WARNING)
     try:

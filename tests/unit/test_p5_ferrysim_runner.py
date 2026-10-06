@@ -95,8 +95,8 @@ from tests.golden import _build_p4_plan as UG5
 from tests.golden import _canon
 
 REPO = Path(__file__).resolve().parents[2]
-N12 = C.cell_named("jit-n12-120")
-N6 = C.cell_named("jit-n6-90")
+N12 = C.cell_named("jit-n12-90")
+N6 = C.cell_named("jit-n6-150")
 EXPECTED = dataclasses.replace(R.DERIVED, expected_availability=True)
 
 #: Toy cells, chosen by a probe over six validation seeds of four toy
@@ -160,17 +160,17 @@ def _decisions(cell, index):
 
 def test_the_cells_are_decision_3s_on_phase_4s_pilot_flags():
     assert [c.name for c in C.CELLS] == [
-        "jit-n6-45", "jit-n6-90", "jit-n12-120", "jit-n12-180", "cln-n12-120", "cln-n12-180"]
+        "jit-n6-75", "jit-n6-150", "jit-n12-90", "jit-n12-180", "cln-n12-90", "cln-n12-180"]
     table = {c.name: (c.family, c.role, c.n_devices, c.budget_s, c.budget_role,
                       c.contact_regime) for c in C.CELLS}
     (s6, k6), (s12, k12) = C.BUDGETS_S[6], C.BUDGETS_S[12]
     (rs6, rk6), (rs12, rk12) = C.BUDGET_ROLES[6], C.BUDGET_ROLES[12]
     assert table == {
-        "jit-n6-45": ("jittery", "control", 6, s6, rs6, "jittery"),
-        "jit-n6-90": ("jittery", "control", 6, k6, rk6, "jittery"),
-        "jit-n12-120": ("jittery", "decision-rich", 12, s12, rs12, "jittery"),
+        "jit-n6-75": ("jittery", "control", 6, s6, rs6, "jittery"),
+        "jit-n6-150": ("jittery", "control", 6, k6, rk6, "jittery"),
+        "jit-n12-90": ("jittery", "decision-rich", 12, s12, rs12, "jittery"),
         "jit-n12-180": ("jittery", "decision-rich", 12, k12, rk12, "jittery"),
-        "cln-n12-120": ("clean", "negative-control", 12, s12, rs12, "clean"),
+        "cln-n12-90": ("clean", "negative-control", 12, s12, rs12, "clean"),
         "cln-n12-180": ("clean", "negative-control", 12, k12, rk12, "clean"),
     }
     # each name carries its size and budget, each size's stress budget first
@@ -190,7 +190,7 @@ def test_the_cells_are_decision_3s_on_phase_4s_pilot_flags():
         assert dict(cell.params) == {"N": c.n_devices, "rrf": 60.0, "n_missions": 4,
                                      "regime": "jittery"}
     assert C.FAMILIES["jittery"] == C.CELLS[:4] and C.FAMILIES["clean"] == C.CELLS[4:]
-    assert C.STUDY_5_5_CELLS == (C.cell_named("jit-n12-120"), C.cell_named("jit-n12-180"))
+    assert C.STUDY_5_5_CELLS == (C.cell_named("jit-n12-90"), C.cell_named("jit-n12-180"))
     assert C.family_sha256("jittery") != C.family_sha256("clean")
     assert C.family_sha256("jittery") == C.family_sha256("jittery")
     with pytest.raises(ValueError, match="no FerrySim cell"):
@@ -200,7 +200,7 @@ def test_the_cells_are_decision_3s_on_phase_4s_pilot_flags():
 
 
 def test_a_cell_can_set_the_interference_period_for_study_5_6():
-    cell = dataclasses.replace(N12, name="jit-n12-120-p30", interference_period_s=30.0)
+    cell = dataclasses.replace(N12, name="jit-n12-90-p30", interference_period_s=30.0)
     assert cell.driver_settings()["ferry_physics"] == {"contact_regime": "jittery",
                                                        "interference_period_s": 30.0}
     assert N12.driver_settings()["ferry_physics"] == {"contact_regime": "jittery"}
@@ -261,12 +261,12 @@ def test_the_seed_streams_are_disjoint_and_checked():
 
 
 def test_a_stream_is_a_function_of_its_name_cell_and_index(monkeypatch):
-    full = C.stream_seeds(C.HELDOUT_STREAM, "jit-n12-120", 50)
+    full = C.stream_seeds(C.HELDOUT_STREAM, "jit-n12-90", 50)
     assert len(set(full)) == 50
-    assert C.stream_seeds(C.HELDOUT_STREAM, "jit-n12-120", 20, start=30) == full[30:]
+    assert C.stream_seeds(C.HELDOUT_STREAM, "jit-n12-90", 20, start=30) == full[30:]
     assert full != C.stream_seeds(C.HELDOUT_STREAM, "jit-n12-180", 50)
-    assert full != C.stream_seeds(C.VAL_STREAM, "jit-n12-120", 50)
-    assert C.trial_seed(C.HELDOUT_STREAM, "jit-n12-120", 7) == full[7]
+    assert full != C.stream_seeds(C.VAL_STREAM, "jit-n12-90", 50)
+    assert C.trial_seed(C.HELDOUT_STREAM, "jit-n12-90", 7) == full[7]
     # a seed repeated within a stream is skipped, so its episodes stay distinct
     raw = [5, 7, 5, 9, 7, 11]
     monkeypatch.setattr(C, "trial_seed", lambda stream, cell, index: raw[index])
@@ -296,27 +296,26 @@ def test_a_training_run_draws_its_familys_cells_from_its_own_stream():
 # block (experiments/ferrysim/cells.py), from what it measures; they pin it.
 #: The families' hashes (a manifest's ``cell_family_sha256``): ``jittery``,
 #: ``clean`` and ``jittery56``.
-JITTERY_SHA256 = "32b5cb6bc119f1e2b13423dd178cef81c4f7032f24bd199b732f53bd296d3e91"
-CLEAN_SHA256 = "76955c9b637ab875c761bf0ce21181ce1983d9c5df02b6183e74abbfc2915902"
-JITTERY56_SHA256 = "0079de11cdbe8b3fc71f7f6bdd1cf1d859e600031dd625b7996b35b7767fac66"
+JITTERY_SHA256 = "deaa4e082ba40fab48efd2822aaee205df888f26ae48563d320c81a5e9ee052e"
+CLEAN_SHA256 = "97d119d6760685f036548c9f04921fded05102f5ce07f4bb8d73bc1fb332f98f"
+JITTERY56_SHA256 = "affb41aa0f396e4b78f2f8ed3063775033163471482c7ad4ae12dcf4196e2a47"
 #: Study 5.6's lags (s) by Study 5.5 cell, and their periods (s): the quarter and
 #: half at the stress budget, then at the knee.
-LAGS_S = {"jit-n12-120": 26, "jit-n12-180": 34}
-P_C_S = (104, 52, 136, 68)
+LAGS_S = {"jit-n12-90": 27, "jit-n12-180": 34}
+P_C_S = (108, 54, 136, 68)
 #: The lags' sample: (lags, pooled median to 3 places) per Study 5.5 cell.
-LAG_SAMPLE = {"jit-n12-120": (1397, 26.418), "jit-n12-180": (397, 34.106)}
+LAG_SAMPLE = {"jit-n12-90": (672, 26.943), "jit-n12-180": (397, 34.106)}
 #: The ratio check's bounds by budget (stress, knee): the 0.5 and 99.5 % points
 #: of a RATIO_EPISODES-episode median in the lag's 200-episode measurement
 #: (episodes resampled whole, since one layout's lags move together), as a
 #: multiple of the measured median, widened by 5 % for the lag's rounding to the
-#: second and its move with P_c, and rounded outward. At the stand-ins: 0.86 to
-#: 1.17 x at 120 s and 0.70 to 1.38 x at 180 s before widening.
-RATIO_BOUNDS_BY_BUDGET = ((0.81, 1.23), (0.66, 1.45))
+#: second and its move with P_c, and rounded outward. Before widening: 0.88 to 1.20 x at jit-n12-90; 0.71 to 1.41 x at jit-n12-180.
+RATIO_BOUNDS_BY_BUDGET = ((0.83, 1.26), (0.67, 1.48))
 # <<< re-pin pins
 
 #: Study 5.6's cells: the name, the Study 5.5 cell it copies, and its P_c (s).
-STUDY_5_6 = (("jit-n12-120-q", "jit-n12-120", float(P_C_S[0])),
-             ("jit-n12-120-h", "jit-n12-120", float(P_C_S[1])),
+STUDY_5_6 = (("jit-n12-90-q", "jit-n12-90", float(P_C_S[0])),
+             ("jit-n12-90-h", "jit-n12-90", float(P_C_S[1])),
              ("jit-n12-180-q", "jit-n12-180", float(P_C_S[2])),
              ("jit-n12-180-h", "jit-n12-180", float(P_C_S[3])))
 
@@ -360,12 +359,12 @@ def test_study_5_6s_cells_are_study_5_5s_at_a_quarter_and_a_half_of_the_lag():
                                regime="jittery", families=("F",))
         assert max(2, report.s("F")) == cell.cap_s == C.CAP_S[(12, "jittery")]
     assert not set(C.STUDY_5_6_CELLS) & set(C.CELLS)
-    assert C.STUDY_5_6_CONTROL_CELLS == (C.cell_named("cln-n12-120"), C.cell_named("cln-n12-180"))
+    assert C.STUDY_5_6_CONTROL_CELLS == (C.cell_named("cln-n12-90"), C.cell_named("cln-n12-180"))
     C.check_disjoint([(stream, C.stream_seeds(stream, c.name, count))
                       for c in C.CELLS + C.STUDY_5_6_CELLS
                       for stream, count in ((C.VAL_STREAM, 200), (C.HELDOUT_STREAM, 1000))])
-    assert C.stream_seeds(C.VAL_STREAM, "jit-n12-120-q", 50) != C.stream_seeds(
-        C.VAL_STREAM, "jit-n12-120", 50)
+    assert C.stream_seeds(C.VAL_STREAM, "jit-n12-90-q", 50) != C.stream_seeds(
+        C.VAL_STREAM, "jit-n12-90", 50)
 
 
 def test_jittery56_adds_study_5_6s_cells_and_moves_no_other_family():
@@ -376,8 +375,8 @@ def test_jittery56_adds_study_5_6s_cells_and_moves_no_other_family():
     assert C.family_sha256("jittery") == JITTERY_SHA256
     assert C.family_sha256("clean") == CLEAN_SHA256
     assert [c.name for c in C.FAMILIES["jittery"]] == [
-        "jit-n6-45", "jit-n6-90", "jit-n12-120", "jit-n12-180"]
-    assert [c.name for c in C.FAMILIES["clean"]] == ["cln-n12-120", "cln-n12-180"]
+        "jit-n6-75", "jit-n6-150", "jit-n12-90", "jit-n12-180"]
+    assert [c.name for c in C.FAMILIES["clean"]] == ["cln-n12-90", "cln-n12-180"]
     # The Exp 5 addendum's scale family (Study 5.11 (c)) follows them; it moves
     # none of them (tests/unit/test_exp5_ferrysim_scale.py).
     assert list(C.FAMILIES) == ["jittery", "clean", "jittery56", "scale"]
@@ -385,7 +384,7 @@ def test_jittery56_adds_study_5_6s_cells_and_moves_no_other_family():
     assert C.family_sha256("jittery56") == JITTERY56_SHA256
     # the jittery regime's one score flies them, whichever family it practised over
     assert {c.family for c in C.FAMILIES["jittery56"]} == {"jittery"}
-    assert [c.name for c in C.STUDY_5_5_CELLS] == ["jit-n12-120", "jit-n12-180"]
+    assert [c.name for c in C.STUDY_5_5_CELLS] == ["jit-n12-90", "jit-n12-180"]
     drawn = [C.train_episode(4, "jittery56", e) for e in range(800)]
     counts = collections.Counter(cell.name for cell, _ in drawn)
     assert set(counts) == {c.name for c in C.FAMILIES["jittery56"]}
@@ -422,8 +421,8 @@ def test_the_lag_is_fxs_arrival_lags_pooled_over_its_first_validation_episodes()
     sample ``cells.STUDY_5_6_LAGS_S`` was pinned on."""
     assert EV.LAG_EPISODES == 200
     flown = [lag for i in range(2) for lag in C.arrival_lags(
-        _episode("jit-n12-120", i, "FX").sorties)]
-    assert EV.fx_lags("jit-n12-120", episodes=2) == flown and len(flown) >= 2
+        _episode("jit-n12-90", i, "FX").sorties)]
+    assert EV.fx_lags("jit-n12-90", episodes=2) == flown and len(flown) >= 2
     assert EV.fx_lag_median(N12, episodes=2) == statistics.median(flown)
     with pytest.raises(ValueError, match="no lag"):
         EV.fx_lag_median(N12, episodes=0)
@@ -605,7 +604,7 @@ def test_a_ferrysim_rows_device_serve_columns_are_harness_artifacts(policy, devi
     test above)."""
     from experiments.analysis.traces_scorer import score_traces
 
-    cell = C.cell_named("jit-n6-45")
+    cell = C.cell_named("jit-n6-75")
     ep = E.run_episode(cell, _seed(cell), policy, device_model=device_model, keep_case=True,
                        driver_overrides={"trace_root": tmp_path})
     assert ep.sorties and {k: ep.row[k] for k in _ROW_SERVES} == FERRYSIM_SERVES
@@ -692,14 +691,14 @@ def test_the_trainers_reference_phase_flies_fx_pair():
 
 
 def test_stop_after_ends_the_trial_once_that_mission_has_closed():
-    full = _episode("jit-n12-120", 0, "FX")
+    full = _episode("jit-n12-90", 0, "FX")
     part = E.run_episode(N12, _seed(), E.Policy.of_arm("FX"), stop_after=1)
     assert len(full.sorties) == 4 and len(part.sorties) == 2
     assert _sorties(part) == _sorties(full)[:2]
 
 
 def test_a_pair_slot_episodes_records_are_ferrysims_reading_and_a_difference_raises():
-    ep = _episode("jit-n12-120", 0, "fx_pair")
+    ep = _episode("jit-n12-90", 0, "fx_pair")
     k = next(i for i, s in enumerate(ep.sorties) if len(s.stops) >= 2)
     sortie, records = ep.sorties[k], ep.pair_records[k]
     E._check_pair_records(sortie, records)
@@ -714,7 +713,7 @@ def test_a_pair_slot_episodes_records_are_ferrysims_reading_and_a_difference_rai
     with pytest.raises(AssertionError, match="record"):
         E._check_pair_records(sortie, records[:-1])
     # arms carry no pair record; a slot carries one per Pass-1 stop flown
-    assert set(_episode("jit-n12-120", 0, "FX").pair_records) == {None}
+    assert set(_episode("jit-n12-90", 0, "FX").pair_records) == {None}
     assert [len(r) for r in ep.pair_records] == [len(s.stops) for s in ep.sorties]
 
 
@@ -1377,12 +1376,12 @@ def test_the_headroom_command_takes_the_plan_as_the_runner_reads_it(monkeypatch,
     monkeypatch.setattr(HR, "cell_headroom", lambda episodes: {"headroom": 1.0})
     monkeypatch.setattr(HR, "format_report", lambda report: "")
     out = tmp_path / "headroom.json"
-    assert HR.main(["--cells", "jit-n12-120", "--episodes", "2", "--plan-score-params",
+    assert HR.main(["--cells", "jit-n12-90", "--episodes", "2", "--plan-score-params",
                     '{"c_cov_per_device": 0.25}', "--out", str(out)]) == 0
     assert [t.plan_score_params for t in built[0]] == [{"c_cov_per_device": 0.25}] * 2
     assert json.loads(out.read_text(encoding="utf-8"))["plan_score_params"] == {
         "c_cov_per_device": 0.25}
-    assert HR.main(["--cells", "jit-n12-120", "--episodes", "1", "--out", str(out)]) == 0
+    assert HR.main(["--cells", "jit-n12-90", "--episodes", "1", "--out", str(out)]) == 0
     assert [t.plan_score_params for t in built[1]] == [{}]
     assert "plan_score_params" not in json.loads(out.read_text(encoding="utf-8"))
     for flag, why in (('{"kappa": 1}', "--plan-score-params: plan_score_params: unknown "
@@ -1392,7 +1391,7 @@ def test_the_headroom_command_takes_the_plan_as_the_runner_reads_it(monkeypatch,
                       ("[1]", "--plan-score-params must be a JSON object")):
         capsys.readouterr()
         with pytest.raises(SystemExit) as refused:
-            HR.main(["--cells", "jit-n12-120", "--plan-score-params", flag])
+            HR.main(["--cells", "jit-n12-90", "--plan-score-params", flag])
         assert refused.value.code == 2 and why in capsys.readouterr().err, flag
     assert len(built) == 2
 
@@ -1409,12 +1408,12 @@ def test_the_headroom_and_evaluate_commands_make_their_out_folder_before_flying(
                         lambda fn, tasks, workers=1: made.append(out.parent.is_dir()) or [])
     monkeypatch.setattr(HR, "cell_headroom", lambda episodes: {"headroom": 1.0})
     monkeypatch.setattr(HR, "format_report", lambda report: "")
-    assert HR.main(["--cells", "jit-n12-120", "--episodes", "1", "--out", str(out)]) == 0
+    assert HR.main(["--cells", "jit-n12-90", "--episodes", "1", "--out", str(out)]) == 0
     assert out.is_file()
     evaluated = tmp_path / "results" / "exp5" / "references" / "val.json"
     monkeypatch.setattr(EV, "evaluate",
                         lambda *args, **kwargs: made.append(evaluated.parent.is_dir()) or [])
-    assert EV.main(["--cells", "jit-n12-120", "--episodes", "1", "--out", str(evaluated)]) == 0
+    assert EV.main(["--cells", "jit-n12-90", "--episodes", "1", "--out", str(evaluated)]) == 0
     assert json.loads(evaluated.read_text(encoding="utf-8")) == {"summaries": [], "scores": []}
     assert made == [True, True]
 
@@ -1474,7 +1473,7 @@ def test_a_checkpoints_held_out_score_lands_in_its_manifest(tmp_path):
             seeds={"init": 1}, cell_family="jittery", cell_family_sha256=C.family_sha256(
                 "jittery"), trainer_commit=None, dirty=True, episodes_trained=10,
             validation=[], held_out=None))
-    summaries = [{"cell": "jit-n12-120", "stream": C.HELDOUT_STREAM, "policy": "FQ-g90",
+    summaries = [{"cell": "jit-n12-90", "stream": C.HELDOUT_STREAM, "policy": "FQ-g90",
                   "index": i, "return": r, "decisions": [2, 3],
                   "terms": {"gain": 1.0, "time": 0.1, "energy": 0.0, "distance": 0.0,
                             "coverage": 0.2}}

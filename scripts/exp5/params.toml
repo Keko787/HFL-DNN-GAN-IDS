@@ -185,7 +185,7 @@ n_trials = 20
 payload_bytes = 1000000
 
 [s511a]                       # decision cost in FerrySim (in process, stub trainer)
-cells = ["jit-n6-90", "jit-n12-120", "scl-n24-350", "scl-n48-680", "scl-n96-1330"]
+cells = ["jit-n6-150", "jit-n12-90", "scl-n24-350", "scl-n48-680", "scl-n96-1330"]
 policies = ["FX"]
 episodes = 20
 modes = ["auto", "subsets", "local"]   # planner left alone; stop subsets forced; local search forced
@@ -243,8 +243,10 @@ payload_bytes = 1000000
 # Every RL stage refuses until this is true. Set it only after the re-pin is
 # committed: FerrySim's N = 12 cells, the 5.6 lags, the four P_c constants, the
 # jittery56 hash and the test literals moved to the stack's measured N = 12
-# knee (Run Guide 2.8, "The re-pin"; go-ahead item 5).
-repinned = false
+# knee (Run Guide 2.8, "The re-pin"; go-ahead item 5). Re-pinned 5 Oct 2026
+# (scripts/exp5/repin.py): N = 6 at 75/150 s, N = 12 at 90/180 s, lags 27/34 s;
+# set true in the commit that holds the re-pin.
+repinned = true
 # Trainings side by side, one logical CPU each: "auto" is the host's logical
 # CPUs less 2 (14 on the 16 the campaign was sized on), or give a number.
 max_jobs = "auto"
