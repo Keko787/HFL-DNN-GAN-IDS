@@ -2,7 +2,7 @@
 
 What is left before the Exp 5 sweep can run, stage by stage: what is ready, what is not, and why.
 
-*As of 6 Oct 2026, after the S\* pilot (commit `6e4b6c3`), the re-pin (`77880dc`), the smoke run of every stage (its fixes `b54185a`) and the code gate; the `"auto"` machine limits are `4b78194`. The live view is `exp5 status` (or `exp5 check`); the full procedure is the [reproducibility guide](Experiment_5_Reproducibility_Guide.md).*
+*As of 6 Oct 2026, about 10:00: batch 1 and `sens` done and scored (`ff90bbf`, `53bdfc5`), and the RL campaign paused after its calibration for a decision ([findings](Experiment_5_RL_Calibration_Findings.md)). Before that: the S\* pilot (commit `6e4b6c3`), the re-pin (`77880dc`), the smoke run of every stage (its fixes `b54185a`) and the code gate; the `"auto"` machine limits are `4b78194`. The live view is `exp5 status` (or `exp5 check`); the full procedure is the [reproducibility guide](Experiment_5_Reproducibility_Guide.md).*
 
 ---
 
@@ -35,7 +35,8 @@ The code, the launcher, every stage's definition, the scoring and the documentat
 | `quick` | ⏳ After batch 1 | Batch 1's recorded CSVs to compare against | A reviewer's reproduction of 5.3's headline cell (320 trials). It needs a recorded batch 1 to compare with. |
 | `batch1` | ▶️ Ready | — | See above. |
 | `sens` | ⏳ After batch 1 | Batch 1's CSVs | 5.3's F, FX and H1 at the session timeout × 0.75 and × 1.5. × 1 is batch 1's own cell. |
-| `rl-headroom`, `rl-calibrate`, `rl-sweep`, `rl-e3` | ▶️ Ready | `rl-headroom`'s report, for `rl-calibrate` and `rl-sweep` | Since the re-pin, FerrySim's cells fly the stack's budgets: 75 and 150 s at N = 6, 90 and 180 s at N = 12. |
+| `rl-headroom`, `rl-calibrate` | ✅ Done, 6 Oct | — | ε = 0.01 everywhere (headroom 0.012–0.042). Calibration: `jittery56` flat, `clean` sanity-failed by 0.0005; the learned score sits at FX's level, below greedy_1. See [the findings](Experiment_5_RL_Calibration_Findings.md). |
+| `rl-sweep`, `rl-e3` | ⏸️ Paused | The decision after the calibration (below) | The campaign pauses here by design. |
 | `rl-s57` | ❌ Blocked | Study 5.5's verdict (`rl.gamma_star`, `rl.keep_learned`) | 5.7's scores train only if the verdict keeps the learned score. |
 | `batch2` | ❌ Blocked | The RL verdict (`rl.keep_learned`, the `rl.checkpoints` paths); the 5.1 weights decision (below) | 5.1, 5.2, the rest of 5.3, 5.4, 5.5's stack check, 5.6–5.8, the rest of 5.9, 5.13: about 11,300 trials, roughly 50 h. FQ and E3 arms fly checkpoints that don't exist yet. |
 | `pilot3` | ▶️ Ready | — | 5.15's interference levels, 5.12's training-time levels (p512) and 5.11 (c)'s FerrySim sweeps: 80 trials plus FerrySim. Its stack jobs fly H1 (no cap) and its FerrySim jobs the scale cells, which the re-pin leaves alone. |
@@ -52,8 +53,8 @@ The code, the launcher, every stage's definition, the scoring and the documentat
 | 2 | ✅ The re-pin: FerrySim's N = 6 cells to (75, 150) s and N = 12 to (90, 180) s; caps 2; Study 5.6's lags 27 and 34 s (periods 108/54 and 136/68 s); the hashes and the test pins. Two tests that held the old budgets as literals were fixed. Commit it, with `[rl] repinned = true` | `python scripts/exp5/repin.py --dry-run`, then `--workers 8`; the FerrySim tests | done (26 s, then about 5 min of tests) |
 | 3 | ✅ A smoke run of every stage after the pilots, 5–6 Oct: one trial per job (RL trainings at 30 episodes), stand-ins for the undecided values (γ\* 0.9 with the learned score kept, the smoke verdict's checkpoints, pilot3's example values). 10 stages and 310 jobs, then batch 2's 361; every trial row ok. It found two problems, both in smoke runs alone, fixed in `b54185a`: smoke trainings stopped short of the learner's 1,000-transition warm-up, so Study 5.7's ablation checkpoints were one network and their evaluation refused them (smoke now trains past a warm-up of 64); and `report` on an RL stage did not show the verdict | `exp5 run <stage> --smoke --yes`, stage by stage, with `--set` stand-ins for the RL decisions and pilot3's values | done (about 3.5 h; Study 5.4's O1 oracle took 50 min of it at its full 30 episodes, and smoke now flies it at 2) |
 | 4 | ✅ The code gate, 6 Oct, on `b54185a`: 6,375 tests, the five known failures with their recorded signatures, the same as all three baselines. None of the five last-bit `erfc` differences the guide expects on another host appeared | `python -m pytest tests …` then `tests/golden/make_baseline.py compare` | done (18 min) |
-| 5 | Batch 1, then `sens` (or after step 6; see the order choice) | `exp5 run batch1 --yes`, `exp5 run sens --yes` | ~7 h |
-| 6 | The RL campaign. It pauses after the calibration (a sanity check to read) and after Study 5.5's verdict | `exp5 run rl --yes` | ~12–20 h |
+| 5 | ✅ Batch 1, then `sens`, 6 Oct 00:36–06:40 from `c461552`: 1,760 + 120 trials, every row ok; scored (`exp5 score batch1`, `score sens`) into `results/exp5/scores/`; committed `ff90bbf` (results) and `53bdfc5` (scores, headlines in its message); traces in `results/exp5/archives/{b1,sens}_traces.tar.gz` | `exp5 run batch1 --yes`, `exp5 run sens --yes` | done (6 h) |
+| 6 | The RL campaign. It pauses after the calibration (a sanity check to read) and after Study 5.5's verdict. **Headroom and calibration done (6 Oct 06:42–09:17); paused for the decision recorded in [the findings](Experiment_5_RL_Calibration_Findings.md)** | `exp5 run rl --yes` | ~2.5 h done; the sweep ~10 h |
 | 7 | Act on the verdict: set `rl.gamma_star`, `rl.keep_learned` and the `rl.checkpoints` paths; build FX-dwell and FX-cov (if FX is kept) or M1 (if the learned score is kept) | params.toml; a build | decisions + build |
 | 8 | Batch 2 | `exp5 run batch2 --yes` | ~50 h |
 | 9 | Batch 3's pilots, then their outputs | `exp5 run pilot3 --yes`, `exp5 report pilot3 --apply`, the rest by hand | ~1 h |
@@ -74,6 +75,7 @@ The TTL and knee pilots ran on the first host: 8 physical cores, 16 logical, 95 
 |---|---|---|
 | **5.1's bound-derived merge weights.** `agg:cutoff`'s age weights are FedAsync's hinge with hand-set constants; the "derived from the bound" side is a theory-track derivation not yet done. 5.7 cites it too. | Batch 2 (5.1 and 5.7) | Drop the derivation and add a small sensitivity check on the hand-set constants (~240 trials, launcher settings only); drop it with nothing added; or do the derivation (research work), after which it becomes a weight mode and a 5.1 variant. |
 | **Batch 1 before or after RL** | Step 5 | After RL, as the campaign orders it; or right after the re-pin and smoke test. See "Order choice" above. |
+| **How the RL campaign goes on** after the calibration: run the sweep as planned; screen one learner revision on the clean cells first (the one the plan allows); or keep FX without the sweep | `rl-sweep` | The options with their pros and cons, and the screen's pre-set rule, are in [the findings](Experiment_5_RL_Calibration_Findings.md). |
 | **The verdict's follow-ups:** γ\*, keep the learned score or not, the checkpoints; FX-dwell/FX-cov or M1 | Batch 2 | Read from `exp5 report rl-sweep`. |
 | **pilot3's hand-set values:** 5.15's harsher interference amplitude and higher path-loss exponent, 5.11 (c)'s knees | Batch 3 | Read from `exp5 report pilot3`. |
 | **Publishing the trace archives** (a GitHub release, Zenodo for the paper's artifact) | The paper | Nothing is published without your go-ahead. |
