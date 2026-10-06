@@ -1,0 +1,15 @@
+[
+ "-m",
+ "experiments.analysis.traces_scorer",
+ "--traces",
+ "results/exp5/b1/s511b/n12k2_knee__FX_traces",
+ "--status-csv",
+ "results/exp5/b1/s511b/n12k2_knee__FX.csv",
+ "--tau",
+ "0.71",
+ "0.82",
+ "--cost-columns",
+ "--pair-columns",
+ "--csv",
+ "results/exp5/b1/s511b/n12k2_knee__FX_scored.csv"
+]

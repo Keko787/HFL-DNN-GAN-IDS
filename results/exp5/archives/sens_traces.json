@@ -1,0 +1,46 @@
+{
+ "stage": "sens",
+ "archive": "sens_traces.tar.gz",
+ "sha256": "0569c3d6dacb4eecd1fa4ae0d54a19ba7dbd7b44650078353b8b5803fe6bc1fd",
+ "bytes": 1149271,
+ "created": "2026-10-06T06:44:26",
+ "commit": "705235f0dd50df4ccf6468079455b428520d4c18",
+ "folders": [
+  {
+   "path": "sens/ttl/n6k1_knee_ttl0.75__F_traces",
+   "trials": 20,
+   "files": 360,
+   "bytes": 1024868
+  },
+  {
+   "path": "sens/ttl/n6k1_knee_ttl0.75__FX_traces",
+   "trials": 20,
+   "files": 360,
+   "bytes": 1024676
+  },
+  {
+   "path": "sens/ttl/n6k1_knee_ttl0.75__H1_traces",
+   "trials": 20,
+   "files": 360,
+   "bytes": 1092248
+  },
+  {
+   "path": "sens/ttl/n6k1_knee_ttl1.5__F_traces",
+   "trials": 20,
+   "files": 360,
+   "bytes": 1024907
+  },
+  {
+   "path": "sens/ttl/n6k1_knee_ttl1.5__FX_traces",
+   "trials": 20,
+   "files": 360,
+   "bytes": 1024695
+  },
+  {
+   "path": "sens/ttl/n6k1_knee_ttl1.5__H1_traces",
+   "trials": 20,
+   "files": 360,
+   "bytes": 1092328
+  }
+ ]
+}
