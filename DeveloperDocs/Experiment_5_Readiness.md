@@ -2,25 +2,25 @@
 
 What is left before the Exp 5 sweep can run, stage by stage: what is ready, what is not, and why.
 
-*As of 5 Oct 2026, after the S\* pilot (commit `6e4b6c3`) and the re-pin (`77880dc`); the `"auto"` machine limits are `4b78194`. The live view is `exp5 status` (or `exp5 check`); the full procedure is the [reproducibility guide](Experiment_5_Reproducibility_Guide.md).*
+*As of 6 Oct 2026, after the S\* pilot (commit `6e4b6c3`), the re-pin (`77880dc`), the smoke run of every stage (its fixes `b54185a`) and the code gate; the `"auto"` machine limits are `4b78194`. The live view is `exp5 status` (or `exp5 check`); the full procedure is the [reproducibility guide](Experiment_5_Reproducibility_Guide.md).*
 
 ---
 
 ## In one paragraph
 
-The code, the launcher, every stage's definition, the scoring and the documentation are built. The first three pilots are done: the session timeout (TTL), the budget knees with τ, and the age cap S\* (2 at every N). **Batch 1 and batch 3's `pilot3` have every setting they need.** The FerrySim re-pin is done, so the RL stages can run: FerrySim's cells now fly the stack's budgets. Batch 2 needs the RL verdict, and batch 3 needs its own pilot. No stage beyond the pilots has had a smoke run yet. From S\* on, the campaign runs on a second host; see "The host" below.
+The code, the launcher, every stage's definition, the scoring and the documentation are built. The first three pilots are done: the session timeout (TTL), the budget knees with τ, and the age cap S\* (2 at every N). **Batch 1 and batch 3's `pilot3` have every setting they need.** The FerrySim re-pin is done, so the RL stages can run: FerrySim's cells now fly the stack's budgets. Batch 2 needs the RL verdict, and batch 3 needs its own pilot. Every stage has passed a smoke run, and the code gate passed. From S\* on, the campaign runs on a second host; see "The host" below.
 
 ---
 
 ## Is batch 1 ready?
 
-**Yes, after a smoke run.**
+**Yes.**
 
 | | |
 |---|---|
 | What it has | The knee and stress budgets per N, the session timeouts, τ = 0.71, S\* = 2 at every N, and every other batch 1 setting. All 70 of its stack jobs pass the runner's argument checks with the real values (`exp5 validate batch1`). |
 | Size | 1,920 trials (5.3 core, 5.9 core, 5.11 (b), 5.14) plus 3 FerrySim jobs (5.11 (a)). About 6 h on the second host (the launcher estimates 4.4 h at its `"auto"` limits, 4.9 h at the first host's; the knee ran about 1.3 times its estimate). |
-| Do first | A smoke run. The re-pin, which renamed the FerrySim cells that 5.11 (a) flies, is done. |
+| Do first | Nothing: the re-pin (which renamed the FerrySim cells 5.11 (a) flies), the smoke run and the code gate are done. |
 | Order choice | The campaign runs batch 1 after the RL verdict. That is not because its runs could become invalid: F, FX and FQ are separate arms, and batch 2 adds FQ to batch 1's own cells on the same seeds. The verdict decides which arm the paper calls FeRRy. If the learned score is kept, 5.3 and 5.9 get FQ in batch 2, while 5.11 (b) and 5.14 would show only F and FX unless extended. Batch 1 can therefore also run right after the re-pin and smoke test, before RL. |
 
 ---
@@ -33,7 +33,7 @@ The code, the launcher, every stage's definition, the scoring and the documentat
 | `knee` | ✅ Done | — | Knees 150, 180, 240, 262 s (stress half of each); 120 s at N = 6 with the measured payload; τ = 0.71. N = 6's knee is the grid's largest budget, accepted as is. |
 | `sstar` | ✅ Done | — | S\* = 2 at N = 6, 12, 18 and 24: one mission covers 90% of layouts at each knee, two at each stress budget (N ≥ 12 by the tool's greedy bound). Ran on the second host; the tool has no timing in it. |
 | `quick` | ⏳ After batch 1 | Batch 1's recorded CSVs to compare against | A reviewer's reproduction of 5.3's headline cell (320 trials). It needs a recorded batch 1 to compare with. |
-| `batch1` | ▶️ Ready | A smoke run (recommended) | See above. |
+| `batch1` | ▶️ Ready | — | See above. |
 | `sens` | ⏳ After batch 1 | Batch 1's CSVs | 5.3's F, FX and H1 at the session timeout × 0.75 and × 1.5. × 1 is batch 1's own cell. |
 | `rl-headroom`, `rl-calibrate`, `rl-sweep`, `rl-e3` | ▶️ Ready | `rl-headroom`'s report, for `rl-calibrate` and `rl-sweep` | Since the re-pin, FerrySim's cells fly the stack's budgets: 75 and 150 s at N = 6, 90 and 180 s at N = 12. |
 | `rl-s57` | ❌ Blocked | Study 5.5's verdict (`rl.gamma_star`, `rl.keep_learned`) | 5.7's scores train only if the verdict keeps the learned score. |
@@ -50,8 +50,8 @@ The code, the launcher, every stage's definition, the scoring and the documentat
 |---|---|---|---|
 | 1 | ✅ The S\* pilot and its output (S\* = 2 at every N); commit it | `exp5 run sstar --yes`, `exp5 report sstar --apply` | done |
 | 2 | ✅ The re-pin: FerrySim's N = 6 cells to (75, 150) s and N = 12 to (90, 180) s; caps 2; Study 5.6's lags 27 and 34 s (periods 108/54 and 136/68 s); the hashes and the test pins. Two tests that held the old budgets as literals were fixed. Commit it, with `[rl] repinned = true` | `python scripts/exp5/repin.py --dry-run`, then `--workers 8`; the FerrySim tests | done (26 s, then about 5 min of tests) |
-| 3 | A smoke run of every stage: one trial per job (RL trainings at 30 episodes), into `../exp5_smoke`, with placeholders for the values still undecided | `exp5 run <stage> --smoke --yes`, stage by stage, with `--set` placeholders for the RL decisions and pilot3's values | ~1–2 h |
-| 4 | The code gate: the full suite against the recorded baselines | `python -m pytest tests …` then `tests/golden/make_baseline.py compare` | ~25 min |
+| 3 | ✅ A smoke run of every stage after the pilots, 5–6 Oct: one trial per job (RL trainings at 30 episodes), stand-ins for the undecided values (γ\* 0.9 with the learned score kept, the smoke verdict's checkpoints, pilot3's example values). 10 stages and 310 jobs, then batch 2's 361; every trial row ok. It found two problems, both in smoke runs alone, fixed in `b54185a`: smoke trainings stopped short of the learner's 1,000-transition warm-up, so Study 5.7's ablation checkpoints were one network and their evaluation refused them (smoke now trains past a warm-up of 64); and `report` on an RL stage did not show the verdict | `exp5 run <stage> --smoke --yes`, stage by stage, with `--set` stand-ins for the RL decisions and pilot3's values | done (about 3.5 h; Study 5.4's O1 oracle took 50 min of it at its full 30 episodes, and smoke now flies it at 2) |
+| 4 | ✅ The code gate, 6 Oct, on `b54185a`: 6,375 tests, the five known failures with their recorded signatures, the same as all three baselines. None of the five last-bit `erfc` differences the guide expects on another host appeared | `python -m pytest tests …` then `tests/golden/make_baseline.py compare` | done (18 min) |
 | 5 | Batch 1, then `sens` (or after step 6; see the order choice) | `exp5 run batch1 --yes`, `exp5 run sens --yes` | ~7 h |
 | 6 | The RL campaign. It pauses after the calibration (a sanity check to read) and after Study 5.5's verdict | `exp5 run rl --yes` | ~12–20 h |
 | 7 | Act on the verdict: set `rl.gamma_star`, `rl.keep_learned` and the `rl.checkpoints` paths; build FX-dwell and FX-cov (if FX is kept) or M1 (if the learned score is kept) | params.toml; a build | decisions + build |
@@ -75,6 +75,7 @@ The TTL and knee pilots ran on the first host: 8 physical cores, 16 logical, 95 
 | **5.1's bound-derived merge weights.** `agg:cutoff`'s age weights are FedAsync's hinge with hand-set constants; the "derived from the bound" side is a theory-track derivation not yet done. 5.7 cites it too. | Batch 2 (5.1 and 5.7) | Drop the derivation and add a small sensitivity check on the hand-set constants (~240 trials, launcher settings only); drop it with nothing added; or do the derivation (research work), after which it becomes a weight mode and a 5.1 variant. |
 | **Batch 1 before or after RL** | Step 5 | After RL, as the campaign orders it; or right after the re-pin and smoke test. See "Order choice" above. |
 | **The verdict's follow-ups:** γ\*, keep the learned score or not, the checkpoints; FX-dwell/FX-cov or M1 | Batch 2 | Read from `exp5 report rl-sweep`. |
+| **p512's not-ready band and the first mission** (see "What could still go wrong") | pilot3 | Measure the share on missions 2 onward, the steady state the band is meant for (a scorer column and the rule; recommended); add shorter levels to `[p512] cycle_factors` (no code, but the level picked then barely loads the devices after mission 1); widen the band; or start each device's first fit before takeoff (changes every 5.12 trial's model). |
 | **pilot3's hand-set values:** 5.15's harsher interference amplitude and higher path-loss exponent, 5.11 (c)'s knees | Batch 3 | Read from `exp5 report pilot3`. |
 | **Publishing the trace archives** (a GitHub release, Zenodo for the paper's artifact) | The paper | Nothing is published without your go-ahead. |
 
@@ -85,7 +86,7 @@ Decided already, for reference: τ from the knee pilot (0.71; 0.82 kept as a sec
 ## What could still go wrong
 
 - **The session timeouts and knees came from another host.** This CPU's cores are faster, so its fits are likely shorter and the timeouts more lenient than measured. That is a guess, not a measurement. See "The host" above.
-- **The smoke run has not happened.** Every job passes the runner's argument checks, but none past the pilots has run. Expect it to find a few runtime problems.
+- **p512's band may be out of reach because of the first mission.** In the smoke run (one trial per level) even the shortest training time, 45 s, left 37.5% of Pass-1 contacts with no update ready, against the 10–30% band. Mission 1 accounts for most of it: every device starts its first fit at the mule's first takeoff, so mission 1's contacts, seconds later, find almost none ready (5 of 6 at 45 s), while missions 2–4 found 4 of 18 (22%, inside the band). Mission 1 is a quarter of the contacts, so it adds about 20 points at every level. **Open decision before pilot3** (below).
 - **A pilot rule can come back empty.** p512 refuses if no training-time level gives 10–30% not-ready contacts (change `[p512] cycle_factors` and rerun). (The re-pin's own check passed, narrowly: at 180 s the ratio bound is 1.48 against 1.5.)
 - **τ = 0.71 is set by the larger sizes.** At N = 18 and 24, accuracy levels off near 0.71 whatever the budget. At N = 6, where 80% of trials reach 0.82, most trials reach 0.71 early, so time to τ separates the arms less there. Final accuracy and reach at 0.82 are reported beside it.
 - **The N = 6 cells leave the learned score little to decide.** At their measured budgets one stop serves all six devices in most missions. At 150 s, every pair FX's in-flight slot weighed over 24 episodes was the dock. They are controls, so that is their role, but they add little training signal to the `jittery` family.
