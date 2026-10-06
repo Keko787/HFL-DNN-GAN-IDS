@@ -400,3 +400,12 @@ def test_rl_report_shows_the_verdict_the_report_file_nests(tmp_path, capsys):
     shown = capsys.readouterr().out
     assert '"outcome": "rising"' in shown and '"greedy_1_flag": true' in shown
     assert '"best_gamma": 0.25' in shown and "curves" not in shown
+
+
+def test_smoke_flies_the_o1_oracle_on_two_episodes(tmp_path):
+    s = _filled_settings()
+    jobs = [j for j in L.build("batch2", L.Settings(s.data), None, str(tmp_path))
+            if "experiments.analysis.o1_oracle" in j.args]
+    assert jobs and all(j.args[j.args.index("--episodes") + 1] == "30" for j in jobs)
+    L.smoke(jobs)
+    assert all(j.args[j.args.index("--episodes") + 1] == "2" for j in jobs)
