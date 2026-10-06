@@ -466,7 +466,7 @@ exp5 score batch1 --rescore
 
 ## 11. Status and open decisions
 
-*As of 5 Oct 2026.* What each stage still waits on, and the steps left before the sweep, are in [Experiment_5_Readiness.md](Experiment_5_Readiness.md).
+*As of 6 Oct 2026.* What each stage still waits on, and the steps left before the sweep, are in [Experiment_5_Readiness.md](Experiment_5_Readiness.md).
 
 - **Done:**
   - the TTL pilot: `session_ttl_s` 36, 34, 34 and 23 s at N = 6, 12, 18 and 24;
@@ -474,9 +474,10 @@ exp5 score batch1 --rescore
   - the S\* pilot (`6e4b6c3`): `s_star` 2 at every N. One mission covers 90% of layouts at each knee, and two at each stress budget; N ≥ 12 by the tool's greedy bound. It ran on a second host (12 physical cores, 20 logical, 64 GB). The TTL and knee pilots ran on the first (8, 16, 95 GB). S\* is a planning-level calculation with no timing in it, so the host does not change it.
 - **Host.** From S\* on, the campaign runs on the second host, by choice (5 Oct 2026). Its machine limits are `"auto"` ([§2.1](#21-the-machine)). The session timeouts and knees are still the first host's; `check` and `run` warn about it.
 - **The re-pin, 5 Oct 2026 (`77880dc`):** FerrySim's N = 6 cells moved to 75 and 150 s (`jit-n6-75`, `jit-n6-150`), and N = 12 to 90 and 180 s (`jit-n12-90`, `cln-n12-90` and Study 5.6's `jit-n12-90-q`/`-h`; the 180 s cells kept their names). Caps 2; Study 5.6's lags 27 and 34 s, so P_c 108/54 and 136/68 s; ratio bounds 0.83–1.26 and 0.67–1.48.
+- **The smoke run and the code gate, 5–6 Oct 2026:** every stage after the pilots passed a smoke run, every trial row ok, once two smoke-only problems were fixed (`b54185a`: smoke trainings now pass the learner's warm-up, and `report` shows an RL verdict). The code gate on `b54185a` matched all three baselines (6,375 tests, the five known failures). Details in the readiness doc's steps 3 and 4.
 - **Next:**
-  - a smoke run of every stage;
-  - the RL campaign;
+  - batch 1, and the RL campaign;
+  - p512's band, to decide before `pilot3` (the readiness doc's open decisions);
   - the batches.
 - **Decided: τ.** In the knee pilot's first cells, H1 reached τ = 0.82 within 4 missions in few trials: 5 of the first 49 at N = 12, and none at N = 24, where accuracy levels off near 0.71 at every budget. The missions stay at 4, and τ is set from the knee pilot by the rule in [§5.2](#52-the-pilots), with 0.82 kept as a second τ. The rule gave 0.71 (0.82 at N = 6, 0.72 at N = 12, 0.71 at N = 18 and 24).
 - **Decided: the traces.** Per-stage archives (`exp5 pack`), with their checksums committed; the archives go to a release and to Zenodo. Nothing has been published yet.
