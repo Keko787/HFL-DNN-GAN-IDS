@@ -409,3 +409,32 @@ def test_smoke_flies_the_o1_oracle_on_two_episodes(tmp_path):
     assert jobs and all(j.args[j.args.index("--episodes") + 1] == "30" for j in jobs)
     L.smoke(jobs)
     assert all(j.args[j.args.index("--episodes") + 1] == "2" for j in jobs)
+
+
+def test_p512_picks_its_level_by_the_share_after_the_first_mission(tmp_path, monkeypatch):
+    """Every fit starts at the first takeoff, so the first mission's contacts find
+    few updates ready at any level; the rule reads the later missions' share
+    (decided 6 Oct 2026), here inside the band only at the shortest level."""
+    from types import SimpleNamespace
+
+    from experiments.analysis import traces_scorer as TS
+
+    s = _filled_settings()
+    jobs = [j for j in L.build("pilot3", s, None, str(tmp_path)) if j.study == "p512"]
+    after = [0.22, 0.41, 0.73, 0.88]                    # the smoke run's, by level
+    every = [0.375, 0.565, 0.81, 0.913]                 # all above the band
+    by_trace = {}
+    for j, a, e in zip(jobs, after, every):
+        out = L.REPO / j.out
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text("status\n", encoding="utf-8")
+        traces = L.REPO / (j.out[:-4] + "_traces")
+        traces.mkdir()
+        by_trace[str(traces)] = SimpleNamespace(compute=SimpleNamespace(
+            not_ready_share_after_first=a, not_ready_share=e))
+    monkeypatch.setattr(TS, "load_status_csv", lambda path: None)
+    monkeypatch.setattr(TS, "score_traces", lambda traces, **kw: [by_trace[str(traces)]])
+    problems = []
+    levels = L.p512_levels(s, jobs, problems)
+    first = float(jobs[0].args[jobs[0].args.index("--train-time-s") + 1])
+    assert problems == [] and levels is not None and f"spread = [{first:.1f}," in levels

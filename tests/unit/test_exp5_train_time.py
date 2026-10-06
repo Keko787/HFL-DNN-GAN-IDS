@@ -460,6 +460,14 @@ def test_the_compute_columns_read_the_fit_records(f_45s):
     assert r.pass_1_target_contacts == sum(len(s["targets"]) for s in stops)
     assert r.not_ready_contacts == sum(len(s["not_ready"]) for s in stops) > 0
     assert r.not_ready_share == pytest.approx(r.not_ready_contacts / r.pass_1_target_contacts)
+    # After the first mission (pilot3's p512 rule reads that share).
+    later = [s for m in _missions(timed) if m["mission_round"] > min(
+        x["mission_round"] for x in _missions(timed)) for s in m["pass_1_flown"]]
+    assert later and r.pass_1_target_contacts_after_first == sum(
+        len(s["targets"]) for s in later) < r.pass_1_target_contacts
+    assert r.not_ready_contacts_after_first == sum(len(s["not_ready"]) for s in later)
+    assert r.not_ready_share_after_first == pytest.approx(
+        r.not_ready_contacts_after_first / r.pass_1_target_contacts_after_first)
     clean = sum(1 for m in missions for o in m.pass_1_outcomes if o[1] == "clean")
     assert r.pass_1_clean_share == pytest.approx(clean / r.pass_1_target_contacts)
     fits = [f for m in missions for f in m.train_fits]

@@ -411,8 +411,12 @@ N = 6
 # H1 at the N = 6 knee at 1 MB, with the median fit time (simulated s) at each
 # multiple of the mission cycle (the knee budget plus the ferry's 30 s turnaround)
 # and a fixed log-normal sigma. `report pilot3` picks "spread": the level whose
-# mean share of Pass-1 contacts that found no update ready lies in not_ready_band,
-# the one nearest the band's middle if several. "stragglers" is spread with
+# mean share of Pass-1 contacts that found no update ready, after each mule's
+# first mission, lies in not_ready_band, the one nearest the band's middle if
+# several. After the first mission (decided 6 Oct 2026): every fit starts at the
+# first takeoff, so the first mission's contacts find few updates ready at any
+# level (the smoke run: 5 of 6 at 45 s, 22% of later contacts), which would put
+# every level above the band; the share over every mission is reported beside it. "stragglers" is spread with
 # straggler_share of the devices at straggler_factor; "none" is no training time.
 # `report pilot3 --apply` writes the three as pilot_outputs.train_levels.
 N = 6

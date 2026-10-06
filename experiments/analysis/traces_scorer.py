@@ -1330,8 +1330,9 @@ DETECTION_COLUMNS = (
 #: (``--compute-columns``). Scorer-only.
 COMPUTE_COLUMNS = (
     "train_time_median_s", "train_time_sigma", "straggler_share", "straggler_factor",
-    "pass_1_target_contacts", "not_ready_contacts", "not_ready_share", "pass_1_clean_share",
-    "policy_not_ready_drops",
+    "pass_1_target_contacts", "not_ready_contacts", "not_ready_share",
+    "pass_1_target_contacts_after_first", "not_ready_contacts_after_first",
+    "not_ready_share_after_first", "pass_1_clean_share", "policy_not_ready_drops",
     "device_train_busy_s", "device_uplink_s", "device_p_comp_w", "device_p_tx_w",
     "device_energy_j_total", "device_energy_j_max",
 )
@@ -1504,6 +1505,9 @@ class ComputeReport:
     pass_1_target_contacts: Optional[int] = None
     not_ready_contacts: Optional[int] = None
     not_ready_share: Optional[float] = None
+    pass_1_target_contacts_after_first: Optional[int] = None
+    not_ready_contacts_after_first: Optional[int] = None
+    not_ready_share_after_first: Optional[float] = None
     pass_1_clean_share: Optional[float] = None
     policy_not_ready_drops: Optional[int] = None
     device_train_busy_s: Optional[float] = None
@@ -1544,6 +1548,10 @@ def compute_report(obs: Exp4Observation, mule_cfgs: Sequence[Mapping[str, object
     **The contacts** (the Pass-1 stops of missions with fit records):
     ``pass_1_target_contacts``, the targets solicited; ``not_ready_contacts``,
     those that found no update ready, and ``not_ready_share`` of the targets;
+    the same three ``_after_first``, over each mule's missions after its first
+    (every fit starts at the first takeoff, so the first mission's contacts,
+    seconds later, find few updates ready whatever the train times: pilot3's
+    p512 rule reads the share after it, decided 6 Oct 2026);
     ``pass_1_clean_share``, the CLEAN Pass-1 sessions per target contact (the
     summary's ``update_yield`` is the plan's update yield);
     ``policy_not_ready_drops``, the devices arm D5's readiness test left out
@@ -1573,12 +1581,19 @@ def compute_report(obs: Exp4Observation, mule_cfgs: Sequence[Mapping[str, object
         if isinstance(raw, Mapping):
             times.update({str(d): float(t) for d, t in raw.items()
                           if _float_or_none(t) is not None})
-    targets = not_ready = 0
+    first: Dict[Optional[str], int] = {}
+    for m in timed:
+        first[m.mule_id] = min(first.get(m.mule_id, m.mission_round), m.mission_round)
+    targets = not_ready = later_targets = later_not_ready = 0
     uplink: Dict[str, float] = {}
     for m in timed:
+        later = m.mission_round > first[m.mule_id]
         for stop in m.fit_stops or ():
             targets += len(stop.targets)
             not_ready += len(stop.not_ready)
+            if later:
+                later_targets += len(stop.targets)
+                later_not_ready += len(stop.not_ready)
             for did, sec in stop.uplink_s.items():
                 uplink[did] = uplink.get(did, 0.0) + float(sec)
     clean = sum(1 for m in timed for (_d, outcome, _t) in (m.pass_1_outcomes or ())
@@ -1598,6 +1613,9 @@ def compute_report(obs: Exp4Observation, mule_cfgs: Sequence[Mapping[str, object
         pass_1_target_contacts=targets,
         not_ready_contacts=not_ready,
         not_ready_share=(not_ready / targets) if targets else None,
+        pass_1_target_contacts_after_first=later_targets,
+        not_ready_contacts_after_first=later_not_ready,
+        not_ready_share_after_first=(later_not_ready / later_targets) if later_targets else None,
         pass_1_clean_share=(clean / targets) if targets else None,
         policy_not_ready_drops=sum(len(devices) for m in timed
                                    for devices, reason in m.policy_drops or ()
