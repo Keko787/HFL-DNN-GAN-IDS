@@ -302,3 +302,73 @@ def test_report_quick_never_pairs_different_seeds(tmp_path):
     L.report_quick(s, quick, recorded_root=root)
     report = json.loads((Path(quick[0].out).parent.parent / "reproduction.json").read_text("utf-8"))
     assert report["jobs"][quick[0].name]["pairs"] == 0
+
+
+SIZED_ON = {"physical_cpus": 8, "logical_cpus": 16, "ram_gb": 94.7}
+AUTO_KEYS = ("machine.max_jobs", "machine.max_device_processes", "machine.mem_budget_gb",
+             "rl.max_jobs")
+
+
+def _auto_settings():
+    return L.Settings({"machine": {k.split(".")[1]: "auto" for k in AUTO_KEYS[:3]},
+                       "rl": {"max_jobs": "auto"}})
+
+
+def test_auto_limits_give_the_sized_on_hosts_values_there():
+    s = _auto_settings()
+    L.resolve_machine(s, SIZED_ON)
+    assert [s.get(k) for k in AUTO_KEYS] == [6, 36, 75.0, 14]
+    assert len(s.auto) == 4 and all("(" in note for note in s.auto)
+
+
+def test_auto_limits_scale_with_the_host():
+    s = _auto_settings()                                    # 8 P + 4 E cores, 64 GB
+    L.resolve_machine(s, {"physical_cpus": 12, "logical_cpus": 20, "ram_gb": 63.8})
+    assert [s.get(k) for k in AUTO_KEYS] == [7, 45, 51.0, 18]
+    s = _auto_settings()                                    # no SMT: the cores bind
+    L.resolve_machine(s, {"physical_cpus": 4, "logical_cpus": 4, "ram_gb": 16.0})
+    assert [s.get(k) for k in AUTO_KEYS] == [1, 9, 12.0, 2]
+    s = _auto_settings()                                    # never below one N = 6 trial
+    L.resolve_machine(s, {"physical_cpus": 1, "logical_cpus": 1, "ram_gb": 4.0})
+    assert [s.get(k) for k in AUTO_KEYS] == [1, 6, 3.0, 1]
+
+
+def test_auto_leaves_numbers_and_follows_a_set_device_count():
+    s = _auto_settings()
+    s.data["machine"]["max_device_processes"] = 24
+    s.data["rl"]["max_jobs"] = 3
+    L.resolve_machine(s, SIZED_ON)
+    assert [s.get(k) for k in AUTO_KEYS] == [4, 24, 75.0, 3]
+    assert len(s.auto) == 2
+
+
+def test_auto_memory_needs_the_ram():
+    with pytest.raises(SystemExit, match="psutil"):
+        L.resolve_machine(_auto_settings(), {"physical_cpus": 8, "logical_cpus": 16})
+
+
+def test_params_limits_are_auto_and_load_as_numbers():
+    text = L.PARAMS.read_text(encoding="utf-8-sig")
+    raw = L.tomllib.loads(text)
+    assert all(raw[k.split(".")[0]][k.split(".")[1]] == "auto" for k in AUTO_KEYS)
+    s, _ = L.load_settings(L.PARAMS)
+    assert all(isinstance(s.get(k), (int, float)) and s.get(k) > 0 for k in AUTO_KEYS)
+    assert L.Builder(s).concurrency(6) >= 1
+
+
+def test_pilot_host_note_names_another_host(tmp_path, monkeypatch):
+    here = {"processor": "here-cpu", "physical_cpus": 12, "logical_cpus": 20, "ram_gb": 63.8,
+            "platform": "Windows-11"}
+    monkeypatch.setattr(L, "host_info", lambda: dict(here))
+    monkeypatch.setattr(L, "REPO", tmp_path)
+    assert L.pilot_host_note("out") is None                 # no TTL manifest yet
+    launcher = tmp_path / "out" / "ttl" / "_launcher"
+    launcher.mkdir(parents=True)
+    (launcher / "manifest_20261005_123722.json").write_text(
+        json.dumps({"environment": {"host": dict(here, ram_gb=63.7)}}), encoding="utf-8")
+    assert L.pilot_host_note("out") is None                 # the same host
+    (launcher / "manifest_20261006_090000.json").write_text(
+        json.dumps({"environment": {"host": dict(SIZED_ON, processor="there-cpu")}}),
+        encoding="utf-8")
+    note = L.pilot_host_note("out")                         # the latest manifest's host
+    assert note and "there-cpu" in note and "here-cpu" in note and "--out-root" in note

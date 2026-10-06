@@ -61,11 +61,18 @@ footprint = true
 # Parallel jobs (one runner process each). The scheduler also keeps the sum of
 # the jobs' estimated memory under mem_budget_gb, and the devices of the
 # running jobs (each a TensorFlow process that trains) under
-# max_device_processes: on 8 physical cores (16 threads) CPU binds first.
-# 36 = six N = 6 jobs, which ran cleanly in the launcher's test (5 Oct).
-max_jobs = 6
-max_device_processes = 36
-mem_budget_gb = 75.0          # of 95 GB on this machine
+# max_device_processes: CPU binds first.
+# Each limit is a number, or "auto": sized for the host that runs by scaling
+# the host the campaign was sized on (8 physical cores, 16 logical, 95 GB),
+# where six N = 6 jobs (36 devices) and 75 GB ran cleanly (5 Oct 2026):
+#   max_device_processes = min(4.5 x physical cores, 2.25 x logical CPUs)  (36 there)
+#   max_jobs             = max_device_processes // 6, one N = 6 job's      (6 there)
+#   mem_budget_gb        = 0.8 x RAM, rounded down                         (75 there)
+# `exp5 check` prints what they come to here, and each manifest records it.
+# They only pace the scheduler; no trial's arguments depend on them.
+max_jobs = "auto"
+max_device_processes = "auto"
+mem_budget_gb = "auto"
 # Measured 5 Oct 2026 with the footprint probe (N = 6, 1 MB, the canonical
 # model): a device peaks at about 431 MB, the cluster 395 MB, a mule 44 MB, a
 # whole trial 2.9 GB. The build plan's 1.6 GB per process came from another
@@ -234,7 +241,9 @@ payload_bytes = 1000000
 # jittery56 hash and the test literals moved to the stack's measured N = 12
 # knee (Run Guide 2.8, "The re-pin"; go-ahead item 5).
 repinned = false
-max_jobs = 14                 # trainings side by side (one core each; 8 cores, 16 threads)
+# Trainings side by side, one logical CPU each: "auto" is the host's logical
+# CPUs less 2 (14 on the 16 the campaign was sized on), or give a number.
+max_jobs = "auto"
 gb_per_training = 0.6
 workers = 8                   # evaluate and headroom worker processes
 headroom_episodes = 200
