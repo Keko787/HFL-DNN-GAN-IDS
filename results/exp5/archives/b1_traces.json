@@ -1,0 +1,448 @@
+{
+ "stage": "batch1",
+ "archive": "b1_traces.tar.gz",
+ "sha256": "9bf12231d201b617817a4565d0efdc4d135b7a08d34467d7013d0376ac6dd445",
+ "bytes": 32251703,
+ "created": "2026-10-06T06:44:25",
+ "commit": "705235f0dd50df4ccf6468079455b428520d4c18",
+ "folders": [
+  {
+   "path": "b1/s511a/auto_traces",
+   "trials": 5,
+   "files": 7940,
+   "bytes": 19996305
+  },
+  {
+   "path": "b1/s511a/local_traces",
+   "trials": 5,
+   "files": 7940,
+   "bytes": 20046327
+  },
+  {
+   "path": "b1/s511a/subsets_traces",
+   "trials": 5,
+   "files": 7940,
+   "bytes": 20001506
+  },
+  {
+   "path": "b1/s511b/n12k2_knee__D4_traces",
+   "trials": 20,
+   "files": 640,
+   "bytes": 2061830
+  },
+  {
+   "path": "b1/s511b/n12k2_knee__F_traces",
+   "trials": 20,
+   "files": 640,
+   "bytes": 2072661
+  },
+  {
+   "path": "b1/s511b/n12k2_knee__FX_traces",
+   "trials": 20,
+   "files": 640,
+   "bytes": 2073720
+  },
+  {
+   "path": "b1/s511b/n12k2_knee__H1_traces",
+   "trials": 20,
+   "files": 640,
+   "bytes": 2055908
+  },
+  {
+   "path": "b1/s511b/n12k3_knee__D4_traces",
+   "trials": 20,
+   "files": 680,
+   "bytes": 2372712
+  },
+  {
+   "path": "b1/s511b/n12k3_knee__F_traces",
+   "trials": 20,
+   "files": 680,
+   "bytes": 2542078
+  },
+  {
+   "path": "b1/s511b/n12k3_knee__FX_traces",
+   "trials": 20,
+   "files": 680,
+   "bytes": 2539115
+  },
+  {
+   "path": "b1/s511b/n12k3_knee__H1_traces",
+   "trials": 20,
+   "files": 680,
+   "bytes": 2425716
+  },
+  {
+   "path": "b1/s511b/n18k3_knee__D4_traces",
+   "trials": 20,
+   "files": 920,
+   "bytes": 2957721
+  },
+  {
+   "path": "b1/s511b/n18k3_knee__F_traces",
+   "trials": 20,
+   "files": 920,
+   "bytes": 3096540
+  },
+  {
+   "path": "b1/s511b/n18k3_knee__FX_traces",
+   "trials": 20,
+   "files": 920,
+   "bytes": 3094631
+  },
+  {
+   "path": "b1/s511b/n18k3_knee__H1_traces",
+   "trials": 20,
+   "files": 920,
+   "bytes": 3000180
+  },
+  {
+   "path": "b1/s514/n6k1_knee__capoff_traces",
+   "trials": 40,
+   "files": 720,
+   "bytes": 2046730
+  },
+  {
+   "path": "b1/s514/n6k1_knee__capS1_traces",
+   "trials": 40,
+   "files": 720,
+   "bytes": 2051353
+  },
+  {
+   "path": "b1/s514/n6k1_knee__capS_traces",
+   "trials": 40,
+   "files": 720,
+   "bytes": 2059612
+  },
+  {
+   "path": "b1/s514/n6k1_knee__hoveroff_traces",
+   "trials": 40,
+   "files": 720,
+   "bytes": 2061579
+  },
+  {
+   "path": "b1/s514/n6k1_knee__local_traces",
+   "trials": 40,
+   "files": 720,
+   "bytes": 2104343
+  },
+  {
+   "path": "b1/s514/n6k1_knee__secF_traces",
+   "trials": 40,
+   "files": 720,
+   "bytes": 2087447
+  },
+  {
+   "path": "b1/s514/n6k1_knee__secFL1_traces",
+   "trials": 40,
+   "files": 720,
+   "bytes": 2110053
+  },
+  {
+   "path": "b1/s514/n6k1_knee__wcov_traces",
+   "trials": 40,
+   "files": 720,
+   "bytes": 2057508
+  },
+  {
+   "path": "b1/s514/n6k1_knee__whole_traces",
+   "trials": 40,
+   "files": 720,
+   "bytes": 2058962
+  },
+  {
+   "path": "b1/s514/n6k1_stress__capoff_traces",
+   "trials": 40,
+   "files": 720,
+   "bytes": 2018974
+  },
+  {
+   "path": "b1/s514/n6k1_stress__capS1_traces",
+   "trials": 40,
+   "files": 720,
+   "bytes": 2024388
+  },
+  {
+   "path": "b1/s514/n6k1_stress__capS_traces",
+   "trials": 40,
+   "files": 720,
+   "bytes": 2033902
+  },
+  {
+   "path": "b1/s514/n6k1_stress__hoveroff_traces",
+   "trials": 40,
+   "files": 720,
+   "bytes": 2035833
+  },
+  {
+   "path": "b1/s514/n6k1_stress__local_traces",
+   "trials": 40,
+   "files": 720,
+   "bytes": 2077273
+  },
+  {
+   "path": "b1/s514/n6k1_stress__secF_traces",
+   "trials": 40,
+   "files": 720,
+   "bytes": 2066026
+  },
+  {
+   "path": "b1/s514/n6k1_stress__secFL1_traces",
+   "trials": 40,
+   "files": 720,
+   "bytes": 2086679
+  },
+  {
+   "path": "b1/s514/n6k1_stress__wcov_traces",
+   "trials": 40,
+   "files": 720,
+   "bytes": 2025178
+  },
+  {
+   "path": "b1/s514/n6k1_stress__whole_traces",
+   "trials": 40,
+   "files": 720,
+   "bytes": 2093411
+  },
+  {
+   "path": "b1/s53/n6k1_knee__D1_traces",
+   "trials": 20,
+   "files": 360,
+   "bytes": 1086385
+  },
+  {
+   "path": "b1/s53/n6k1_knee__D2_traces",
+   "trials": 20,
+   "files": 360,
+   "bytes": 1093009
+  },
+  {
+   "path": "b1/s53/n6k1_knee__D3_traces",
+   "trials": 20,
+   "files": 360,
+   "bytes": 1092362
+  },
+  {
+   "path": "b1/s53/n6k1_knee__D4_traces",
+   "trials": 20,
+   "files": 360,
+   "bytes": 1101356
+  },
+  {
+   "path": "b1/s53/n6k1_knee__D4fedex_traces",
+   "trials": 20,
+   "files": 360,
+   "bytes": 1097349
+  },
+  {
+   "path": "b1/s53/n6k1_knee__FX_traces",
+   "trials": 20,
+   "files": 360,
+   "bytes": 1024693
+  },
+  {
+   "path": "b1/s53/n6k1_knee__H1_traces",
+   "trials": 20,
+   "files": 360,
+   "bytes": 1092257
+  },
+  {
+   "path": "b1/s53/n6k1_stress__D1_traces",
+   "trials": 20,
+   "files": 360,
+   "bytes": 961654
+  },
+  {
+   "path": "b1/s53/n6k1_stress__D2_traces",
+   "trials": 20,
+   "files": 360,
+   "bytes": 949277
+  },
+  {
+   "path": "b1/s53/n6k1_stress__D3_traces",
+   "trials": 20,
+   "files": 360,
+   "bytes": 973419
+  },
+  {
+   "path": "b1/s53/n6k1_stress__D4_traces",
+   "trials": 20,
+   "files": 360,
+   "bytes": 1102263
+  },
+  {
+   "path": "b1/s53/n6k1_stress__D4fedex_traces",
+   "trials": 20,
+   "files": 360,
+   "bytes": 1098314
+  },
+  {
+   "path": "b1/s53/n6k1_stress__FX_traces",
+   "trials": 20,
+   "files": 360,
+   "bytes": 1023387
+  },
+  {
+   "path": "b1/s53/n6k1_stress__H1_traces",
+   "trials": 20,
+   "files": 360,
+   "bytes": 933487
+  },
+  {
+   "path": "b1/s53/n6k3_knee__D1_traces",
+   "trials": 20,
+   "files": 440,
+   "bytes": 1705127
+  },
+  {
+   "path": "b1/s53/n6k3_knee__D2_traces",
+   "trials": 20,
+   "files": 440,
+   "bytes": 1705078
+  },
+  {
+   "path": "b1/s53/n6k3_knee__D3_traces",
+   "trials": 20,
+   "files": 440,
+   "bytes": 1705034
+  },
+  {
+   "path": "b1/s53/n6k3_knee__D4_traces",
+   "trials": 20,
+   "files": 440,
+   "bytes": 1672565
+  },
+  {
+   "path": "b1/s53/n6k3_knee__D4fedex_traces",
+   "trials": 20,
+   "files": 440,
+   "bytes": 1666409
+  },
+  {
+   "path": "b1/s53/n6k3_knee__F_traces",
+   "trials": 20,
+   "files": 440,
+   "bytes": 1949642
+  },
+  {
+   "path": "b1/s53/n6k3_knee__FX_traces",
+   "trials": 20,
+   "files": 440,
+   "bytes": 1949876
+  },
+  {
+   "path": "b1/s53/n6k3_knee__H1_traces",
+   "trials": 20,
+   "files": 440,
+   "bytes": 1704597
+  },
+  {
+   "path": "b1/s53/n6k3_stress__D1_traces",
+   "trials": 20,
+   "files": 440,
+   "bytes": 1685814
+  },
+  {
+   "path": "b1/s53/n6k3_stress__D2_traces",
+   "trials": 20,
+   "files": 440,
+   "bytes": 1681990
+  },
+  {
+   "path": "b1/s53/n6k3_stress__D3_traces",
+   "trials": 20,
+   "files": 440,
+   "bytes": 1682043
+  },
+  {
+   "path": "b1/s53/n6k3_stress__D4_traces",
+   "trials": 20,
+   "files": 440,
+   "bytes": 1672352
+  },
+  {
+   "path": "b1/s53/n6k3_stress__D4fedex_traces",
+   "trials": 20,
+   "files": 440,
+   "bytes": 1666216
+  },
+  {
+   "path": "b1/s53/n6k3_stress__F_traces",
+   "trials": 20,
+   "files": 440,
+   "bytes": 1949401
+  },
+  {
+   "path": "b1/s53/n6k3_stress__FX_traces",
+   "trials": 20,
+   "files": 440,
+   "bytes": 1949914
+  },
+  {
+   "path": "b1/s53/n6k3_stress__H1_traces",
+   "trials": 20,
+   "files": 440,
+   "bytes": 1680842
+  },
+  {
+   "path": "b1/s59/n12k1_knee__D3_traces",
+   "trials": 20,
+   "files": 600,
+   "bytes": 1696600
+  },
+  {
+   "path": "b1/s59/n12k1_knee__D4_traces",
+   "trials": 20,
+   "files": 600,
+   "bytes": 1725576
+  },
+  {
+   "path": "b1/s59/n12k1_knee__F_traces",
+   "trials": 20,
+   "files": 600,
+   "bytes": 1626910
+  },
+  {
+   "path": "b1/s59/n12k1_knee__FX_traces",
+   "trials": 20,
+   "files": 600,
+   "bytes": 1616966
+  },
+  {
+   "path": "b1/s59/n12k1_knee__H1_traces",
+   "trials": 20,
+   "files": 600,
+   "bytes": 1687018
+  },
+  {
+   "path": "b1/s59/n24k1_knee__D3_traces",
+   "trials": 20,
+   "files": 1080,
+   "bytes": 2795257
+  },
+  {
+   "path": "b1/s59/n24k1_knee__D4_traces",
+   "trials": 20,
+   "files": 1080,
+   "bytes": 2793295
+  },
+  {
+   "path": "b1/s59/n24k1_knee__F_traces",
+   "trials": 20,
+   "files": 1080,
+   "bytes": 2870703
+  },
+  {
+   "path": "b1/s59/n24k1_knee__FX_traces",
+   "trials": 20,
+   "files": 1080,
+   "bytes": 2874315
+  },
+  {
+   "path": "b1/s59/n24k1_knee__H1_traces",
+   "trials": 20,
+   "files": 1080,
+   "bytes": 2786865
+  }
+ ]
+}
