@@ -2641,6 +2641,9 @@ def smoke(jobs: List[Job]) -> None:
             _set_flag(a, "--trials", "1")
         elif "experiments.analysis.age_cap_s_star" in a:
             _set_flag(a, "--layouts", "3")
+        elif "experiments.analysis.o1_oracle" in a:
+            # The oracle's 30 episodes took 4-13 min a job in the first smoke run.
+            _set_flag(a, "--episodes", "2")
         elif "pilot" in a:
             _set_flag(a, "--episodes", "1")
         elif "evaluate" in a:
