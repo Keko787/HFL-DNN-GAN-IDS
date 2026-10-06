@@ -141,6 +141,11 @@ def test_the_config_refuses_a_misplaced_or_bad_exponent():
     assert any("finite number > 0" in e for e in errs)
 
 
+#: The N = 6 control _mission flies (its budget is the re-pin's knee: read it from
+#: the cell, never as a literal, so a re-pin that renames the cell keeps this test).
+CONTROL = "jit-n6-150"
+
+
 def _mission(arm):
     """One FerrySim episode of ``arm`` on the N = 6 control: its row, and what the
     mule's scheduler held at the first plan."""
@@ -165,7 +170,7 @@ def _mission(arm):
 
         sch.build_ferry_plan = wrapped
 
-    cell = C.cell_named("jit-n6-90")
+    cell = C.cell_named(CONTROL)
     logging.disable(logging.WARNING)
     try:
         # agg:cutoff cuts by age only with a merge period: T_nom, as the campaign runs it.
@@ -178,11 +183,14 @@ def _mission(arm):
 
 
 def test_on_a_real_mission_each_arm_flies_its_own_deadline():
+    from experiments.ferrysim import cells as C
+
+    budget = C.cell_named(CONTROL).budget_s      # F-round's one round: the mission budget
     f_row, f_seen = _mission("F")
     r_row, r_seen = _mission("F-round")
     p_row, p_seen = _mission("F-pref")
     assert r_row["deadline_law"] == "round" and p_row["deadline_law"] == "pref"
-    assert json.loads(r_row["deadline_params"])["round_s"] == 90.0
+    assert json.loads(r_row["deadline_params"])["round_s"] == budget
     assert "plan_speed_alpha" not in json.loads(f_row["ferry_params"])
     assert "plan_speed_alpha" not in json.loads(r_row["ferry_params"])
     assert json.loads(p_row["ferry_params"])["plan_speed_alpha"] == 2.0
@@ -190,5 +198,5 @@ def test_on_a_real_mission_each_arm_flies_its_own_deadline():
     # No training times here: t_j is the dwell alone, under T, so Oort's factor is 1.
     assert p_seen["weights"] == pytest.approx(r_seen["weights"])
     caps = r_seen["caps"]
-    assert caps and set(caps.values()) == {int(90.0 // r_seen["period"])}
+    assert caps and set(caps.values()) == {int(budget // r_seen["period"])}
     assert set(p_seen["caps"].values()) == {None}

@@ -931,7 +931,7 @@ def test_a_ferrysim_episodes_kept_trace_scores_its_slots_decisions(tmp_path):
     from experiments.ferrysim import cells as C
     from experiments.ferrysim import episode as EP
 
-    cell = C.cell_named("jit-n12-120")
+    cell = C.cell_named("jit-n12-90")
     seed = C.stream_seeds(C.VAL_STREAM, cell.name, 1)[0]
     ep = EP.run_episode(cell, seed, EP.Policy.scripted("greedy_1"),
                         driver_overrides={"trace_root": tmp_path, "t_nom_layouts": 3})

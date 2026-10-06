@@ -887,7 +887,7 @@ def test_a_scorer_that_reads_the_channel_ahead_is_caught():
 #: The sample: the jittery family's cells, validation-stream episodes (as the
 #: headroom report flew them), flown by fx_pair with a trainer at ε = 0, which
 #: flies exactly as no trainer and keeps each decision's view.
-SAMPLE = (("jit-n12-120", 4), ("jit-n12-180", 2), ("jit-n6-45", 3))
+SAMPLE = (("jit-n12-90", 4), ("jit-n12-180", 2), ("jit-n6-75", 3))
 #: Rows the pooled sample needs; the N = 12 cells fly one more episode each
 #: until it has them (at most SAMPLE_ROUNDS more), so the sample holds at any
 #: budget the cells are re-pinned to.
@@ -922,14 +922,18 @@ def test_no_column_is_constant_on_a_ferrysim_sample_but_the_declared_sparse_ones
         ferrysim_sample):
     """Other choices 4: no column is constant across a FerrySim sample except as
     declared, which was the plan's complaint about today's features (L917).
-    Pooled, every column varies; a single cell's few episodes may miss only a
-    declared rare event."""
+    Pooled, every column varies; a decision-rich cell's few episodes may miss
+    only a declared rare event. The N = 6 control is left out of the per-cell
+    check: at its measured budgets (the re-pin of 5 Oct 2026: 75 and 150 s) one
+    stop serves all six devices in most missions, so the in-flight slot mostly
+    weighs the dock alone (at the knee, every pair it saw over 24 episodes was
+    the dock), which is the control's role (where looking ahead cannot matter)."""
     assert set(SPARSE_COLUMNS) <= set(SCHEMA.columns)
     rows = _sample_rows(ferrysim_sample)
     assert len(rows) > SAMPLE_ROWS
     constant = [name for j, name in enumerate(SCHEMA.columns) if len(set(rows[:, j])) == 1]
     assert constant == []
-    for name, _ in SAMPLE:
+    for name in (c.name for c in FC.STUDY_5_5_CELLS):
         sub = _sample_rows(ferrysim_sample, name)
         constant = {c for j, c in enumerate(SCHEMA.columns) if len(set(sub[:, j])) == 1}
         assert constant <= set(SPARSE_COLUMNS), (name, constant)
@@ -1083,7 +1087,7 @@ def _learned_factory():
 def test_the_learned_score_flies_a_ferrysim_episode_deterministically():
     """U8a's hand-off: a learned policy enters FerrySim as ``Policy(label,
     scorer=factory)``; the same episode twice gives the same records."""
-    cell = FC.cell_named("jit-n12-120")
+    cell = FC.cell_named("jit-n12-90")
     seed = FC.stream_seeds(FC.VAL_STREAM, cell.name, 1)[0]
     policy = Policy("pair_v1", scorer=_learned_factory)
     first = run_episode(cell, seed, policy)

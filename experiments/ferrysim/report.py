@@ -6,7 +6,7 @@ score at γ ∈ {0, 0.25, 0.5, 0.75, 0.9, 0.99} from 10 training seeds each and
 asks whether looking ahead helps; the exit gate keeps FX if it does not (build
 plan L935). The rule is read on N = 12, the decision-rich cell at both its
 budgets (decision 5 (a); N = 6 is reported as the control where looking ahead
-cannot matter): Study 5.5's two cells, jit-n12-120 and jit-n12-180
+cannot matter): Study 5.5's two cells, jit-n12-90 and jit-n12-180
 (``cells.STUDY_5_5_CELLS``, the command line's default), whichever family
 trained the score; Study 5.6's N = 12 cells are read only when named (the
 orchestrator's resolution R22). It is read on one shared set of held-out

@@ -53,7 +53,7 @@ def test_the_hook_flies_fs_plan_and_reads_one_gap_per_plan(monkeypatch):
 
 def test_the_command_line_refuses_n_above_six(tmp_path):
     with pytest.raises(SystemExit):
-        O.main(["--cells", "jit-n12-120", "--episodes", "1", "--out", str(tmp_path / "o.json")])
+        O.main(["--cells", "jit-n12-90", "--episodes", "1", "--out", str(tmp_path / "o.json")])
 
 
 def test_the_summary_reads_the_rows():
@@ -85,7 +85,7 @@ def test_on_a_real_mission_the_oracle_bounds_f_and_the_prune_is_exact(monkeypatc
 
         sch.build_ferry_plan = wrapped
 
-    cell = C.cell_named("jit-n6-45")
+    cell = C.cell_named("jit-n6-75")
     logging.disable(logging.WARNING)
     try:
         run_episode(cell, C.stream_seeds(C.VAL_STREAM, cell.name, 1)[0], Policy.of_arm("F"),

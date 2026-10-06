@@ -1160,7 +1160,7 @@ class Builder:
                                       gamma=g, seed=int(seed), tag=self._gtag(g))
                     self.jobs.append(job)
                     names.append(job.name)
-            cells = (["--cells", "cln-n12-120", "cln-n12-180"] if fam == "clean" else [])
+            cells = (["--cells", "cln-n12-90", "cln-n12-180"] if fam == "clean" else [])
             ev = f"{self.root}/rl/calibration/{fam}_evaluation.json"
             evaluate = self._rl_tool(
                 "rl-calibrate", study, "evaluate",

@@ -74,7 +74,7 @@ Pinned here (the Phase 5 spec's units table, row U8b; the user's decisions 4,
 * **Study 5.6's family and cells** (resolution R22): the command line takes
   ``jittery56`` and Study 5.6's cells wherever it names a family or a cell, and
   no default moves; a jittery56 score trains under a study of its own (R19);
-  Study 5.5's verdict reads jit-n12-120 and jit-n12-180, whichever family
+  Study 5.5's verdict reads jit-n12-90 and jit-n12-180, whichever family
   trained the score.
 """
 
@@ -140,7 +140,7 @@ REPO = Path(__file__).resolve().parents[2]
 #: transitions bootstrap, and some missions make no decision at all.
 N3 = C.FerryCell("smoke-n3", C.FAMILY_JITTERY, C.ROLE_CONTROL, 3, 20.0, C.BUDGET_STRESS_PRIOR,
                  2, "jittery")
-N12 = C.cell_named("jit-n12-120")
+N12 = C.cell_named("jit-n12-90")
 #: A learner small enough to update inside a smoke run.
 SMOKE_LEARNER = LearnerSettings(batch=16, replay_capacity=1000, warmup_transitions=32,
                                 behaviour=BehaviourSchedule(reference_episodes=10))
@@ -736,7 +736,7 @@ def test_e3_trains_from_a_bootstrap_it_does_not_keep_and_saves_a_chen_dqn_checkp
     assert policy.manifest["sha256"] == res.sha256
     flight, overrides = K.checkpoint_flight(res.path)
     assert flight.arm == "E3" and overrides == {"policy_checkpoints": {"e3": res.path}}
-    n6 = C.cell_named("jit-n6-90")
+    n6 = C.cell_named("jit-n6-150")
     ep = E.run_episode(n6, _val_seed(n6), flight, driver_overrides=overrides, reward=R.BYTES)
     assert ep.decisions >= 1
     assert json.loads(ep.row["policy_params"]) == {"policy_sha256": res.sha256,
@@ -1087,7 +1087,7 @@ def _table(means, *, spread=0.002, seed_effect=0.01, validation=None, refs=None,
     val = {g: dict(enumerate(validation[g] + _centred(r, seeds, spread))) for g in means}
     return RP.SweepTable(epsilon=eps, held_out=held, validation=val,
                          references=refs if refs is not None else _refs(),
-                         cells=("jit-n12-120", "jit-n12-180"),
+                         cells=("jit-n12-90", "jit-n12-180"),
                          held_out_episodes=held_out_episodes)
 
 
@@ -1326,19 +1326,19 @@ def test_a_table_refuses_what_is_not_a_sweep():
 
 
 def test_epsilon_reads_the_validation_headroom_of_the_cells_read():
-    report = {"stream": C.VAL_STREAM, "cells": {"jit-n12-120": {"headroom": 0.0911},
+    report = {"stream": C.VAL_STREAM, "cells": {"jit-n12-90": {"headroom": 0.0911},
                                                 "jit-n12-180": {"headroom": 0.0229},
-                                                "jit-n6-45": {"headroom": 0.5}}}
-    assert RP.epsilon_from_headroom_report(report, ["jit-n12-120", "jit-n12-180"]) == 0.01
-    assert RP.epsilon_from_headroom_report(report, ["jit-n6-45"]) == pytest.approx(0.05)
+                                                "jit-n6-75": {"headroom": 0.5}}}
+    assert RP.epsilon_from_headroom_report(report, ["jit-n12-90", "jit-n12-180"]) == 0.01
+    assert RP.epsilon_from_headroom_report(report, ["jit-n6-75"]) == pytest.approx(0.05)
     # the score is the mean over its cells, so its headroom is theirs: (0.5 + 0.0911) / 2
-    assert RP.epsilon_from_headroom_report(report, ["jit-n6-45", "jit-n12-120"]) == (
+    assert RP.epsilon_from_headroom_report(report, ["jit-n6-75", "jit-n12-90"]) == (
         pytest.approx(0.1 * (0.5 + 0.0911) / 2))
     for stream in (C.HELDOUT_STREAM, None):
         with pytest.raises(ValueError, match="validation"):
-            RP.epsilon_from_headroom_report(dict(report, stream=stream), ["jit-n6-45"])
+            RP.epsilon_from_headroom_report(dict(report, stream=stream), ["jit-n6-75"])
     with pytest.raises(ValueError, match="no cells"):
-        RP.epsilon_from_headroom_report(report, ["cln-n12-120"])
+        RP.epsilon_from_headroom_report(report, ["cln-n12-90"])
 
 
 # --------------------------------------------------------------------------- #
@@ -1456,8 +1456,8 @@ def test_a_table_holds_the_held_out_count_its_references_flew():
 # The table from an evaluation file
 # --------------------------------------------------------------------------- #
 
-CELLS_READ = ("jit-n12-120", "jit-n12-180")
-FLOWN = CELLS_READ + ("jit-n6-90",)
+CELLS_READ = ("jit-n12-90", "jit-n12-180")
+FLOWN = CELLS_READ + ("jit-n6-150",)
 
 
 def _manifest(gamma, seed, *, revision=0, purpose="trained", kind="pair_q", val=0.0,
@@ -1467,7 +1467,7 @@ def _manifest(gamma, seed, *, revision=0, purpose="trained", kind="pair_q", val=
     validates at ``n6`` (``val`` by default)."""
     n6 = val if n6 is None else n6
     curve = [{"episode": e, "score": val,
-              "cells": {**{c: val + e / 1e6 for c in CELLS_READ}, "jit-n6-90": n6 + e / 1e6}}
+              "cells": {**{c: val + e / 1e6 for c in CELLS_READ}, "jit-n6-150": n6 + e / 1e6}}
              for e in (1000, 2000, 3000)]
     return {"kind": kind, "purpose": purpose, "learner_revision": revision, "gamma": gamma,
             "cell_family": "jittery", "cell_family_sha256": "0" * 64,
@@ -1512,10 +1512,10 @@ def test_the_table_from_an_evaluation_file_reads_seed_means_on_the_cells_read():
         assert [table.validation[g][s] for s in table.seeds] == pytest.approx(
             [direct.validation[g][s] + 0.002 for s in direct.seeds])
     assert table.references["FX"] == pytest.approx(direct.references["FX"][:8])
-    assert table.decisions["jit-n6-90"]["FX"] == 0.5
-    assert table.per_cell["jit-n6-90"]["0.9"] == pytest.approx(direct.mean(0.9) + 1.0)
-    assert table.per_cell["jit-n12-120"]["0.9"] == pytest.approx(direct.mean(0.9))
-    assert table.per_cell["jit-n6-90"]["FX"] == pytest.approx(
+    assert table.decisions["jit-n6-150"]["FX"] == 0.5
+    assert table.per_cell["jit-n6-150"]["0.9"] == pytest.approx(direct.mean(0.9) + 1.0)
+    assert table.per_cell["jit-n12-90"]["0.9"] == pytest.approx(direct.mean(0.9))
+    assert table.per_cell["jit-n6-150"]["FX"] == pytest.approx(
         statistics.fmean(direct.references["FX"][8:12]))
     for g in (0.5, 0.9):
         val_mean = statistics.fmean(direct.validation[g].values())
@@ -1551,14 +1551,14 @@ def test_the_table_refuses_two_learners_in_one_sweep():
         (lambda d: d["checkpoints"][3]["manifest"].update(
             reward=T.HAND_TRAINING_REWARD.to_json()), "rewards"),
         (lambda d: d["checkpoints"].append(d["checkpoints"][0]), "two checkpoints"),
-        (lambda d: d["references"]["FX"]["returns"]["jit-n12-120"].pop(), "held-out episode"),
+        (lambda d: d["references"]["FX"]["returns"]["jit-n12-90"].pop(), "held-out episode"),
         (lambda d: d.update(stream=C.VAL_STREAM), "held-out runs"),
     ]
     for change, message in cases:
         with pytest.raises(ValueError, match=message):
             RP.sweep_table(evaluation(change), cells=CELLS_READ, epsilon=0.01)
     with pytest.raises(ValueError, match="flew"):
-        RP.sweep_table(_evaluation(_table(FLATISH)), cells=("cln-n12-120",), epsilon=0.01)
+        RP.sweep_table(_evaluation(_table(FLATISH)), cells=("cln-n12-90",), epsilon=0.01)
 
 
 # --------------------------------------------------------------------------- #
@@ -1848,25 +1848,25 @@ def test_a_checkpoint_flies_only_as_its_own_tag(smoke, monkeypatch, tmp_path):
 def test_the_cli_evaluates_records_the_held_out_score_and_reports(smoke, tmp_path, capsys):
     path = _copy_checkpoint(smoke.path, tmp_path)
     out = tmp_path / "out" / "evaluation.json"
-    assert CLI.main(["evaluate", "--checkpoints", str(tmp_path), "--cells", "jit-n6-45",
+    assert CLI.main(["evaluate", "--checkpoints", str(tmp_path), "--cells", "jit-n6-75",
                      "--episodes", "2", "--references", "FX", "greedy_1", "--record",
                      "--out", str(out)]) == 0
     data = json.loads(out.read_text(encoding="utf-8"))
-    assert data["format"] == RP.EVALUATION_FORMAT and data["cells"] == ["jit-n6-45"]
+    assert data["format"] == RP.EVALUATION_FORMAT and data["cells"] == ["jit-n6-75"]
     assert sorted(data["references"]) == ["FX", "greedy_1"]
-    assert data["seeds"]["jit-n6-45"] == list(C.stream_seeds(C.HELDOUT_STREAM, "jit-n6-45", 2))
+    assert data["seeds"]["jit-n6-75"] == list(C.stream_seeds(C.HELDOUT_STREAM, "jit-n6-75", 2))
     (entry,) = data["checkpoints"]
-    assert entry["path"] == str(path) and len(entry["returns"]["jit-n6-45"]) == 2
+    assert entry["path"] == str(path) and len(entry["returns"]["jit-n6-75"]) == 2
     held = verify_checkpoint(path)["held_out"]
     assert entry["manifest"]["held_out"] == held and held["episodes"] == 2
-    assert held["return_mean"] == pytest.approx(statistics.fmean(entry["returns"]["jit-n6-45"]))
+    assert held["return_mean"] == pytest.approx(statistics.fmean(entry["returns"]["jit-n6-75"]))
     assert campaign_refusals(entry["manifest"]) == []
     # the report refuses to read a checkpoint on cells its validation never flew
     capsys.readouterr()
     with pytest.raises(SystemExit):
         CLI.main(["report", "--evaluation", str(out), "--epsilon", "0.01", "--cells",
-                  "jit-n6-45"])
-    assert "its validation did not fly the cells ['jit-n6-45']" in capsys.readouterr().err
+                  "jit-n6-75"])
+    assert "its validation did not fly the cells ['jit-n6-75']" in capsys.readouterr().err
 
 
 @pytest.mark.parametrize("flags, reward", [
@@ -1881,7 +1881,7 @@ def test_the_cli_evaluates_and_records_under_the_reward_it_is_given(smoke, tmp_p
     the recorded held-out score names that reward."""
     path = _copy_checkpoint(smoke.path, tmp_path)
     out = tmp_path / "evaluation.json"
-    cell = C.cell_named("jit-n6-45")
+    cell = C.cell_named("jit-n6-75")
     assert CLI.main(["evaluate", "--checkpoints", str(path), "--cells", cell.name,
                      "--episodes", "2", "--references", "FX", "greedy_1", "--record",
                      "--out", str(out), *flags]) == 0
@@ -1915,7 +1915,7 @@ def test_evaluate_reads_each_checkpoint_on_its_plan_and_one_file_on_one_plan(smo
     evaluation file reads its policies on one plan. Without a reference the flag
     would set nothing and is refused."""
     cov = _planned_copy(smoke.path, tmp_path / "cov", F_COV_SCORE)
-    cell = C.cell_named("jit-n6-45")
+    cell = C.cell_named("jit-n6-75")
     out = tmp_path / "evaluation.json"
     argv = ["evaluate", "--checkpoints", str(cov), "--cells", cell.name, "--episodes", "2",
             "--out", str(out)]
@@ -1979,7 +1979,7 @@ def test_the_cli_takes_jittery56_and_study_5_6s_cells_and_moves_no_default(monke
     from experiments.ferrysim import headroom as HR
 
     names = [c.name for c in C.STUDY_5_6_CELLS]
-    assert names == ["jit-n12-120-q", "jit-n12-120-h", "jit-n12-180-q", "jit-n12-180-h"]
+    assert names == ["jit-n12-90-q", "jit-n12-90-h", "jit-n12-180-q", "jit-n12-180-h"]
     for argv in (["train", "--study", "s", "--gamma", "0", "--seed", "0"],
                  ["sweep", "--study", "s", "--gammas", "0", "--seeds", "0"]):
         assert CLI.parser().parse_args(argv + ["--family", "jittery56"]).family == "jittery56"
@@ -1990,9 +1990,9 @@ def test_the_cli_takes_jittery56_and_study_5_6s_cells_and_moves_no_default(monke
     evaluate = CLI.parser().parse_args(["evaluate", "--out", "e.json", "--cells", *names])
     assert [C.cell_named(c) for c in evaluate.cells] == list(C.STUDY_5_6_CELLS)
     assert CLI.parser().parse_args(["evaluate", "--out", "e.json"]).cells == [
-        "jit-n6-45", "jit-n6-90", "jit-n12-120", "jit-n12-180"]
+        "jit-n6-75", "jit-n6-150", "jit-n12-90", "jit-n12-180"]
     assert CLI.parser().parse_args(["report", "--evaluation", "e.json"]).cells == [
-        "jit-n12-120", "jit-n12-180"]
+        "jit-n12-90", "jit-n12-180"]
     assert CLI.parser().parse_args(["report", "--evaluation", "e.json",
                                     "--cells", *names]).cells == names
     # headroom: the episodes its command would fly, none flown
@@ -2009,14 +2009,14 @@ def test_the_cli_takes_jittery56_and_study_5_6s_cells_and_moves_no_default(monke
     assert [t.cell for t in built[1]] == list(C.CELLS)
     capsys.readouterr()
     with pytest.raises(SystemExit) as refused:
-        CLI.main(["headroom", "--cells", "jit-n12-120-x"])
+        CLI.main(["headroom", "--cells", "jit-n12-90-x"])
     assert refused.value.code == 2 and "no FerrySim cell" in capsys.readouterr().err
 
 
 def test_evaluate_flies_study_5_6s_cells_when_named(tmp_path):
     """Named, each of Study 5.6's cells flies its own seeds as FerrySim flies it."""
     out = tmp_path / "evaluation.json"
-    names = ["jit-n12-120-q", "jit-n12-180-h"]
+    names = ["jit-n12-90-q", "jit-n12-180-h"]
     assert CLI.main(["evaluate", "--cells", *names, "--stream", "val", "--episodes", "1",
                      "--references", "FX", "--out", str(out)]) == 0
     data = json.loads(out.read_text(encoding="utf-8"))
@@ -2097,14 +2097,14 @@ def _as_jittery56(evaluation):
 def test_study_5_5s_verdict_reads_its_two_cells_whichever_family_trained_the_score(tmp_path,
                                                                                   capsys):
     """A sweep trained over jittery56, its evaluation flying Study 5.6's cells too:
-    the rule reads jit-n12-120 and jit-n12-180 alone, the verdict the same sweep
+    the rule reads jit-n12-90 and jit-n12-180 alone, the verdict the same sweep
     trained over jittery gives; Study 5.6's cells are reported beside them, and
     read in their place they would give another verdict. One family per sweep."""
     direct = _table({**FLATISH, 0.9: 0.05}, refs=_refs(greedy=0.004, n=12, block=4))
     plain = _evaluation(direct)
     sweep = _as_jittery56(plain)
     read = [c.name for c in C.STUDY_5_5_CELLS]
-    assert read == ["jit-n12-120", "jit-n12-180"]
+    assert read == ["jit-n12-90", "jit-n12-180"]
     table = RP.sweep_table(sweep, cells=read, epsilon=0.01)
     same = RP.sweep_table(plain, cells=read, epsilon=0.01)
     assert (table.held_out, table.validation, table.references) == (
@@ -2122,7 +2122,7 @@ def test_study_5_5s_verdict_reads_its_two_cells_whichever_family_trained_the_sco
     verdict = tmp_path / "verdict.json"
     assert CLI.main(["report", "--evaluation", str(evaluation), "--epsilon", "0.01",
                      "--out", str(verdict)]) == 0
-    assert "Study 5.5 on jit-n12-120, jit-n12-180:" in capsys.readouterr().out
+    assert "Study 5.5 on jit-n12-90, jit-n12-180:" in capsys.readouterr().out
     saved = json.loads(verdict.read_text(encoding="utf-8"))["verdict"]
     assert (saved["cells"], saved["outcome"], saved["best_gamma"], saved["replace_fx"]) == (
         read, "rising", 0.9, True)
@@ -2296,7 +2296,7 @@ def test_each_command_line_puts_the_callers_logging_level_back(monkeypatch, caps
             for module, name in ((EV, "evaluate"), (HR, "headroom_report")):
                 monkeypatch.setattr(module, name, refuses)
                 with pytest.raises(SystemExit) as refused:
-                    module.main(["--cells", "jit-n12-120", "--episodes", "1"])
+                    module.main(["--cells", "jit-n12-90", "--episodes", "1"])
                 assert refused.value.code == 2 and "refused" in capsys.readouterr().err
                 assert logging.root.manager.disable == level
         assert seen == [logging.WARNING] * 8
