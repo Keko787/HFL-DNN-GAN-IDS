@@ -687,8 +687,8 @@ python -m experiments.ferrysim sweep --study 5.5-calibration-jittery56 --family 
 python -m experiments.ferrysim sweep --study 5.5-calibration-clean --family clean --gammas 0 0.9 --seeds 0 1 2 --workers 6
 python -m experiments.ferrysim evaluate --checkpoints results/exp5/checkpoints/5.5-calibration-jittery56 --workers 8 --out results/exp5/calibration/jittery56_evaluation.json
 python -m experiments.ferrysim report --evaluation results/exp5/calibration/jittery56_evaluation.json --headroom results/exp5/headroom/headroom.json --out results/exp5/calibration/jittery56_verdict.json
-python -m experiments.ferrysim evaluate --checkpoints results/exp5/checkpoints/5.5-calibration-clean --cells cln-n12-120 cln-n12-180 --workers 8 --out results/exp5/calibration/clean_evaluation.json
-python -m experiments.ferrysim report --evaluation results/exp5/calibration/clean_evaluation.json --headroom results/exp5/headroom/headroom.json --cells cln-n12-120 cln-n12-180 --out results/exp5/calibration/clean_verdict.json
+python -m experiments.ferrysim evaluate --checkpoints results/exp5/checkpoints/5.5-calibration-clean --cells cln-n12-90 cln-n12-180 --workers 8 --out results/exp5/calibration/clean_evaluation.json
+python -m experiments.ferrysim report --evaluation results/exp5/calibration/clean_evaluation.json --headroom results/exp5/headroom/headroom.json --cells cln-n12-90 cln-n12-180 --out results/exp5/calibration/clean_verdict.json
 ```
 
 A calibration verdict reads "NOT pre-registered" (R26) and is decided by the same rule; with 3 seeds

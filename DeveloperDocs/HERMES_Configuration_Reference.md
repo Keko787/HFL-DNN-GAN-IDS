@@ -1951,33 +1951,40 @@ S\* tool's S at each size's two budgets.
 
 | Cell | Family | Role | N | Budget | Contact channel |
 |---|---|---|---|---|---|
-| `jit-n6-45` | jittery | control, where looking ahead cannot matter | 6 | 45 s, Phase 4's stress prior | jittery, P_c 60 s |
-| `jit-n6-90` | jittery | control | 6 | 90 s, Phase 4's knee prior | jittery, P_c 60 s |
-| `jit-n12-120` | jittery | decision-rich: Study 5.5 | 12 | 120 s, stand-in | jittery, P_c 60 s |
-| `jit-n12-180` | jittery | decision-rich: Study 5.5 | 12 | 180 s, stand-in | jittery, P_c 60 s |
-| `cln-n12-120` | clean | negative control (critic C3) | 12 | 120 s, stand-in | clean |
-| `cln-n12-180` | clean | negative control | 12 | 180 s, stand-in | clean |
-| `jit-n12-120-q`, `jit-n12-120-h` | `jittery56` | Study 5.6: lag/P_c a quarter, a half | 12 | 120 s, stand-in | jittery, P_c 104 s and 52 s |
-| `jit-n12-180-q`, `jit-n12-180-h` | `jittery56` | Study 5.6 | 12 | 180 s, stand-in | jittery, P_c 136 s and 68 s |
+| `jit-n6-75` | jittery | control, where looking ahead cannot matter | 6 | 75 s, the stack's stress budget | jittery, P_c 60 s |
+| `jit-n6-150` | jittery | control | 6 | 150 s, the stack's knee | jittery, P_c 60 s |
+| `jit-n12-90` | jittery | decision-rich: Study 5.5 | 12 | 90 s, the stack's stress budget | jittery, P_c 60 s |
+| `jit-n12-180` | jittery | decision-rich: Study 5.5 | 12 | 180 s, the stack's knee | jittery, P_c 60 s |
+| `cln-n12-90` | clean | negative control (critic C3) | 12 | 90 s, stress | clean |
+| `cln-n12-180` | clean | negative control | 12 | 180 s, knee | clean |
+| `jit-n12-90-q`, `jit-n12-90-h` | `jittery56` | Study 5.6: lag/P_c a quarter, a half | 12 | 90 s, stress | jittery, P_c 108 s and 54 s |
+| `jit-n12-180-q`, `jit-n12-180-h` | `jittery56` | Study 5.6 | 12 | 180 s, knee | jittery, P_c 136 s and 68 s |
 
-The N = 12 budgets are stand-ins until a pilot measures the N = 12 knee and stress budget (critic
-B6). Study 5.6's periods (R22) are 4 × and 2 × `STUDY_5_6_LAGS_S` (26 s at 120 s, 34 s at 180 s):
-critic A3's lag from one Pass-1 arrival to the next in a sortie (`cells.arrival_lags`), FX's median
-over every lag of the first 200 episodes of the matching Study 5.5 cell's validation stream at the
-default P_c, rounded to the nearest second (`evaluate.fx_lag_median`; the fix round measured
-26.42 s over 1,397 lags and 34.11 s over 397). The integers are a pre-registration convention, not
-a measurement to the second: the pooled median's 95 % interval is about 25.4–27.5 s and 32.2–36.9 s,
-and the first 400 episodes give 26.80 s and 35.12 s. The half cells follow the rule though their
-52 s and 68 s lie near 60 s. The 5.6 cells stay out of `CELLS`, the headroom report's default; their
-control is the clean N = 12 cells (`STUDY_5_6_CONTROL_CELLS`). They are re-pinned with the budgets
-after the N = 12 pilot, on the same sample and statistic, and with them move the four P_c constants,
-the `jittery56` hash and the test literals.
+**Re-pinned 5 Oct 2026** (`scripts/exp5/repin.py`; Exp 5 Reproducibility Guide §5.3). The budgets
+are the stack's knee and stress pilots (`scripts/exp5/params.toml` `[pilot_outputs]`), so the learned
+score trains on the budgets the stack flies (critic B6). Before that date N = 6 flew Phase 4's priors
+(45 and 90 s) and N = 12 stand-ins (120 and 180 s), and records from then name the cells `jit-n6-45`,
+`jit-n6-90`, `jit-n12-120`, `cln-n12-120`, `jit-n12-120-q` and `jit-n12-120-h` (P_c 104 and 52 s);
+the 180 s cells kept their names. Study 5.6's periods (R22) are 4 × and 2 × `STUDY_5_6_LAGS_S` (27 s
+at 90 s, 34 s at 180 s): critic A3's lag from one Pass-1 arrival to the next in a sortie
+(`cells.arrival_lags`), FX's median over every lag of the first 200 episodes of the matching Study 5.5
+cell's validation stream at the default P_c, rounded to the nearest second (`evaluate.fx_lag_median`;
+the re-pin measured 26.94 s over 672 lags and 34.11 s over 397; at the stand-ins the fix round had
+measured 26.42 s over 1,397 lags at 120 s). The integers are a pre-registration convention, not a
+measurement to the second. The ratio check's bounds come from the same sample (a 24-episode pooled
+median's 0.5 and 99.5 % points over the full median, widened by 5 % and rounded outward): 0.83–1.26
+at 90 s and 0.67–1.48 at 180 s, so the quarter and half cells' ranges stay apart, if narrowly at
+180 s. The half cells follow the rule though their 54 s and 68 s lie near 60 s. The 5.6 cells stay
+out of `CELLS`, the headroom report's default; their control is the clean N = 12 cells
+(`STUDY_5_6_CONTROL_CELLS`). A later re-pin moves them, the four P_c constants, the hashes and the
+test literals together, on the same sample and statistic.
 
 **Families**, one score per contact regime: `jittery`, the four jittery cells (sha256
-`32b5cb6b…3e91`); `clean`, the two clean cells (`76955c9b…5902`); and `jittery56`, the jittery cells
-and Study 5.6's four (`0079de11…ac66`); and, since the Exp 5 addendum, `scale` (§20.3,
-`d410f0d1…70ad`), which moves none of them. A manifest records its family and the hash
-(`cells.family_sha256`). Study 5.5 is read on `STUDY_5_5_CELLS` (jit-n12-120 and jit-n12-180),
+`deaa4e08…052e`; `32b5cb6b…3e91` before the re-pin); `clean`, the two clean cells (`97d119d6…f98f`;
+`76955c9b…5902` before); and `jittery56`, the jittery cells and Study 5.6's four (`affb41aa…2a47`;
+`0079de11…ac66` before); and, since the Exp 5 addendum, `scale` (§20.3, `d410f0d1…70ad`), which
+moves none of them and which the re-pin left alone. A manifest records its family and the hash
+(`cells.family_sha256`). Study 5.5 is read on `STUDY_5_5_CELLS` (jit-n12-90 and jit-n12-180),
 whichever family trained the score; which family the jittery score practises on is the user's
 choice before the 5.5 sweep (R29).
 
@@ -2066,7 +2073,7 @@ logging level back when it ends (R28).
 | `train` | `--kind` (`pair_q`, or `chen_dqn`); `--family` (`jittery`; `clean`, `jittery56`); `--study` (required); `--tag` (the arm's: `g<100γ>` on the derived reward, `dwell` or `cov` with `--ablation`, `hand` on F·hand, `e3`); `--root` (the repository's `results/exp5/checkpoints`); `--gamma`, `--seed` (both required); `--episodes` (10000); `--eval-every` (1000); `--val-episodes` (200); `--patience` (3); `--reward` (derived; `bytes` for `chen_dqn`; or `hand`); `--c-t` (0.1); `--c-cov` (1); `--lr` (1e-3); `--epsilon-start` (0.3); `--epsilon-end` (0.05); `--reference-episodes` (500; none for `chen_dqn`); `--no-phase`; `--ablation` (`dwell` or `cov`); `--plan-score-params` (JSON, the runner's format); `--allow-dirty`; `--overwrite` |
 | `sweep` | as `train`, with `--gammas` and `--seeds` (both required) in place of `--gamma` and `--seed`, and `--workers` (1); every path is checked before the first run |
 | `evaluate` | `--checkpoints` (files, or directories searched for `.npz` files at any depth); `--cells` (the jittery family's four); `--stream` (`heldout`, or `val`); `--episodes` (1000); `--start` (0); `--references` (FX, F and the four scripted ones) or `--no-references`; `--reward` (derived; `hand`, `bytes`); `--c-t`; `--c-cov`; `--workers` (1); `--plan-score-params` (the references' plan); `--record`; `--out` (required) |
-| `report` | `--evaluation` (required); `--epsilon` or `--headroom` (exactly one); `--cells` (jit-n12-120 jit-n12-180); `--out` |
+| `report` | `--evaluation` (required); `--epsilon` or `--headroom` (exactly one); `--cells` (jit-n12-90 jit-n12-180); `--out` |
 | `headroom` | `--cells` (decision 3's six); `--episodes` (200); `--start` (0); `--max-leaves` (512); `--workers` (1); `--plan-score-params`; `--out` |
 
 - `train` and `sweep` refuse a dirty tree unless `--allow-dirty` is given (the manifest records it),
@@ -2084,7 +2091,7 @@ logging level back when it ends (R28).
   each cell's summary. A pair checkpoint flies the plan it trained under; beside the references it
   must have trained on theirs (`--plan-score-params`), and with `--no-references` that flag is
   refused. The N = 6 control is among the default cells (R20: about 3.3 h for Study 5.5's
-  evaluation at 8 workers); a clean study names `--cells cln-n12-120 cln-n12-180`, and Study 5.6's
+  evaluation at 8 workers); a clean study names `--cells cln-n12-90 cln-n12-180`, and Study 5.6's
   cells fly only when named.
 - `report` applies Study 5.5's rule (below) to an evaluation file on `--cells`, with ε given or read
   from a headroom report flown on the evaluation's plan. It refuses an evaluation not on the
@@ -2576,7 +2583,7 @@ weights, S3 deadlines, the age cap, the start state, the budget's end, each clas
 
 | Setting | Default | Meaning |
 |---|---|---|
-| `--cells` | `jit-n6-45 jit-n6-90` | FerrySim cells at N ≤ 6 (the build plan's bound; a larger cell is refused). |
+| `--cells` | `jit-n6-75 jit-n6-150` | FerrySim cells at N ≤ 6 (the build plan's bound; a larger cell is refused). |
 | `--episodes`, `--stream` | 30, `ferrysim-val` | Episodes per cell, from the validation stream. |
 | `--arm` | F | The arm whose plans are judged. |
 | `--physics`, `--driver` | none | Overrides on the cells, e.g. Study 5.4's `'{"narrow_range_ratio": 2}'` or `'{"far_share": 0.5}'` (§20.10). |
@@ -2604,7 +2611,7 @@ on every extension's V (its home, energy and link with nothing left uncovered, o
 About 1 minute per N = 6 mission on one core.
 
 ```bash
-python -m experiments.analysis.o1_oracle --cells jit-n6-45 jit-n6-90 --episodes 30 --workers 8 --out results/exp5/s54/o1_gap.json
+python -m experiments.analysis.o1_oracle --cells jit-n6-75 jit-n6-150 --episodes 30 --workers 8 --out results/exp5/s54/o1_gap.json
 ```
 
 Tests: `tests/unit/test_exp5_o1_oracle.py`.
