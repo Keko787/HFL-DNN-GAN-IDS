@@ -2353,7 +2353,9 @@ def cmd_report(stage: str, s: Settings, jobs: List[Job],
                 continue
             if j.name.endswith("/report"):
                 r = json.loads(path.read_text(encoding="utf-8"))
-                keys = ("outcome", "replace_fx", "greedy_1_beats_fx", "stack_check", "epsilon")
+                # ferrysim report writes {epsilon_source, evaluation, verdict}.
+                r = r.get("verdict", r) if isinstance(r, dict) else r
+                keys = ("outcome", "replace_fx", "greedy_1_flag", "stack_check", "epsilon")
                 shown = {k: r[k] for k in keys if k in r}
                 print(f"  {j.name}: " + (json.dumps(shown) if shown else
                                          f"see {j.out} (keys: {', '.join(list(r)[:10])})"))
@@ -2615,6 +2617,13 @@ def _set_flag(args: List[str], flag: str, value: str) -> None:
         args += [flag, value]
 
 
+#: A smoke training's warm-up (the learner's batch): its 30 episodes store about 150
+#: transitions, under the learner's 1,000, so without it no update runs and every
+#: training of one seed and gamma saves the same network, which the evaluator
+#: refuses to score twice (Study 5.7's dwell and cov ablations).
+SMOKE_WARMUP = 64
+
+
 def smoke(jobs: List[Job]) -> None:
     """Every job at its smallest: a check that each starts and ends, not a result."""
     for j in jobs:
@@ -2624,7 +2633,8 @@ def smoke(jobs: List[Job]) -> None:
             j.trials = 1
         elif j.kind == "rl-train":
             for flag, value in (("--episodes", "30"), ("--eval-every", "15"),
-                                ("--val-episodes", "8")):
+                                ("--val-episodes", "8"),
+                                ("--warmup-transitions", str(SMOKE_WARMUP))):
                 _set_flag(a, flag, value)
         elif a and a[0].endswith("fit_time_probe.py"):
             _set_flag(a, "--fits", "1")
