@@ -1,0 +1,124 @@
+{"event": "start", "job": "5.5-jittery56/g0/g0_s0", "pid": 69432, "at": "2026-10-06T13:58:49"}
+{"event": "start", "job": "5.5-jittery56/g0/g0_s1", "pid": 78600, "at": "2026-10-06T13:58:49"}
+{"event": "start", "job": "5.5-jittery56/g0/g0_s2", "pid": 31196, "at": "2026-10-06T13:58:49"}
+{"event": "start", "job": "5.5-jittery56/g0/g0_s3", "pid": 98244, "at": "2026-10-06T13:58:49"}
+{"event": "start", "job": "5.5-jittery56/g0/g0_s4", "pid": 33768, "at": "2026-10-06T13:58:49"}
+{"event": "start", "job": "5.5-jittery56/g0/g0_s5", "pid": 43888, "at": "2026-10-06T13:58:49"}
+{"event": "start", "job": "5.5-jittery56/g0/g0_s6", "pid": 113144, "at": "2026-10-06T13:58:49"}
+{"event": "start", "job": "5.5-jittery56/g0/g0_s7", "pid": 93164, "at": "2026-10-06T13:58:49"}
+{"event": "start", "job": "5.5-jittery56/g0/g0_s8", "pid": 93212, "at": "2026-10-06T13:58:49"}
+{"event": "start", "job": "5.5-jittery56/g0/g0_s9", "pid": 64364, "at": "2026-10-06T13:58:49"}
+{"event": "start", "job": "5.5-jittery56/g25/g0.25_s0", "pid": 85704, "at": "2026-10-06T13:58:49"}
+{"event": "start", "job": "5.5-jittery56/g25/g0.25_s1", "pid": 102024, "at": "2026-10-06T13:58:49"}
+{"event": "start", "job": "5.5-jittery56/g25/g0.25_s2", "pid": 115564, "at": "2026-10-06T13:58:49"}
+{"event": "start", "job": "5.5-jittery56/g25/g0.25_s3", "pid": 82956, "at": "2026-10-06T13:58:49"}
+{"event": "start", "job": "5.5-jittery56/g25/g0.25_s4", "pid": 107284, "at": "2026-10-06T13:58:49"}
+{"event": "start", "job": "5.5-jittery56/g25/g0.25_s5", "pid": 111964, "at": "2026-10-06T13:58:49"}
+{"event": "start", "job": "5.5-jittery56/g25/g0.25_s6", "pid": 85060, "at": "2026-10-06T13:58:49"}
+{"event": "start", "job": "5.5-jittery56/g25/g0.25_s7", "pid": 67820, "at": "2026-10-06T13:58:49"}
+{"event": "end", "job": "5.5-jittery56/g25/g0.25_s2", "rc": 0, "wall_s": 5031.2, "rows": null, "rows_not_ok": null, "at": "2026-10-06T15:22:41"}
+{"event": "end", "job": "5.5-jittery56/g25/g0.25_s6", "rc": 0, "wall_s": 5031.1, "rows": null, "rows_not_ok": null, "at": "2026-10-06T15:22:41"}
+{"event": "start", "job": "5.5-jittery56/g25/g0.25_s8", "pid": 103696, "at": "2026-10-06T15:22:41"}
+{"event": "start", "job": "5.5-jittery56/g25/g0.25_s9", "pid": 49852, "at": "2026-10-06T15:22:41"}
+{"event": "end", "job": "5.5-jittery56/g0/g0_s6", "rc": 0, "wall_s": 5867.6, "rows": null, "rows_not_ok": null, "at": "2026-10-06T15:36:37"}
+{"event": "start", "job": "5.5-jittery56/g50/g0.5_s0", "pid": 30220, "at": "2026-10-06T15:36:37"}
+{"event": "end", "job": "5.5-jittery56/g0/g0_s4", "rc": 0, "wall_s": 6475.9, "rows": null, "rows_not_ok": null, "at": "2026-10-06T15:46:45"}
+{"event": "start", "job": "5.5-jittery56/g50/g0.5_s1", "pid": 103140, "at": "2026-10-06T15:46:45"}
+{"event": "end", "job": "5.5-jittery56/g0/g0_s1", "rc": 0, "wall_s": 7184.2, "rows": null, "rows_not_ok": null, "at": "2026-10-06T15:58:34"}
+{"event": "end", "job": "5.5-jittery56/g0/g0_s5", "rc": 0, "wall_s": 7184.2, "rows": null, "rows_not_ok": null, "at": "2026-10-06T15:58:34"}
+{"event": "end", "job": "5.5-jittery56/g25/g0.25_s0", "rc": 0, "wall_s": 7184.1, "rows": null, "rows_not_ok": null, "at": "2026-10-06T15:58:34"}
+{"event": "start", "job": "5.5-jittery56/g50/g0.5_s2", "pid": 19184, "at": "2026-10-06T15:58:34"}
+{"event": "start", "job": "5.5-jittery56/g50/g0.5_s3", "pid": 43732, "at": "2026-10-06T15:58:34"}
+{"event": "start", "job": "5.5-jittery56/g50/g0.5_s4", "pid": 65128, "at": "2026-10-06T15:58:34"}
+{"event": "end", "job": "5.5-jittery56/g0/g0_s2", "rc": 0, "wall_s": 7518.3, "rows": null, "rows_not_ok": null, "at": "2026-10-06T16:04:08"}
+{"event": "start", "job": "5.5-jittery56/g50/g0.5_s5", "pid": 99024, "at": "2026-10-06T16:04:08"}
+{"event": "end", "job": "5.5-jittery56/g0/g0_s7", "rc": 0, "wall_s": 7908.4, "rows": null, "rows_not_ok": null, "at": "2026-10-06T16:10:38"}
+{"event": "start", "job": "5.5-jittery56/g50/g0.5_s6", "pid": 67468, "at": "2026-10-06T16:10:38"}
+{"event": "end", "job": "5.5-jittery56/g0/g0_s8", "rc": 0, "wall_s": 8006.4, "rows": null, "rows_not_ok": null, "at": "2026-10-06T16:12:16"}
+{"event": "end", "job": "5.5-jittery56/g25/g0.25_s5", "rc": 0, "wall_s": 8006.4, "rows": null, "rows_not_ok": null, "at": "2026-10-06T16:12:16"}
+{"event": "start", "job": "5.5-jittery56/g50/g0.5_s7", "pid": 15920, "at": "2026-10-06T16:12:16"}
+{"event": "start", "job": "5.5-jittery56/g50/g0.5_s8", "pid": 70048, "at": "2026-10-06T16:12:16"}
+{"event": "end", "job": "5.5-jittery56/g0/g0_s3", "rc": 0, "wall_s": 8716.6, "rows": null, "rows_not_ok": null, "at": "2026-10-06T16:24:06"}
+{"event": "start", "job": "5.5-jittery56/g50/g0.5_s9", "pid": 31312, "at": "2026-10-06T16:24:06"}
+{"event": "end", "job": "5.5-jittery56/g25/g0.25_s7", "rc": 0, "wall_s": 8782.5, "rows": null, "rows_not_ok": null, "at": "2026-10-06T16:25:12"}
+{"event": "start", "job": "5.5-jittery56/g75/g0.75_s0", "pid": 104440, "at": "2026-10-06T16:25:12"}
+{"event": "end", "job": "5.5-jittery56/g0/g0_s0", "rc": 0, "wall_s": 8838.7, "rows": null, "rows_not_ok": null, "at": "2026-10-06T16:26:08"}
+{"event": "end", "job": "5.5-jittery56/g25/g0.25_s1", "rc": 0, "wall_s": 8838.6, "rows": null, "rows_not_ok": null, "at": "2026-10-06T16:26:08"}
+{"event": "start", "job": "5.5-jittery56/g75/g0.75_s1", "pid": 76716, "at": "2026-10-06T16:26:08"}
+{"event": "start", "job": "5.5-jittery56/g75/g0.75_s2", "pid": 75820, "at": "2026-10-06T16:26:08"}
+{"event": "end", "job": "5.5-jittery56/g25/g0.25_s4", "rc": 0, "wall_s": 9000.7, "rows": null, "rows_not_ok": null, "at": "2026-10-06T16:28:50"}
+{"event": "start", "job": "5.5-jittery56/g75/g0.75_s3", "pid": 54140, "at": "2026-10-06T16:28:50"}
+{"event": "end", "job": "5.5-jittery56/g25/g0.25_s9", "rc": 0, "wall_s": 4141.5, "rows": null, "rows_not_ok": null, "at": "2026-10-06T16:31:42"}
+{"event": "start", "job": "5.5-jittery56/g75/g0.75_s4", "pid": 40040, "at": "2026-10-06T16:31:42"}
+{"event": "end", "job": "5.5-jittery56/g50/g0.5_s0", "rc": 0, "wall_s": 3351.2, "rows": null, "rows_not_ok": null, "at": "2026-10-06T16:32:28"}
+{"event": "start", "job": "5.5-jittery56/g75/g0.75_s5", "pid": 111648, "at": "2026-10-06T16:32:28"}
+{"event": "end", "job": "5.5-jittery56/g25/g0.25_s8", "rc": 0, "wall_s": 4361.6, "rows": null, "rows_not_ok": null, "at": "2026-10-06T16:35:22"}
+{"event": "start", "job": "5.5-jittery56/g75/g0.75_s6", "pid": 82388, "at": "2026-10-06T16:35:22"}
+{"event": "end", "job": "5.5-jittery56/g25/g0.25_s3", "rc": 0, "wall_s": 9602.8, "rows": null, "rows_not_ok": null, "at": "2026-10-06T16:38:52"}
+{"event": "start", "job": "5.5-jittery56/g75/g0.75_s7", "pid": 75440, "at": "2026-10-06T16:38:52"}
+{"event": "end", "job": "5.5-jittery56/g50/g0.5_s1", "rc": 0, "wall_s": 3363.1, "rows": null, "rows_not_ok": null, "at": "2026-10-06T16:42:48"}
+{"event": "start", "job": "5.5-jittery56/g75/g0.75_s8", "pid": 110940, "at": "2026-10-06T16:42:48"}
+{"event": "end", "job": "5.5-jittery56/g0/g0_s9", "rc": 0, "wall_s": 10535.1, "rows": null, "rows_not_ok": null, "at": "2026-10-06T16:54:25"}
+{"event": "start", "job": "5.5-jittery56/g75/g0.75_s9", "pid": 39060, "at": "2026-10-06T16:54:25"}
+{"event": "end", "job": "5.5-jittery56/g50/g0.5_s6", "rc": 0, "wall_s": 3334.9, "rows": null, "rows_not_ok": null, "at": "2026-10-06T17:06:13"}
+{"event": "start", "job": "5.5-jittery56/g90/g0.9_s0", "pid": 104828, "at": "2026-10-06T17:06:13"}
+{"event": "end", "job": "5.5-jittery56/g50/g0.5_s7", "rc": 0, "wall_s": 3290.9, "rows": null, "rows_not_ok": null, "at": "2026-10-06T17:07:07"}
+{"event": "start", "job": "5.5-jittery56/g90/g0.9_s1", "pid": 65256, "at": "2026-10-06T17:07:07"}
+{"event": "end", "job": "5.5-jittery56/g75/g0.75_s1", "rc": 0, "wall_s": 3292.9, "rows": null, "rows_not_ok": null, "at": "2026-10-06T17:21:01"}
+{"event": "start", "job": "5.5-jittery56/g90/g0.9_s2", "pid": 78512, "at": "2026-10-06T17:21:01"}
+{"event": "end", "job": "5.5-jittery56/g50/g0.5_s5", "rc": 0, "wall_s": 4983.4, "rows": null, "rows_not_ok": null, "at": "2026-10-06T17:27:11"}
+{"event": "start", "job": "5.5-jittery56/g90/g0.9_s3", "pid": 36768, "at": "2026-10-06T17:27:11"}
+{"event": "end", "job": "5.5-jittery56/g75/g0.75_s6", "rc": 0, "wall_s": 3485.0, "rows": null, "rows_not_ok": null, "at": "2026-10-06T17:33:27"}
+{"event": "start", "job": "5.5-jittery56/g90/g0.9_s4", "pid": 51356, "at": "2026-10-06T17:33:27"}
+{"event": "end", "job": "5.5-jittery56/g50/g0.5_s2", "rc": 0, "wall_s": 5755.7, "rows": null, "rows_not_ok": null, "at": "2026-10-06T17:34:29"}
+{"event": "start", "job": "5.5-jittery56/g90/g0.9_s5", "pid": 97484, "at": "2026-10-06T17:34:29"}
+{"event": "end", "job": "5.5-jittery56/g75/g0.75_s2", "rc": 0, "wall_s": 4147.2, "rows": null, "rows_not_ok": null, "at": "2026-10-06T17:35:16"}
+{"event": "start", "job": "5.5-jittery56/g90/g0.9_s6", "pid": 33984, "at": "2026-10-06T17:35:16"}
+{"event": "end", "job": "5.5-jittery56/g50/g0.5_s8", "rc": 0, "wall_s": 5143.5, "rows": null, "rows_not_ok": null, "at": "2026-10-06T17:38:00"}
+{"event": "start", "job": "5.5-jittery56/g90/g0.9_s7", "pid": 60848, "at": "2026-10-06T17:38:00"}
+{"event": "end", "job": "5.5-jittery56/g75/g0.75_s0", "rc": 0, "wall_s": 4943.5, "rows": null, "rows_not_ok": null, "at": "2026-10-06T17:47:36"}
+{"event": "start", "job": "5.5-jittery56/g90/g0.9_s8", "pid": 18320, "at": "2026-10-06T17:47:36"}
+{"event": "end", "job": "5.5-jittery56/g75/g0.75_s8", "rc": 0, "wall_s": 4077.2, "rows": null, "rows_not_ok": null, "at": "2026-10-06T17:50:46"}
+{"event": "start", "job": "5.5-jittery56/g90/g0.9_s9", "pid": 107036, "at": "2026-10-06T17:50:46"}
+{"event": "end", "job": "5.5-jittery56/g50/g0.5_s9", "rc": 0, "wall_s": 5809.7, "rows": null, "rows_not_ok": null, "at": "2026-10-06T18:00:56"}
+{"event": "start", "job": "5.5-jittery56/g99/g0.99_s0", "pid": 8588, "at": "2026-10-06T18:00:56"}
+{"event": "end", "job": "5.5-jittery56/g75/g0.75_s9", "rc": 0, "wall_s": 4211.2, "rows": null, "rows_not_ok": null, "at": "2026-10-06T18:04:36"}
+{"event": "end", "job": "5.5-jittery56/g90/g0.9_s1", "rc": 0, "wall_s": 3449.0, "rows": null, "rows_not_ok": null, "at": "2026-10-06T18:04:36"}
+{"event": "start", "job": "5.5-jittery56/g99/g0.99_s1", "pid": 85888, "at": "2026-10-06T18:04:36"}
+{"event": "start", "job": "5.5-jittery56/g99/g0.99_s2", "pid": 33940, "at": "2026-10-06T18:04:36"}
+{"event": "end", "job": "5.5-jittery56/g75/g0.75_s5", "rc": 0, "wall_s": 6083.7, "rows": null, "rows_not_ok": null, "at": "2026-10-06T18:13:52"}
+{"event": "start", "job": "5.5-jittery56/g99/g0.99_s3", "pid": 83048, "at": "2026-10-06T18:13:52"}
+{"event": "end", "job": "5.5-jittery56/g50/g0.5_s4", "rc": 0, "wall_s": 8324.4, "rows": null, "rows_not_ok": null, "at": "2026-10-06T18:17:18"}
+{"event": "start", "job": "5.5-jittery56/g99/g0.99_s4", "pid": 58824, "at": "2026-10-06T18:17:18"}
+{"event": "end", "job": "5.5-jittery56/g75/g0.75_s3", "rc": 0, "wall_s": 6679.9, "rows": null, "rows_not_ok": null, "at": "2026-10-06T18:20:10"}
+{"event": "start", "job": "5.5-jittery56/g99/g0.99_s5", "pid": 115096, "at": "2026-10-06T18:20:10"}
+{"event": "end", "job": "5.5-jittery56/g50/g0.5_s3", "rc": 0, "wall_s": 8574.5, "rows": null, "rows_not_ok": null, "at": "2026-10-06T18:21:28"}
+{"event": "start", "job": "5.5-jittery56/g99/g0.99_s6", "pid": 16904, "at": "2026-10-06T18:21:28"}
+{"event": "end", "job": "5.5-jittery56/g90/g0.9_s2", "rc": 0, "wall_s": 4189.2, "rows": null, "rows_not_ok": null, "at": "2026-10-06T18:30:50"}
+{"event": "end", "job": "5.5-jittery56/g90/g0.9_s6", "rc": 0, "wall_s": 3334.9, "rows": null, "rows_not_ok": null, "at": "2026-10-06T18:30:50"}
+{"event": "start", "job": "5.5-jittery56/g99/g0.99_s7", "pid": 31916, "at": "2026-10-06T18:30:50"}
+{"event": "start", "job": "5.5-jittery56/g99/g0.99_s8", "pid": 99956, "at": "2026-10-06T18:30:51"}
+{"event": "end", "job": "5.5-jittery56/g90/g0.9_s7", "rc": 0, "wall_s": 3526.9, "rows": null, "rows_not_ok": null, "at": "2026-10-06T18:36:47"}
+{"event": "start", "job": "5.5-jittery56/g99/g0.99_s9", "pid": 100668, "at": "2026-10-06T18:36:47"}
+{"event": "end", "job": "5.5-jittery56/g75/g0.75_s4", "rc": 0, "wall_s": 7658.3, "rows": null, "rows_not_ok": null, "at": "2026-10-06T18:39:21"}
+{"event": "end", "job": "5.5-jittery56/g90/g0.9_s8", "rc": 0, "wall_s": 3407.0, "rows": null, "rows_not_ok": null, "at": "2026-10-06T18:44:23"}
+{"event": "end", "job": "5.5-jittery56/g90/g0.9_s9", "rc": 0, "wall_s": 3399.0, "rows": null, "rows_not_ok": null, "at": "2026-10-06T18:47:25"}
+{"event": "end", "job": "5.5-jittery56/g75/g0.75_s7", "rc": 0, "wall_s": 8180.3, "rows": null, "rows_not_ok": null, "at": "2026-10-06T18:55:13"}
+{"event": "end", "job": "5.5-jittery56/g99/g0.99_s0", "rc": 0, "wall_s": 3256.9, "rows": null, "rows_not_ok": null, "at": "2026-10-06T18:55:13"}
+{"event": "end", "job": "5.5-jittery56/g99/g0.99_s2", "rc": 0, "wall_s": 3346.9, "rows": null, "rows_not_ok": null, "at": "2026-10-06T19:00:23"}
+{"event": "end", "job": "5.5-jittery56/g90/g0.9_s3", "rc": 0, "wall_s": 5867.6, "rows": null, "rows_not_ok": null, "at": "2026-10-06T19:04:59"}
+{"event": "end", "job": "5.5-jittery56/g99/g0.99_s4", "rc": 0, "wall_s": 3030.8, "rows": null, "rows_not_ok": null, "at": "2026-10-06T19:07:49"}
+{"event": "end", "job": "5.5-jittery56/g90/g0.9_s0", "rc": 0, "wall_s": 7308.1, "rows": null, "rows_not_ok": null, "at": "2026-10-06T19:08:01"}
+{"event": "end", "job": "5.5-jittery56/g99/g0.99_s6", "rc": 0, "wall_s": 3640.8, "rows": null, "rows_not_ok": null, "at": "2026-10-06T19:22:09"}
+{"event": "end", "job": "5.5-jittery56/g99/g0.99_s9", "rc": 0, "wall_s": 2740.5, "rows": null, "rows_not_ok": null, "at": "2026-10-06T19:22:27"}
+{"event": "end", "job": "5.5-jittery56/g90/g0.9_s4", "rc": 0, "wall_s": 6767.7, "rows": null, "rows_not_ok": null, "at": "2026-10-06T19:26:15"}
+{"event": "end", "job": "5.5-jittery56/g90/g0.9_s5", "rc": 0, "wall_s": 6753.7, "rows": null, "rows_not_ok": null, "at": "2026-10-06T19:27:03"}
+{"event": "end", "job": "5.5-jittery56/g99/g0.99_s7", "rc": 0, "wall_s": 3816.8, "rows": null, "rows_not_ok": null, "at": "2026-10-06T19:34:27"}
+{"event": "end", "job": "5.5-jittery56/g99/g0.99_s3", "rc": 0, "wall_s": 5325.2, "rows": null, "rows_not_ok": null, "at": "2026-10-06T19:42:38"}
+{"event": "end", "job": "5.5-jittery56/g99/g0.99_s8", "rc": 0, "wall_s": 4316.9, "rows": null, "rows_not_ok": null, "at": "2026-10-06T19:42:48"}
+{"event": "end", "job": "5.5-jittery56/g99/g0.99_s5", "rc": 0, "wall_s": 5101.1, "rows": null, "rows_not_ok": null, "at": "2026-10-06T19:45:12"}
+{"event": "end", "job": "5.5-jittery56/g99/g0.99_s1", "rc": 0, "wall_s": 6505.5, "rows": null, "rows_not_ok": null, "at": "2026-10-06T19:53:02"}
+{"event": "start", "job": "5.5-jittery56/evaluate", "pid": 110644, "at": "2026-10-06T19:53:02"}
+{"event": "end", "job": "5.5-jittery56/evaluate", "rc": 0, "wall_s": 11815.9, "rows": null, "rows_not_ok": null, "at": "2026-10-06T23:09:58"}
+{"event": "start", "job": "5.5-jittery56/report", "pid": 21328, "at": "2026-10-06T23:09:58"}
+{"event": "end", "job": "5.5-jittery56/report", "rc": 0, "wall_s": 6.0, "rows": null, "rows_not_ok": null, "at": "2026-10-06T23:10:04"}
