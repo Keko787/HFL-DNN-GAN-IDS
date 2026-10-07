@@ -2,7 +2,7 @@
 
 What is left before the Exp 5 sweep can run, stage by stage: what is ready, what is not, and why.
 
-*As of 6 Oct 2026, about 10:00: batch 1 and `sens` done and scored (`ff90bbf`, `53bdfc5`), and the RL campaign paused after its calibration for a decision ([findings](Experiment_5_RL_Calibration_Findings.md)). Before that: the S\* pilot (commit `6e4b6c3`), the re-pin (`77880dc`), the smoke run of every stage (its fixes `b54185a`) and the code gate; the `"auto"` machine limits are `4b78194`. The live view is `exp5 status` (or `exp5 check`); the full procedure is the [reproducibility guide](Experiment_5_Reproducibility_Guide.md).*
+*As of 7 Oct 2026, 07:00: batch 2 is ready (its builds in `aedae8b`), and 5.11 (a) was rerun alone, unthrottled (the `batch1` row). As of 6 Oct 2026, about 10:00: batch 1 and `sens` done and scored (`ff90bbf`, `53bdfc5`), and the RL campaign paused after its calibration for a decision ([findings](Experiment_5_RL_Calibration_Findings.md)). Before that: the S\* pilot (commit `6e4b6c3`), the re-pin (`77880dc`), the smoke run of every stage (its fixes `b54185a`) and the code gate; the `"auto"` machine limits are `4b78194`. The live view is `exp5 status` (or `exp5 check`); the full procedure is the [reproducibility guide](Experiment_5_Reproducibility_Guide.md).*
 
 ---
 
@@ -33,7 +33,7 @@ The code, the launcher, every stage's definition, the scoring and the documentat
 | `knee` | ✅ Done | — | Knees 150, 180, 240, 262 s (stress half of each); 120 s at N = 6 with the measured payload; τ = 0.71. N = 6's knee is the grid's largest budget, accepted as is. |
 | `sstar` | ✅ Done | — | S\* = 2 at N = 6, 12, 18 and 24: one mission covers 90% of layouts at each knee, two at each stress budget (N ≥ 12 by the tool's greedy bound). Ran on the second host; the tool has no timing in it. |
 | `quick` | ⏳ After batch 1 | Batch 1's recorded CSVs to compare against | A reviewer's reproduction of 5.3's headline cell (320 trials). It needs a recorded batch 1 to compare with. |
-| `batch1` | ▶️ Ready | — | See above. |
+| `batch1` | ✅ Done, 6 Oct 00:36–06:40 | — | Scored (`ff90bbf`, `53bdfc5`). **5.11 (a) was rerun alone on 7 Oct** into `results/exp5/s511a_quiet/b1/s511a/`: the three modes one at a time, every process opted out of power throttling. Every episode made the same plans as in batch 1, and planning ran 1.5–2.5 times faster. Batch 1's run started at 00:36 beside all of batch 1's jobs, and may also have been throttled. **Report 5.11 (a) from the rerun;** batch 1's reports stay as recorded. At N = 96 a plan takes 1.53 s on average (p95 2.0 s), against 3.70 s (5.16 s) in batch 1; at N = 6, 0.037 s. |
 | `sens` | ⏳ After batch 1 | Batch 1's CSVs | 5.3's F, FX and H1 at the session timeout × 0.75 and × 1.5. × 1 is batch 1's own cell. |
 | `rl-headroom`, `rl-calibrate` | ✅ Done, 6 Oct | — | ε = 0.01 everywhere (headroom 0.012–0.042). Calibration: `jittery56` flat, `clean` sanity-failed by 0.0005; the learned score sits at FX's level, below greedy_1. See [the findings](Experiment_5_RL_Calibration_Findings.md). |
 | `rl-sweep` | ✅ Done, 6 Oct 13:58–23:10 | — | **Verdict: flat** (pre-registered). No γ beats γ = 0 by ε; the best learned score is at FX's level, below greedy_1. FX stays; `keep_learned = false` ([verdict](Experiment_5_RL_Calibration_Findings.md#the-sweeps-verdict-6-oct-2026-2310--flat-fx-stays)). |
