@@ -488,5 +488,6 @@ exp5 score batch1 --rescore
   - FedProx's ρ in 5.1 is 0.01.
   - 5.6 flies 40 trials per cell, as 5.5's stack check and 5.7 do.
   - 5.12's training-time levels are set by a pilot (p512, in `pilot3`).
+- **5.11 (a) rerun, 7 Oct 2026:** alone and unthrottled, into `results/exp5/s511a_quiet` (`exp5 run batch1 --study s511a --out-root results/exp5/s511a_quiet --jobs 1`). The plans match batch 1's episode for episode; the planning times are 1.5–2.5 times shorter (batch 1 ran it beside all of its jobs). 5.11 (a) is reported from the rerun.
 - **Built 7 Oct 2026, before batch 2 (`aedae8b`; code gate as the baselines):** FX-dwell and FX-cov for Study 5.7 (5.5 kept FX); `agg:asynchfl` switched to Async-HFL's polynomial staleness, q = 0.5; the launcher's power-throttling opt-out (§2.1).
 - **Not built:** 5.1's `agg:seq` (decided out: it needs a protocol change); 5.1's hand-set merge weights; M1 (5.5 did not keep the learned score); Study 5.10 (needs AERPAW access).

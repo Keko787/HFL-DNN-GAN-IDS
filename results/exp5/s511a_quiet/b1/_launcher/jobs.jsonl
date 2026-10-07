@@ -1,0 +1,6 @@
+{"event": "start", "job": "s511a/auto", "pid": 95068, "at": "2026-10-07T06:52:10"}
+{"event": "end", "job": "s511a/auto", "rc": 0, "wall_s": 62.4, "rows": null, "rows_not_ok": null, "at": "2026-10-07T06:53:12"}
+{"event": "start", "job": "s511a/subsets", "pid": 105156, "at": "2026-10-07T06:53:12"}
+{"event": "end", "job": "s511a/subsets", "rc": 0, "wall_s": 60.4, "rows": null, "rows_not_ok": null, "at": "2026-10-07T06:54:12"}
+{"event": "start", "job": "s511a/local", "pid": 63968, "at": "2026-10-07T06:54:12"}
+{"event": "end", "job": "s511a/local", "rc": 0, "wall_s": 56.4, "rows": null, "rows_not_ok": null, "at": "2026-10-07T06:55:09"}
