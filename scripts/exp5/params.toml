@@ -73,6 +73,12 @@ footprint = true
 max_jobs = "auto"
 max_device_processes = "auto"
 mem_budget_gb = "auto"
+# Windows: opt the launcher and every process under it out of power throttling
+# (EcoQoS), which confines a background process to the efficiency cores, and
+# keep the machine awake while a stage runs. On the second host (8 performance,
+# 4 efficiency cores) throttled jobs ran at about 28% CPU (6 Oct 2026), and
+# every wall-clock measurement with them. Each manifest records it ("power").
+unthrottle = true
 # Measured 5 Oct 2026 with the footprint probe (N = 6, 1 MB, the canonical
 # model): a device peaks at about 431 MB, the cluster 395 MB, a mule 44 MB, a
 # whole trial 2.9 GB. The build plan's 1.6 GB per process came from another
@@ -378,8 +384,11 @@ n_trials = 40
 N = 12
 payload_bytes = 1000000
 
-[s57]                         # one objective (only with the learned score kept)
-arms = ["FQ", "FQ-dwell", "FQ-cov", "FQ-hand", "D4"]
+[s57]                         # one objective: the plan's dwell and coverage terms
+# Study 5.5 kept FX (6 Oct 2026), so the plan-term ablations fly FX's slot:
+# FX-dwell and FX-cov in place of FQ-dwell and FQ-cov. F-hand (FQ-hand) and the
+# reward grid were learned scores, and leave with them (rl.keep_learned = false).
+arms = ["FX", "FX-dwell", "FX-cov", "D4"]
 budgets = ["stress", "knee"]
 N = 12
 n_trials = 40
@@ -579,7 +588,7 @@ also = ["reached_tau", "sim_s_to_tau", "round_close_rate_kmin1", "pass1_contacts
 [score.s57]
 metric = "round_close_rate_kmin1"
 better = "higher"
-reference = "FQ"
+reference = "FX"
 also = ["reached_tau", "sim_s_to_tau", "network_aou_mean"]
 
 [score.s58]

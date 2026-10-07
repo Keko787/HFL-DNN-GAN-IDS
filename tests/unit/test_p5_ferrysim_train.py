@@ -84,6 +84,7 @@ import dataclasses
 import functools
 import json
 import logging
+import os
 import shutil
 import statistics
 import subprocess
@@ -2273,8 +2274,11 @@ def test_the_cli_prints_and_saves_the_grids_label(tmp_path, capsys):
 
 
 def test_the_cli_runs_as_a_module_and_hands_headroom_its_own_options(capsys):
+    # UTF-8 output, as the launcher runs every job: the help names γ, which a
+    # Windows pipe's default code page (cp1252) cannot print.
+    env = dict(os.environ, PYTHONIOENCODING="utf-8")
     out = subprocess.run([sys.executable, "-m", "experiments.ferrysim", "--help"], cwd=REPO,
-                         capture_output=True, text=True, timeout=120)
+                         capture_output=True, text=True, encoding="utf-8", env=env, timeout=120)
     assert out.returncode == 0
     for command in CLI.COMMANDS:
         assert command in out.stdout

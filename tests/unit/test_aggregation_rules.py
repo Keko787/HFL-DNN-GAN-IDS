@@ -104,6 +104,7 @@ def test_unknown_rule_and_bad_parameters_are_refused():
     for bad in (
         dict(server_lr=0.0), dict(a_max=-1), dict(period_s=0.0),
         dict(hinge_a=-1.0), dict(decay=-0.1), dict(value="gradient"),
+        dict(poly_q=-0.5), dict(asynchfl_form="hinge"),
         dict(buffer_k=0),
     ):
         with pytest.raises(AggregationConfigError):
@@ -132,8 +133,45 @@ def test_hinge_matches_fedasync():
     assert staleness(spec, -3) == 1.0  # negative ages count as 0
 
 
+def test_asynchfl_is_async_hfls_polynomial_by_default():
+    """Async-HFL's s(a) = (a + 1)^-q, adopted from FedAsync (q = 0.5 by default);
+    the exponential is available by name, and every recorded parameter dict
+    (which holds ``decay`` whatever the rule) still builds."""
+    spec = AggregationSpec(rule=AGG_ASYNCHFL)
+    assert (spec.asynchfl_form, spec.poly_q) == ("polynomial", 0.5)
+    assert staleness(spec, 0) == 1.0
+    assert staleness(spec, 3) == pytest.approx(4.0 ** -0.5)
+    assert staleness(AggregationSpec(rule=AGG_ASYNCHFL, poly_q=1.0), 4) == pytest.approx(0.2)
+    assert staleness(AggregationSpec(rule=AGG_ASYNCHFL, asynchfl_form="exponential"),
+                     2) == pytest.approx(math.exp(-1.0))
+    old = {"server_lr": 1.0, "a_max": None, "period_s": None, "hinge_a": 1.0,
+           "hinge_b": 0.0, "decay": 0.5, "value": "uniform", "buffer_k": None,
+           "fedex_n": None}
+    assert AggregationSpec.from_config(AGG_CUTOFF, old) == AggregationSpec(rule=AGG_CUTOFF)
+    # A recorded agg:asynchfl dict names decay and no form: it flew the exponential.
+    assert AggregationSpec.from_config(AGG_ASYNCHFL, old).asynchfl_form == "exponential"
+    assert AggregationSpec.from_config(AGG_ASYNCHFL, {}).asynchfl_form == "polynomial"
+    assert AggregationSpec.from_config(
+        AGG_ASYNCHFL, {"decay": 0.3, "asynchfl_form": "polynomial"}).asynchfl_form == "polynomial"
+
+
+def test_only_asynchfl_writes_its_form_and_exponent():
+    """Every other rule's aggregation_params is the recorded dict (no new key), so
+    recorded rows and traces read as before; agg:asynchfl's round-trips."""
+    old_keys = {"server_lr", "a_max", "period_s", "hinge_a", "hinge_b", "decay", "value",
+                "buffer_k", "fedex_n"}
+    for rule in (AGG_CUTOFF, AGG_FEDBUFF):
+        assert set(AggregationSpec(rule=rule).to_params()) == old_keys
+    for form in ("polynomial", "exponential"):
+        spec = AggregationSpec(rule=AGG_ASYNCHFL, asynchfl_form=form, poly_q=0.7)
+        params = spec.to_params()
+        assert set(params) == old_keys | {"asynchfl_form", "poly_q"}
+        assert AggregationSpec.from_config(AGG_ASYNCHFL, params) == spec
+
+
 def test_other_rules_staleness():
-    assert staleness(AggregationSpec(rule=AGG_ASYNCHFL, decay=0.5), 2) == pytest.approx(math.exp(-1.0))
+    exponential = AggregationSpec(rule=AGG_ASYNCHFL, asynchfl_form="exponential", decay=0.5)
+    assert staleness(exponential, 2) == pytest.approx(math.exp(-1.0))
     assert staleness(AggregationSpec(rule=AGG_FEDBUFF), 3) == pytest.approx(0.5)
     assert staleness(AggregationSpec(), 7) == 1.0
 
@@ -335,7 +373,7 @@ def test_a_uniformly_stale_mission_shrinks_the_step():
     """Both updates of age 3 under asynchfl: e^{-1.5} times their mean, not
     the full mean (dividing by Σ w_i would cancel the common factor)."""
     theta_v = _theta(5)
-    spec = AggregationSpec(rule=AGG_ASYNCHFL, decay=0.5)
+    spec = AggregationSpec(rule=AGG_ASYNCHFL, asynchfl_form="exponential", decay=0.5)
     subs = [
         _delta_sub("a", _local(theta_v, 1), theta_v, 10, basis=2),
         _delta_sub("b", _local(theta_v, 2), theta_v, 30, basis=2),
@@ -352,7 +390,7 @@ def test_a_uniformly_stale_mission_shrinks_the_step():
 
 def test_a_mixed_age_mission_divides_by_the_staleness_free_mass():
     theta_v = _theta(6)
-    spec = AggregationSpec(rule=AGG_ASYNCHFL, decay=0.5)
+    spec = AggregationSpec(rule=AGG_ASYNCHFL, asynchfl_form="exponential", decay=0.5)
     subs = [
         _delta_sub("fresh", _local(theta_v, 1), theta_v, 10, basis=4),   # age 0
         _delta_sub("old", _local(theta_v, 2), theta_v, 30, basis=2),     # age 2
@@ -479,7 +517,7 @@ def test_partial_staleness_and_cluster_cutoff():
     assert partial_age(p, 5) == 2
     assert partial_staleness(spec, p, 4) == pytest.approx(0.5)
     assert partial_staleness(spec, p, 5) == 0.0          # past a_max at the cluster
-    decay = AggregationSpec(rule=AGG_ASYNCHFL, decay=1.0)
+    decay = AggregationSpec(rule=AGG_ASYNCHFL, asynchfl_form="exponential", decay=1.0)
     assert partial_staleness(decay, p, 5) == pytest.approx(math.exp(-2.0))
 
 

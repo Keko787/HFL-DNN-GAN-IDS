@@ -80,7 +80,9 @@ row reads as before, and the default arm list is still :data:`DEFAULT_ARMS`.
 **The Exp 5 addendum's arm** (:data:`ADDENDUM_ARMS`; Studies 5.14 and 5.15):
 ``F+L1`` is F with H3's adaptive backhaul, as H1+L1 is H1 with it: a plan arm
 (:func:`is_plan_arm`, F's settings everywhere F has them), refused where the
-adaptive backhaul would not fly. It runs only when named.
+adaptive backhaul would not fly. It runs only when named. ``FX-dwell`` and
+``FX-cov`` (Study 5.7) are FX with the plan score's dwell term, or its
+coverage term, off: plan arms the same way, added when Study 5.5 kept FX.
 """
 
 from __future__ import annotations
@@ -181,8 +183,12 @@ PHASE_5_ARMS = LEARNED_ARMS + ("H1+L1",)
 #: deadline for every device, the round's, after FedCS) and ``F-pref`` (no
 #: per-device cutoff; Oort's speed factor on the coverage weights): F with
 #: the selection literature's deadline in place of its per-device one
-#: (:data:`_ARM_LAW`).
-ADDENDUM_PLAN_ARMS = ("F+L1", "F-round", "F-pref")
+#: (:data:`_ARM_LAW`). Study 5.7 adds ``FX-dwell`` and ``FX-cov``, FX with the
+#: plan score's dwell term, or its coverage term, off (:data:`_ARM_SCORE`):
+#: Study 5.5's verdict kept FX as F's in-flight rule (6 Oct 2026), so 5.7's
+#: plan-term ablations fly FX's slot in place of FQ-dwell's and FQ-cov's
+#: learned scores (critic C2's fallback).
+ADDENDUM_PLAN_ARMS = ("F+L1", "F-round", "F-pref", "FX-dwell", "FX-cov")
 ADDENDUM_ARMS = ADDENDUM_PLAN_ARMS
 
 #: Every arm the driver runs.
@@ -212,7 +218,8 @@ _ARM_POLICY = {
 #: Each plan arm's change to F's plan fields (:meth:`Exp4Driver.plan_settings`).
 #: F-prio's change is its ``miss_priority`` (:meth:`Exp4Driver.effective_miss_priority`),
 #: which is not a plan field. FeRRy Phase 5: every FQ arm flies the pair slot;
-#: FQ-dwell's and FQ-cov's score changes are in :data:`_ARM_SCORE`.
+#: FQ-dwell's and FQ-cov's score changes are in :data:`_ARM_SCORE`, and so are
+#: FX-dwell's and FX-cov's (Study 5.7), which fly FX's slot.
 _PLAN_ARM = {
     "F": {},
     "FX": {"flight_slot": "cross_heuristic"},
@@ -226,6 +233,8 @@ _PLAN_ARM = {
     "F+L1": {},
     "F-round": {},
     "F-pref": {"plan_speed_alpha": 2.0},       # Oort's alpha (oort.DEFAULT_SPEED_ALPHA)
+    "FX-dwell": {"flight_slot": "cross_heuristic"},
+    "FX-cov": {"flight_slot": "cross_heuristic"},
 }
 
 #: Unit U11 (Study 5.2): the arms that fly the selection literature's deadline
@@ -239,14 +248,16 @@ _ARM_LAW = {"F-round": "round", "F-pref": "pref"}
 #: capped devices only: "cap-only service" (decision 3).
 F_COV_SCORE = {"c_cov_per_device": 0.0, "c_link": 0.0}
 
-#: FQ-dwell's plan score settings, over the driver's own: the dwell taken out
-#: of Δ in the score (``PlanScoreParams.dwell_in_delta``; Study 5.7's dwell
-#: ablation, design D-L (a)).
+#: FQ-dwell's and FX-dwell's plan score settings, over the driver's own: the
+#: dwell taken out of Δ in the score (``PlanScoreParams.dwell_in_delta``;
+#: Study 5.7's dwell ablation, design D-L (a)).
 FQ_DWELL_SCORE = {"dwell_in_delta": False}
 
 #: Each arm's change to the plan score's settings (:meth:`Exp4Driver.plan_settings`):
-#: F-cov's and FQ-cov's coverage term off, FQ-dwell's dwell out of Δ.
-_ARM_SCORE = {"F-cov": F_COV_SCORE, "FQ-cov": F_COV_SCORE, "FQ-dwell": FQ_DWELL_SCORE}
+#: F-cov's, FQ-cov's and FX-cov's coverage term off, FQ-dwell's and FX-dwell's
+#: dwell out of Δ.
+_ARM_SCORE = {"F-cov": F_COV_SCORE, "FQ-cov": F_COV_SCORE, "FQ-dwell": FQ_DWELL_SCORE,
+              "FX-cov": F_COV_SCORE, "FX-dwell": FQ_DWELL_SCORE}
 
 #: The arms that may admit part of a stop (``member_admission="subset"``,
 #: decision 4 (b)): the plan arms, H1-H3 (S3b's gate) and D1-D3 and D5 (their
@@ -1203,7 +1214,8 @@ class Exp4Driver:
         FeRRy Phase 5 (critic A5): an FQ arm gets F's fields with the pair slot
         (``flight_slot="pair_q"``), FQ-cov F-cov's score and FQ-dwell the dwell
         out of Δ (:data:`_ARM_SCORE`); its checkpoint is not a plan field
-        (:meth:`checkpoint_settings`).
+        (:meth:`checkpoint_settings`). Study 5.7's FX-dwell and FX-cov get FX's
+        slot with FQ-dwell's and FQ-cov's score changes.
         """
         admission = self.effective_member_admission(arm)
         if not is_plan_arm(arm):

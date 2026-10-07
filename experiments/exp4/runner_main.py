@@ -823,8 +823,18 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         help="agg:cutoff: FedAsync hinge knee b in rounds (default 0).",
     )
     parser.add_argument(
+        "--agg-asynchfl-form", choices=("polynomial", "exponential"), default=None,
+        help="agg:asynchfl: the staleness function (default polynomial, Async-HFL's "
+             "(age+1)^-q; exponential is exp(-λ·age), not Async-HFL's).",
+    )
+    parser.add_argument(
+        "--agg-poly-q", type=float, default=None,
+        help="agg:asynchfl: q in (age+1)^-q (default 0.5, FedAsync's polynomial).",
+    )
+    parser.add_argument(
         "--agg-decay", type=float, default=None,
-        help="agg:asynchfl: staleness decay λ in exp(-λ·age) (default 0.5).",
+        help="agg:asynchfl: λ in exp(-λ·age) (default 0.5). Given without "
+             "--agg-asynchfl-form, it selects the exponential form.",
     )
     parser.add_argument(
         "--agg-value", choices=("uniform", "loss"), default=None,
@@ -1016,6 +1026,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 ("period_s", args.agg_period_s),
                 ("hinge_a", args.agg_hinge_a),
                 ("hinge_b", args.agg_hinge_b),
+                ("asynchfl_form", args.agg_asynchfl_form),
+                ("poly_q", args.agg_poly_q),
                 ("decay", args.agg_decay),
                 ("value", args.agg_value),
                 ("buffer_k", args.agg_buffer_k),

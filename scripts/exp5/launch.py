@@ -168,7 +168,7 @@ FERRYSIM = ["-m", "experiments.ferrysim"]
 
 #: The plan arms take the age cap (--age-cap-missions); the H and D arms do not.
 PLAN_ARMS = {"F", "FX", "FB+wide", "FB+medium", "FB+narrow", "F-cov", "F-prio", "F+L1",
-             "F-round", "F-pref"}
+             "F-round", "F-pref", "FX-dwell", "FX-cov"}
 
 #: Unit U11's arms fly their own deadline law (the round's, after FedCS or Oort),
 #: whatever --deadline-law says, so the campaign's law is not passed to them.
@@ -282,6 +282,169 @@ def host_info() -> Dict[str, Any]:
     except ImportError:
         pass
     return host
+
+
+# -- Windows power throttling ------------------------------------------------ #
+
+#: Windows 11 throttles a process it judges to be in the background (EcoQoS):
+#: on a hybrid CPU that confines it to the efficiency cores. A stage left
+#: running in a terminal, or with the screen off, qualifies, and on the second
+#: host its jobs then ran at about 28% CPU (6 Oct 2026), with every wall-clock
+#: measurement (fit times, decision times) slowed with them. The opt-out is per
+#: process and is not inherited, so the launcher applies it to itself and to
+#: every process under it as each appears (:class:`ThrottleGuard`).
+PROCESS_POWER_THROTTLING = 4             # PROCESS_INFORMATION_CLASS.ProcessPowerThrottling
+POWER_THROTTLING_EXECUTION_SPEED = 0x1   # the control bit: execution speed (EcoQoS)
+PROCESS_SET_INFORMATION = 0x0200
+PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+ES_CONTINUOUS = 0x80000000               # SetThreadExecutionState: hold until reset
+ES_SYSTEM_REQUIRED = 0x00000001          # ... the system awake (the display may sleep)
+
+
+def _kernel32():
+    import ctypes
+    from ctypes import wintypes
+
+    class State(ctypes.Structure):       # PROCESS_POWER_THROTTLING_STATE
+        _fields_ = [("Version", wintypes.ULONG), ("ControlMask", wintypes.ULONG),
+                    ("StateMask", wintypes.ULONG)]
+
+    k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    k32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+    k32.OpenProcess.restype = wintypes.HANDLE
+    k32.CloseHandle.argtypes = [wintypes.HANDLE]
+    for fn in (k32.SetProcessInformation, k32.GetProcessInformation):
+        fn.argtypes = [wintypes.HANDLE, ctypes.c_int, ctypes.c_void_p, wintypes.DWORD]
+        fn.restype = wintypes.BOOL
+    k32.SetThreadExecutionState.argtypes = [wintypes.DWORD]
+    k32.SetThreadExecutionState.restype = wintypes.DWORD
+    return ctypes, k32, State
+
+
+def unthrottle(pid: int) -> bool:
+    """Opt process ``pid`` out of Windows power throttling: the execution-speed
+    bit under control, its state off. False off Windows or where Windows
+    refuses (the process is gone, or not ours)."""
+    if os.name != "nt":
+        return False
+    ctypes, k32, State = _kernel32()
+    handle = k32.OpenProcess(PROCESS_SET_INFORMATION, False, int(pid))
+    if not handle:
+        return False
+    try:
+        state = State(1, POWER_THROTTLING_EXECUTION_SPEED, 0)
+        return bool(k32.SetProcessInformation(handle, PROCESS_POWER_THROTTLING,
+                                              ctypes.byref(state), ctypes.sizeof(state)))
+    finally:
+        k32.CloseHandle(handle)
+
+
+def throttling_state(pid: int) -> Optional[Tuple[int, int]]:
+    """Process ``pid``'s (ControlMask, StateMask) for power throttling: (1, 0)
+    once :func:`unthrottle` took, (0, 0) while Windows decides. None off Windows
+    or where it cannot be read."""
+    if os.name != "nt":
+        return None
+    ctypes, k32, State = _kernel32()
+    handle = k32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, int(pid))
+    if not handle:
+        return None
+    try:
+        state = State(1, 0, 0)
+        if not k32.GetProcessInformation(handle, PROCESS_POWER_THROTTLING,
+                                         ctypes.byref(state), ctypes.sizeof(state)):
+            return None
+        return int(state.ControlMask), int(state.StateMask)
+    finally:
+        k32.CloseHandle(handle)
+
+
+def keep_awake(on: bool) -> bool:
+    """Keep the system from sleeping while a stage runs (``on``), or release it.
+    It holds for this thread until released or the launcher exits."""
+    if os.name != "nt":
+        return False
+    _, k32, _ = _kernel32()
+    flags = ES_CONTINUOUS | (ES_SYSTEM_REQUIRED if on else 0)
+    return bool(k32.SetThreadExecutionState(flags))
+
+
+def _process_tree() -> List[int]:
+    """The pids of the launcher and every process under it: the job runners,
+    their device, cluster and mule processes, the trainers' workers."""
+    import psutil
+    me = psutil.Process()
+    return [me.pid] + [p.pid for p in me.children(recursive=True)]
+
+
+class ThrottleGuard:
+    """While a stage runs on Windows: the launcher and every process under it
+    opted out of power throttling, and the machine kept awake.
+
+    :meth:`sweep` runs at each turn of the job loop (every 2 s), so a job's own
+    processes are opted out within seconds of starting, each once while it
+    runs (a pid that leaves the tree is forgotten, as Windows may reuse it).
+    It needs psutil to see the processes under the jobs; without it only the
+    launcher and the job processes are opted out (:meth:`watch`).
+    ``[machine] unthrottle = false`` turns it off."""
+
+    def __init__(self, enabled: bool, *, apply=unthrottle, tree=_process_tree,
+                 awake=keep_awake) -> None:
+        self.enabled = bool(enabled)
+        self._apply, self._tree, self._awake = apply, tree, awake
+        self._live: set = set()         # opted out, or refused, and still running
+        self.unthrottled = 0
+        self.refused = 0
+        self.kept_awake = False
+        self._released = False
+        self.sees_tree = True
+
+    def start(self) -> "ThrottleGuard":
+        if not self.enabled:
+            return self
+        self.kept_awake = bool(self._awake(True))
+        if self._tree is _process_tree:
+            try:
+                import psutil  # noqa: F401
+            except ImportError:
+                self.sees_tree = False
+        self.watch(os.getpid())
+        self.sweep()
+        return self
+
+    def watch(self, pid: int) -> None:
+        """Opt one process out now (a job the moment it starts)."""
+        if self.enabled and pid not in self._live:
+            self._one(int(pid))
+
+    def sweep(self) -> None:
+        if not self.enabled or not self.sees_tree:
+            return
+        try:
+            pids = set(self._tree())
+        except Exception:               # never let the guard stop a stage
+            return
+        self._live &= pids
+        for pid in sorted(pids - self._live):
+            self._one(pid)
+
+    def _one(self, pid: int) -> None:
+        self._live.add(pid)
+        if self._apply(pid):
+            self.unthrottled += 1
+        else:
+            self.refused += 1
+
+    def stop(self) -> None:
+        if self.enabled and self.kept_awake and not self._released:
+            self._awake(False)
+            self._released = True
+
+    def record(self) -> Dict[str, Any]:
+        """What the manifest records."""
+        return {"unthrottle": self.enabled, "keep_awake": self.kept_awake,
+                "sees_job_children": self.enabled and self.sees_tree,
+                "processes_unthrottled": self.unthrottled, "refused": self.refused}
 
 
 def resolve_machine(s: Settings, host: Optional[Dict[str, Any]] = None) -> None:
@@ -1240,7 +1403,8 @@ class Builder:
         del s.missing[before:]
         if keep is False:
             print("rl-s57: the 5.5 verdict did not keep the learned score (rl.keep_learned = "
-                  "false); 5.7 then compares FX-dwell and FX-cov, which are not built")
+                  "false), so 5.7 trains nothing: it flies FX against FX-dwell and FX-cov "
+                  "in batch 2")
             return
         study = f"5.7-{fam}"
         g = float(gamma or 0.0)
@@ -1805,7 +1969,24 @@ def _run_jobs(stage: str, s: Settings, params_text: str, jobs: List[Job], todo: 
         "settings": json.loads(json.dumps(s.data, default=str)),
         "jobs": [asdict(j) for j in jobs],
     }
+    guard = ThrottleGuard(os.name == "nt" and bool(s.get("machine.unthrottle", True))).start()
+    manifest["power"] = guard.record()
     manifest_path.write_text(json.dumps(manifest, indent=1), encoding="utf-8")
+    if guard.enabled:
+        print("power: every job runs with Windows power throttling off, and the machine "
+              "stays awake while the stage runs"
+              + ("" if guard.sees_tree else " (without psutil, the jobs' own processes "
+                 "are not reached)"))
+    try:
+        return _job_loop(stage, root, jobs, todo, s, max_jobs, manifest, manifest_path, guard)
+    finally:
+        guard.stop()
+
+
+def _job_loop(stage: str, root: Path, jobs: List[Job], todo: List[Job], s: Settings,
+              max_jobs: Optional[int], manifest: Dict[str, Any], manifest_path: Path,
+              guard: ThrottleGuard) -> int:
+    threads = {k: str(v) for k, v in (s.get("machine.threads") or {}).items()}
     events = (root / "_launcher" / "jobs.jsonl").open("a", encoding="utf-8")
 
     def log_event(**kw):
@@ -1862,6 +2043,7 @@ def _run_jobs(stage: str, s: Settings, params_text: str, jobs: List[Job], todo: 
                 proc = subprocess.Popen([sys.executable] + j.args, cwd=REPO, env=env,
                                         stdout=logf, stderr=subprocess.STDOUT,
                                         creationflags=flags)
+                guard.watch(proc.pid)
                 running[j.name] = (j, proc, time.monotonic(), logf)
                 pending.remove(j)
                 used += j.mem_gb
@@ -1881,6 +2063,7 @@ def _run_jobs(stage: str, s: Settings, params_text: str, jobs: List[Job], todo: 
                 pending.clear()
                 break
             time.sleep(2.0)
+            guard.sweep()
             for name, (j, proc, t0, logf) in list(running.items()):
                 rc = proc.poll()
                 if rc is None:
@@ -1905,11 +2088,14 @@ def _run_jobs(stage: str, s: Settings, params_text: str, jobs: List[Job], todo: 
             logf.close()
             log_event(event="interrupted", job=name)
         events.close()
+        manifest["power"] = guard.record()
+        manifest_path.write_text(json.dumps(manifest, indent=1), encoding="utf-8")
         return 130
     events.close()
     manifest["finished"] = dt.datetime.now().isoformat(timespec="seconds")
     manifest["failed"] = failed
     manifest["skipped"] = skipped
+    manifest["power"] = guard.record()
     manifest_path.write_text(json.dumps(manifest, indent=1), encoding="utf-8")
     ok = len(todo) - len(failed) - len(skipped)
     print(f"\nstage {stage}: {ok} jobs ok, {len(failed)} failed, {len(skipped)} skipped; "
@@ -2805,6 +2991,12 @@ def cmd_check(s: Settings, a: argparse.Namespace) -> int:
         line(False, "psutil", "missing (the footprint probe and the lock need it)")
     for note in s.auto:
         line(True, "auto limit", note)
+    if os.name == "nt":
+        on = bool(s.get("machine.unthrottle", True))
+        line(True if on else None, "power throttling",
+             "every job opted out, the machine kept awake while a stage runs" if on else
+             "machine.unthrottle = false: Windows may hold background jobs to the "
+             "efficiency cores")
     note = pilot_host_note(a.out_root)
     line(None if note else True, "pilot host", note or "the session timeouts were measured "
                                                        "on this host (or not yet)")

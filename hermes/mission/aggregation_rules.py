@@ -43,9 +43,15 @@ M_m·Δ_m = Σ_i w_i·Δθ_i.
   a_max_j = ⌊Φ_j / T⌋ with T the mission period (build-plan decision D5), or
   from a fixed ``a_max``, whichever is smaller. This is the deadline's third
   role in contribution C3.
-* ``agg:asynchfl`` — exponential staleness decay exp(−λ·a) at the mule and
-  again at the cluster, after Async-HFL (Yu et al., IoTDI 2023). Pair it with
-  the devices' proximal term (``DeviceConfig.fedprox_rho``).
+* ``agg:asynchfl`` — Async-HFL (Yu et al., IoTDI 2023): staleness weighting at
+  the mule and again at the cluster with Async-HFL's polynomial function
+  s(a) = (a + 1)^−q, which it adopts from FedAsync. ``poly_q`` is q, 0.5 by
+  default: Async-HFL does not report its q, and 0.5 is FedAsync's chosen
+  polynomial. Pair it with the devices' proximal term
+  (``DeviceConfig.fedprox_rho``). ``asynchfl_form = "exponential"`` gives
+  s(a) = exp(−λ·a) with λ = ``decay`` instead, this module's form before
+  7 Oct 2026; it is not Async-HFL's (the paper's "exponential decay
+  factors" are its mixing weights), so a run that uses it must say so.
 * ``agg:fedbuff`` — FedBuff (Nguyen et al., AISTATS 2022). The cluster buffers
   updates and, once K have arrived, applies their mean, each scaled by
   1/√(1 + a). Unweighted by n, as in the paper: at the mule w_i = s(a_i) and
@@ -114,6 +120,12 @@ VALUE_UNIFORM = "uniform"
 VALUE_LOSS = "loss"
 VALUE_PROXIES = (VALUE_UNIFORM, VALUE_LOSS)
 
+#: ``agg:asynchfl``'s staleness function: Async-HFL's polynomial (the default)
+#: or the exponential this module used before 7 Oct 2026 (module docstring).
+ASYNCHFL_POLYNOMIAL = "polynomial"
+ASYNCHFL_EXPONENTIAL = "exponential"
+ASYNCHFL_FORMS = (ASYNCHFL_POLYNOMIAL, ASYNCHFL_EXPONENTIAL)
+
 
 class AggregationConfigError(ValueError):
     """Raised for an unknown rule or an invalid rule parameter."""
@@ -139,7 +151,17 @@ class AggregationSpec:
     #: FedAsync hinge: s(a) = 1 for a ≤ b, else 1/(a_coef·(a − b) + 1).
     hinge_a: float = 1.0
     hinge_b: float = 0.0
-    #: ``agg:asynchfl`` decay rate λ in s(a) = exp(−λ·a).
+    #: ``agg:asynchfl``'s staleness function (:data:`ASYNCHFL_FORMS`). It and
+    #: ``poly_q`` are written to ``aggregation_params`` under ``agg:asynchfl``
+    #: only (:meth:`to_params`), so every other rule's recorded rows and traces
+    #: read as before; a recorded ``agg:asynchfl`` dict, which names ``decay``
+    #: but no form, reads as the exponential it flew (:meth:`from_config`).
+    asynchfl_form: str = ASYNCHFL_POLYNOMIAL
+    #: ``agg:asynchfl`` polynomial exponent q in s(a) = (a + 1)^−q.
+    poly_q: float = 0.5
+    #: ``agg:asynchfl`` decay rate λ in s(a) = exp(−λ·a), read only under
+    #: ``asynchfl_form = "exponential"``. Kept so that every recorded
+    #: ``aggregation_params`` (which holds it whatever the rule) still builds.
     decay: float = 0.5
     #: v_i: ``uniform`` (1) or ``loss`` (the update's raw local loss, taken
     #: after the cutoff; a missing or non-positive loss counts as the mean of
@@ -199,6 +221,12 @@ class AggregationSpec:
             )
         if self.decay < 0.0:
             raise AggregationConfigError(f"decay must be >= 0, got {self.decay}")
+        if self.asynchfl_form not in ASYNCHFL_FORMS:
+            raise AggregationConfigError(
+                f"asynchfl_form must be one of {ASYNCHFL_FORMS}, got {self.asynchfl_form!r}"
+            )
+        if self.poly_q < 0.0:
+            raise AggregationConfigError(f"poly_q must be >= 0, got {self.poly_q}")
         if self.value not in VALUE_PROXIES:
             raise AggregationConfigError(
                 f"value must be one of {VALUE_PROXIES}, got {self.value!r}"
@@ -211,9 +239,13 @@ class AggregationSpec:
     # ------------------------------------------------------------- config I/O
 
     def to_params(self) -> dict:
-        """Everything but the rule name, for ``aggregation_params``."""
+        """Everything but the rule name, for ``aggregation_params``; the
+        ``agg:asynchfl`` form and exponent under that rule only."""
         raw = asdict(self)
         raw.pop("rule")
+        if self.rule != AGG_ASYNCHFL:
+            for name in _ASYNCHFL_ONLY:
+                raw.pop(name)
         return raw
 
     @classmethod
@@ -227,7 +259,15 @@ class AggregationSpec:
                 f"unknown aggregation parameter(s): {sorted(unknown)}"
             )
         kwargs.pop("rule", None)
+        if rule == AGG_ASYNCHFL and "decay" in kwargs and "asynchfl_form" not in kwargs:
+            # decay is the exponential's rate: a dict that names it and no form
+            # is the exponential's (every agg:asynchfl record before 7 Oct 2026).
+            kwargs["asynchfl_form"] = ASYNCHFL_EXPONENTIAL
         return cls(rule=rule or AGG_PLAIN, **kwargs)
+
+
+#: The fields :meth:`AggregationSpec.to_params` writes under ``agg:asynchfl`` only.
+_ASYNCHFL_ONLY = ("asynchfl_form", "poly_q")
 
 
 # --------------------------------------------------------------------------- #
@@ -242,7 +282,9 @@ def staleness(spec: AggregationSpec, age: int) -> float:
             return 1.0
         return 1.0 / (spec.hinge_a * (a - spec.hinge_b) + 1.0)
     if spec.rule == AGG_ASYNCHFL:
-        return math.exp(-spec.decay * a)
+        if spec.asynchfl_form == ASYNCHFL_EXPONENTIAL:
+            return math.exp(-spec.decay * a)
+        return (a + 1.0) ** -spec.poly_q
     if spec.rule == AGG_FEDBUFF:
         return 1.0 / math.sqrt(1.0 + a)
     return 1.0

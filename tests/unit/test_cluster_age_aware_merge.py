@@ -184,7 +184,7 @@ def _theta_plus(step):
 
 
 def test_two_partials_at_different_ages_step_by_their_staleness():
-    spec = AggregationSpec(rule=AGG_ASYNCHFL, decay=0.5)
+    spec = AggregationSpec(rule=AGG_ASYNCHFL, asynchfl_form="exponential", decay=0.5)
     c = _cluster(spec, min_participation=2)
     _advance(c, 5)
     up1 = _up(M1, spec, shift=1.0, base_version=3)                # age 2, M = 10
@@ -246,7 +246,8 @@ def test_a_lone_expired_partial_takes_no_step_and_keeps_the_round_open():
 
 def test_a_single_stale_partial_mixes_in_at_its_staleness():
     """One partial: θ + η·e^{-λ·age}·Δ, the FedAsync / Async-HFL mixing form."""
-    spec = AggregationSpec(rule=AGG_ASYNCHFL, decay=0.5, server_lr=0.5)
+    spec = AggregationSpec(rule=AGG_ASYNCHFL, asynchfl_form="exponential", decay=0.5,
+                           server_lr=0.5)
     c = _cluster(spec)
     _advance(c, 2)
     up = _up(M1, spec, shift=1.0, base_version=0)
