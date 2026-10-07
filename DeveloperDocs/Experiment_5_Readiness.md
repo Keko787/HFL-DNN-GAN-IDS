@@ -36,7 +36,8 @@ The code, the launcher, every stage's definition, the scoring and the documentat
 | `batch1` | ▶️ Ready | — | See above. |
 | `sens` | ⏳ After batch 1 | Batch 1's CSVs | 5.3's F, FX and H1 at the session timeout × 0.75 and × 1.5. × 1 is batch 1's own cell. |
 | `rl-headroom`, `rl-calibrate` | ✅ Done, 6 Oct | — | ε = 0.01 everywhere (headroom 0.012–0.042). Calibration: `jittery56` flat, `clean` sanity-failed by 0.0005; the learned score sits at FX's level, below greedy_1. See [the findings](Experiment_5_RL_Calibration_Findings.md). |
-| `rl-sweep`, `rl-e3` | ▶️ Running from 6 Oct 13:58 | — | Option A, decided 6 Oct: the sweep as pre-registered, then E3's trainings ([findings](Experiment_5_RL_Calibration_Findings.md#decision)). |
+| `rl-sweep` | ✅ Done, 6 Oct 13:58–23:10 | — | **Verdict: flat** (pre-registered). No γ beats γ = 0 by ε; the best learned score is at FX's level, below greedy_1. FX stays; `keep_learned = false` ([verdict](Experiment_5_RL_Calibration_Findings.md#the-sweeps-verdict-6-oct-2026-2310--flat-fx-stays)). |
+| `rl-e3` | ▶️ Running from 6 Oct 23:10 | — | E3's five trainings (Chen's settings, γ = 0.99) and their evaluation; its checkpoint then goes in `rl.checkpoints.e3`, the last setting batch 2 needs. |
 | `rl-s57` | ❌ Blocked | Study 5.5's verdict (`rl.gamma_star`, `rl.keep_learned`) | 5.7's scores train only if the verdict keeps the learned score. |
 | `batch2` | ❌ Blocked | The RL verdict (`rl.keep_learned`, the `rl.checkpoints` paths); the 5.1 weights decision (below) | 5.1, 5.2, the rest of 5.3, 5.4, 5.5's stack check, 5.6–5.8, the rest of 5.9, 5.13: about 11,300 trials, roughly 50 h. FQ and E3 arms fly checkpoints that don't exist yet. |
 | `pilot3` | ▶️ Ready | — | 5.15's interference levels, 5.12's training-time levels (p512) and 5.11 (c)'s FerrySim sweeps: 80 trials plus FerrySim. Its stack jobs fly H1 (no cap) and its FerrySim jobs the scale cells, which the re-pin leaves alone. |
