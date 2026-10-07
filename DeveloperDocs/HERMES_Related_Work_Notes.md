@@ -337,11 +337,12 @@ Networks*, IAAA 2025 (Springer LNNS, 2026).** Abstract only; the chapter is payw
   - E3 is the learned baseline without that structure (Chen's style).
   - M1 is one network over every pair with no plan (Ho's style, and CEDA's stance).
   - FX is the fixed rule in the same slot.
-- **What the paper can claim depends on Study 5.5:**
-  - The calibration (6 Oct, not pre-registered) read **flat:** looking ahead added nothing.
-  - The one-step learned score sat **at FX's level, below greedy_1**, a simple one-step rule that sees the same inputs.
-  - The diagnosis is that the learner probably copied FX ([findings](Experiment_5_RL_Calibration_Findings.md)).
-  - If the sweep agrees, FX is FeRRy's in-flight rule and the null is published. C4 then rests on the two-clock structure (plan, then re-decide on measured signal), not on learning.
+- **Study 5.5's verdict (6 Oct 2026, pre-registered): flat.**
+  - No γ beat γ = 0 by ε = 0.01, and every γ > 0 is equivalent to γ = 0 within ±ε.
+  - The best learned score sat **at FX's level (−0.0774 against −0.0786) and below greedy_1 (−0.0716)**, a simple one-step rule that sees the same inputs.
+  - So **FX is FeRRy's in-flight rule, and the null is published** ([verdict](Experiment_5_RL_Calibration_Findings.md#the-sweeps-verdict-6-oct-2026-2310--flat-fx-stays)).
+  - C4 rests on the two-clock structure (plan, then re-decide on measured signal), not on learning.
+  - Report the copy-FX diagnosis with it. A one-revision learner screen remains for the revision window.
 
 ---
 
@@ -356,7 +357,7 @@ added).
 * **Do not call** E3 "FedQMIX", D5 "FedCS" without "degraded", D2 "Oort" without "statistical utility" and its deviations, or M1 a port of Ho.
 * **Do not describe** `agg:asynchfl` as Async-HFL's staleness function while it uses an exponential (§5a, §6a).
 * **Do not describe** FeRRy's coverage term as Zhai's (§3.3), or O1 as Zhai's method.
-* **Do not claim** that learning helps in flight unless Study 5.5's verdict reads rising (§5b).
+* **Do not claim** that learning helps in flight. Study 5.5's verdict read **flat**, and FX is FeRRy's in-flight rule (§5b).
 * **Do not claim** Oort or Power-of-Choice are inapplicable. `rpow-d` and Oort port directly; FedCS and `pow-d` do not. State the boundary, not a blanket dismissal.
 * **Do not claim** Byzantine robustness (a non-goal), or results from studies not yet run: H0, E3, O1, D5 and the merge rules are in batches 2–3.
 * **Do not imply** the starvation problem is novel. FeRRy's enforcement under travel cost is the contribution; the problem is shared.
@@ -427,7 +428,8 @@ fix. None changes a result already run, except that D3's numbers are the "expect
 - [ ] Find the full references for Yang (JSAC 2025), Shen (IoTJ 2024) and Chen (TVT 2025). Recover the novelty audit (Revision 3, 23 Sep 2026) and `HERMES_vs_Chen2023_Model-Aided_FedQMIX.md`; both are cited by the build plan and absent from the repository.
 - [ ] Get Ho et al.'s full text, if M1 is built.
 - [ ] Decide whether and how CEDA is cited under double-anonymous review.
-- [ ] Re-check §5b against Study 5.5's verdict, and §3.1 against batch 2 (E3, H0, the merge rules).
+- [x] Re-check §5b against Study 5.5's verdict: **flat**, FX stays (6 Oct).
+- [ ] Re-check §3.1 against batch 2 (E3, H0, the merge rules).
 - [ ] Consider a CEDA-style information ablation of FQ's features (§5b), if the learned score is kept.
 
 **From August, still open:**

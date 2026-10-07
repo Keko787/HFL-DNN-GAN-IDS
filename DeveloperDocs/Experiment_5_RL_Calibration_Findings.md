@@ -189,3 +189,38 @@ Mean held-out return over each family's cells (the four jittery cells above; the
 - FeRRy's lead over the state-of-the-art baselines comes from batch 1 (F and FX against H1 and D1–D4), so it does not depend on the sweep's outcome.
 
 Option B's screen stays fixed above. If the sweep reads flat and the copy-FX diagnosis matters to the paper or its reviewers, it can run in the revision window.
+
+---
+
+## The sweep's verdict (6 Oct 2026, 23:10) — **flat; FX stays**
+
+**The run.**
+- **Trainings:** Study 5.5's 60 trainings (γ ∈ {0, 0.25, 0.5, 0.75, 0.9, 0.99} × 10 seeds on `jittery56`, with the default learner), 13:58–19:53.
+- **Evaluation:** 197 min on 1,000 held-out episodes per cell, from commit `9ffb12b`.
+- **Reports:** `results/exp5/rl/s55/{evaluation,verdict}.json`. The verdict is **pre-registered**.
+
+| γ | 0 | 0.25 | 0.5 | 0.75 | 0.9 | 0.99 |
+|---|---|---|---|---|---|---|
+| Mean held-out return | -0.0795 | -0.0776 | -0.0779 | **-0.0774** | -0.0778 | -0.0779 |
+
+- **Rising? No.** No γ beats γ = 0 by ε = 0.01. The gains are 0.0015–0.0020; the best, γ = 0.75, has Holm p = 0.14.
+- **Flat? Yes.** Every γ > 0 is equivalent to γ = 0 within ±ε (TOST p ≤ 1.3e-4). A trend test detects a small upward drift with γ, about 0.002, a fifth of ε, so it has no practical weight.
+- **Sanity check: passed.** γ = 0 scores −0.0795 against a floor of −0.0816, though 3 of the 10 seeds fall below the floor.
+- **Against the fixed rules:**
+  - The best learned score (γ = 0.75, −0.0774) sits at FX's level (−0.0786).
+  - It trails greedy_1 (−0.0716) by 0.0059, CI [−0.0066, −0.0050], p = 0.002.
+  - **So `replace_fx = false`.**
+- **greedy_1 against FX:** +0.0070, CI [0.0045, 0.0098]. That is below ε, so the user-decides flag (critic A2) is not raised.
+
+**It reads as the calibration did.** Looking ahead adds nothing, and the learned score reaches FX's level and no higher. This is consistent with the diagnosis above: the learner probably copied FX.
+
+**What follows, by the pre-registered rule** (applied 6 Oct in `params.toml`):
+- **`keep_learned = false`.** FX stays as FeRRy's in-flight rule, and the null is published.
+- **`gamma_star = 0.75`,** recorded only.
+- **Study 5.5's stack check in batch 2** flies the verdict's picks, γ = 0.75 at seed 3 and γ = 0 at seed 5, beside FX and F.
+- **What drops out:** the FQ arms leave batch 2, 5.7's learned scores do not train, and M1 is not built.
+- **What must be built before batch 2:** **FX-dwell and FX-cov** for Study 5.7.
+
+**For the paper.**
+- **The learning claim of C4 is a null.** C4 rests on the two-clock structure: a plan at the dock, and a re-decision on measured signal at each stop by the fixed rule FX.
+- **The honest description:** the learned score matched FX and fell short of the one-step rule greedy_1. A one-revision screen (option B above) could test whether a different learner setting changes that, in the revision window, if reviewers press.
