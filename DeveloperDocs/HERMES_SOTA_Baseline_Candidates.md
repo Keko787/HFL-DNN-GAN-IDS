@@ -294,19 +294,22 @@ Checked 2026-08-13 against full text, not abstracts:
 - **UAV-Aided Multi-Community FL** — Mestoukirdi, Esrafilian, Gesbert & Li. **IEEE GLOBECOM 2022**
   (SAC Aerial Communications) · [arXiv:2206.02043](https://arxiv.org/abs/2206.02043)
 
-**Added for FeRRy (Sep–Oct 2026), as the build plan's Sources list them.** ⚠ This document records no full-text check of these; read each before citing it.
+**Added for FeRRy (Sep–Oct 2026), as the build plan's Sources list them.**
 
-- **FedEx** — Bian, Shen, Chen, Xu, *Indirect-Communication Federated Learning via Mobile Transporters*. **IEEE TMC 24(6), 2025.** The closest prior (arm D4).
-- **Cui et al.** — Cui, Yang, Wu, Feng, Hu, *Data Value Based Asynchronous FL for UAV Swarm Under Unstable Communication*. **IEEE TMC 23(6), 2024.** The Whittle index (arm D3) and the sequential merge (`agg:seq`, decided out).
-- **Chen et al.** — Chen, Esrafilian, Bayerlein, Gesbert, Caccamo, *Model-Aided Federated RL for Multi-UAV Trajectory Planning in IoT Networks*. **IEEE GLOBECOM Workshops 2023.** The source of arm E3; never label E3 "FedQMIX".
-- **Zhai et al.** — Zhai, Yuan, Wang, Yang, *UAV-Enabled Asynchronous FL*. **IEEE TWC 24(3), 2025.** The coverage term and the offline oracle (arm O1).
-- **Ho et al.** — *Energy-Efficient DDPG-Based UAV-Assisted Asynchronous FL*. **IAAA 2025.** The monolithic agent (arm M1, built only if 5.5 keeps a learned score).
-- **FedAsync** — Xie et al., 2019. The staleness hinge in `agg:cutoff`.
-- **FedBuff** — Nguyen et al., **AISTATS 2022**. `agg:fedbuff`.
-- **Async-HFL** — Yu et al., **IoTDI 2023**. `agg:asynchfl`.
-- **Yang et al.** — **IEEE JSAC 2025**: the age cutoff in `agg:cutoff`, and a contextual-bandit selector (cite only).
-- **Shen et al.** — **IEEE IoTJ 2024**: the proximal term in `agg:cutoff`.
-- **Chen et al.** — **IEEE TVT 2025**: the theory track's citation for mobility as mixing. The full reference is not held in the repository.
+- **References and links checked 6 Oct 2026** against Crossref, arXiv and the publishers' listings: title, authors, venue, DOI. This confirms each paper's identity only.
+- ⚠ **Their full texts have not been read here.** Read each before citing it.
+
+- **FedEx** — Bian, Shen, Chen, Xu, *Indirect-Communication Federated Learning via Mobile Transporters*. **IEEE TMC 24(6), 2025, pp. 4845–4857** · [doi:10.1109/TMC.2025.3527405](https://doi.org/10.1109/TMC.2025.3527405) · [IEEE Xplore](https://ieeexplore.ieee.org/document/10833721/) · [open-access copy (NSF PAR)](https://par.nsf.gov/servlets/purl/10588590). An earlier 6-page version by Bian, Shen and Xu: [arXiv:2302.07323](https://arxiv.org/abs/2302.07323). The closest prior (arm D4).
+- **Cui et al.** — Cui, Yang, Wu, Feng, Hu, *The Data Value Based Asynchronous Federated Learning for UAV Swarm Under Unstable Communication Scenarios*. **IEEE TMC 23(6), 2024, pp. 7165–7179** · [doi:10.1109/TMC.2023.3331906](https://doi.org/10.1109/TMC.2023.3331906) · [IEEE Xplore](https://ieeexplore.ieee.org/document/10314794). The Whittle index (arm D3) and the sequential merge (`agg:seq`, decided out).
+- **Chen et al.** — Chen, Esrafilian, Bayerlein, Gesbert, Caccamo, *Model-Aided Federated Reinforcement Learning for Multi-UAV Trajectory Planning in IoT Networks*. **IEEE GLOBECOM Workshops 2023** · [IEEE Xplore](https://ieeexplore.ieee.org/document/10465088/) · [arXiv:2306.02029](https://arxiv.org/abs/2306.02029) · [code](https://github.com/Cirrick/Multi_UAV_Data_Harvesting). The source of arm E3; never label E3 "FedQMIX".
+- **Zhai et al.** — Zhai, Yuan, Wang, Yang, *UAV-Enabled Asynchronous Federated Learning*. **IEEE TWC 24(3), 2025, pp. 2358–2372** · [doi:10.1109/TWC.2024.3520501](https://doi.org/10.1109/TWC.2024.3520501) · [arXiv:2403.06653](https://arxiv.org/abs/2403.06653). The coverage term and the offline oracle (arm O1).
+- **Ho et al.** — Ho, Win, Do, Na, Cho, *Energy-Efficient DDPG-Based UAV-Assisted Asynchronous Federated Learning with MC-NOMA in IoT Networks*. **IAAA 2025** (1st Int. Conf. on Intelligent Aerial Access and Applications) · [conference program](https://iaaa25.vnua.edu.vn/program.html). No proceedings link found yet. The monolithic agent (arm M1, built only if 5.5 keeps a learned score).
+- **FedAsync** — Xie, Koyejo, Gupta, *Asynchronous Federated Optimization*, 2019 · [arXiv:1903.03934](https://arxiv.org/abs/1903.03934). The staleness hinge in `agg:cutoff`.
+- **FedBuff** — Nguyen, Malik, Zhan, Yousefpour, Rabbat, Malek, Huba, *Federated Learning with Buffered Asynchronous Aggregation*. **AISTATS 2022**, PMLR 151:3581–3607 · [proceedings](https://proceedings.mlr.press/v151/nguyen22b.html) · [arXiv:2106.06639](https://arxiv.org/abs/2106.06639). `agg:fedbuff`.
+- **Async-HFL** — Yu, Cherkasova, Vardhan, Zhao, Ekaireb, Zhang, Mazumdar, Rosing, *Async-HFL: Efficient and Robust Asynchronous Federated Learning in Hierarchical IoT Networks*. **IoTDI 2023** · [doi:10.1145/3576842.3582377](https://doi.org/10.1145/3576842.3582377) · [arXiv:2301.06646](https://arxiv.org/abs/2301.06646) · [code](https://github.com/Orienfish/Async-HFL). `agg:asynchfl`.
+- **Yang et al.** — **IEEE JSAC 2025**: the age cutoff in `agg:cutoff`, and a contextual-bandit selector (cite only). ⚠ **Link pending:** the full reference is not held in the repository, so no paper is linked rather than a guess.
+- **Shen et al.** — **IEEE IoTJ 2024**: the proximal term in `agg:cutoff`. ⚠ **Link pending**, for the same reason.
+- **Chen et al.** — **IEEE TVT 2025**: the theory track's citation for mobility as mixing. ⚠ **Link pending**, for the same reason.
 
 **Other sources:**
 
