@@ -1,0 +1,312 @@
+{
+  "blas": "openblas64 0.3.23.dev (USE_64BITINT=1 DYNAMIC_ARCH=1 DYNAMIC_OLDER= NO_CBLAS= NO_LAPACK= NO_LAPACKE= NO_AFFINITY=1 USE_OPENMP= SKYLAKEX MAX_THREADS=2); OPENBLAS_NUM_THREADS=1",
+  "cell_family": "jittery",
+  "cell_family_sha256": "deaa4e082ba40fab48efd2822aaee205df888f26ae48563d320c81a5e9ee052e",
+  "classes": [
+    "wide"
+  ],
+  "dirty": false,
+  "episodes_trained": 2000,
+  "format": 2,
+  "gamma": 0.99,
+  "held_out": {
+    "cells": {
+      "jit-n12-180": {
+        "cell": "jit-n12-180",
+        "decisions_per_sortie_mean": 5.108,
+        "episodes": 1000,
+        "first_index": 0,
+        "policy": "ckpt-cdfd343d6f54",
+        "return_mean": 2.1996666666666664,
+        "return_sd": 0.390309004375603,
+        "return_se": 0.012342654450995317,
+        "sorties_with_2_or_more": 1.0,
+        "stream": "ferrysim-heldout",
+        "terms_mean": {
+          "coverage": 0.0,
+          "distance": 0.0,
+          "energy": 0.0,
+          "gain": 2.1996666666666664,
+          "time": 0.0
+        }
+      },
+      "jit-n12-90": {
+        "cell": "jit-n12-90",
+        "decisions_per_sortie_mean": 3.20175,
+        "episodes": 1000,
+        "first_index": 0,
+        "policy": "ckpt-cdfd343d6f54",
+        "return_mean": 1.64275,
+        "return_sd": 0.37445165299317107,
+        "return_se": 0.011841200970734269,
+        "sorties_with_2_or_more": 1.0,
+        "stream": "ferrysim-heldout",
+        "terms_mean": {
+          "coverage": 0.0,
+          "distance": 0.0,
+          "energy": 0.0,
+          "gain": 1.64275,
+          "time": 0.0
+        }
+      },
+      "jit-n6-150": {
+        "cell": "jit-n6-150",
+        "decisions_per_sortie_mean": 3.70675,
+        "episodes": 1000,
+        "first_index": 0,
+        "policy": "ckpt-cdfd343d6f54",
+        "return_mean": 2.1996666666666664,
+        "return_sd": 0.5510527230202137,
+        "return_se": 0.017425817155817754,
+        "sorties_with_2_or_more": 0.99825,
+        "stream": "ferrysim-heldout",
+        "terms_mean": {
+          "coverage": 0.0,
+          "distance": 0.0,
+          "energy": 0.0,
+          "gain": 2.1996666666666664,
+          "time": 0.0
+        }
+      },
+      "jit-n6-75": {
+        "cell": "jit-n6-75",
+        "decisions_per_sortie_mean": 2.45025,
+        "episodes": 1000,
+        "first_index": 0,
+        "policy": "ckpt-cdfd343d6f54",
+        "return_mean": 1.69,
+        "return_sd": 0.5370387628980586,
+        "return_se": 0.01698265682556994,
+        "sorties_with_2_or_more": 0.98725,
+        "stream": "ferrysim-heldout",
+        "terms_mean": {
+          "coverage": 0.0,
+          "distance": 0.0,
+          "energy": 0.0,
+          "gain": 1.69,
+          "time": 0.0
+        }
+      }
+    },
+    "episodes": 4000,
+    "first_index": 0,
+    "return_mean": 1.9330208333333332,
+    "reward": {
+      "c_cov": 0.0,
+      "c_e": 0.0,
+      "c_t": 0.0,
+      "expected_availability": false,
+      "kind": "bytes",
+      "n_ref": 10.0
+    },
+    "stream": "ferrysim-heldout"
+  },
+  "kind": "chen_dqn",
+  "learner_revision": 0,
+  "network": {
+    "activation": "tanh",
+    "adam_beta1": 0.9,
+    "adam_beta2": 0.999,
+    "adam_eps": 1e-08,
+    "feature_dim": 10,
+    "gamma": 0.99,
+    "grad_clip": 10.0,
+    "hidden": [
+      64,
+      64
+    ],
+    "huber_delta": 1.0,
+    "lr": 0.0005,
+    "n_step": 1,
+    "target_sync": 500
+  },
+  "numpy": "1.26.4",
+  "purpose": "trained",
+  "reward": {
+    "c_cov": 0.0,
+    "c_e": 0.0,
+    "c_t": 0.0,
+    "expected_availability": true,
+    "kind": "bytes",
+    "n_ref": 10.0
+  },
+  "schema": {
+    "columns": [
+      "remaining",
+      "snr",
+      "reachable",
+      "dx",
+      "dy",
+      "distance",
+      "members",
+      "return_energy",
+      "energy_left",
+      "time_left"
+    ],
+    "declared_constant": [
+      "remaining",
+      "reachable"
+    ],
+    "dim": 10,
+    "length_scale_m": 100.0,
+    "snr_scale_db": 10.0,
+    "version": "e3_v1"
+  },
+  "seeds": {
+    "behaviour": "sha256('ferrysim-train-0|behaviour|<episode>')[:4] mod 2**31",
+    "init": 962148733,
+    "replay": 233496634,
+    "run": 0,
+    "train_stream": "ferrysim-train-0",
+    "val_first_index": 0,
+    "val_stream": "ferrysim-val"
+  },
+  "sha256": "cdfd343d6f54af93857fb7b20226801c4f00fe1064a1d0b78c5779d8b364514b",
+  "trainer_commit": "5999e21f79f1dfb602e736368851b5154417209e",
+  "training": {
+    "outcome": {
+      "best_episode": 2000,
+      "episodes_run": 5000,
+      "stopped_early": true,
+      "transitions": 71652,
+      "updates": 70653
+    },
+    "spec": {
+      "cells": [
+        "jit-n6-75",
+        "jit-n6-150",
+        "jit-n12-90",
+        "jit-n12-180"
+      ],
+      "device_model": "equal",
+      "episodes": 10000,
+      "eval_every": 1000,
+      "family": "jittery",
+      "kind": "chen_dqn",
+      "learner": {
+        "batch": 64,
+        "behaviour": {
+          "decay_fraction": 0.5,
+          "epsilon_end": 0.05,
+          "epsilon_start": 1.0,
+          "reference_episodes": 0
+        },
+        "replay_capacity": 50000,
+        "warmup_transitions": 1000
+      },
+      "network": {
+        "activation": "tanh",
+        "adam_beta1": 0.9,
+        "adam_beta2": 0.999,
+        "adam_eps": 1e-08,
+        "gamma": 0.99,
+        "grad_clip": 10.0,
+        "hidden": [
+          64,
+          64
+        ],
+        "huber_delta": 1.0,
+        "lr": 0.0005,
+        "n_step": 1,
+        "target_sync": 500
+      },
+      "patience": 3,
+      "phase": true,
+      "reward": {
+        "c_cov": 0.0,
+        "c_e": 0.0,
+        "c_t": 0.0,
+        "expected_availability": true,
+        "kind": "bytes",
+        "n_ref": 10.0
+      },
+      "seed": 0,
+      "val_episodes": 200,
+      "validation_reward": {
+        "c_cov": 0.0,
+        "c_e": 0.0,
+        "c_t": 0.0,
+        "expected_availability": false,
+        "kind": "bytes",
+        "n_ref": 10.0
+      }
+    }
+  },
+  "validation": [
+    {
+      "cells": {
+        "jit-n12-180": 2.26,
+        "jit-n12-90": 1.6166666666666665,
+        "jit-n6-150": 2.1933333333333334,
+        "jit-n6-75": 1.7633333333333332
+      },
+      "episode": 1000,
+      "episodes": 200,
+      "loss_mean": 0.0037997420074277945,
+      "score": 1.9583333333333333,
+      "train_return_mean": 1.8004581765937127,
+      "transitions": 14214,
+      "updates": 13215
+    },
+    {
+      "cells": {
+        "jit-n12-180": 2.2666666666666666,
+        "jit-n12-90": 1.6366666666666665,
+        "jit-n6-150": 2.203333333333333,
+        "jit-n6-75": 1.75
+      },
+      "episode": 2000,
+      "episodes": 200,
+      "loss_mean": 0.0028641577362556515,
+      "score": 1.9641666666666666,
+      "train_return_mean": 1.858429030622005,
+      "transitions": 28676,
+      "updates": 27677
+    },
+    {
+      "cells": {
+        "jit-n12-180": 2.2566666666666664,
+        "jit-n12-90": 1.635,
+        "jit-n6-150": 2.1966666666666668,
+        "jit-n6-75": 1.76
+      },
+      "episode": 3000,
+      "episodes": 200,
+      "loss_mean": 0.002713846433112249,
+      "score": 1.9620833333333332,
+      "train_return_mean": 1.8448243907617694,
+      "transitions": 42638,
+      "updates": 41639
+    },
+    {
+      "cells": {
+        "jit-n12-180": 2.265,
+        "jit-n12-90": 1.645,
+        "jit-n6-150": 2.1933333333333334,
+        "jit-n6-75": 1.7366666666666666
+      },
+      "episode": 4000,
+      "episodes": 200,
+      "loss_mean": 0.002613012163168124,
+      "score": 1.96,
+      "train_return_mean": 1.899729836300974,
+      "transitions": 57116,
+      "updates": 56117
+    },
+    {
+      "cells": {
+        "jit-n12-180": 2.2616666666666667,
+        "jit-n12-90": 1.615,
+        "jit-n6-150": 2.216666666666667,
+        "jit-n6-75": 1.7566666666666666
+      },
+      "episode": 5000,
+      "episodes": 200,
+      "loss_mean": 0.0023438393550052317,
+      "score": 1.9625,
+      "train_return_mean": 1.9464445423648378,
+      "transitions": 71652,
+      "updates": 70653
+    }
+  ]
+}
