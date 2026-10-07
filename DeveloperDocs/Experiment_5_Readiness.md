@@ -39,7 +39,7 @@ The code, the launcher, every stage's definition, the scoring and the documentat
 | `rl-sweep` | ✅ Done, 6 Oct 13:58–23:10 | — | **Verdict: flat** (pre-registered). No γ beats γ = 0 by ε; the best learned score is at FX's level, below greedy_1. FX stays; `keep_learned = false` ([verdict](Experiment_5_RL_Calibration_Findings.md#the-sweeps-verdict-6-oct-2026-2310--flat-fx-stays)). |
 | `rl-e3` | ✅ Done, 6 Oct 23:10 – 7 Oct 00:10 | — | Five trainings (Chen's settings, γ = 0.99) and their held-out evaluation. `rl.checkpoints.e3` is seed 0, the median-validation seed; the five seeds' held-out bytes returns are within 0.4% (1.933–1.941). |
 | `rl-s57` | ❌ Blocked | Study 5.5's verdict (`rl.gamma_star`, `rl.keep_learned`) | 5.7's scores train only if the verdict keeps the learned score. |
-| `batch2` | ⏳ Settings complete; two builds first | FX-dwell and FX-cov for Study 5.7 (FX was kept); the `agg:asynchfl` decision for 5.1 ([related work §6a](HERMES_Related_Work_Notes.md)) | 346 jobs, 9,060 trials (660 shared with batch 1 and already done), roughly 50 h. FX is FeRRy's in-flight rule; the FQ arms are out except 5.5's stack check (FQ-g75, FQ-g0); E3 flies `g0.99_s0`. |
+| `batch2` | ⏳ Ready: settings complete, builds done 7 Oct (`aedae8b`) | Nothing. Built 7 Oct: FX-dwell and FX-cov for Study 5.7 (FX was kept); `agg:asynchfl` switched to Async-HFL's polynomial for 5.1 ([related work §6a](HERMES_Related_Work_Notes.md)); the launcher's power-throttling opt-out | 350 jobs, 9,220 trials (660 shared with batch 1 and already done), roughly 50 h. FX is FeRRy's in-flight rule; the FQ arms are out except 5.5's stack check (FQ-g75, FQ-g0); E3 flies `g0.99_s0`. |
 | `pilot3` | ▶️ Ready | — | 5.15's interference levels, 5.12's training-time levels (p512) and 5.11 (c)'s FerrySim sweeps: 80 trials plus FerrySim. Its stack jobs fly H1 (no cap) and its FerrySim jobs the scale cells, which the re-pin leaves alone. |
 | `batch3` | ❌ Blocked | `pilot3`'s outputs (`pilot_outputs.train_levels` by `--apply`; `[s515] harsher_amp_db`, `lossier_n_pl` and `[s511c] knee_s` by hand) | 5.12, 5.15, 5.11 (c): about 1,460 trials, roughly 3 h. |
 | Study 5.10 | ❌ Not here | AERPAW access | Real radios; validation, not a statistical study. |
@@ -56,13 +56,13 @@ The code, the launcher, every stage's definition, the scoring and the documentat
 | 4 | ✅ The code gate, 6 Oct, on `b54185a`: 6,375 tests, the five known failures with their recorded signatures, the same as all three baselines. None of the five last-bit `erfc` differences the guide expects on another host appeared | `python -m pytest tests …` then `tests/golden/make_baseline.py compare` | done (18 min) |
 | 5 | ✅ Batch 1, then `sens`, 6 Oct 00:36–06:40 from `c461552`: 1,760 + 120 trials, every row ok; scored (`exp5 score batch1`, `score sens`) into `results/exp5/scores/`; committed `ff90bbf` (results) and `53bdfc5` (scores, headlines in its message); traces in `results/exp5/archives/{b1,sens}_traces.tar.gz` | `exp5 run batch1 --yes`, `exp5 run sens --yes` | done (6 h) |
 | 6 | The RL campaign. It pauses after the calibration (a sanity check to read) and after Study 5.5's verdict. **Headroom and calibration done (6 Oct 06:42–09:17); paused for the decision recorded in [the findings](Experiment_5_RL_Calibration_Findings.md)** | `exp5 run rl --yes` | ~2.5 h done; the sweep ~10 h |
-| 7 | Act on the verdict: set `rl.gamma_star`, `rl.keep_learned` and the `rl.checkpoints` paths; build FX-dwell and FX-cov (if FX is kept) or M1 (if the learned score is kept) | params.toml; a build | decisions + build |
+| 7 | ✅ Act on the verdict: `rl.gamma_star` 0.75, `rl.keep_learned` false and the `rl.checkpoints` paths (6 Oct); FX was kept, so FX-dwell and FX-cov were built (7 Oct) and M1 is not | params.toml; a build | done |
 | 8 | Batch 2 | `exp5 run batch2 --yes` | ~50 h |
 | 9 | Batch 3's pilots, then their outputs | `exp5 run pilot3 --yes`, `exp5 report pilot3 --apply`, the rest by hand | ~1 h |
 | 10 | Batch 3 | `exp5 run batch3 --yes` | ~3 h |
 | 11 | Score each batch, archive each stage's traces, commit; publish the archives (with your go-ahead) | `exp5 score batches`, `exp5 pack all` | ~1 h |
 
-Machine time from step 1 to step 11 is about 3.5–4 days, plus the pauses for reading reports and deciding. Every remaining stage runs on one host, the second ([guide §9](Experiment_5_Reproducibility_Guide.md#9-determinism-what-matches-across-machines)). Keep it awake and pause Windows Update for the long stages.
+Machine time from step 1 to step 11 is about 3.5–4 days, plus the pauses for reading reports and deciding. Every remaining stage runs on one host, the second ([guide §9](Experiment_5_Reproducibility_Guide.md#9-determinism-what-matches-across-machines)). Pause Windows Update for the long stages; the launcher keeps the machine awake and its jobs off the efficiency cores ([guide §2.1](Experiment_5_Reproducibility_Guide.md#21-the-machine)).
 
 ### The host
 
@@ -76,7 +76,6 @@ The TTL and knee pilots ran on the first host: 8 physical cores, 16 logical, 95 
 |---|---|---|
 | **5.1's bound-derived merge weights.** `agg:cutoff`'s age weights are FedAsync's hinge with hand-set constants; the "derived from the bound" side is a theory-track derivation not yet done. 5.7 cites it too. | Batch 2 (5.1 and 5.7) | Drop the derivation and add a small sensitivity check on the hand-set constants (~240 trials, launcher settings only); drop it with nothing added; or do the derivation (research work), after which it becomes a weight mode and a 5.1 variant. |
 | **Batch 1 before or after RL** | Step 5 | After RL, as the campaign orders it; or right after the re-pin and smoke test. See "Order choice" above. |
-| **The verdict's follow-ups:** γ\*, keep the learned score or not, the checkpoints; FX-dwell/FX-cov or M1 | Batch 2 | Read from `exp5 report rl-sweep`. |
 | **pilot3's hand-set values:** 5.15's harsher interference amplitude and higher path-loss exponent, 5.11 (c)'s knees | Batch 3 | Read from `exp5 report pilot3`. |
 | **Publishing the trace archives** (a GitHub release, Zenodo for the paper's artifact) | The paper | Nothing is published without your go-ahead. |
 

@@ -245,7 +245,9 @@ reproduces the recorded runs. Code: [hermes/mission/aggregation_rules.py](../her
 | `hinge_a`, `hinge_b` | `aggregation_params` | 1.0, 0 | config field; `--agg-hinge-a/-b` | FedAsync's hinge s(a) = 1 for a ≤ b, else 1/(a·(a − b) + 1) (`agg:cutoff`). To be replaced by the constants the theory track derives. |
 | `a_max` | `aggregation_params` | None | config field; `--agg-a-max` | Fixed cutoff in cluster rounds; weight is exactly 0 past it. At the cluster it also cuts whole partials older than `a_max`; a fold whose every partial is cut takes no step, leaves the round open and sends every waiting mule its DOWN (event `cluster_merge_expired`). An update whose age is unknown (no basis version) counts as age 0 and is never cut. |
 | `period_s` (T) | `aggregation_params` | None | config field; `--agg-period-s` | Mission period for the per-device cutoff of decision D5 (below). |
-| `decay` (λ) | `aggregation_params` | 0.5 | config field; `--agg-decay` | `agg:asynchfl`: s(a) = exp(−λ·a) on each device's age at the mule, and on each partial's age at the cluster. |
+| `asynchfl_form` | `aggregation_params` | `polynomial` | config field; `--agg-asynchfl-form` | `agg:asynchfl`'s staleness function, on each device's age at the mule and on each partial's age at the cluster. `polynomial` is Async-HFL's s(a) = (a + 1)^−q, which it adopts from FedAsync (decided 7 Oct 2026; [related work §6a](HERMES_Related_Work_Notes.md), item 10). `exponential` is s(a) = exp(−λ·a), this rule's form before then, which is not Async-HFL's. Written to `aggregation_params` under `agg:asynchfl` only, so every other rule's rows and traces read as before. |
+| `poly_q` (q) | `aggregation_params` | 0.5 | config field; `--agg-poly-q` | `agg:asynchfl`, polynomial form: q in (a + 1)^−q. Async-HFL does not report its q; 0.5 is FedAsync's polynomial, and FedBuff's (1 + τ)^−0.5. |
+| `decay` (λ) | `aggregation_params` | 0.5 | config field; `--agg-decay` | `agg:asynchfl`, exponential form: λ in exp(−λ·a). Given without a form, it selects the exponential: a recorded `agg:asynchfl` dict names `decay` and no form, and reads as the exponential it flew. |
 | `value` | `aggregation_params` | `uniform` | config field; `--agg-value` | v_i in w_i = n_i·v_i·s(a_i): 1, or the update's raw training loss (`loss`), taken over the updates admitted past the cutoff; an update with no loss gets the mean of the known ones. Raw rather than divided by a mean, so partials from several mules combine exactly as one merge over all their devices. |
 | `buffer_k` (K) | `aggregation_params` | the slice size of the mule whose partial first opens the buffer (all registered devices if that slice is empty), fixed for the run | config field; `--agg-buffer-k` | `agg:fedbuff`: updates buffered per server step. K is FedBuff's own quorum, so `min_participation` does not gate it. While the buffer fills the round stays open and θ unchanged; the service still sends the mule its DOWN (event `cluster_merge_deferred`). A buffer still filling when the trial ends never reaches θ, and the mean is not n-weighted, so FedBuff at the default K does not tie with `agg:plain` even with every basis current; run it with K = 1 for that check. |
 | `fedex_n` (N) | `aggregation_params` | the cluster's registered devices | config field | `agg:fedex`: N in x ← x + (1/N)·Σ_i Δθ_i, the total number of clients (FedEx-Async, TMC 2025). Faithful at η = 1 and `min_participation` = 1, so every return is its own step. |
@@ -1840,8 +1842,9 @@ fallback, `subset` admission by default, the miss priority on, T_nom per cell an
 check; a test asserts that each FQ arm's mule config equals F's but for `flight_slot`, the
 checkpoint fields and its ablation's own field (critic A5). It also needs `--in-flight-response
 replan` (R3). FQ-dwell, FQ-cov and FQ-hand train their checkpoints only if Study 5.5 keeps the
-learned score (critic C2); otherwise Study 5.7's plan-term ablations fly FX, and `FX-dwell` and
-`FX-cov` are added then.
+learned score (critic C2). It did not (6 Oct 2026), so Study 5.7's plan-term ablations fly FX:
+`FX-dwell` and `FX-cov` (added 7 Oct 2026) are FX's slot with FQ-dwell's and FQ-cov's score
+changes, addendum plan arms (`ADDENDUM_PLAN_ARMS`) with F's settings wherever F has them.
 
 | Flag | Default | Meaning |
 |---|---|---|

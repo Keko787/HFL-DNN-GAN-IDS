@@ -215,8 +215,8 @@ records `aggregation`, `aggregation_params` (JSON), `fedprox_rho`, `pass_2_budge
 
 | Flag | Default | Meaning |
 |---|---|---|
-| `--aggregation` | `agg:plain` | The L3 merge rule, set on the cluster and the mule together. `agg:cutoff` (FeRRy: n·v·hinge(age), zero past the cutoff), `agg:asynchfl` (exp(−λ·age) at the mule and the cluster), `agg:fedbuff` (apply the mean after K updates). |
-| `--agg-server-lr`, `--agg-a-max`, `--agg-period-s`, `--agg-hinge-a`, `--agg-hinge-b`, `--agg-decay`, `--agg-value`, `--agg-buffer-k` | see §14 | The rule's parameters. `--agg-period-s` turns each device's deadline window into its cutoff (decision D5). |
+| `--aggregation` | `agg:plain` | The L3 merge rule, set on the cluster and the mule together. `agg:cutoff` (FeRRy: n·v·hinge(age), zero past the cutoff), `agg:asynchfl` (Async-HFL's polynomial (age + 1)^−q at the mule and the cluster; `--agg-asynchfl-form exponential` for exp(−λ·age), this rule's form before 7 Oct 2026), `agg:fedbuff` (apply the mean after K updates). |
+| `--agg-server-lr`, `--agg-a-max`, `--agg-period-s`, `--agg-hinge-a`, `--agg-hinge-b`, `--agg-asynchfl-form`, `--agg-poly-q`, `--agg-decay`, `--agg-value`, `--agg-buffer-k` | see §14 | The rule's parameters. `--agg-period-s` turns each device's deadline window into its cutoff (decision D5). |
 | `--fedprox-rho` | 0 | FedProx weight on every device. |
 | `--pass-2-budget` | off | Walk Pass 2 against `--mission-budget-s` (required); skipped devices keep their older basis, so ages spread. Pass-1 devices train ahead on the basis they adopt, so one skipped in Pass 2 ships its next update one round old. |
 | `--deadline-law` | `additive` | `multiplicative`: Φ ← clamp(β·clamp(Φ)), β_on after an on-time delivery, β_partial after a miss by a device that answered, β_timeout after one by a device that did not, one-shot cluster overrides. Tunables `--deadline-beta-on` (0.8), `--deadline-beta-partial` (1.25), `--deadline-beta-timeout` (1.5), `--deadline-phi-min` (5), `--deadline-phi-max` (300); see §15 of the configuration reference. |
@@ -628,7 +628,8 @@ compare rule"). The campaign gate follows the go-ahead, in item 7's order.
 | `FQ` | F with the learned (band, next stop) score in the flight slot | `main`: the derived reward, at whatever weights its manifest records (R28) | The build plan's F; Phase 4's F keeps the committed slot, and the paper may call FQ "F". |
 | `FQ-g0` … `FQ-g99` | FQ at γ = 0, 0.25, 0.5, 0.75, 0.9 or 0.99 | `gX`: γ = X/100, the derived reward at decision 4 (a)'s weights (c_t 0.1, c_cov 1) | Study 5.5's stack check flies the verdict's two picks. |
 | `FQ-hand` | FQ trained on F·hand | `hand`: an F·hand checkpoint, which no other tag takes | Study 5.7. |
-| `FQ-dwell`, `FQ-cov` | FQ with the plan score's dwell term, or its coverage term, off | `dwell`, `cov`: trained on that plan (`train --ablation dwell` or `cov`) | Study 5.7, only if Study 5.5 keeps the learned score (critic C2); otherwise FX-dwell and FX-cov are added. |
+| `FQ-dwell`, `FQ-cov` | FQ with the plan score's dwell term, or its coverage term, off | `dwell`, `cov`: trained on that plan (`train --ablation dwell` or `cov`) | Study 5.7, only if Study 5.5 keeps the learned score (critic C2). It did not (6 Oct 2026), so 5.7 flies FX-dwell and FX-cov. |
+| `FX-dwell`, `FX-cov` | FX with the plan score's dwell term, or its coverage term, off | none | Study 5.7 (added 7 Oct 2026, as Study 5.5 kept FX). Plan arms (FQ-dwell's and FQ-cov's score changes, FX's slot); `--mission-clock sim`. |
 | `E3` | Chen et al.'s DQN as a whole scheduler that names each next stop in flight | `E3` (tag `e3`): trained on E3's bytes reward | Legacy mode: whole stops whatever `--member-admission` says, a `--contact-band`, the run's in-flight response. |
 | `H1+L1` | H1 with H3's adaptive backhaul | none | Needs `--backhaul-model seconds` or `--l1-channel` (R27); it replaces H3 as the adaptive backhaul's reference (decision 8). |
 
