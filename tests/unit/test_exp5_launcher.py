@@ -438,3 +438,122 @@ def test_p512_picks_its_level_by_the_share_after_the_first_mission(tmp_path, mon
     levels = L.p512_levels(s, jobs, problems)
     first = float(jobs[0].args[jobs[0].args.index("--train-time-s") + 1])
     assert problems == [] and levels is not None and f"spread = [{first:.1f}," in levels
+
+
+# --------------------------------------------------------------------------- #
+# Windows power throttling: every job opted out, the machine kept awake
+# --------------------------------------------------------------------------- #
+
+def _guard(trees, applied, refuse=()):
+    awake = []
+    it = iter(trees)
+
+    def apply(pid):
+        applied.append(pid)
+        return pid not in refuse
+
+    g = L.ThrottleGuard(True, apply=apply, tree=lambda: next(it),
+                        awake=lambda on: awake.append(on) or True)
+    return g, awake
+
+
+def test_the_guard_opts_each_process_out_once_while_it_runs():
+    applied = []
+    me = L.os.getpid()
+    g, awake = _guard([[me, 10], [me, 10, 11, 12], [me, 12, 10]], applied, refuse={11})
+    g.start()                          # itself (watch), then the first tree
+    assert applied == [me, 10] and awake == [True]
+    g.watch(10)                        # a job already seen is not opted out again
+    g.sweep()                          # 11 and 12 appear under a job
+    assert applied == [me, 10, 11, 12]
+    g.sweep()                          # 11 has gone: forgotten, never retried while gone
+    assert applied == [me, 10, 11, 12]
+    g.stop()
+    g.stop()
+    assert awake == [True, False]      # released once
+    assert g.record() == {"unthrottle": True, "keep_awake": True, "sees_job_children": True,
+                          "processes_unthrottled": 3, "refused": 1}
+
+
+def test_a_reused_pid_is_opted_out_again():
+    applied = []
+    me = L.os.getpid()
+    g, _ = _guard([[me, 20], [me], [me, 20]], applied)
+    g.start()
+    g.sweep()
+    g.sweep()
+    assert applied == [me, 20, 20]
+
+
+def test_the_guard_off_does_nothing():
+    calls = []
+    g = L.ThrottleGuard(False, apply=calls.append, tree=lambda: [1, 2],
+                        awake=calls.append).start()
+    g.watch(5)
+    g.sweep()
+    g.stop()
+    assert calls == [] and g.record()["unthrottle"] is False
+
+
+def test_a_failing_tree_never_stops_the_stage():
+    def tree():
+        raise RuntimeError("psutil hiccup")
+
+    applied = []
+    g = L.ThrottleGuard(True, apply=lambda pid: applied.append(pid) or True, tree=tree,
+                        awake=lambda on: True).start()
+    g.sweep()
+    assert applied == [L.os.getpid()]
+
+
+def test_params_turn_the_guard_on():
+    s, _ = L.load_settings(L.PARAMS)
+    assert s.get("machine.unthrottle") is True
+
+
+@pytest.mark.skipif(L.os.name != "nt", reason="Windows power throttling")
+def test_unthrottle_takes_on_a_real_process():
+    import subprocess
+    import sys
+
+    child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"])
+    try:
+        assert L.unthrottle(child.pid) is True
+        assert L.throttling_state(child.pid) == (L.POWER_THROTTLING_EXECUTION_SPEED, 0)
+    finally:
+        child.kill()
+        child.wait()
+    assert L.unthrottle(0) is False                  # not openable: refused, not raised
+    assert L.throttling_state(0) is None
+
+
+@pytest.mark.skipif(L.os.name != "nt", reason="Windows power throttling")
+def test_a_stage_runs_its_jobs_unthrottled_and_records_it(tmp_path):
+    """End to end: a tool job (and the process it starts) reads its own power
+    throttling state; the manifest records the guard."""
+    import json as _json
+
+    s, _ = L.load_settings(L.PARAMS)
+    out = tmp_path / "state.json"
+    probe = (
+        "import json, subprocess, sys, time\n"
+        "sys.path.insert(0, r'%s')\n"
+        "import importlib.util as u\n"
+        "spec = u.spec_from_file_location('l', r'%s'); l = u.module_from_spec(spec)\n"
+        "sys.modules['l'] = l; spec.loader.exec_module(l)\n"
+        "kid = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(8)'])\n"
+        "time.sleep(5)\n"
+        "json.dump({'job': l.throttling_state(l.os.getpid()),\n"
+        "           'child': l.throttling_state(kid.pid)}, open(r'%s', 'w'))\n"
+        "kid.kill()\n"
+    ) % (L.REPO, L.HERE / "launch.py", out)
+    job = L.Job(stage="sens", study="t", name="t/probe", args=["-c", probe], out=str(out),
+                kind="tool")
+    rc = L._run_jobs("sens", s, "", [job], [job], {"commit": "x"}, {}, 1, str(tmp_path))
+    assert rc == 0
+    state = _json.loads(out.read_text())
+    assert state == {"job": [1, 0], "child": [1, 0]}
+    (manifest,) = (tmp_path / L.STAGE_DIR["sens"] / "_launcher").glob("manifest_*.json")
+    power = _json.loads(manifest.read_text(encoding="utf-8"))["power"]
+    assert power["unthrottle"] is True and power["keep_awake"] is True
+    assert power["processes_unthrottled"] >= 3 and power["refused"] == 0

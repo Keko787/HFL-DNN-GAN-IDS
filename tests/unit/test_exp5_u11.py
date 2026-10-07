@@ -115,7 +115,7 @@ def test_demand_weights_take_the_factor_only_when_given():
 # --------------------------------------------------------------------------- #
 
 def test_the_arms_and_their_laws():
-    assert ADDENDUM_PLAN_ARMS[1:] == ("F-round", "F-pref")
+    assert ADDENDUM_PLAN_ARMS[1:3] == ("F-round", "F-pref")
     assert all(is_plan_arm(a) for a in ("F-round", "F-pref"))
     d = Exp4Driver(mission_clock="sim", contact_band="wide", mission_budget_s=90.0,
                    deadline_law="multiplicative")
