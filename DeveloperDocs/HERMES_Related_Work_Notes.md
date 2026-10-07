@@ -276,18 +276,18 @@ Guardrails, so the revision does not overreach in either direction:
 | Privacy-Preserving FL for UAV (A3C) | — | ⚠ **not cleared** |
 | Contribution-Based Resource Allocation | — | ⚠ **not cleared** |
 | Broad UAV-FL sweep (client / relay / aggregation / Byzantine) | — | ⚠ triaged **by architecture class** from abstracts — enough to exclude as arms, **not** to cite |
-| **Added for FeRRy (Oct 2026)** — from the build plan's Sources (the novelty audit, 23 Sep 2026); this document records no full-text check | | |
-| FedEx — Bian, Shen, Chen, Xu | IEEE TMC 24(6), 2025 | ⚠ read before citing (the closest prior; arm D4) |
-| Data Value Based Async FL for UAV Swarm — Cui, Yang, Wu, Feng, Hu | IEEE TMC 23(6), 2024 | ⚠ read before citing (arm D3) |
-| Model-Aided Federated RL for Multi-UAV Trajectory Planning — Chen, Esrafilian, Bayerlein, Gesbert, Caccamo | IEEE GLOBECOM Workshops 2023 | ⚠ read before citing (arm E3; a comparison note, `HERMES_vs_Chen2023_Model-Aided_FedQMIX.md`, is not in the repository) |
-| UAV-Enabled Asynchronous FL — Zhai, Yuan, Wang, Yang | IEEE TWC 24(3), 2025 | ⚠ read before citing (coverage term; arm O1) |
-| Energy-Efficient DDPG-Based UAV-Assisted Async FL — Ho et al. | IAAA 2025 | ⚠ read before citing (arm M1) |
-| FedAsync — Xie et al. | 2019 (arXiv) | ⚠ read before citing |
-| FedBuff — Nguyen et al. | AISTATS 2022 | ⚠ read before citing |
-| Async-HFL — Yu et al. | IoTDI 2023 | ⚠ read before citing |
-| Yang et al. (age cutoff; contextual bandit) | IEEE JSAC 2025 | ⚠ read before citing; full title not held here |
-| Shen et al. (proximal term) | IEEE IoTJ 2024 | ⚠ read before citing; full title not held here |
-| Chen et al. (mobility as mixing, the theory track) | IEEE TVT 2025 | ⚠ the full reference is not held in the repository |
+| **Added for FeRRy (Oct 2026)** — references and links checked 6 Oct against Crossref, arXiv and publisher listings (identity only); full texts not read here | | |
+| FedEx: *Indirect-Communication Federated Learning via Mobile Transporters* — Bian, Shen, Chen, Xu | IEEE TMC 24(6), 2025, pp. 4845–4857 · [doi:10.1109/TMC.2025.3527405](https://doi.org/10.1109/TMC.2025.3527405) · [open-access copy (NSF PAR)](https://par.nsf.gov/servlets/purl/10588590) · earlier version [arXiv:2302.07323](https://arxiv.org/abs/2302.07323) | ⚠ read before citing (the closest prior; arm D4) |
+| *The Data Value Based Asynchronous FL for UAV Swarm Under Unstable Communication Scenarios* — Cui, Yang, Wu, Feng, Hu | IEEE TMC 23(6), 2024, pp. 7165–7179 · [doi:10.1109/TMC.2023.3331906](https://doi.org/10.1109/TMC.2023.3331906) | ⚠ read before citing (arm D3) |
+| *Model-Aided Federated RL for Multi-UAV Trajectory Planning in IoT Networks* — Chen, Esrafilian, Bayerlein, Gesbert, Caccamo | IEEE GLOBECOM Workshops 2023 · [IEEE Xplore](https://ieeexplore.ieee.org/document/10465088/) · [arXiv:2306.02029](https://arxiv.org/abs/2306.02029) | ⚠ read before citing (arm E3). The comparison note `HERMES_vs_Chen2023_Model-Aided_FedQMIX.md` is not in the repository |
+| *UAV-Enabled Asynchronous Federated Learning* — Zhai, Yuan, Wang, Yang | IEEE TWC 24(3), 2025, pp. 2358–2372 · [doi:10.1109/TWC.2024.3520501](https://doi.org/10.1109/TWC.2024.3520501) · [arXiv:2403.06653](https://arxiv.org/abs/2403.06653) | ⚠ read before citing (coverage term; arm O1) |
+| *Energy-Efficient DDPG-Based UAV-Assisted Asynchronous FL with MC-NOMA in IoT Networks* — Ho, Win, Do, Na, Cho | IAAA 2025 · [conference program](https://iaaa25.vnua.edu.vn/program.html) (no proceedings link found yet) | ⚠ read before citing (arm M1) |
+| FedAsync: *Asynchronous Federated Optimization* — Xie, Koyejo, Gupta | 2019 · [arXiv:1903.03934](https://arxiv.org/abs/1903.03934) | ⚠ read before citing |
+| FedBuff: *Federated Learning with Buffered Asynchronous Aggregation* — Nguyen et al. | AISTATS 2022, PMLR 151:3581–3607 · [proceedings](https://proceedings.mlr.press/v151/nguyen22b.html) · [arXiv:2106.06639](https://arxiv.org/abs/2106.06639) | ⚠ read before citing |
+| Async-HFL — Yu et al. | IoTDI 2023 · [doi:10.1145/3576842.3582377](https://doi.org/10.1145/3576842.3582377) · [arXiv:2301.06646](https://arxiv.org/abs/2301.06646) | ⚠ read before citing |
+| Yang et al. (age cutoff; contextual bandit) | IEEE JSAC 2025 | ⚠ **link pending**: the full reference is not held in the repository |
+| Shen et al. (proximal term) | IEEE IoTJ 2024 | ⚠ **link pending**: the full reference is not held in the repository |
+| Chen et al. (mobility as mixing, the theory track) | IEEE TVT 2025 | ⚠ **link pending**: the full reference is not held in the repository |
 
 ## 8. Open items for the revision
 
@@ -295,7 +295,8 @@ Guardrails, so the revision does not overreach in either direction:
 
 - [ ] Read the new papers in §7 in full before citing any, starting with FedEx, the closest prior, and Cui. Record what each check changes, as §2 did for Oort and FedCS.
 - [ ] Recover the novelty audit (Revision 3, 23 Sep 2026) and `HERMES_vs_Chen2023_Model-Aided_FedQMIX.md`. Both are cited by the build plan and absent from the repository.
-- [ ] Find the full references for Yang (JSAC 2025), Shen (IoTJ 2024) and Chen (TVT 2025).
+- [x] Links for the build plan's new sources, checked against Crossref and arXiv (6 Oct). Two titles were corrected along the way: Cui's ends "…Unstable Communication Scenarios", and Ho's continues "…with MC-NOMA in IoT Networks".
+- [ ] Find the full references for Yang (JSAC 2025), Shen (IoTJ 2024) and Chen (TVT 2025), and Ho's proceedings link.
 - [ ] Write §0.3's FedEx paragraph from batch 1's numbers. Revisit it once batch 2 adds E3, H0 and the aggregation rules.
 - [ ] Re-check §0.4's learning guardrail against Study 5.5's verdict.
 
