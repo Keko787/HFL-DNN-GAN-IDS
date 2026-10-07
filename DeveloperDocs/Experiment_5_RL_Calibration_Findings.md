@@ -219,7 +219,7 @@ Option B's screen stays fixed above. If the sweep reads flat and the copy-FX dia
 - **`gamma_star = 0.75`,** recorded only.
 - **Study 5.5's stack check in batch 2** flies the verdict's picks, γ = 0.75 at seed 3 and γ = 0 at seed 5, beside FX and F.
 - **What drops out:** the FQ arms leave batch 2, 5.7's learned scores do not train, and M1 is not built.
-- **What must be built before batch 2:** **FX-dwell and FX-cov** for Study 5.7.
+- **What must be built before batch 2:** **FX-dwell and FX-cov** for Study 5.7. Built 7 Oct 2026: 5.7 flies FX, FX-dwell, FX-cov and D4.
 
 **For the paper.**
 - **The learning claim of C4 is a null.** C4 rests on the two-clock structure: a plan at the dock, and a re-decision on measured signal at each stop by the fixed rule FX.

@@ -281,8 +281,8 @@ it against `agg:plain`, `agg:fedbuff` and `agg:asynchfl`. Batch 1's D4/D4fedex c
 early, indirect evidence: the same tour, with FeRRy's merge against FedEx's, 52 against 101 s with
 three mules.
 
-**Two of our comparison rules need care before Study 5.1 runs (§6a):**
-- **`agg:asynchfl` implements exp(−λ·a),** which Async-HFL does not use. It is polynomial.
+**Two of our comparison rules needed care before Study 5.1 runs (§6a):**
+- **`agg:asynchfl` now uses Async-HFL's polynomial,** (a + 1)^−q with q = 0.5 (decided 7 Oct 2026). Async-HFL does not report its q; 0.5 is FedAsync's polynomial. Until then it used exp(−λ·a), which Async-HFL does not; no recorded run used it.
 - **`agg:fedbuff` sets K to the slice size,** not FedBuff's default of 10. It does keep FedBuff's (1 + τ)^−0.5 and a server learning rate.
 
 ---
@@ -355,7 +355,7 @@ added).
 * **Do not claim** FeRRy beats FedEx across the board. Claim what batch 1 shows: F's route leads at N = 6 with one mule; FedEx's tour keeps pace from N = 12; FedEx's own merge falls behind (§3.1).
 * **Do not call Cui's index "optimal"** or FeRRy "fairer than Cui" (§4). **Do not call** our D3 Cui's index without saying it flies our "expected" variant.
 * **Do not call** E3 "FedQMIX", D5 "FedCS" without "degraded", D2 "Oort" without "statistical utility" and its deviations, or M1 a port of Ho.
-* **Do not describe** `agg:asynchfl` as Async-HFL's staleness function while it uses an exponential (§5a, §6a).
+* **Describe** `agg:asynchfl` as Async-HFL's polynomial staleness function with q = 0.5, FedAsync's value, since Async-HFL does not report its q (§5a, §6a).
 * **Do not describe** FeRRy's coverage term as Zhai's (§3.3), or O1 as Zhai's method.
 * **Do not claim** that learning helps in flight. Study 5.5's verdict read **flat**, and FX is FeRRy's in-flight rule (§5b).
 * **Do not claim** Oort or Power-of-Choice are inapplicable. `rpow-d` and Oort port directly; FedCS and `pow-d` do not. State the boundary, not a blanket dismissal.
@@ -381,7 +381,7 @@ fix. None changes a result already run, except that D3's numbers are the "expect
 | 7 | Ho | M1 "after Ho": one DDQN over (band, stop) | DDPG controlling movement, CPU and power for energy; no shown served-device choice (abstract only) | build plan (M1), SOTA §0.2 | "in the style of Ho" |
 | 8 | FedAsync | `agg:cutoff` = "FedAsync's hinge with Yang's cutoff" | the hinge never reaches zero; FedAsync has no deadline | build plan (aggregation arms), `aggregation_rules.py` docstring | "FedAsync's hinge, truncated to zero at a deadline-derived a_max" |
 | 9 | FedAsync | the proximal term "from Shen et al." | FedAsync's local objective already has one; FedProx is the usual origin | build plan | credit FedProx and FedAsync; Shen as the source used |
-| 10 | Async-HFL | `agg:asynchfl`: "exponential staleness decay … after Async-HFL" | polynomial (h − τ + 1)^−q; "exponential decay factor" names the mixing weight | `aggregation_rules.py` (`exp(−λ·a)`), build plan | **before Study 5.1 runs:** switch to the polynomial form, or keep the exponential and declare it ours |
+| 10 | Async-HFL | `agg:asynchfl`: "exponential staleness decay … after Async-HFL" | polynomial (h − τ + 1)^−q; "exponential decay factor" names the mixing weight | `aggregation_rules.py` (`exp(−λ·a)`), build plan | ✅ **switched to the polynomial** (7 Oct 2026), q = 0.5; the exponential stays available by name (`asynchfl_form`) |
 | 11 | FedBuff | `agg:fedbuff`: K = slice size | K = 10 by default, independent of concurrency | `aggregation_rules.py` (documented) | declare K = slice size as a deviation in 5.1's write-up |
 | 12 | FedEx | D4 "1/N accumulation applied on return" | correct: it accumulates update *deltas*, each one tour stale; CARP names the whole two-level algorithm | SOTA §0.2 | wording only |
 | 13 | FedEx | D4 = FedEx-Async with CARP | one transporter per mission (Gibbs never runs), no energy gate | `fedex_carp.py` (documented) | say "FedEx's tour and merge"; state both deviations with D4's numbers |
@@ -423,7 +423,7 @@ fix. None changes a result already run, except that D3's numbers are the "expect
 
 **From the 6 Oct readings:**
 - [x] Full-text reads of FedEx, Cui, Zhai, Chen, FedAsync, FedBuff and Async-HFL (§7). Ho: abstract only.
-- [ ] **Decide `agg:asynchfl`'s staleness function before Study 5.1 runs** (§6a, item 10).
+- [x] **Decide `agg:asynchfl`'s staleness function before Study 5.1 runs** (§6a, item 10): Async-HFL's polynomial, q = 0.5 (7 Oct).
 - [ ] Carry §6a's wording fixes into the build plan and the SOTA document. Add E3's served-device deviation, and D3's "expected" variant, to their reports.
 - [ ] Find the full references for Yang (JSAC 2025), Shen (IoTJ 2024) and Chen (TVT 2025). Recover the novelty audit (Revision 3, 23 Sep 2026) and `HERMES_vs_Chen2023_Model-Aided_FedQMIX.md`; both are cited by the build plan and absent from the repository.
 - [ ] Get Ho et al.'s full text, if M1 is built.
