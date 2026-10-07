@@ -1,0 +1,327 @@
+{
+  "blas": "openblas64 0.3.23.dev (USE_64BITINT=1 DYNAMIC_ARCH=1 DYNAMIC_OLDER= NO_CBLAS= NO_LAPACK= NO_LAPACKE= NO_AFFINITY=1 USE_OPENMP= SKYLAKEX MAX_THREADS=2); OPENBLAS_NUM_THREADS=1",
+  "cell_family": "jittery",
+  "cell_family_sha256": "deaa4e082ba40fab48efd2822aaee205df888f26ae48563d320c81a5e9ee052e",
+  "classes": [
+    "wide"
+  ],
+  "dirty": false,
+  "episodes_trained": 3000,
+  "format": 2,
+  "gamma": 0.99,
+  "held_out": {
+    "cells": {
+      "jit-n12-180": {
+        "cell": "jit-n12-180",
+        "decisions_per_sortie_mean": 5.11225,
+        "episodes": 1000,
+        "first_index": 0,
+        "policy": "ckpt-843b686c1039",
+        "return_mean": 2.2031666666666667,
+        "return_sd": 0.3864336551838461,
+        "return_se": 0.012220105149250872,
+        "sorties_with_2_or_more": 1.0,
+        "stream": "ferrysim-heldout",
+        "terms_mean": {
+          "coverage": 0.0,
+          "distance": 0.0,
+          "energy": 0.0,
+          "gain": 2.2031666666666667,
+          "time": 0.0
+        }
+      },
+      "jit-n12-90": {
+        "cell": "jit-n12-90",
+        "decisions_per_sortie_mean": 3.24025,
+        "episodes": 1000,
+        "first_index": 0,
+        "policy": "ckpt-843b686c1039",
+        "return_mean": 1.65275,
+        "return_sd": 0.3801491019700264,
+        "return_se": 0.012021370126928856,
+        "sorties_with_2_or_more": 1.0,
+        "stream": "ferrysim-heldout",
+        "terms_mean": {
+          "coverage": 0.0,
+          "distance": 0.0,
+          "energy": 0.0,
+          "gain": 1.65275,
+          "time": 0.0
+        }
+      },
+      "jit-n6-150": {
+        "cell": "jit-n6-150",
+        "decisions_per_sortie_mean": 3.70675,
+        "episodes": 1000,
+        "first_index": 0,
+        "policy": "ckpt-843b686c1039",
+        "return_mean": 2.197833333333333,
+        "return_sd": 0.5513865345143796,
+        "return_se": 0.017436373202124836,
+        "sorties_with_2_or_more": 0.99825,
+        "stream": "ferrysim-heldout",
+        "terms_mean": {
+          "coverage": 0.0,
+          "distance": 0.0,
+          "energy": 0.0,
+          "gain": 2.197833333333333,
+          "time": 0.0
+        }
+      },
+      "jit-n6-75": {
+        "cell": "jit-n6-75",
+        "decisions_per_sortie_mean": 2.46875,
+        "episodes": 1000,
+        "first_index": 0,
+        "policy": "ckpt-843b686c1039",
+        "return_mean": 1.692,
+        "return_sd": 0.5375173717424627,
+        "return_se": 0.01699779176613612,
+        "sorties_with_2_or_more": 0.9885,
+        "stream": "ferrysim-heldout",
+        "terms_mean": {
+          "coverage": 0.0,
+          "distance": 0.0,
+          "energy": 0.0,
+          "gain": 1.692,
+          "time": 0.0
+        }
+      }
+    },
+    "episodes": 4000,
+    "first_index": 0,
+    "return_mean": 1.9364374999999998,
+    "reward": {
+      "c_cov": 0.0,
+      "c_e": 0.0,
+      "c_t": 0.0,
+      "expected_availability": false,
+      "kind": "bytes",
+      "n_ref": 10.0
+    },
+    "stream": "ferrysim-heldout"
+  },
+  "kind": "chen_dqn",
+  "learner_revision": 0,
+  "network": {
+    "activation": "tanh",
+    "adam_beta1": 0.9,
+    "adam_beta2": 0.999,
+    "adam_eps": 1e-08,
+    "feature_dim": 10,
+    "gamma": 0.99,
+    "grad_clip": 10.0,
+    "hidden": [
+      64,
+      64
+    ],
+    "huber_delta": 1.0,
+    "lr": 0.0005,
+    "n_step": 1,
+    "target_sync": 500
+  },
+  "numpy": "1.26.4",
+  "purpose": "trained",
+  "reward": {
+    "c_cov": 0.0,
+    "c_e": 0.0,
+    "c_t": 0.0,
+    "expected_availability": true,
+    "kind": "bytes",
+    "n_ref": 10.0
+  },
+  "schema": {
+    "columns": [
+      "remaining",
+      "snr",
+      "reachable",
+      "dx",
+      "dy",
+      "distance",
+      "members",
+      "return_energy",
+      "energy_left",
+      "time_left"
+    ],
+    "declared_constant": [
+      "remaining",
+      "reachable"
+    ],
+    "dim": 10,
+    "length_scale_m": 100.0,
+    "snr_scale_db": 10.0,
+    "version": "e3_v1"
+  },
+  "seeds": {
+    "behaviour": "sha256('ferrysim-train-4|behaviour|<episode>')[:4] mod 2**31",
+    "init": 1886960085,
+    "replay": 196118441,
+    "run": 4,
+    "train_stream": "ferrysim-train-4",
+    "val_first_index": 0,
+    "val_stream": "ferrysim-val"
+  },
+  "sha256": "843b686c1039b49027d75338405ddb9b03cacffe3de3931387141aed9038d4eb",
+  "trainer_commit": "5999e21f79f1dfb602e736368851b5154417209e",
+  "training": {
+    "outcome": {
+      "best_episode": 3000,
+      "episodes_run": 6000,
+      "stopped_early": true,
+      "transitions": 86073,
+      "updates": 85074
+    },
+    "spec": {
+      "cells": [
+        "jit-n6-75",
+        "jit-n6-150",
+        "jit-n12-90",
+        "jit-n12-180"
+      ],
+      "device_model": "equal",
+      "episodes": 10000,
+      "eval_every": 1000,
+      "family": "jittery",
+      "kind": "chen_dqn",
+      "learner": {
+        "batch": 64,
+        "behaviour": {
+          "decay_fraction": 0.5,
+          "epsilon_end": 0.05,
+          "epsilon_start": 1.0,
+          "reference_episodes": 0
+        },
+        "replay_capacity": 50000,
+        "warmup_transitions": 1000
+      },
+      "network": {
+        "activation": "tanh",
+        "adam_beta1": 0.9,
+        "adam_beta2": 0.999,
+        "adam_eps": 1e-08,
+        "gamma": 0.99,
+        "grad_clip": 10.0,
+        "hidden": [
+          64,
+          64
+        ],
+        "huber_delta": 1.0,
+        "lr": 0.0005,
+        "n_step": 1,
+        "target_sync": 500
+      },
+      "patience": 3,
+      "phase": true,
+      "reward": {
+        "c_cov": 0.0,
+        "c_e": 0.0,
+        "c_t": 0.0,
+        "expected_availability": true,
+        "kind": "bytes",
+        "n_ref": 10.0
+      },
+      "seed": 4,
+      "val_episodes": 200,
+      "validation_reward": {
+        "c_cov": 0.0,
+        "c_e": 0.0,
+        "c_t": 0.0,
+        "expected_availability": false,
+        "kind": "bytes",
+        "n_ref": 10.0
+      }
+    }
+  },
+  "validation": [
+    {
+      "cells": {
+        "jit-n12-180": 2.263333333333333,
+        "jit-n12-90": 1.62,
+        "jit-n6-150": 2.1966666666666668,
+        "jit-n6-75": 1.7533333333333332
+      },
+      "episode": 1000,
+      "episodes": 200,
+      "loss_mean": 0.0042778097394198305,
+      "score": 1.9583333333333333,
+      "train_return_mean": 1.8008652134316638,
+      "transitions": 14052,
+      "updates": 13053
+    },
+    {
+      "cells": {
+        "jit-n12-180": 2.268333333333333,
+        "jit-n12-90": 1.63,
+        "jit-n6-150": 2.2,
+        "jit-n6-75": 1.72
+      },
+      "episode": 2000,
+      "episodes": 200,
+      "loss_mean": 0.0029475853198446486,
+      "score": 1.9545833333333333,
+      "train_return_mean": 1.8445568893563378,
+      "transitions": 28186,
+      "updates": 27187
+    },
+    {
+      "cells": {
+        "jit-n12-180": 2.273333333333333,
+        "jit-n12-90": 1.6483333333333332,
+        "jit-n6-150": 2.1966666666666668,
+        "jit-n6-75": 1.7366666666666666
+      },
+      "episode": 3000,
+      "episodes": 200,
+      "loss_mean": 0.0028289012492234613,
+      "score": 1.9637499999999999,
+      "train_return_mean": 1.8560819070109105,
+      "transitions": 42509,
+      "updates": 41510
+    },
+    {
+      "cells": {
+        "jit-n12-180": 2.2916666666666665,
+        "jit-n12-90": 1.635,
+        "jit-n6-150": 2.203333333333333,
+        "jit-n6-75": 1.7066666666666666
+      },
+      "episode": 4000,
+      "episodes": 200,
+      "loss_mean": 0.0026624191109372304,
+      "score": 1.9591666666666665,
+      "train_return_mean": 1.8867278735588866,
+      "transitions": 56828,
+      "updates": 55829
+    },
+    {
+      "cells": {
+        "jit-n12-180": 2.2783333333333333,
+        "jit-n12-90": 1.633333333333333,
+        "jit-n6-150": 2.21,
+        "jit-n6-75": 1.7033333333333331
+      },
+      "episode": 5000,
+      "episodes": 200,
+      "loss_mean": 0.0024427137519192873,
+      "score": 1.9562499999999998,
+      "train_return_mean": 1.9150050024308258,
+      "transitions": 71398,
+      "updates": 70399
+    },
+    {
+      "cells": {
+        "jit-n12-180": 2.273333333333333,
+        "jit-n12-90": 1.635,
+        "jit-n6-150": 2.203333333333333,
+        "jit-n6-75": 1.7066666666666666
+      },
+      "episode": 6000,
+      "episodes": 200,
+      "loss_mean": 0.00215140064431225,
+      "score": 1.9545833333333331,
+      "train_return_mean": 1.970332197760477,
+      "transitions": 86073,
+      "updates": 85074
+    }
+  ]
+}

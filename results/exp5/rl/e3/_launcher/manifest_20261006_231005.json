@@ -1,0 +1,1282 @@
+{
+ "stage": "rl-e3",
+ "started": "2026-10-06T23:10:05",
+ "argv": [
+  "scripts/exp5/launch.py",
+  "run",
+  "rl-e3",
+  "--yes"
+ ],
+ "git": {
+  "commit": "5999e21f79f1dfb602e736368851b5154417209e",
+  "branch": "main",
+  "code_dirty": [],
+  "tree_status": [
+   "?? .idea/",
+   "?? Analysis/FLMetrics/",
+   "?? Analysis/TestAnalysis/ModelPerformance/CHANGES_SUMMARY.md",
+   "?? Analysis/TestAnalysis/diagrams/",
+   "?? Analysis/logs/",
+   "?? ModelArchive/ACGAN_discriminator_20250217_023330.h5",
+   "?? ModelArchive/ACGAN_discriminator_V1.h5",
+   "?? ModelArchive/ACGAN_discriminator_V2.h5",
+   "?? ModelArchive/ACGAN_discriminator_V3.h5",
+   "?? ModelArchive/ACGAN_discriminator_V4.h5",
+   "?? ModelArchive/ACGAN_generator_20250217_023330.h5",
+   "?? ModelArchive/ACGAN_generator_V1.h5",
+   "?? ModelArchive/ACGAN_generator_V2.h5",
+   "?? ModelArchive/ACGAN_generator_V3.h5",
+   "?? ModelArchive/ACGAN_generator_V4.h5",
+   "?? ModelArchive/GAN_B1.h5",
+   "?? ModelArchive/GAN_B1_2.h5",
+   "?? ModelArchive/GAN_B3.h5",
+   "?? ModelArchive/GAN_B4.h5",
+   "?? ModelArchive/GAN_V1.h5",
+   "?? ModelArchive/GAN_version_GA1.h5",
+   "?? ModelArchive/NIDS_20250208_215925.h5",
+   "?? ModelArchive/NIDS_20250208_220018.h5",
+   "?? ModelArchive/NIDS_20250208_220115.h5",
+   "?? ModelArchive/NIDS_20250210_193024.h5",
+   "?? ModelArchive/NIDS_Base_Model_V2.h5",
+   "?? ModelArchive/NIDS_Version_CICIOTreg.h5",
+   "?? ModelArchive/NIDS_data_test1.h5",
+   "?? ModelArchive/NIDS_version_A.h5",
+   "?? ModelArchive/NIDS_version_B.h5",
+   "?? ModelArchive/WGAN_Version_A1.h5",
+   "?? ModelArchive/discriminator_ACGAN_20250217_023014.h5",
+   "?? ModelArchive/discriminator_GAN_B1.h5",
+   "?? ModelArchive/discriminator_GAN_B1_2.h5",
+   "?? ModelArchive/discriminator_GAN_B3.h5",
+   "?? ModelArchive/discriminator_GAN_B4.h5",
+   "?? ModelArchive/discriminator_GAN_V1.h5",
+   "?? ModelArchive/discriminator_GAN_version_GA1.h5",
+   "?? ModelArchive/discriminator_Spit_v1.h5",
+   "?? ModelArchive/discriminator_WGAN_Version_A1.h5",
+   "?? ModelArchive/discriminator_local_GAN_Test1.h5",
+   "?? ModelArchive/generator_ACGAN_20250217_023014.h5",
+   "?? ModelArchive/generator_GAN_B1.h5",
+   "?? ModelArchive/generator_GAN_B1_2.h5",
+   "?? ModelArchive/generator_GAN_B3.h5",
+   "?? ModelArchive/generator_GAN_B4.h5",
+   "?? ModelArchive/generator_GAN_V1.h5",
+   "?? ModelArchive/generator_GAN_version_GA1.h5",
+   "?? ModelArchive/generator_V1.h5",
+   "?? ModelArchive/generator_WGAN_Version_A1.h5",
+   "?? ModelArchive/generator_local_GAN_Test1.h5",
+   "?? ModelArchive/local_GAN_Test1.h5",
+   "?? \"Presentation Documents/\"",
+   "?? results/exp3/",
+   "?? results/exp3_7_21/",
+   "?? results/exp3_smoke/",
+   "?? results/exp3_smoke2/",
+   "?? results/exp3_smoke3/",
+   "?? results/exp3_smoke_g/",
+   "?? results/exp3_smoke_g2/",
+   "?? results/exp3_smoke_g3/",
+   "?? results/exp3_smoke_summary/",
+   "?? results/exp3_smoke_table/",
+   "?? results/exp3_smoke_v14/",
+   "?? results/exp3_v10/",
+   "?? results/exp3_v11/",
+   "?? results/exp3_v12/",
+   "?? results/exp3_v13/",
+   "?? results/exp3_v14/",
+   "?? results/exp3_v15/",
+   "?? results/exp3_v4/",
+   "?? results/exp3_v5/",
+   "?? results/exp3_v6/",
+   "?? results/exp3_v7/",
+   "?? results/exp3_v8/",
+   "?? results/exp3_v9/",
+   "?? results/exp4_matrix/_discarded/b60_20seed_snapshot.csv",
+   "?? results/exp4_matrix/_discarded/sota_pilot_10seed_snapshot.csv",
+   "?? results/exp5/checkpoints/",
+   "?? results/exp5/rl/s55/",
+   "?? results/exp5/rl/sweep/",
+   "?? \"results/legacy exp3/\""
+  ]
+ },
+ "environment": {
+  "python": "3.11.9 (tags/v3.11.9:de54cf5, Apr  2 2024, 10:12:12) [MSC v.1938 64 bit (AMD64)]",
+  "executable": "C:\\Users\\kskos\\AppData\\Local\\Programs\\Python\\Python311\\python.exe",
+  "packages": {
+   "numpy": "1.26.4",
+   "pandas": "2.2.2",
+   "scipy": "1.17.1",
+   "scikit-learn": "1.8.0",
+   "matplotlib": "3.8.4",
+   "tensorflow": "2.21.0",
+   "keras": "3.14.1",
+   "protobuf": "6.33.6",
+   "flwr": "1.29.0",
+   "psutil": "7.0.0"
+  },
+  "threads": {
+   "OMP_NUM_THREADS": "2",
+   "TF_NUM_INTRAOP_THREADS": "2",
+   "TF_NUM_INTEROP_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1"
+  },
+  "host": {
+   "platform": "Windows-10-10.0.26200-SP0",
+   "machine": "AMD64",
+   "processor": "Intel64 Family 6 Model 151 Stepping 2, GenuineIntel",
+   "logical_cpus": 20,
+   "physical_cpus": 12,
+   "ram_gb": 63.8
+  }
+ },
+ "dataset": {
+  "dir": "D:\\networkIntrusionDetectionSystem\\datasets\\CICIOT2023",
+  "csv_files": 169,
+  "bytes": 13754161509,
+  "names_and_sizes_sha256": "a7eacffa63ccb883024c21e3cb74f31929fcfa89a2587b4a9789e58676e50db3"
+ },
+ "launcher_sha256": "9b9a753715ec5251567122050e0ef33d6ef14b82772d0f90f24a8a75e2712e18",
+ "params_sha256": "cc805987c7cb856b139be5c370c2aab27b2754c92313e99988e72d8735c7f6f3",
+ "params_toml": "# Exp 5 campaign settings, read by scripts/exp5/launch.py.\n#\n# Every number a stage needs lives here, so the file in the commit that a\n# manifest records says how a sweep ran. A setting that is commented out is\n# UNSET: the launcher refuses (or, with --skip-blocked, leaves out) every job\n# that needs it, and names it. Change a setting only before a stage starts;\n# a CSV written under other settings is refused on resume (its .argv.json).\n#\n# Order of the stages and what each one fills in below:\n#   ttl     -> [pilot_outputs] session_ttl_s   (2 x the p95 fit time, rounded up)\n#   knee    -> [pilot_outputs] knee_s, stress_s (where served fraction stops rising;\n#                                                stress = half the knee, rounded to 5 s)\n#   sstar   -> [pilot_outputs] s_star           (the S* tool's S per N)\n#   batch1  -> the studies, at the values above\n#\n# Sources: FeRRy_Build_Plan.html (Experiments, Study overview, Addendum),\n# Experiment_4_Run_Guide.md sections 2.6-2.8, HERMES_Configuration_Reference.md\n# sections 17-20.\n\n[campaign]\n# REQUIRED. The base seed of every trial in the campaign (trial seed =\n# sha256(base_seed | cell | trial)). 42 is Exp 4's; the pilots take a seed of\n# their own (Phase 4 spec, decision 7). Same seed in every stage keeps the\n# studies' arms paired.\nbase_seed = 20261005\nn_missions = 4                # the headline's mission count (build plan, Experiments)\nregime = \"jittery\"            # the network (backhaul) regime: --regime\n# The contact channel's regime (--contact-regime). The runner's default is\n# clean whatever --regime says (D2). Decided 5 Oct 2026: the whole campaign,\n# the knee included, flies the jittery contact channel (interference 5 dB, P_c\n# 60 s), as the learned score's FerrySim cells do (Phase 5 decision 3), so the\n# re-pin reads a knee measured on the cells' own channel; a study that sweeps\n# the channel (5.6's clean control, 5.15) sets it per job.\ncontact_regime = \"jittery\"\n# 0 = the fixed 100 m realism field (the recorded behaviour; density rises with N).\n# 6 = grow the field with N at N = 6's density (--h1-field-ref-n 6; 5.9 and 5.11).\n# One value for the whole campaign: the knee and S* must be measured on the\n# field the studies fly. Fixed (decided 5 Oct 2026): FerrySim's N = 12 training\n# cells fly the fixed field, and the re-pin reads the stack's N = 12 knee onto\n# them, so the stack must fly the same field.\nfield_ref_n = 0\n# The deadline law of the FeRRy arms (F, FX, FB+, F-cov, F-cap, F-prio, F+L1 and\n# the FQ arms). The build plan defines F with the multiplicative law; F-add, the\n# additive law, is Study 5.2's ablation. --deadline-law is one driver setting,\n# so the launcher passes it per job: the H and D arms keep the driver's default\n# (additive, the recorded law). Decided 5 Oct 2026.\nferry_arm_deadline_law = \"multiplicative\"\n# agg:cutoff's merge period T. agg:cutoff cuts an update by age only with a\n# period (a_max = floor(window / T)); without one the cutoff never applies, for\n# any arm. On the simulated clock the documented setting is T = T_nom\n# (--agg-period-t-nom; Configuration Reference 14 and 20.12). Every stage after\n# the knee pilot passes it (the knee measures service, which the merge does not\n# change, and its recorded commands must stay as they ran). Decided 5 Oct 2026.\nmerge_period_t_nom = true\n# --footprint-probe on every batch-1 trial (processes and peak memory, 5.11). It\n# only reads memory, so a trial is the same with it; it is on everywhere so the\n# studies' shared cells (5.3, 5.9, 5.11 (b), 5.14 at N = 6) are one job.\nfootprint = true\n\n[machine]\n# Parallel jobs (one runner process each). The scheduler also keeps the sum of\n# the jobs' estimated memory under mem_budget_gb, and the devices of the\n# running jobs (each a TensorFlow process that trains) under\n# max_device_processes: CPU binds first.\n# Each limit is a number, or \"auto\": sized for the host that runs by scaling\n# the host the campaign was sized on (8 physical cores, 16 logical, 95 GB),\n# where six N = 6 jobs (36 devices) and 75 GB ran cleanly (5 Oct 2026):\n#   max_device_processes = min(4.5 x physical cores, 2.25 x logical CPUs)  (36 there)\n#   max_jobs             = max_device_processes // 6, one N = 6 job's      (6 there)\n#   mem_budget_gb        = 0.8 x RAM, rounded down                         (75 there)\n# `exp5 check` prints what they come to here, and each manifest records it.\n# They only pace the scheduler; no trial's arguments depend on them.\nmax_jobs = \"auto\"\nmax_device_processes = \"auto\"\nmem_budget_gb = \"auto\"\n# Measured 5 Oct 2026 with the footprint probe (N = 6, 1 MB, the canonical\n# model): a device peaks at about 431 MB, the cluster 395 MB, a mule 44 MB, a\n# whole trial 2.9 GB. The build plan's 1.6 GB per process came from another\n# host; these keep a margin over the measurement.\ngb_per_tf_process = 0.6       # the cluster and each device\ngb_per_light_process = 0.3    # the runner and each mule\n# Per-process thread caps, set for every job and recorded in the manifest. The\n# Exp 4 parallel sweep used the first three. Keep them fixed for the whole\n# campaign: they change wall-clock fit time (hence the TTL pilot), and TF's\n# thread count can change the model's last bits.\n[machine.threads]\nOMP_NUM_THREADS = \"2\"\nTF_NUM_INTRAOP_THREADS = \"2\"\nTF_NUM_INTEROP_THREADS = \"1\"\nOPENBLAS_NUM_THREADS = \"1\"\n\n# --------------------------------------------------------------------------\n# Pilot outputs. Fill these from the pilots' reports, then commit.\n# --------------------------------------------------------------------------\n[pilot_outputs]\n# From stage ttl, 5 Oct 2026 (results/exp5/ttl): 2 x p95 fit time, rounded up. The p95 is the\n# first fit (TensorFlow's tracing, ~17 s with 36 processes at once); later fits ~1.6 s.\nsession_ttl_s = { \"6\" = 36.0, \"12\" = 34.0, \"18\" = 34.0, \"24\" = 23.0 }\n# From stage knee, 5 Oct 2026 (results/exp5/knee; 600 trials, the jittery contact\n# channel), by the [knee] rule. N = 6's knee (1 MB) is the grid's largest budget,\n# 150 s (update yield 3.26 at 120 s, 3.46 at 150 s), so the report warned that\n# the plateau may lie beyond it; accepted as is, without extending the grid\n# (decided 5 Oct 2026), and written by hand since --apply refuses on a warning.\nknee_s = { \"6\" = 150.0, \"12\" = 180.0, \"18\" = 240.0, \"24\" = 262.0 }\nstress_s = { \"6\" = 75.0, \"12\" = 90.0, \"18\" = 120.0, \"24\" = 130.0 }\n# From stage sstar, 5 Oct 2026 (results/exp5/sstar; run on the 12-core, 64 GB host,\n# not the pilots' own, which the planning-level tool does not depend on): F's S*\n# on 90 % of 30 layouts at the knee and stress budgets, at least 2. At every N one\n# mission covers the knee and two the stress budget (N >= 12 by the greedy bound).\ns_star = { \"6\" = 2, \"12\" = 2, \"18\" = 2, \"24\" = 2 }\n# At the measured payload (18.8 KB), for Study 5.4:\nknee_meas_s = { \"6\" = 120.0 }\nstress_meas_s = { \"6\" = 60.0 }\n# From stage knee, by [score]'s pilot_tau rule: the primary accuracy threshold\n# (by N at the knee: 6 -> 0.82, 12 -> 0.72, 18 and 24 -> 0.71; the smallest).\ntau = 0.71\n# From stage pilot3 (p512's rule): Study 5.12's training-time levels.\n# train_levels  = { none = [0.0, 0.0, 0.0, 1.0], spread = [60.0, 0.5, 0.0, 1.0], stragglers = [60.0, 0.5, 0.2, 5.0] }\n\n# --------------------------------------------------------------------------\n# Stage ttl: the session-TTL pilot (fit_time_probe.py at each N, with as many\n# trials side by side as the scheduler will run at that N).\n# --------------------------------------------------------------------------\n[ttl]\nN = [6, 12, 18, 24]\nfits = 4\n\n# --------------------------------------------------------------------------\n# Stage knee: H1 budget sweeps on wide (Run Guide 2.6/2.7), the Phase 4\n# pilots' common flags, K = 1. Needs session_ttl_s.\n# --------------------------------------------------------------------------\n[knee]\n# [N, payload] per sweep: 1 MB at every N the studies fly (18 and 24 for 5.11 (b)\n# and 5.9), and the measured payload (\"measured\", 18.8 KB) at N = 6 for 5.4.\ncells = [[6, 1000000], [12, 1000000], [18, 1000000], [24, 1000000], [6, \"measured\"]]\nn_trials = 20                 # pilots use n = 20\n# The budgets to sweep per N (one CSV per point), around the stand-ins: N = 6\n# prior knee 90 s / stress 45 s; N = 12 FerrySim 120/180 s; N = 24 FerrySim\n# scale family 350/525 s. Fixed 5 Oct 2026, before the pilot ran.\nbudgets_s = { \"6\" = [30, 45, 60, 90, 120, 150], \"12\" = [60, 90, 120, 150, 180, 240], \"18\" = [120, 180, 240, 300, 360, 450], \"24\" = [175, 262, 350, 437, 525, 700] }\n# The knee rule, pre-registered 5 Oct 2026 before the pilot ran (Run Guide 2.6:\n# \"where the served fraction stops rising\"): per (N, payload), the smallest\n# budget whose mean `metric` reaches `plateau_share` of the largest mean over\n# the grid. The stress budget is half the knee, rounded to 5 s (Run Guide 2.7).\n# `launch.py report knee` applies it. update_yield is the mean number of\n# updates merged per round (the served share times N).\nmetric = \"update_yield\"\nplateau_share = 0.95\n\n# --------------------------------------------------------------------------\n# Stage sstar: the age cap S* per N at the knee and stress budgets (Run Guide\n# 2.7; D4 in the build plan). Needs knee_s and stress_s.\n# --------------------------------------------------------------------------\n[sstar]\nN = [6, 12, 18, 24]\npayload_bytes = 1000000\n\n# --------------------------------------------------------------------------\n# Stage batch1 (the 8 Oct split). Needs session_ttl_s, knee_s, stress_s, s_star.\n# Budgets and S are keyed by the cell's N at every K (\"the budget at each N\",\n# 5.11). Plan arms (F, FX, F+L1) fly --age-cap-missions S; H and D arms do not.\n# --------------------------------------------------------------------------\n[s53]                         # whole-scheduler comparison, core cells\narms = [\"F\", \"FX\", \"H1\", \"D1\", \"D2\", \"D3\", \"D4\"]\nd4_faithful = true            # also D4 with its own merge (agg:fedex), job \"D4fedex\"\nN = [6]\nK = [1, 3]\nbudgets = [\"knee\", \"stress\"]\nn_trials = 20\npayload_bytes = 1000000       # the plan arms' pilots' payload: the cap and coverage bind there\n\n[s59]                         # scale, core cells (N = 6 cells are shared with s53)\narms = [\"F\", \"FX\", \"H1\", \"D3\", \"D4\"]\nN = [6, 12, 24]\nK = [1]\nbudgets = [\"knee\"]\nn_trials = 20\npayload_bytes = 1000000\n\n[s511b]                       # scaling with mules: weak (6 per mule) and strong (N = 12)\narms = [\"F\", \"FX\", \"H1\", \"D4\"]\ncells = [[6, 1], [12, 2], [18, 3], [12, 1], [12, 3]]   # [N, K]\nbudgets = [\"knee\"]\nn_trials = 20\npayload_bytes = 1000000\n\n[s511a]                       # decision cost in FerrySim (in process, stub trainer)\ncells = [\"jit-n6-150\", \"jit-n12-90\", \"scl-n24-350\", \"scl-n48-680\", \"scl-n96-1330\"]\npolicies = [\"FX\"]\nepisodes = 20\nmodes = [\"auto\", \"subsets\", \"local\"]   # planner left alone; stop subsets forced; local search forced\nworkers = 4\n\n[s514]                        # component ablations: F against F with one switch flipped\nN = 6\nbudgets = [\"knee\", \"stress\"]\nn_trials = 40\npayload_bytes = 1000000       # held fixed at 1 MB by the study\n# The variants are fixed in launch.py (S514_VARIANTS): cap S*, whole stops,\n# local search, weighted coverage rank, cap S* + 1, cap off, hover off, and\n# F / F+L1 on the seconds backhaul (F+L1 needs the adaptive backhaul).\n\n# --------------------------------------------------------------------------\n# Stage sens (after batch 1): does 5.3's core comparison depend on the session\n# TTL pilot's value? The budget is varied by the studies themselves (stress,\n# knee, relaxed) and S* by 5.14 (S + 1, off); the TTL nowhere else. Factor 1\n# is batch 1's own cell (read from batch 1, not flown again).\n# --------------------------------------------------------------------------\n[sens]\narms = [\"F\", \"FX\", \"H1\"]\nttl_factors = [0.75, 1.0, 1.5]\nbudgets = [\"knee\"]\nN = 6\nK = 1\nn_trials = 20\npayload_bytes = 1000000\n\n# --------------------------------------------------------------------------\n# Stage quick (not part of the campaign): a reviewer's reproduction of 5.3's\n# headline cell, the core arms at one mule (320 trials: about half an hour on\n# this 8-core machine, a few hours on a laptop). Batch 1's own jobs (same\n# arguments, so trial i has the same seed as batch 1's trial i), written to\n# results/exp5/quick, never over batch 1's CSVs. `report quick` sets each\n# trial beside the recorded one; `score quick` compares the arms as 5.3 does.\n# Needs the pilot outputs above (committed), not the pilots. Fewer trials\n# (n_trials) keep the seeds: trial i is batch 1's trial i whatever the count.\n# --------------------------------------------------------------------------\n[quick]\narms = [\"F\", \"FX\", \"H1\", \"D1\", \"D2\", \"D3\", \"D4\"]\nd4_faithful = true            # and D4 with its own merge, as batch 1\nbudgets = [\"knee\", \"stress\"]\nN = 6\nK = [1]                       # [1, 3] is the whole of batch 1's 5.3 core\nn_trials = 20\npayload_bytes = 1000000\n\n# --------------------------------------------------------------------------\n# The learned score's FerrySim campaign (Run Guide 2.8; Scheduler Freeze 5l).\n# Stages rl-headroom, rl-calibrate, rl-sweep, rl-e3, rl-s57, in that order.\n# Checkpoints go to results/exp5/checkpoints/<study>/<tag>/g<gamma>_s<seed>.npz.\n# --------------------------------------------------------------------------\n[rl]\n# Every RL stage refuses until this is true. Set it only after the re-pin is\n# committed: FerrySim's N = 12 cells, the 5.6 lags, the four P_c constants, the\n# jittery56 hash and the test literals moved to the stack's measured N = 12\n# knee (Run Guide 2.8, \"The re-pin\"; go-ahead item 5). Re-pinned 5 Oct 2026\n# (scripts/exp5/repin.py): N = 6 at 75/150 s, N = 12 at 90/180 s, lags 27/34 s;\n# set true in the commit that holds the re-pin.\nrepinned = true\n# Trainings side by side, one logical CPU each: \"auto\" is the host's logical\n# CPUs less 2 (14 on the 16 the campaign was sized on), or give a number.\nmax_jobs = \"auto\"\ngb_per_training = 0.6\nworkers = 8                   # evaluate and headroom worker processes\nheadroom_episodes = 200\nfamily = \"jittery56\"          # the jittery score's family (go-ahead item 3, the recommended one)\ncalibration_families = [\"jittery56\", \"clean\"]\ncalibration_gammas = [0.0, 0.9]\ncalibration_seeds = [0, 1, 2]\nsweep_gammas = [0.0, 0.25, 0.5, 0.75, 0.9, 0.99]   # Study 5.5\nsweep_seeds = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]\n# Set from rl-sweep's verdict (launch.py report rl-sweep): the best gamma and\n# whether the learned score is kept (5.7's scores train only then).\n# gamma_star = 0.9\n# keep_learned = true\n\n[rl.val_episodes]             # validation episodes per family; the default (200) elsewhere\njittery56 = 400\n\n[rl.e3]                       # E3, after Chen et al. (go-ahead item 2, R16)\nfamily = \"jittery\"            # Run Guide 2.8\nseeds = [0, 1, 2, 3, 4]\n# Chen's settings (decided 5 Oct 2026: E3 reproduces a published method): lr 5e-4,\n# epsilon from 1.0. \"pair\" would be the pair learner's defaults (lr 1e-3, epsilon 0.3 to 0.05).\nsettings = \"chen\"\n# E3's gamma: Chen's own, the default of his published code (decided 5 Oct 2026;\n# github.com/Cirrick/Multi_UAV_Data_Harvesting, common/arguments.py: --gamma 0.99,\n# beside the lr 5e-4 and epsilon from 1.0 above; no training script overrides it).\ngamma = 0.99\n\n[rl.s57]                      # Study 5.7's scores, at gamma_star\nseeds = [0, 1, 2, 3, 4]       # F-hand and the dwell and cov ablations\ngrid_c_t = [0.03, 0.1, 0.3]   # the reward grid; (0.1, 1) is 5.5's own and is not retrained\ngrid_c_cov = [0.25, 1.0, 4.0]\ngrid_seeds = [0, 1, 2]\n\n# The checkpoints the learned arms fly in batch 2, set after the RL stages\n# (launch.py report rl-sweep prints the verdict's stack_check picks). Paths are\n# repo-relative, results/exp5/checkpoints/<study>/<tag>/g<gamma>_s<seed>.npz.\n[rl.checkpoints]\n# main  = \"\"                  # FQ: the verdict's best gamma at its median-validation seed\n# best_tag = \"g90\"            # 5.5's stack check: the best gamma's tag (FQ-g<..>) ...\n# best  = \"\"                  # ... and its checkpoint (the same file as main)\n# g0    = \"\"                  # 5.5's stack check: gamma = 0 at its median-validation seed\n# hand  = \"\"                  # 5.7: FQ-hand, FQ-dwell and FQ-cov at gamma_star\n# dwell = \"\"\n# cov   = \"\"\n# e3    = \"\"                  # E3 (5.3, 5.6)\n\n# ==========================================================================\n# Batch 2 (stage batch2): the studies that run once the RL verdict has decided\n# F's in-flight slot. FQ arms run only with [rl] keep_learned = true (left out\n# when it is false); E3 needs [rl.checkpoints] e3. Cells shared with batch 1\n# (same arguments) are not run again: they read batch 1's CSV.\n# Budget levels: knee, stress, relaxed (relaxed_factor x knee), and, at the\n# measured payload, knee_meas and stress_meas.\n# ==========================================================================\n[batch2]\nrelaxed_factor = 2.0          # 5.3's third budget (the build plan's 30, 60, 120 s)\n\n[s51]                         # aggregation with age: rules on a fixed route\nrules = [\"agg:plain\", \"agg:cutoff\", \"agg:cutoff+fedprox\", \"agg:fedbuff\", \"agg:asynchfl\"]\n# agg:seq is out: it needs in-session training, a protocol change (decided 5 Oct 2026)\n# FedProx's proximal coefficient rho for agg:cutoff+fedprox (decided 5 Oct 2026): a\n# standard value from the middle of the FedProx paper's grid {0.001, 0.01, 0.1, 1};\n# 5.1's data are IID, where FedProx stays close to plain averaging.\nfedprox_rho = 0.01\nbudgets = [\"knee\", \"stress\"]\npass_2 = [\"unbudgeted\", \"budgeted\"]   # budgeted Pass 2 on H1's route only (plan arms refuse it)\nroutes = [\"H1\", \"F\"]\nN = 6\nn_trials = 40\npayload_bytes = 1000000\n\n[s52]                         # deadline form\narms = [\"F\", \"F-add\", \"F-round\", \"F-pref\"]   # F-add: F with the additive law\nbudgets = [\"knee\", \"stress\"]\nN = 6\nn_trials = 40\npayload_bytes = 1000000\n\n[s53x]                        # 5.3 beyond batch 1's core: D5, H0, E3, FQ, and the relaxed budget\narms = [\"F\", \"FX\", \"FQ\", \"H1\", \"D1\", \"D2\", \"D3\", \"D4\", \"D5\", \"E3\"]\nd4_faithful = true\nbudgets = [\"knee\", \"stress\", \"relaxed\"]\nK = [1, 3]\nN = 6\nn_trials = 40\npayload_bytes = 1000000\nh0 = true                     # H0, the live-link reference, on the wall clock only (one cell per K = 1)\n\n[s54]                         # test (a): reach\narms = [\"F\", \"FB+wide\", \"FB+medium\", \"FB+narrow\"]\nnarrow_range_ratios = [2.0, 3.0]          # beside the derivation's 3.87 (the base cell)\nfar_shares = [0.25, 0.5, 0.75]            # beside the uniform draw (the base cell)\npayloads = [\"measured\", 1000000]\nbudget = \"knee\"               # knee_meas at the measured payload\nN = 6\nn_trials = 20\no1 = true                     # O1's gap on FerrySim's N = 6 cells, at the base and at each setting\no1_episodes = 30\no1_workers = 8\n\n[s55]                         # test (b): the stack check of the verdict's picks\nbudgets = [\"stress\", \"knee\"]  # at N = 12, the re-pinned cells' budgets\nN = 12\nn_trials = 40\npayload_bytes = 1000000\n\n[s56]                         # test (c): when learning helps, at the 5.6 cells' periods\narms = [\"FQ\", \"FX\", \"E3\"]\n# Trials per cell (Run Guide 2.8's N_56; decided 5 Oct 2026): 40, as 5.5's stack\n# check and 5.7 fly on the same N = 12 cells. 6 cells x 3 arms: 720 trials.\nn_trials = 40\nN = 12\npayload_bytes = 1000000\n\n[s57]                         # one objective (only with the learned score kept)\narms = [\"FQ\", \"FQ-dwell\", \"FQ-cov\", \"FQ-hand\", \"D4\"]\nbudgets = [\"stress\", \"knee\"]\nN = 12\nn_trials = 40\npayload_bytes = 1000000\n\n[s58]                         # fairness under physical cost\narms = [\"F\", \"F-cov\", \"F-cap\", \"F-prio\", \"FB+wide\", \"D3\", \"D4\", \"D1\"]\nbudgets = [\"knee\", \"stress\"]\nmissions = [4, 8]             # the cap binds only from mission S on\nN = 6\nn_trials = 20\npayload_bytes = 1000000\n\n[s59x]                        # 5.9 beyond batch 1's core: K = 2, 3, the stress budget, the clean channel\narms = [\"F\", \"FX\", \"FQ\", \"H1\", \"D3\", \"D4\"]\nN = [6, 12, 24]\nK = [1, 2, 3]\nbudgets = [\"knee\", \"stress\"]\ncontact_regimes = [\"jittery\", \"clean\"]\nn_trials = 20\npayload_bytes = 1000000\n\n[s513]                        # data heterogeneity (real model, family labels)\nroute_arms = [\"F\", \"FX\", \"H1\", \"D3\"]\nplain_on_route = \"F\"          # agg:plain against agg:cutoff on F's route\npartitions = [[\"iid\", 0.0], [\"dirichlet\", 1.0], [\"dirichlet\", 0.1], [\"quantity\", 1.0]]\nbudget = \"knee\"\nN = 6\nn_trials = 20\npayload_bytes = 1000000\n\n# ==========================================================================\n# Batch 3: studies that need a pilot of their own first (stage pilot3, then\n# batch3). Their levels stay unset until the pilot reports.\n# ==========================================================================\n[p515]                        # 5.15's harsher interference level: H1's served share by amplitude\namps_db = [8.0, 11.0, 14.0, 17.0]\nn_trials = 10\nN = 6\n\n[p512]                        # 5.12's training-time levels (decided 5 Oct 2026: set by this pilot)\n# H1 at the N = 6 knee at 1 MB, with the median fit time (simulated s) at each\n# multiple of the mission cycle (the knee budget plus the ferry's 30 s turnaround)\n# and a fixed log-normal sigma. `report pilot3` picks \"spread\": the level whose\n# mean share of Pass-1 contacts that found no update ready, after each mule's\n# first mission, lies in not_ready_band, the one nearest the band's middle if\n# several. After the first mission (decided 6 Oct 2026): every fit starts at the\n# first takeoff, so the first mission's contacts find few updates ready at any\n# level (the smoke run: 5 of 6 at 45 s, 22% of later contacts), which would put\n# every level above the band; the share over every mission is reported beside it. \"stragglers\" is spread with\n# straggler_share of the devices at straggler_factor; \"none\" is no training time.\n# `report pilot3 --apply` writes the three as pilot_outputs.train_levels.\nN = 6\ncycle_factors = [0.25, 0.5, 1.0, 2.0]\nturnaround_s = 30.0\nsigma = 0.5\nnot_ready_band = [0.1, 0.3]\nstraggler_share = 0.2\nstraggler_factor = 5.0\nn_trials = 10\npayload_bytes = 1000000\n\n[p511c]                       # 5.11 (c): FerrySim budget sweeps at N = 24, 48, 96 (the scale family)\ncells = [\"scl-n24-350\", \"scl-n48-680\", \"scl-n96-1330\"]\nbudgets_s = { \"scl-n24-350\" = [175, 262, 350, 437, 525, 700], \"scl-n48-680\" = [340, 510, 680, 850, 1020, 1360], \"scl-n96-1330\" = [665, 1000, 1330, 1660, 1995, 2660] }\npolicies = [\"FX\"]\nepisodes = 20\nworkers = 8\n\n[s512]                        # compute and model-size heterogeneity\narms = [\"F\", \"FX\", \"H1\", \"D5\", \"D4\"]\npayloads = [\"measured\", 1000000, 10000000]\nmodel_archs = [\"ciciot\"]      # add \"high_performance\" for the larger model\n# The training-time levels are pilot_outputs.train_levels, set by pilot3's p512\n# (the build plan: \"set by a pilot\"; decided 5 Oct 2026). Each is\n# [median_s, sigma, straggler_share, straggler_factor]; \"none\" is median 0.\nbudget = \"knee\"               # knee_meas at the measured payload\nN = 6\nn_trials = 20\n\n[s515]                        # radio layer: one axis at a time from the jittery default\narms = [\"F\", \"FX\", \"H1\", \"H1+L1\", \"F+L1\"]\nbackhaul = \"seconds\"          # every cell, so the L1 arms fly their adaptive backhaul\nshadow_sigmas_db = [8.0]      # beside the default 4\namps_db = [1.0]               # beside the jittery default 5 (plus the harsher level below)\n# UNSET until p515 reports: the harsher amplitude, and the lossier path-loss exponent.\n# harsher_amp_db = 11.0\n# lossier_n_pl = 2.7\nmission_backhaul_arms = [\"F\", \"FX\", \"H1\"]   # also once on the recorded mission backhaul\nbudget = \"knee\"\nN = 6\nn_trials = 20\npayload_bytes = 1000000\n\n[s511c]                       # 5.11 (c): FerrySim beyond the stack, at the pilot's knees\npolicies = [\"F\", \"FX\", \"greedy_1\", \"hyb\"]\nepisodes = 30\nworkers = 8\n# UNSET until p511c reports: each scale cell's knee (s).\n# knee_s = { \"scl-n24-350\" = 350.0, \"scl-n48-680\" = 680.0, \"scl-n96-1330\" = 1330.0 }\n\n# ==========================================================================\n# Scoring (launch.py score <batch>; scoring.py): the analysis plan, fixed\n# before the studies run. Per study: the primary metric (the build plan's,\n# Study overview) and which way is better, the reference variant every other\n# variant in a cell is compared with, the columns reported beside it, and what\n# the scorer adds. A variant is the job tag after \"__\": the arm with \"+\" as \"p\"\n# (F+L1 -> FpL1, FB+wide -> FBpwide), or the study's own label (5.14's switch,\n# 5.1's rule, D4fedex, Fplain). A metric name ending in \"tau\" takes the first\n# tau (sim_s_to_tau -> sim_s_to_tau0.82). Comparisons are paired by trial on\n# complete pairs; Holm across the family; a claim needs the bootstrap CI to\n# exclude 0 and Holm p < alpha.\n# ==========================================================================\n[score]\n# The accuracy thresholds; the first is the primary. \"pilot\" is the knee\n# pilot's tau (pilot_outputs.tau, by the rule below); 0.82, the build plan's,\n# stays as the second so its reach rate is still reported. Decided 5 Oct 2026,\n# before the knee pilot finished: at 4 missions few trials reach 0.82 (H1 in\n# the first knee cells: 5 of 49 at N = 12, none at N = 24, where accuracy\n# levels off near 0.71), so time to 0.82 would be blank in most trials.\ntau = [\"pilot\", 0.82]\n# The rule `report knee` applies (and --apply writes as pilot_outputs.tau): the\n# largest tau, in steps of pilot_tau_step, that at least pilot_tau_share of\n# H1's ok trials reach within the trial (the highest accuracy after any round)\n# at each N's knee at 1 MB; the smallest of those over N.\npilot_tau_share = 0.8\npilot_tau_step = 0.01\nalpha = 0.05\nfamily = \"study\"              # Holm across every comparison of a study (\"cell\": per cell)\nn_bootstraps = 2000\nalso = [\"reached_tau\", \"sim_s_to_tau\", \"round_close_rate_kmin1\", \"network_aou_mean\",\n        \"deadline_miss_rate\", \"update_yield\", \"final_accuracy\", \"final_auc\"]\n\n[score.s53]                   # 5.3 core: time to tau, with the reach rate where runs fall short\nmetric = \"sim_s_to_tau\"\nreference = \"F\"\n\n[score.s53x]                  # 5.3 in full (H0 flies the wall clock: its own cell, described)\nmetric = \"sim_s_to_tau\"\nreference = \"F\"\nalso = [\"reached_tau\", \"sim_s_to_tau\", \"wall_s_to_tau\", \"round_close_rate_kmin1\",\n        \"deadline_miss_rate\", \"network_aou_mean\", \"update_yield\", \"final_accuracy\"]\n\n[score.s59]\nmetric = \"sim_s_to_tau\"\nreference = \"F\"\n\n[score.ttl]                   # stage sens: 5.3's comparison at each TTL factor (a cell each)\nmetric = \"sim_s_to_tau\"\nreference = \"F\"\n\n[score.s59x]\nmetric = \"sim_s_to_tau\"\nreference = \"F\"\n\n[score.s511b]                 # 5.11 (b): time to tau per mule; the footprint beside it\nmetric = \"sim_s_to_tau\"\nreference = \"F\"\nalso = [\"reached_tau\", \"sim_s_to_tau\", \"update_yield\", \"plan_wall_s_mean\", \"plan_wall_s_p95\",\n        \"pair_wall_s_mean\", \"trial_processes\", \"peak_rss_mib_total\"]\n\n[score.s514]                  # 5.14: F (cap S*) against F with one switch flipped\nmetric = \"network_aou_mean\"\nreference = \"capS\"\nversus = { secF = \"\", secFL1 = \"secF\" }   # F+L1 against F, both on the seconds backhaul\nage_cap = true                # every variant scored at the study's S (pilot_outputs.s_star)\nalso = [\"cap_violations\", \"age_max\", \"age_p95\", \"round_close_rate_kmin1\", \"reached_tau\",\n        \"sim_s_to_tau\"]\n\n[score.s51]                   # 5.1: each rule against agg:cutoff on the same route and Pass 2\nmetric = \"sim_s_to_tau\"\nreference = \"cutoff\"\nalso = [\"reached_tau\", \"sim_s_to_tau\", \"final_accuracy\", \"final_auc\", \"round_close_rate_kmin1\",\n        \"network_aou_mean\"]\n\n[score.s52]\nmetric = \"deadline_miss_rate\"\nreference = \"F\"\nalso = [\"round_close_rate_kmin1\", \"network_aou_mean\", \"reached_tau\", \"sim_s_to_tau\"]\n\n[score.s54]\nmetric = \"network_aou_mean\"\nreference = \"F\"\nalso = [\"far_served_share\", \"round_close_rate_kmin1\", \"reached_tau\", \"sim_s_to_tau\"]\n\n[score.s55]                   # the verdict's picks on the stack, against the one-step FX\nmetric = \"sim_s_to_tau\"\nreference = \"FX\"\nalso = [\"reached_tau\", \"sim_s_to_tau\", \"round_close_rate_kmin1\", \"pair_fx_agree_share\"]\n\n[score.s56]\nmetric = \"sim_s_to_tau\"\nreference = \"FX\"\nalso = [\"reached_tau\", \"sim_s_to_tau\", \"round_close_rate_kmin1\", \"pass1_contacts_mean\",\n        \"update_yield\"]\n\n[score.s57]\nmetric = \"round_close_rate_kmin1\"\nbetter = \"higher\"\nreference = \"FQ\"\nalso = [\"reached_tau\", \"sim_s_to_tau\", \"network_aou_mean\"]\n\n[score.s58]\nmetric = \"network_aou_mean\"\nreference = \"F\"\nage_cap = true\nalso = [\"age_max\", \"age_p95\", \"jain_merged\", \"cap_violations\", \"round_close_rate_kmin1\",\n        \"reached_tau\", \"sim_s_to_tau\"]\n\n[score.s512]\nmetric = \"sim_s_to_tau\"\nreference = \"F\"\nscorer_flags = [\"--compute-columns\"]\nalso = [\"reached_tau\", \"sim_s_to_tau\", \"update_yield\", \"not_ready_share\",\n        \"round_close_rate_kmin1\", \"device_energy_j_total\"]\n\n[score.s513]\nmetric = \"sim_s_to_tau\"\nreference = \"F\"\nscorer_flags = [\"--detection-columns\"]\nalso = [\"reached_tau\", \"sim_s_to_tau\", \"final_accuracy\", \"final_auc\", \"tpr_final\", \"fpr_final\",\n        \"f1_final\", \"recall_family_min\", \"network_aou_shard_weighted_mean\"]\n\n[score.s515]                  # H1+L1 against H1 (does the adaptive backhaul pay off); the rest against F\nmetric = \"sim_s_to_tau\"\nreference = \"F\"\nversus = { H1pL1 = \"H1\" }\n",
+ "overrides": [],
+ "auto": [
+  "machine.max_device_processes = 45 (the smaller of 4.5 x 12 physical cores and 2.25 x 20 logical CPUs)",
+  "machine.max_jobs = 7 (45 training processes // 6, one N = 6 job's)",
+  "machine.mem_budget_gb = 51 (0.8 x 63.8 GB of RAM, rounded down)",
+  "rl.max_jobs = 18 (20 logical CPUs less 2)"
+ ],
+ "settings": {
+  "campaign": {
+   "base_seed": 20261005,
+   "n_missions": 4,
+   "regime": "jittery",
+   "contact_regime": "jittery",
+   "field_ref_n": 0,
+   "ferry_arm_deadline_law": "multiplicative",
+   "merge_period_t_nom": true,
+   "footprint": true
+  },
+  "machine": {
+   "max_jobs": 7,
+   "max_device_processes": 45,
+   "mem_budget_gb": 51.0,
+   "gb_per_tf_process": 0.6,
+   "gb_per_light_process": 0.3,
+   "threads": {
+    "OMP_NUM_THREADS": "2",
+    "TF_NUM_INTRAOP_THREADS": "2",
+    "TF_NUM_INTEROP_THREADS": "1",
+    "OPENBLAS_NUM_THREADS": "1"
+   }
+  },
+  "pilot_outputs": {
+   "session_ttl_s": {
+    "6": 36.0,
+    "12": 34.0,
+    "18": 34.0,
+    "24": 23.0
+   },
+   "knee_s": {
+    "6": 150.0,
+    "12": 180.0,
+    "18": 240.0,
+    "24": 262.0
+   },
+   "stress_s": {
+    "6": 75.0,
+    "12": 90.0,
+    "18": 120.0,
+    "24": 130.0
+   },
+   "s_star": {
+    "6": 2,
+    "12": 2,
+    "18": 2,
+    "24": 2
+   },
+   "knee_meas_s": {
+    "6": 120.0
+   },
+   "stress_meas_s": {
+    "6": 60.0
+   },
+   "tau": 0.71
+  },
+  "ttl": {
+   "N": [
+    6,
+    12,
+    18,
+    24
+   ],
+   "fits": 4
+  },
+  "knee": {
+   "cells": [
+    [
+     6,
+     1000000
+    ],
+    [
+     12,
+     1000000
+    ],
+    [
+     18,
+     1000000
+    ],
+    [
+     24,
+     1000000
+    ],
+    [
+     6,
+     "measured"
+    ]
+   ],
+   "n_trials": 20,
+   "budgets_s": {
+    "6": [
+     30,
+     45,
+     60,
+     90,
+     120,
+     150
+    ],
+    "12": [
+     60,
+     90,
+     120,
+     150,
+     180,
+     240
+    ],
+    "18": [
+     120,
+     180,
+     240,
+     300,
+     360,
+     450
+    ],
+    "24": [
+     175,
+     262,
+     350,
+     437,
+     525,
+     700
+    ]
+   },
+   "metric": "update_yield",
+   "plateau_share": 0.95
+  },
+  "sstar": {
+   "N": [
+    6,
+    12,
+    18,
+    24
+   ],
+   "payload_bytes": 1000000
+  },
+  "s53": {
+   "arms": [
+    "F",
+    "FX",
+    "H1",
+    "D1",
+    "D2",
+    "D3",
+    "D4"
+   ],
+   "d4_faithful": true,
+   "N": [
+    6
+   ],
+   "K": [
+    1,
+    3
+   ],
+   "budgets": [
+    "knee",
+    "stress"
+   ],
+   "n_trials": 20,
+   "payload_bytes": 1000000
+  },
+  "s59": {
+   "arms": [
+    "F",
+    "FX",
+    "H1",
+    "D3",
+    "D4"
+   ],
+   "N": [
+    6,
+    12,
+    24
+   ],
+   "K": [
+    1
+   ],
+   "budgets": [
+    "knee"
+   ],
+   "n_trials": 20,
+   "payload_bytes": 1000000
+  },
+  "s511b": {
+   "arms": [
+    "F",
+    "FX",
+    "H1",
+    "D4"
+   ],
+   "cells": [
+    [
+     6,
+     1
+    ],
+    [
+     12,
+     2
+    ],
+    [
+     18,
+     3
+    ],
+    [
+     12,
+     1
+    ],
+    [
+     12,
+     3
+    ]
+   ],
+   "budgets": [
+    "knee"
+   ],
+   "n_trials": 20,
+   "payload_bytes": 1000000
+  },
+  "s511a": {
+   "cells": [
+    "jit-n6-150",
+    "jit-n12-90",
+    "scl-n24-350",
+    "scl-n48-680",
+    "scl-n96-1330"
+   ],
+   "policies": [
+    "FX"
+   ],
+   "episodes": 20,
+   "modes": [
+    "auto",
+    "subsets",
+    "local"
+   ],
+   "workers": 4
+  },
+  "s514": {
+   "N": 6,
+   "budgets": [
+    "knee",
+    "stress"
+   ],
+   "n_trials": 40,
+   "payload_bytes": 1000000
+  },
+  "sens": {
+   "arms": [
+    "F",
+    "FX",
+    "H1"
+   ],
+   "ttl_factors": [
+    0.75,
+    1.0,
+    1.5
+   ],
+   "budgets": [
+    "knee"
+   ],
+   "N": 6,
+   "K": 1,
+   "n_trials": 20,
+   "payload_bytes": 1000000
+  },
+  "quick": {
+   "arms": [
+    "F",
+    "FX",
+    "H1",
+    "D1",
+    "D2",
+    "D3",
+    "D4"
+   ],
+   "d4_faithful": true,
+   "budgets": [
+    "knee",
+    "stress"
+   ],
+   "N": 6,
+   "K": [
+    1
+   ],
+   "n_trials": 20,
+   "payload_bytes": 1000000
+  },
+  "rl": {
+   "repinned": true,
+   "max_jobs": 18,
+   "gb_per_training": 0.6,
+   "workers": 8,
+   "headroom_episodes": 200,
+   "family": "jittery56",
+   "calibration_families": [
+    "jittery56",
+    "clean"
+   ],
+   "calibration_gammas": [
+    0.0,
+    0.9
+   ],
+   "calibration_seeds": [
+    0,
+    1,
+    2
+   ],
+   "sweep_gammas": [
+    0.0,
+    0.25,
+    0.5,
+    0.75,
+    0.9,
+    0.99
+   ],
+   "sweep_seeds": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9
+   ],
+   "val_episodes": {
+    "jittery56": 400
+   },
+   "e3": {
+    "family": "jittery",
+    "seeds": [
+     0,
+     1,
+     2,
+     3,
+     4
+    ],
+    "settings": "chen",
+    "gamma": 0.99
+   },
+   "s57": {
+    "seeds": [
+     0,
+     1,
+     2,
+     3,
+     4
+    ],
+    "grid_c_t": [
+     0.03,
+     0.1,
+     0.3
+    ],
+    "grid_c_cov": [
+     0.25,
+     1.0,
+     4.0
+    ],
+    "grid_seeds": [
+     0,
+     1,
+     2
+    ]
+   },
+   "checkpoints": {}
+  },
+  "batch2": {
+   "relaxed_factor": 2.0
+  },
+  "s51": {
+   "rules": [
+    "agg:plain",
+    "agg:cutoff",
+    "agg:cutoff+fedprox",
+    "agg:fedbuff",
+    "agg:asynchfl"
+   ],
+   "fedprox_rho": 0.01,
+   "budgets": [
+    "knee",
+    "stress"
+   ],
+   "pass_2": [
+    "unbudgeted",
+    "budgeted"
+   ],
+   "routes": [
+    "H1",
+    "F"
+   ],
+   "N": 6,
+   "n_trials": 40,
+   "payload_bytes": 1000000
+  },
+  "s52": {
+   "arms": [
+    "F",
+    "F-add",
+    "F-round",
+    "F-pref"
+   ],
+   "budgets": [
+    "knee",
+    "stress"
+   ],
+   "N": 6,
+   "n_trials": 40,
+   "payload_bytes": 1000000
+  },
+  "s53x": {
+   "arms": [
+    "F",
+    "FX",
+    "FQ",
+    "H1",
+    "D1",
+    "D2",
+    "D3",
+    "D4",
+    "D5",
+    "E3"
+   ],
+   "d4_faithful": true,
+   "budgets": [
+    "knee",
+    "stress",
+    "relaxed"
+   ],
+   "K": [
+    1,
+    3
+   ],
+   "N": 6,
+   "n_trials": 40,
+   "payload_bytes": 1000000,
+   "h0": true
+  },
+  "s54": {
+   "arms": [
+    "F",
+    "FB+wide",
+    "FB+medium",
+    "FB+narrow"
+   ],
+   "narrow_range_ratios": [
+    2.0,
+    3.0
+   ],
+   "far_shares": [
+    0.25,
+    0.5,
+    0.75
+   ],
+   "payloads": [
+    "measured",
+    1000000
+   ],
+   "budget": "knee",
+   "N": 6,
+   "n_trials": 20,
+   "o1": true,
+   "o1_episodes": 30,
+   "o1_workers": 8
+  },
+  "s55": {
+   "budgets": [
+    "stress",
+    "knee"
+   ],
+   "N": 12,
+   "n_trials": 40,
+   "payload_bytes": 1000000
+  },
+  "s56": {
+   "arms": [
+    "FQ",
+    "FX",
+    "E3"
+   ],
+   "n_trials": 40,
+   "N": 12,
+   "payload_bytes": 1000000
+  },
+  "s57": {
+   "arms": [
+    "FQ",
+    "FQ-dwell",
+    "FQ-cov",
+    "FQ-hand",
+    "D4"
+   ],
+   "budgets": [
+    "stress",
+    "knee"
+   ],
+   "N": 12,
+   "n_trials": 40,
+   "payload_bytes": 1000000
+  },
+  "s58": {
+   "arms": [
+    "F",
+    "F-cov",
+    "F-cap",
+    "F-prio",
+    "FB+wide",
+    "D3",
+    "D4",
+    "D1"
+   ],
+   "budgets": [
+    "knee",
+    "stress"
+   ],
+   "missions": [
+    4,
+    8
+   ],
+   "N": 6,
+   "n_trials": 20,
+   "payload_bytes": 1000000
+  },
+  "s59x": {
+   "arms": [
+    "F",
+    "FX",
+    "FQ",
+    "H1",
+    "D3",
+    "D4"
+   ],
+   "N": [
+    6,
+    12,
+    24
+   ],
+   "K": [
+    1,
+    2,
+    3
+   ],
+   "budgets": [
+    "knee",
+    "stress"
+   ],
+   "contact_regimes": [
+    "jittery",
+    "clean"
+   ],
+   "n_trials": 20,
+   "payload_bytes": 1000000
+  },
+  "s513": {
+   "route_arms": [
+    "F",
+    "FX",
+    "H1",
+    "D3"
+   ],
+   "plain_on_route": "F",
+   "partitions": [
+    [
+     "iid",
+     0.0
+    ],
+    [
+     "dirichlet",
+     1.0
+    ],
+    [
+     "dirichlet",
+     0.1
+    ],
+    [
+     "quantity",
+     1.0
+    ]
+   ],
+   "budget": "knee",
+   "N": 6,
+   "n_trials": 20,
+   "payload_bytes": 1000000
+  },
+  "p515": {
+   "amps_db": [
+    8.0,
+    11.0,
+    14.0,
+    17.0
+   ],
+   "n_trials": 10,
+   "N": 6
+  },
+  "p512": {
+   "N": 6,
+   "cycle_factors": [
+    0.25,
+    0.5,
+    1.0,
+    2.0
+   ],
+   "turnaround_s": 30.0,
+   "sigma": 0.5,
+   "not_ready_band": [
+    0.1,
+    0.3
+   ],
+   "straggler_share": 0.2,
+   "straggler_factor": 5.0,
+   "n_trials": 10,
+   "payload_bytes": 1000000
+  },
+  "p511c": {
+   "cells": [
+    "scl-n24-350",
+    "scl-n48-680",
+    "scl-n96-1330"
+   ],
+   "budgets_s": {
+    "scl-n24-350": [
+     175,
+     262,
+     350,
+     437,
+     525,
+     700
+    ],
+    "scl-n48-680": [
+     340,
+     510,
+     680,
+     850,
+     1020,
+     1360
+    ],
+    "scl-n96-1330": [
+     665,
+     1000,
+     1330,
+     1660,
+     1995,
+     2660
+    ]
+   },
+   "policies": [
+    "FX"
+   ],
+   "episodes": 20,
+   "workers": 8
+  },
+  "s512": {
+   "arms": [
+    "F",
+    "FX",
+    "H1",
+    "D5",
+    "D4"
+   ],
+   "payloads": [
+    "measured",
+    1000000,
+    10000000
+   ],
+   "model_archs": [
+    "ciciot"
+   ],
+   "budget": "knee",
+   "N": 6,
+   "n_trials": 20
+  },
+  "s515": {
+   "arms": [
+    "F",
+    "FX",
+    "H1",
+    "H1+L1",
+    "F+L1"
+   ],
+   "backhaul": "seconds",
+   "shadow_sigmas_db": [
+    8.0
+   ],
+   "amps_db": [
+    1.0
+   ],
+   "mission_backhaul_arms": [
+    "F",
+    "FX",
+    "H1"
+   ],
+   "budget": "knee",
+   "N": 6,
+   "n_trials": 20,
+   "payload_bytes": 1000000
+  },
+  "s511c": {
+   "policies": [
+    "F",
+    "FX",
+    "greedy_1",
+    "hyb"
+   ],
+   "episodes": 30,
+   "workers": 8
+  },
+  "score": {
+   "tau": [
+    "pilot",
+    0.82
+   ],
+   "pilot_tau_share": 0.8,
+   "pilot_tau_step": 0.01,
+   "alpha": 0.05,
+   "family": "study",
+   "n_bootstraps": 2000,
+   "also": [
+    "reached_tau",
+    "sim_s_to_tau",
+    "round_close_rate_kmin1",
+    "network_aou_mean",
+    "deadline_miss_rate",
+    "update_yield",
+    "final_accuracy",
+    "final_auc"
+   ],
+   "s53": {
+    "metric": "sim_s_to_tau",
+    "reference": "F"
+   },
+   "s53x": {
+    "metric": "sim_s_to_tau",
+    "reference": "F",
+    "also": [
+     "reached_tau",
+     "sim_s_to_tau",
+     "wall_s_to_tau",
+     "round_close_rate_kmin1",
+     "deadline_miss_rate",
+     "network_aou_mean",
+     "update_yield",
+     "final_accuracy"
+    ]
+   },
+   "s59": {
+    "metric": "sim_s_to_tau",
+    "reference": "F"
+   },
+   "ttl": {
+    "metric": "sim_s_to_tau",
+    "reference": "F"
+   },
+   "s59x": {
+    "metric": "sim_s_to_tau",
+    "reference": "F"
+   },
+   "s511b": {
+    "metric": "sim_s_to_tau",
+    "reference": "F",
+    "also": [
+     "reached_tau",
+     "sim_s_to_tau",
+     "update_yield",
+     "plan_wall_s_mean",
+     "plan_wall_s_p95",
+     "pair_wall_s_mean",
+     "trial_processes",
+     "peak_rss_mib_total"
+    ]
+   },
+   "s514": {
+    "metric": "network_aou_mean",
+    "reference": "capS",
+    "versus": {
+     "secF": "",
+     "secFL1": "secF"
+    },
+    "age_cap": true,
+    "also": [
+     "cap_violations",
+     "age_max",
+     "age_p95",
+     "round_close_rate_kmin1",
+     "reached_tau",
+     "sim_s_to_tau"
+    ]
+   },
+   "s51": {
+    "metric": "sim_s_to_tau",
+    "reference": "cutoff",
+    "also": [
+     "reached_tau",
+     "sim_s_to_tau",
+     "final_accuracy",
+     "final_auc",
+     "round_close_rate_kmin1",
+     "network_aou_mean"
+    ]
+   },
+   "s52": {
+    "metric": "deadline_miss_rate",
+    "reference": "F",
+    "also": [
+     "round_close_rate_kmin1",
+     "network_aou_mean",
+     "reached_tau",
+     "sim_s_to_tau"
+    ]
+   },
+   "s54": {
+    "metric": "network_aou_mean",
+    "reference": "F",
+    "also": [
+     "far_served_share",
+     "round_close_rate_kmin1",
+     "reached_tau",
+     "sim_s_to_tau"
+    ]
+   },
+   "s55": {
+    "metric": "sim_s_to_tau",
+    "reference": "FX",
+    "also": [
+     "reached_tau",
+     "sim_s_to_tau",
+     "round_close_rate_kmin1",
+     "pair_fx_agree_share"
+    ]
+   },
+   "s56": {
+    "metric": "sim_s_to_tau",
+    "reference": "FX",
+    "also": [
+     "reached_tau",
+     "sim_s_to_tau",
+     "round_close_rate_kmin1",
+     "pass1_contacts_mean",
+     "update_yield"
+    ]
+   },
+   "s57": {
+    "metric": "round_close_rate_kmin1",
+    "better": "higher",
+    "reference": "FQ",
+    "also": [
+     "reached_tau",
+     "sim_s_to_tau",
+     "network_aou_mean"
+    ]
+   },
+   "s58": {
+    "metric": "network_aou_mean",
+    "reference": "F",
+    "age_cap": true,
+    "also": [
+     "age_max",
+     "age_p95",
+     "jain_merged",
+     "cap_violations",
+     "round_close_rate_kmin1",
+     "reached_tau",
+     "sim_s_to_tau"
+    ]
+   },
+   "s512": {
+    "metric": "sim_s_to_tau",
+    "reference": "F",
+    "scorer_flags": [
+     "--compute-columns"
+    ],
+    "also": [
+     "reached_tau",
+     "sim_s_to_tau",
+     "update_yield",
+     "not_ready_share",
+     "round_close_rate_kmin1",
+     "device_energy_j_total"
+    ]
+   },
+   "s513": {
+    "metric": "sim_s_to_tau",
+    "reference": "F",
+    "scorer_flags": [
+     "--detection-columns"
+    ],
+    "also": [
+     "reached_tau",
+     "sim_s_to_tau",
+     "final_accuracy",
+     "final_auc",
+     "tpr_final",
+     "fpr_final",
+     "f1_final",
+     "recall_family_min",
+     "network_aou_shard_weighted_mean"
+    ]
+   },
+   "s515": {
+    "metric": "sim_s_to_tau",
+    "reference": "F",
+    "versus": {
+     "H1pL1": "H1"
+    }
+   }
+  }
+ },
+ "jobs": [
+  {
+   "stage": "rl-e3",
+   "study": "5.3-e3",
+   "name": "5.3-e3/e3/g0.99_s0",
+   "args": [
+    "-m",
+    "experiments.ferrysim",
+    "train",
+    "--kind",
+    "chen_dqn",
+    "--family",
+    "jittery",
+    "--study",
+    "5.3-e3",
+    "--gamma",
+    "0.99",
+    "--seed",
+    "0",
+    "--root",
+    "results/exp5/checkpoints",
+    "--tag",
+    "e3",
+    "--lr",
+    "5e-4",
+    "--epsilon-start",
+    "1.0"
+   ],
+   "out": "results/exp5/checkpoints/5.3-e3/e3/g0.99_s0.npz",
+   "kind": "rl-train",
+   "n": 0,
+   "mem_gb": 0.6,
+   "trials": null,
+   "blocked": [],
+   "aliases": [],
+   "alias_of": null,
+   "deps": [],
+   "slots": 1
+  },
+  {
+   "stage": "rl-e3",
+   "study": "5.3-e3",
+   "name": "5.3-e3/e3/g0.99_s1",
+   "args": [
+    "-m",
+    "experiments.ferrysim",
+    "train",
+    "--kind",
+    "chen_dqn",
+    "--family",
+    "jittery",
+    "--study",
+    "5.3-e3",
+    "--gamma",
+    "0.99",
+    "--seed",
+    "1",
+    "--root",
+    "results/exp5/checkpoints",
+    "--tag",
+    "e3",
+    "--lr",
+    "5e-4",
+    "--epsilon-start",
+    "1.0"
+   ],
+   "out": "results/exp5/checkpoints/5.3-e3/e3/g0.99_s1.npz",
+   "kind": "rl-train",
+   "n": 0,
+   "mem_gb": 0.6,
+   "trials": null,
+   "blocked": [],
+   "aliases": [],
+   "alias_of": null,
+   "deps": [],
+   "slots": 1
+  },
+  {
+   "stage": "rl-e3",
+   "study": "5.3-e3",
+   "name": "5.3-e3/e3/g0.99_s2",
+   "args": [
+    "-m",
+    "experiments.ferrysim",
+    "train",
+    "--kind",
+    "chen_dqn",
+    "--family",
+    "jittery",
+    "--study",
+    "5.3-e3",
+    "--gamma",
+    "0.99",
+    "--seed",
+    "2",
+    "--root",
+    "results/exp5/checkpoints",
+    "--tag",
+    "e3",
+    "--lr",
+    "5e-4",
+    "--epsilon-start",
+    "1.0"
+   ],
+   "out": "results/exp5/checkpoints/5.3-e3/e3/g0.99_s2.npz",
+   "kind": "rl-train",
+   "n": 0,
+   "mem_gb": 0.6,
+   "trials": null,
+   "blocked": [],
+   "aliases": [],
+   "alias_of": null,
+   "deps": [],
+   "slots": 1
+  },
+  {
+   "stage": "rl-e3",
+   "study": "5.3-e3",
+   "name": "5.3-e3/e3/g0.99_s3",
+   "args": [
+    "-m",
+    "experiments.ferrysim",
+    "train",
+    "--kind",
+    "chen_dqn",
+    "--family",
+    "jittery",
+    "--study",
+    "5.3-e3",
+    "--gamma",
+    "0.99",
+    "--seed",
+    "3",
+    "--root",
+    "results/exp5/checkpoints",
+    "--tag",
+    "e3",
+    "--lr",
+    "5e-4",
+    "--epsilon-start",
+    "1.0"
+   ],
+   "out": "results/exp5/checkpoints/5.3-e3/e3/g0.99_s3.npz",
+   "kind": "rl-train",
+   "n": 0,
+   "mem_gb": 0.6,
+   "trials": null,
+   "blocked": [],
+   "aliases": [],
+   "alias_of": null,
+   "deps": [],
+   "slots": 1
+  },
+  {
+   "stage": "rl-e3",
+   "study": "5.3-e3",
+   "name": "5.3-e3/e3/g0.99_s4",
+   "args": [
+    "-m",
+    "experiments.ferrysim",
+    "train",
+    "--kind",
+    "chen_dqn",
+    "--family",
+    "jittery",
+    "--study",
+    "5.3-e3",
+    "--gamma",
+    "0.99",
+    "--seed",
+    "4",
+    "--root",
+    "results/exp5/checkpoints",
+    "--tag",
+    "e3",
+    "--lr",
+    "5e-4",
+    "--epsilon-start",
+    "1.0"
+   ],
+   "out": "results/exp5/checkpoints/5.3-e3/e3/g0.99_s4.npz",
+   "kind": "rl-train",
+   "n": 0,
+   "mem_gb": 0.6,
+   "trials": null,
+   "blocked": [],
+   "aliases": [],
+   "alias_of": null,
+   "deps": [],
+   "slots": 1
+  },
+  {
+   "stage": "rl-e3",
+   "study": "5.3-e3",
+   "name": "5.3-e3/evaluate",
+   "args": [
+    "-m",
+    "experiments.ferrysim",
+    "evaluate",
+    "--checkpoints",
+    "results/exp5/checkpoints/5.3-e3",
+    "--reward",
+    "bytes",
+    "--record",
+    "--workers",
+    "8",
+    "--out",
+    "results/exp5/rl/e3/evaluation.json"
+   ],
+   "out": "results/exp5/rl/e3/evaluation.json",
+   "kind": "tool",
+   "n": 0,
+   "mem_gb": 5.3999999999999995,
+   "trials": null,
+   "blocked": [],
+   "aliases": [],
+   "alias_of": null,
+   "deps": [
+    "5.3-e3/e3/g0.99_s0",
+    "5.3-e3/e3/g0.99_s1",
+    "5.3-e3/e3/g0.99_s2",
+    "5.3-e3/e3/g0.99_s3",
+    "5.3-e3/e3/g0.99_s4"
+   ],
+   "slots": 8
+  }
+ ],
+ "finished": "2026-10-07T00:10:26",
+ "failed": [],
+ "skipped": []
+}

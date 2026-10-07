@@ -1,0 +1,12 @@
+{"event": "start", "job": "5.3-e3/e3/g0.99_s0", "pid": 21772, "at": "2026-10-06T23:10:05"}
+{"event": "start", "job": "5.3-e3/e3/g0.99_s1", "pid": 33272, "at": "2026-10-06T23:10:05"}
+{"event": "start", "job": "5.3-e3/e3/g0.99_s2", "pid": 92800, "at": "2026-10-06T23:10:05"}
+{"event": "start", "job": "5.3-e3/e3/g0.99_s3", "pid": 67316, "at": "2026-10-06T23:10:05"}
+{"event": "start", "job": "5.3-e3/e3/g0.99_s4", "pid": 115368, "at": "2026-10-06T23:10:05"}
+{"event": "end", "job": "5.3-e3/e3/g0.99_s0", "rc": 0, "wall_s": 1168.2, "rows": null, "rows_not_ok": null, "at": "2026-10-06T23:29:34"}
+{"event": "end", "job": "5.3-e3/e3/g0.99_s4", "rc": 0, "wall_s": 1388.2, "rows": null, "rows_not_ok": null, "at": "2026-10-06T23:33:14"}
+{"event": "end", "job": "5.3-e3/e3/g0.99_s1", "rc": 0, "wall_s": 1818.3, "rows": null, "rows_not_ok": null, "at": "2026-10-06T23:40:24"}
+{"event": "end", "job": "5.3-e3/e3/g0.99_s3", "rc": 0, "wall_s": 1818.3, "rows": null, "rows_not_ok": null, "at": "2026-10-06T23:40:24"}
+{"event": "end", "job": "5.3-e3/e3/g0.99_s2", "rc": 0, "wall_s": 2240.4, "rows": null, "rows_not_ok": null, "at": "2026-10-06T23:47:26"}
+{"event": "start", "job": "5.3-e3/evaluate", "pid": 976, "at": "2026-10-06T23:47:26"}
+{"event": "end", "job": "5.3-e3/evaluate", "rc": 0, "wall_s": 1380.2, "rows": null, "rows_not_ok": null, "at": "2026-10-07T00:10:26"}

@@ -304,7 +304,11 @@ g0    = "results/exp5/checkpoints/5.5-jittery56/g0/g0_s5.npz"
 # hand  = ""                  # 5.7: FQ-hand, FQ-dwell and FQ-cov at gamma_star
 # dwell = ""
 # cov   = ""
-# e3    = ""                  # E3 (5.3, 5.6)
+# E3 (5.3, 5.6), from stage rl-e3 (6-7 Oct 2026; Chen's settings, gamma 0.99, 5 seeds):
+# the median-validation seed, as 5.5's picks are chosen. Seed 0: validation 1.9642
+# (seeds 1.9629-1.9787); held-out bytes return 1.933, the lowest of the five
+# (1.933-1.941, within 0.4%).
+e3    = "results/exp5/checkpoints/5.3-e3/e3/g0.99_s0.npz"
 
 # ==========================================================================
 # Batch 2 (stage batch2): the studies that run once the RL verdict has decided

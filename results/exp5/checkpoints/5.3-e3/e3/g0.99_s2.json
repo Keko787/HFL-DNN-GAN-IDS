@@ -1,0 +1,387 @@
+{
+  "blas": "openblas64 0.3.23.dev (USE_64BITINT=1 DYNAMIC_ARCH=1 DYNAMIC_OLDER= NO_CBLAS= NO_LAPACK= NO_LAPACKE= NO_AFFINITY=1 USE_OPENMP= SKYLAKEX MAX_THREADS=2); OPENBLAS_NUM_THREADS=1",
+  "cell_family": "jittery",
+  "cell_family_sha256": "deaa4e082ba40fab48efd2822aaee205df888f26ae48563d320c81a5e9ee052e",
+  "classes": [
+    "wide"
+  ],
+  "dirty": false,
+  "episodes_trained": 7000,
+  "format": 2,
+  "gamma": 0.99,
+  "held_out": {
+    "cells": {
+      "jit-n12-180": {
+        "cell": "jit-n12-180",
+        "decisions_per_sortie_mean": 5.12925,
+        "episodes": 1000,
+        "first_index": 0,
+        "policy": "ckpt-41e0229e04b7",
+        "return_mean": 2.20575,
+        "return_sd": 0.3849637372837446,
+        "return_se": 0.012173622263873146,
+        "sorties_with_2_or_more": 1.0,
+        "stream": "ferrysim-heldout",
+        "terms_mean": {
+          "coverage": 0.0,
+          "distance": 0.0,
+          "energy": 0.0,
+          "gain": 2.20575,
+          "time": 0.0
+        }
+      },
+      "jit-n12-90": {
+        "cell": "jit-n12-90",
+        "decisions_per_sortie_mean": 3.18725,
+        "episodes": 1000,
+        "first_index": 0,
+        "policy": "ckpt-41e0229e04b7",
+        "return_mean": 1.6578333333333333,
+        "return_sd": 0.374805440204509,
+        "return_se": 0.011852388704682942,
+        "sorties_with_2_or_more": 1.0,
+        "stream": "ferrysim-heldout",
+        "terms_mean": {
+          "coverage": 0.0,
+          "distance": 0.0,
+          "energy": 0.0,
+          "gain": 1.6578333333333333,
+          "time": 0.0
+        }
+      },
+      "jit-n6-150": {
+        "cell": "jit-n6-150",
+        "decisions_per_sortie_mean": 3.7115,
+        "episodes": 1000,
+        "first_index": 0,
+        "policy": "ckpt-41e0229e04b7",
+        "return_mean": 2.2011666666666665,
+        "return_sd": 0.5509859869179997,
+        "return_se": 0.017423706774966175,
+        "sorties_with_2_or_more": 0.99825,
+        "stream": "ferrysim-heldout",
+        "terms_mean": {
+          "coverage": 0.0,
+          "distance": 0.0,
+          "energy": 0.0,
+          "gain": 2.2011666666666665,
+          "time": 0.0
+        }
+      },
+      "jit-n6-75": {
+        "cell": "jit-n6-75",
+        "decisions_per_sortie_mean": 2.44125,
+        "episodes": 1000,
+        "first_index": 0,
+        "policy": "ckpt-41e0229e04b7",
+        "return_mean": 1.6981666666666666,
+        "return_sd": 0.5243826576232861,
+        "return_se": 0.016582435635818415,
+        "sorties_with_2_or_more": 0.98625,
+        "stream": "ferrysim-heldout",
+        "terms_mean": {
+          "coverage": 0.0,
+          "distance": 0.0,
+          "energy": 0.0,
+          "gain": 1.6981666666666666,
+          "time": 0.0
+        }
+      }
+    },
+    "episodes": 4000,
+    "first_index": 0,
+    "return_mean": 1.9407291666666666,
+    "reward": {
+      "c_cov": 0.0,
+      "c_e": 0.0,
+      "c_t": 0.0,
+      "expected_availability": false,
+      "kind": "bytes",
+      "n_ref": 10.0
+    },
+    "stream": "ferrysim-heldout"
+  },
+  "kind": "chen_dqn",
+  "learner_revision": 0,
+  "network": {
+    "activation": "tanh",
+    "adam_beta1": 0.9,
+    "adam_beta2": 0.999,
+    "adam_eps": 1e-08,
+    "feature_dim": 10,
+    "gamma": 0.99,
+    "grad_clip": 10.0,
+    "hidden": [
+      64,
+      64
+    ],
+    "huber_delta": 1.0,
+    "lr": 0.0005,
+    "n_step": 1,
+    "target_sync": 500
+  },
+  "numpy": "1.26.4",
+  "purpose": "trained",
+  "reward": {
+    "c_cov": 0.0,
+    "c_e": 0.0,
+    "c_t": 0.0,
+    "expected_availability": true,
+    "kind": "bytes",
+    "n_ref": 10.0
+  },
+  "schema": {
+    "columns": [
+      "remaining",
+      "snr",
+      "reachable",
+      "dx",
+      "dy",
+      "distance",
+      "members",
+      "return_energy",
+      "energy_left",
+      "time_left"
+    ],
+    "declared_constant": [
+      "remaining",
+      "reachable"
+    ],
+    "dim": 10,
+    "length_scale_m": 100.0,
+    "snr_scale_db": 10.0,
+    "version": "e3_v1"
+  },
+  "seeds": {
+    "behaviour": "sha256('ferrysim-train-2|behaviour|<episode>')[:4] mod 2**31",
+    "init": 844198550,
+    "replay": 873073968,
+    "run": 2,
+    "train_stream": "ferrysim-train-2",
+    "val_first_index": 0,
+    "val_stream": "ferrysim-val"
+  },
+  "sha256": "41e0229e04b750ef8418a25d4e7c30653e84b17c3c00d4dd871cd6b964b7b8fa",
+  "trainer_commit": "5999e21f79f1dfb602e736368851b5154417209e",
+  "training": {
+    "outcome": {
+      "best_episode": 7000,
+      "episodes_run": 10000,
+      "stopped_early": false,
+      "transitions": 143636,
+      "updates": 142637
+    },
+    "spec": {
+      "cells": [
+        "jit-n6-75",
+        "jit-n6-150",
+        "jit-n12-90",
+        "jit-n12-180"
+      ],
+      "device_model": "equal",
+      "episodes": 10000,
+      "eval_every": 1000,
+      "family": "jittery",
+      "kind": "chen_dqn",
+      "learner": {
+        "batch": 64,
+        "behaviour": {
+          "decay_fraction": 0.5,
+          "epsilon_end": 0.05,
+          "epsilon_start": 1.0,
+          "reference_episodes": 0
+        },
+        "replay_capacity": 50000,
+        "warmup_transitions": 1000
+      },
+      "network": {
+        "activation": "tanh",
+        "adam_beta1": 0.9,
+        "adam_beta2": 0.999,
+        "adam_eps": 1e-08,
+        "gamma": 0.99,
+        "grad_clip": 10.0,
+        "hidden": [
+          64,
+          64
+        ],
+        "huber_delta": 1.0,
+        "lr": 0.0005,
+        "n_step": 1,
+        "target_sync": 500
+      },
+      "patience": 3,
+      "phase": true,
+      "reward": {
+        "c_cov": 0.0,
+        "c_e": 0.0,
+        "c_t": 0.0,
+        "expected_availability": true,
+        "kind": "bytes",
+        "n_ref": 10.0
+      },
+      "seed": 2,
+      "val_episodes": 200,
+      "validation_reward": {
+        "c_cov": 0.0,
+        "c_e": 0.0,
+        "c_t": 0.0,
+        "expected_availability": false,
+        "kind": "bytes",
+        "n_ref": 10.0
+      }
+    }
+  },
+  "validation": [
+    {
+      "cells": {
+        "jit-n12-180": 2.2666666666666666,
+        "jit-n12-90": 1.635,
+        "jit-n6-150": 2.1933333333333334,
+        "jit-n6-75": 1.6866666666666665
+      },
+      "episode": 1000,
+      "episodes": 200,
+      "loss_mean": 0.004546419585809792,
+      "score": 1.9454166666666666,
+      "train_return_mean": 1.8007368435951518,
+      "transitions": 14080,
+      "updates": 13081
+    },
+    {
+      "cells": {
+        "jit-n12-180": 2.27,
+        "jit-n12-90": 1.6566666666666665,
+        "jit-n6-150": 2.1866666666666665,
+        "jit-n6-75": 1.7233333333333332
+      },
+      "episode": 2000,
+      "episodes": 200,
+      "loss_mean": 0.002913768881132467,
+      "score": 1.9591666666666665,
+      "train_return_mean": 1.8426568821666909,
+      "transitions": 28091,
+      "updates": 27092
+    },
+    {
+      "cells": {
+        "jit-n12-180": 2.275,
+        "jit-n12-90": 1.6483333333333332,
+        "jit-n6-150": 2.183333333333333,
+        "jit-n6-75": 1.73
+      },
+      "episode": 3000,
+      "episodes": 200,
+      "loss_mean": 0.0027442725156018913,
+      "score": 1.9591666666666665,
+      "train_return_mean": 1.8701315586320006,
+      "transitions": 42320,
+      "updates": 41321
+    },
+    {
+      "cells": {
+        "jit-n12-180": 2.275,
+        "jit-n12-90": 1.67,
+        "jit-n6-150": 2.1866666666666665,
+        "jit-n6-75": 1.74
+      },
+      "episode": 4000,
+      "episodes": 200,
+      "loss_mean": 0.0026228749529002447,
+      "score": 1.9679166666666665,
+      "train_return_mean": 1.8928346657344375,
+      "transitions": 56581,
+      "updates": 55582
+    },
+    {
+      "cells": {
+        "jit-n12-180": 2.2666666666666666,
+        "jit-n12-90": 1.65,
+        "jit-n6-150": 2.2,
+        "jit-n6-75": 1.7466666666666666
+      },
+      "episode": 5000,
+      "episodes": 200,
+      "loss_mean": 0.0024568895351652423,
+      "score": 1.9658333333333333,
+      "train_return_mean": 1.911629291996192,
+      "transitions": 70906,
+      "updates": 69907
+    },
+    {
+      "cells": {
+        "jit-n12-180": 2.265,
+        "jit-n12-90": 1.653333333333333,
+        "jit-n6-150": 2.183333333333333,
+        "jit-n6-75": 1.73
+      },
+      "episode": 6000,
+      "episodes": 200,
+      "loss_mean": 0.0022054935364956866,
+      "score": 1.9579166666666665,
+      "train_return_mean": 1.963399988668442,
+      "transitions": 85648,
+      "updates": 84649
+    },
+    {
+      "cells": {
+        "jit-n12-180": 2.27,
+        "jit-n12-90": 1.6483333333333332,
+        "jit-n6-150": 2.1966666666666668,
+        "jit-n6-75": 1.7666666666666666
+      },
+      "episode": 7000,
+      "episodes": 200,
+      "loss_mean": 0.0020259670619246083,
+      "score": 1.9704166666666667,
+      "train_return_mean": 1.9396245711038618,
+      "transitions": 100134,
+      "updates": 99135
+    },
+    {
+      "cells": {
+        "jit-n12-180": 2.2716666666666665,
+        "jit-n12-90": 1.6416666666666666,
+        "jit-n6-150": 2.1866666666666665,
+        "jit-n6-75": 1.74
+      },
+      "episode": 8000,
+      "episodes": 200,
+      "loss_mean": 0.0018773870236328777,
+      "score": 1.96,
+      "train_return_mean": 1.9364016279391447,
+      "transitions": 114484,
+      "updates": 113485
+    },
+    {
+      "cells": {
+        "jit-n12-180": 2.2733333333333334,
+        "jit-n12-90": 1.62,
+        "jit-n6-150": 2.1866666666666665,
+        "jit-n6-75": 1.74
+      },
+      "episode": 9000,
+      "episodes": 200,
+      "loss_mean": 0.0018257739849396229,
+      "score": 1.955,
+      "train_return_mean": 1.9523770547724,
+      "transitions": 128999,
+      "updates": 128000
+    },
+    {
+      "cells": {
+        "jit-n12-180": 2.2816666666666667,
+        "jit-n12-90": 1.635,
+        "jit-n6-150": 2.19,
+        "jit-n6-75": 1.7333333333333332
+      },
+      "episode": 10000,
+      "episodes": 200,
+      "loss_mean": 0.0018144469917126772,
+      "score": 1.96,
+      "train_return_mean": 1.961286951553841,
+      "transitions": 143636,
+      "updates": 142637
+    }
+  ]
+}
