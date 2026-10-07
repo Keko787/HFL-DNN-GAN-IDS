@@ -261,8 +261,15 @@ sweep_gammas = [0.0, 0.25, 0.5, 0.75, 0.9, 0.99]   # Study 5.5
 sweep_seeds = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
 # Set from rl-sweep's verdict (launch.py report rl-sweep): the best gamma and
 # whether the learned score is kept (5.7's scores train only then).
-# gamma_star = 0.9
-# keep_learned = true
+# Study 5.5's verdict, 6 Oct 2026 (results/exp5/rl/s55/verdict.json, pre-registered):
+# FLAT. No gamma beat gamma = 0 by epsilon = 0.01 (gains 0.0015-0.0020; the best,
+# 0.75, Holm p 0.14); every gamma > 0 is equivalent within +-epsilon (TOST); the
+# best learned score (-0.0774) trails greedy_1 (-0.0716) and sits at FX's level
+# (-0.0786), so replace_fx is false: FX stays FeRRy's in-flight rule, the FQ arms
+# leave batch 2, 5.7's learned scores do not train, and M1 is not built.
+# gamma_star records the best gamma only.
+gamma_star = 0.75
+keep_learned = false
 
 [rl.val_episodes]             # validation episodes per family; the default (200) elsewhere
 jittery56 = 400
@@ -289,9 +296,11 @@ grid_seeds = [0, 1, 2]
 # repo-relative, results/exp5/checkpoints/<study>/<tag>/g<gamma>_s<seed>.npz.
 [rl.checkpoints]
 # main  = ""                  # FQ: the verdict's best gamma at its median-validation seed
-# best_tag = "g90"            # 5.5's stack check: the best gamma's tag (FQ-g<..>) ...
-# best  = ""                  # ... and its checkpoint (the same file as main)
-# g0    = ""                  # 5.5's stack check: gamma = 0 at its median-validation seed
+# Study 5.5's stack check (batch 2), from the verdict's stack_check: the best gamma
+# (0.75) at its median-validation seed (3), and gamma = 0 at its (5).
+best_tag = "g75"
+best  = "results/exp5/checkpoints/5.5-jittery56/g75/g0.75_s3.npz"
+g0    = "results/exp5/checkpoints/5.5-jittery56/g0/g0_s5.npz"
 # hand  = ""                  # 5.7: FQ-hand, FQ-dwell and FQ-cov at gamma_star
 # dwell = ""
 # cov   = ""
