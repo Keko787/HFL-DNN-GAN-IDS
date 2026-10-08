@@ -124,135 +124,93 @@ Decentralized learning, federated learning, UAV data mules, tactical edge comput
 \section{Introduction}
 \label{sec:introduction}
 
-Disaster response, wildfire monitoring, agricultural sensing, and tactical
-field operations increasingly depend on edge devices deployed where fixed
-network infrastructure is sparse, damaged, or unavailable. These devices
-capture observations that may be difficult or impossible to reproduce, such as
-sensor measurements from an isolated field site, imagery from damaged
-infrastructure, or telemetry from vehicles operating beyond cellular
-coverage~\cite{zeng2016wireless, song2022comprehensive}. Yet these are also the
-environments most likely to experience denied, disrupted, intermittent, and
-limited (DDIL) connectivity, where towers may lose power, backhaul may become
-congested, and terrain or distance may prevent persistent communication with a
-central server~\cite{gupta2015survey}.
+Disaster response, wildfire monitoring, agricultural sensing and tactical
+operations increasingly rely on edge devices deployed where fixed infrastructure
+is sparse, damaged or absent~\cite{zeng2016wireless, song2022comprehensive}.
+These are also the settings most prone to denied, disrupted, intermittent and
+limited (DDIL) connectivity~\cite{gupta2015survey}. Federated learning (FL) suits
+them, because devices exchange model updates rather than raw
+data~\cite{mcmahan2017communication, kostage2025hifins}, but it still needs every
+device to reach the server: when a device cannot, its update is lost, and rounds
+close short, time out, or fail to produce a usable model~\cite{li2020federated}.
+The gap is not faster FL communication but federation that continues when the
+network itself is fragmented.
 
-Federated learning (FL) is well suited to this setting because devices train on
-their local observations and exchange model updates instead of transferring raw
-datasets~\cite{mcmahan2017communication, kostage2025hifins}. However, reducing
-the amount of data transferred does not remove the need for connectivity. In a
-DDIL deployment, the practical bottleneck becomes \emph{reachability}: if a
-device cannot contact the federation server, its update cannot contribute to
-the global model. As connectivity deteriorates, rounds increasingly close with
-only a subset of participants, time out while waiting for unavailable clients,
-or fail to produce a usable model altogether~\cite{li2020federated}. The
-operational gap is therefore not simply making FL communication faster, but
-allowing federation to continue when the network graph itself becomes
-fragmented.
+UAVs acting as data mules can bridge disconnected regions by carrying model state
+between devices and servers~\cite{zhang2025latency, arsalaan2024uavs}, but a mule
+has limited flight time and energy, and a contact is useful only if an update is
+ready and the link can sustain the transfer when the mule arrives. Hierarchical
+FL, UAV-assisted FL, physical model transport, RF-adaptive networking and client
+selection each address part of this problem~\cite{liu2020client, lin2023delay,
+parasnis2023connectivity, yemini2023robust, mestoukirdi2022uav, bian2025indirect,
+wang2018deep, cui2019multi, nishio2019client, lai2021oort}, but they retain
+persistent reachability, stationary aggregation, or a communication setting that
+the mobility decision does not control.
 
-Autonomous UAVs acting as data mules offer a way to bridge these disconnected
-regions by physically carrying model state between edge devices and aggregation
-servers~\cite{zhang2025latency, arsalaan2024uavs}. Doing so, however, introduces
-a coordination problem beyond conventional FL. A mule has limited flight time
-and energy, so it cannot necessarily visit every device. A useful contact also
-depends on whether an update is ready and whether the wireless link can sustain
-the transfer when the mule arrives. Existing hierarchical FL, UAV-assisted FL,
-physical model transport, RF-adaptive networking, and adaptive client selection
-address parts of this problem~\cite{liu2020client, lin2023delay,
-parasnis2023connectivity, yemini2023robust, zhang2025latency,
-mestoukirdi2022uav, bian2025indirect, wang2018deep, cui2019multi,
-nishio2019client, lai2021oort}, but they generally retain persistent
-reachability, stationary aggregation, or a fixed communication setting that the
-mobility decision does not control. A courier-based federation instead requires
-these decisions to work together under a finite mission budget.
+We present \sysname{}, a Federated RF-aware Routing framework whose central
+observation is that a mule's radio reach is itself a decision. A contact band
+with a narrower occupied bandwidth reaches farther at a lower rate: it can serve
+a whole field from one stop at the cost of a longer dwell, whereas a wide band
+serves each device quickly but only from nearby, so the mule spends most of its
+mission in transit. Which trade wins depends on how many devices need service,
+where they are and how much time remains, so \sysname{} chooses the band class
+and the route together, before each flight.
 
-In this paper, we present \sysname{}, a Federated RF-aware Routing framework that
-sustains federated learning across persistently disconnected regions by flying
-UAV data mules between edge devices and an edge server. Its central observation
-is that a mule's radio reach is itself a decision. A contact band with a
-narrower occupied bandwidth reaches farther at a lower rate: it can serve a
-whole field from a single stop at the cost of a longer dwell, whereas a wide
-band serves each device quickly but only from nearby, so the mule spends most
-of its mission flying between stops. Which trade is better depends on how many
-devices need service, where they are, and how much mission time remains, so
-\sysname{} chooses the band class and the route together, before each flight,
-under the mission budget.
+\sysname{} decides on two clocks. On the \emph{plan clock}, at the dock, it
+searches band classes and routes under one feasibility test of per-device
+deadlines and the mission budget, and commits the plan that serves the most
+coverage weight, a weight that grows with the missions since a device last
+contributed. On the \emph{flight clock}, a per-stop rule can use the observed
+channel to pick a faster band or reorder the remaining stops, and the mule
+re-plans when the channel has used up the plan's slack. Updates are merged on
+the mule with staleness weights and across mules at the server, so rounds close
+with what arrives. We evaluate three variants: F commits the plan, FX adds a
+fixed per-stop rule, and FQ a learned one.
 
-\sysname{} organizes its decisions by when they are made. On the \emph{plan
-clock}, at the dock, the mule clusters the devices that need service at each
-band class's range, searches routes that pass a single feasibility test (every
-stop meets its devices' deadlines, and the mule lands and uploads within the
-budget), and commits the plan that serves the most coverage weight, a weight
-that grows with the number of missions since a device last contributed. On the
-\emph{flight clock}, at each stop, the same test gates a per-stop rule that can
-use the realized channel to pick a faster band or reorder the remaining stops,
-and the mule re-plans the remainder when the channel has used up the plan's
-slack. Updates are merged on the mule with weights that discount stale ones,
-and across mules at the server, so rounds close with the updates that arrive
-instead of waiting on an unreachable device. Learning can enter in one place, a
-learned per-stop score, and the hard gates always run before it. We evaluate
-three variants that share the plan: F commits it in flight, FX adds the fixed
-per-stop rule, and FQ the learned score.
-
-We implement \sysname{} as a prototype in which the server, each mule and each
-device are separate processes that exchange messages over TCP and the devices
-train a real intrusion-detection model on CICIoT2023~\cite{CiCIoT2023}, with
-mission time, the radio channel and energy simulated. We compare it with seven
-whole schedulers, our earlier staged heuristic and six drawn from the
-age-of-information, client-selection, UAV-learning and model-transport
-literature, on paired seeds and under an analysis plan fixed before the studies
-ran. With six devices, one mule and a moderate mission budget, \sysname{}
-reaches the target accuracy 27--31\% sooner than each of the seven baselines. The gain comes from shorter rounds, not
-fewer: \sysname{}'s plan chooses the long-reach narrow band in 89\% of missions
-and cuts the transit between stops from about 140\,s to 15\,s, and pinned to
-the wide band it is no faster than FedEx's route. Under tight budgets it keeps
-updates fresher than age-of-information and Whittle-index schedulers, and
-without its coverage term the share of rounds that close at twelve devices
-falls from 99\% to 74\%.
-Several design elements show no measurable effect at our settings, and we
-report them as such. Among them is learning: FQ performs like F and FX, so the
-learned score adds nothing to the fixed rule. In an exploratory comparison,
-however, FQ reaches the target 36\% sooner than a learned scheduler that has no
-plan, which locates the gain in the plan rather than in learning. We also measure
-where \sysname{} falls short: it plans on the mean channel, so it overruns a
-tight budget in 30\% of missions, and it does not price training time, so it
-becomes less reliable than simpler baselines when devices need time to train.
+In a multi-process prototype that trains a real intrusion-detection model on
+CICIoT2023~\cite{CiCIoT2023}, with mission time, the channel and energy
+simulated, we compare \sysname{} with seven whole schedulers under a
+pre-registered analysis plan. With six devices and one mule, it reaches the
+target accuracy 27--31\% sooner than each, because its plan chooses the
+long-reach narrow band and cuts the transit between stops from about 140\,s to
+15\,s; pinned to the wide band, it is no faster than FedEx's route. Under tight
+budgets it keeps updates fresher than age-of-information schedulers. Learning
+adds nothing to the fixed per-stop rule, and an exploratory comparison locates
+the gain in the plan: inside it, the learned score reaches the target 36\%
+sooner than a learned scheduler without one. We also report \sysname{}'s limits:
+its plan prices the mean channel, so it overruns tight budgets in 30\% of
+missions, and it does not price training time.
 
 The contributions of this paper are:
 
 \begin{itemize}
 
-\item \textbf{Reach as a mission decision.} We formulate model transport by
-data mules so that the contact band class, which sets how far a mule reaches
-and how fast it transfers, is chosen jointly with the route under a mission
-budget, and we give a planner that searches both under one feasibility test.
+\item \textbf{Reach as a mission decision.} We treat the contact band class,
+which sets how far a mule reaches and how fast it transfers, as a decision made
+jointly with the route under a mission budget, and give a planner that searches
+both under one feasibility test.
 
-\item \textbf{A two-clock design with bounded learning.} The same feasibility
-test gates a dock-time plan and an in-flight per-stop decision, with per-device
-deadline windows that adapt to contact outcomes, a coverage weight and age cap
-that keep devices from being starved, and staleness-weighted merges on the mule
-and at the server. A learned component can rank only the options the gates
-admit.
+\item \textbf{A two-clock design with bounded learning.} The same test gates a
+dock-time plan and in-flight per-stop decisions, with adaptive per-device
+deadlines, a coverage weight and age cap against starvation, and
+staleness-weighted merges; learning ranks only what the gates admit.
 
-\item \textbf{A prototype and a simulator built from the same code.} The
-multi-process prototype trains a real model at every contact, and FerrySim runs
-the same planner, flight slot and channel in-process, to train learned
-components and to plan for up to 96 devices.
+\item \textbf{A prototype and a simulator built from the same code.} A
+multi-process prototype that trains a real model, and FerrySim, which trains the
+learned components and plans for up to 96 devices.
 
-\item \textbf{A pre-registered comparison with the state of the art.} We test
-\sysname{} against seven whole schedulers with paired seeds and multiplicity
-correction, and report where it wins, why (its band choice), which parts of its
-design have no measurable effect, and where it falls short.
+\item \textbf{A pre-registered comparison with the state of the art.} Against
+seven whole schedulers, on paired seeds with multiplicity correction, we report
+where \sysname{} wins, why, which parts of its design have no measurable effect,
+and where it falls short.
 
 \end{itemize}
 
-The remainder of this paper is organized as follows.
-Section~\ref{sec:related_works} reviews related work.
-Section~\ref{sec:method} presents \sysname{}'s design: the quantities each
-layer supplies, the feasibility test, the two decision clocks, and aggregation.
-Section~\ref{sec:setup} describes the experimental setup and the design of
-each study, Section~\ref{sec:results} reports and discusses the results
-against the state of the art, and Section~\ref{sec:conclusion} concludes
-and outlines future work.
+Section~\ref{sec:related_works} reviews related work,
+Section~\ref{sec:method} presents \sysname{}'s design,
+Section~\ref{sec:setup} the experimental setup and design,
+Section~\ref{sec:results} the results, and Section~\ref{sec:conclusion}
+concludes.
 
 \definecolor{goodgreen}{RGB}{178,210,150}
 \definecolor{ferrygreen}{RGB}{105,160,90}
