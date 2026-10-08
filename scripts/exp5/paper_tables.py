@@ -170,7 +170,7 @@ def headline_table() -> str:
              r"reach rate in brackets when below 1. " + DAG + r" significantly slower than F "
              r"(paired bootstrap CI excludes 0, Holm $p<0.05$). " + SECT + r"FQ flew the "
              r"$K=1$ cells after the pre-registered study, on the same seeds; its exploratory "
-             r"comparisons (Section~\ref{sec:res:rl}) find it no different from F or FX. "
+             r"comparisons find it no different from F or FX. "
              r"D4 flies its whole tour whatever the budget, so its two budget columns "
              r"coincide.}",
              r"\label{tab:exp5_headline}",
@@ -445,7 +445,7 @@ def claims_table() -> str:
               r"Time to $\tau$ is averaged over the seeds in which both arms reach $\tau$; a row "
               r"that compares fewer seeds than its study's others says how many. The backhaul "
               r"row flies the time-varying backhaul, whose adaptive controller sees the SNR "
-              r"that decides each upload's loss (Section~\ref{sec:method:l1}).",
+              r"that decides each upload's loss.",
               rf"C4 in FerrySim (Study~5.5, pre-registered; 60 trainings, six $\gamma$ from 0 to "
               rf"0.99): {v['outcome']}, no $\gamma$ beats $\gamma=0$ by "
               rf"$\epsilon={v['epsilon']:g}$; held-out return, best learned ${best:.4f}$, FX "
@@ -479,7 +479,7 @@ def robustness_table() -> str:
              r"to $\tau$ (s), reach rate in brackets when below 1; notation as in "
              r"Table~\ref{tab:exp5_headline}. Means are over trials that reach $\tau$: under "
              r"training time F reaches it in fewer trials. Study~5.15's cells, its default "
-             r"included, fly the time-varying backhaul (Section~\ref{sec:method:l1}), so its "
+             r"included, fly the time-varying backhaul, so its "
              r"default is not the main configuration of Table~\ref{tab:exp5_headline}.}",
              r"\label{tab:exp5_robust}",
              r"\small",
