@@ -409,12 +409,10 @@ edge server. This section describes what the mule decides, when it decides it,
 and which quantities each decision uses. We organize the description by
 \emph{decision clock} rather than by layer, because the two decisions that
 determine most of the behavior of the system each span the radio, scheduling,
-and learning layers. Section~\ref{sec:method:roles} fixes the setting and the
-role of each layer, Section~\ref{sec:method:models} defines the quantities that
-the layers supply, Sections~\ref{sec:method:gate}--\ref{sec:method:flight}
-define the shared feasibility test and the two decision clocks, and
-Section~\ref{sec:method:merge} defines aggregation. Section~\ref{sec:method:alg}
-gives the complete mission round, its cost, and the implementation.
+and learning layers. We first fix the setting and the role of each layer, then
+define the quantities the layers supply, the shared feasibility test, the two
+decision clocks, and aggregation, and close with the complete mission round,
+its cost, and the implementation.
 
 % -----------------------------------------------------------------------------
 \subsection{Setting, Layer Roles, and Decision Clocks}
@@ -431,19 +429,19 @@ and pulls the device's prepared update. A \emph{mission} has two passes. In
 and docks to upload the merged result. The server merges across mules and
 produces the next global model. In \textsc{Pass 2} the mule delivers that model
 to every device in its slice. Delivering a known model version in Pass~2 is what
-gives each collected update an observable basis version, and therefore an age
-(Section~\ref{sec:method:models}). Each mission has a time budget
+gives each collected update an observable basis version, and therefore an age.
+Each mission has a time budget
 $T_{\mathrm{miss}}$ for Pass~1: the plan and every check in flight require the
 predicted landing and upload to fall within $T_{\mathrm{miss}}$ of takeoff. The
-prediction prices the mean channel, so a realized mission can overrun
-(Section~\ref{sec:method:gate}). Pass~2 is not budgeted.
+prediction prices the mean channel, so a realized mission can overrun.
+Pass~2 is not budgeted.
 
 \paragraph{Several mules}
 With $K>1$ mules, the server cuts the field into $K$ contiguous sectors by angle
 around the dock, starting after the widest empty arc, with slice sizes that
 differ by at most one device. Every mule starts at the shared dock, and the mules
 fly concurrently. Each mule plans and flies its own slice, and the server folds
-the uploads in simulated-time order (Section~\ref{sec:method:merge}). Queueing at
+the uploads in simulated-time order. Queueing at
 the dock is not modelled.
 
 \paragraph{Learning task}
@@ -461,18 +459,17 @@ or, at no simulated cost, inside a Pass-1 contact at which it holds no prepared
 update (its first contact, or one after a missed delivery). After each round
 closes, the server evaluates the global model on the test set, stamped at the
 simulated time the closing upload completed, before Pass~2 delivers the model;
-the accuracy at a 0.5 threshold is the quantity the target $\tau$ refers to
-(Section~\ref{sec:setup:cells}). The model occupies 18.8~KB; to represent a
-larger model, every transfer is priced as if it held $S=1$~MB
-(Section~\ref{sec:method:l1}).
+the accuracy at a 0.5 threshold is the quantity the accuracy target $\tau$
+refers to. The model occupies 18.8~KB; to represent a larger model, every
+transfer is priced as if it held $S=1$~MB.
 
 \paragraph{What the layers contribute}
 Table~\ref{tab:layer-roles} states the role of each layer in the decisions
 below. The radio layer prices a link; it does not choose among devices. The
 scheduling layer makes every route and band decision. The learning layer
 supplies the value of a collected update and the cost of an uncollected one.
-Hard gates (eligibility, the feasibility test of
-Section~\ref{sec:method:gate}, and the age cap) always run before any ranking
+Hard gates (eligibility, the feasibility test defined below, and the age cap)
+always run before any ranking
 step, so a ranking rule, learned or not, only chooses among options that the
 gates have admitted.
 
@@ -544,7 +541,7 @@ flight.}
 \paragraph{What is learned}
 Every decision on both clocks is made by a rule or a search over a declared
 score. Learning can enter in one place only: a learned pair score can occupy the
-flight slot in place of the fixed rule (Section~\ref{sec:method:flight}). We
+flight slot in place of the fixed rule. We
 therefore describe the design as a set of coupled decisions, and treat learning
 as one optional way to fill one of them.
 
@@ -673,7 +670,7 @@ the jittery regime), drawn per upload from a seeded stream. A lost upload is not
 retried: its updates are discarded, the server returns the unchanged model,
 which Pass~2 delivers, and the planner, which records the devices as merged
 before the upload, still counts them as served. Study~5.14's backhaul test and
-every cell of Study~5.15 (Section~\ref{sec:setup:design}) use a time-varying
+every cell of Study~5.15 use a time-varying
 backhaul instead: carrier $c$'s SNR at the upload time $t$ is
 $6+g(c)+5\sin\bigl(2\pi(t/P_{\mathrm{bh}}+\phi_c)\bigr)+1.5\,\xi_c(t)$~dB, with
 $P_{\mathrm{bh}}=4\Tnom$, and an upload is lost with probability
@@ -708,8 +705,8 @@ is recorded as a timeout. Host load could therefore change an outcome; at 0.75,
 
 \paragraph{Device training time}
 By default local training costs no simulated time, so an update is always ready
-when the mule arrives. To study compute heterogeneity
-(Section~\ref{sec:res:robust}), a device can instead take
+when the mule arrives. To study compute heterogeneity, a device can instead
+take
 $T_j=\tilde{T}\,e^{\sigma z_j}$ to train, with median $\tilde{T}$, $\sigma=0.5$,
 and $z_j$ a keyed standard normal draw; a fixed share of the devices can be made
 stragglers whose time is multiplied by a factor. A device's first fit starts at
@@ -757,7 +754,7 @@ $U_j$ whose merge last used an update from $j$ ($U_j=0$ if none). A high plan ag
 strengthens a device's claim to be served. The \emph{merge age} of an update is
 $a_i=v-b_i$, the version $v$ of the global model the mule carries minus the
 version $b_i$ of the model the device trained from; it is measured in cluster
-rounds and discounts the update's weight (Section~\ref{sec:method:merge}). The
+rounds and discounts the update's weight in the merge. The
 device echoes the basis version with its update, so the mule can compute the age
 without holding old models.
 
@@ -785,7 +782,7 @@ members are all capped is exempt from its deadline clause but not from the
 budget. Any stop with a capped member is flown first when a route is
 trimmed. A capped device that its cluster stop cannot serve alone within the
 budget is offered a one-device \emph{hover stop} on the segment from the dock to
-the device. And the plan key of Section~\ref{sec:method:plan} compares the ages
+the device. And the plan key, defined below, compares the ages
 of the capped devices that a plan leaves out before it compares anything else.
 
 % -----------------------------------------------------------------------------
@@ -795,7 +792,7 @@ of the capped devices that a plan leaves out before it compares anything else.
 One predicate decides whether a stop may be served next, and it is the only
 admission rule in the plan-mode system. It is applied to the committed plan,
 inside the plan search, at every departure, inside the re-plan, and to the
-in-flight choices of Section~\ref{sec:method:flight}. For a stop $s$ with member set $\mathcal{M}_s$, reached
+in-flight choices of the flight clock. For a stop $s$ with member set $\mathcal{M}_s$, reached
 from a state (pose, clock $c$, energy) on band $b$,
 \begin{align}
 t_{\mathrm{arr}} &= c+\|\mathrm{pose}-s\|/v,\\
@@ -815,10 +812,9 @@ evaluated configuration.) Every clause is monotone in the member set: dwell is a
 sum of non-negative terms, and arrival, return and upload do not depend on the
 members. This allows a stop that fails whole to be reduced to the members that
 fit in one pass. The test prices the mean SNR, so it can admit a stop that the
-realized channel then lengthens; the departure check described in
-Section~\ref{sec:method:flight} catches this after the stop. Nothing re-checks
-after the last Pass-1 stop, so a realized mission can overrun the budget;
-Section~\ref{sec:res:robust} measures how often.
+realized channel then lengthens; the departure check on the flight clock
+catches this after the stop. Nothing re-checks after the last Pass-1 stop, so a
+realized mission can overrun the budget.
 
 % -----------------------------------------------------------------------------
 \subsection{Plan Clock: Reach and Route}
@@ -845,7 +841,7 @@ the planner prices every class and commits the best.
 
 \paragraph{Route search}
 For each class, candidate routes are generated and passed through the
-feasibility test of Section~\ref{sec:method:gate}, with each stop checked from
+feasibility test, with each stop checked from
 the state the previous stop leaves. The search depends on the problem size:
 \begin{itemize}
 \item \textsf{exact}, for at most six demanded devices: every ordered sequence of stops, each reduced to every non-empty member subset, pruning any failing prefix and any superset of a failing member set. It is optimal over the member subsets that the score prices.
@@ -942,14 +938,13 @@ arrival in four. The score is a masked pointer double DQN (two hidden layers of
 64 units) over a 36-feature row per admitted pair, which includes the SNR now,
 the dwell, the next stop's mean SNR per class, deadline slack, plan ages, the
 clock and energy left, and the arrival's phase in the interference cycle. It is
-trained in FerrySim (Section~\ref{sec:method:alg}) on a per-decision reward, the
+trained in FerrySim (described below) on a per-decision reward, the
 merge weight collected at the stop less a time cost, with the weighted shortfall
 of the devices the plan committed to charged at the end of each sortie that
 flew a stop ($c_t=0.1$, $c_{\mathrm{cov}}=1$, hand-set); in training, a targeted
 device is credited at its reliability $\rho_j$ rather than the realized draw. We
 call \sysname{} with this filling FQ. FQ thus picks its next stop before
 serving, from the priced dwell, and FX after serving, from the realized clock.
-Section~\ref{sec:res:rl} compares them.
 
 \paragraph{Departure check and re-plan}
 After serving a stop, the mule folds the remaining queue through the feasibility
@@ -1077,14 +1072,13 @@ per class, so planning cost does not depend on wall time. On the flight clock,
 each arrival evaluates at most $|\mathcal{B}|\times|\text{queue}|$ pairs, each
 with one fold of the feasibility test. The merge on the mule is linear in the
 number of collected updates, and the merge at the server is linear in the number
-of mules. Section~\ref{sec:res:scale} measures the planner's wall time from
-$N=6$ to $N=96$.
+of mules.
 
 \paragraph{Implementation and scope}
 The prototype is a Python implementation in which the server, each mule, and
 each device run as separate processes that exchange messages over TCP, and
-devices train the real model (Section~\ref{sec:method:roles}). Mission time and
-energy come from the simulated clock of Section~\ref{sec:method:l1}, and the
+devices train the real model. Mission time and energy come from the simulated
+clock above, and the
 radio quantities are simulated from the models above; none is a measured value
 from the physical testbed. Updates carry integrity checks (round, size and a
 SHA-256 checksum) but no authentication; device authentication,
@@ -1103,7 +1097,7 @@ the same planner, flight slot, feasibility test, channel and mission clock, but
 connects them by synchronous in-process links instead of TCP. It omits model
 training: each device returns the global model plus small Gaussian noise, so an
 episode (one four-mission trial) measures scheduling, not learning. An episode
-is scored by the reward of Section~\ref{sec:method:flight} (E3's by the share of
+is scored by FQ's training reward (E3's by the share of
 devices collected), and training, validation and held-out episodes come from
 separate seed streams. FerrySim also differs from the full system in these
 ways: it flies one mule; its cells use an additive deadline law, no merge
@@ -1117,11 +1111,11 @@ budgets from their own pilot, so FerrySim's $N=24$ is not the full system's.
 \subsection{Testbed}
 \label{sec:setup:testbed}
 
-Every trial runs the full system of Section~\ref{sec:method}: the server, each
+Every trial runs the full system described above: the server, each
 mule, and each device are separate processes that exchange messages over TCP,
 and the devices train the real intrusion-detection model on CICIoT2023.
 Mission time, the radio channel, and energy come from the simulated clock and
-channel of Section~\ref{sec:method:l1}, in the interference-limited (jittery)
+channel described above, in the interference-limited (jittery)
 regime. A trial flies four missions with a 1~MB model payload and records every
 event, from which a separate scorer computes the metrics. The learned per-stop
 score and the learned baseline E3 are trained in FerrySim, which also runs the
@@ -1134,25 +1128,22 @@ A cell fixes the number of devices $N$, the number of mules $K$, and the mission
 budget. Devices are static and placed uniformly at random on a $200\times200$~m
 square centred on the dock, a new layout per trial; the square is the same at
 every $N$, so the field grows denser as $N$ grows (FerrySim's scale cells grow
-it instead, Section~\ref{sec:method:alg}). We evaluate $N\in\{6,12,24\}$ devices with one mule, and up to three
+it instead). We evaluate $N\in\{6,12,24\}$ devices with one mule, and up to three
 mules at $N=12$ and $18$. Each $N$ has two mission budgets, set by pilots before
 the studies ran. The \emph{knee} is the smallest budget whose mean update yield
 reaches 95\% of the best on a budget grid (150, 180 and 262\,s at $N=6$, 12 and
 24), and the \emph{stress} budget is half of it. The accuracy target
 $\tau=0.71$ is the largest value, on a 0.01 grid, that at least 80\% of the
 baseline H1's trials reach at every $N$'s knee. It lies 4.3 points above the
-0.667 that labelling every test flow benign would score
-(Section~\ref{sec:method:roles}), so time to $\tau$ measures how soon a model
+0.667 that labelling every test flow benign would score, so time to $\tau$ measures how soon a model
 becomes useful, not how good it ends; Table~\ref{tab:exp5_headline} also reports
-F's and H0's final accuracy. The age cap is $S=2$
-(Section~\ref{sec:method:demand}).
+F's and H0's final accuracy. The age cap is $S=2$.
 
 \subsection{Arms}
 \label{sec:setup:arms}
 
 Table~\ref{tab:exp5_arms} lists the arms. \sysname{} has three, which share the
-dock-time plan and differ only in how they fill the flight slot of
-Section~\ref{sec:method:flight}: F leaves it empty and flies the plan as
+dock-time plan and differ only in how they fill the flight slot: F leaves it empty and flies the plan as
 committed, FX fills it with the fixed cross-layer rule, and FQ with the learned
 pair score. Every baseline is a whole scheduler,
 flown in the same simulator, at the same budgets, on the same seeds, and on the
@@ -1238,7 +1229,7 @@ three mules, at the knee and stress budgets, and compares each baseline with F o
 time to $\tau$. H0, which has no mule, flies one cell over the live link and is
 described rather than tested. FQ joined the one-mule cells after Study~5.5's
 verdict (Q5), on the same seeds; its comparisons form their own exploratory
-family (Section~\ref{sec:res:sota}).
+family.
 
 \paragraph{Q2: Where does the advantage come from?}
 From 5.3's traces we split each arm's mission time into transit between stops,
@@ -1246,7 +1237,7 @@ dwell, and the return, upload and dock turnaround. Study~5.4 pins F to each band
 the 1~MB payload and with the measured 18.8~KB one; its primary metric is the
 network age of updates. In FerrySim, an exhaustive oracle over band class,
 clustering, route and per-stop band measures how far F's plan is from the best
-plan (Section~\ref{sec:res:mechanism}).
+plan.
 
 \paragraph{Q3: How does it scale, and what does deciding cost?}
 Study~5.9 grows the field to $N=12$ and $24$ with one mule and flies F, FX, H1,
@@ -1255,13 +1246,11 @@ on the same seeds, in Study~5.5's stack check. Study~5.11 measures (a) the
 planner's wall time per plan from $N=6$ to $96$ in FerrySim, run alone on the
 host; (b) one to three mules at $N=12$, and six devices per mule up to $N=18$
 with three mules; and (c) FerrySim budget sweeps at $N=24$, 48 and 96, whose
-knees set the budgets at which we report the share of devices served
-(Section~\ref{sec:res:scale}).
+knees set the budgets at which we report the share of devices served.
 
 \paragraph{Q4: Does each part of the design matter?}
 We test five claims about the design, each against an alternative that removes
-or replaces one part of it, on the claim's own metric
-(Section~\ref{sec:res:claims}). C1, reach is a decision: F pinned to one band
+or replaces one part of it, on the claim's own metric. C1, reach is a decision: F pinned to one band
 class (Study~5.4). C2, one derived objective: FX without its coverage term or
 its dwell term, at $N=12$, on the round-close rate (Study~5.7). C3, one deadline
 in three roles: plain averaging, FedBuff~\cite{nguyen2022federated},
@@ -1276,10 +1265,10 @@ over four missions, on the age of updates (Study~5.8). Study~5.14 also flips one
 component of F at a time, with 40 trials per cell: whole stops only, the local
 search only, a weighted coverage rank, the age cap raised or removed, no hover
 stops, and the adaptive backhaul (F+L1) against the fixed carrier, both on the
-time-varying backhaul of Section~\ref{sec:method:l1}.
+time-varying backhaul.
 
 \paragraph{Q5: Does learning help inside the plan?}
-Study~5.5 trains the learned pair score of Section~\ref{sec:method:flight} in
+Study~5.5 trains FQ's learned pair score in
 FerrySim at six discount factors ($\gamma\in\{0, 0.25, 0.5, 0.75, 0.9, 0.99\}$),
 ten seeds each, and evaluates the median-validation seed of each on 1000
 held-out episodes per cell, against FX and a one-step greedy rule. The learned
@@ -1288,11 +1277,10 @@ held-out return. Its stack check then flies FQ with the chosen $\gamma$ (and
 with $\gamma=0$) against FX and F in the full system at $N=12$. After that
 verdict, an exploratory comparison, not pre-registered, flies FQ in 5.3's
 one-mule cells against E3, F, FX and D4, Holm-corrected across its eight
-comparisons (Section~\ref{sec:res:rl}).
+comparisons.
 
 \paragraph{Q6: How robust is it?}
-At the knee budget, three studies each change one condition
-(Section~\ref{sec:res:robust}). Study~5.12 gives each device a training time,
+At the knee budget, three studies each change one condition. Study~5.12 gives each device a training time,
 log-normal with median 68\,s and $\sigma=0.5$ (the median set by a pilot), and
 in a second cell makes 20\% of the devices five times slower (arms F, FX, H1,
 D4, D5). Study~5.13 splits the data across devices by a Dirichlet draw
@@ -1300,8 +1288,7 @@ D4, D5). Study~5.13 splits the data across devices by a Dirichlet draw
 varies the channel one axis at a time from the jittery default: the
 interference amplitude (1 and 17\,dB, against 5), the path-loss exponent (2.7,
 against 2.2), and the shadowing (8\,dB, against 4) (F, FX, H1). Its cells, the
-default included, fly the time-varying backhaul of
-Section~\ref{sec:method:l1}, so its default cell is not the main
+default included, fly the time-varying backhaul, so its default cell is not the main
 configuration.
 
 \paragraph{What was run}
@@ -1344,7 +1331,7 @@ against F's 3.5 updates and 0.831.
 
 \begin{table}[t]
 \centering
-\caption{Whole-scheduler comparison at $N=6$ (Study~5.3): mean simulated time to $\tau=0.71$ in seconds (lower is better), 20 paired trials per cell; reach rate in brackets when below 1. $^{\dagger}$ significantly slower than F (paired bootstrap CI excludes 0, Holm $p<0.05$). $^{\S}$FQ flew the $K=1$ cells after the pre-registered study, on the same seeds; its exploratory comparisons (Section~\ref{sec:res:rl}) find it no different from F or FX. D4 flies its whole tour whatever the budget, so its two budget columns coincide.}
+\caption{Whole-scheduler comparison at $N=6$ (Study~5.3): mean simulated time to $\tau=0.71$ in seconds (lower is better), 20 paired trials per cell; reach rate in brackets when below 1. $^{\dagger}$ significantly slower than F (paired bootstrap CI excludes 0, Holm $p<0.05$). $^{\S}$FQ flew the $K=1$ cells after the pre-registered study, on the same seeds; its exploratory comparisons find it no different from F or FX. D4 flies its whole tour whatever the budget, so its two budget columns coincide.}
 \label{tab:exp5_headline}
 \resizebox{\columnwidth}{!}{%
 \begin{tabular}{l rr rr}
@@ -1468,12 +1455,10 @@ term keeps rounds closing: without it, the round-close rate falls from 99\% to
 stress budget: its network age of updates is 0.78 missions, against 1.06 for
 MAX-AoI and 1.07 for Cui's Whittle index, and 1.10 without the coverage term
 (C5). On the time-varying backhaul, the adaptive controller lowers it from
-0.88 to 0.69. That controller observes the SNR that decides each upload's loss
-(Section~\ref{sec:method:l1}), so this is close to the most that adapting the
+0.88 to 0.69. That controller observes the SNR that decides each upload's loss, so this is close to the most that adapting the
 backhaul can give. Several parts of the
 design show no measurable effect at these settings, and we report them as such.
-Pinning the band does not change the age of updates (its effect is on time,
-Section~\ref{sec:res:mechanism}). The dwell term and the age cap change nothing
+Pinning the band does not change the age of updates (its effect is on time). The dwell term and the age cap change nothing
 over four missions. The merge rules tie: with every device served in Pass~2,
 collected updates almost always have merge age zero, so the age weighting
 rarely acts; FedBuff's buffering slows learning, and FedProx is not
@@ -1524,7 +1509,7 @@ stress budget), but not significantly.
 }
 \par\smallskip
 \begin{minipage}{\textwidth}\footnotesize
-Time to $\tau$ is averaged over the seeds in which both arms reach $\tau$; a row that compares fewer seeds than its study's others says how many. The backhaul row flies the time-varying backhaul, whose adaptive controller sees the SNR that decides each upload's loss (Section~\ref{sec:method:l1}).
+Time to $\tau$ is averaged over the seeds in which both arms reach $\tau$; a row that compares fewer seeds than its study's others says how many. The backhaul row flies the time-varying backhaul, whose adaptive controller sees the SNR that decides each upload's loss.
 C4 in FerrySim (Study~5.5, pre-registered; 60 trainings, six $\gamma$ from 0 to 0.99): flat, no $\gamma$ beats $\gamma=0$ by $\epsilon=0.01$; held-out return, best learned $-0.0774$, FX $-0.0786$, greedy-1 $-0.0716$.
 C1 optimality: against an exhaustive oracle (O1) over band class, clustering, route and per-stop band, F's plan serves the same share of devices at the knee (gap 0.00) and 0.04 less at the stress budget.
 \end{minipage}
@@ -1539,7 +1524,7 @@ indistinguishable from FX at $N=12$ (C4 in Table~\ref{tab:exp5_claims}), as it i
 from F and FX at $N=6$ (Table~\ref{tab:exp5_headline}). FX is therefore FeRRy's
 per-stop rule, and the null is reported here. The two do not decide on the
 same information: FQ picks its next stop on arrival, from the priced dwell, and
-FX after serving, from the realized clock (Section~\ref{sec:method:flight}), so
+FX after serving, from the realized clock, so
 the comparison is of two rules, not of two rankings over the same choice.
 
 \paragraph{Learning inside the plan, against learning without one}
@@ -1599,7 +1584,7 @@ Adding a compute term to the plan is future work.
 
 \begin{table*}[t]
 \centering
-\caption{Robustness at $N=6$, the knee budget: device training time (Study~5.12; median 68\,s, and with 20\% of devices $5\times$ slower), non-IID data (Study~5.13, Dirichlet $\alpha=0.1$) and harsher channels (Study~5.15). Mean time to $\tau$ (s), reach rate in brackets when below 1; notation as in Table~\ref{tab:exp5_headline}. Means are over trials that reach $\tau$: under training time F reaches it in fewer trials. Study~5.15's cells, its default included, fly the time-varying backhaul (Section~\ref{sec:method:l1}), so its default is not the main configuration of Table~\ref{tab:exp5_headline}.}
+\caption{Robustness at $N=6$, the knee budget: device training time (Study~5.12; median 68\,s, and with 20\% of devices $5\times$ slower), non-IID data (Study~5.13, Dirichlet $\alpha=0.1$) and harsher channels (Study~5.15). Mean time to $\tau$ (s), reach rate in brackets when below 1; notation as in Table~\ref{tab:exp5_headline}. Means are over trials that reach $\tau$: under training time F reaches it in fewer trials. Study~5.15's cells, its default included, fly the time-varying backhaul, so its default is not the main configuration of Table~\ref{tab:exp5_headline}.}
 \label{tab:exp5_robust}
 \small
 \begin{tabular}{l rr r rrrr}
