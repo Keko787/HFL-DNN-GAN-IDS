@@ -160,27 +160,42 @@ HEADLINE_CELLS = [("n6k1_knee", "knee"), ("n6k1_stress", "stress"),
                   ("n6k3_knee", "knee"), ("n6k3_stress", "stress")]
 
 
+def stress_budget_cells(variant: str, stage: str = "batch2") -> Tuple[str, str]:
+    """(share of missions that overran the stress budget, updates merged per round)
+    at N = 6 with one mule, from the trials the scorer compared (the figure script's
+    entries, which resolve each arm's shared and reused cells)."""
+    import paper_figures as PF
+    e = PF.entry(stage, "s53x", "n6k1_stress", variant)
+    return (f"{PF._mean(e, 'sim_budget_overrun_rate') * 100:.0f}\\%",
+            f"{PF._mean(e, 'update_yield'):.1f}")
+
+
 def headline_table() -> str:
     st = Study("b2", "s53x")
     lines = [r"\begin{table}[t]", r"\centering",
              r"\caption{Scheduler comparison at $N=6$: time to $\tau=0.71$, with the share "
-             r"of trials that reach it in brackets when below 100\%. " + DAG + r"Significantly "
-             r"slower than F. " + SECT + r"Exploratory.}",
+             r"of trials that reach it in brackets when below 100\%, and with one mule under "
+             r"the stress budget, the share of missions that overran it and the updates merged "
+             r"per round (yield). " + DAG + r"Significantly slower than F. " + SECT
+             + r"Exploratory.}",
              r"\label{tab:exp5_headline}",
              r"\resizebox{\columnwidth}{!}{%",
-             r"\begin{tabular}{l rr rr}",
+             r"\begin{tabular}{l rr rr rr}",
              r"\toprule",
-             r" & \multicolumn{2}{c}{$K=1$ mule} & \multicolumn{2}{c}{$K=3$ mules} \\",
-             r"\cmidrule(lr){2-3}\cmidrule(lr){4-5}",
-             r"\textbf{Arm} & knee & stress & knee & stress \\",
+             r" & \multicolumn{2}{c}{$K=1$ mule} & \multicolumn{2}{c}{$K=3$ mules} "
+             r"& \multicolumn{2}{c}{$K=1$, stress} \\",
+             r"\cmidrule(lr){2-3}\cmidrule(lr){4-5}\cmidrule(lr){6-7}",
+             r"\textbf{Arm} & knee & stress & knee & stress & overrun & yield \\",
              r"\midrule"]
     for variant, label in HEADLINE_ARMS:
         cells = [tau_cell(st, cell, variant, reference="F", bold=(variant == "F"))
                  for cell, _ in HEADLINE_CELLS]
+        cells += list(stress_budget_cells(variant))
         lines.append(f"{label} & " + " & ".join(cells) + r" \\")
         if variant == "FX":
+            over, yld = stress_budget_cells(FQ, stage="batch2fq")
             lines.append(f"FQ{SECT} & {fq_n6_cell('n6k1_knee')} & {fq_n6_cell('n6k1_stress')}"
-                         r" & -- & -- \\")
+                         f" & -- & -- & {over} & {yld}" + r" \\")
             lines.append(r"\midrule")
     # H0 (no mule) is described in the results text, not in the table.
     lines += [r"\bottomrule", r"\end{tabular}%", "}", r"\end{table}"]
@@ -239,24 +254,23 @@ def decision_cost_table() -> str:
         rep = json.loads((REPO / f"results/exp5/b3/s511c/{cell}.json").read_text(encoding="utf-8"))
         ferry[cell] = {r["policy"]: r for r in rep["table"]}
     lines = [r"\begin{table}[t]", r"\centering",
-             r"\caption{Decision-cost study. Planner wall time per plan "
-             r"(mean / p95, s; one host, alone); for $N\ge 24$, FerrySim's served share of "
-             r"devices at each $N$'s knee budget under F and FX, 30 episodes.}",
+             r"\caption{Decision-cost study: planner time per plan, and FerrySim's share of "
+             r"devices served at each $N$'s knee budget.}",
              r"\label{tab:exp5_cost}",
              r"\resizebox{\columnwidth}{!}{%",
              r"\begin{tabular}{r rr rrr}",
              r"\toprule",
-             r" & \multicolumn{2}{c}{plan time (s)} & \multicolumn{3}{c}{FerrySim at the knee} \\",
+             r" & \multicolumn{2}{c}{plan time} & \multicolumn{3}{c}{FerrySim at the knee} \\",
              r"\cmidrule(lr){2-3}\cmidrule(lr){4-6}",
-             r"$N$ & mean & p95 & budget (s) & F served & FX served \\",
+             r"$N$ & mean & p95 & budget & F served & FX served \\",
              r"\midrule"]
     for cell, n in cells:
         p = plan[cell]
-        row = [str(n), f"{p['plan_wall_s_mean']:.3f}", f"{p['plan_wall_s_p95']:.3f}"]
+        row = [str(n), f"{p['plan_wall_s_mean']:.2f}\\,s", f"{p['plan_wall_s_p95']:.2f}\\,s"]
         if cell in ferry:
             fr = ferry[cell]
-            row += [f"{fr['F']['budget_s']:.0f}", f"{fr['F']['served_share_mean']:.2f}",
-                    f"{fr['FX']['served_share_mean']:.2f}"]
+            row += [f"{fr['F']['budget_s']:.0f}\\,s", f"{fr['F']['served_share_mean'] * 100:.0f}\\%",
+                    f"{fr['FX']['served_share_mean'] * 100:.0f}\\%"]
         else:
             row += ["--", "--", "--"]
         lines.append(" & ".join(row) + r" \\")
@@ -272,7 +286,8 @@ def mules_table() -> str:
     lines = [r"\begin{table}[t]", r"\centering",
              r"\caption{Scaling out with mules (decision-cost study), knee budget: time to "
              r"$\tau$. Weak scaling holds six devices per mule; strong scaling adds mules at "
-             r"$N=12$. Notation as in Table~\ref{tab:exp5_headline}.}",
+             r"$N=12$. Notation as in Table~\ref{tab:exp5_headline}; " + STAR
+             + r"significantly faster than F.}",
              r"\label{tab:exp5_mules}",
              r"\resizebox{\columnwidth}{!}{%",
              r"\begin{tabular}{l rrr rr}",
@@ -431,7 +446,7 @@ def robustness_table() -> str:
             ("D4", "D4 (FedEx route)"), ("D5", "D5 (FedCS)")]
     lines = [r"\begin{table*}[t]", r"\centering",
              r"\caption{Robustness at $N=6$ and the knee budget: time to $\tau$. Notation as "
-             r"in Table~\ref{tab:exp5_headline}.}",
+             r"in Table~\ref{tab:exp5_headline}; " + STAR + r"significantly faster than F.}",
              r"\label{tab:exp5_robust}",
              r"\small",
              r"\begin{tabular}{l rr r rrrr}",
