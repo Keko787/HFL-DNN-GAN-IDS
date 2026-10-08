@@ -1,0 +1,45 @@
+% Conclusion and bibliography of the FeRRy paper (draft, 8 Oct 2026). Appended by
+% DeveloperDocs/paper/assemble.py after evaluation.tex.
+%%%%% BEGIN SECTION %%%%%
+\section{Conclusion and Future Work}
+\label{sec:conclusion}
+
+This paper presented \sysname{}, a framework that sustains federated learning
+across disconnected regions by planning UAV data-mule missions in which the
+radio's reach is a decision. At the dock, \sysname{} chooses a contact band
+class and a route together under one feasibility test that respects per-device
+deadlines and the mission budget. In flight, the same test gates a per-stop
+decision and a re-plan, and staleness-weighted merges on the mule and at the
+server close rounds with the updates that arrive. In a multi-process prototype
+that trains a real intrusion-detection model, \sysname{} reached the target
+accuracy 27--31\% sooner than seven whole schedulers at six devices, because its
+plan chose a long-reach narrow band that removed most of the transit between
+stops. It kept updates fresher than age-of-information schedulers under tight
+budgets, beat the FedEx route at 24 devices under the stress budget, and planned
+in 1.5\,s at 96 devices. Several elements of the design showed no measurable
+effect at our settings. Among them is a learned per-stop score: FQ performed like
+the fixed rule, and its exploratory advantage over a learned scheduler without a
+plan came from the plan it flies inside.
+
+Future work follows from the limitations we measured. \sysname{}'s plan prices
+the mean channel, so it overran tight budgets in 30\% of missions; pricing the
+channel's variation, or reserving slack for it, is a first step. The plan also
+ignores training time, so when devices need time to train it reaches devices
+whose updates are not ready; adding a compute term to the plan is a second.
+Beyond these, mission time, the radio channel and energy are simulated in this
+evaluation. Validating the band trade over the air on a UAV testbed, with
+measured channels and battery limits, and coordinating mules that share
+spectrum and a dock remain open.
+
+% IPDPS 2027 asks authors to disclose AI-generated text in the Acknowledgements.
+% DRAFT wording: the authors must confirm or rewrite it. Funding acknowledgements
+% stay out until the camera-ready (double-anonymous review).
+\section*{Acknowledgment}
+Parts of this paper's text, and of the code for its experiments and analysis,
+were drafted with the assistance of an AI model (Claude, Anthropic). The authors
+reviewed, edited, and verified all of it, and take responsibility for the
+content.
+
+\bibliographystyle{ieeetr}
+\bibliography{biblio}
+%%%%% END SECTION %%%%%

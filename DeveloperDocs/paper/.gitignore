@@ -1,0 +1,4 @@
+# Build outputs of assemble.py: the figure PDFs are copies of
+# results/exp5/paper/figures/, and the Overleaf zip bundles the built paper.
+Figures/exp5/
+ferry_paper_overleaf.zip
