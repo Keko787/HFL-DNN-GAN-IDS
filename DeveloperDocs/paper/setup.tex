@@ -25,13 +25,20 @@ largest problems ($N=48$ and $96$).
 \label{sec:setup:cells}
 
 A cell fixes the number of devices $N$, the number of mules $K$, and the mission
-budget. We evaluate $N\in\{6,12,24\}$ devices with one mule, and up to three
+budget. Devices are static and placed uniformly at random on a $200\times200$~m
+square centred on the dock, a new layout per trial; the square is the same at
+every $N$, so the field grows denser as $N$ grows (FerrySim's scale cells grow
+it instead, Section~\ref{sec:method:alg}). We evaluate $N\in\{6,12,24\}$ devices with one mule, and up to three
 mules at $N=12$ and $18$. Each $N$ has two mission budgets, set by pilots before
 the studies ran. The \emph{knee} is the smallest budget whose mean update yield
 reaches 95\% of the best on a budget grid (150, 180 and 262\,s at $N=6$, 12 and
 24), and the \emph{stress} budget is half of it. The accuracy target
 $\tau=0.71$ is the largest value, on a 0.01 grid, that at least 80\% of the
-baseline H1's trials reach at every $N$'s knee. The age cap is $S=2$
+baseline H1's trials reach at every $N$'s knee. It lies 4.3 points above the
+0.667 that labelling every test flow benign would score
+(Section~\ref{sec:method:roles}), so time to $\tau$ measures how soon a model
+becomes useful, not how good it ends; Table~\ref{tab:exp5_headline} also reports
+F's and H0's final accuracy. The age cap is $S=2$
 (Section~\ref{sec:method:demand}).
 
 \subsection{Arms}
@@ -49,6 +56,28 @@ index, D4 runs FedEx's tour with one transporter, and D5 is FedCS without its
 resource-request phase.
 
 %%TABLE:tab:exp5_arms%%
+
+\paragraph{How the baselines fly}
+The baselines share \sysname{}'s first stages: they cluster the devices into
+stops at the wide band's range, price a stop with the same feasibility test,
+and deliver in an unbudgeted, nearest-first Pass~2. Unlike \sysname{}, they
+serve whole stops only, have no age cap, and use an additive deadline law: a
+device's window shrinks by $5\sigma$~s after a clean contact and widens by
+$10\sigma$~s after a miss, with a floor of $5\sigma$~s and no ceiling. H1 admits
+stops in deadline order under the deadline and budget clauses, flies them by
+priority bucket (new devices first) and then by distance from the dock, and
+trims at each departure as \sysname{} does. D1--D3 rank the stops by their own
+key (age of information, statistical utility, the Whittle index) and walk the
+ranking under the budget clause alone, skipping what fails; D5 adds stops in
+order of least marginal time while they fit one round deadline. These four fly
+their admitted order, re-check only the budget at each departure, and re-admit
+by their own rule. D4 flies FedEx's visit-all tour with no budget check, so it
+can overrun the budget, and with three mules it splits the devices by FedEx's
+own assignment rather than by sectors. E3 admits every stop and, at takeoff and
+at each departure, picks the next stop by its learned Q-values among the stops
+that still fit the budget, with no re-plan. It is trained in FerrySim with one
+mule (learning rate $5\times10^{-4}$, $\gamma=0.99$) and flown per mule with
+three.
 
 \subsection{Metrics and Statistics}
 \label{sec:setup:metrics}
@@ -117,7 +146,8 @@ cost: MAX-AoI, the Whittle index, and F without its coverage term or age cap,
 over four missions, on the age of updates (Study~5.8). Study~5.14 also flips one
 component of F at a time, with 40 trials per cell: whole stops only, the local
 search only, a weighted coverage rank, the age cap raised or removed, no hover
-stops, and the adaptive backhaul (F+L1) against the fixed carrier.
+stops, and the adaptive backhaul (F+L1) against the fixed carrier, both on the
+time-varying backhaul of Section~\ref{sec:method:l1}.
 
 \paragraph{Q5: Does learning help inside the plan?}
 Study~5.5 trains the learned pair score of Section~\ref{sec:method:flight} in
@@ -140,7 +170,10 @@ D4, D5). Study~5.13 splits the data across devices by a Dirichlet draw
 ($\alpha=0.1$) over the dataset's attack families (F, FX, H1, D3). Study~5.15
 varies the channel one axis at a time from the jittery default: the
 interference amplitude (1 and 17\,dB, against 5), the path-loss exponent (2.7,
-against 2.2), and the shadowing (8\,dB, against 4) (F, FX, H1).
+against 2.2), and the shadowing (8\,dB, against 4) (F, FX, H1). Its cells, the
+default included, fly the time-varying backhaul of
+Section~\ref{sec:method:l1}, so its default cell is not the main
+configuration.
 
 \paragraph{What was run}
 To meet the submission date, we cut the later studies. Studies~5.1, 5.2, 5.5's
