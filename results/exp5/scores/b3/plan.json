@@ -1,0 +1,334 @@
+{
+ "taus": [
+  0.71,
+  0.82
+ ],
+ "alpha": 0.05,
+ "family": "study",
+ "n_bootstraps": 2000,
+ "specs": {
+  "s53": {
+   "study": "s53",
+   "metric": "sim_s_to_tau",
+   "better": "lower",
+   "reference": "F",
+   "versus": {},
+   "also": [
+    "reached_tau",
+    "sim_s_to_tau",
+    "round_close_rate_kmin1",
+    "network_aou_mean",
+    "deadline_miss_rate",
+    "update_yield",
+    "final_accuracy",
+    "final_auc"
+   ],
+   "scorer_flags": [],
+   "age_cap": false,
+   "note": ""
+  },
+  "s53x": {
+   "study": "s53x",
+   "metric": "sim_s_to_tau",
+   "better": "lower",
+   "reference": "F",
+   "versus": {},
+   "also": [
+    "reached_tau",
+    "sim_s_to_tau",
+    "wall_s_to_tau",
+    "round_close_rate_kmin1",
+    "deadline_miss_rate",
+    "network_aou_mean",
+    "update_yield",
+    "final_accuracy"
+   ],
+   "scorer_flags": [],
+   "age_cap": false,
+   "note": ""
+  },
+  "s59": {
+   "study": "s59",
+   "metric": "sim_s_to_tau",
+   "better": "lower",
+   "reference": "F",
+   "versus": {},
+   "also": [
+    "reached_tau",
+    "sim_s_to_tau",
+    "round_close_rate_kmin1",
+    "network_aou_mean",
+    "deadline_miss_rate",
+    "update_yield",
+    "final_accuracy",
+    "final_auc"
+   ],
+   "scorer_flags": [],
+   "age_cap": false,
+   "note": ""
+  },
+  "ttl": {
+   "study": "ttl",
+   "metric": "sim_s_to_tau",
+   "better": "lower",
+   "reference": "F",
+   "versus": {},
+   "also": [
+    "reached_tau",
+    "sim_s_to_tau",
+    "round_close_rate_kmin1",
+    "network_aou_mean",
+    "deadline_miss_rate",
+    "update_yield",
+    "final_accuracy",
+    "final_auc"
+   ],
+   "scorer_flags": [],
+   "age_cap": false,
+   "note": ""
+  },
+  "s59x": {
+   "study": "s59x",
+   "metric": "sim_s_to_tau",
+   "better": "lower",
+   "reference": "F",
+   "versus": {},
+   "also": [
+    "reached_tau",
+    "sim_s_to_tau",
+    "round_close_rate_kmin1",
+    "network_aou_mean",
+    "deadline_miss_rate",
+    "update_yield",
+    "final_accuracy",
+    "final_auc"
+   ],
+   "scorer_flags": [],
+   "age_cap": false,
+   "note": ""
+  },
+  "s511b": {
+   "study": "s511b",
+   "metric": "sim_s_to_tau",
+   "better": "lower",
+   "reference": "F",
+   "versus": {},
+   "also": [
+    "reached_tau",
+    "sim_s_to_tau",
+    "update_yield",
+    "plan_wall_s_mean",
+    "plan_wall_s_p95",
+    "pair_wall_s_mean",
+    "trial_processes",
+    "peak_rss_mib_total"
+   ],
+   "scorer_flags": [],
+   "age_cap": false,
+   "note": ""
+  },
+  "s514": {
+   "study": "s514",
+   "metric": "network_aou_mean",
+   "better": "lower",
+   "reference": "capS",
+   "versus": {
+    "secF": null,
+    "secFL1": "secF"
+   },
+   "also": [
+    "cap_violations",
+    "age_max",
+    "age_p95",
+    "round_close_rate_kmin1",
+    "reached_tau",
+    "sim_s_to_tau"
+   ],
+   "scorer_flags": [],
+   "age_cap": true,
+   "note": ""
+  },
+  "s51": {
+   "study": "s51",
+   "metric": "sim_s_to_tau",
+   "better": "lower",
+   "reference": "cutoff",
+   "versus": {},
+   "also": [
+    "reached_tau",
+    "sim_s_to_tau",
+    "final_accuracy",
+    "final_auc",
+    "round_close_rate_kmin1",
+    "network_aou_mean"
+   ],
+   "scorer_flags": [],
+   "age_cap": false,
+   "note": ""
+  },
+  "s52": {
+   "study": "s52",
+   "metric": "deadline_miss_rate",
+   "better": "lower",
+   "reference": "F",
+   "versus": {},
+   "also": [
+    "round_close_rate_kmin1",
+    "network_aou_mean",
+    "reached_tau",
+    "sim_s_to_tau"
+   ],
+   "scorer_flags": [],
+   "age_cap": false,
+   "note": ""
+  },
+  "s54": {
+   "study": "s54",
+   "metric": "network_aou_mean",
+   "better": "lower",
+   "reference": "F",
+   "versus": {},
+   "also": [
+    "far_served_share",
+    "round_close_rate_kmin1",
+    "reached_tau",
+    "sim_s_to_tau"
+   ],
+   "scorer_flags": [],
+   "age_cap": false,
+   "note": ""
+  },
+  "s55": {
+   "study": "s55",
+   "metric": "sim_s_to_tau",
+   "better": "lower",
+   "reference": "FX",
+   "versus": {},
+   "also": [
+    "reached_tau",
+    "sim_s_to_tau",
+    "round_close_rate_kmin1",
+    "pair_fx_agree_share"
+   ],
+   "scorer_flags": [],
+   "age_cap": false,
+   "note": ""
+  },
+  "s56": {
+   "study": "s56",
+   "metric": "sim_s_to_tau",
+   "better": "lower",
+   "reference": "FX",
+   "versus": {},
+   "also": [
+    "reached_tau",
+    "sim_s_to_tau",
+    "round_close_rate_kmin1",
+    "pass1_contacts_mean",
+    "update_yield"
+   ],
+   "scorer_flags": [],
+   "age_cap": false,
+   "note": ""
+  },
+  "s57": {
+   "study": "s57",
+   "metric": "round_close_rate_kmin1",
+   "better": "higher",
+   "reference": "FX",
+   "versus": {},
+   "also": [
+    "reached_tau",
+    "sim_s_to_tau",
+    "network_aou_mean"
+   ],
+   "scorer_flags": [],
+   "age_cap": false,
+   "note": ""
+  },
+  "s58": {
+   "study": "s58",
+   "metric": "network_aou_mean",
+   "better": "lower",
+   "reference": "F",
+   "versus": {},
+   "also": [
+    "age_max",
+    "age_p95",
+    "jain_merged",
+    "cap_violations",
+    "round_close_rate_kmin1",
+    "reached_tau",
+    "sim_s_to_tau"
+   ],
+   "scorer_flags": [],
+   "age_cap": true,
+   "note": ""
+  },
+  "s512": {
+   "study": "s512",
+   "metric": "sim_s_to_tau",
+   "better": "lower",
+   "reference": "F",
+   "versus": {},
+   "also": [
+    "reached_tau",
+    "sim_s_to_tau",
+    "update_yield",
+    "not_ready_share",
+    "round_close_rate_kmin1",
+    "device_energy_j_total"
+   ],
+   "scorer_flags": [
+    "--compute-columns"
+   ],
+   "age_cap": false,
+   "note": ""
+  },
+  "s513": {
+   "study": "s513",
+   "metric": "sim_s_to_tau",
+   "better": "lower",
+   "reference": "F",
+   "versus": {},
+   "also": [
+    "reached_tau",
+    "sim_s_to_tau",
+    "final_accuracy",
+    "final_auc",
+    "tpr_final",
+    "fpr_final",
+    "f1_final",
+    "recall_family_min",
+    "network_aou_shard_weighted_mean"
+   ],
+   "scorer_flags": [
+    "--detection-columns"
+   ],
+   "age_cap": false,
+   "note": ""
+  },
+  "s515": {
+   "study": "s515",
+   "metric": "sim_s_to_tau",
+   "better": "lower",
+   "reference": "F",
+   "versus": {
+    "H1pL1": "H1"
+   },
+   "also": [
+    "reached_tau",
+    "sim_s_to_tau",
+    "round_close_rate_kmin1",
+    "network_aou_mean",
+    "deadline_miss_rate",
+    "update_yield",
+    "final_accuracy",
+    "final_auc"
+   ],
+   "scorer_flags": [],
+   "age_cap": false,
+   "note": ""
+  }
+ }
+}
