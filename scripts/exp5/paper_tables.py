@@ -8,8 +8,8 @@ report and H0's trial CSV, so the tables regenerate whenever a study is rescored
 Time to tau is the simulated seconds to tau = 0.71 (``sim_s_to_tau0.71``) over the
 trials that reach it; a claim is the scorer's (paired seeds, bootstrap CI excludes
 0, Holm p < 0.05). The tables use booktabs and \\resizebox (graphicx), as the paper
-does, and cite the paper's own keys; two baselines have no key there yet
-(MAX-AoI, FedAsync), marked TODO.
+does, and cite the paper's own keys; MAX-AoI cites kadota2018scheduling, which
+DeveloperDocs/paper/biblio.bib adds.
 """
 
 from __future__ import annotations
@@ -109,8 +109,9 @@ def cmp_row(st: Study, cell: str, variant: str, digits: int = 2) -> Tuple[str, s
 ARMS_TABLE = r"""
 \begin{table}[t]
 \centering
-\caption{Arms compared in Experiment~5. FeRRy's arms share the dock-time plan; the
-baselines are whole schedulers flown on the same simulator, budgets and paired seeds.}
+\caption{Arms compared in the evaluation. FeRRy's arms (F, FX, FQ) share the dock-time
+plan and differ only in the in-flight slot; the baselines are whole schedulers flown on
+the same simulator, budgets and paired seeds.}
 \label{tab:exp5_arms}
 \small
 \begin{tabularx}{\columnwidth}{l X}
@@ -119,9 +120,10 @@ baselines are whole schedulers flown on the same simulator, budgets and paired s
 \midrule
 F & FeRRy: dock-time plan (band class, route, deadline-gated admission, coverage term, age cap $S$), committed in flight. \\
 FX & F with the cross-layer in-flight rule: at each stop, the nearest stop that keeps the plan feasible, at the fastest band that still reaches the planned targets. \\
-H1 & HERMES's staged heuristic: deadline-tiered contact regions, no dock-time plan. \\
+FQ & F with the learned in-flight rule: FX's slot, masks and fallback, ranked by a learned pair score (masked double DQN trained in FerrySim, $\gamma=0.75$). \\
+H1 & Staged deadline heuristic (our earlier scheduler): deadline-tiered contact regions, no dock-time plan. \\
 H0 & Live-link reference: FL over the degraded infrastructure link, no mule. \\
-D1 & MAX-AoI: visit the stalest device next \cite{TODO-maxaoi}. \\
+D1 & MAX-AoI: visit the stalest device next \cite{kadota2018scheduling}. \\
 D2 & Oort-style statistical utility \cite{lai2021oort}. \\
 D3 & Whittle index on value-weighted age of updates \cite{cui2023data}, our expected-connectivity variant. \\
 D4 & FedEx's visit-all 2-OPT tour \cite{bian2025indirect}, one transporter, never skips; D4$_{\text{FedEx}}$ adds its $1/N$ delta merge. \\
@@ -131,6 +133,27 @@ E3 & Single-agent next-stop DQN after Chen et al.\ \cite{chen2023model}, trained
 \end{tabularx}
 \end{table}
 """.strip("\n")
+
+SECT = r"$^{\S}$"               # FQ: flown outside the pre-registered study's family
+FQ = "FQ-g75"                  # Study 5.5's gamma = 0.75 pick
+
+
+def fq_n6_cell(cell: str) -> str:
+    """FQ's time to tau in 5.3's one-mule cells, from the exploratory run's scored
+    trials (results/exp5/b2/s53x/<cell>__FQ-g75_scored.csv; scripts/exp5/fq_vs_e3.py
+    pairs it with the other arms). The run left 5.3's own score files untouched."""
+    rows = _rows(REPO / "results" / "exp5" / "b2" / "s53x" / f"{cell}__{FQ}_scored.csv")
+    ok = [r for r in rows if r.get("status", "ok") == "ok"]
+    times = [float(r[f"sim_s_to_tau{TAU}"]) for r in ok
+             if r.get(f"sim_s_to_tau{TAU}") not in ("", None, "nan")]
+    if not times:
+        return "--"
+    text = f"{statistics.mean(times):.0f}"
+    reach = len(times) / len(ok)
+    if reach < 0.995:
+        text += rf"\,{{\scriptsize({reach:.2f})}}"
+    return text
+
 
 HEADLINE_ARMS = [("F", "F"), ("FX", "FX"), ("H1", "H1"), ("D1", "D1 (MAX-AoI)"),
                  ("D2", "D2 (Oort)"), ("D3", "D3 (Cui)"), ("D4", "D4 (FedEx route)"),
@@ -145,8 +168,11 @@ def headline_table() -> str:
              r"\caption{Whole-scheduler comparison at $N=6$ (Study~5.3): mean simulated "
              r"time to $\tau=0.71$ in seconds (lower is better), 20 paired trials per cell; "
              r"reach rate in brackets when below 1. " + DAG + r" significantly slower than F "
-             r"(paired bootstrap CI excludes 0, Holm $p<0.05$). D4 flies its whole tour "
-             r"whatever the budget, so its two budget columns coincide.}",
+             r"(paired bootstrap CI excludes 0, Holm $p<0.05$). " + SECT + r"FQ flew the "
+             r"$K=1$ cells after the pre-registered study, on the same seeds; its exploratory "
+             r"comparisons (Section~\ref{sec:res:rl}) find it no different from F or FX. "
+             r"D4 flies its whole tour whatever the budget, so its two budget columns "
+             r"coincide.}",
              r"\label{tab:exp5_headline}",
              r"\resizebox{\columnwidth}{!}{%",
              r"\begin{tabular}{l rr rr}",
@@ -160,6 +186,8 @@ def headline_table() -> str:
                  for cell, _ in HEADLINE_CELLS]
         lines.append(f"{label} & " + " & ".join(cells) + r" \\")
         if variant == "FX":
+            lines.append(f"FQ{SECT} & {fq_n6_cell('n6k1_knee')} & {fq_n6_cell('n6k1_stress')}"
+                         r" & -- & -- \\")
             lines.append(r"\midrule")
     # H0 flies the wall clock: described beside F, never paired.
     h0 = _rows(REPO / "results/exp5/b2/s53x/n6_wall__H0.csv")
@@ -189,7 +217,9 @@ def scale_table() -> str:
     lines = [r"\begin{table}[t]", r"\centering",
              r"\caption{Scale (Study~5.9): mean time to $\tau$ (s) with one mule as the "
              r"device population grows, at each $N$'s knee and stress budgets. Notation as in "
-             r"Table~\ref{tab:exp5_headline}.}",
+             r"Table~\ref{tab:exp5_headline}. " + SECT + r"FQ at $N=6$ is the exploratory run "
+             r"and at $N=12$ Study~5.5's stack check, on the same cells and seeds (there it "
+             r"is tested against FX only); it was not flown at $N=24$.}",
              r"\label{tab:exp5_scale}",
              r"\resizebox{\columnwidth}{!}{%",
              r"\begin{tabular}{l rrr rrr}",
@@ -198,10 +228,19 @@ def scale_table() -> str:
              r"\cmidrule(lr){2-4}\cmidrule(lr){5-7}",
              r"\textbf{Arm} & $N=6$ & $12$ & $24$ & $N=6$ & $12$ & $24$ \\",
              r"\midrule"]
+    s55 = Study("b2", "s55")           # FQ at N = 12: 5.9's cells, 5.5's stack check
+    for stx, cell in ((core, "n12k1_knee"), (ext, "n12k1_stress")):
+        for variant in ("F", "FX"):    # the cells are the same only if F and FX agree
+            assert stx.arm(cell, variant)["metric_mean"] == s55.arm(cell, variant)["metric_mean"], \
+                (cell, variant)
     for variant, label in SCALE_ARMS:
         cells = [tau_cell(stx, cell, variant, reference="F", bold=(variant == "F"))
                  for stx, cell in cols]
         lines.append(f"{label} & " + " & ".join(cells) + r" \\")
+        if variant == "FX":
+            fq = [fq_n6_cell("n6k1_knee"), tau_cell(s55, "n12k1_knee", FQ), "--",
+                  fq_n6_cell("n6k1_stress"), tau_cell(s55, "n12k1_stress", FQ), "--"]
+            lines.append(f"FQ{SECT} & " + " & ".join(fq) + r" \\")
     lines += [r"\bottomrule", r"\end{tabular}%", "}", r"\end{table}"]
     return "\n".join(lines)
 
@@ -474,7 +513,7 @@ def main(argv=None) -> int:
     header = ("% Experiment 5 tables, generated by scripts/exp5/paper_tables.py from\n"
               "% results/exp5/scores (do not edit by hand; rerun the script).\n"
               "% Needs booktabs, tabularx, graphicx (all loaded by the paper).\n"
-              "% TODO keys: MAX-AoI (D1) has no entry in biblio.bib yet.\n")
+              "% MAX-AoI (D1) cites kadota2018scheduling (DeveloperDocs/paper/biblio.bib).\n")
     parts = [ARMS_TABLE, headline_table(), scale_table(), mules_table(),
              decision_cost_table(), claims_table(), robustness_table()]
     out.write_text(header + "\n\n".join(parts) + "\n", encoding="utf-8")
