@@ -32,32 +32,24 @@ $\tau$, 20 paired trials per arm. Markers are offset horizontally for legibility
 \begin{figure*}[t]
 \centering
 \includegraphics[width=\textwidth]{Figures/exp5/fig_exp5_systems.pdf}
-\caption{Decision cost and mules (decision-cost study). (a)~Planner wall time per plan against $N$, mean
-and p95, one host running alone. (b)~FerrySim's share of devices served at each $N$'s
-knee budget under F, FX and greedy-1 (30 episodes). (c)~Time to $\tau$ at $N=12$ as mules
-are added, mean and 95\% bootstrap CI.}
+\caption{Decision-cost study: (a)~planner time per plan; (b)~FerrySim's share of devices
+served at each $N$'s knee budget (greedy-1: a one-step greedy rule); (c)~time to
+$\tau$ at $N=12$ as mules are added, mean and 95\% CI.}
 \label{fig:exp5_systems}
 \end{figure*}
 
 \begin{figure*}[t]
 \centering
 \includegraphics[width=\textwidth]{Figures/exp5/fig_exp5_mechanism.pdf}
-\caption{Where F's advantage comes from ($N=6$, one mule, knee budget). (a)~Mean simulated
-mission time by component. Every baseline flies the wide band and spends most of a mission
-in transit between stops; F mostly plans the narrow band, whose range reaches the field from
-about one stop, and trades transit for dwell. Pinning F to the wide band removes its
-advantage. (b)~Time to $\tau$ for the same rows: mean and 95\% bootstrap CI over the trials
-that reach $\tau$. The pinned-band rows come from the band-pinning study, whose pre-registered metric is
-the network age of updates; their time to $\tau$ is descriptive.}
+\caption{Where F's advantage comes from ($N=6$, one mule, knee budget): (a)~mean mission
+time by component; (b)~time to $\tau$, mean and 95\% CI over the trials that reach it.}
 \label{fig:exp5_mechanism}
 \end{figure*}
 
 \begin{figure}[t]
 \centering
 \includegraphics[width=\columnwidth]{Figures/exp5/fig_exp5_bands.pdf}
-\caption{Share of F's plans flying each band class, by cell. With few devices F plans the
-long-reach narrow band; as the field fills and the budget tightens, it shifts to the faster
-medium and wide classes.}
+\caption{Share of F's plans flying each band class, by cell.}
 \label{fig:exp5_bands}
 \end{figure}
 
@@ -73,27 +65,18 @@ only F reaches $\tau$ counts as a win, and a tie as half.}
 \begin{figure}[t]
 \centering
 \includegraphics[width=\columnwidth]{Figures/exp5/fig_exp5_budget.pdf}
-\caption{Updates merged per round against the share of missions that overran the budget,
-at $N=6$ under the stress budget. The baselines stay within the budget by leaving devices
-out. FedEx's visit-all tour (D4) keeps its yield by overrunning the budget in 85\%
-of missions. F keeps nearly D4's yield by flying fewer stops, but its plans, priced at the
-mean SNR, overrun in 30\% of missions, by 8.5\,s on average.}
+\caption{Updates merged per round against the share of missions that overran the budget
+($N=6$, stress budget).}
 \label{fig:exp5_budget}
 \end{figure}
 
 \begin{figure*}[t]
 \centering
 \includegraphics[width=\textwidth]{Figures/exp5/fig_exp5_learning.pdf}
-\caption{Learning inside FeRRy's plan against learning without one ($N=6$, one mule, 20
-paired seeds; exploratory, not pre-registered). F commits the plan in flight, FX adds the
-fixed per-stop rule, FQ the learned per-stop score (the learned-score study's $\gamma=0.75$ pick), and E3
-is Chen et al.'s learned scheduler with no plan. (a)~Time to $\tau$ at the knee (filled) and
-stress (hollow) budgets: mean and 95\% bootstrap CI over the trials that reach $\tau$, with
-the reach rate in brackets when it is below 1; $^{\ddagger}$slower than FQ (paired by seed,
-Holm $p<0.05$ across the exploratory comparisons of FQ with E3, F, FX and D4 at both
-budgets). (b)~Mean mission time at the knee by
-component, and the band each arm flies: the three FeRRy variants share the plan's
-narrow-band reach, while E3 flies the wide band.}
+\caption{Learning inside the plan against learning without one ($N=6$, one mule;
+exploratory). (a)~Time to $\tau$ at the knee (filled) and stress (hollow) budgets,
+mean and 95\% CI, reach rate in brackets when below 1; $^{\ddagger}$slower than FQ.
+(b)~Mean mission time at the knee by component, and each arm's band.}
 \label{fig:exp5_learning}
 \end{figure*}
 
