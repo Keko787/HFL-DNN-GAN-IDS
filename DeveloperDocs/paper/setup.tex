@@ -11,11 +11,11 @@
 \subsection{Testbed}
 \label{sec:setup:testbed}
 
-Every trial runs the full system of Section~\ref{sec:method}: the server, each
+Every trial runs the full system described above: the server, each
 mule, and each device are separate processes that exchange messages over TCP,
 and the devices train the real intrusion-detection model on CICIoT2023.
 Mission time, the radio channel, and energy come from the simulated clock and
-channel of Section~\ref{sec:method:l1}, in the interference-limited (jittery)
+channel described above, in the interference-limited (jittery)
 regime. A trial flies four missions with a 1~MB model payload and records every
 event, from which a separate scorer computes the metrics. The learned per-stop
 score and the learned baseline E3 are trained in FerrySim, which also runs the
@@ -28,25 +28,22 @@ A cell fixes the number of devices $N$, the number of mules $K$, and the mission
 budget. Devices are static and placed uniformly at random on a $200\times200$~m
 square centred on the dock, a new layout per trial; the square is the same at
 every $N$, so the field grows denser as $N$ grows (FerrySim's scale cells grow
-it instead, Section~\ref{sec:method:alg}). We evaluate $N\in\{6,12,24\}$ devices with one mule, and up to three
+it instead). We evaluate $N\in\{6,12,24\}$ devices with one mule, and up to three
 mules at $N=12$ and $18$. Each $N$ has two mission budgets, set by pilots before
 the studies ran. The \emph{knee} is the smallest budget whose mean update yield
 reaches 95\% of the best on a budget grid (150, 180 and 262\,s at $N=6$, 12 and
 24), and the \emph{stress} budget is half of it. The accuracy target
 $\tau=0.71$ is the largest value, on a 0.01 grid, that at least 80\% of the
 baseline H1's trials reach at every $N$'s knee. It lies 4.3 points above the
-0.667 that labelling every test flow benign would score
-(Section~\ref{sec:method:roles}), so time to $\tau$ measures how soon a model
+0.667 that labelling every test flow benign would score, so time to $\tau$ measures how soon a model
 becomes useful, not how good it ends; Table~\ref{tab:exp5_headline} also reports
-F's and H0's final accuracy. The age cap is $S=2$
-(Section~\ref{sec:method:demand}).
+F's and H0's final accuracy. The age cap is $S=2$.
 
 \subsection{Arms}
 \label{sec:setup:arms}
 
 Table~\ref{tab:exp5_arms} lists the arms. \sysname{} has three, which share the
-dock-time plan and differ only in how they fill the flight slot of
-Section~\ref{sec:method:flight}: F leaves it empty and flies the plan as
+dock-time plan and differ only in how they fill the flight slot: F leaves it empty and flies the plan as
 committed, FX fills it with the fixed cross-layer rule, and FQ with the learned
 pair score. Every baseline is a whole scheduler,
 flown in the same simulator, at the same budgets, on the same seeds, and on the
@@ -109,7 +106,7 @@ three mules, at the knee and stress budgets, and compares each baseline with F o
 time to $\tau$. H0, which has no mule, flies one cell over the live link and is
 described rather than tested. FQ joined the one-mule cells after Study~5.5's
 verdict (Q5), on the same seeds; its comparisons form their own exploratory
-family (Section~\ref{sec:res:sota}).
+family.
 
 \paragraph{Q2: Where does the advantage come from?}
 From 5.3's traces we split each arm's mission time into transit between stops,
@@ -117,7 +114,7 @@ dwell, and the return, upload and dock turnaround. Study~5.4 pins F to each band
 the 1~MB payload and with the measured 18.8~KB one; its primary metric is the
 network age of updates. In FerrySim, an exhaustive oracle over band class,
 clustering, route and per-stop band measures how far F's plan is from the best
-plan (Section~\ref{sec:res:mechanism}).
+plan.
 
 \paragraph{Q3: How does it scale, and what does deciding cost?}
 Study~5.9 grows the field to $N=12$ and $24$ with one mule and flies F, FX, H1,
@@ -126,13 +123,11 @@ on the same seeds, in Study~5.5's stack check. Study~5.11 measures (a) the
 planner's wall time per plan from $N=6$ to $96$ in FerrySim, run alone on the
 host; (b) one to three mules at $N=12$, and six devices per mule up to $N=18$
 with three mules; and (c) FerrySim budget sweeps at $N=24$, 48 and 96, whose
-knees set the budgets at which we report the share of devices served
-(Section~\ref{sec:res:scale}).
+knees set the budgets at which we report the share of devices served.
 
 \paragraph{Q4: Does each part of the design matter?}
 We test five claims about the design, each against an alternative that removes
-or replaces one part of it, on the claim's own metric
-(Section~\ref{sec:res:claims}). C1, reach is a decision: F pinned to one band
+or replaces one part of it, on the claim's own metric. C1, reach is a decision: F pinned to one band
 class (Study~5.4). C2, one derived objective: FX without its coverage term or
 its dwell term, at $N=12$, on the round-close rate (Study~5.7). C3, one deadline
 in three roles: plain averaging, FedBuff~\cite{nguyen2022federated},
@@ -147,10 +142,10 @@ over four missions, on the age of updates (Study~5.8). Study~5.14 also flips one
 component of F at a time, with 40 trials per cell: whole stops only, the local
 search only, a weighted coverage rank, the age cap raised or removed, no hover
 stops, and the adaptive backhaul (F+L1) against the fixed carrier, both on the
-time-varying backhaul of Section~\ref{sec:method:l1}.
+time-varying backhaul.
 
 \paragraph{Q5: Does learning help inside the plan?}
-Study~5.5 trains the learned pair score of Section~\ref{sec:method:flight} in
+Study~5.5 trains FQ's learned pair score in
 FerrySim at six discount factors ($\gamma\in\{0, 0.25, 0.5, 0.75, 0.9, 0.99\}$),
 ten seeds each, and evaluates the median-validation seed of each on 1000
 held-out episodes per cell, against FX and a one-step greedy rule. The learned
@@ -159,11 +154,10 @@ held-out return. Its stack check then flies FQ with the chosen $\gamma$ (and
 with $\gamma=0$) against FX and F in the full system at $N=12$. After that
 verdict, an exploratory comparison, not pre-registered, flies FQ in 5.3's
 one-mule cells against E3, F, FX and D4, Holm-corrected across its eight
-comparisons (Section~\ref{sec:res:rl}).
+comparisons.
 
 \paragraph{Q6: How robust is it?}
-At the knee budget, three studies each change one condition
-(Section~\ref{sec:res:robust}). Study~5.12 gives each device a training time,
+At the knee budget, three studies each change one condition. Study~5.12 gives each device a training time,
 log-normal with median 68\,s and $\sigma=0.5$ (the median set by a pilot), and
 in a second cell makes 20\% of the devices five times slower (arms F, FX, H1,
 D4, D5). Study~5.13 splits the data across devices by a Dirichlet draw
@@ -171,8 +165,7 @@ D4, D5). Study~5.13 splits the data across devices by a Dirichlet draw
 varies the channel one axis at a time from the jittery default: the
 interference amplitude (1 and 17\,dB, against 5), the path-loss exponent (2.7,
 against 2.2), and the shadowing (8\,dB, against 4) (F, FX, H1). Its cells, the
-default included, fly the time-varying backhaul of
-Section~\ref{sec:method:l1}, so its default cell is not the main
+default included, fly the time-varying backhaul, so its default cell is not the main
 configuration.
 
 \paragraph{What was run}

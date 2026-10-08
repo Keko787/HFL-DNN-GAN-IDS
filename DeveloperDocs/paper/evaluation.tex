@@ -88,12 +88,10 @@ term keeps rounds closing: without it, the round-close rate falls from 99\% to
 stress budget: its network age of updates is 0.78 missions, against 1.06 for
 MAX-AoI and 1.07 for Cui's Whittle index, and 1.10 without the coverage term
 (C5). On the time-varying backhaul, the adaptive controller lowers it from
-0.88 to 0.69. That controller observes the SNR that decides each upload's loss
-(Section~\ref{sec:method:l1}), so this is close to the most that adapting the
+0.88 to 0.69. That controller observes the SNR that decides each upload's loss, so this is close to the most that adapting the
 backhaul can give. Several parts of the
 design show no measurable effect at these settings, and we report them as such.
-Pinning the band does not change the age of updates (its effect is on time,
-Section~\ref{sec:res:mechanism}). The dwell term and the age cap change nothing
+Pinning the band does not change the age of updates (its effect is on time). The dwell term and the age cap change nothing
 over four missions. The merge rules tie: with every device served in Pass~2,
 collected updates almost always have merge age zero, so the age weighting
 rarely acts; FedBuff's buffering slows learning, and FedProx is not
@@ -113,7 +111,7 @@ indistinguishable from FX at $N=12$ (C4 in Table~\ref{tab:exp5_claims}), as it i
 from F and FX at $N=6$ (Table~\ref{tab:exp5_headline}). FX is therefore FeRRy's
 per-stop rule, and the null is reported here. The two do not decide on the
 same information: FQ picks its next stop on arrival, from the priced dwell, and
-FX after serving, from the realized clock (Section~\ref{sec:method:flight}), so
+FX after serving, from the realized clock, so
 the comparison is of two rules, not of two rankings over the same choice.
 
 \paragraph{Learning inside the plan, against learning without one}
