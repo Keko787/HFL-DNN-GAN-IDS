@@ -76,11 +76,11 @@ def tau_cell(st: Study, cell: str, variant: str, reference: Optional[str] = None
     reach = _f(a.get(f"reach_rate_tau{TAU}"))
     if mean is None:
         return "--"
-    text = f"{mean:.0f}"
+    text = f"{mean:.0f}\\,s"
     if bold:
         text = rf"\textbf{{{text}}}"
     if reach is not None and reach < 0.995:
-        text += rf"\,{{\scriptsize({reach:.2f})}}"
+        text += rf"\,{{\scriptsize({reach * 100:.0f}\%)}}"
     if reference:
         text += claim_mark(st.comp(cell, variant), reference)
     return text
@@ -109,9 +109,7 @@ def cmp_row(st: Study, cell: str, variant: str, digits: int = 2) -> Tuple[str, s
 ARMS_TABLE = r"""
 \begin{table}[t]
 \centering
-\caption{Arms compared in the evaluation. FeRRy's arms (F, FX, FQ) share the dock-time
-plan and differ only in the in-flight slot; the baselines are whole schedulers flown on
-the same simulator, budgets and paired seeds.}
+\caption{Arms compared in the evaluation.}
 \label{tab:exp5_arms}
 \small
 \begin{tabularx}{\columnwidth}{l X}
@@ -148,10 +146,10 @@ def fq_n6_cell(cell: str) -> str:
              if r.get(f"sim_s_to_tau{TAU}") not in ("", None, "nan")]
     if not times:
         return "--"
-    text = f"{statistics.mean(times):.0f}"
+    text = f"{statistics.mean(times):.0f}\\,s"
     reach = len(times) / len(ok)
     if reach < 0.995:
-        text += rf"\,{{\scriptsize({reach:.2f})}}"
+        text += rf"\,{{\scriptsize({reach * 100:.0f}\%)}}"
     return text
 
 
@@ -165,14 +163,9 @@ HEADLINE_CELLS = [("n6k1_knee", "knee"), ("n6k1_stress", "stress"),
 def headline_table() -> str:
     st = Study("b2", "s53x")
     lines = [r"\begin{table}[t]", r"\centering",
-             r"\caption{Scheduler comparison at $N=6$: mean simulated "
-             r"time to $\tau=0.71$ in seconds (lower is better), 20 paired trials per cell; "
-             r"reach rate in brackets when below 1. " + DAG + r" significantly slower than F "
-             r"(paired bootstrap CI excludes 0, Holm $p<0.05$). " + SECT + r"FQ flew the "
-             r"$K=1$ cells after the pre-registered study, on the same seeds; its exploratory "
-             r"comparisons find it no different from F or FX. "
-             r"D4 flies its whole tour whatever the budget, so its two budget columns "
-             r"coincide.}",
+             r"\caption{Scheduler comparison at $N=6$: time to $\tau=0.71$, with the share "
+             r"of trials that reach it in brackets when below 100\%. " + DAG + r"Significantly "
+             r"slower than F. " + SECT + r"Exploratory.}",
              r"\label{tab:exp5_headline}",
              r"\resizebox{\columnwidth}{!}{%",
              r"\begin{tabular}{l rr rr}",
@@ -189,18 +182,8 @@ def headline_table() -> str:
             lines.append(f"FQ{SECT} & {fq_n6_cell('n6k1_knee')} & {fq_n6_cell('n6k1_stress')}"
                          r" & -- & -- \\")
             lines.append(r"\midrule")
-    # H0 flies the wall clock: described beside F, never paired.
-    h0 = _rows(REPO / "results/exp5/b2/s53x/n6_wall__H0.csv")
-    h0_ok = [r for r in h0 if r.get("status", "ok") == "ok"]
-    h0_acc = statistics.mean(float(r["final_accuracy"]) for r in h0_ok)
-    h0_yield = statistics.mean(float(r["update_yield"]) for r in h0_ok)
-    f = st.arm("n6k1_knee", "F")
-    lines += [r"\midrule",
-              rf"\multicolumn{{5}}{{l}}{{\footnotesize H0 (no mule, live link): "
-              rf"{h0_yield:.1f} updates/round, final accuracy {h0_acc:.3f}; "
-              rf"F at the $K=1$ knee: {float(f['mean_update_yield']):.1f} updates/round, "
-              rf"{float(f['mean_final_accuracy']):.3f}.}} \\",
-              r"\bottomrule", r"\end{tabular}%", "}", r"\end{table}"]
+    # H0 (no mule) is described in the results text, not in the table.
+    lines += [r"\bottomrule", r"\end{tabular}%", "}", r"\end{table}"]
     return "\n".join(lines)
 
 
@@ -215,11 +198,9 @@ def scale_table() -> str:
     cols = [(core, "n6k1_knee"), (core, "n12k1_knee"), (core, "n24k1_knee"),
             (h53, "n6k1_stress"), (ext, "n12k1_stress"), (ext, "n24k1_stress")]
     lines = [r"\begin{table}[t]", r"\centering",
-             r"\caption{Scale study: mean time to $\tau$ (s) with one mule as the "
-             r"device population grows, at each $N$'s knee and stress budgets. Notation as in "
-             r"Table~\ref{tab:exp5_headline}. " + SECT + r"FQ at $N=6$ is the exploratory run "
-             r"and at $N=12$ the learned-score study's full-system check, on the same cells and seeds (there it "
-             r"is tested against FX only); it was not flown at $N=24$.}",
+             r"\caption{Scale study: time to $\tau$ with one mule, at each $N$'s knee and "
+             r"stress budgets. Notation as in Table~\ref{tab:exp5_headline}; FQ, flown in "
+             r"other studies, is not tested against F.}",
              r"\label{tab:exp5_scale}",
              r"\resizebox{\columnwidth}{!}{%",
              r"\begin{tabular}{l rrr rrr}",
@@ -240,7 +221,7 @@ def scale_table() -> str:
         if variant == "FX":
             fq = [fq_n6_cell("n6k1_knee"), tau_cell(s55, "n12k1_knee", FQ), "--",
                   fq_n6_cell("n6k1_stress"), tau_cell(s55, "n12k1_stress", FQ), "--"]
-            lines.append(f"FQ{SECT} & " + " & ".join(fq) + r" \\")
+            lines.append("FQ & " + " & ".join(fq) + r" \\")
     lines += [r"\bottomrule", r"\end{tabular}%", "}", r"\end{table}"]
     return "\n".join(lines)
 
@@ -289,9 +270,9 @@ def mules_table() -> str:
     cols = [("n6k1_knee", "6/1"), ("n12k2_knee", "12/2"), ("n18k3_knee", "18/3"),
             ("n12k1_knee", "12/1"), ("n12k3_knee", "12/3")]
     lines = [r"\begin{table}[t]", r"\centering",
-             r"\caption{Scaling out with mules (decision-cost study), knee budget: mean time to $\tau$ "
-             r"(s). Weak scaling holds six devices per mule ($N/K$ = 6/1, 12/2, 18/3); strong "
-             r"scaling adds mules at $N=12$. Notation as in Table~\ref{tab:exp5_headline}.}",
+             r"\caption{Scaling out with mules (decision-cost study), knee budget: time to "
+             r"$\tau$. Weak scaling holds six devices per mule; strong scaling adds mules at "
+             r"$N=12$. Notation as in Table~\ref{tab:exp5_headline}.}",
              r"\label{tab:exp5_mules}",
              r"\resizebox{\columnwidth}{!}{%",
              r"\begin{tabular}{l rrr rr}",
@@ -312,7 +293,7 @@ def mules_table() -> str:
 CLAIM_METRICS = {
     "aou": ("age of updates (missions)", lambda v: f"{v:.2f}", True),
     "close": ("round-close rate", lambda v: f"{v * 100:.0f}\\%", False),
-    "tau": (r"time to $\tau$ (s)", lambda v: f"{v:.0f}", True),
+    "tau": (r"time to $\tau$", lambda v: f"{v:.0f}\\,s", True),
     "miss": ("deadline-miss rate", lambda v: f"{v * 100:.1f}\\%", True),
 }
 
@@ -378,7 +359,6 @@ def claims_table() -> str:
     FeRRy's advantage as a percentage of its own value with the CI, Holm p and a
     plain verdict."""
     studies: Dict[Tuple[str, str], Study] = {}
-    o1 = json.loads((REPO / "results/exp5/b2/s54/o1_base.json").read_text(encoding="utf-8"))
     rows = []
     for group, test, metric, sdir, study, cell, variant, flip in CLAIM_ROWS:
         st = studies.setdefault((sdir, study), Study(sdir, study))
@@ -391,13 +371,10 @@ def claims_table() -> str:
     for _, _, _, study, c, _ in rows:
         full[study] = max(full.get(study, 0), int(c["n_pairs"]))
     lines = [r"\begin{table*}[t]", r"\centering",
-             r"\caption{Tests of FeRRy's design claims. Each row replaces one part of FeRRy's "
-             r"design with an alternative (a baseline, a removed component, or another rule) "
-             r"and compares the two on the study's pre-registered metric, paired by seed "
-             r"($N=6$ and 20 seeds unless noted; the components study flies 40). FeRRy's "
-             r"advantage is the paired difference as a percentage of FeRRy's value, positive "
-             r"when FeRRy's design does better, with its 95\% bootstrap CI. \emph{Holds}: the "
-             r"CI excludes 0 and Holm $p<0.05$ within the study.}",
+             r"\caption{Tests of the design claims, each against an alternative that "
+             r"replaces one part of FeRRy's design. Advantage: the paired difference as a "
+             r"share of FeRRy's value, positive when FeRRy's design does better, with its "
+             r"95\% CI. \emph{Holds}: significant at Holm $p<0.05$.}",
              r"\label{tab:exp5_claims}",
              r"\footnotesize",
              r"\resizebox{\textwidth}{!}{%",
@@ -434,28 +411,8 @@ def claims_table() -> str:
             f"\\quad {test} & {name} & {fmt(ferry)} & {fmt(alt)}{seeds} & "
             f"{_pct(adv)}\\% [{_pct(adv_lo)}, {_pct(adv_hi)}] & "
             f"{'$<$0.001' if holm < 0.001 else f'{holm:.3f}'} & {verdict}" + r" \\")
-    v = json.loads((REPO / "results/exp5/rl/s55/verdict.json")
-                   .read_text(encoding="utf-8"))["verdict"]
-    best = max(v["means"].values())
-    s = o1["summary"]
-    # The notes sit under the table, not in it, so they do not set its width.
-    lines += [r"\bottomrule", r"\end{tabular}%", "}",
-              r"\par\smallskip",
-              r"\begin{minipage}{\textwidth}\footnotesize",
-              r"Time to $\tau$ is averaged over the seeds in which both arms reach $\tau$; a row "
-              r"that compares fewer seeds than its study's others says how many. The backhaul "
-              r"row flies the time-varying backhaul, whose adaptive controller sees the SNR "
-              r"that decides each upload's loss.",
-              rf"C4 in FerrySim (learned-score study, pre-registered; 60 trainings, six $\gamma$ from 0 to "
-              rf"0.99): {v['outcome']}, no $\gamma$ beats $\gamma=0$ by "
-              rf"$\epsilon={v['epsilon']:g}$; held-out return, best learned ${best:.4f}$, FX "
-              rf"${v['references']['FX']:.4f}$, greedy-1 ${v['references']['greedy_1']:.4f}$.",
-              rf"C1 optimality: against an exhaustive oracle (O1) over band class, clustering, "
-              rf"route and per-stop band, F's plan serves the same share of devices at the knee "
-              rf"(gap {s['jit-n6-150']['gap_share_at_key_mean']:.2f}) and "
-              rf"{s['jit-n6-75']['gap_share_at_key_mean']:.2f} less at the stress budget.",
-              r"\end{minipage}",
-              r"\end{table*}"]
+    # The learned score's FerrySim verdict and the oracle gap are in the results text.
+    lines += [r"\bottomrule", r"\end{tabular}%", "}", r"\end{table*}"]
     return "\n".join(lines)
 
 
@@ -473,14 +430,8 @@ def robustness_table() -> str:
     arms = [("F", "F"), ("FX", "FX"), ("H1", "H1"), ("D3", "D3 (Cui)"),
             ("D4", "D4 (FedEx route)"), ("D5", "D5 (FedCS)")]
     lines = [r"\begin{table*}[t]", r"\centering",
-             r"\caption{Robustness at $N=6$, the knee budget: device training time (training-time study; "
-             r"median 68\,s, and with 20\% of devices $5\times$ slower), non-IID data "
-             r"(non-IID study, Dirichlet $\alpha=0.1$) and harsher channels (radio study). Mean time "
-             r"to $\tau$ (s), reach rate in brackets when below 1; notation as in "
-             r"Table~\ref{tab:exp5_headline}. Means are over trials that reach $\tau$: under "
-             r"training time F reaches it in fewer trials. The radio study's cells, its default "
-             r"included, fly the time-varying backhaul, so its "
-             r"default is not the main configuration of Table~\ref{tab:exp5_headline}.}",
+             r"\caption{Robustness at $N=6$ and the knee budget: time to $\tau$. Notation as "
+             r"in Table~\ref{tab:exp5_headline}.}",
              r"\label{tab:exp5_robust}",
              r"\small",
              r"\begin{tabular}{l rr r rrrr}",
@@ -498,13 +449,7 @@ def robustness_table() -> str:
             else:
                 cells.append("--")
         lines.append(f"{label} & " + " & ".join(cells) + r" \\")
-    yields = {v: float(s512.arm("n6k1_knee_1mb_spread", v)["mean_update_yield"])
-              for v in ("F", "H1", "D5")}
-    lines += [r"\midrule",
-              rf"\multicolumn{{8}}{{l}}{{\footnotesize Updates merged per round under the "
-              rf"training spread: F {yields['F']:.2f}, H1 {yields['H1']:.2f}, "
-              rf"D5 {yields['D5']:.2f} (F 3.54 without training time).}} \\",
-              r"\bottomrule", r"\end{tabular}", r"\end{table*}"]
+    lines += [r"\bottomrule", r"\end{tabular}", r"\end{table*}"]
     return "\n".join(lines)
 
 

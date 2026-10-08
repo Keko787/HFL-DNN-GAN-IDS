@@ -4,9 +4,7 @@
 % MAX-AoI (D1) cites kadota2018scheduling (DeveloperDocs/paper/biblio.bib).
 \begin{table}[t]
 \centering
-\caption{Arms compared in the evaluation. FeRRy's arms (F, FX, FQ) share the dock-time
-plan and differ only in the in-flight slot; the baselines are whole schedulers flown on
-the same simulator, budgets and paired seeds.}
+\caption{Arms compared in the evaluation.}
 \label{tab:exp5_arms}
 \small
 \begin{tabularx}{\columnwidth}{l X}
@@ -30,7 +28,7 @@ E3 & Single-agent next-stop DQN after Chen et al.\ \cite{chen2023model}, trained
 
 \begin{table}[t]
 \centering
-\caption{Scheduler comparison at $N=6$: mean simulated time to $\tau=0.71$ in seconds (lower is better), 20 paired trials per cell; reach rate in brackets when below 1. $^{\dagger}$ significantly slower than F (paired bootstrap CI excludes 0, Holm $p<0.05$). $^{\S}$FQ flew the $K=1$ cells after the pre-registered study, on the same seeds; its exploratory comparisons find it no different from F or FX. D4 flies its whole tour whatever the budget, so its two budget columns coincide.}
+\caption{Scheduler comparison at $N=6$: time to $\tau=0.71$, with the share of trials that reach it in brackets when below 100\%. $^{\dagger}$Significantly slower than F. $^{\S}$Exploratory.}
 \label{tab:exp5_headline}
 \resizebox{\columnwidth}{!}{%
 \begin{tabular}{l rr rr}
@@ -39,20 +37,18 @@ E3 & Single-agent next-stop DQN after Chen et al.\ \cite{chen2023model}, trained
 \cmidrule(lr){2-3}\cmidrule(lr){4-5}
 \textbf{Arm} & knee & stress & knee & stress \\
 \midrule
-F & \textbf{194} & \textbf{178} & \textbf{52} & \textbf{52} \\
-FX & 178 & 175 & 56 & 56 \\
-FQ$^{\S}$ & 180 & 182 & -- & -- \\
+F & \textbf{194\,s} & \textbf{178\,s} & \textbf{52\,s} & \textbf{52\,s} \\
+FX & 178\,s & 175\,s & 56\,s & 56\,s \\
+FQ$^{\S}$ & 180\,s & 182\,s & -- & -- \\
 \midrule
-H1 & 282$^{\dagger}$ & 220\,{\scriptsize(0.90)} & 65 & 64 \\
-D1 (MAX-AoI) & 282$^{\dagger}$ & 238 & 65 & 64 \\
-D2 (Oort) & 266$^{\dagger}$ & 229\,{\scriptsize(0.90)} & 65 & 64 \\
-D3 (Cui) & 280$^{\dagger}$ & 209 & 65 & 64 \\
-D4 (FedEx route) & 264$^{\dagger}$ & 264$^{\dagger}$ & 55 & 55 \\
-D4$_{\text{FedEx}}$ & 281\,{\scriptsize(0.95)} & 281\,{\scriptsize(0.95)} & 101$^{\dagger}$ & 101$^{\dagger}$ \\
-D5 (FedCS) & 275$^{\dagger}$ & 198\,{\scriptsize(0.95)} & 65 & 64 \\
-E3 (Chen) & 280$^{\dagger}$ & 211\,{\scriptsize(0.95)} & 65 & 64 \\
-\midrule
-\multicolumn{5}{l}{\footnotesize H0 (no mule, live link): 0.5 updates/round, final accuracy 0.686; F at the $K=1$ knee: 3.5 updates/round, 0.831.} \\
+H1 & 282\,s$^{\dagger}$ & 220\,s\,{\scriptsize(90\%)} & 65\,s & 64\,s \\
+D1 (MAX-AoI) & 282\,s$^{\dagger}$ & 238\,s & 65\,s & 64\,s \\
+D2 (Oort) & 266\,s$^{\dagger}$ & 229\,s\,{\scriptsize(90\%)} & 65\,s & 64\,s \\
+D3 (Cui) & 280\,s$^{\dagger}$ & 209\,s & 65\,s & 64\,s \\
+D4 (FedEx route) & 264\,s$^{\dagger}$ & 264\,s$^{\dagger}$ & 55\,s & 55\,s \\
+D4$_{\text{FedEx}}$ & 281\,s\,{\scriptsize(95\%)} & 281\,s\,{\scriptsize(95\%)} & 101\,s$^{\dagger}$ & 101\,s$^{\dagger}$ \\
+D5 (FedCS) & 275\,s$^{\dagger}$ & 198\,s\,{\scriptsize(95\%)} & 65\,s & 64\,s \\
+E3 (Chen) & 280\,s$^{\dagger}$ & 211\,s\,{\scriptsize(95\%)} & 65\,s & 64\,s \\
 \bottomrule
 \end{tabular}%
 }
@@ -60,7 +56,7 @@ E3 (Chen) & 280$^{\dagger}$ & 211\,{\scriptsize(0.95)} & 65 & 64 \\
 
 \begin{table}[t]
 \centering
-\caption{Scale study: mean time to $\tau$ (s) with one mule as the device population grows, at each $N$'s knee and stress budgets. Notation as in Table~\ref{tab:exp5_headline}. $^{\S}$FQ at $N=6$ is the exploratory run and at $N=12$ the learned-score study's full-system check, on the same cells and seeds (there it is tested against FX only); it was not flown at $N=24$.}
+\caption{Scale study: time to $\tau$ with one mule, at each $N$'s knee and stress budgets. Notation as in Table~\ref{tab:exp5_headline}; FQ, flown in other studies, is not tested against F.}
 \label{tab:exp5_scale}
 \resizebox{\columnwidth}{!}{%
 \begin{tabular}{l rrr rrr}
@@ -69,12 +65,12 @@ E3 (Chen) & 280$^{\dagger}$ & 211\,{\scriptsize(0.95)} & 65 & 64 \\
 \cmidrule(lr){2-4}\cmidrule(lr){5-7}
 \textbf{Arm} & $N=6$ & $12$ & $24$ & $N=6$ & $12$ & $24$ \\
 \midrule
-F & \textbf{194} & \textbf{486}\,{\scriptsize(0.95)} & \textbf{749} & \textbf{178} & \textbf{371} & \textbf{661} \\
-FX & 178 & 424\,{\scriptsize(0.90)} & 789 & 175 & 386\,{\scriptsize(0.90)} & 658 \\
-FQ$^{\S}$ & 180 & 461\,{\scriptsize(0.90)} & -- & 182 & 389\,{\scriptsize(0.90)} & -- \\
-H1 & 282$^{\dagger}$ & 589\,{\scriptsize(0.95)} & 951$^{\dagger}$ & 220\,{\scriptsize(0.90)} & 446\,{\scriptsize(0.95)} & 651\,{\scriptsize(0.95)} \\
-D3 (Cui) & 280$^{\dagger}$ & 507\,{\scriptsize(0.95)} & 911$^{\dagger}$ & 209 & 460\,{\scriptsize(0.90)} & 662\,{\scriptsize(0.95)} \\
-D4 (FedEx route) & 264$^{\dagger}$ & 459\,{\scriptsize(0.95)} & 752 & 264$^{\dagger}$ & 459\,{\scriptsize(0.95)} & 752$^{\dagger}$ \\
+F & \textbf{194\,s} & \textbf{486\,s}\,{\scriptsize(95\%)} & \textbf{749\,s} & \textbf{178\,s} & \textbf{371\,s} & \textbf{661\,s} \\
+FX & 178\,s & 424\,s\,{\scriptsize(90\%)} & 789\,s & 175\,s & 386\,s\,{\scriptsize(90\%)} & 658\,s \\
+FQ & 180\,s & 461\,s\,{\scriptsize(90\%)} & -- & 182\,s & 389\,s\,{\scriptsize(90\%)} & -- \\
+H1 & 282\,s$^{\dagger}$ & 589\,s\,{\scriptsize(95\%)} & 951\,s$^{\dagger}$ & 220\,s\,{\scriptsize(90\%)} & 446\,s\,{\scriptsize(95\%)} & 651\,s\,{\scriptsize(95\%)} \\
+D3 (Cui) & 280\,s$^{\dagger}$ & 507\,s\,{\scriptsize(95\%)} & 911\,s$^{\dagger}$ & 209\,s & 460\,s\,{\scriptsize(90\%)} & 662\,s\,{\scriptsize(95\%)} \\
+D4 (FedEx route) & 264\,s$^{\dagger}$ & 459\,s\,{\scriptsize(95\%)} & 752\,s & 264\,s$^{\dagger}$ & 459\,s\,{\scriptsize(95\%)} & 752\,s$^{\dagger}$ \\
 \bottomrule
 \end{tabular}%
 }
@@ -82,7 +78,7 @@ D4 (FedEx route) & 264$^{\dagger}$ & 459\,{\scriptsize(0.95)} & 752 & 264$^{\dag
 
 \begin{table}[t]
 \centering
-\caption{Scaling out with mules (decision-cost study), knee budget: mean time to $\tau$ (s). Weak scaling holds six devices per mule ($N/K$ = 6/1, 12/2, 18/3); strong scaling adds mules at $N=12$. Notation as in Table~\ref{tab:exp5_headline}.}
+\caption{Scaling out with mules (decision-cost study), knee budget: time to $\tau$. Weak scaling holds six devices per mule; strong scaling adds mules at $N=12$. Notation as in Table~\ref{tab:exp5_headline}.}
 \label{tab:exp5_mules}
 \resizebox{\columnwidth}{!}{%
 \begin{tabular}{l rrr rr}
@@ -91,10 +87,10 @@ D4 (FedEx route) & 264$^{\dagger}$ & 459\,{\scriptsize(0.95)} & 752 & 264$^{\dag
 \cmidrule(lr){2-4}\cmidrule(lr){5-6}
 \textbf{Arm} & $N/K$=6/1 & $N/K$=12/2 & $N/K$=18/3 & $N/K$=12/1 & $N/K$=12/3 \\
 \midrule
-F & \textbf{194} & \textbf{226} & \textbf{186} & \textbf{486}\,{\scriptsize(0.95)} & \textbf{151} \\
-FX & 178 & 205 & 131\,{\scriptsize(0.95)} & 424\,{\scriptsize(0.90)} & 102$^{\ast}$ \\
-H1 & 282$^{\dagger}$ & 263\,{\scriptsize(0.95)} & 149 & 589\,{\scriptsize(0.95)} & 165 \\
-D4 (FedEx route) & 264$^{\dagger}$ & 222 & 186 & 459\,{\scriptsize(0.95)} & 128 \\
+F & \textbf{194\,s} & \textbf{226\,s} & \textbf{186\,s} & \textbf{486\,s}\,{\scriptsize(95\%)} & \textbf{151\,s} \\
+FX & 178\,s & 205\,s & 131\,s\,{\scriptsize(95\%)} & 424\,s\,{\scriptsize(90\%)} & 102\,s$^{\ast}$ \\
+H1 & 282\,s$^{\dagger}$ & 263\,s\,{\scriptsize(95\%)} & 149\,s & 589\,s\,{\scriptsize(95\%)} & 165\,s \\
+D4 (FedEx route) & 264\,s$^{\dagger}$ & 222\,s & 186\,s & 459\,s\,{\scriptsize(95\%)} & 128\,s \\
 \bottomrule
 \end{tabular}%
 }
@@ -123,7 +119,7 @@ $N$ & mean & p95 & budget (s) & F served & FX served \\
 
 \begin{table*}[t]
 \centering
-\caption{Tests of FeRRy's design claims. Each row replaces one part of FeRRy's design with an alternative (a baseline, a removed component, or another rule) and compares the two on the study's pre-registered metric, paired by seed ($N=6$ and 20 seeds unless noted; the components study flies 40). FeRRy's advantage is the paired difference as a percentage of FeRRy's value, positive when FeRRy's design does better, with its 95\% bootstrap CI. \emph{Holds}: the CI excludes 0 and Holm $p<0.05$ within the study.}
+\caption{Tests of the design claims, each against an alternative that replaces one part of FeRRy's design. Advantage: the paired difference as a share of FeRRy's value, positive when FeRRy's design does better, with its 95\% CI. \emph{Holds}: significant at Holm $p<0.05$.}
 \label{tab:exp5_claims}
 \footnotesize
 \resizebox{\textwidth}{!}{%
@@ -140,15 +136,15 @@ $N$ & mean & p95 & budget (s) & F served & FX served \\
 \quad Dwell term removed ($N{=}12$) & round-close rate & 99\% & 99\% & 0\% [0, 0] & 1.000 & no difference \\
 \midrule
 \multicolumn{7}{l}{\textit{C3: one deadline, three roles}} \\
-\quad Plain-mean merge & time to $\tau$ (s) & 194 & 194 & 0\% [0, 0] & 1.000 & no difference \\
-\quad Async-HFL merge & time to $\tau$ (s) & 194 & 194 & 0\% [0, 0] & 1.000 & no difference \\
-\quad FedBuff merge & time to $\tau$ (s) & 159 & 346 (13 seeds) & +117\% [+59, +183] & 0.117 & no difference \\
-\quad FeRRy's merge with FedProx & time to $\tau$ (s) & 194 & 146 & $-$25\% [$-$64, +10] & 1.000 & no difference \\
+\quad Plain-mean merge & time to $\tau$ & 194\,s & 194\,s & 0\% [0, 0] & 1.000 & no difference \\
+\quad Async-HFL merge & time to $\tau$ & 194\,s & 194\,s & 0\% [0, 0] & 1.000 & no difference \\
+\quad FedBuff merge & time to $\tau$ & 159\,s & 346\,s (13 seeds) & +117\% [+59, +183] & 0.117 & no difference \\
+\quad FeRRy's merge with FedProx & time to $\tau$ & 194\,s & 146\,s & $-$25\% [$-$64, +10] & 1.000 & no difference \\
 \quad Round deadline, after FedCS (stress) & deadline-miss rate & 42.2\% & 47.4\% & +13\% [+3, +23] & 0.152 & no difference \\
 \quad Preferred duration, after Oort (stress) & deadline-miss rate & 42.2\% & 47.2\% & +12\% [+3, +22] & 0.152 & no difference \\
 \midrule
 \multicolumn{7}{l}{\textit{C4: two clocks, re-decided per stop}} \\
-\quad Learned per-stop score, FQ ($N{=}12$) & time to $\tau$ (s) & 424 & 461 & +9\% [0, +23] & 0.555 & no difference \\
+\quad Learned per-stop score, FQ ($N{=}12$) & time to $\tau$ & 424\,s & 461\,s & +9\% [0, +23] & 0.555 & no difference \\
 \midrule
 \multicolumn{7}{l}{\textit{C5: fairness under physical cost}} \\
 \quad MAX-AoI scheduler, D1 (stress) & age of updates (missions) & 0.78 & 1.06 & +37\% [+21, +53] & 0.009 & \textbf{holds} \\
@@ -162,17 +158,11 @@ $N$ & mean & p95 & budget (s) & F served & FX served \\
 \bottomrule
 \end{tabular}%
 }
-\par\smallskip
-\begin{minipage}{\textwidth}\footnotesize
-Time to $\tau$ is averaged over the seeds in which both arms reach $\tau$; a row that compares fewer seeds than its study's others says how many. The backhaul row flies the time-varying backhaul, whose adaptive controller sees the SNR that decides each upload's loss.
-C4 in FerrySim (learned-score study, pre-registered; 60 trainings, six $\gamma$ from 0 to 0.99): flat, no $\gamma$ beats $\gamma=0$ by $\epsilon=0.01$; held-out return, best learned $-0.0774$, FX $-0.0786$, greedy-1 $-0.0716$.
-C1 optimality: against an exhaustive oracle (O1) over band class, clustering, route and per-stop band, F's plan serves the same share of devices at the knee (gap 0.00) and 0.04 less at the stress budget.
-\end{minipage}
 \end{table*}
 
 \begin{table*}[t]
 \centering
-\caption{Robustness at $N=6$, the knee budget: device training time (training-time study; median 68\,s, and with 20\% of devices $5\times$ slower), non-IID data (non-IID study, Dirichlet $\alpha=0.1$) and harsher channels (radio study). Mean time to $\tau$ (s), reach rate in brackets when below 1; notation as in Table~\ref{tab:exp5_headline}. Means are over trials that reach $\tau$: under training time F reaches it in fewer trials. The radio study's cells, its default included, fly the time-varying backhaul, so its default is not the main configuration of Table~\ref{tab:exp5_headline}.}
+\caption{Robustness at $N=6$ and the knee budget: time to $\tau$. Notation as in Table~\ref{tab:exp5_headline}.}
 \label{tab:exp5_robust}
 \small
 \begin{tabular}{l rr r rrrr}
@@ -181,14 +171,12 @@ C1 optimality: against an exhaustive oracle (O1) over band class, clustering, ro
 \cmidrule(lr){2-3}\cmidrule(lr){4-4}\cmidrule(lr){5-8}
 \textbf{Arm} & train spread & stragglers & Dir(0.1) & default & 17 dB interf. & $n_{\text{pl}}{=}2.7$ & $\sigma{=}8$ dB \\
 \midrule
-F & \textbf{137}\,{\scriptsize(0.75)} & \textbf{159}\,{\scriptsize(0.70)} & \textbf{378}\,{\scriptsize(0.55)} & \textbf{216}\,{\scriptsize(0.95)} & \textbf{255}\,{\scriptsize(0.95)} & \textbf{257} & \textbf{219}\,{\scriptsize(0.90)} \\
-FX & 120\,{\scriptsize(0.75)} & 146\,{\scriptsize(0.70)} & 329\,{\scriptsize(0.55)}$^{\ast}$ & 192\,{\scriptsize(0.95)}$^{\ast}$ & 209\,{\scriptsize(0.95)} & 263 & 183\,{\scriptsize(0.85)}$^{\ast}$ \\
-H1 & 325$^{\dagger}$ & 296\,{\scriptsize(0.95)} & 507\,{\scriptsize(0.55)}$^{\dagger}$ & 274 & 332 & 261 & 281 \\
-D3 (Cui) & -- & -- & 519\,{\scriptsize(0.50)}$^{\dagger}$ & -- & -- & -- & -- \\
-D4 (FedEx route) & 333$^{\dagger}$ & 304\,{\scriptsize(0.90)} & -- & -- & -- & -- & -- \\
-D5 (FedCS) & 222\,{\scriptsize(0.95)}$^{\dagger}$ & 250\,{\scriptsize(0.85)} & -- & -- & -- & -- & -- \\
-\midrule
-\multicolumn{8}{l}{\footnotesize Updates merged per round under the training spread: F 0.71, H1 2.24, D5 1.77 (F 3.54 without training time).} \\
+F & \textbf{137\,s}\,{\scriptsize(75\%)} & \textbf{159\,s}\,{\scriptsize(70\%)} & \textbf{378\,s}\,{\scriptsize(55\%)} & \textbf{216\,s}\,{\scriptsize(95\%)} & \textbf{255\,s}\,{\scriptsize(95\%)} & \textbf{257\,s} & \textbf{219\,s}\,{\scriptsize(90\%)} \\
+FX & 120\,s\,{\scriptsize(75\%)} & 146\,s\,{\scriptsize(70\%)} & 329\,s\,{\scriptsize(55\%)}$^{\ast}$ & 192\,s\,{\scriptsize(95\%)}$^{\ast}$ & 209\,s\,{\scriptsize(95\%)} & 263\,s & 183\,s\,{\scriptsize(85\%)}$^{\ast}$ \\
+H1 & 325\,s$^{\dagger}$ & 296\,s\,{\scriptsize(95\%)} & 507\,s\,{\scriptsize(55\%)}$^{\dagger}$ & 274\,s & 332\,s & 261\,s & 281\,s \\
+D3 (Cui) & -- & -- & 519\,s\,{\scriptsize(50\%)}$^{\dagger}$ & -- & -- & -- & -- \\
+D4 (FedEx route) & 333\,s$^{\dagger}$ & 304\,s\,{\scriptsize(90\%)} & -- & -- & -- & -- & -- \\
+D5 (FedCS) & 222\,s\,{\scriptsize(95\%)}$^{\dagger}$ & 250\,s\,{\scriptsize(85\%)} & -- & -- & -- & -- & -- \\
 \bottomrule
 \end{tabular}
 \end{table*}
