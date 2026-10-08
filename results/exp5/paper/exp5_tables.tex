@@ -119,40 +119,51 @@ $N$ & mean & p95 & budget (s) & F served & FX served \\
 
 \begin{table*}[t]
 \centering
-\caption{Tests of FeRRy's design claims ($N=6$ unless noted; 5.7 and 5.5 at $N=12$). Difference is reference $-$ variant, paired by seed, with its 95\% bootstrap CI; AoU = mean network age of updates (lower is better), close = round-close rate, miss = deadline-miss rate, $t_\tau$ = time to $\tau$ (s). Means are over complete pairs. A claim needs the CI to exclude 0 and Holm $p<0.05$ within the study.}
+\caption{Tests of FeRRy's design claims. Each row replaces one part of FeRRy's design with an alternative (a baseline, a removed component, or another rule) and compares the two on the study's pre-registered metric, paired by seed ($N=6$ and 20 seeds unless noted; the components study flies 40). FeRRy's advantage is the paired difference as a percentage of FeRRy's value, positive when FeRRy's design does better, with its 95\% bootstrap CI. \emph{Holds}: the CI excludes 0 and Holm $p<0.05$ within the study.}
 \label{tab:exp5_claims}
-\small
-\begin{tabular}{l l l rr r r l}
+\footnotesize
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{l l rr r r l}
 \toprule
-\textbf{Claim} & \textbf{Test} & \textbf{Metric} & \textbf{Ref.} & \textbf{Variant} & \textbf{Difference [95\% CI]} & \textbf{Holm $p$} & \textbf{Verdict} \\
+\textbf{Alternative tested} & \textbf{Metric} & \textbf{FeRRy} & \textbf{Alternative} & \textbf{FeRRy's advantage [95\% CI]} & \textbf{Holm $p$} & \textbf{Verdict} \\
 \midrule
-C1 & band class pinned wide vs F & AoU & 0.700 & 0.721 & -0.021 [-0.052, 0.000] & 1.000 & no difference \\
-C1 & band class pinned narrow vs F & AoU & 0.700 & 0.700 & 0.000 [0.000, 0.000] & 1.000 & no difference \\
+\multicolumn{7}{l}{\textit{C1: reach is a decision}} \\
+\quad Band class pinned to wide & age of updates (missions) & 0.70 & 0.72 & +3\% [0, +7] & 1.000 & no difference \\
+\quad Band class pinned to narrow & age of updates (missions) & 0.70 & 0.70 & 0\% [0, 0] & 1.000 & no difference \\
 \midrule
-C2 & coverage term off (FX-cov) & close & 0.99 & 0.74 & 0.25 [0.25, 0.25] & 0.000 & favours FX \\
-C2 & dwell term off (FX-dwell) & close & 0.99 & 0.99 & 0.00 [0.00, 0.00] & 1.000 & no difference \\
+\multicolumn{7}{l}{\textit{C2: one derived objective}} \\
+\quad Coverage term removed ($N{=}12$) & round-close rate & 99\% & 74\% & +25\% [+25, +25] & $<$0.001 & \textbf{holds} \\
+\quad Dwell term removed ($N{=}12$) & round-close rate & 99\% & 99\% & 0\% [0, 0] & 1.000 & no difference \\
 \midrule
-C3 & plain mean vs cutoff, F route & $t_\tau$ & 194 & 194 & 0 [0, 0] & 1.000 & no difference \\
-C3 & Async-HFL vs cutoff, F route & $t_\tau$ & 194 & 194 & 0 [0, 0] & 1.000 & no difference \\
-C3 & FedBuff vs cutoff, F route & $t_\tau$ & 159 & 346 & -186 [-292, -94] & 0.117 & no difference \\
-C3 & +FedProx vs cutoff, F route & $t_\tau$ & 194 & 146 & 48 [-20, 124] & 1.000 & no difference \\
-C3 & round deadline (FedCS) vs F & miss & 0.422 & 0.474 & -0.053 [-0.095, -0.014] & 0.152 & no difference \\
-C3 & preferred duration (Oort) vs F & miss & 0.422 & 0.472 & -0.050 [-0.093, -0.012] & 0.152 & no difference \\
+\multicolumn{7}{l}{\textit{C3: one deadline, three roles}} \\
+\quad Plain-mean merge & time to $\tau$ (s) & 194 & 194 & 0\% [0, 0] & 1.000 & no difference \\
+\quad Async-HFL merge & time to $\tau$ (s) & 194 & 194 & 0\% [0, 0] & 1.000 & no difference \\
+\quad FedBuff merge & time to $\tau$ (s) & 159 & 346 (13 seeds) & +117\% [+59, +183] & 0.117 & no difference \\
+\quad FeRRy's merge with FedProx & time to $\tau$ (s) & 194 & 146 & $-$25\% [$-$64, +10] & 1.000 & no difference \\
+\quad Round deadline, after FedCS (stress) & deadline-miss rate & 42.2\% & 47.4\% & +13\% [+3, +23] & 0.152 & no difference \\
+\quad Preferred duration, after Oort (stress) & deadline-miss rate & 42.2\% & 47.2\% & +12\% [+3, +22] & 0.152 & no difference \\
 \midrule
-C4 & learned score ($\gamma{=}0.75$) vs FX & $t_\tau$ & 424 & 461 & -37 [-99, 0] & 0.555 & no difference \\
+\multicolumn{7}{l}{\textit{C4: two clocks, re-decided per stop}} \\
+\quad Learned per-stop score, FQ ($N{=}12$) & time to $\tau$ (s) & 424 & 461 & +9\% [0, +23] & 0.555 & no difference \\
 \midrule
-C5 & MAX-AoI (D1) vs F, stress & AoU & 0.775 & 1.062 & -0.287 [-0.415, -0.163] & 0.009 & favours F \\
-C5 & Cui's Whittle (D3) vs F, stress & AoU & 0.775 & 1.073 & -0.298 [-0.423, -0.179] & 0.007 & favours F \\
-C5 & coverage term off (F-cov), stress & AoU & 0.775 & 1.096 & -0.321 [-0.379, -0.262] & 0.001 & favours F \\
-C5 & age cap off (F-cap), stress & AoU & 0.775 & 0.775 & 0.000 [0.000, 0.000] & 1.000 & no difference \\
+\multicolumn{7}{l}{\textit{C5: fairness under physical cost}} \\
+\quad MAX-AoI scheduler, D1 (stress) & age of updates (missions) & 0.78 & 1.06 & +37\% [+21, +53] & 0.009 & \textbf{holds} \\
+\quad Whittle index, D3 (stress) & age of updates (missions) & 0.78 & 1.07 & +38\% [+23, +55] & 0.007 & \textbf{holds} \\
+\quad Coverage term removed (stress) & age of updates (missions) & 0.78 & 1.10 & +41\% [+34, +49] & 0.001 & \textbf{holds} \\
+\quad Age cap removed (stress) & age of updates (missions) & 0.78 & 0.78 & 0\% [0, 0] & 1.000 & no difference \\
 \midrule
--- & whole stops vs member subsets, stress & AoU & 0.810 & 0.897 & -0.086 [-0.149, -0.033] & 0.078 & no difference \\
--- & adaptive backhaul (F+L1) vs F & AoU & 0.883 & 0.689 & 0.195 [0.126, 0.277] & 0.000 & favours F+L1 \\
-\midrule
-\multicolumn{8}{l}{\footnotesize C4, pre-registered FerrySim sweep (Study~5.5; 60 trainings, six $\gamma$ from 0 to 0.99): flat, no $\gamma$ beats $\gamma=0$ by $\epsilon=0.01$. Held-out return: best learned -0.0774, FX -0.0786, greedy-1 -0.0716.} \\
-\multicolumn{8}{l}{\footnotesize C1, optimality: against an exhaustive oracle (O1) over band class, clustering, route and per-stop band, F's plan serves the same share of devices at the knee (gap 0.00) and 0.04 less at the stress budget.} \\
+\multicolumn{7}{l}{\textit{Component ablations (Study 5.14)}} \\
+\quad Whole stops only (stress) & age of updates (missions) & 0.81 & 0.90 & +11\% [+4, +18] & 0.078 & no difference \\
+\quad Fixed backhaul carrier, no L1 & age of updates (missions) & 0.69 & 0.88 & +28\% [+18, +40] & $<$0.001 & \textbf{holds} \\
 \bottomrule
-\end{tabular}
+\end{tabular}%
+}
+\par\smallskip
+\begin{minipage}{\textwidth}\footnotesize
+Time to $\tau$ is averaged over the seeds in which both arms reach $\tau$; a row that compares fewer seeds than its study's others says how many.
+C4 in FerrySim (Study~5.5, pre-registered; 60 trainings, six $\gamma$ from 0 to 0.99): flat, no $\gamma$ beats $\gamma=0$ by $\epsilon=0.01$; held-out return, best learned $-0.0774$, FX $-0.0786$, greedy-1 $-0.0716$.
+C1 optimality: against an exhaustive oracle (O1) over band class, clustering, route and per-stop band, F's plan serves the same share of devices at the knee (gap 0.00) and 0.04 less at the stress budget.
+\end{minipage}
 \end{table*}
 
 \begin{table*}[t]

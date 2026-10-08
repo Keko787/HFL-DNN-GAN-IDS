@@ -905,18 +905,6 @@ are added, mean and 95\% bootstrap CI.}
 \label{fig:exp5_systems}
 \end{figure*}
 
-\begin{figure}[t]
-\centering
-\includegraphics[width=\columnwidth]{Figures/fig_exp5_claims.pdf}
-\caption{Each design-claim test compares FeRRy's design with one alternative (a baseline,
-a component removed, or another rule): the paired difference as a percentage of FeRRy's
-value, so that right of zero means FeRRy's design does better, with its 95\% bootstrap CI.
-Filled: a claim
-(CI excludes 0 and Holm $p<0.05$ within the study). Tests and metrics as in
-Table~\ref{tab:exp5_claims}.}
-\label{fig:exp5_claims}
-\end{figure}
-
 \begin{figure*}[t]
 \centering
 \includegraphics[width=\textwidth]{Figures/fig_exp5_mechanism.pdf}
