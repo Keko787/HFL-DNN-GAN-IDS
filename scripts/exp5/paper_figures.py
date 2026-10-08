@@ -70,7 +70,13 @@ STAGE_SETS: Dict[str, Tuple[Optional[int], List[str], Optional[List[str]]]] = {
                ["s51", "s52", "s53x", "s54", "s55", "s57", "s58", "s59x", "s513"]),
     "batch3": (None, ["s512.payloads=[1000000]", "s515.arms=['F','FX','H1']",
                       "s515.mission_backhaul_arms=[]"], None),
+    # The exploratory FQ run of 8 Oct 2026 (scripts/exp5/fq_vs_e3.py): FQ in 5.3's
+    # N = 6, one-mule cells beside F, FX, D4 and E3.
+    "batch2fq": (20, ["s53x.arms=['F','FX','D4','E3','FQ-g75']", "s53x.K=[1]",
+                      "s53x.budgets=['knee','stress']", "s53x.d4_faithful=false",
+                      "s53x.h0=false", "rl.keep_learned=true"], ["s53x"]),
 }
+LAUNCH_STAGE = {"batch2fq": "batch2"}
 
 # --------------------------------------------------------------------------- #
 # Style (the dataviz reference palette and chrome, light, for print)
@@ -150,10 +156,11 @@ def entries(stage: str) -> Dict[Tuple[str, str, str], object]:
     s, _ = L.load_settings(L.PARAMS)
     ns = argparse.Namespace(trials=trials, set=sets, dataset=None,
                             **{o: None for o, _, _ in L.LEVERS})
+    launch_stage = LAUNCH_STAGE.get(stage, stage)
     with contextlib.redirect_stdout(io.StringIO()):
         L.apply_levers(s, ns)
-        jobs = L.build(stage, s, studies, "results/exp5")
-    _, by_study, _, _ = L.score_plan(stage, s, jobs)
+        jobs = L.build(launch_stage, s, studies, "results/exp5")
+    _, by_study, _, _ = L.score_plan(launch_stage, s, jobs)
     out = {}
     for study, members in by_study.items():
         for e in members:
@@ -783,6 +790,75 @@ def fig_budget(out: Path) -> None:
     save(fig, out, "fig_exp5_budget")
 
 
+LEARN_ROWS = [  # (label, variant, has FeRRy's plan)
+    ("F (plan, committed in flight)", "F", True),
+    ("FX (plan + fixed per-stop rule)", "FX", True),
+    ("FQ (plan + learned per-stop score)", "FQ-g75", True),
+    ("E3 (learned scheduler, no plan)", "E3", False),
+]
+
+
+def fig_learning(out: Path) -> None:
+    """Learning inside FeRRy's plan against learning without one (N = 6, one mule):
+    time to tau at both budgets, and where a knee mission's time goes."""
+    fig, (ax, bx) = plt.subplots(1, 2, figsize=(COL2, 2.25), sharey=True,
+                                 gridspec_kw={"width_ratios": [1, 1]})
+    n = len(LEARN_ROWS)
+    # The exploratory family's claims (scripts/exp5/fq_vs_e3.py): arms slower than FQ.
+    import csv as _csv
+    slower = set()
+    path = REPO / "results/exp5/scores/b2/exploratory_fq_vs_e3.csv"
+    with path.open(newline="", encoding="utf-8") as f:
+        for r in _csv.DictReader(f):
+            if r["claim"].lower() in ("true", "1") and r["favours"] == "FQ-g75":
+                slower.add((r["cell"], r["reference"]))
+    for i, (label, var, planned) in enumerate(LEARN_ROWS):
+        y = n - 1 - i
+        color = ARM_COLOR["F"] if planned else INK2
+        for dy, cell, filled in ((0.14, "n6k1_knee", True), (-0.14, "n6k1_stress", False)):
+            e = entry("batch2fq", "s53x", cell, var)
+            m, lo, hi = mean_ci(values(e, TAU_COL))
+            ax.plot([lo, hi], [y + dy, y + dy], color=color, lw=1.3, zorder=3)
+            ax.scatter([m], [y + dy], s=22, zorder=4, color=color if filled else SURFACE,
+                       edgecolor=color, linewidth=1.2)
+            rr = reach_rate(e)
+            mark = r"$^{\ddagger}$" if (cell, var) in slower else ""
+            ax.text(505, y + dy, f"{m:.0f}{mark}" + (f" ({rr:.2f})" if rr < 0.995 else ""),
+                    va="center", fontsize=6.0, color=INK2, clip_on=False)
+        e = entry("batch2fq", "s53x", "n6k1_knee", var)
+        tr, dw = _mean(e, "sim_transit_s_mean"), _mean(e, "sim_dwell_s_mean")
+        total = _mean(e, "sim_mission_duration_s_mean")
+        left = 0.0
+        for width, c in ((tr, TRANSIT), (dw, DWELL), (max(total - tr - dw, 0.0), CONTEXT)):
+            bx.barh(y, width, left=left, height=0.56, color=c, edgecolor=SURFACE,
+                    linewidth=1.0, zorder=3)
+            left += width
+        shares = _band_shares(e)
+        band = (f"narrow {shares.get('narrow', 0):.0%}" if planned else "wide (fixed)")
+        bx.text(total + 4, y, f"{total:.0f} s, {band}", va="center", fontsize=6.0, color=INK2)
+    ax.set_yticks(range(n))
+    ax.set_yticklabels([r[0] for r in reversed(LEARN_ROWS)])
+    ax.tick_params(axis="y", labelcolor=INK2)
+    ax.set_xlim(0, 500)
+    ax.set_xlabel(r"simulated time to $\tau$ = 0.71 (s)")
+    ax.set_title(r"(a) time to $\tau$, mean and 95% CI", color=INK2, loc="left")
+    ax.grid(axis="y", visible=False)
+    bx.set_xlim(0, 330)
+    bx.set_xlabel("simulated mission time at the knee (s), mean")
+    bx.set_title("(b) where a mission's time goes", color=INK2, loc="left")
+    bx.grid(axis="y", visible=False)
+    handles = [Line2D([], [], color=INK2, marker="o", lw=1.3, ms=4.5, label="knee budget"),
+               Line2D([], [], color=INK2, marker="o", mfc=SURFACE, lw=1.3, ms=4.5,
+                      label="stress budget"),
+               plt.Rectangle((0, 0), 1, 1, color=TRANSIT, label="transit"),
+               plt.Rectangle((0, 0), 1, 1, color=DWELL, label="dwell"),
+               plt.Rectangle((0, 0), 1, 1, color=CONTEXT, label="return, upload, dock")]
+    fig.legend(handles=handles, loc="lower center", bbox_to_anchor=(0.5, -0.01), ncol=5,
+               fontsize=6.4, handlelength=1.3, columnspacing=1.6)
+    fig.subplots_adjust(wspace=0.22, bottom=0.27)
+    save(fig, out, "fig_exp5_learning")
+
+
 FIGURE_TEX = r"""% Experiment 5 figures, generated by scripts/exp5/paper_figures.py (the PDFs) and
 % written here with their captions. Copy results/exp5/paper/figures/*.pdf into the
 % paper's Figures/ folder.
@@ -878,6 +954,22 @@ mean SNR, overrun in @F_OVER@\% of missions, by @F_OVER_S@\,s on average.}
 
 \begin{figure*}[t]
 \centering
+\includegraphics[width=\textwidth]{Figures/fig_exp5_learning.pdf}
+\caption{Learning inside FeRRy's plan against learning without one ($N=6$, one mule, 20
+paired seeds; exploratory, not pre-registered). F commits the plan in flight, FX adds the
+fixed per-stop rule, FQ the learned per-stop score (Study~5.5's $\gamma=0.75$ pick), and E3
+is Chen et al.'s learned scheduler with no plan. (a)~Time to $\tau$ at the knee (filled) and
+stress (hollow) budgets: mean and 95\% bootstrap CI over the trials that reach $\tau$, with
+the reach rate in brackets when it is below 1; $^{\ddagger}$slower than FQ (paired by seed,
+Holm $p<0.05$ across the exploratory comparisons of FQ with E3, F, FX and D4 at both
+budgets). (b)~Mean mission time at the knee by
+component, and the band each arm flies: the three FeRRy variants share the plan's
+narrow-band reach, while E3 flies the wide band.}
+\label{fig:exp5_learning}
+\end{figure*}
+
+\begin{figure*}[t]
+\centering
 \includegraphics[width=\textwidth]{Figures/fig_exp5_compute.pdf}
 \caption{Device training time (Study~5.12, $N=6$, knee budget): updates merged per round
 and the share of trials reaching $\tau$ with no training time, a seeded spread (median
@@ -917,7 +1009,7 @@ def main(argv=None) -> int:
     figs = {"convergence": fig_convergence, "tau": fig_tau, "scale": fig_scale,
             "systems": fig_systems, "claims": fig_claims, "compute": fig_compute,
             "mechanism": fig_mechanism, "bands": fig_bands, "paired": fig_paired,
-            "budget": fig_budget}
+            "budget": fig_budget, "learning": fig_learning}
     for name, fn in figs.items():
         if a.only and name not in a.only:
             continue
