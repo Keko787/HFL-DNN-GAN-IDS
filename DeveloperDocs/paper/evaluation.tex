@@ -49,7 +49,10 @@ transit (Fig.~\ref{fig:exp5_learning}b). Pinning F to each band class isolates t
 effect: pinned to the wide band, F reaches $\tau$ in 265\,s, D4's own time;
 pinned to the narrow band, in 196\,s, F's own. (The band-pinning study's pre-registered
 metric is the age of updates, on which the pinned bands do not differ; these
-times to $\tau$ are descriptive.) The choice also adapts
+times to $\tau$ are descriptive.) The plan's choice is close to the best:
+against an exhaustive oracle over band class, clustering, route and per-stop
+band, F's plan serves as many devices at the knee budget, and 4 percentage
+points fewer under the stress budget. It also adapts
 (Fig.~\ref{fig:exp5_bands}). As the field fills and the budget tightens, F
 shifts to the faster medium and wide classes, mostly wide at $N=24$ under the
 stress budget, where the narrow band's dwell would no longer fit.
@@ -111,7 +114,7 @@ indistinguishable from FX at $N=12$ (C4 in Table~\ref{tab:exp5_claims}), as it i
 from F and FX at $N=6$ (Table~\ref{tab:exp5_headline}). FX is therefore FeRRy's
 per-stop rule, and the null is reported here. The two do not decide on the
 same information: FQ picks its next stop on arrival, from the priced dwell, and
-FX after serving, from the realized clock, so
+FX after serving, from the realized mission time, so
 the comparison is of two rules, not of two rankings over the same choice.
 
 \paragraph{Learning inside the plan, against learning without one}

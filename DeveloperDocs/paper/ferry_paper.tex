@@ -474,7 +474,7 @@ Pass~1, it can revise the band and the next stop from the signal it observes.
 The two clocks are needed because interference varies with a period comparable
 to one leg, so the band that is best at takeoff need not be best at a later
 stop. What the flight observes returns to the plan: rate sets dwell, dwell
-advances the mission clock, the clock decides feasibility, and infeasibility
+advances mission time, mission time decides feasibility, and infeasibility
 triggers a re-plan. Every decision is a rule or a search over a declared score;
 learning can enter only through the flight slot.
 
@@ -492,13 +492,13 @@ learning can enter only through the flight slot.
   \node[box, right=of d] (bb) {band class\\$\bbar$};
   \node[box, right=of bb] (st) {stops at\\$R(\bbar)$};
   \node[box, right=of st] (rt) {route\\$\pi$};
-  \node[gate, right=of rt] (g1) {gate\\(S3b)};
+  \node[gate, right=of rt] (g1) {feasibility\\test};
   \draw[arr] (d)--(bb); \draw[arr] (bb)--(st); \draw[arr] (st)--(rt); \draw[arr] (rt)--(g1);
   % flight clock
   \node[font=\scriptsize\bfseries, anchor=west] (fl) at (0,0.1) {Flight clock (each Pass-1 arrival)};
   \node[box] (ob) at (0.9,-0.5) {observe\\SNR per band};
   \node[box, right=of ob] (pr) {(band, next\\stop) pair};
-  \node[gate, right=of pr] (g2) {mask\\(S3b)};
+  \node[gate, right=of pr] (g2) {feasibility\\test};
   \node[box, right=of g2] (sv) {serve,\\dwell};
   \node[box, right=of sv] (rp) {fits?\\else re-plan};
   \draw[arr] (ob)--(pr); \draw[arr] (pr)--(g2); \draw[arr] (g2)--(sv); \draw[arr] (sv)--(rp);
@@ -517,7 +517,7 @@ flight.}
 \subsection{Quantities Supplied by the Layers}
 \label{sec:method:models}
 
-\subsubsection{L1: Contact Link, Clock, and Backhaul}
+\subsubsection{L1: Contact Link, Mission Time, and Backhaul}
 \label{sec:method:l1}
 
 \paragraph{Band classes}
@@ -580,8 +580,8 @@ p_{\mathrm{out}}(b,d)=\Phi\!\left(\frac{\gamma_{\mathrm{floor}}-\bar\gamma_b(d)}
 \label{eq:pout}
 \end{equation}
 
-\paragraph{Mission clock and energy}
-Mission time is a simulated clock charged for transit at 5~m/s, dwell, a 1~s
+\paragraph{Mission time and energy}
+Mission time is simulated time since takeoff, charged for transit at 5~m/s, dwell, a 1~s
 listen window at a stop with a missing reply, the return leg, the upload, and a
 30~s dock turnaround. Energy follows the same ledger,
 \begin{equation}
@@ -671,14 +671,14 @@ capped device its stop cannot serve within the budget gets a one-device
 ages of the capped devices a plan leaves out.
 
 % -----------------------------------------------------------------------------
-\subsection{The Feasibility Test and the Mission Clock}
+\subsection{The Feasibility Test}
 \label{sec:method:gate}
 
 One predicate decides whether a stop may be served next; it is the only
 admission rule in the plan-mode system, applied to the committed plan, inside
 the plan search, at every departure, inside the re-plan, and to the in-flight
 choices. For a stop $s$ with members $\mathcal{M}_s$, reached from a state
-(pose, clock $c$, energy) on band $b$,
+(pose, mission time $c$, energy) on band $b$,
 \begin{align}
 t_{\mathrm{arr}} &= c+\|\mathrm{pose}-s\|/v,\\
 t_{\mathrm{fin}} &= t_{\mathrm{arr}}+\!\!\sum_{j\in\mathcal{M}_s}\!\tau^{\mathrm{dwell}}_{j,b}(\bar\gamma_b(d_j)),\\
@@ -761,7 +761,7 @@ makes the two choices at different moments: on arrival it picks the fastest
 class that still reaches every device $\bbar$ reaches at the stop, at the
 observed SNR; at the next departure, after the stop is served and the departure
 check has run, it picks the nearest remaining stop whose move to the front still
-passes the feasibility test from the realized clock, or else the plan's next.
+passes the feasibility test from the realized mission time, or else the plan's next.
 
 The learned filling, FQ, makes both choices on arrival, as a pair $(b,s)$ ranked
 by a learned score. A pair is admitted only if the band reaches every device
@@ -770,15 +770,15 @@ the flight still passes the feasibility test after serving on $b$ at the
 observed dwell; if no pair is admitted, the mule serves on FX's band and keeps
 the plan's order. The score is a masked double DQN over one feature row per
 admitted pair (the current and next-stop SNR per class, the dwell, deadline
-slack, plan ages, the clock and energy left, and the phase of the interference
+slack, plan ages, the mission time and energy left, and the phase of the interference
 cycle), trained in FerrySim on a per-stop reward: the merge weight collected less
 a time cost, with the weighted shortfall of committed devices charged at the end
 of each sortie. FQ thus picks its next stop before serving, from the priced
-dwell, and FX after serving, from the realized clock.
+dwell, and FX after serving, from the realized mission time.
 
 \paragraph{Departure check and re-plan}
 After each stop, the mule checks the remaining queue against the feasibility
-test at its current clock. If the queue no longer fits, it re-plans the
+test at its current mission time. If the queue no longer fits, it re-plans the
 remainder: stops with a capped member move to the front, the rest keep the
 plan's order, and stops and members that no longer fit are trimmed. Every
 dropped stop is final for the mission and recorded as a synthetic timeout.
@@ -880,7 +880,7 @@ carry integrity checks but no authentication; poisoning-robust aggregation and
 privacy mechanisms are out of scope. The learned score, the learned baseline E3,
 and the largest problems ($N=48$ and $96$) run in FerrySim, an in-process
 simulator built from the same driver, services, planner, flight slot,
-feasibility test, channel and clock. It omits model training (a device returns
+feasibility test, channel and mission-time model. It omits model training (a device returns
 the global model plus small noise), flies one mule, uses an additive deadline
 law and no merge cutoff, and grows the field with $N$ in its scale cells, so its
 $N=24$ is not the full system's.
@@ -894,8 +894,8 @@ $N=24$ is not the full system's.
 Every trial runs the full system described above: the server, each
 mule, and each device are separate processes that exchange messages over TCP,
 and the devices train the real intrusion-detection model on CICIoT2023.
-Mission time, the radio channel, and energy come from the simulated clock and
-channel described above, in the interference-limited (jittery)
+Mission time, the radio channel, and energy are simulated as described
+above, in the interference-limited (jittery)
 regime. A trial flies four missions with a 1~MB model payload and records every
 event, from which a separate scorer computes the metrics. The learned per-stop
 score and the learned baseline E3 are trained in FerrySim, which also runs the
@@ -934,9 +934,7 @@ resource-request phase.
 
 \begin{table}[t]
 \centering
-\caption{Arms compared in the evaluation. FeRRy's arms (F, FX, FQ) share the dock-time
-plan and differ only in the in-flight slot; the baselines are whole schedulers flown on
-the same simulator, budgets and paired seeds.}
+\caption{Arms compared in the evaluation.}
 \label{tab:exp5_arms}
 \small
 \begin{tabularx}{\columnwidth}{l X}
@@ -990,7 +988,8 @@ merged update), the round-close rate, the deadline-miss rate, the update yield
 so every arm in a cell sees the same layout, channel and data. Each comparison
 is the paired mean difference with a 95\% percentile-bootstrap CI (2000
 resamples) and a Wilcoxon signed-rank $p$, Holm-corrected across each study's
-comparisons. A comparison is a \emph{claim} when the CI excludes 0 and the Holm
+comparisons; time to $\tau$ is compared over the seeds in which both arms reach
+it. A comparison is a \emph{claim} when the CI excludes 0 and the Holm
 $p<0.05$. Each study's cells, arms, primary metric and reference arm, the test
 families, and the pilot rules were fixed in an analysis plan before the studies
 ran.
@@ -1019,9 +1018,8 @@ described rather than tested.
 
 \begin{table*}[t]
 \centering
-\caption{The studies of the evaluation. Q: the question each answers; C: the
-design claim it tests. Unless stated, one mule and 20 paired trials per cell.
-$^{\dagger}$Flies the time-varying backhaul.}
+\caption{The studies of the evaluation. $^{\dagger}$Flies the time-varying
+backhaul.}
 \label{tab:studies}
 \footnotesize
 \begin{tabularx}{\textwidth}{@{}r l c L l l@{}}
@@ -1089,7 +1087,7 @@ against F's 3.5 updates and 0.831.
 
 \begin{table}[t]
 \centering
-\caption{Scheduler comparison at $N=6$: mean simulated time to $\tau=0.71$ in seconds (lower is better), 20 paired trials per cell; reach rate in brackets when below 1. $^{\dagger}$ significantly slower than F (paired bootstrap CI excludes 0, Holm $p<0.05$). $^{\S}$FQ flew the $K=1$ cells after the pre-registered study, on the same seeds; its exploratory comparisons find it no different from F or FX. D4 flies its whole tour whatever the budget, so its two budget columns coincide.}
+\caption{Scheduler comparison at $N=6$: time to $\tau=0.71$, with the share of trials that reach it in brackets when below 100\%. $^{\dagger}$Significantly slower than F. $^{\S}$Exploratory.}
 \label{tab:exp5_headline}
 \resizebox{\columnwidth}{!}{%
 \begin{tabular}{l rr rr}
@@ -1098,20 +1096,18 @@ against F's 3.5 updates and 0.831.
 \cmidrule(lr){2-3}\cmidrule(lr){4-5}
 \textbf{Arm} & knee & stress & knee & stress \\
 \midrule
-F & \textbf{194} & \textbf{178} & \textbf{52} & \textbf{52} \\
-FX & 178 & 175 & 56 & 56 \\
-FQ$^{\S}$ & 180 & 182 & -- & -- \\
+F & \textbf{194\,s} & \textbf{178\,s} & \textbf{52\,s} & \textbf{52\,s} \\
+FX & 178\,s & 175\,s & 56\,s & 56\,s \\
+FQ$^{\S}$ & 180\,s & 182\,s & -- & -- \\
 \midrule
-H1 & 282$^{\dagger}$ & 220\,{\scriptsize(0.90)} & 65 & 64 \\
-D1 (MAX-AoI) & 282$^{\dagger}$ & 238 & 65 & 64 \\
-D2 (Oort) & 266$^{\dagger}$ & 229\,{\scriptsize(0.90)} & 65 & 64 \\
-D3 (Cui) & 280$^{\dagger}$ & 209 & 65 & 64 \\
-D4 (FedEx route) & 264$^{\dagger}$ & 264$^{\dagger}$ & 55 & 55 \\
-D4$_{\text{FedEx}}$ & 281\,{\scriptsize(0.95)} & 281\,{\scriptsize(0.95)} & 101$^{\dagger}$ & 101$^{\dagger}$ \\
-D5 (FedCS) & 275$^{\dagger}$ & 198\,{\scriptsize(0.95)} & 65 & 64 \\
-E3 (Chen) & 280$^{\dagger}$ & 211\,{\scriptsize(0.95)} & 65 & 64 \\
-\midrule
-\multicolumn{5}{l}{\footnotesize H0 (no mule, live link): 0.5 updates/round, final accuracy 0.686; F at the $K=1$ knee: 3.5 updates/round, 0.831.} \\
+H1 & 282\,s$^{\dagger}$ & 220\,s\,{\scriptsize(90\%)} & 65\,s & 64\,s \\
+D1 (MAX-AoI) & 282\,s$^{\dagger}$ & 238\,s & 65\,s & 64\,s \\
+D2 (Oort) & 266\,s$^{\dagger}$ & 229\,s\,{\scriptsize(90\%)} & 65\,s & 64\,s \\
+D3 (Cui) & 280\,s$^{\dagger}$ & 209\,s & 65\,s & 64\,s \\
+D4 (FedEx route) & 264\,s$^{\dagger}$ & 264\,s$^{\dagger}$ & 55\,s & 55\,s \\
+D4$_{\text{FedEx}}$ & 281\,s\,{\scriptsize(95\%)} & 281\,s\,{\scriptsize(95\%)} & 101\,s$^{\dagger}$ & 101\,s$^{\dagger}$ \\
+D5 (FedCS) & 275\,s$^{\dagger}$ & 198\,s\,{\scriptsize(95\%)} & 65\,s & 64\,s \\
+E3 (Chen) & 280\,s$^{\dagger}$ & 211\,s\,{\scriptsize(95\%)} & 65\,s & 64\,s \\
 \bottomrule
 \end{tabular}%
 }
@@ -1132,7 +1128,10 @@ transit (Fig.~\ref{fig:exp5_learning}b). Pinning F to each band class isolates t
 effect: pinned to the wide band, F reaches $\tau$ in 265\,s, D4's own time;
 pinned to the narrow band, in 196\,s, F's own. (The band-pinning study's pre-registered
 metric is the age of updates, on which the pinned bands do not differ; these
-times to $\tau$ are descriptive.) The choice also adapts
+times to $\tau$ are descriptive.) The plan's choice is close to the best:
+against an exhaustive oracle over band class, clustering, route and per-stop
+band, F's plan serves as many devices at the knee budget, and 4 percentage
+points fewer under the stress budget. It also adapts
 (Fig.~\ref{fig:exp5_bands}). As the field fills and the budget tightens, F
 shifts to the faster medium and wide classes, mostly wide at $N=24$ under the
 stress budget, where the narrow band's dwell would no longer fit.
@@ -1175,7 +1174,7 @@ the work: at $N=12$, F's time to $\tau$ falls from 486\,s with one mule to
 
 \begin{table}[t]
 \centering
-\caption{Scale study: mean time to $\tau$ (s) with one mule as the device population grows, at each $N$'s knee and stress budgets. Notation as in Table~\ref{tab:exp5_headline}. $^{\S}$FQ at $N=6$ is the exploratory run and at $N=12$ the learned-score study's full-system check, on the same cells and seeds (there it is tested against FX only); it was not flown at $N=24$.}
+\caption{Scale study: time to $\tau$ with one mule, at each $N$'s knee and stress budgets. Notation as in Table~\ref{tab:exp5_headline}; FQ, flown in other studies, is not tested against F.}
 \label{tab:exp5_scale}
 \resizebox{\columnwidth}{!}{%
 \begin{tabular}{l rrr rrr}
@@ -1184,12 +1183,12 @@ the work: at $N=12$, F's time to $\tau$ falls from 486\,s with one mule to
 \cmidrule(lr){2-4}\cmidrule(lr){5-7}
 \textbf{Arm} & $N=6$ & $12$ & $24$ & $N=6$ & $12$ & $24$ \\
 \midrule
-F & \textbf{194} & \textbf{486}\,{\scriptsize(0.95)} & \textbf{749} & \textbf{178} & \textbf{371} & \textbf{661} \\
-FX & 178 & 424\,{\scriptsize(0.90)} & 789 & 175 & 386\,{\scriptsize(0.90)} & 658 \\
-FQ$^{\S}$ & 180 & 461\,{\scriptsize(0.90)} & -- & 182 & 389\,{\scriptsize(0.90)} & -- \\
-H1 & 282$^{\dagger}$ & 589\,{\scriptsize(0.95)} & 951$^{\dagger}$ & 220\,{\scriptsize(0.90)} & 446\,{\scriptsize(0.95)} & 651\,{\scriptsize(0.95)} \\
-D3 (Cui) & 280$^{\dagger}$ & 507\,{\scriptsize(0.95)} & 911$^{\dagger}$ & 209 & 460\,{\scriptsize(0.90)} & 662\,{\scriptsize(0.95)} \\
-D4 (FedEx route) & 264$^{\dagger}$ & 459\,{\scriptsize(0.95)} & 752 & 264$^{\dagger}$ & 459\,{\scriptsize(0.95)} & 752$^{\dagger}$ \\
+F & \textbf{194\,s} & \textbf{486\,s}\,{\scriptsize(95\%)} & \textbf{749\,s} & \textbf{178\,s} & \textbf{371\,s} & \textbf{661\,s} \\
+FX & 178\,s & 424\,s\,{\scriptsize(90\%)} & 789\,s & 175\,s & 386\,s\,{\scriptsize(90\%)} & 658\,s \\
+FQ & 180\,s & 461\,s\,{\scriptsize(90\%)} & -- & 182\,s & 389\,s\,{\scriptsize(90\%)} & -- \\
+H1 & 282\,s$^{\dagger}$ & 589\,s\,{\scriptsize(95\%)} & 951\,s$^{\dagger}$ & 220\,s\,{\scriptsize(90\%)} & 446\,s\,{\scriptsize(95\%)} & 651\,s\,{\scriptsize(95\%)} \\
+D3 (Cui) & 280\,s$^{\dagger}$ & 507\,s\,{\scriptsize(95\%)} & 911\,s$^{\dagger}$ & 209\,s & 460\,s\,{\scriptsize(90\%)} & 662\,s\,{\scriptsize(95\%)} \\
+D4 (FedEx route) & 264\,s$^{\dagger}$ & 459\,s\,{\scriptsize(95\%)} & 752\,s & 264\,s$^{\dagger}$ & 459\,s\,{\scriptsize(95\%)} & 752\,s$^{\dagger}$ \\
 \bottomrule
 \end{tabular}%
 }
@@ -1226,7 +1225,7 @@ stress budget), but not significantly.
 
 \begin{table*}[t]
 \centering
-\caption{Tests of FeRRy's design claims. Each row replaces one part of FeRRy's design with an alternative (a baseline, a removed component, or another rule) and compares the two on the study's pre-registered metric, paired by seed ($N=6$ and 20 seeds unless noted; the components study flies 40). FeRRy's advantage is the paired difference as a percentage of FeRRy's value, positive when FeRRy's design does better, with its 95\% bootstrap CI. \emph{Holds}: the CI excludes 0 and Holm $p<0.05$ within the study.}
+\caption{Tests of the design claims, each against an alternative that replaces one part of FeRRy's design. Advantage: the paired difference as a share of FeRRy's value, positive when FeRRy's design does better, with its 95\% CI. \emph{Holds}: significant at Holm $p<0.05$.}
 \label{tab:exp5_claims}
 \footnotesize
 \resizebox{\textwidth}{!}{%
@@ -1243,15 +1242,15 @@ stress budget), but not significantly.
 \quad Dwell term removed ($N{=}12$) & round-close rate & 99\% & 99\% & 0\% [0, 0] & 1.000 & no difference \\
 \midrule
 \multicolumn{7}{l}{\textit{C3: one deadline, three roles}} \\
-\quad Plain-mean merge & time to $\tau$ (s) & 194 & 194 & 0\% [0, 0] & 1.000 & no difference \\
-\quad Async-HFL merge & time to $\tau$ (s) & 194 & 194 & 0\% [0, 0] & 1.000 & no difference \\
-\quad FedBuff merge & time to $\tau$ (s) & 159 & 346 (13 seeds) & +117\% [+59, +183] & 0.117 & no difference \\
-\quad FeRRy's merge with FedProx & time to $\tau$ (s) & 194 & 146 & $-$25\% [$-$64, +10] & 1.000 & no difference \\
+\quad Plain-mean merge & time to $\tau$ & 194\,s & 194\,s & 0\% [0, 0] & 1.000 & no difference \\
+\quad Async-HFL merge & time to $\tau$ & 194\,s & 194\,s & 0\% [0, 0] & 1.000 & no difference \\
+\quad FedBuff merge & time to $\tau$ & 159\,s & 346\,s (13 seeds) & +117\% [+59, +183] & 0.117 & no difference \\
+\quad FeRRy's merge with FedProx & time to $\tau$ & 194\,s & 146\,s & $-$25\% [$-$64, +10] & 1.000 & no difference \\
 \quad Round deadline, after FedCS (stress) & deadline-miss rate & 42.2\% & 47.4\% & +13\% [+3, +23] & 0.152 & no difference \\
 \quad Preferred duration, after Oort (stress) & deadline-miss rate & 42.2\% & 47.2\% & +12\% [+3, +22] & 0.152 & no difference \\
 \midrule
 \multicolumn{7}{l}{\textit{C4: two clocks, re-decided per stop}} \\
-\quad Learned per-stop score, FQ ($N{=}12$) & time to $\tau$ (s) & 424 & 461 & +9\% [0, +23] & 0.555 & no difference \\
+\quad Learned per-stop score, FQ ($N{=}12$) & time to $\tau$ & 424\,s & 461\,s & +9\% [0, +23] & 0.555 & no difference \\
 \midrule
 \multicolumn{7}{l}{\textit{C5: fairness under physical cost}} \\
 \quad MAX-AoI scheduler, D1 (stress) & age of updates (missions) & 0.78 & 1.06 & +37\% [+21, +53] & 0.009 & \textbf{holds} \\
@@ -1265,12 +1264,6 @@ stress budget), but not significantly.
 \bottomrule
 \end{tabular}%
 }
-\par\smallskip
-\begin{minipage}{\textwidth}\footnotesize
-Time to $\tau$ is averaged over the seeds in which both arms reach $\tau$; a row that compares fewer seeds than its study's others says how many. The backhaul row flies the time-varying backhaul, whose adaptive controller sees the SNR that decides each upload's loss.
-C4 in FerrySim (learned-score study, pre-registered; 60 trainings, six $\gamma$ from 0 to 0.99): flat, no $\gamma$ beats $\gamma=0$ by $\epsilon=0.01$; held-out return, best learned $-0.0774$, FX $-0.0786$, greedy-1 $-0.0716$.
-C1 optimality: against an exhaustive oracle (O1) over band class, clustering, route and per-stop band, F's plan serves the same share of devices at the knee (gap 0.00) and 0.04 less at the stress budget.
-\end{minipage}
 \end{table*}
 \subsection{Learning Inside the Plan}
 \label{sec:res:rl}
@@ -1282,7 +1275,7 @@ indistinguishable from FX at $N=12$ (C4 in Table~\ref{tab:exp5_claims}), as it i
 from F and FX at $N=6$ (Table~\ref{tab:exp5_headline}). FX is therefore FeRRy's
 per-stop rule, and the null is reported here. The two do not decide on the
 same information: FQ picks its next stop on arrival, from the priced dwell, and
-FX after serving, from the realized clock, so
+FX after serving, from the realized mission time, so
 the comparison is of two rules, not of two rankings over the same choice.
 
 \paragraph{Learning inside the plan, against learning without one}
@@ -1342,7 +1335,7 @@ Adding a compute term to the plan is future work.
 
 \begin{table*}[t]
 \centering
-\caption{Robustness at $N=6$, the knee budget: device training time (training-time study; median 68\,s, and with 20\% of devices $5\times$ slower), non-IID data (non-IID study, Dirichlet $\alpha=0.1$) and harsher channels (radio study). Mean time to $\tau$ (s), reach rate in brackets when below 1; notation as in Table~\ref{tab:exp5_headline}. Means are over trials that reach $\tau$: under training time F reaches it in fewer trials. The radio study's cells, its default included, fly the time-varying backhaul, so its default is not the main configuration of Table~\ref{tab:exp5_headline}.}
+\caption{Robustness at $N=6$ and the knee budget: time to $\tau$. Notation as in Table~\ref{tab:exp5_headline}.}
 \label{tab:exp5_robust}
 \small
 \begin{tabular}{l rr r rrrr}
@@ -1351,14 +1344,12 @@ Adding a compute term to the plan is future work.
 \cmidrule(lr){2-3}\cmidrule(lr){4-4}\cmidrule(lr){5-8}
 \textbf{Arm} & train spread & stragglers & Dir(0.1) & default & 17 dB interf. & $n_{\text{pl}}{=}2.7$ & $\sigma{=}8$ dB \\
 \midrule
-F & \textbf{137}\,{\scriptsize(0.75)} & \textbf{159}\,{\scriptsize(0.70)} & \textbf{378}\,{\scriptsize(0.55)} & \textbf{216}\,{\scriptsize(0.95)} & \textbf{255}\,{\scriptsize(0.95)} & \textbf{257} & \textbf{219}\,{\scriptsize(0.90)} \\
-FX & 120\,{\scriptsize(0.75)} & 146\,{\scriptsize(0.70)} & 329\,{\scriptsize(0.55)}$^{\ast}$ & 192\,{\scriptsize(0.95)}$^{\ast}$ & 209\,{\scriptsize(0.95)} & 263 & 183\,{\scriptsize(0.85)}$^{\ast}$ \\
-H1 & 325$^{\dagger}$ & 296\,{\scriptsize(0.95)} & 507\,{\scriptsize(0.55)}$^{\dagger}$ & 274 & 332 & 261 & 281 \\
-D3 (Cui) & -- & -- & 519\,{\scriptsize(0.50)}$^{\dagger}$ & -- & -- & -- & -- \\
-D4 (FedEx route) & 333$^{\dagger}$ & 304\,{\scriptsize(0.90)} & -- & -- & -- & -- & -- \\
-D5 (FedCS) & 222\,{\scriptsize(0.95)}$^{\dagger}$ & 250\,{\scriptsize(0.85)} & -- & -- & -- & -- & -- \\
-\midrule
-\multicolumn{8}{l}{\footnotesize Updates merged per round under the training spread: F 0.71, H1 2.24, D5 1.77 (F 3.54 without training time).} \\
+F & \textbf{137\,s}\,{\scriptsize(75\%)} & \textbf{159\,s}\,{\scriptsize(70\%)} & \textbf{378\,s}\,{\scriptsize(55\%)} & \textbf{216\,s}\,{\scriptsize(95\%)} & \textbf{255\,s}\,{\scriptsize(95\%)} & \textbf{257\,s} & \textbf{219\,s}\,{\scriptsize(90\%)} \\
+FX & 120\,s\,{\scriptsize(75\%)} & 146\,s\,{\scriptsize(70\%)} & 329\,s\,{\scriptsize(55\%)}$^{\ast}$ & 192\,s\,{\scriptsize(95\%)}$^{\ast}$ & 209\,s\,{\scriptsize(95\%)} & 263\,s & 183\,s\,{\scriptsize(85\%)}$^{\ast}$ \\
+H1 & 325\,s$^{\dagger}$ & 296\,s\,{\scriptsize(95\%)} & 507\,s\,{\scriptsize(55\%)}$^{\dagger}$ & 274\,s & 332\,s & 261\,s & 281\,s \\
+D3 (Cui) & -- & -- & 519\,s\,{\scriptsize(50\%)}$^{\dagger}$ & -- & -- & -- & -- \\
+D4 (FedEx route) & 333\,s$^{\dagger}$ & 304\,s\,{\scriptsize(90\%)} & -- & -- & -- & -- & -- \\
+D5 (FedCS) & 222\,s\,{\scriptsize(95\%)}$^{\dagger}$ & 250\,s\,{\scriptsize(85\%)} & -- & -- & -- & -- & -- \\
 \bottomrule
 \end{tabular}
 \end{table*}

@@ -112,7 +112,7 @@ Pass~1, it can revise the band and the next stop from the signal it observes.
 The two clocks are needed because interference varies with a period comparable
 to one leg, so the band that is best at takeoff need not be best at a later
 stop. What the flight observes returns to the plan: rate sets dwell, dwell
-advances the mission clock, the clock decides feasibility, and infeasibility
+advances mission time, mission time decides feasibility, and infeasibility
 triggers a re-plan. Every decision is a rule or a search over a declared score;
 learning can enter only through the flight slot.
 
@@ -130,13 +130,13 @@ learning can enter only through the flight slot.
   \node[box, right=of d] (bb) {band class\\$\bbar$};
   \node[box, right=of bb] (st) {stops at\\$R(\bbar)$};
   \node[box, right=of st] (rt) {route\\$\pi$};
-  \node[gate, right=of rt] (g1) {gate\\(S3b)};
+  \node[gate, right=of rt] (g1) {feasibility\\test};
   \draw[arr] (d)--(bb); \draw[arr] (bb)--(st); \draw[arr] (st)--(rt); \draw[arr] (rt)--(g1);
   % flight clock
   \node[font=\scriptsize\bfseries, anchor=west] (fl) at (0,0.1) {Flight clock (each Pass-1 arrival)};
   \node[box] (ob) at (0.9,-0.5) {observe\\SNR per band};
   \node[box, right=of ob] (pr) {(band, next\\stop) pair};
-  \node[gate, right=of pr] (g2) {mask\\(S3b)};
+  \node[gate, right=of pr] (g2) {feasibility\\test};
   \node[box, right=of g2] (sv) {serve,\\dwell};
   \node[box, right=of sv] (rp) {fits?\\else re-plan};
   \draw[arr] (ob)--(pr); \draw[arr] (pr)--(g2); \draw[arr] (g2)--(sv); \draw[arr] (sv)--(rp);
@@ -155,7 +155,7 @@ flight.}
 \subsection{Quantities Supplied by the Layers}
 \label{sec:method:models}
 
-\subsubsection{L1: Contact Link, Clock, and Backhaul}
+\subsubsection{L1: Contact Link, Mission Time, and Backhaul}
 \label{sec:method:l1}
 
 \paragraph{Band classes}
@@ -218,8 +218,8 @@ p_{\mathrm{out}}(b,d)=\Phi\!\left(\frac{\gamma_{\mathrm{floor}}-\bar\gamma_b(d)}
 \label{eq:pout}
 \end{equation}
 
-\paragraph{Mission clock and energy}
-Mission time is a simulated clock charged for transit at 5~m/s, dwell, a 1~s
+\paragraph{Mission time and energy}
+Mission time is simulated time since takeoff, charged for transit at 5~m/s, dwell, a 1~s
 listen window at a stop with a missing reply, the return leg, the upload, and a
 30~s dock turnaround. Energy follows the same ledger,
 \begin{equation}
@@ -309,14 +309,14 @@ capped device its stop cannot serve within the budget gets a one-device
 ages of the capped devices a plan leaves out.
 
 % -----------------------------------------------------------------------------
-\subsection{The Feasibility Test and the Mission Clock}
+\subsection{The Feasibility Test}
 \label{sec:method:gate}
 
 One predicate decides whether a stop may be served next; it is the only
 admission rule in the plan-mode system, applied to the committed plan, inside
 the plan search, at every departure, inside the re-plan, and to the in-flight
 choices. For a stop $s$ with members $\mathcal{M}_s$, reached from a state
-(pose, clock $c$, energy) on band $b$,
+(pose, mission time $c$, energy) on band $b$,
 \begin{align}
 t_{\mathrm{arr}} &= c+\|\mathrm{pose}-s\|/v,\\
 t_{\mathrm{fin}} &= t_{\mathrm{arr}}+\!\!\sum_{j\in\mathcal{M}_s}\!\tau^{\mathrm{dwell}}_{j,b}(\bar\gamma_b(d_j)),\\
@@ -399,7 +399,7 @@ makes the two choices at different moments: on arrival it picks the fastest
 class that still reaches every device $\bbar$ reaches at the stop, at the
 observed SNR; at the next departure, after the stop is served and the departure
 check has run, it picks the nearest remaining stop whose move to the front still
-passes the feasibility test from the realized clock, or else the plan's next.
+passes the feasibility test from the realized mission time, or else the plan's next.
 
 The learned filling, FQ, makes both choices on arrival, as a pair $(b,s)$ ranked
 by a learned score. A pair is admitted only if the band reaches every device
@@ -408,15 +408,15 @@ the flight still passes the feasibility test after serving on $b$ at the
 observed dwell; if no pair is admitted, the mule serves on FX's band and keeps
 the plan's order. The score is a masked double DQN over one feature row per
 admitted pair (the current and next-stop SNR per class, the dwell, deadline
-slack, plan ages, the clock and energy left, and the phase of the interference
+slack, plan ages, the mission time and energy left, and the phase of the interference
 cycle), trained in FerrySim on a per-stop reward: the merge weight collected less
 a time cost, with the weighted shortfall of committed devices charged at the end
 of each sortie. FQ thus picks its next stop before serving, from the priced
-dwell, and FX after serving, from the realized clock.
+dwell, and FX after serving, from the realized mission time.
 
 \paragraph{Departure check and re-plan}
 After each stop, the mule checks the remaining queue against the feasibility
-test at its current clock. If the queue no longer fits, it re-plans the
+test at its current mission time. If the queue no longer fits, it re-plans the
 remainder: stops with a capped member move to the front, the rest keep the
 plan's order, and stops and members that no longer fit are trimmed. Every
 dropped stop is final for the mission and recorded as a synthetic timeout.
@@ -518,7 +518,7 @@ carry integrity checks but no authentication; poisoning-robust aggregation and
 privacy mechanisms are out of scope. The learned score, the learned baseline E3,
 and the largest problems ($N=48$ and $96$) run in FerrySim, an in-process
 simulator built from the same driver, services, planner, flight slot,
-feasibility test, channel and clock. It omits model training (a device returns
+feasibility test, channel and mission-time model. It omits model training (a device returns
 the global model plus small noise), flies one mule, uses an additive deadline
 law and no merge cutoff, and grows the field with $N$ in its scale cells, so its
 $N=24$ is not the full system's.
