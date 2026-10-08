@@ -93,6 +93,22 @@ mean SNR, overrun in 30\% of missions, by 8.5\,s on average.}
 
 \begin{figure*}[t]
 \centering
+\includegraphics[width=\textwidth]{Figures/fig_exp5_learning.pdf}
+\caption{Learning inside FeRRy's plan against learning without one ($N=6$, one mule, 20
+paired seeds; exploratory, not pre-registered). F commits the plan in flight, FX adds the
+fixed per-stop rule, FQ the learned per-stop score (Study~5.5's $\gamma=0.75$ pick), and E3
+is Chen et al.'s learned scheduler with no plan. (a)~Time to $\tau$ at the knee (filled) and
+stress (hollow) budgets: mean and 95\% bootstrap CI over the trials that reach $\tau$, with
+the reach rate in brackets when it is below 1; $^{\ddagger}$slower than FQ (paired by seed,
+Holm $p<0.05$ across the exploratory comparisons of FQ with E3, F, FX and D4 at both
+budgets). (b)~Mean mission time at the knee by
+component, and the band each arm flies: the three FeRRy variants share the plan's
+narrow-band reach, while E3 flies the wide band.}
+\label{fig:exp5_learning}
+\end{figure*}
+
+\begin{figure*}[t]
+\centering
 \includegraphics[width=\textwidth]{Figures/fig_exp5_compute.pdf}
 \caption{Device training time (Study~5.12, $N=6$, knee budget): updates merged per round
 and the share of trials reaching $\tau$ with no training time, a seeded spread (median
