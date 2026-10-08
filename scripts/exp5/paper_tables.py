@@ -269,75 +269,152 @@ def mules_table() -> str:
     return "\n".join(lines)
 
 
+# The claims table's metrics: (name with its unit, formatter, lower is better).
+CLAIM_METRICS = {
+    "aou": ("age of updates (missions)", lambda v: f"{v:.2f}", True),
+    "close": ("round-close rate", lambda v: f"{v * 100:.0f}\\%", False),
+    "tau": (r"time to $\tau$ (s)", lambda v: f"{v:.0f}", True),
+    "miss": ("deadline-miss rate", lambda v: f"{v * 100:.1f}\\%", True),
+}
+
+# (claim group, the alternative tested, metric, study dir, study, cell, variant, flip).
+# FeRRy's design is the comparison's reference, except where flip is set: there the
+# variant is FeRRy's (the adaptive backhaul, against the fixed carrier).
+CLAIM_ROWS = [
+    ("C1 reach", "Band class pinned to wide", "aou", "b2", "s54", "n6k1_knee_1mb",
+     "FBpwide", False),
+    ("", "Band class pinned to narrow", "aou", "b2", "s54", "n6k1_knee_1mb",
+     "FBpnarrow", False),
+    ("C2 one objective", r"Coverage term removed ($N{=}12$)", "close", "b2", "s57",
+     "n12k1_knee", "FX-cov", False),
+    ("", r"Dwell term removed ($N{=}12$)", "close", "b2", "s57", "n12k1_knee",
+     "FX-dwell", False),
+    ("C3 one deadline", "Plain-mean merge", "tau", "b2", "s51", "n6k1_knee_F_unbud",
+     "plain", False),
+    ("", "Async-HFL merge", "tau", "b2", "s51", "n6k1_knee_F_unbud", "asynchfl", False),
+    ("", "FedBuff merge", "tau", "b2", "s51", "n6k1_knee_F_unbud", "fedbuff", False),
+    ("", "FeRRy's merge with FedProx", "tau", "b2", "s51", "n6k1_knee_F_unbud",
+     "cutoff_fedprox", False),
+    ("", "Round deadline, after FedCS (stress)", "miss", "b2", "s52", "n6k1_stress",
+     "F-round", False),
+    ("", "Preferred duration, after Oort (stress)", "miss", "b2", "s52", "n6k1_stress",
+     "F-pref", False),
+    ("C4 two clocks", r"Learned per-stop score, FQ ($N{=}12$)", "tau", "b2", "s55",
+     "n12k1_knee", "FQ-g75", False),
+    ("C5 fairness", "MAX-AoI scheduler, D1 (stress)", "aou", "b2", "s58", "n6k1_stress_m4",
+     "D1", False),
+    ("", "Whittle index, D3 (stress)", "aou", "b2", "s58", "n6k1_stress_m4", "D3", False),
+    ("", "Coverage term removed (stress)", "aou", "b2", "s58", "n6k1_stress_m4", "F-cov",
+     False),
+    ("", "Age cap removed (stress)", "aou", "b2", "s58", "n6k1_stress_m4", "F-cap", False),
+    ("Components", "Whole stops only (stress)", "aou", "b1", "s514", "n6k1_stress", "whole",
+     False),
+    ("", "Fixed backhaul carrier, no L1", "aou", "b1", "s514", "n6k1_knee", "secFL1", True),
+]
+
+
+CLAIM_GROUPS = {
+    "C1 reach": "C1: reach is a decision",
+    "C2 one objective": "C2: one derived objective",
+    "C3 one deadline": "C3: one deadline, three roles",
+    "C4 two clocks": "C4: two clocks, re-decided per stop",
+    "C5 fairness": "C5: fairness under physical cost",
+    "Components": "Component ablations (Study 5.14)",
+}
+
+
+def _pct(x: float, signed: bool = True) -> str:
+    """A rounded percentage with no negative zero."""
+    r = round(x)
+    if r == 0:
+        return "0"
+    if r < 0:
+        return f"$-${-r}"                       # a typeset minus, not a hyphen
+    return f"+{r}" if signed else f"{r}"
+
+
 def claims_table() -> str:
-    """One row per design claim's test: the reference, the variant, both means,
-    the paired difference (reference - variant) with its CI, Holm p and verdict."""
-    s51, s52 = Study("b2", "s51"), Study("b2", "s52")
-    s54, s57, s58 = Study("b2", "s54"), Study("b2", "s57"), Study("b2", "s58")
-    s55, s514 = Study("b2", "s55"), Study("b1", "s514")
+    """One row per test of a design claim, under its claim's header row: the
+    alternative to FeRRy's design, the study's metric with its unit, both means,
+    FeRRy's advantage as a percentage of its own value with the CI, Holm p and a
+    plain verdict."""
+    studies: Dict[Tuple[str, str], Study] = {}
     o1 = json.loads((REPO / "results/exp5/b2/s54/o1_base.json").read_text(encoding="utf-8"))
-    rows = [
-        # (claim, test, metric, study, cell, variant, digits)
-        ("C1", "band class pinned wide vs F", "AoU", s54, "n6k1_knee_1mb", "FBpwide", 3),
-        ("C1", "band class pinned narrow vs F", "AoU", s54, "n6k1_knee_1mb", "FBpnarrow", 3),
-        ("C2", "coverage term off (FX-cov)", "close", s57, "n12k1_knee", "FX-cov", 2),
-        ("C2", "dwell term off (FX-dwell)", "close", s57, "n12k1_knee", "FX-dwell", 2),
-        ("C3", "plain mean vs cutoff, F route", r"$t_\tau$", s51, "n6k1_knee_F_unbud", "plain", 0),
-        ("C3", "Async-HFL vs cutoff, F route", r"$t_\tau$", s51, "n6k1_knee_F_unbud", "asynchfl", 0),
-        ("C3", "FedBuff vs cutoff, F route", r"$t_\tau$", s51, "n6k1_knee_F_unbud", "fedbuff", 0),
-        ("C3", "+FedProx vs cutoff, F route", r"$t_\tau$", s51, "n6k1_knee_F_unbud", "cutoff_fedprox", 0),
-        ("C3", "round deadline (FedCS) vs F", "miss", s52, "n6k1_stress", "F-round", 3),
-        ("C3", "preferred duration (Oort) vs F", "miss", s52, "n6k1_stress", "F-pref", 3),
-        ("C4", "learned score ($\\gamma{=}0.75$) vs FX", r"$t_\tau$", s55, "n12k1_knee", "FQ-g75", 0),
-        ("C5", "MAX-AoI (D1) vs F, stress", "AoU", s58, "n6k1_stress_m4", "D1", 3),
-        ("C5", "Cui's Whittle (D3) vs F, stress", "AoU", s58, "n6k1_stress_m4", "D3", 3),
-        ("C5", "coverage term off (F-cov), stress", "AoU", s58, "n6k1_stress_m4", "F-cov", 3),
-        ("C5", "age cap off (F-cap), stress", "AoU", s58, "n6k1_stress_m4", "F-cap", 3),
-        ("--", "whole stops vs member subsets, stress", "AoU", s514, "n6k1_stress", "whole", 3),
-        ("--", "adaptive backhaul (F+L1) vs F", "AoU", s514, "n6k1_knee", "secFL1", 3),
-    ]
+    rows = []
+    for group, test, metric, sdir, study, cell, variant, flip in CLAIM_ROWS:
+        st = studies.setdefault((sdir, study), Study(sdir, study))
+        c = st.comp(cell, variant)
+        if c is None:
+            raise KeyError((study, cell, variant))
+        rows.append((group, test, metric, study, c, flip))
+    # The most seeds any row of a study compares: a row with fewer says so.
+    full: Dict[str, int] = {}
+    for _, _, _, study, c, _ in rows:
+        full[study] = max(full.get(study, 0), int(c["n_pairs"]))
     lines = [r"\begin{table*}[t]", r"\centering",
-             r"\caption{Tests of FeRRy's design claims ($N=6$ unless noted; 5.7 and 5.5 at "
-             r"$N=12$). Difference is reference $-$ variant, paired by seed, with its 95\% "
-             r"bootstrap CI; AoU = mean network age of updates (lower is better), close = "
-             r"round-close rate, miss = deadline-miss rate, $t_\tau$ = time to $\tau$ (s). "
-             r"Means are over complete pairs. A claim needs the CI to exclude 0 and Holm "
-             r"$p<0.05$ within the study.}",
+             r"\caption{Tests of FeRRy's design claims. Each row replaces one part of FeRRy's "
+             r"design with an alternative (a baseline, a removed component, or another rule) "
+             r"and compares the two on the study's pre-registered metric, paired by seed "
+             r"($N=6$ and 20 seeds unless noted; the components study flies 40). FeRRy's "
+             r"advantage is the paired difference as a percentage of FeRRy's value, positive "
+             r"when FeRRy's design does better, with its 95\% bootstrap CI. \emph{Holds}: the "
+             r"CI excludes 0 and Holm $p<0.05$ within the study.}",
              r"\label{tab:exp5_claims}",
-             r"\small",
-             r"\begin{tabular}{l l l rr r r l}",
+             r"\footnotesize",
+             r"\resizebox{\textwidth}{!}{%",
+             r"\begin{tabular}{l l rr r r l}",
              r"\toprule",
-             r"\textbf{Claim} & \textbf{Test} & \textbf{Metric} & \textbf{Ref.} & "
-             r"\textbf{Variant} & \textbf{Difference [95\% CI]} & \textbf{Holm $p$} & "
-             r"\textbf{Verdict} \\",
-             r"\midrule"]
-    last = None
-    for claim, test, metric, st, cell, variant, digits in rows:
-        ref_m, var_m, diff, p, verdict = cmp_row(st, cell, variant, digits)
-        if last is not None and claim != last:
-            lines.append(r"\midrule")
-        last = claim
-        verdict = {"--": "no difference"}.get(verdict, f"favours {verdict}")
-        verdict = (verdict.replace("FBpwide", "FB+wide").replace("secFL1", "F+L1")
-                   .replace("cutoff", "cutoff").replace("capS", "F"))
-        lines.append(f"{claim} & {test} & {metric} & {ref_m} & {var_m} & {diff} & {p} & "
-                     f"{verdict}" + r" \\")
+             r"\textbf{Alternative tested} & \textbf{Metric} & "
+             r"\textbf{FeRRy} & \textbf{Alternative} & \textbf{FeRRy's advantage [95\% CI]} & "
+             r"\textbf{Holm $p$} & \textbf{Verdict} \\"]
+    for i, (group, test, metric, study, c, flip) in enumerate(rows):
+        name, fmt, lower = CLAIM_METRICS[metric]
+        ref_m, var_m = float(c["ref_mean"]), float(c["variant_mean"])
+        d, lo, hi = float(c["mean_diff"]), float(c["ci_low"]), float(c["ci_high"])
+        # mean_diff is reference - variant; turn it into alternative - FeRRy.
+        if flip:
+            ferry, alt, gap, gap_ci = var_m, ref_m, d, (lo, hi)
+        else:
+            ferry, alt, gap, gap_ci = ref_m, var_m, -d, (-hi, -lo)
+        sign = 1.0 if lower else -1.0            # positive: FeRRy's design better
+        adv = sign * gap / ferry * 100
+        adv_lo, adv_hi = sorted(sign * g / ferry * 100 for g in gap_ci)
+        ferry_name = c["variant"] if flip else c["reference"]
+        holm = float(c["p_holm"])
+        if c.get("claim", "").lower() in ("true", "1"):
+            verdict = (r"\textbf{holds}" if c["favours"] == ferry_name
+                       else "alternative better")
+        else:
+            verdict = "no difference"
+        pairs = int(c["n_pairs"])
+        seeds = f" ({pairs} seeds)" if pairs < full[study] else ""
+        if group:
+            lines += [r"\midrule",
+                      rf"\multicolumn{{7}}{{l}}{{\textit{{{CLAIM_GROUPS[group]}}}}} \\"]
+        lines.append(
+            f"\\quad {test} & {name} & {fmt(ferry)} & {fmt(alt)}{seeds} & "
+            f"{_pct(adv)}\\% [{_pct(adv_lo)}, {_pct(adv_hi)}] & "
+            f"{'$<$0.001' if holm < 0.001 else f'{holm:.3f}'} & {verdict}" + r" \\")
     v = json.loads((REPO / "results/exp5/rl/s55/verdict.json")
                    .read_text(encoding="utf-8"))["verdict"]
     best = max(v["means"].values())
     s = o1["summary"]
-    lines += [r"\midrule",
-              rf"\multicolumn{{8}}{{l}}{{\footnotesize C4, pre-registered FerrySim sweep "
-              rf"(Study~5.5; 60 trainings, six $\gamma$ from 0 to 0.99): {v['outcome']}, no "
-              rf"$\gamma$ beats $\gamma=0$ by $\epsilon={v['epsilon']:g}$. Held-out return: best "
-              rf"learned {best:.4f}, FX {v['references']['FX']:.4f}, greedy-1 "
-              rf"{v['references']['greedy_1']:.4f}.}} \\",
-              rf"\multicolumn{{8}}{{l}}{{\footnotesize C1, optimality: against an exhaustive "
-              rf"oracle (O1) over band class, clustering, route and per-stop band, F's plan "
-              rf"serves the same share of devices at the knee (gap "
-              rf"{s['jit-n6-150']['gap_share_at_key_mean']:.2f}) and "
-              rf"{s['jit-n6-75']['gap_share_at_key_mean']:.2f} less at the stress budget.}} \\",
-              r"\bottomrule", r"\end{tabular}", r"\end{table*}"]
+    # The notes sit under the table, not in it, so they do not set its width.
+    lines += [r"\bottomrule", r"\end{tabular}%", "}",
+              r"\par\smallskip",
+              r"\begin{minipage}{\textwidth}\footnotesize",
+              r"Time to $\tau$ is averaged over the seeds in which both arms reach $\tau$; a row "
+              r"that compares fewer seeds than its study's others says how many.",
+              rf"C4 in FerrySim (Study~5.5, pre-registered; 60 trainings, six $\gamma$ from 0 to "
+              rf"0.99): {v['outcome']}, no $\gamma$ beats $\gamma=0$ by "
+              rf"$\epsilon={v['epsilon']:g}$; held-out return, best learned ${best:.4f}$, FX "
+              rf"${v['references']['FX']:.4f}$, greedy-1 ${v['references']['greedy_1']:.4f}$.",
+              rf"C1 optimality: against an exhaustive oracle (O1) over band class, clustering, "
+              rf"route and per-stop band, F's plan serves the same share of devices at the knee "
+              rf"(gap {s['jit-n6-150']['gap_share_at_key_mean']:.2f}) and "
+              rf"{s['jit-n6-75']['gap_share_at_key_mean']:.2f} less at the stress budget.",
+              r"\end{minipage}",
+              r"\end{table*}"]
     return "\n".join(lines)
 
 
