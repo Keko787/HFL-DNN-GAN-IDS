@@ -361,11 +361,9 @@ Table~\ref{tab:ferry-comparison} shows that prior work addresses individual part
 \section{\sysname{} Methodology}
 \label{sec:method}
 
-\sysname{} sustains federated learning across regions that a stationary network
-cannot reach, by flying an autonomous mule (UAV) between edge devices and an
-edge server. We describe the design by \emph{decision clock} rather than by
-layer, because the two decisions that shape most of its behavior each span the
-radio, scheduling and learning layers.
+\sysname{} flies an autonomous mule (UAV) between edge devices and an edge
+server. We describe it by \emph{decision clock} rather than by layer, because
+its two main decisions each span the radio, scheduling and learning layers.
 
 % -----------------------------------------------------------------------------
 \subsection{Setting, Layer Roles, and Decision Clocks}
@@ -373,39 +371,38 @@ radio, scheduling and learning layers.
 
 \paragraph{Setting}
 A cluster has one edge server, one or more mules, and static field devices whose
-positions the server's registry holds. The server gives each mule a disjoint
-slice $\mathcal{M}$ of the registry for the trial; with $K>1$ mules the slices
-are angular sectors around the dock whose sizes differ by at most one, and the
-mules fly concurrently from the shared dock. Devices train offline between
-visits, so a contact is exchange only: the mule pushes the current global model
-and pulls the device's prepared update. A \emph{mission} has two passes. In
-\textsc{Pass 1} the mule collects updates along a route, merges them on board,
-and docks to upload; the server merges across mules into the next global model.
-In \textsc{Pass 2} the mule delivers that model to every device in its slice,
-which gives each later update a known basis version, and so an age. A time
-budget $T_{\mathrm{miss}}$ bounds Pass~1: the plan and every check in flight
-require the predicted landing and upload to fall within $T_{\mathrm{miss}}$ of
-takeoff. Pass~2 is not budgeted.
+positions the server's registry holds. Each mule gets a disjoint slice
+$\mathcal{M}$ of the registry for the trial; with $K>1$ mules the slices are
+angular sectors around the shared dock, within one device of equal size, and the
+mules fly concurrently. Devices train offline between visits, so a contact is
+exchange only: the mule pushes the global model and pulls the device's prepared
+update. In \textsc{Pass 1} of a mission the mule collects updates along a route,
+merges them on board and docks to upload; the server merges across mules into
+the next global model. In \textsc{Pass 2} the mule delivers that model to its
+whole slice, which gives each later update a known basis version, and so an age.
+A budget $T_{\mathrm{miss}}$ bounds Pass~1: the plan and every check in flight
+require the predicted landing and upload within $T_{\mathrm{miss}}$ of takeoff.
 
 \paragraph{Learning task}
-The devices train a binary intrusion detector on CICIoT2023~\cite{CiCIoT2023},
-with 21 features scaled to $[0,1]$. Each trial draws 20{,}000 balanced training
-flows, split evenly across the devices, and a disjoint test set of 6{,}000 flows
-that is two-thirds benign, so labelling every flow benign scores 0.667. The
-model is a multilayer perceptron (hidden layers of 64 to 4 units) trained with
-Adam for one local epoch per model received; a device with no prepared update
-trains inside the contact, at no simulated cost. The server evaluates each new
-global model on the test set, stamped when the closing upload completes. Every
-transfer is priced as $S=1$~MB, to represent a larger model than the 18.8~KB
-one.
+The devices train a binary intrusion detector on CICIoT2023~\cite{CiCIoT2023}, a
+multilayer perceptron trained for one local epoch per model received, on 20{,}000
+balanced training flows split across them; a disjoint 6{,}000-flow test set
+scores each new global model, stamped when its closing upload completes. A device
+with no prepared update trains inside the contact, at no simulated cost. Every
+transfer is priced as $S=1$~MB.
 
-\paragraph{Layer roles}
-The radio layer prices a link but never chooses among devices; the scheduling
-layer makes every admission, band and route decision; the learning layer values
-a collected update and the cost of a missing one (Table~\ref{tab:layer-roles}).
-Hard gates (eligibility, the feasibility test, and the age cap) always run
-before any ranking, so a ranking rule, learned or not, chooses only among
-options the gates admit.
+\paragraph{Layer roles and clocks}
+Table~\ref{tab:layer-roles} gives each layer's role. Hard gates (eligibility, the
+feasibility test, and the age cap) always run before any ranking, so a ranking
+rule, learned or not, chooses only among options the gates admit. On the
+\emph{plan clock}, once per mission at the dock, the mule chooses a contact band
+class $\bbar$ and a route together, because the band class fixes the contact
+range, the range fixes the stops, and the stops fix the route
+(Fig.~\ref{fig:clocks}). On the \emph{flight clock}, in Pass~1, it can revise the
+band and the next stop from the signal it observes, since interference varies
+over about one leg. Rate sets dwell, dwell advances mission time, mission time
+decides feasibility, and infeasibility triggers a re-plan. Learning can enter
+only through the flight slot.
 
 \begin{table}[t]
 \centering
@@ -422,19 +419,6 @@ L3 Federated learning & values & Merge weight, update age, coverage weight, cros
 \bottomrule
 \end{tabularx}
 \end{table}
-
-\paragraph{Two decision clocks}
-On the \emph{plan clock}, once per mission at the dock, the mule chooses a
-contact band class $\bbar$ and an ordered route together, because the band class
-fixes the contact range, the range fixes how devices cluster into stops, and
-the stops fix the route (Fig.~\ref{fig:clocks}). On the \emph{flight clock}, in
-Pass~1, it can revise the band and the next stop from the signal it observes.
-The two clocks are needed because interference varies with a period comparable
-to one leg, so the band that is best at takeoff need not be best at a later
-stop. What the flight observes returns to the plan: rate sets dwell, dwell
-advances mission time, mission time decides feasibility, and infeasibility
-triggers a re-plan. Every decision is a rule or a search over a declared score;
-learning can enter only through the flight slot.
 
 \begin{figure}[t]
 \centering
@@ -475,42 +459,38 @@ learning can enter only through the flight slot.
 \label{sec:method:l1}
 
 \paragraph{Band classes}
-The contact link offers a set $\mathcal{B}$ of three band classes that share one
-carrier and differ in occupied bandwidth $B_b=N_{\mathrm{RB}}\times180$~kHz, on
-LTE channel bandwidths~\cite{3gpp36104}: \textsf{wide} (20~MHz, 100 resource
-blocks), \textsf{medium} (5~MHz, 25) and \textsf{narrow} (1.4~MHz, 6). With a
-common transmit power and a noise floor that scales with $B_b$, a narrower class
-reaches farther at a lower rate. Relative to a reference class with bandwidth
-$B_0$ and slant range $R_0^{3D}$,
+The contact link offers three band classes $\mathcal{B}$ on one carrier, LTE
+channel bandwidths~\cite{3gpp36104} with occupied bandwidth
+$B_b=N_{\mathrm{RB}}\times180$~kHz: \textsf{wide} (20~MHz, 100 resource blocks),
+\textsf{medium} (5~MHz, 25) and \textsf{narrow} (1.4~MHz, 6). With a common
+transmit power and a noise floor that scales with $B_b$, a narrower class
+reaches farther at a lower rate:
 \begin{equation}
 R_b^{3D} = R_0^{3D}\left(\frac{B_0}{B_b}\right)^{1/n},
 \qquad
 R_b = \sqrt{\left(R_b^{3D}\right)^2 - h^2},
 \label{eq:range}
 \end{equation}
-with path-loss exponent $n=2.2$ and altitude $h=25$~m. Anchoring \textsf{wide} at
-60~m gives planar ranges of 60, 120 and 232~m. At $R_b$ the mean SNR exceeds the
-decoding floor by a shadowing margin $M_{\mathrm{sh}}=5.1$~dB, so a device at the
-edge of its class is reachable with probability 0.9 under shadowing alone.
+relative to a reference class $(B_0,R_0^{3D})$, with path-loss exponent $n=2.2$
+and altitude $h=25$~m. Anchoring \textsf{wide} at 60~m gives planar ranges of
+60, 120 and 232~m, at which the mean SNR clears the decoding floor by a 5.1~dB
+shadowing margin $M_{\mathrm{sh}}$ (reach probability 0.9 under shadowing).
 
 \paragraph{Rate and dwell}
 The mean SNR at distance $d$ is
 $\bar\gamma_b(d)=\gamma_{\mathrm{floor}}+M_{\mathrm{sh}}+10\,n\log_{10}(R_b^{3D}/d^{3D})$,
-with $\gamma_{\mathrm{floor}}=-6.7$~dB (CQI~1). The rate is the smaller of a CQI
-spectral efficiency and the Shannon rate on the occupied bandwidth,
+with $\gamma_{\mathrm{floor}}=-6.7$~dB (CQI~1), and the rate is
 \begin{equation}
 r_b(\gamma)=\min\bigl\{\kappa_b B_b\,\mathrm{SE}(\gamma),\;B_b\log_2(1+10^{\gamma/10})\bigr\},
 \label{eq:rate}
 \end{equation}
-for $\gamma\ge\gamma_{\mathrm{floor}}$ and zero below, with $\kappa_b$ an
-implementation efficiency. Moving $S_j$ bytes takes
-$\tau_{j,b}^{\mathrm{dwell}}(\gamma)=8S_j/r_b(\gamma)$; a Pass-1 session moves
-$2S$ (push and pull), a Pass-2 delivery and the upload $S$ each, and the dwells
-at one stop add. The channel acts on a contact only through whether a device is
-solicited (a device below the floor on arrival is not, and costs no airtime) and
-how long its session takes: the rate is read at the session's start, and a
-started session always completes. The messages travel over a lossless local TCP
-link that carries no radio effects.
+for $\gamma\ge\gamma_{\mathrm{floor}}$ and zero below, with $\mathrm{SE}$ the CQI
+spectral efficiency and $\kappa_b$ an implementation efficiency. Moving $S_j$
+bytes takes $\tau_{j,b}^{\mathrm{dwell}}(\gamma)=8S_j/r_b(\gamma)$: $2S$ for a
+Pass-1 session, $S$ for a delivery or the upload, with the dwells at a stop
+adding up. The channel only decides whether a device is solicited (not if it is
+below the floor on arrival) and how long its session takes; a started session
+always completes, and the TCP messages carry no radio effects.
 
 \paragraph{Channel over time}
 The realized SNR of device $j$ on class $b$ at mission time $t$ is
@@ -518,159 +498,140 @@ The realized SNR of device $j$ on class $b$ at mission time $t$ is
 \gamma_{b,j}(t)=\bar\gamma_b(d_j)+X_j(t)+A\sin\bigl(2\pi(t/P_c+\phi_b)\bigr)+\sigma_I\,\xi_b(t),
 \label{eq:realsnr}
 \end{equation}
-with correlated shadowing $X_j$ ($\sigma_{\mathrm{sh}}=4$~dB, correlation time
-7.4~s) and a per-class interference term~\cite{3gpp36777} of period $P_c=60$~s,
-class phases $\phi_b\in\{0,\tfrac13,\tfrac23\}$ and noise $\xi_b$; in the
-interference-limited (``jittery'') regime used throughout, $A=5$~dB and
-$\sigma_I=1.5$~dB. Both terms come from keyed hashes, so two policies that ask for
-the same value at the same time get the same value. The planner prices only the
-mean $\bar\gamma_b$, since pricing the realized phase would be an oracle, so
-realized missions run longer than planned; the flight clock observes
-$\gamma_{b,j}(t)$. The planner also uses the outage probability
+with correlated shadowing $X_j$ ($\sigma_{\mathrm{sh}}=4$~dB, 7.4~s correlation
+time) and per-class interference~\cite{3gpp36777} of period $P_c=60$~s, phases
+$\phi_b\in\{0,\tfrac13,\tfrac23\}$ and noise $\xi_b$; the interference-limited
+(``jittery'') regime sets $A=5$~dB and $\sigma_I=1.5$~dB. Keyed hashes give every
+policy the same draws. The planner prices only the mean $\bar\gamma_b$, so
+realized missions run longer than planned, and uses the outage probability
 \begin{equation}
 p_{\mathrm{out}}(b,d)=\Phi\!\left(\frac{\gamma_{\mathrm{floor}}-\bar\gamma_b(d)}{\sigma_{\mathrm{eff}}}\right),
 \quad
-\sigma_{\mathrm{eff}}^2=\sigma_{\mathrm{sh}}^2+\sigma_I^2+\tfrac{A^2}{2}.
+\sigma_{\mathrm{eff}}^2=\sigma_{\mathrm{sh}}^2+\sigma_I^2+\tfrac{A^2}{2};
 \label{eq:pout}
 \end{equation}
+the flight clock observes $\gamma_{b,j}(t)$.
 
 \paragraph{Mission time and energy}
-Mission time is simulated time since takeoff, charged for transit at 5~m/s, dwell, a 1~s
-listen window at a stop with a missing reply, the return leg, the upload, and a
-30~s dock turnaround. Energy follows the same ledger,
+Mission time is simulated time since takeoff, charged for transit at 5~m/s,
+dwell, a 1~s listen at a stop with a missing reply, the return, the upload and a
+30~s dock turnaround. Propulsion energy follows the same ledger,
 \begin{equation}
 E = P_{\mathrm{move}}\,(t_{\mathrm{transit}}+t_{\mathrm{return}})
   + P_{\mathrm{hover}}\,(t_{\mathrm{dwell}}+t_{\mathrm{listen}}),
 \label{eq:energy}
 \end{equation}
-with $P_{\mathrm{move}}=143.6$~W and $P_{\mathrm{hover}}=168.5$~W from the
-rotary-wing model of Zeng et al.~\cite{zeng2019energy}. Flight is planar at
-altitude $h$, energy counts propulsion only, and no battery capacity is enforced.
+with $P_{\mathrm{move}}=143.6$~W and $P_{\mathrm{hover}}=168.5$~W from Zeng et
+al.'s rotary-wing model~\cite{zeng2019energy}; no battery limit is enforced.
 
 \paragraph{Backhaul}
-The upload rides the best of three backhaul carriers and is lost with a fixed
-probability (2\%). A lost upload is not retried: the server returns the
-unchanged model, Pass~2 delivers it, and the planner, which records the devices
-as merged before the upload, still counts them as served. The component
-ablations' backhaul test and every cell of the radio study
-(Table~\ref{tab:studies}) use a time-varying backhaul instead, whose SNR
-swings sinusoidally and whose loss is logistic in the SNR; on the fixed carrier
-it loses about a fifth of the uploads (F closes 79\% of its rounds there,
-against 97\%). Only there does the radio layer's adaptive carrier controller
-(F+L1) act, and since it observes the realized SNR that decides each loss, it is
-close to an oracle. The backhaul never enters a scheduling decision.
+The upload rides the best of three backhaul carriers and is lost with probability
+2\%, without retry: Pass~2 then delivers the unchanged model, and the planner,
+which records the devices as merged before the upload, counts them as served.
+The component ablations' backhaul test and the radio study
+(Table~\ref{tab:studies}) use a time-varying backhaul instead, which loses about
+a fifth of the uploads on the fixed carrier (F closes 79\% of its rounds,
+against 97\%); only there does the adaptive carrier controller (F+L1) act, and
+since it sees the SNR that decides each loss, it is close to an oracle. The
+backhaul never enters a scheduling decision.
 
 \subsubsection{L2/L3: Demand, Deadlines, Ages, and the Age Cap}
 \label{sec:method:demand}
 
 \paragraph{Contact outcomes}
-A Pass-1 contact is \emph{clean} when the device returns an update matching the
-round, size and checksum the mule expects, \emph{partial} when the device
-answers but refuses or fails those checks, and otherwise a \emph{timeout}.
-Whether a reachable device replies is drawn each mission from its reliability
-$\rho_j\sim U(0.15,1)$; a device whose reply is lost still receives the push and
-adopts the model. A wall-clock session timeout (36~s at $N=6$) is recorded as a
-timeout; at 0.75, 1 and 1.5 times its value the results were identical. To study
-compute heterogeneity, a device can take a log-normal time to train, restarted
-by each model it receives; an update not ready on arrival is a timeout that costs
-no airtime. The plan does not price training time.
+A Pass-1 contact is \emph{clean} when the device returns an update with the
+expected round, size and checksum, \emph{partial} when it answers but refuses
+or fails those checks, and otherwise a \emph{timeout}. Whether a reachable device
+replies is drawn each mission from its reliability $\rho_j\sim U(0.15,1)$; a lost
+reply still costs the push. A session that outlasts its wall-clock timeout (36~s
+at $N=6$) is a timeout; results were identical at 0.75 to 1.5 times that value.
+A device can also be given a log-normal training time, restarted by each model
+it receives; an update not ready on arrival is a timeout, and the plan does not
+price training time.
 
 \paragraph{Per-device deadline}
-Each device $j$ carries a fulfilment window $\Phi(j)$ and a deadline
+Each device $j$ has a fulfilment window $\Phi(j)$ and a deadline
 \begin{equation}
 \mathrm{Deadline}(j)=t+\Phi(j)-\iota(j),
 \label{eq:deadline}
 \end{equation}
-where $t$ is the planning time and $\iota(j)$ the time since its last clean
-contact. After each contact the window is scaled and clamped,
+with $t$ the planning time and $\iota(j)$ the time since its last clean contact.
+After each contact the window is scaled and clamped,
 \begin{equation}
 \Phi(j)\leftarrow\min\{\Phi_{\max},\max\{\Phi_{\min},\,\beta_{o}\,\Phi(j)\}\},
 \label{eq:phi}
 \end{equation}
 with $\beta_{\mathrm{clean}}=0.8$; $\beta_{\mathrm{partial}}=1.25$ for a partial
-or a timeout after the device answered (a failed push, a lost reply, or no
-update ready); and $\beta_{\mathrm{timeout}}=1.5$ for a device that stayed
-silent, was out of reach, or was left out. Windows are in units of
-$\sigma=\Tnom/10$~s, where $\Tnom$ is the median duration of a nominal two-pass
-mission on the wide band (203~s at $N=6$): $\Phi_0=60\sigma$, $\Phi_{\min}=5\sigma$
-and $\Phi_{\max}=300\sigma$~s. A clean contact re-anchors $\iota(j)$; a failed one
-widens the window but leaves the anchor stale, so a device that keeps failing
-grows steadily more overdue. A device the plan leaves out, or the mule drops in
-flight, is recorded as a synthetic timeout.
+or a timeout after the device answered; and $\beta_{\mathrm{timeout}}=1.5$ for a
+silent, unreachable or left-out device. In units of $\sigma=\Tnom/10$~s, where
+$\Tnom$ is the median nominal two-pass mission on the wide band (203~s at $N=6$),
+$\Phi_0=60\sigma$, $\Phi_{\min}=5\sigma$ and $\Phi_{\max}=300\sigma$~s. A clean
+contact re-anchors $\iota(j)$; a failed one widens the window but leaves the
+anchor stale, so a device that keeps failing grows more overdue. A device the
+plan leaves out, or the mule drops in flight, counts as a timeout.
 
 \paragraph{Ages and coverage weight}
-The \emph{plan age} $a_j=m-U_j$ counts the missions of the device's own mule
-since the mission $U_j$ whose merge last used its update; a high plan age
-strengthens the device's claim to be served. The \emph{merge age} $a_i=v-b_i$
-of an update is the version $v$ of the model the mule carries minus the version
-$b_i$ the device trained from, which the device echoes with its update; it
-discounts the update in the merge. A missed contact relaxes a device's
-\emph{window} but not its \emph{priority}, which enters through the coverage
-weight
+The \emph{plan age} $a_j=m-U_j$ counts the missions since the mission $U_j$ whose
+merge last used the device's update, and strengthens its claim to be served. The
+\emph{merge age} $a_i=v-b_i$ of an update is the mule's model version minus the
+version $b_i$ the device trained from, which it echoes; it discounts the update
+in the merge. A miss relaxes a device's \emph{window} but not its
+\emph{priority}, which enters through the coverage weight
 \begin{equation}
 w_j=\max(a_j,1)\,(1+\mu_j),
 \label{eq:covweight}
 \end{equation}
-where $\mu_j$ is the miss streak; under a plan, $\mu_j=a_j-1$, so $w_j$ grows
-roughly as $a_j^2$.
+with $\mu_j$ the miss streak; under a plan, $\mu_j=a_j-1$, so $w_j\approx a_j^2$.
 
 \paragraph{Age cap}
-A device is \emph{capped} when $a_j\ge S$. A pilot sets $S=2$, the fewest
-missions that serve every servable device on 90\% of sampled layouts at the
-stress budget. A stop's own deadline is the earliest among its uncapped members,
-and a stop of capped members only is exempt from its deadline clause but not
-from the budget. A trimmed route flies stops with a capped member first; a
-capped device its stop cannot serve within the budget gets a one-device
-\emph{hover stop} between it and the dock; and the plan key first compares the
-ages of the capped devices a plan leaves out.
+A device is \emph{capped} when $a_j\ge S$, with $S=2$ from a pilot (the fewest
+missions that serve every servable device on 90\% of layouts at the stress
+budget). A stop's deadline is the earliest among its uncapped members, and a
+stop of capped members only is exempt from it but not from the budget; a trimmed
+route flies stops with a capped member first; a capped device its stop cannot
+serve within the budget gets a one-device \emph{hover stop}; and the plan key
+first compares the ages of the capped devices a plan leaves out.
 
 % -----------------------------------------------------------------------------
 \subsection{The Feasibility Test}
 \label{sec:method:gate}
 
-One predicate decides whether a stop may be served next; it is the only
-admission rule in the plan-mode system, applied to the committed plan, inside
-the plan search, at every departure, inside the re-plan, and to the in-flight
-choices. For a stop $s$ with members $\mathcal{M}_s$, reached from a state
-(pose, mission time $c$, energy) on band $b$,
+One predicate decides whether a stop may be served next, and it is the only
+admission rule: it checks the committed plan, the plan search, every departure,
+the re-plan and the in-flight choices. For a stop $s$ with members
+$\mathcal{M}_s$, reached from a state (pose, mission time $c$, energy) on band $b$,
 \begin{align}
 t_{\mathrm{arr}} &= c+\|\mathrm{pose}-s\|/v,\\
 t_{\mathrm{fin}} &= t_{\mathrm{arr}}+\!\!\sum_{j\in\mathcal{M}_s}\!\tau^{\mathrm{dwell}}_{j,b}(\bar\gamma_b(d_j)),\\
 t_{\mathrm{home}} &= t_{\mathrm{fin}}+t_{\mathrm{return}}+t_{\mathrm{upload}},
 \end{align}
-and the stop is admitted only if (i) $t_{\mathrm{fin}}$ meets the stop's own
-deadline, (ii) $t_{\mathrm{home}}$ falls within the budget, takeoff plus
-$T_{\mathrm{miss}}$, and (iii) the energy of Eq.~\eqref{eq:energy} stays within
-capacity, if one is set. Every clause is monotone in the member set, so a stop
-that fails whole can be reduced to the members that fit. The test prices the
-mean SNR, so the realized channel can lengthen an admitted stop; the departure
-check catches this after the stop, but nothing re-checks after the last Pass-1
-stop, so a realized mission can overrun the budget.
+and the stop is admitted only if $t_{\mathrm{fin}}$ meets its deadline,
+$t_{\mathrm{home}}$ falls within takeoff plus $T_{\mathrm{miss}}$, and the energy
+of Eq.~\eqref{eq:energy} fits any capacity set. The clauses are monotone in the
+member set, so a stop that fails whole can be reduced to the members that fit.
+The departure check catches a stop that the realized channel lengthens, but
+nothing re-checks after the last Pass-1 stop, so a mission can overrun.
 
 % -----------------------------------------------------------------------------
 \subsection{Plan Clock: Reach and Route}
 \label{sec:method:plan}
 
-At the dock the mule commits a plan $\mathcal{P}=(\bbar,\pi)$: the band class
-flown in both passes, and an ordered list of stops, each reduced to the members
-that fit. The demand is every device in the slice, with its deadline, plan age,
-miss streak and weight.
+At the dock the mule commits a plan $\mathcal{P}=(\bbar,\pi)$: the band class for
+both passes and an ordered list of stops, each reduced to the members that fit.
 
 \paragraph{Reach is a decision}
-For each class $b$, a greedy anchor sweep clusters the demand into stops at the
-class's range $R_b$, at a cluster's centroid when every member is within $R_b$
-of it. A wide class serves few devices per stop at a high rate; a narrow class
+For each class, a greedy anchor sweep clusters the slice into stops at the range
+$R_b$. A wide class serves few devices per stop at a high rate; a narrow class
 can reach the field from one stop but dwells longer. No fixed rule chooses
 between them, so the planner prices every class and commits the best.
 
 \paragraph{Route search}
-Candidate routes pass through the feasibility test stop by stop. Up to six
-demanded devices, an \textsf{exact} search enumerates every ordered sequence of
-stops and member subsets, pruning failing prefixes, and is optimal over what the
-score prices. With more devices but at most six stops, it searches ordered stop
-subsets, trimming each stop greedily; beyond that, a bounded local search
-(2-OPT, then first-improvement moves, at most 2000 evaluations per class) keeps
-planning deterministic. The empty plan is chosen only if no other is admitted.
+Routes pass the feasibility test stop by stop. Up to six devices, an exact search
+enumerates every ordered sequence of stops and member subsets and is optimal over
+what the score prices; with up to six stops, it searches ordered stop subsets;
+beyond that, a deterministic local search (2-OPT, then first-improvement moves,
+at most 2000 evaluations per class) runs. The empty plan is chosen only if no
+other is admitted.
 
 \paragraph{Plan score and plan key}
 Candidates are scored by
@@ -678,73 +639,62 @@ Candidates are scored by
 V(\bbar,\pi)=-\Bigl[c_1\Bigl(\tfrac{\Delta}{\Tnom}\Bigr)^{2}+c_2U+c_3L+c_4\frac{E}{P_{\mathrm{hover}}\Tnom}\Bigr],
 \label{eq:planscore}
 \end{equation}
-where $\Delta$ is the duration of the whole two-pass mission on $\bbar$, $E$ its
-energy, and
+with $\Delta$ the duration of the two-pass mission on $\bbar$, $E$ its energy, and
 \begin{equation}
 U=1-\frac{\sum_{\text{served}}w_j}{\sum_{\text{demand}}w_j},
 \qquad
 L=\frac{\sum_{\text{served}}w_j\,p_{\mathrm{out}}(\bbar,d_j)}{\sum_{\text{demand}}w_j}
 \end{equation}
-the weighted coverage shortfall and expected link loss, with $c_1=1$,
-$c_2=c_3=N_{\mathrm{demand}}$ and $c_4=0.1$. The form follows FedEx's
-route-dependent bound~\cite{bian2025indirect}, but the score is declared, not
-derived: the constants are hand-set and the term in $\Delta$ is a staleness
-surrogate. Because every plan that serves a device pays for a whole Pass~2, $V$
-alone can prefer to fly empty, so the mule commits the plan with the smallest
-key
+the weighted coverage shortfall and expected link loss ($c_1=1$,
+$c_2=c_3=N_{\mathrm{demand}}$, $c_4=0.1$). The form follows FedEx's
+route-dependent bound~\cite{bian2025indirect}, but the constants are hand-set and
+the term in $\Delta$ is a staleness surrogate. Since every non-empty plan pays
+for a whole Pass~2, $V$ alone can prefer to fly empty, so the mule commits the
+plan with the smallest key
 \begin{equation}
 \bigl(\kappa_{\mathrm{cap}},\;-\textstyle\sum_{\text{served}}w_j/\sum_{\text{demand}}w_j,\;-V,\;\text{class index}\bigr),
 \label{eq:plankey}
 \end{equation}
-compared lexicographically, where $\kappa_{\mathrm{cap}}$ lists the ages of the
-capped devices the plan leaves out, largest first. Time and energy thus break
-ties among plans that serve the same weight, and the order of enumeration never
-matters. A guard fold re-checks the chosen route before commit, and every
-device the plan leaves out is recorded as a miss. No plan-time value is learned.
+compared lexicographically, with $\kappa_{\mathrm{cap}}$ the ages of the capped
+devices the plan leaves out, largest first: time and energy break ties among
+plans that serve the same weight. A guard fold re-checks the route before
+commit, and every device left out is recorded as a miss.
 
 % -----------------------------------------------------------------------------
 \subsection{Flight Clock: Band, Next Stop, and Re-Planning}
 \label{sec:method:flight}
 
 \paragraph{The flight slot}
-In Pass~1, after takeoff, the mule can revise two choices per stop: the band on
-which to serve the stop it has reached, and the next stop of the remaining
-queue. With an empty slot, \sysname{} flies the plan's band and order unchanged;
-this is F, the reference arm. The fixed filling, FX, is a cross-layer rule that
-makes the two choices at different moments: on arrival it picks the fastest
-class that still reaches every device $\bbar$ reaches at the stop, at the
-observed SNR; at the next departure, after the stop is served and the departure
-check has run, it picks the nearest remaining stop whose move to the front still
-passes the feasibility test from the realized mission time, or else the plan's next.
-
-The learned filling, FQ, makes both choices on arrival, as a pair $(b,s)$ ranked
-by a learned score. A pair is admitted only if the band reaches every device
-$\bbar$ reaches at the stop, the next stop belongs to the plan, and the rest of
-the flight still passes the feasibility test after serving on $b$ at the
-observed dwell; if no pair is admitted, the mule serves on FX's band and keeps
-the plan's order. The score is a masked double DQN over one feature row per
-admitted pair (the current and next-stop SNR per class, the dwell, deadline
-slack, plan ages, the mission time and energy left, and the phase of the interference
-cycle), trained in FerrySim on a per-stop reward: the merge weight collected less
-a time cost, with the weighted shortfall of committed devices charged at the end
-of each sortie. FQ thus picks its next stop before serving, from the priced
-dwell, and FX after serving, from the realized mission time.
+In Pass~1 the mule can revise, per stop, the band on which to serve the stop it
+has reached and the next stop of the queue. F, the reference arm, leaves the
+slot empty and flies the plan's band and order. The fixed filling, FX, picks on
+arrival the fastest class that still reaches every device $\bbar$ reaches, at the
+observed SNR, and at the next departure, after the departure check, the nearest
+remaining stop whose move to the front passes the feasibility test from the
+realized mission time. The learned filling, FQ, makes both choices on arrival,
+as a pair $(b,s)$ ranked by a masked double DQN; a pair is admitted only if the
+band reaches what $\bbar$ reaches, the stop belongs to the plan, and the rest of
+the flight passes the feasibility test at the observed dwell, and with no
+admitted pair the mule serves on FX's band in the plan's order. Its features are
+the current and next-stop SNR per class, the dwell, deadline slack, plan ages,
+the mission time and energy left and the interference phase; it is trained in
+FerrySim on the merge weight collected less a time cost, with the shortfall of
+committed devices charged at the end of each sortie. FQ thus picks its next stop
+before serving, from the priced dwell, and FX after, from the realized time.
 
 \paragraph{Departure check and re-plan}
-After each stop, the mule checks the remaining queue against the feasibility
-test at its current mission time. If the queue no longer fits, it re-plans the
-remainder: stops with a capped member move to the front, the rest keep the
-plan's order, and stops and members that no longer fit are trimmed. Every
-dropped stop is final for the mission and recorded as a synthetic timeout.
+After each stop, if the remaining queue no longer passes the feasibility test,
+the mule re-plans it: stops with a capped member move to the front, the rest
+keep the plan's order, and what no longer fits is trimmed and counted as a
+timeout for the mission.
 
 % -----------------------------------------------------------------------------
 \subsection{Aggregation: Mule, Cluster, and Delivery}
 \label{sec:method:merge}
 
 \paragraph{Merge on the mule}
-Devices send the update $\Delta\theta_i=\theta_i^{\mathrm{after}}-\theta_i^{\mathrm{basis}}$
-with its basis version. At the end of Pass~1 the mule merges the updates with
-age-dependent weights,
+Devices send $\Delta\theta_i=\theta_i^{\mathrm{after}}-\theta_i^{\mathrm{basis}}$
+with its basis version, and at the end of Pass~1 the mule merges
 \begin{equation}
 w_i=n_i\,v_i\,s(a_i)\ \text{ for } a_i\le a_{\max,j},\qquad w_i=0\ \text{ otherwise},
 \label{eq:mergeweight}
@@ -754,34 +704,27 @@ M=\sum_{i\,\text{admitted}}n_iv_i,\qquad
 \Delta_m=\frac{1}{M}\sum_{i\,\text{admitted}}w_i\,\Delta\theta_i,
 \label{eq:mulemerge}
 \end{equation}
-where $n_i$ is the number of local examples and $v_i$ a value proxy (uniform in
-the evaluation). The staleness factor is FedAsync's hinge~\cite{xie2019asynchronous},
-$s(a)=1/(a+1)$, and the cutoff comes from the device's own window,
+with $n_i$ the local examples, $v_i$ a value proxy (uniform here), FedAsync's
+hinge $s(a)=1/(a+1)$~\cite{xie2019asynchronous}, and the cutoff
 $a_{\max,j}=\lfloor\Phi(j)/\Tnom\rfloor$, so the window that admits a device
-(Eq.~\eqref{eq:deadline}) also bounds how long its update counts. Dividing by
-$M$ rather than $\sum w_i$ lets a uniformly stale mission move the model by
-only $s(a)$ times its mean; with current bases the merge is the plain
-example-weighted mean, as it is for almost every merge on the mule in our runs.
+(Eq.~\eqref{eq:deadline}) also bounds how long its update counts. Dividing by $M$
+rather than $\sum w_i$ lets a uniformly stale mission move the model by only
+$s(a)$ times its mean; with current bases, as for almost every merge on the mule
+in our runs, it is the plain example-weighted mean.
 
-\paragraph{Merge across mules}
-At the server, each mule's partial carries its own staleness $s_m=s(V-v_m)$,
-where $V$ is the server's version and $v_m$ the version the mule carried:
+\paragraph{Merge across mules and delivery}
+At the server, each partial carries its own staleness $s_m=s(V-v_m)$, with $V$ the
+server's version and $v_m$ the mule's:
 \begin{equation}
 \theta\leftarrow\theta+\eta\,\frac{\sum_{m\,\text{live}}M_m\,s_m\,\Delta_m}{\sum_{m\,\text{live}}M_m},
 \label{eq:clustermerge}
 \end{equation}
-with $\eta=1$; a partial is live if non-empty. The server merges as soon as one
-partial arrives, so each upload closes its own round and no round waits on an
-unreachable device. A mule flies Pass~1 with the model it received at its
-previous dock, so with several mules the others' merges in between make its
-partial stale: at $N=6$ with three mules, 160 of 198 merges applied a partial one
-to three versions old, discounted to between a half and a quarter of its weight.
-
-\paragraph{Delivery}
-If Pass~1 collected any update, the mule flies Pass~2: it delivers the new model
-to every stop of its slice at $R(\bbar)$, nearest first, on $\bbar$, skipping only
-a device below the floor on arrival. Each device stores the model with its
-version and resumes offline training.
+with $\eta=1$ and a partial live if non-empty. The server merges as soon as one
+partial arrives, so each upload closes its own round. A mule flies Pass~1 with
+the model of its previous dock, so with three mules at $N=6$, 160 of 198 merges
+applied a partial one to three versions old. If Pass~1 collected any update, the
+mule then delivers the new model to its slice, nearest stop first, on $\bbar$,
+skipping only a device below the floor.
 
 % -----------------------------------------------------------------------------
 \subsection{Mission Round, Cost, and Implementation}
@@ -819,25 +762,18 @@ version and resumes offline training.
 \end{algorithmic}
 \end{algorithm}
 
-\paragraph{Cost}
-Training stays on the devices. The \textsf{exact} search evaluates at most 1957
-stop sequences per class, and the local search at most 2000, so planning cost
-does not depend on wall time; each arrival evaluates at most
-$|\mathcal{B}|\times|\text{queue}|$ pairs, one feasibility fold each, and both
-merges are linear in their inputs.
-
-\paragraph{Implementation, scope, and FerrySim}
-The prototype runs the server, each mule and each device as separate Python
-processes that exchange messages over TCP, and the devices train the real model;
-mission time, the radio channel and energy are simulated, not measured. Updates
-carry integrity checks but no authentication; poisoning-robust aggregation and
-privacy mechanisms are out of scope. The learned score, the learned baseline E3,
-and the largest problems ($N=48$ and $96$) run in FerrySim, an in-process
-simulator built from the same driver, services, planner, flight slot,
-feasibility test, channel and mission-time model. It omits model training (a device returns
-the global model plus small noise), flies one mule, uses an additive deadline
-law and no merge cutoff, and grows the field with $N$ in its scale cells, so its
-$N=24$ is not the full system's.
+\paragraph{Cost and implementation}
+Planning cost is bounded (at most 1957 stop sequences per class for the exact
+search, 2000 evaluations for the local one), and each arrival evaluates at most
+$|\mathcal{B}|\times|\text{queue}|$ pairs; both merges are linear. The prototype
+runs the server, each mule and each device as separate Python processes over TCP,
+and the devices train the real model; mission time, the channel and energy are
+simulated. Updates carry integrity checks but no authentication;
+poisoning-robust aggregation and privacy are out of scope. The learned score, E3
+and the largest problems ($N=48$, $96$) run in FerrySim, an in-process simulator
+built from the same code that omits model training, flies one mule, uses an
+additive deadline law and no merge cutoff, and grows the field with $N$ in its
+scale cells.
 
 \section{Experimental Setup and Design}
 \label{sec:setup}
@@ -992,23 +928,19 @@ study did not keep the learned score.
 \subsection{Against the State of the Art}
 \label{sec:res:sota}
 
-Table~\ref{tab:exp5_headline} sets FeRRy against every baseline at $N=6$. With
-one mule at the knee budget, F reaches $\tau$ in 194\,s, and each of the seven
-baselines needs 264--282\,s: F is 27--31\% faster, and every comparison is a
-claim. FedEx with its own merge (D4$_{\text{FedEx}}$), a variant of D4, is as
-slow (281\,s) but misses $\tau$ in one trial, and its comparison is not a claim. Paired seed by seed, F reaches $\tau$ first in 80--90\% of the trials
-against each baseline. FeRRy's other two arms are as fast: FX reaches $\tau$ in
-178\,s and FQ in 180\,s, and neither differs significantly from F. FQ, flown
-after the pre-registered study, is also faster than D4 and E3 at the knee in
-its own exploratory family (Holm $p<0.001$). Under the stress budget, only the FedEx route (D4) is
-significantly slower. The other baselines trail by 28--60\,s, but they keep
-within the budget by leaving devices out, which widens their spread. With three
-mules every scheduler reaches $\tau$ in 52--65\,s, except FedEx with its own
-merge (D4$_{\text{FedEx}}$), which needs 101\,s: its unweighted accumulation of
-one-tour-old updates slows learning. Without a mule (H0), federated learning
-over the degraded live link merges 0.5 updates per round and ends at an
-accuracy of 0.686, barely above the 0.667 of labelling every flow benign,
-against F's 3.5 updates and 0.831.
+With one mule at the knee budget, F reaches $\tau$ in 194\,s and each of the
+seven baselines needs 264--282\,s (Table~\ref{tab:exp5_headline}): F is
+27--31\% faster, every comparison is a claim, and F gets there first in
+80--90\% of paired seeds. FedEx with its own merge (D4$_{\text{FedEx}}$) is as
+slow (281\,s) but misses $\tau$ once, so its comparison is not a claim. FX
+(178\,s) and FQ (180\,s) do not differ from F; FQ, flown later, also beats D4
+and E3 at the knee in its exploratory family. Under the stress budget only the
+FedEx route is significantly slower: the other baselines trail by 28--60\,s but
+stay within the budget by leaving devices out. With three mules every scheduler
+reaches $\tau$ in 52--65\,s except D4$_{\text{FedEx}}$ (101\,s), whose
+unweighted, one-tour-old updates slow learning. Without a mule (H0), FL over the
+degraded link merges 0.5 updates per round and ends at 0.686 accuracy, barely
+above the all-benign 0.667, against F's 3.5 and 0.831.
 
 \begin{table}[t]
 \centering
@@ -1040,26 +972,21 @@ E3 (Chen) & 280\,s$^{\dagger}$ & 211\,s\,{\scriptsize(95\%)} & 65\,s & 64\,s \\
 \subsection{Why FeRRy Is Faster: Reach}
 \label{sec:res:mechanism}
 
-F does not need fewer rounds than the baselines: all of them reach $\tau$ in
-1.65--1.84 rounds on average, with near-identical update yield. F's rounds are
-shorter. Fig.~\ref{fig:exp5_mechanism} shows where a mission's time goes. Every
-baseline flies the wide band, which reaches a device only from nearby, so it
-spends about 140\,s of a mission in transit between stops. F's plan chooses the
-narrow band in 89\% of missions: its range covers the field from about one
-stop, so F spends 15\,s in transit and 107\,s dwelling at the lower rate, and
-its missions are 22--26\% shorter. FX and FQ inherit the plan's reach: they fly the
-narrow or medium band on 95\% and 98\% of missions and spend the same 15\,s in
-transit (Fig.~\ref{fig:exp5_learning}b). Pinning F to each band class isolates this
-effect: pinned to the wide band, F reaches $\tau$ in 265\,s, D4's own time;
-pinned to the narrow band, in 196\,s, F's own. (The band-pinning study's pre-registered
-metric is the age of updates, on which the pinned bands do not differ; these
-times to $\tau$ are descriptive.) The plan's choice is close to the best:
-against an exhaustive oracle over band class, clustering, route and per-stop
-band, F's plan serves as many devices at the knee budget, and 4 percentage
-points fewer under the stress budget. It also adapts
-(Fig.~\ref{fig:exp5_bands}). As the field fills and the budget tightens, F
-shifts to the faster medium and wide classes, mostly wide at $N=24$ under the
-stress budget, where the narrow band's dwell would no longer fit.
+F does not need fewer rounds (every arm reaches $\tau$ in 1.65--1.84 rounds,
+with near-identical update yield); its rounds are shorter
+(Fig.~\ref{fig:exp5_mechanism}). Every baseline flies the wide band, which
+reaches a device only from nearby, and spends about 140\,s of a mission in
+transit. F's plan chooses the narrow band in 89\% of missions, whose range
+covers the field from about one stop: F spends 15\,s in transit and 107\,s
+dwelling, and its missions are 22--26\% shorter. FX and FQ inherit this reach
+(narrow or medium on 95\% and 98\% of missions; Fig.~\ref{fig:exp5_learning}b).
+Pinned to the wide band, F reaches $\tau$ in 265\,s, D4's own time; pinned to
+narrow, in 196\,s. (These times are descriptive: the band-pinning study's
+pre-registered metric, the age of updates, does not differ.) The choice is near
+the best, serving as many devices as an exhaustive oracle at the knee budget and
+4 points fewer under stress, and it adapts (Fig.~\ref{fig:exp5_bands}): as the
+field fills and the budget tightens, F shifts to medium and wide, mostly wide at
+$N=24$ under stress.
 
 \begin{figure*}[t]
 \centering
@@ -1077,19 +1004,16 @@ time by component; (b)~time to $\tau$, mean and 95\% CI over the trials that rea
 \subsection{Scale and Decision Cost}
 \label{sec:res:scale}
 
-Table~\ref{tab:exp5_scale} follows the comparison to larger fields. At $N=24$, F
-is significantly faster than H1 and D3 at the knee (749 against 951 and 911\,s)
-and ties the FedEx route (752\,s); under the stress budget it beats the FedEx
-route (661 against 752\,s). At $N=12$ no comparison is a claim; FQ, flown in the
-same cells in the learned-score study's full-system check, takes 461\,s at the knee and 389\,s under
-the stress budget, not significantly different from FX (424 and 386\,s). FeRRy's planning
-stays affordable (Fig.~\ref{fig:exp5_systems}a): measured alone on one host, the
-planner takes 0.04\,s per plan at $N=6$ and 1.5\,s at $N=96$ (p95 2.0\,s), a small
-share of a mission.
-In FerrySim, the plan serves 54--57\% of the devices at each scale's knee
-budget from $N=24$ to $96$ (Fig.~\ref{fig:exp5_systems}b). Adding mules divides
-the work: at $N=12$, F's time to $\tau$ falls from 486\,s with one mule to
-226\,s with two and 151\,s with three (Fig.~\ref{fig:exp5_systems}c).
+At $N=24$ (Table~\ref{tab:exp5_scale}), F is significantly faster than H1 and D3
+at the knee (749 against 951 and 911\,s), ties the FedEx route (752\,s), and
+beats it under the stress budget (661 against 752\,s); at $N=12$ no comparison
+is a claim, and FQ (461 and 389\,s) does not differ from FX (424 and 386\,s).
+Planning stays cheap (Fig.~\ref{fig:exp5_systems}a): alone on one host, a plan
+takes 0.04\,s at $N=6$ and 1.5\,s at $N=96$ (p95 2.0\,s). In FerrySim the plan
+serves 54--57\% of the devices at each scale's knee budget up to $N=96$
+(Fig.~\ref{fig:exp5_systems}b), and at $N=12$ more mules cut F's time to
+$\tau$ from 486\,s to 226\,s with two and 151\,s with three
+(Fig.~\ref{fig:exp5_systems}c).
 
 \begin{table}[t]
 \centering
@@ -1123,23 +1047,18 @@ $\tau$ at $N=12$ as mules are added, mean and 95\% CI.}
 \subsection{The Design Claims}
 \label{sec:res:claims}
 
-Table~\ref{tab:exp5_claims} tests each claim against an alternative that
-removes or replaces one part of FeRRy's design. Five tests hold. The coverage
-term keeps rounds closing: without it, the round-close rate falls from 99\% to
-74\% (C2). FeRRy keeps updates fresher than the fairness baselines under the
-stress budget: its network age of updates is 0.78 missions, against 1.06 for
-MAX-AoI and 1.07 for Cui's Whittle index, and 1.10 without the coverage term
-(C5). On the time-varying backhaul, the adaptive controller lowers it from
-0.88 to 0.69. That controller observes the SNR that decides each upload's loss, so this is close to the most that adapting the
-backhaul can give. Several parts of the
-design show no measurable effect at these settings, and we report them as such.
-Pinning the band does not change the age of updates (its effect is on time). The dwell term and the age cap change nothing
-over four missions. The merge rules tie: with every device served in Pass~2,
-collected updates almost always have merge age zero, so the age weighting
-rarely acts; FedBuff's buffering slows learning, and FedProx is not
-significantly faster. The selection literature's deadline forms miss slightly
-more deadlines than FeRRy's per-device deadline (47\% against 42\% under the
-stress budget), but not significantly.
+Five tests hold (Table~\ref{tab:exp5_claims}). Without the coverage term the
+round-close rate falls from 99\% to 74\% (C2). Under the stress budget FeRRy's
+age of updates is 0.78 missions, against 1.06 for MAX-AoI, 1.07 for the Whittle
+index and 1.10 without the coverage term (C5). On the time-varying backhaul the
+adaptive controller lowers it from 0.88 to 0.69, close to the most adaptation
+can give, since the controller sees the SNR that decides each loss. Other parts
+show no measurable effect here: pinning the band leaves the age of updates
+unchanged (its effect is on time), the dwell term and the age cap change nothing
+over four missions, and the merge rules tie because collected updates almost
+always have merge age zero (FedBuff's buffering slows learning, and FedProx is
+not significantly faster). The selection literature's deadline forms miss
+slightly more deadlines (47\% against 42\% under stress), but not significantly.
 
 \begin{table*}[t]
 \centering
@@ -1186,35 +1105,23 @@ stress budget), but not significantly.
 \subsection{Learning Inside the Plan}
 \label{sec:res:rl}
 
-The learned-score study's result is flat: no $\gamma$ beats $\gamma=0$ by the pre-registered
-margin, and the best learned score ($\gamma=0.75$) matches FeRRy's fixed rule
-(FX) while trailing the one-step greedy rule. In the full system FQ is again
-indistinguishable from FX at $N=12$ (C4 in Table~\ref{tab:exp5_claims}), as it is
-from F and FX at $N=6$ (Table~\ref{tab:exp5_headline}). FX is therefore FeRRy's
-per-stop rule, and the null is reported here. The two do not decide on the
-same information: FQ picks its next stop on arrival, from the priced dwell, and
-FX after serving, from the realized mission time, so
-the comparison is of two rules, not of two rankings over the same choice.
+The learned-score study is flat: no $\gamma$ beats $\gamma=0$ by the
+pre-registered margin, and the best ($\gamma=0.75$) matches FX while trailing a
+one-step greedy rule. In the full system FQ is again indistinguishable from FX
+(C4) and, at $N=6$, from F, so FX is FeRRy's per-stop rule. The two decide on
+different information (FQ before serving, from the priced dwell; FX after, from
+the realized mission time), so this compares two rules, not two rankings.
 
-\paragraph{Learning inside the plan, against learning without one}
-The exploratory comparison asks how a learner inside FeRRy's plan fares against
-a published learned scheduler. FQ, FeRRy's plan with the $\gamma=0.75$ score,
-flew the scheduler comparison's one-mule cells on the same 20 seeds as E3, our single-agent DQN after
-Chen et al.~\cite{chen2023model}, which picks every next stop with no dock-time
-plan (Fig.~\ref{fig:exp5_learning}). At the knee budget FQ reaches $\tau$ in 180\,s
-against E3's 280\,s, a paired difference of 100\,s (95\% CI [63, 141]; Holm
-$p<0.001$ across the eight exploratory comparisons). Under the stress budget, FQ
-is faster over the 19 seeds in which both reach $\tau$ (174 against 211\,s), but
-the CI includes zero. FQ is indistinguishable from F and FX at both budgets. Its
-advantage therefore comes from the plan, not from learning. FQ inherits the
-plan's choice of band (narrow or medium on 98\% of missions) and spends 15\,s of
-a 155\,s mission in transit, whereas E3 flies the wide band and spends 144\,s of
-a 228\,s mission in transit. The same ordering holds in FerrySim, where each
-learner is scored on its own objective: E3's held-out return falls 6\% below
-FX's, while FQ's matches FX's. We did not build a single learner that also makes
-the plan's decisions, so this is our closest test of a learner inside FeRRy's
-plan and gates against one without them. It supports the two-clock structure
-(C4), not a gain from learning.
+The exploratory comparison sets FQ against E3, a single-agent DQN after Chen et
+al.~\cite{chen2023model} that picks every next stop with no plan, on the same 20
+seeds (Fig.~\ref{fig:exp5_learning}). At the knee FQ reaches $\tau$ in 180\,s
+against E3's 280\,s (difference 100\,s, 95\% CI [63, 141], Holm $p<0.001$ across
+the eight exploratory comparisons); under stress it is faster over 19 shared
+seeds (174 against 211\,s), but the CI includes zero. FQ inherits the plan's
+band and spends 15\,s of a 155\,s mission in transit, against E3's 144\,s of
+228\,s, and in FerrySim E3's held-out return falls 6\% below FX's while FQ's
+matches it. The gain comes from the plan, not from learning, which supports the
+two-clock structure (C4).
 
 \begin{figure*}[t]
 \centering
@@ -1228,22 +1135,19 @@ mean and 95\% CI, reach rate in brackets when below 1; $^{\ddagger}$slower than 
 \subsection{Robustness and Limitations}
 \label{sec:res:robust}
 
-Table~\ref{tab:exp5_robust} varies the data, the channel and the devices'
-compute. With strongly non-IID data (Dirichlet $\alpha=0.1$), every arm reaches
-$\tau$ in only about half of the trials, and F remains significantly faster than
-H1 and D3 where both reach it. The radio study flies the time-varying backhaul
-throughout, so its default column (F at 216\,s) is not the main configuration
-(194\,s). Under its harsher channels F stays ahead of H1 without a claim, and
-FX's per-stop rule is significantly faster than F on the default channel and
-with 8\,dB shadowing. Two limitations stand out.
-First, FeRRy's plan prices the mean SNR, so under the stress budget 30\% of its
-missions overrun the budget, by 8.5\,s on average
+With strongly non-IID data (Dirichlet $\alpha=0.1$;
+Table~\ref{tab:exp5_robust}), every arm reaches $\tau$ in about half the trials,
+and F stays significantly faster than H1 and D3 where both do. The radio study
+flies the time-varying backhaul, so its default (F at 216\,s) is not the main
+configuration (194\,s); under its harsher channels F stays ahead of H1 without a
+claim, and FX is significantly faster than F on the default channel and with
+8\,dB shadowing. Two limitations stand out. FeRRy's plan prices the mean SNR, so
+under the stress budget 30\% of its missions overrun, by 8.5\,s on average
 (Fig.~\ref{fig:exp5_budget}); the FedEx route, which never skips a device,
-overruns in 85\%, and F keeps nearly its update yield while flying fewer stops. Second, when devices take time to train (the training-time study), F's
-update yield falls from 3.5 to 0.7 updates per round and it reaches $\tau$ in
-only 70--75\% of trials, while H1, D4 and D5 keep 85--100\%: FeRRy's plan does
-not price training time, so it reaches devices whose updates are not ready.
-Adding a compute term to the plan is future work.
+overruns in 85\%, and F keeps nearly its update yield with fewer stops. And the
+plan does not price training time: when devices take time to train, F's yield
+falls from 3.5 to 0.7 updates per round and it reaches $\tau$ in only 70--75\% of
+trials, while H1, D4 and D5 keep 85--100\%.
 
 \begin{table*}[t]
 \centering
