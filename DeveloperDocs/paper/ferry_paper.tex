@@ -505,11 +505,7 @@ learning can enter only through the flight slot.
   \draw[arr, dashed] (rp.south) -- ++(0,-0.32) -| (ob.south);
   \draw[arr, dashed] (g1.south) -- ++(0,-0.25) -| ($(ob.west)+(-0.15,0)$) -- (ob.west);
 \end{tikzpicture}
-\caption{The two decision clocks. The flight row shows FQ, which chooses the band
-and the next stop together on arrival; FX chooses the band on arrival and the
-next stop after the departure check, and F keeps the plan's. The shaded boxes
-are the same feasibility test, applied once to the committed plan and again in
-flight.}
+\caption{The two decision clocks; the flight row shows FQ's per-stop choice.}
 \label{fig:clocks}
 \end{figure}
 
@@ -1139,21 +1135,14 @@ stress budget, where the narrow band's dwell would no longer fit.
 \begin{figure*}[t]
 \centering
 \includegraphics[width=\textwidth]{Figures/exp5/fig_exp5_mechanism.pdf}
-\caption{Where F's advantage comes from ($N=6$, one mule, knee budget). (a)~Mean simulated
-mission time by component. Every baseline flies the wide band and spends most of a mission
-in transit between stops; F mostly plans the narrow band, whose range reaches the field from
-about one stop, and trades transit for dwell. Pinning F to the wide band removes its
-advantage. (b)~Time to $\tau$ for the same rows: mean and 95\% bootstrap CI over the trials
-that reach $\tau$. The pinned-band rows come from the band-pinning study, whose pre-registered metric is
-the network age of updates; their time to $\tau$ is descriptive.}
+\caption{Where F's advantage comes from ($N=6$, one mule, knee budget): (a)~mean mission
+time by component; (b)~time to $\tau$, mean and 95\% CI over the trials that reach it.}
 \label{fig:exp5_mechanism}
 \end{figure*}
 \begin{figure}[t]
 \centering
 \includegraphics[width=\columnwidth]{Figures/exp5/fig_exp5_bands.pdf}
-\caption{Share of F's plans flying each band class, by cell. With few devices F plans the
-long-reach narrow band; as the field fills and the budget tightens, it shifts to the faster
-medium and wide classes.}
+\caption{Share of F's plans flying each band class, by cell.}
 \label{fig:exp5_bands}
 \end{figure}
 \subsection{Scale and Decision Cost}
@@ -1165,8 +1154,9 @@ and ties the FedEx route (752\,s); under the stress budget it beats the FedEx
 route (661 against 752\,s). At $N=12$ no comparison is a claim; FQ, flown in the
 same cells in the learned-score study's full-system check, takes 461\,s at the knee and 389\,s under
 the stress budget, not significantly different from FX (424 and 386\,s). FeRRy's planning
-stays affordable (Fig.~\ref{fig:exp5_systems}a): the planner takes 0.04\,s per
-plan at $N=6$ and 1.5\,s at $N=96$ (p95 2.0\,s), a small share of a mission.
+stays affordable (Fig.~\ref{fig:exp5_systems}a): measured alone on one host, the
+planner takes 0.04\,s per plan at $N=6$ and 1.5\,s at $N=96$ (p95 2.0\,s), a small
+share of a mission.
 In FerrySim, the plan serves 54--57\% of the devices at each scale's knee
 budget from $N=24$ to $96$ (Fig.~\ref{fig:exp5_systems}b). Adding mules divides
 the work: at $N=12$, F's time to $\tau$ falls from 486\,s with one mule to
@@ -1196,10 +1186,9 @@ D4 (FedEx route) & 264\,s$^{\dagger}$ & 459\,s\,{\scriptsize(95\%)} & 752\,s & 2
 \begin{figure*}[t]
 \centering
 \includegraphics[width=\textwidth]{Figures/exp5/fig_exp5_systems.pdf}
-\caption{Decision cost and mules (decision-cost study). (a)~Planner wall time per plan against $N$, mean
-and p95, one host running alone. (b)~FerrySim's share of devices served at each $N$'s
-knee budget under F, FX and greedy-1 (30 episodes). (c)~Time to $\tau$ at $N=12$ as mules
-are added, mean and 95\% bootstrap CI.}
+\caption{Decision-cost study: (a)~planner time per plan; (b)~FerrySim's share of devices
+served at each $N$'s knee budget (greedy-1: a one-step greedy rule); (c)~time to
+$\tau$ at $N=12$ as mules are added, mean and 95\% CI.}
 \label{fig:exp5_systems}
 \end{figure*}
 \subsection{The Design Claims}
@@ -1301,16 +1290,10 @@ plan and gates against one without them. It supports the two-clock structure
 \begin{figure*}[t]
 \centering
 \includegraphics[width=\textwidth]{Figures/exp5/fig_exp5_learning.pdf}
-\caption{Learning inside FeRRy's plan against learning without one ($N=6$, one mule, 20
-paired seeds; exploratory, not pre-registered). F commits the plan in flight, FX adds the
-fixed per-stop rule, FQ the learned per-stop score (the learned-score study's $\gamma=0.75$ pick), and E3
-is Chen et al.'s learned scheduler with no plan. (a)~Time to $\tau$ at the knee (filled) and
-stress (hollow) budgets: mean and 95\% bootstrap CI over the trials that reach $\tau$, with
-the reach rate in brackets when it is below 1; $^{\ddagger}$slower than FQ (paired by seed,
-Holm $p<0.05$ across the exploratory comparisons of FQ with E3, F, FX and D4 at both
-budgets). (b)~Mean mission time at the knee by
-component, and the band each arm flies: the three FeRRy variants share the plan's
-narrow-band reach, while E3 flies the wide band.}
+\caption{Learning inside the plan against learning without one ($N=6$, one mule;
+exploratory). (a)~Time to $\tau$ at the knee (filled) and stress (hollow) budgets,
+mean and 95\% CI, reach rate in brackets when below 1; $^{\ddagger}$slower than FQ.
+(b)~Mean mission time at the knee by component, and each arm's band.}
 \label{fig:exp5_learning}
 \end{figure*}
 \subsection{Robustness and Limitations}
@@ -1327,7 +1310,7 @@ with 8\,dB shadowing. Two limitations stand out.
 First, FeRRy's plan prices the mean SNR, so under the stress budget 30\% of its
 missions overrun the budget, by 8.5\,s on average
 (Fig.~\ref{fig:exp5_budget}); the FedEx route, which never skips a device,
-overruns in 85\%. Second, when devices take time to train (the training-time study), F's
+overruns in 85\%, and F keeps nearly its update yield while flying fewer stops. Second, when devices take time to train (the training-time study), F's
 update yield falls from 3.5 to 0.7 updates per round and it reaches $\tau$ in
 only 70--75\% of trials, while H1, D4 and D5 keep 85--100\%: FeRRy's plan does
 not price training time, so it reaches devices whose updates are not ready.
@@ -1356,11 +1339,8 @@ D5 (FedCS) & 222\,s\,{\scriptsize(95\%)}$^{\dagger}$ & 250\,s\,{\scriptsize(85\%
 \begin{figure}[t]
 \centering
 \includegraphics[width=\columnwidth]{Figures/exp5/fig_exp5_budget.pdf}
-\caption{Updates merged per round against the share of missions that overran the budget,
-at $N=6$ under the stress budget. The baselines stay within the budget by leaving devices
-out. FedEx's visit-all tour (D4) keeps its yield by overrunning the budget in 85\%
-of missions. F keeps nearly D4's yield by flying fewer stops, but its plans, priced at the
-mean SNR, overrun in 30\% of missions, by 8.5\,s on average.}
+\caption{Updates merged per round against the share of missions that overran the budget
+($N=6$, stress budget).}
 \label{fig:exp5_budget}
 \end{figure}
 
