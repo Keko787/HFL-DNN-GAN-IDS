@@ -164,7 +164,7 @@ $N$ & mean & p95 & budget (s) & F served & FX served \\
 }
 \par\smallskip
 \begin{minipage}{\textwidth}\footnotesize
-Time to $\tau$ is averaged over the seeds in which both arms reach $\tau$; a row that compares fewer seeds than its study's others says how many.
+Time to $\tau$ is averaged over the seeds in which both arms reach $\tau$; a row that compares fewer seeds than its study's others says how many. The backhaul row flies the time-varying backhaul, whose adaptive controller sees the SNR that decides each upload's loss (Section~\ref{sec:method:l1}).
 C4 in FerrySim (Study~5.5, pre-registered; 60 trainings, six $\gamma$ from 0 to 0.99): flat, no $\gamma$ beats $\gamma=0$ by $\epsilon=0.01$; held-out return, best learned $-0.0774$, FX $-0.0786$, greedy-1 $-0.0716$.
 C1 optimality: against an exhaustive oracle (O1) over band class, clustering, route and per-stop band, F's plan serves the same share of devices at the knee (gap 0.00) and 0.04 less at the stress budget.
 \end{minipage}
@@ -172,7 +172,7 @@ C1 optimality: against an exhaustive oracle (O1) over band class, clustering, ro
 
 \begin{table*}[t]
 \centering
-\caption{Robustness at $N=6$, the knee budget: device training time (Study~5.12; median 68\,s, and with 20\% of devices $5\times$ slower), non-IID data (Study~5.13, Dirichlet $\alpha=0.1$) and harsher channels (Study~5.15). Mean time to $\tau$ (s), reach rate in brackets when below 1; notation as in Table~\ref{tab:exp5_headline}. Means are over trials that reach $\tau$: under training time F reaches it in fewer trials.}
+\caption{Robustness at $N=6$, the knee budget: device training time (Study~5.12; median 68\,s, and with 20\% of devices $5\times$ slower), non-IID data (Study~5.13, Dirichlet $\alpha=0.1$) and harsher channels (Study~5.15). Mean time to $\tau$ (s), reach rate in brackets when below 1; notation as in Table~\ref{tab:exp5_headline}. Means are over trials that reach $\tau$: under training time F reaches it in fewer trials. Study~5.15's cells, its default included, fly the time-varying backhaul (Section~\ref{sec:method:l1}), so its default is not the main configuration of Table~\ref{tab:exp5_headline}.}
 \label{tab:exp5_robust}
 \small
 \begin{tabular}{l rr r rrrr}

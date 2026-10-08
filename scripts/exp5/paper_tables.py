@@ -443,7 +443,9 @@ def claims_table() -> str:
               r"\par\smallskip",
               r"\begin{minipage}{\textwidth}\footnotesize",
               r"Time to $\tau$ is averaged over the seeds in which both arms reach $\tau$; a row "
-              r"that compares fewer seeds than its study's others says how many.",
+              r"that compares fewer seeds than its study's others says how many. The backhaul "
+              r"row flies the time-varying backhaul, whose adaptive controller sees the SNR "
+              r"that decides each upload's loss (Section~\ref{sec:method:l1}).",
               rf"C4 in FerrySim (Study~5.5, pre-registered; 60 trainings, six $\gamma$ from 0 to "
               rf"0.99): {v['outcome']}, no $\gamma$ beats $\gamma=0$ by "
               rf"$\epsilon={v['epsilon']:g}$; held-out return, best learned ${best:.4f}$, FX "
@@ -476,7 +478,9 @@ def robustness_table() -> str:
              r"(Study~5.13, Dirichlet $\alpha=0.1$) and harsher channels (Study~5.15). Mean time "
              r"to $\tau$ (s), reach rate in brackets when below 1; notation as in "
              r"Table~\ref{tab:exp5_headline}. Means are over trials that reach $\tau$: under "
-             r"training time F reaches it in fewer trials.}",
+             r"training time F reaches it in fewer trials. Study~5.15's cells, its default "
+             r"included, fly the time-varying backhaul (Section~\ref{sec:method:l1}), so its "
+             r"default is not the main configuration of Table~\ref{tab:exp5_headline}.}",
              r"\label{tab:exp5_robust}",
              r"\small",
              r"\begin{tabular}{l rr r rrrr}",
