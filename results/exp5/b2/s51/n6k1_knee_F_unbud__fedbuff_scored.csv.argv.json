@@ -1,0 +1,15 @@
+[
+ "-m",
+ "experiments.analysis.traces_scorer",
+ "--traces",
+ "results/exp5/b2/s51/n6k1_knee_F_unbud__fedbuff_traces",
+ "--status-csv",
+ "results/exp5/b2/s51/n6k1_knee_F_unbud__fedbuff.csv",
+ "--tau",
+ "0.71",
+ "0.82",
+ "--cost-columns",
+ "--pair-columns",
+ "--csv",
+ "results/exp5/b2/s51/n6k1_knee_F_unbud__fedbuff_scored.csv"
+]

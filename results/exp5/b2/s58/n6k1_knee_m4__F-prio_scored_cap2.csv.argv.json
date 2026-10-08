@@ -1,0 +1,17 @@
+[
+ "-m",
+ "experiments.analysis.traces_scorer",
+ "--traces",
+ "results/exp5/b2/s58/n6k1_knee_m4__F-prio_traces",
+ "--status-csv",
+ "results/exp5/b2/s58/n6k1_knee_m4__F-prio.csv",
+ "--tau",
+ "0.71",
+ "0.82",
+ "--cost-columns",
+ "--pair-columns",
+ "--age-cap-s",
+ "2",
+ "--csv",
+ "results/exp5/b2/s58/n6k1_knee_m4__F-prio_scored_cap2.csv"
+]
