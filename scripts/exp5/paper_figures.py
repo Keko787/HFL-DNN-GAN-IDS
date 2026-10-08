@@ -616,55 +616,98 @@ MECH_ROWS = [  # (label, stage, study, cell, variant, kind)
 ]
 
 
+def _axes_in(fig, w_in: float, h_in: float, left: float, bottom: float,
+             width: float, height: float):
+    """An axes placed in inches on a figure of w_in x h_in."""
+    return fig.add_axes([left / w_in, bottom / h_in, width / w_in, height / h_in])
+
+
 def fig_mechanism(out: Path) -> None:
-    """Where F's time goes: mission-time anatomy and time to tau, with F's band
-    pinned to each class, against the baselines (all fly the wide band)."""
-    fig, (ax, bx) = plt.subplots(1, 2, figsize=(COL2, 2.9), sharey=True,
-                                 gridspec_kw={"width_ratios": [1.25, 1]})
+    """Where F's time goes (N = 6, one mule, knee): (a) mission-time anatomy and
+    (b) time to tau, with F's band pinned to each class, against the baselines
+    (all fly the wide band); (c) F's band class by cell. The panel letters sit in
+    the axis labels and one legend row tops the figure, to keep it short."""
+    H = 2.35
+    fig = plt.figure(figsize=(COL2, H))
+    bottom, height = 0.36, 1.72
+    ax = _axes_in(fig, COL2, H, 1.08, bottom, 2.03, height)
+    bx = _axes_in(fig, COL2, H, 3.21, bottom, 1.62, height)
+    cx = _axes_in(fig, COL2, H, 5.57, bottom, 1.36, height)
     n = len(MECH_ROWS)
     for i, (label, stage, study, cell, var, kind) in enumerate(MECH_ROWS):
         y = n - 1 - i
         e = entry(stage, study, cell, var)
         tr, dw = _mean(e, "sim_transit_s_mean"), _mean(e, "sim_dwell_s_mean")
         total = _mean(e, "sim_mission_duration_s_mean")
-        other = max(total - tr - dw, 0.0)
         left = 0.0
-        for width, color in ((tr, TRANSIT), (dw, DWELL), (other, CONTEXT)):
-            ax.barh(y, width, left=left, height=0.62, color=color, edgecolor=SURFACE,
-                    linewidth=1.0, zorder=3)
+        for width, color in ((tr, TRANSIT), (dw, DWELL), (max(total - tr - dw, 0.0), CONTEXT)):
+            ax.barh(y, width, left=left, height=0.66, color=color, edgecolor=SURFACE,
+                    linewidth=0.8, zorder=3)
             left += width
-        ax.text(total + 4, y, f"{total:.0f}", va="center", fontsize=6.3, color=INK2)
+        ax.text(total + 4, y, f"{total:.0f}", va="center", fontsize=6.2, color=INK2)
         m, lo, hi = mean_ci(values(e, TAU_COL))
         color = ARM_COLOR.get(kind, INK2) if kind in ("F", "FX") else INK2
-        bx.plot([lo, hi], [y, y], color=color, lw=1.4, zorder=3)
-        bx.scatter([m], [y], s=22, color=color, zorder=4, edgecolor=SURFACE, linewidth=1.0,
+        bx.plot([lo, hi], [y, y], color=color, lw=1.3, zorder=3)
+        bx.scatter([m], [y], s=18, color=color, zorder=4, edgecolor=SURFACE, linewidth=0.9,
                    marker=ARM_MARKER.get(var, "o") if kind != "pin" else "o")
-        bx.text(505, y, f"{m:.0f}", va="center", fontsize=6.3, color=INK2, clip_on=False)
+        bx.text(hi + 9, y, f"{m:.0f}", va="center", fontsize=6.2, color=INK2)
     for k in (1.5, 4.5):                       # separate F/FX, the pinned F, the baselines
         ax.axhline(n - 1 - k, color=GRID, lw=0.8)
         bx.axhline(n - 1 - k, color=GRID, lw=0.8)
+    for a in (ax, bx):
+        a.set_ylim(-0.6, n - 0.4)
+        a.grid(axis="y", visible=False)
+    short = {"F (band chosen per mission)": "F (band chosen)"}
     ax.set_yticks(range(n))
-    ax.set_yticklabels([r[0] for r in reversed(MECH_ROWS)])
+    ax.set_yticklabels([short.get(r[0], r[0]) for r in reversed(MECH_ROWS)])
     ax.tick_params(axis="y", labelcolor=INK2)
     for lbl in ax.get_yticklabels():
-        if lbl.get_text().startswith("F (") or lbl.get_text() == "FX":
+        if lbl.get_text().startswith("F (band") or lbl.get_text() == "FX":
             lbl.set_color(INK)
             lbl.set_fontweight("bold")
-    ax.set_xlabel("simulated mission time (s), mean")
-    ax.set_title("(a) where a mission's time goes", color=INK2, loc="left")
+    bx.set_yticks(range(n))
+    bx.set_yticklabels([])
+    bx.tick_params(axis="y", length=0)
     ax.set_xlim(0, 250)
-    ax.grid(axis="y", visible=False)
-    handles = [plt.Rectangle((0, 0), 1, 1, color=TRANSIT, label="transit to stops"),
-               plt.Rectangle((0, 0), 1, 1, color=DWELL, label="dwell (serving devices)"),
-               plt.Rectangle((0, 0), 1, 1, color=CONTEXT,
-                             label="return, upload, dock turnaround")]
-    fig.legend(handles=handles, loc="lower center", bbox_to_anchor=(0.42, -0.03), ncol=3,
-               fontsize=6.5, handlelength=1.0)
-    bx.set_xlabel(r"simulated time to $\tau$ = 0.71 (s)")
-    bx.set_title(r"(b) time to $\tau$, mean and 95% CI", color=INK2, loc="left")
-    bx.set_xlim(0, 500)
-    bx.grid(axis="y", visible=False)
-    fig.subplots_adjust(wspace=0.12, bottom=0.22)
+    ax.set_xticks([0, 100, 200])
+    ax.set_xlabel("(a) mission time (s), mean")
+    bx.set_xlim(0, 420)
+    bx.set_xticks([0, 200, 400])
+    bx.set_xlabel(r"(b) time to $\tau$ = 0.71 (s), mean, 95% CI")
+    nc = len(BAND_CELLS)
+    for i, (label, stage, study, cell) in enumerate(BAND_CELLS):
+        y = nc - 1 - i
+        shares = _band_shares(entry(stage, study, cell, "F"))
+        left = 0.0
+        for band in ("narrow", "medium", "wide"):
+            w = shares.get(band, 0.0)
+            if w <= 0:
+                continue
+            cx.barh(y, w, left=left, height=0.62, color=BAND_RAMP[band], edgecolor=SURFACE,
+                    linewidth=0.8, zorder=3)
+            if w >= 0.2:
+                ink = INK if band == "narrow" else SURFACE
+                cx.text(left + w / 2, y, f"{w:.0%}", ha="center", va="center", fontsize=5.9,
+                        color=ink, zorder=4)
+            left += w
+    cx.set_yticks(range(nc))
+    cx.set_yticklabels([c[0].replace("N = ", "N=").replace("K = ", "K=").replace(",", "")
+                        for c in reversed(BAND_CELLS)])
+    cx.tick_params(axis="y", labelcolor=INK2)
+    cx.set_xlim(0, 1)
+    cx.set_ylim(-0.6, nc - 0.4)
+    cx.set_xticks([0, 0.5, 1.0])
+    cx.set_xticklabels(["0", "50%", "100%"])
+    cx.set_xlabel("(c) F's plans by band class")
+    cx.grid(axis="y", visible=False)
+    handles = [plt.Rectangle((0, 0), 1, 1, color=TRANSIT, label="transit"),
+               plt.Rectangle((0, 0), 1, 1, color=DWELL, label="dwell"),
+               plt.Rectangle((0, 0), 1, 1, color=CONTEXT, label="return, upload, dock"),
+               plt.Rectangle((0, 0), 1, 1, color=BAND_RAMP["narrow"], label="narrow (1.4 MHz)"),
+               plt.Rectangle((0, 0), 1, 1, color=BAND_RAMP["medium"], label="medium (5 MHz)"),
+               plt.Rectangle((0, 0), 1, 1, color=BAND_RAMP["wide"], label="wide (20 MHz)")]
+    fig.legend(handles=handles, loc="upper center", bbox_to_anchor=(0.5, 1.0), ncol=6,
+               fontsize=6.4, handlelength=1.0, columnspacing=1.4)
     save(fig, out, "fig_exp5_mechanism")
 
 
@@ -764,7 +807,7 @@ def fig_budget(out: Path) -> None:
     """Under the stress budget: updates kept per round against the share of missions
     that overran the budget (N = 6, one mule)."""
     arms = ["F", "FX", "H1", "D1", "D2", "D3", "D4", "D5", "E3"]
-    fig, ax = plt.subplots(figsize=(COL1, 2.4))
+    fig, ax = plt.subplots(figsize=(COL1, 1.95))
     pts = {}
     for arm in arms:
         e = entry("batch2", "s53x", "n6k1_stress", arm)
@@ -779,7 +822,7 @@ def fig_budget(out: Path) -> None:
                     fontsize=6.2, color=INK2, ha=ha, va="center")
     # The baselines cluster near zero overrun: a label column with leader lines.
     cluster = sorted((a for a in arms if a not in ("F", "FX", "D4")), key=lambda a: -pts[a][1])
-    top, step = 2.95, 0.17
+    top, step = 3.0, 0.21
     for i, arm in enumerate(cluster):
         ly = top - i * step
         ax.annotate(ARM_LABEL[arm], pts[arm], xytext=(0.22, ly), textcoords="data",
@@ -907,8 +950,9 @@ $\tau$ at $N=12$ as mules are added, mean and 95\% CI.}
 \begin{figure*}[t]
 \centering
 \includegraphics[width=\textwidth]{Figures/exp5/fig_exp5_mechanism.pdf}
-\caption{Where F's advantage comes from ($N=6$, one mule, knee budget): (a)~mean mission
-time by component; (b)~time to $\tau$, mean and 95\% CI over the trials that reach it.}
+\caption{Where F's advantage comes from: (a)~mean mission time by component and (b)~time
+to $\tau$, mean and 95\% CI over the trials that reach it ($N=6$, one mule, knee
+budget); (c)~share of F's plans flying each band class, by cell.}
 \label{fig:exp5_mechanism}
 \end{figure*}
 
