@@ -503,7 +503,7 @@ learning can enter only through the flight slot.
   \node[box, right=of sv] (rp) {fits?\\else re-plan};
   \draw[arr] (ob)--(pr); \draw[arr] (pr)--(g2); \draw[arr] (g2)--(sv); \draw[arr] (sv)--(rp);
   \draw[arr, dashed] (rp.south) -- ++(0,-0.32) -| (ob.south);
-  \draw[arr, dashed] (g1.south) -- ++(0,-0.25) -| (ob.north west);
+  \draw[arr, dashed] (g1.south) -- ++(0,-0.25) -| ($(ob.west)+(-0.15,0)$) -- (ob.west);
 \end{tikzpicture}
 \caption{The two decision clocks. The flight row shows FQ, which chooses the band
 and the next stop together on arrival; FX chooses the band on arrival and the
