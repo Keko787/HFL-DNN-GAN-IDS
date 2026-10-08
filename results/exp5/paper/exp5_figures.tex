@@ -5,7 +5,7 @@
 \begin{figure*}[t]
 \centering
 \includegraphics[width=\textwidth]{Figures/exp5/fig_exp5_convergence.pdf}
-\caption{Test accuracy over simulated time at $N=6$ with one mule (Study~5.3), the mean
+\caption{Test accuracy over simulated time at $N=6$ with one mule (scheduler comparison), the mean
 of 20 paired trials per arm, at the knee (150\,s) and stress (75\,s) budgets. F and FX
 cross $\tau=0.71$ first; gray lines are the seven baselines (H1, D1--D5, E3).}
 \label{fig:exp5_convergence}
@@ -14,7 +14,7 @@ cross $\tau=0.71$ first; gray lines are the seven baselines (H1, D1--D5, E3).}
 \begin{figure*}[t]
 \centering
 \includegraphics[width=\textwidth]{Figures/exp5/fig_exp5_tau.pdf}
-\caption{Time to $\tau$ at $N=6$, one mule (Study~5.3): mean and 95\% bootstrap CI over
+\caption{Time to $\tau$ at $N=6$, one mule (scheduler comparison): mean and 95\% bootstrap CI over
 the trials that reach $\tau$; dots are single trials; the reach rate is given where it
 is below 1. $^{\dagger}$Slower than F (paired by seed, Holm $p<0.05$).}
 \label{fig:exp5_tau}
@@ -23,7 +23,7 @@ is below 1. $^{\dagger}$Slower than F (paired by seed, Holm $p<0.05$).}
 \begin{figure*}[t]
 \centering
 \includegraphics[width=\textwidth]{Figures/exp5/fig_exp5_scale.pdf}
-\caption{Time to $\tau$ as the device population grows (Study~5.9), one mule, each $N$
+\caption{Time to $\tau$ as the device population grows (scale study), one mule, each $N$
 at its own knee and stress budget: mean and 95\% bootstrap CI over the trials that reach
 $\tau$, 20 paired trials per arm. Markers are offset horizontally for legibility.}
 \label{fig:exp5_scale}
@@ -32,7 +32,7 @@ $\tau$, 20 paired trials per arm. Markers are offset horizontally for legibility
 \begin{figure*}[t]
 \centering
 \includegraphics[width=\textwidth]{Figures/exp5/fig_exp5_systems.pdf}
-\caption{Systems scaling (Study~5.11). (a)~Planner wall time per plan against $N$, mean
+\caption{Decision cost and mules (decision-cost study). (a)~Planner wall time per plan against $N$, mean
 and p95, one host running alone. (b)~FerrySim's share of devices served at each $N$'s
 knee budget under F, FX and greedy-1 (30 episodes). (c)~Time to $\tau$ at $N=12$ as mules
 are added, mean and 95\% bootstrap CI.}
@@ -47,7 +47,7 @@ mission time by component. Every baseline flies the wide band and spends most of
 in transit between stops; F mostly plans the narrow band, whose range reaches the field from
 about one stop, and trades transit for dwell. Pinning F to the wide band removes its
 advantage. (b)~Time to $\tau$ for the same rows: mean and 95\% bootstrap CI over the trials
-that reach $\tau$. The pinned-band rows come from Study~5.4, whose pre-registered metric is
+that reach $\tau$. The pinned-band rows come from the band-pinning study, whose pre-registered metric is
 the network age of updates; their time to $\tau$ is descriptive.}
 \label{fig:exp5_mechanism}
 \end{figure*}
@@ -86,7 +86,7 @@ mean SNR, overrun in 30\% of missions, by 8.5\,s on average.}
 \includegraphics[width=\textwidth]{Figures/exp5/fig_exp5_learning.pdf}
 \caption{Learning inside FeRRy's plan against learning without one ($N=6$, one mule, 20
 paired seeds; exploratory, not pre-registered). F commits the plan in flight, FX adds the
-fixed per-stop rule, FQ the learned per-stop score (Study~5.5's $\gamma=0.75$ pick), and E3
+fixed per-stop rule, FQ the learned per-stop score (the learned-score study's $\gamma=0.75$ pick), and E3
 is Chen et al.'s learned scheduler with no plan. (a)~Time to $\tau$ at the knee (filled) and
 stress (hollow) budgets: mean and 95\% bootstrap CI over the trials that reach $\tau$, with
 the reach rate in brackets when it is below 1; $^{\ddagger}$slower than FQ (paired by seed,
@@ -100,7 +100,7 @@ narrow-band reach, while E3 flies the wide band.}
 \begin{figure*}[t]
 \centering
 \includegraphics[width=\textwidth]{Figures/exp5/fig_exp5_compute.pdf}
-\caption{Device training time (Study~5.12, $N=6$, knee budget): updates merged per round
+\caption{Device training time (training-time study, $N=6$, knee budget): updates merged per round
 and the share of trials reaching $\tau$ with no training time, a seeded spread (median
 68\,s) and 20\% stragglers at $5\times$. F's plan does not price training time: its yield
 falls to 0.7 updates per round and it reaches $\tau$ in 70--75\% of

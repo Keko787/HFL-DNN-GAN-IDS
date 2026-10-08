@@ -165,7 +165,7 @@ HEADLINE_CELLS = [("n6k1_knee", "knee"), ("n6k1_stress", "stress"),
 def headline_table() -> str:
     st = Study("b2", "s53x")
     lines = [r"\begin{table}[t]", r"\centering",
-             r"\caption{Whole-scheduler comparison at $N=6$ (Study~5.3): mean simulated "
+             r"\caption{Scheduler comparison at $N=6$: mean simulated "
              r"time to $\tau=0.71$ in seconds (lower is better), 20 paired trials per cell; "
              r"reach rate in brackets when below 1. " + DAG + r" significantly slower than F "
              r"(paired bootstrap CI excludes 0, Holm $p<0.05$). " + SECT + r"FQ flew the "
@@ -215,10 +215,10 @@ def scale_table() -> str:
     cols = [(core, "n6k1_knee"), (core, "n12k1_knee"), (core, "n24k1_knee"),
             (h53, "n6k1_stress"), (ext, "n12k1_stress"), (ext, "n24k1_stress")]
     lines = [r"\begin{table}[t]", r"\centering",
-             r"\caption{Scale (Study~5.9): mean time to $\tau$ (s) with one mule as the "
+             r"\caption{Scale study: mean time to $\tau$ (s) with one mule as the "
              r"device population grows, at each $N$'s knee and stress budgets. Notation as in "
              r"Table~\ref{tab:exp5_headline}. " + SECT + r"FQ at $N=6$ is the exploratory run "
-             r"and at $N=12$ Study~5.5's stack check, on the same cells and seeds (there it "
+             r"and at $N=12$ the learned-score study's full-system check, on the same cells and seeds (there it "
              r"is tested against FX only); it was not flown at $N=24$.}",
              r"\label{tab:exp5_scale}",
              r"\resizebox{\columnwidth}{!}{%",
@@ -258,7 +258,7 @@ def decision_cost_table() -> str:
         rep = json.loads((REPO / f"results/exp5/b3/s511c/{cell}.json").read_text(encoding="utf-8"))
         ferry[cell] = {r["policy"]: r for r in rep["table"]}
     lines = [r"\begin{table}[t]", r"\centering",
-             r"\caption{Decision cost and scale (Study~5.11). Planner wall time per plan "
+             r"\caption{Decision-cost study. Planner wall time per plan "
              r"(mean / p95, s; one host, alone); for $N\ge 24$, FerrySim's served share of "
              r"devices at each $N$'s knee budget under F and FX, 30 episodes.}",
              r"\label{tab:exp5_cost}",
@@ -289,7 +289,7 @@ def mules_table() -> str:
     cols = [("n6k1_knee", "6/1"), ("n12k2_knee", "12/2"), ("n18k3_knee", "18/3"),
             ("n12k1_knee", "12/1"), ("n12k3_knee", "12/3")]
     lines = [r"\begin{table}[t]", r"\centering",
-             r"\caption{Scaling out with mules (Study~5.11b), knee budget: mean time to $\tau$ "
+             r"\caption{Scaling out with mules (decision-cost study), knee budget: mean time to $\tau$ "
              r"(s). Weak scaling holds six devices per mule ($N/K$ = 6/1, 12/2, 18/3); strong "
              r"scaling adds mules at $N=12$. Notation as in Table~\ref{tab:exp5_headline}.}",
              r"\label{tab:exp5_mules}",
@@ -358,7 +358,7 @@ CLAIM_GROUPS = {
     "C3 one deadline": "C3: one deadline, three roles",
     "C4 two clocks": "C4: two clocks, re-decided per stop",
     "C5 fairness": "C5: fairness under physical cost",
-    "Components": "Component ablations (Study 5.14)",
+    "Components": "Component ablations",
 }
 
 
@@ -446,7 +446,7 @@ def claims_table() -> str:
               r"that compares fewer seeds than its study's others says how many. The backhaul "
               r"row flies the time-varying backhaul, whose adaptive controller sees the SNR "
               r"that decides each upload's loss.",
-              rf"C4 in FerrySim (Study~5.5, pre-registered; 60 trainings, six $\gamma$ from 0 to "
+              rf"C4 in FerrySim (learned-score study, pre-registered; 60 trainings, six $\gamma$ from 0 to "
               rf"0.99): {v['outcome']}, no $\gamma$ beats $\gamma=0$ by "
               rf"$\epsilon={v['epsilon']:g}$; held-out return, best learned ${best:.4f}$, FX "
               rf"${v['references']['FX']:.4f}$, greedy-1 ${v['references']['greedy_1']:.4f}$.",
@@ -473,20 +473,20 @@ def robustness_table() -> str:
     arms = [("F", "F"), ("FX", "FX"), ("H1", "H1"), ("D3", "D3 (Cui)"),
             ("D4", "D4 (FedEx route)"), ("D5", "D5 (FedCS)")]
     lines = [r"\begin{table*}[t]", r"\centering",
-             r"\caption{Robustness at $N=6$, the knee budget: device training time (Study~5.12; "
+             r"\caption{Robustness at $N=6$, the knee budget: device training time (training-time study; "
              r"median 68\,s, and with 20\% of devices $5\times$ slower), non-IID data "
-             r"(Study~5.13, Dirichlet $\alpha=0.1$) and harsher channels (Study~5.15). Mean time "
+             r"(non-IID study, Dirichlet $\alpha=0.1$) and harsher channels (radio study). Mean time "
              r"to $\tau$ (s), reach rate in brackets when below 1; notation as in "
              r"Table~\ref{tab:exp5_headline}. Means are over trials that reach $\tau$: under "
-             r"training time F reaches it in fewer trials. Study~5.15's cells, its default "
+             r"training time F reaches it in fewer trials. The radio study's cells, its default "
              r"included, fly the time-varying backhaul, so its "
              r"default is not the main configuration of Table~\ref{tab:exp5_headline}.}",
              r"\label{tab:exp5_robust}",
              r"\small",
              r"\begin{tabular}{l rr r rrrr}",
              r"\toprule",
-             r" & \multicolumn{2}{c}{compute (5.12)} & data (5.13) & "
-             r"\multicolumn{4}{c}{channel (5.15)} \\",
+             r" & \multicolumn{2}{c}{compute (Study 10)} & data (Study 11) & "
+             r"\multicolumn{4}{c}{channel (Study 13)} \\",
              r"\cmidrule(lr){2-3}\cmidrule(lr){4-4}\cmidrule(lr){5-8}",
              r"\textbf{Arm} & " + " & ".join(c[2] for c in cols) + r" \\",
              r"\midrule"]
