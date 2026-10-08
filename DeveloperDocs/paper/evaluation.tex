@@ -70,8 +70,9 @@ and ties the FedEx route (752\,s); under the stress budget it beats the FedEx
 route (661 against 752\,s). At $N=12$ no comparison is a claim; FQ, flown in the
 same cells in the learned-score study's full-system check, takes 461\,s at the knee and 389\,s under
 the stress budget, not significantly different from FX (424 and 386\,s). FeRRy's planning
-stays affordable (Fig.~\ref{fig:exp5_systems}a): the planner takes 0.04\,s per
-plan at $N=6$ and 1.5\,s at $N=96$ (p95 2.0\,s), a small share of a mission.
+stays affordable (Fig.~\ref{fig:exp5_systems}a): measured alone on one host, the
+planner takes 0.04\,s per plan at $N=6$ and 1.5\,s at $N=96$ (p95 2.0\,s), a small
+share of a mission.
 In FerrySim, the plan serves 54--57\% of the devices at each scale's knee
 budget from $N=24$ to $96$ (Fig.~\ref{fig:exp5_systems}b). Adding mules divides
 the work: at $N=12$, F's time to $\tau$ falls from 486\,s with one mule to
@@ -153,7 +154,7 @@ with 8\,dB shadowing. Two limitations stand out.
 First, FeRRy's plan prices the mean SNR, so under the stress budget 30\% of its
 missions overrun the budget, by 8.5\,s on average
 (Fig.~\ref{fig:exp5_budget}); the FedEx route, which never skips a device,
-overruns in 85\%. Second, when devices take time to train (the training-time study), F's
+overruns in 85\%, and F keeps nearly its update yield while flying fewer stops. Second, when devices take time to train (the training-time study), F's
 update yield falls from 3.5 to 0.7 updates per round and it reaches $\tau$ in
 only 70--75\% of trials, while H1, D4 and D5 keep 85--100\%: FeRRy's plan does
 not price training time, so it reaches devices whose updates are not ready.

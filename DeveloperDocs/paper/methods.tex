@@ -143,11 +143,7 @@ learning can enter only through the flight slot.
   \draw[arr, dashed] (rp.south) -- ++(0,-0.32) -| (ob.south);
   \draw[arr, dashed] (g1.south) -- ++(0,-0.25) -| ($(ob.west)+(-0.15,0)$) -- (ob.west);
 \end{tikzpicture}
-\caption{The two decision clocks. The flight row shows FQ, which chooses the band
-and the next stop together on arrival; FX chooses the band on arrival and the
-next stop after the departure check, and F keeps the plan's. The shaded boxes
-are the same feasibility test, applied once to the committed plan and again in
-flight.}
+\caption{The two decision clocks; the flight row shows FQ's per-stop choice.}
 \label{fig:clocks}
 \end{figure}
 
