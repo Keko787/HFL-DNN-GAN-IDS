@@ -28,27 +28,27 @@ E3 & Single-agent next-stop DQN after Chen et al.\ \cite{chen2023model}, trained
 
 \begin{table}[t]
 \centering
-\caption{Scheduler comparison at $N=6$: time to $\tau=0.71$, with the share of trials that reach it in brackets when below 100\%. $^{\dagger}$Significantly slower than F. $^{\S}$Exploratory.}
+\caption{Scheduler comparison at $N=6$: time to $\tau=0.71$, with the share of trials that reach it in brackets when below 100\%, and with one mule under the stress budget, the share of missions that overran it and the updates merged per round (yield). $^{\dagger}$Significantly slower than F. $^{\S}$Exploratory.}
 \label{tab:exp5_headline}
 \resizebox{\columnwidth}{!}{%
-\begin{tabular}{l rr rr}
+\begin{tabular}{l rr rr rr}
 \toprule
- & \multicolumn{2}{c}{$K=1$ mule} & \multicolumn{2}{c}{$K=3$ mules} \\
-\cmidrule(lr){2-3}\cmidrule(lr){4-5}
-\textbf{Arm} & knee & stress & knee & stress \\
+ & \multicolumn{2}{c}{$K=1$ mule} & \multicolumn{2}{c}{$K=3$ mules} & \multicolumn{2}{c}{$K=1$, stress} \\
+\cmidrule(lr){2-3}\cmidrule(lr){4-5}\cmidrule(lr){6-7}
+\textbf{Arm} & knee & stress & knee & stress & overrun & yield \\
 \midrule
-F & \textbf{194\,s} & \textbf{178\,s} & \textbf{52\,s} & \textbf{52\,s} \\
-FX & 178\,s & 175\,s & 56\,s & 56\,s \\
-FQ$^{\S}$ & 180\,s & 182\,s & -- & -- \\
+F & \textbf{194\,s} & \textbf{178\,s} & \textbf{52\,s} & \textbf{52\,s} & 30\% & 3.2 \\
+FX & 178\,s & 175\,s & 56\,s & 56\,s & 24\% & 3.2 \\
+FQ$^{\S}$ & 180\,s & 182\,s & -- & -- & 24\% & 3.2 \\
 \midrule
-H1 & 282\,s$^{\dagger}$ & 220\,s\,{\scriptsize(90\%)} & 65\,s & 64\,s \\
-D1 (MAX-AoI) & 282\,s$^{\dagger}$ & 238\,s & 65\,s & 64\,s \\
-D2 (Oort) & 266\,s$^{\dagger}$ & 229\,s\,{\scriptsize(90\%)} & 65\,s & 64\,s \\
-D3 (Cui) & 280\,s$^{\dagger}$ & 209\,s & 65\,s & 64\,s \\
-D4 (FedEx route) & 264\,s$^{\dagger}$ & 264\,s$^{\dagger}$ & 55\,s & 55\,s \\
-D4$_{\text{FedEx}}$ & 281\,s\,{\scriptsize(95\%)} & 281\,s\,{\scriptsize(95\%)} & 101\,s$^{\dagger}$ & 101\,s$^{\dagger}$ \\
-D5 (FedCS) & 275\,s$^{\dagger}$ & 198\,s\,{\scriptsize(95\%)} & 65\,s & 64\,s \\
-E3 (Chen) & 280\,s$^{\dagger}$ & 211\,s\,{\scriptsize(95\%)} & 65\,s & 64\,s \\
+H1 & 282\,s$^{\dagger}$ & 220\,s\,{\scriptsize(90\%)} & 65\,s & 64\,s & 1\% & 2.0 \\
+D1 (MAX-AoI) & 282\,s$^{\dagger}$ & 238\,s & 65\,s & 64\,s & 2\% & 2.4 \\
+D2 (Oort) & 266\,s$^{\dagger}$ & 229\,s\,{\scriptsize(90\%)} & 65\,s & 64\,s & 4\% & 2.4 \\
+D3 (Cui) & 280\,s$^{\dagger}$ & 209\,s & 65\,s & 64\,s & 2\% & 2.4 \\
+D4 (FedEx route) & 264\,s$^{\dagger}$ & 264\,s$^{\dagger}$ & 55\,s & 55\,s & 85\% & 3.5 \\
+D4$_{\text{FedEx}}$ & 281\,s\,{\scriptsize(95\%)} & 281\,s\,{\scriptsize(95\%)} & 101\,s$^{\dagger}$ & 101\,s$^{\dagger}$ & 85\% & 3.5 \\
+D5 (FedCS) & 275\,s$^{\dagger}$ & 198\,s\,{\scriptsize(95\%)} & 65\,s & 64\,s & 2\% & 2.6 \\
+E3 (Chen) & 280\,s$^{\dagger}$ & 211\,s\,{\scriptsize(95\%)} & 65\,s & 64\,s & 9\% & 2.7 \\
 \bottomrule
 \end{tabular}%
 }
@@ -78,7 +78,7 @@ D4 (FedEx route) & 264\,s$^{\dagger}$ & 459\,s\,{\scriptsize(95\%)} & 752\,s & 2
 
 \begin{table}[t]
 \centering
-\caption{Scaling out with mules (decision-cost study), knee budget: time to $\tau$. Weak scaling holds six devices per mule; strong scaling adds mules at $N=12$. Notation as in Table~\ref{tab:exp5_headline}.}
+\caption{Scaling out with mules (decision-cost study), knee budget: time to $\tau$. Weak scaling holds six devices per mule; strong scaling adds mules at $N=12$. Notation as in Table~\ref{tab:exp5_headline}; $^{\ast}$significantly faster than F.}
 \label{tab:exp5_mules}
 \resizebox{\columnwidth}{!}{%
 \begin{tabular}{l rrr rr}
@@ -98,20 +98,20 @@ D4 (FedEx route) & 264\,s$^{\dagger}$ & 222\,s & 186\,s & 459\,s\,{\scriptsize(9
 
 \begin{table}[t]
 \centering
-\caption{Decision-cost study. Planner wall time per plan (mean / p95, s; one host, alone); for $N\ge 24$, FerrySim's served share of devices at each $N$'s knee budget under F and FX, 30 episodes.}
+\caption{Decision-cost study: planner time per plan, and FerrySim's share of devices served at each $N$'s knee budget.}
 \label{tab:exp5_cost}
 \resizebox{\columnwidth}{!}{%
 \begin{tabular}{r rr rrr}
 \toprule
- & \multicolumn{2}{c}{plan time (s)} & \multicolumn{3}{c}{FerrySim at the knee} \\
+ & \multicolumn{2}{c}{plan time} & \multicolumn{3}{c}{FerrySim at the knee} \\
 \cmidrule(lr){2-3}\cmidrule(lr){4-6}
-$N$ & mean & p95 & budget (s) & F served & FX served \\
+$N$ & mean & p95 & budget & F served & FX served \\
 \midrule
-6 & 0.037 & 0.064 & -- & -- & -- \\
-12 & 0.022 & 0.043 & -- & -- & -- \\
-24 & 0.142 & 0.265 & 350 & 0.54 & 0.54 \\
-48 & 0.409 & 0.826 & 850 & 0.56 & 0.56 \\
-96 & 1.531 & 1.996 & 1660 & 0.56 & 0.57 \\
+6 & 0.04\,s & 0.06\,s & -- & -- & -- \\
+12 & 0.02\,s & 0.04\,s & -- & -- & -- \\
+24 & 0.14\,s & 0.26\,s & 350\,s & 54\% & 54\% \\
+48 & 0.41\,s & 0.83\,s & 850\,s & 56\% & 56\% \\
+96 & 1.53\,s & 2.00\,s & 1660\,s & 56\% & 57\% \\
 \bottomrule
 \end{tabular}%
 }
@@ -162,7 +162,7 @@ $N$ & mean & p95 & budget (s) & F served & FX served \\
 
 \begin{table*}[t]
 \centering
-\caption{Robustness at $N=6$ and the knee budget: time to $\tau$. Notation as in Table~\ref{tab:exp5_headline}.}
+\caption{Robustness at $N=6$ and the knee budget: time to $\tau$. Notation as in Table~\ref{tab:exp5_headline}; $^{\ast}$significantly faster than F.}
 \label{tab:exp5_robust}
 \small
 \begin{tabular}{l rr r rrrr}
