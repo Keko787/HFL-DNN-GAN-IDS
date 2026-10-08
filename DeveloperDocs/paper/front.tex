@@ -84,16 +84,33 @@
 
 \maketitle
 
-% REVIEW: a proposed revision of this abstract, with an audit of each claim
-% against the results, is in DeveloperDocs/paper/abstract_revision.md.
+% Abstract adopted 8 Oct 2026 from abstract_revision.md (which keeps the audit
+% of the previous abstract's claims), corrected after the methods audit.
 \begin{abstract}
-Federated Learning is increasingly used as a paradigm for preserving security and privacy in applications that operate on distributed systems. However, federated learning requires that every federated device can reach a central server during the federation process, which is not guaranteed in contested-field deployments such as disaster zones involving a UAV fleet. In such use cases, the radio access network primarily determines the range and strength of signals by modulating time budget and channel quality allocated for the UAVs. Devices that are out of range or poorly connected are skipped repeatedly or never reached at all, leading to repeated failures in federated learning. To address this challenge, the paper presents FeRRy, a Federated RF-aware Routing framework that jointly makes decisions about radio channel selection, task routing, and resource aggregation. FeRRy methodology is represented through three key components. First, a band-aware mission planner that selects the radio band and route before each UAV flight. Second, an online re-planning loop iteratively checks the channel, picks the band and next stop to match it retrospectively, and triggers re-plans for the rest of the route. Third, a hierarchical aggregation layer first merges updates on each UAV and then across the UAVs at the edge server, giving older updates lower weight. In addition, FeRRy improves system robustness by penalizing configurations that skip devices and caps access times on devices, while ensuring that remote devices are not left disconnected. The prototype runs the edge server, the UAVs, and the devices as separate processes that communicate over TCP, and the devices train a real intrusion-detection model on the CICIoT2023 dataset. We evaluate FeRRy on a testbed consisting of edge servers and UAVs, in which flight time, the radio channel, and energy are simulated to train a real intrusion-detection model on the CICIoT2023 dataset. We compare FeRRy against state-of-the-art schedulers including mobile-transporter federated learning (FedEx), Oort, FedCS, and a Whittle-index age-of-update scheduler using metrics such as target accuracy, round completion, deadline misses, and network update frequency.
-% NEW (8 Oct 2026): results sentence; trim if the abstract is over the limit.
-In paired trials with six devices, one mule and a moderate mission budget, FeRRy
-reaches the target accuracy 27--31\% sooner than each of seven baseline
-schedulers, because its plan chooses a long-reach narrow band that removes most
-of the transit between stops. Under tight budgets, it keeps updates fresher than
-age-of-information schedulers.
+Federated learning (FL) lets devices train a shared model without sharing their
+data, but it assumes every device can reach the server. In contested and disaster
+zones that assumption fails: devices that are out of range or poorly connected are
+skipped repeatedly, and rounds stall. UAV data mules can carry model updates to
+and from such devices, but a mule has a finite mission budget, and its radio
+decides how far it reaches. We present FeRRy, a Federated RF-aware Routing
+framework that treats a mule's reach as a decision. Before each flight, a
+band-aware mission planner chooses the contact band class, which trades range for
+rate, together with the route, under one feasibility test of per-device deadlines
+and the mission budget. In flight, a per-stop rule can switch to a faster band
+from the observed channel and reorder the remaining stops, each reorder checked
+by the same test, and the mule re-plans the rest of its route when the channel
+uses up the plan's slack. Updates are merged on each mule and then across mules
+at the edge server, with stale updates weighted down, and a coverage term keeps
+devices from being starved. In a prototype whose server, mules and devices run as
+separate processes over TCP and train a real intrusion-detection model on
+CICIoT2023, with flight time, the radio channel and energy simulated, we compare
+FeRRy with seven baseline schedulers, including adaptations of FedEx, Oort, FedCS
+and a Whittle-index age-of-update scheduler. With six devices, one mule and a
+moderate budget, FeRRy reaches the target accuracy 27--31\% sooner than each,
+because its plan chooses a long-reach narrow band that removes most of the
+transit between stops. Under tight budgets it keeps updates fresher than
+age-of-information schedulers, and without its coverage term the share of rounds
+that close at twelve devices falls from 99\% to 74\%.
 \end{abstract}
 
 \begin{IEEEkeywords}

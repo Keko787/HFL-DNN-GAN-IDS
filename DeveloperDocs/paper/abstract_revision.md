@@ -1,22 +1,26 @@
-# Proposed abstract revision (for review)
+# Abstract revision (adopted 8 Oct 2026)
 
-**Status:** proposal only, written 8 Oct 2026. The paper still uses the current
-abstract in `front.tex`. To adopt this one, replace the text between
-`\begin{abstract}` and `\end{abstract}` in `front.tex` with the block below, then
-rebuild:
+**Status:** adopted. The abstract below is the paper's abstract (`front.tex`,
+rebuilt into `ferry_paper.tex`). It is the proposal written earlier the same day,
+with two corrections from the methods audit (`methods_audit.md`):
 
-```bash
-py -3.11 DeveloperDocs/paper/assemble.py
-```
+- **Flight sentence.** The proposal said "the same test gates a per-stop choice
+  of band and next stop". FX's band is not gated by the feasibility test; only
+  the reorder is (and FQ's whole pair). It now reads: "a per-stop rule can
+  switch to a faster band from the observed channel and reorder the remaining
+  stops, each reorder checked by the same test".
+- **Coverage result.** The 99% to 74% round-close result is at N = 12, so it
+  now says "at twelve devices".
 
-**Why:** an audit of the current abstract against the paper's results (below)
-found claims the results do not back, wording that contradicts Section III, and a
-repeated sentence. The proposal keeps the current abstract's structure (problem,
-FeRRy, three components, prototype, comparison, results) and states only what
-the results support. It is about 290 words, against about 380 now; IEEE abstracts
-usually stay under 250, so check the IPDPS limit before submitting.
+**Why it was revised:** an audit of the previous abstract against the paper's
+results (below) found claims the results do not back, wording that contradicts
+Section III, and a repeated sentence. The new abstract keeps the previous one's
+structure (problem, FeRRy, components, prototype, comparison, results) and states
+only what the results support. It is 305 words, against about 380 before; IEEE
+abstracts usually stay under 250, so check the IPDPS limit before submitting.
+If it must shrink, the 99% to 74% clause is the first to cut.
 
-## Proposed abstract (paste-ready LaTeX)
+## The abstract (as in the paper)
 
 ```latex
 Federated learning (FL) lets devices train a shared model without sharing their
@@ -28,11 +32,12 @@ decides how far it reaches. We present FeRRy, a Federated RF-aware Routing
 framework that treats a mule's reach as a decision. Before each flight, a
 band-aware mission planner chooses the contact band class, which trades range for
 rate, together with the route, under one feasibility test of per-device deadlines
-and the mission budget. In flight, the same test gates a per-stop choice of band
-and next stop, and the mule re-plans the rest of its route when the channel uses
-up the plan's slack. Updates are merged on each mule and then across mules at the
-edge server, with stale updates weighted down, and a coverage term keeps devices
-from being starved. In a prototype whose server, mules and devices run as
+and the mission budget. In flight, a per-stop rule can switch to a faster band
+from the observed channel and reorder the remaining stops, each reorder checked
+by the same test, and the mule re-plans the rest of its route when the channel
+uses up the plan's slack. Updates are merged on each mule and then across mules
+at the edge server, with stale updates weighted down, and a coverage term keeps
+devices from being starved. In a prototype whose server, mules and devices run as
 separate processes over TCP and train a real intrusion-detection model on
 CICIoT2023, with flight time, the radio channel and energy simulated, we compare
 FeRRy with seven baseline schedulers, including adaptations of FedEx, Oort, FedCS
@@ -41,16 +46,16 @@ moderate budget, FeRRy reaches the target accuracy 27--31\% sooner than each,
 because its plan chooses a long-reach narrow band that removes most of the
 transit between stops. Under tight budgets it keeps updates fresher than
 age-of-information schedulers, and without its coverage term the share of rounds
-that close falls from 99\% to 74\%.
+that close at twelve devices falls from 99\% to 74\%.
 ```
 
-## Audit of the current abstract
+## Audit of the previous abstract
 
-Each claim in the current abstract, what the paper shows, and the verdict. Numbers
+Each claim in the previous abstract, what the paper shows, and the verdict. Numbers
 come from `results/exp5/scores/` (the CSV named in brackets) and the paper's
 tables.
 
-| Current abstract says | What the paper shows | Verdict | In the proposal |
+| Previous abstract says | What the paper shows | Verdict | In the new abstract |
 |---|---|---|---|
 | Out-of-range or poorly connected devices are skipped, and FL fails | H0 (no mule, live link) merges 0.5 updates per round and ends at accuracy 0.686, against F's 3.5 and 0.831 (Table `tab:exp5_headline`) | Backed | Kept |
 | "the radio access network primarily determines the range and strength of signals by modulating time budget and channel quality allocated for the UAVs" | Motivation, not a result; the radio network does not set the UAV's time budget | Unclear wording | Replaced by "a mule has a finite mission budget, and its radio decides how far it reaches" |
