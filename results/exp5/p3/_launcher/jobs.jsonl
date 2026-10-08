@@ -1,0 +1,28 @@
+{"event": "start", "job": "p515/n6k1_knee_amp8__H1", "pid": 18872, "at": "2026-10-07T18:05:01"}
+{"event": "start", "job": "p515/n6k1_knee_amp11__H1", "pid": 96152, "at": "2026-10-07T18:05:01"}
+{"event": "start", "job": "p515/n6k1_knee_amp14__H1", "pid": 113920, "at": "2026-10-07T18:05:01"}
+{"event": "start", "job": "p515/n6k1_knee_amp17__H1", "pid": 109976, "at": "2026-10-07T18:05:01"}
+{"event": "start", "job": "p512/n6k1_knee_cyc0.25__H1", "pid": 1504, "at": "2026-10-07T18:05:01"}
+{"event": "start", "job": "p512/n6k1_knee_cyc0.5__H1", "pid": 79008, "at": "2026-10-07T18:05:01"}
+{"event": "start", "job": "p512/n6k1_knee_cyc1__H1", "pid": 89836, "at": "2026-10-07T18:05:01"}
+{"event": "end", "job": "p512/n6k1_knee_cyc1__H1", "rc": 0, "wall_s": 450.2, "rows": 10, "rows_not_ok": 0, "at": "2026-10-07T18:12:31"}
+{"event": "start", "job": "p512/n6k1_knee_cyc2__H1", "pid": 17456, "at": "2026-10-07T18:12:31"}
+{"event": "end", "job": "p512/n6k1_knee_cyc0.5__H1", "rc": 0, "wall_s": 486.8, "rows": 10, "rows_not_ok": 0, "at": "2026-10-07T18:13:07"}
+{"event": "end", "job": "p512/n6k1_knee_cyc0.25__H1", "rc": 0, "wall_s": 499.0, "rows": 10, "rows_not_ok": 0, "at": "2026-10-07T18:13:20"}
+{"event": "end", "job": "p515/n6k1_knee_amp17__H1", "rc": 0, "wall_s": 503.1, "rows": 10, "rows_not_ok": 0, "at": "2026-10-07T18:13:24"}
+{"event": "end", "job": "p515/n6k1_knee_amp11__H1", "rc": 0, "wall_s": 527.3, "rows": 10, "rows_not_ok": 0, "at": "2026-10-07T18:13:48"}
+{"event": "end", "job": "p515/n6k1_knee_amp14__H1", "rc": 0, "wall_s": 529.3, "rows": 10, "rows_not_ok": 0, "at": "2026-10-07T18:13:50"}
+{"event": "end", "job": "p515/n6k1_knee_amp8__H1", "rc": 0, "wall_s": 535.4, "rows": 10, "rows_not_ok": 0, "at": "2026-10-07T18:13:56"}
+{"event": "end", "job": "p512/n6k1_knee_cyc2__H1", "rc": 0, "wall_s": 199.8, "rows": 10, "rows_not_ok": 0, "at": "2026-10-07T18:15:51"}
+{"event": "start", "job": "p511c/scl-n24-350", "pid": 87488, "at": "2026-10-07T18:15:51"}
+{"event": "end", "job": "p511c/scl-n24-350", "rc": 0, "wall_s": 14.1, "rows": null, "rows_not_ok": null, "at": "2026-10-07T18:16:05"}
+{"event": "start", "job": "p511c/scl-n48-680", "pid": 87428, "at": "2026-10-07T18:16:05"}
+{"event": "end", "job": "p511c/scl-n48-680", "rc": 0, "wall_s": 38.2, "rows": null, "rows_not_ok": null, "at": "2026-10-07T18:16:43"}
+{"event": "start", "job": "p511c/scl-n96-1330", "pid": 70596, "at": "2026-10-07T18:16:43"}
+{"event": "end", "job": "p511c/scl-n96-1330", "rc": 0, "wall_s": 124.8, "rows": null, "rows_not_ok": null, "at": "2026-10-07T18:18:48"}
+{"event": "start", "job": "p512/n6k1_knee_cyc0.3__H1", "pid": 3656, "at": "2026-10-07T18:19:39"}
+{"event": "start", "job": "p512/n6k1_knee_cyc0.375__H1", "pid": 99476, "at": "2026-10-07T18:19:39"}
+{"event": "start", "job": "p512/n6k1_knee_cyc0.45__H1", "pid": 41024, "at": "2026-10-07T18:19:39"}
+{"event": "end", "job": "p512/n6k1_knee_cyc0.375__H1", "rc": 0, "wall_s": 292.5, "rows": 10, "rows_not_ok": 0, "at": "2026-10-07T18:24:31"}
+{"event": "end", "job": "p512/n6k1_knee_cyc0.3__H1", "rc": 0, "wall_s": 294.5, "rows": 10, "rows_not_ok": 0, "at": "2026-10-07T18:24:34"}
+{"event": "end", "job": "p512/n6k1_knee_cyc0.45__H1", "rc": 0, "wall_s": 294.5, "rows": 10, "rows_not_ok": 0, "at": "2026-10-07T18:24:34"}
