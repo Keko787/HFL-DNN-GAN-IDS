@@ -13,6 +13,12 @@ Writes a PDF (vector, for LaTeX) and a 300-dpi PNG of each figure:
 * ``fig_exp5_claims``: every claim test as a relative effect with its CI.
 * ``fig_exp5_compute``: update yield and reach rate as devices take time to
   train (Study 5.12), the limitation the paper reports.
+* ``fig_exp5_mechanism``: why F wins at N = 6: mission time by component
+  (transit, dwell, the rest) and time to tau, with F's band pinned to each
+  class beside the baselines, which all fly the wide band.
+* ``fig_exp5_bands``: F's band class by cell, as N and the budget change.
+* ``fig_exp5_paired``: the share of paired seeds in which F reaches tau first.
+* ``fig_exp5_budget``: updates per round against budget overruns (stress).
 
 Numbers come from the same entries the scorer compared (``launch.py``'s
 score plan under each stage's run flags, the first ``trials`` rows of each
@@ -103,8 +109,22 @@ def style() -> None:
 
 
 def save(fig, out: Path, name: str) -> None:
+    """Write each format to a temporary file, then swap it into place: on Windows a
+    viewer or file watcher holding the old figure open would otherwise fail the write."""
+    import os
+    import time
     for ext in ("pdf", "png"):
-        fig.savefig(out / f"{name}.{ext}", bbox_inches="tight", pad_inches=0.02)
+        target = out / f"{name}.{ext}"
+        tmp = out / f".{name}.tmp.{ext}"
+        fig.savefig(tmp, format=ext, bbox_inches="tight", pad_inches=0.02)
+        for attempt in range(20):
+            try:
+                os.replace(tmp, target)
+                break
+            except OSError:
+                if attempt == 19:
+                    raise
+                time.sleep(0.25)
     plt.close(fig)
     print(f"  {name}.pdf/.png")
 
@@ -540,6 +560,229 @@ def fig_compute(out: Path) -> None:
     save(fig, out, "fig_exp5_compute")
 
 
+# --------------------------------------------------------------------------- #
+# Why F wins: the mechanism figures
+# --------------------------------------------------------------------------- #
+
+TRANSIT, DWELL = "#e34948", "#4a3aa7"      # mission-time components (validated pair)
+BAND_RAMP = {"narrow": "#86b6ef", "medium": "#2a78d6", "wide": "#104281"}   # ordinal
+
+
+def _mean(e, col: str) -> float:
+    xs = values(e, col)
+    return statistics.fmean(xs) if xs else float("nan")
+
+
+def _band_shares(e) -> Dict[str, float]:
+    acc: Dict[str, float] = {}
+    n = 0
+    for r in e.scored_rows:
+        try:
+            d = json.loads(r.get("band_shares") or "{}")
+        except json.JSONDecodeError:
+            continue
+        if d:
+            n += 1
+            for k, v in d.items():
+                acc[k] = acc.get(k, 0.0) + float(v)
+    return {k: v / n for k, v in acc.items()} if n else {}
+
+
+MECH_ROWS = [  # (label, stage, study, cell, variant, kind)
+    ("F (band chosen per mission)", "batch2", "s53x", "n6k1_knee", "F", "F"),
+    ("FX", "batch2", "s53x", "n6k1_knee", "FX", "FX"),
+    ("F, band pinned narrow", "batch2", "s54", "n6k1_knee_1mb", "FBpnarrow", "pin"),
+    ("F, band pinned medium", "batch2", "s54", "n6k1_knee_1mb", "FBpmedium", "pin"),
+    ("F, band pinned wide", "batch2", "s54", "n6k1_knee_1mb", "FBpwide", "pin"),
+    ("D4 (FedEx route)", "batch2", "s53x", "n6k1_knee", "D4", "base"),
+    ("D2 (Oort)", "batch2", "s53x", "n6k1_knee", "D2", "base"),
+    ("D5 (FedCS)", "batch2", "s53x", "n6k1_knee", "D5", "base"),
+    ("D3 (Cui)", "batch2", "s53x", "n6k1_knee", "D3", "base"),
+    ("E3 (Chen)", "batch2", "s53x", "n6k1_knee", "E3", "base"),
+    ("D1 (MAX-AoI)", "batch2", "s53x", "n6k1_knee", "D1", "base"),
+    ("H1", "batch2", "s53x", "n6k1_knee", "H1", "base"),
+]
+
+
+def fig_mechanism(out: Path) -> None:
+    """Where F's time goes: mission-time anatomy and time to tau, with F's band
+    pinned to each class, against the baselines (all fly the wide band)."""
+    fig, (ax, bx) = plt.subplots(1, 2, figsize=(COL2, 2.9), sharey=True,
+                                 gridspec_kw={"width_ratios": [1.25, 1]})
+    n = len(MECH_ROWS)
+    for i, (label, stage, study, cell, var, kind) in enumerate(MECH_ROWS):
+        y = n - 1 - i
+        e = entry(stage, study, cell, var)
+        tr, dw = _mean(e, "sim_transit_s_mean"), _mean(e, "sim_dwell_s_mean")
+        total = _mean(e, "sim_mission_duration_s_mean")
+        other = max(total - tr - dw, 0.0)
+        left = 0.0
+        for width, color in ((tr, TRANSIT), (dw, DWELL), (other, CONTEXT)):
+            ax.barh(y, width, left=left, height=0.62, color=color, edgecolor=SURFACE,
+                    linewidth=1.0, zorder=3)
+            left += width
+        ax.text(total + 4, y, f"{total:.0f}", va="center", fontsize=6.3, color=INK2)
+        m, lo, hi = mean_ci(values(e, TAU_COL))
+        color = ARM_COLOR.get(kind, INK2) if kind in ("F", "FX") else INK2
+        bx.plot([lo, hi], [y, y], color=color, lw=1.4, zorder=3)
+        bx.scatter([m], [y], s=22, color=color, zorder=4, edgecolor=SURFACE, linewidth=1.0,
+                   marker=ARM_MARKER.get(var, "o") if kind != "pin" else "o")
+        bx.text(505, y, f"{m:.0f}", va="center", fontsize=6.3, color=INK2, clip_on=False)
+    for k in (1.5, 4.5):                       # separate F/FX, the pinned F, the baselines
+        ax.axhline(n - 1 - k, color=GRID, lw=0.8)
+        bx.axhline(n - 1 - k, color=GRID, lw=0.8)
+    ax.set_yticks(range(n))
+    ax.set_yticklabels([r[0] for r in reversed(MECH_ROWS)])
+    ax.tick_params(axis="y", labelcolor=INK2)
+    for lbl in ax.get_yticklabels():
+        if lbl.get_text().startswith("F (") or lbl.get_text() == "FX":
+            lbl.set_color(INK)
+            lbl.set_fontweight("bold")
+    ax.set_xlabel("simulated mission time (s), mean")
+    ax.set_title("(a) where a mission's time goes", color=INK2, loc="left")
+    ax.set_xlim(0, 250)
+    ax.grid(axis="y", visible=False)
+    handles = [plt.Rectangle((0, 0), 1, 1, color=TRANSIT, label="transit to stops"),
+               plt.Rectangle((0, 0), 1, 1, color=DWELL, label="dwell (serving devices)"),
+               plt.Rectangle((0, 0), 1, 1, color=CONTEXT,
+                             label="return, upload, dock turnaround")]
+    fig.legend(handles=handles, loc="lower center", bbox_to_anchor=(0.42, -0.03), ncol=3,
+               fontsize=6.5, handlelength=1.0)
+    bx.set_xlabel(r"simulated time to $\tau$ = 0.71 (s)")
+    bx.set_title(r"(b) time to $\tau$, mean and 95% CI", color=INK2, loc="left")
+    bx.set_xlim(0, 500)
+    bx.grid(axis="y", visible=False)
+    fig.subplots_adjust(wspace=0.12, bottom=0.22)
+    save(fig, out, "fig_exp5_mechanism")
+
+
+BAND_CELLS = [  # (label, stage, study, cell)
+    ("N = 6, knee", "batch2", "s53x", "n6k1_knee"),
+    ("N = 6, stress", "batch2", "s53x", "n6k1_stress"),
+    ("N = 12, knee", "batch1", "s59", "n12k1_knee"),
+    ("N = 12, stress", "batch2", "s59x", "n12k1_stress"),
+    ("N = 24, knee", "batch1", "s59", "n24k1_knee"),
+    ("N = 24, stress", "batch2", "s59x", "n24k1_stress"),
+    ("N = 12, K = 3, knee", "batch1", "s511b", "n12k3_knee"),
+]
+
+
+def fig_bands(out: Path) -> None:
+    """F's band class by cell: the reach decision shifts as the field and budget change."""
+    fig, ax = plt.subplots(figsize=(COL1, 2.2))
+    n = len(BAND_CELLS)
+    for i, (label, stage, study, cell) in enumerate(BAND_CELLS):
+        y = n - 1 - i
+        shares = _band_shares(entry(stage, study, cell, "F"))
+        left = 0.0
+        for band in ("narrow", "medium", "wide"):
+            w = shares.get(band, 0.0)
+            if w <= 0:
+                continue
+            ax.barh(y, w, left=left, height=0.62, color=BAND_RAMP[band], edgecolor=SURFACE,
+                    linewidth=1.0, zorder=3)
+            if w >= 0.16:
+                ink = INK if band == "narrow" else SURFACE
+                ax.text(left + w / 2, y, f"{w:.0%}", ha="center", va="center", fontsize=6,
+                        color=ink, zorder=4)
+            left += w
+    ax.set_yticks(range(n))
+    ax.set_yticklabels([c[0] for c in reversed(BAND_CELLS)])
+    ax.tick_params(axis="y", labelcolor=INK2)
+    ax.set_xlim(0, 1)
+    ax.set_xticks([0, 0.25, 0.5, 0.75, 1.0])
+    ax.set_xticklabels(["0", "25%", "50%", "75%", "100%"])
+    ax.set_xlabel("share of F's plans flying each band class")
+    ax.grid(axis="y", visible=False)
+    handles = [plt.Rectangle((0, 0), 1, 1, color=BAND_RAMP[b], label=f"{b} ({bw})")
+               for b, bw in (("narrow", "1.4 MHz"), ("medium", "5 MHz"), ("wide", "20 MHz"))]
+    ax.legend(handles=handles, loc="lower center", bbox_to_anchor=(0.36, -0.42), ncol=3,
+              fontsize=6.2, handlelength=1.0, columnspacing=1.0)
+    save(fig, out, "fig_exp5_bands")
+
+
+def _win_share(cell: str, arm: str) -> Tuple[float, int]:
+    """Share of seeds where F reaches tau first (ties half), over seeds where either reaches."""
+    def by_trial(e):
+        return {int(r["trial_index"]): SC._num(r.get(TAU_COL)) for r in e.scored_rows}
+    f = by_trial(entry("batch2", "s53x", cell, "F"))
+    b = by_trial(entry("batch2", "s53x", cell, arm))
+    score, n = 0.0, 0
+    for t in set(f) & set(b):
+        fv, bv = f[t], b[t]
+        if fv is None and bv is None:
+            continue
+        n += 1
+        if bv is None or (fv is not None and fv < bv - 1e-9):
+            score += 1
+        elif fv is not None and bv is not None and abs(fv - bv) <= 1e-9:
+            score += 0.5
+    return (score / n if n else float("nan")), n
+
+
+def fig_paired(out: Path) -> None:
+    """Seed by seed: how often F reaches tau before each baseline on the same layout."""
+    arms = ["D4", "D2", "D5", "D3", "E3", "D1", "H1"]
+    fig, ax = plt.subplots(figsize=(COL1, 2.2))
+    for i, arm in enumerate(arms):
+        y = len(arms) - 1 - i
+        knee, _ = _win_share("n6k1_knee", arm)
+        stress, _ = _win_share("n6k1_stress", arm)
+        ax.plot([min(knee, stress), max(knee, stress)], [y, y], color=GRID, lw=1.6, zorder=2)
+        ax.scatter([knee], [y], s=26, color=ARM_COLOR["F"], edgecolor=SURFACE, linewidth=1.0,
+                   zorder=4, label="knee budget" if i == 0 else None)
+        ax.scatter([stress], [y], s=26, color=SURFACE, edgecolor=ARM_COLOR["F"], linewidth=1.3,
+                   zorder=4, label="stress budget" if i == 0 else None)
+    ax.axvline(0.5, color=AXIS, lw=0.8, zorder=1)
+    ax.text(0.51, -0.75, "even", ha="left", va="center", fontsize=6, color=MUTED)
+    ax.set_ylim(-1.0, len(arms) - 0.5)
+    ax.set_yticks(range(len(arms)))
+    ax.set_yticklabels([ARM_LABEL[a] for a in reversed(arms)])
+    ax.tick_params(axis="y", labelcolor=INK2)
+    ax.set_xlim(0.3, 1.0)
+    ax.set_xticks([0.3, 0.5, 0.7, 0.9, 1.0])
+    ax.set_xticklabels(["30%", "50%", "70%", "90%", "100%"])
+    ax.set_xlabel(r"share of paired seeds where F reaches $\tau$ first")
+    ax.grid(axis="y", visible=False)
+    ax.legend(loc="lower left", fontsize=6.3)
+    save(fig, out, "fig_exp5_paired")
+
+
+def fig_budget(out: Path) -> None:
+    """Under the stress budget: updates kept per round against the share of missions
+    that overran the budget (N = 6, one mule)."""
+    arms = ["F", "FX", "H1", "D1", "D2", "D3", "D4", "D5", "E3"]
+    fig, ax = plt.subplots(figsize=(COL1, 2.4))
+    pts = {}
+    for arm in arms:
+        e = entry("batch2", "s53x", "n6k1_stress", arm)
+        pts[arm] = (_mean(e, "sim_budget_overrun_rate"), _mean(e, "update_yield"))
+        color = ARM_COLOR.get(arm) if arm in ("F", "FX", "D4") else MUTED
+        ax.scatter([pts[arm][0]], [pts[arm][1]], s=30, color=color,
+                   marker=ARM_MARKER.get(arm, "o"), edgecolor=SURFACE, linewidth=1.0, zorder=4)
+    # F, FX and D4 stand apart: label them beside their marks.
+    for arm, (dx, dy, ha) in {"F": (7, 5, "left"), "FX": (-7, 5, "right"),
+                              "D4": (-7, -9, "right")}.items():
+        ax.annotate(ARM_LABEL[arm], pts[arm], xytext=(dx, dy), textcoords="offset points",
+                    fontsize=6.2, color=INK2, ha=ha, va="center")
+    # The baselines cluster near zero overrun: a label column with leader lines.
+    cluster = sorted((a for a in arms if a not in ("F", "FX", "D4")), key=lambda a: -pts[a][1])
+    top, step = 2.95, 0.17
+    for i, arm in enumerate(cluster):
+        ly = top - i * step
+        ax.annotate(ARM_LABEL[arm], pts[arm], xytext=(0.22, ly), textcoords="data",
+                    fontsize=6.2, color=INK2, ha="left", va="center",
+                    arrowprops=dict(arrowstyle="-", color=AXIS, lw=0.6,
+                                    shrinkA=0, shrinkB=3))
+    ax.set_xlim(-0.03, 1.0)
+    ax.set_ylim(1.5, 4.0)
+    ax.set_xticks([0, 0.25, 0.5, 0.75, 1.0])
+    ax.set_xticklabels(["0", "25%", "50%", "75%", "100%"])
+    ax.set_xlabel("missions that overran the budget")
+    ax.set_ylabel("updates merged per round")
+    save(fig, out, "fig_exp5_budget")
+
+
 FIGURE_TEX = r"""% Experiment 5 figures, generated by scripts/exp5/paper_figures.py (the PDFs) and
 % written here with their captions. Copy results/exp5/paper/figures/*.pdf into the
 % paper's Figures/ folder.
@@ -593,6 +836,48 @@ Table~\ref{tab:exp5_claims}.}
 
 \begin{figure*}[t]
 \centering
+\includegraphics[width=\textwidth]{Figures/fig_exp5_mechanism.pdf}
+\caption{Where F's advantage comes from ($N=6$, one mule, knee budget). (a)~Mean simulated
+mission time by component. Every baseline flies the wide band and spends most of a mission
+in transit between stops; F mostly plans the narrow band, whose range reaches the field from
+about one stop, and trades transit for dwell. Pinning F to the wide band removes its
+advantage. (b)~Time to $\tau$ for the same rows: mean and 95\% bootstrap CI over the trials
+that reach $\tau$. The pinned-band rows come from Study~5.4, whose pre-registered metric is
+the network age of updates; their time to $\tau$ is descriptive.}
+\label{fig:exp5_mechanism}
+\end{figure*}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{Figures/fig_exp5_bands.pdf}
+\caption{Share of F's plans flying each band class, by cell. With few devices F plans the
+long-reach narrow band; as the field fills and the budget tightens, it shifts to the faster
+medium and wide classes.}
+\label{fig:exp5_bands}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{Figures/fig_exp5_paired.pdf}
+\caption{Seed-paired comparison at $N=6$, one mule: the share of the 20 paired seeds (same
+layout, channel and data) in which F reaches $\tau$ before each baseline. A seed in which
+only F reaches $\tau$ counts as a win, and a tie as half.}
+\label{fig:exp5_paired}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{Figures/fig_exp5_budget.pdf}
+\caption{Updates merged per round against the share of missions that overran the budget,
+at $N=6$ under the stress budget. The baselines stay within the budget by leaving devices
+out. FedEx's visit-all tour (D4) keeps its yield by overrunning the budget in @D4_OVER@\%
+of missions. F keeps nearly D4's yield by flying fewer stops, but its plans, priced at the
+mean SNR, overrun in @F_OVER@\% of missions, by @F_OVER_S@\,s on average.}
+\label{fig:exp5_budget}
+\end{figure}
+
+\begin{figure*}[t]
+\centering
 \includegraphics[width=\textwidth]{Figures/fig_exp5_compute.pdf}
 \caption{Device training time (Study~5.12, $N=6$, knee budget): updates merged per round
 and the share of trials reaching $\tau$ with no training time, a seeded spread (median
@@ -609,8 +894,13 @@ def write_tex(out: Path) -> None:
                                       "update_yield")) for lvl in ("spread", "stragglers")]
     reaches = [reach_rate(entry("batch3", "s512", f"n6k1_knee_1mb_{lvl}", "F")) * 100
                for lvl in ("spread", "stragglers")]
+    stress_f = entry("batch2", "s53x", "n6k1_stress", "F")
+    stress_d4 = entry("batch2", "s53x", "n6k1_stress", "D4")
     text = (FIGURE_TEX.replace("@F_YIELD@", f"{max(yields):.1f}")
-            .replace("@F_REACH@", f"{min(reaches):.0f}--{max(reaches):.0f}"))
+            .replace("@F_REACH@", f"{min(reaches):.0f}--{max(reaches):.0f}")
+            .replace("@D4_OVER@", f"{_mean(stress_d4, 'sim_budget_overrun_rate') * 100:.0f}")
+            .replace("@F_OVER@", f"{_mean(stress_f, 'sim_budget_overrun_rate') * 100:.0f}")
+            .replace("@F_OVER_S@", f"{_mean(stress_f, 'sim_budget_overrun_s_mean'):.1f}"))
     path = out.parent / "exp5_figures.tex"
     path.write_text(text, encoding="utf-8")
     print(f"  {path.relative_to(REPO)}")
@@ -625,7 +915,9 @@ def main(argv=None) -> int:
     out.mkdir(parents=True, exist_ok=True)
     style()
     figs = {"convergence": fig_convergence, "tau": fig_tau, "scale": fig_scale,
-            "systems": fig_systems, "claims": fig_claims, "compute": fig_compute}
+            "systems": fig_systems, "claims": fig_claims, "compute": fig_compute,
+            "mechanism": fig_mechanism, "bands": fig_bands, "paired": fig_paired,
+            "budget": fig_budget}
     for name, fn in figs.items():
         if a.only and name not in a.only:
             continue

@@ -51,6 +51,48 @@ Table~\ref{tab:exp5_claims}.}
 
 \begin{figure*}[t]
 \centering
+\includegraphics[width=\textwidth]{Figures/fig_exp5_mechanism.pdf}
+\caption{Where F's advantage comes from ($N=6$, one mule, knee budget). (a)~Mean simulated
+mission time by component. Every baseline flies the wide band and spends most of a mission
+in transit between stops; F mostly plans the narrow band, whose range reaches the field from
+about one stop, and trades transit for dwell. Pinning F to the wide band removes its
+advantage. (b)~Time to $\tau$ for the same rows: mean and 95\% bootstrap CI over the trials
+that reach $\tau$. The pinned-band rows come from Study~5.4, whose pre-registered metric is
+the network age of updates; their time to $\tau$ is descriptive.}
+\label{fig:exp5_mechanism}
+\end{figure*}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{Figures/fig_exp5_bands.pdf}
+\caption{Share of F's plans flying each band class, by cell. With few devices F plans the
+long-reach narrow band; as the field fills and the budget tightens, it shifts to the faster
+medium and wide classes.}
+\label{fig:exp5_bands}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{Figures/fig_exp5_paired.pdf}
+\caption{Seed-paired comparison at $N=6$, one mule: the share of the 20 paired seeds (same
+layout, channel and data) in which F reaches $\tau$ before each baseline. A seed in which
+only F reaches $\tau$ counts as a win, and a tie as half.}
+\label{fig:exp5_paired}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{Figures/fig_exp5_budget.pdf}
+\caption{Updates merged per round against the share of missions that overran the budget,
+at $N=6$ under the stress budget. The baselines stay within the budget by leaving devices
+out. FedEx's visit-all tour (D4) keeps its yield by overrunning the budget in 85\%
+of missions. F keeps nearly D4's yield by flying fewer stops, but its plans, priced at the
+mean SNR, overrun in 30\% of missions, by 8.5\,s on average.}
+\label{fig:exp5_budget}
+\end{figure}
+
+\begin{figure*}[t]
+\centering
 \includegraphics[width=\textwidth]{Figures/fig_exp5_compute.pdf}
 \caption{Device training time (Study~5.12, $N=6$, knee budget): updates merged per round
 and the share of trials reaching $\tau$ with no training time, a seeded spread (median
