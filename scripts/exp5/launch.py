@@ -139,7 +139,7 @@ import re
 import subprocess
 import sys
 import time
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
@@ -1476,12 +1476,26 @@ def reuse_batch1(jobs: List[Job], s: Settings, root: str) -> None:
     b1.batch1()
     primary = {_key(j): j for j in dedupe(b1.jobs)
                if j.kind == "runner" and not j.blocked and j.alias_of is None}
+    # The CSV batch 1 wrote. A lever can tie two batch-1 studies that share a
+    # cell at different trial counts (--trials 20 on 5.3's 20 and 5.14's 40), and
+    # the dedupe above then names the one whose CSV was never written: the
+    # member holding the most rows wins, the dedupe's pick only where none has any.
+    written: Dict[Tuple[str, ...], Tuple[int, Job]] = {}
+    for p in b1.jobs:
+        if p.kind != "runner" or p.blocked:
+            continue
+        rows, _ = csv_rows(REPO / p.out)
+        if rows > written.get(_key(p), (0, p))[0]:
+            written[_key(p)] = (rows, p)
     for j in jobs:
         if j.kind != "runner" or j.blocked or j.alias_of is not None:
             continue
         p = primary.get(_key(j))
         if p is None:
             continue
+        if _key(j) in written:
+            rows, p = written[_key(j)]
+            p = replace(p, trials=max(rows, p.trials or 0))
         if (j.trials or 0) <= (p.trials or 0):
             j.alias_of = f"batch1:{p.name}"
             j.out = p.out
