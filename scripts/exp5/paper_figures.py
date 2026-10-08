@@ -522,12 +522,17 @@ def fig_claims(out: Path) -> None:
     ax.set_yticklabels(labels)
     ax.tick_params(axis="y", labelcolor=INK2)
     ax.set_xlim(xmin - 6, xmax + 12)
-    ax.set_ylim(y + 0.4, 0.8)
+    ax.set_ylim(y + 0.4, 1.35)                 # room for the first group label
     ax.grid(axis="y", visible=False)
     for gy, g in groups:
         ax.text(xmin - 5, gy + 0.5, g, fontsize=6.6, color=INK, fontweight="bold",
                 ha="left", va="bottom")
-    ax.set_xlabel("effect, % of reference  (right: FeRRy's design better)")
+    ax.set_xlabel("how much better FeRRy's design does (% difference)")
+    # Direction cues at both ends of the axis, above the plot.
+    ax.text(0.0, 1.0, "← alternative better", transform=ax.transAxes, ha="left",
+            va="bottom", fontsize=6.4, color=INK2)
+    ax.text(1.0, 1.0, "FeRRy's design better →", transform=ax.transAxes, ha="right",
+            va="bottom", fontsize=6.4, color=INK2)
     handles = [Line2D([], [], color=ARM_COLOR["F"], marker="o", lw=1.3, ms=4.5,
                       label="claim (CI excludes 0, Holm p < 0.05)"),
                Line2D([], [], color=MUTED, marker="o", mfc=SURFACE, lw=1.3, ms=4.5,
@@ -903,8 +908,10 @@ are added, mean and 95\% bootstrap CI.}
 \begin{figure}[t]
 \centering
 \includegraphics[width=\columnwidth]{Figures/fig_exp5_claims.pdf}
-\caption{Each design-claim test as the paired effect relative to its reference, oriented
-so that right means FeRRy's design is better, with its 95\% bootstrap CI. Filled: a claim
+\caption{Each design-claim test compares FeRRy's design with one alternative (a baseline,
+a component removed, or another rule): the paired difference as a percentage of FeRRy's
+value, so that right of zero means FeRRy's design does better, with its 95\% bootstrap CI.
+Filled: a claim
 (CI excludes 0 and Holm $p<0.05$ within the study). Tests and metrics as in
 Table~\ref{tab:exp5_claims}.}
 \label{fig:exp5_claims}
