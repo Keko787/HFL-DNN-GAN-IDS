@@ -44,13 +44,11 @@ Pinned to the wide band, F reaches $\tau$ in 265\,s, D4's own time; pinned to
 narrow, in 196\,s. (These times are descriptive: the band-pinning study's
 pre-registered metric, the age of updates, does not differ.) The choice is near
 the best, serving as many devices as an exhaustive oracle at the knee budget and
-4 points fewer under stress, and it adapts (Fig.~\ref{fig:exp5_bands}): as the
+4 points fewer under stress, and it adapts (Fig.~\ref{fig:exp5_mechanism}c): as the
 field fills and the budget tightens, F shifts to medium and wide, mostly wide at
 $N=24$ under stress.
 
 %%FIGURE:fig:exp5_mechanism%%
-
-%%FIGURE:fig:exp5_bands%%
 
 \subsection{Scale and Decision Cost}
 \label{sec:res:scale}
@@ -59,16 +57,17 @@ At $N=24$ (Table~\ref{tab:exp5_scale}), F is significantly faster than H1 and D3
 at the knee (749 against 951 and 911\,s), ties the FedEx route (752\,s), and
 beats it under the stress budget (661 against 752\,s); at $N=12$ no comparison
 is a claim, and FQ (461 and 389\,s) does not differ from FX (424 and 386\,s).
-Planning stays cheap (Fig.~\ref{fig:exp5_systems}a): alone on one host, a plan
+Planning stays cheap (Table~\ref{tab:exp5_cost}): alone on one host, a plan
 takes 0.04\,s at $N=6$ and 1.5\,s at $N=96$ (p95 2.0\,s). In FerrySim the plan
-serves 54--57\% of the devices at each scale's knee budget up to $N=96$
-(Fig.~\ref{fig:exp5_systems}b), and at $N=12$ more mules cut F's time to
-$\tau$ from 486\,s to 226\,s with two and 151\,s with three
-(Fig.~\ref{fig:exp5_systems}c).
+serves 54--57\% of the devices at each scale's knee budget up to $N=96$, and at
+$N=12$ more mules cut F's time to $\tau$ from 486\,s to 226\,s with two and
+151\,s with three (Table~\ref{tab:exp5_mules}).
 
 %%TABLE:tab:exp5_scale%%
 
-%%FIGURE:fig:exp5_systems%%
+%%TABLE:tab:exp5_cost%%
+
+%%TABLE:tab:exp5_mules%%
 
 \subsection{The Design Claims}
 \label{sec:res:claims}
@@ -122,13 +121,11 @@ configuration (194\,s); under its harsher channels F stays ahead of H1 without a
 claim, and FX is significantly faster than F on the default channel and with
 8\,dB shadowing. Two limitations stand out. FeRRy's plan prices the mean SNR, so
 under the stress budget 30\% of its missions overrun, by 8.5\,s on average
-(Fig.~\ref{fig:exp5_budget}); the FedEx route, which never skips a device,
+(Table~\ref{tab:exp5_headline}); the FedEx route, which never skips a device,
 overruns in 85\%, and F keeps nearly its update yield with fewer stops. And the
 plan does not price training time: when devices take time to train, F's yield
 falls from 3.5 to 0.7 updates per round and it reaches $\tau$ in only 70--75\% of
 trials, while H1, D4 and D5 keep 85--100\%.
 
 %%TABLE:tab:exp5_robust%%
-
-%%FIGURE:fig:exp5_budget%%
 %%%%% END SECTION %%%%%

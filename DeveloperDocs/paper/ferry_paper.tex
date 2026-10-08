@@ -944,27 +944,27 @@ above the all-benign 0.667, against F's 3.5 and 0.831.
 
 \begin{table}[t]
 \centering
-\caption{Scheduler comparison at $N=6$: time to $\tau=0.71$, with the share of trials that reach it in brackets when below 100\%. $^{\dagger}$Significantly slower than F. $^{\S}$Exploratory.}
+\caption{Scheduler comparison at $N=6$: time to $\tau=0.71$, with the share of trials that reach it in brackets when below 100\%, and with one mule under the stress budget, the share of missions that overran it and the updates merged per round (yield). $^{\dagger}$Significantly slower than F. $^{\S}$Exploratory.}
 \label{tab:exp5_headline}
 \resizebox{\columnwidth}{!}{%
-\begin{tabular}{l rr rr}
+\begin{tabular}{l rr rr rr}
 \toprule
- & \multicolumn{2}{c}{$K=1$ mule} & \multicolumn{2}{c}{$K=3$ mules} \\
-\cmidrule(lr){2-3}\cmidrule(lr){4-5}
-\textbf{Arm} & knee & stress & knee & stress \\
+ & \multicolumn{2}{c}{$K=1$ mule} & \multicolumn{2}{c}{$K=3$ mules} & \multicolumn{2}{c}{$K=1$, stress} \\
+\cmidrule(lr){2-3}\cmidrule(lr){4-5}\cmidrule(lr){6-7}
+\textbf{Arm} & knee & stress & knee & stress & overrun & yield \\
 \midrule
-F & \textbf{194\,s} & \textbf{178\,s} & \textbf{52\,s} & \textbf{52\,s} \\
-FX & 178\,s & 175\,s & 56\,s & 56\,s \\
-FQ$^{\S}$ & 180\,s & 182\,s & -- & -- \\
+F & \textbf{194\,s} & \textbf{178\,s} & \textbf{52\,s} & \textbf{52\,s} & 30\% & 3.2 \\
+FX & 178\,s & 175\,s & 56\,s & 56\,s & 24\% & 3.2 \\
+FQ$^{\S}$ & 180\,s & 182\,s & -- & -- & 24\% & 3.2 \\
 \midrule
-H1 & 282\,s$^{\dagger}$ & 220\,s\,{\scriptsize(90\%)} & 65\,s & 64\,s \\
-D1 (MAX-AoI) & 282\,s$^{\dagger}$ & 238\,s & 65\,s & 64\,s \\
-D2 (Oort) & 266\,s$^{\dagger}$ & 229\,s\,{\scriptsize(90\%)} & 65\,s & 64\,s \\
-D3 (Cui) & 280\,s$^{\dagger}$ & 209\,s & 65\,s & 64\,s \\
-D4 (FedEx route) & 264\,s$^{\dagger}$ & 264\,s$^{\dagger}$ & 55\,s & 55\,s \\
-D4$_{\text{FedEx}}$ & 281\,s\,{\scriptsize(95\%)} & 281\,s\,{\scriptsize(95\%)} & 101\,s$^{\dagger}$ & 101\,s$^{\dagger}$ \\
-D5 (FedCS) & 275\,s$^{\dagger}$ & 198\,s\,{\scriptsize(95\%)} & 65\,s & 64\,s \\
-E3 (Chen) & 280\,s$^{\dagger}$ & 211\,s\,{\scriptsize(95\%)} & 65\,s & 64\,s \\
+H1 & 282\,s$^{\dagger}$ & 220\,s\,{\scriptsize(90\%)} & 65\,s & 64\,s & 1\% & 2.0 \\
+D1 (MAX-AoI) & 282\,s$^{\dagger}$ & 238\,s & 65\,s & 64\,s & 2\% & 2.4 \\
+D2 (Oort) & 266\,s$^{\dagger}$ & 229\,s\,{\scriptsize(90\%)} & 65\,s & 64\,s & 4\% & 2.4 \\
+D3 (Cui) & 280\,s$^{\dagger}$ & 209\,s & 65\,s & 64\,s & 2\% & 2.4 \\
+D4 (FedEx route) & 264\,s$^{\dagger}$ & 264\,s$^{\dagger}$ & 55\,s & 55\,s & 85\% & 3.5 \\
+D4$_{\text{FedEx}}$ & 281\,s\,{\scriptsize(95\%)} & 281\,s\,{\scriptsize(95\%)} & 101\,s$^{\dagger}$ & 101\,s$^{\dagger}$ & 85\% & 3.5 \\
+D5 (FedCS) & 275\,s$^{\dagger}$ & 198\,s\,{\scriptsize(95\%)} & 65\,s & 64\,s & 2\% & 2.6 \\
+E3 (Chen) & 280\,s$^{\dagger}$ & 211\,s\,{\scriptsize(95\%)} & 65\,s & 64\,s & 9\% & 2.7 \\
 \bottomrule
 \end{tabular}%
 }
@@ -984,23 +984,18 @@ Pinned to the wide band, F reaches $\tau$ in 265\,s, D4's own time; pinned to
 narrow, in 196\,s. (These times are descriptive: the band-pinning study's
 pre-registered metric, the age of updates, does not differ.) The choice is near
 the best, serving as many devices as an exhaustive oracle at the knee budget and
-4 points fewer under stress, and it adapts (Fig.~\ref{fig:exp5_bands}): as the
+4 points fewer under stress, and it adapts (Fig.~\ref{fig:exp5_mechanism}c): as the
 field fills and the budget tightens, F shifts to medium and wide, mostly wide at
 $N=24$ under stress.
 
 \begin{figure*}[t]
 \centering
 \includegraphics[width=\textwidth]{Figures/exp5/fig_exp5_mechanism.pdf}
-\caption{Where F's advantage comes from ($N=6$, one mule, knee budget): (a)~mean mission
-time by component; (b)~time to $\tau$, mean and 95\% CI over the trials that reach it.}
+\caption{Where F's advantage comes from: (a)~mean mission time by component and (b)~time
+to $\tau$, mean and 95\% CI over the trials that reach it ($N=6$, one mule, knee
+budget); (c)~share of F's plans flying each band class, by cell.}
 \label{fig:exp5_mechanism}
 \end{figure*}
-\begin{figure}[t]
-\centering
-\includegraphics[width=\columnwidth]{Figures/exp5/fig_exp5_bands.pdf}
-\caption{Share of F's plans flying each band class, by cell.}
-\label{fig:exp5_bands}
-\end{figure}
 \subsection{Scale and Decision Cost}
 \label{sec:res:scale}
 
@@ -1008,12 +1003,11 @@ At $N=24$ (Table~\ref{tab:exp5_scale}), F is significantly faster than H1 and D3
 at the knee (749 against 951 and 911\,s), ties the FedEx route (752\,s), and
 beats it under the stress budget (661 against 752\,s); at $N=12$ no comparison
 is a claim, and FQ (461 and 389\,s) does not differ from FX (424 and 386\,s).
-Planning stays cheap (Fig.~\ref{fig:exp5_systems}a): alone on one host, a plan
+Planning stays cheap (Table~\ref{tab:exp5_cost}): alone on one host, a plan
 takes 0.04\,s at $N=6$ and 1.5\,s at $N=96$ (p95 2.0\,s). In FerrySim the plan
-serves 54--57\% of the devices at each scale's knee budget up to $N=96$
-(Fig.~\ref{fig:exp5_systems}b), and at $N=12$ more mules cut F's time to
-$\tau$ from 486\,s to 226\,s with two and 151\,s with three
-(Fig.~\ref{fig:exp5_systems}c).
+serves 54--57\% of the devices at each scale's knee budget up to $N=96$, and at
+$N=12$ more mules cut F's time to $\tau$ from 486\,s to 226\,s with two and
+151\,s with three (Table~\ref{tab:exp5_mules}).
 
 \begin{table}[t]
 \centering
@@ -1036,14 +1030,45 @@ D4 (FedEx route) & 264\,s$^{\dagger}$ & 459\,s\,{\scriptsize(95\%)} & 752\,s & 2
 \end{tabular}%
 }
 \end{table}
-\begin{figure*}[t]
+\begin{table}[t]
 \centering
-\includegraphics[width=\textwidth]{Figures/exp5/fig_exp5_systems.pdf}
-\caption{Decision-cost study: (a)~planner time per plan; (b)~FerrySim's share of devices
-served at each $N$'s knee budget (greedy-1: a one-step greedy rule); (c)~time to
-$\tau$ at $N=12$ as mules are added, mean and 95\% CI.}
-\label{fig:exp5_systems}
-\end{figure*}
+\caption{Decision-cost study: planner time per plan, and FerrySim's share of devices served at each $N$'s knee budget.}
+\label{tab:exp5_cost}
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{r rr rrr}
+\toprule
+ & \multicolumn{2}{c}{plan time} & \multicolumn{3}{c}{FerrySim at the knee} \\
+\cmidrule(lr){2-3}\cmidrule(lr){4-6}
+$N$ & mean & p95 & budget & F served & FX served \\
+\midrule
+6 & 0.04\,s & 0.06\,s & -- & -- & -- \\
+12 & 0.02\,s & 0.04\,s & -- & -- & -- \\
+24 & 0.14\,s & 0.26\,s & 350\,s & 54\% & 54\% \\
+48 & 0.41\,s & 0.83\,s & 850\,s & 56\% & 56\% \\
+96 & 1.53\,s & 2.00\,s & 1660\,s & 56\% & 57\% \\
+\bottomrule
+\end{tabular}%
+}
+\end{table}
+\begin{table}[t]
+\centering
+\caption{Scaling out with mules (decision-cost study), knee budget: time to $\tau$. Weak scaling holds six devices per mule; strong scaling adds mules at $N=12$. Notation as in Table~\ref{tab:exp5_headline}; $^{\ast}$significantly faster than F.}
+\label{tab:exp5_mules}
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{l rrr rr}
+\toprule
+ & \multicolumn{3}{c}{weak scaling} & \multicolumn{2}{c}{strong scaling} \\
+\cmidrule(lr){2-4}\cmidrule(lr){5-6}
+\textbf{Arm} & $N/K$=6/1 & $N/K$=12/2 & $N/K$=18/3 & $N/K$=12/1 & $N/K$=12/3 \\
+\midrule
+F & \textbf{194\,s} & \textbf{226\,s} & \textbf{186\,s} & \textbf{486\,s}\,{\scriptsize(95\%)} & \textbf{151\,s} \\
+FX & 178\,s & 205\,s & 131\,s\,{\scriptsize(95\%)} & 424\,s\,{\scriptsize(90\%)} & 102\,s$^{\ast}$ \\
+H1 & 282\,s$^{\dagger}$ & 263\,s\,{\scriptsize(95\%)} & 149\,s & 589\,s\,{\scriptsize(95\%)} & 165\,s \\
+D4 (FedEx route) & 264\,s$^{\dagger}$ & 222\,s & 186\,s & 459\,s\,{\scriptsize(95\%)} & 128\,s \\
+\bottomrule
+\end{tabular}%
+}
+\end{table}
 \subsection{The Design Claims}
 \label{sec:res:claims}
 
@@ -1143,7 +1168,7 @@ configuration (194\,s); under its harsher channels F stays ahead of H1 without a
 claim, and FX is significantly faster than F on the default channel and with
 8\,dB shadowing. Two limitations stand out. FeRRy's plan prices the mean SNR, so
 under the stress budget 30\% of its missions overrun, by 8.5\,s on average
-(Fig.~\ref{fig:exp5_budget}); the FedEx route, which never skips a device,
+(Table~\ref{tab:exp5_headline}); the FedEx route, which never skips a device,
 overruns in 85\%, and F keeps nearly its update yield with fewer stops. And the
 plan does not price training time: when devices take time to train, F's yield
 falls from 3.5 to 0.7 updates per round and it reaches $\tau$ in only 70--75\% of
@@ -1151,7 +1176,7 @@ trials, while H1, D4 and D5 keep 85--100\%.
 
 \begin{table*}[t]
 \centering
-\caption{Robustness at $N=6$ and the knee budget: time to $\tau$. Notation as in Table~\ref{tab:exp5_headline}.}
+\caption{Robustness at $N=6$ and the knee budget: time to $\tau$. Notation as in Table~\ref{tab:exp5_headline}; $^{\ast}$significantly faster than F.}
 \label{tab:exp5_robust}
 \small
 \begin{tabular}{l rr r rrrr}
@@ -1169,13 +1194,6 @@ D5 (FedCS) & 222\,s\,{\scriptsize(95\%)}$^{\dagger}$ & 250\,s\,{\scriptsize(85\%
 \bottomrule
 \end{tabular}
 \end{table*}
-\begin{figure}[t]
-\centering
-\includegraphics[width=\columnwidth]{Figures/exp5/fig_exp5_budget.pdf}
-\caption{Updates merged per round against the share of missions that overran the budget
-($N=6$, stress budget).}
-\label{fig:exp5_budget}
-\end{figure}
 
 \section{Conclusion and Future Work}
 \label{sec:conclusion}
