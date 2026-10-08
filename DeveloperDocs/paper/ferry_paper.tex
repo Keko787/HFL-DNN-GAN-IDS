@@ -87,33 +87,37 @@
 
 \maketitle
 
-% Abstract adopted 8 Oct 2026 from abstract_revision.md (which keeps the audit
-% of the previous abstract's claims), corrected after the methods audit.
+% Abstract: the short hybrid of abstract_revision.md, adopted 8 Oct 2026
+% (the document keeps the earlier versions and the audit of the original).
 \begin{abstract}
-Federated learning (FL) lets devices train a shared model without sharing their
-data, but it assumes every device can reach the server. In contested and disaster
-zones that assumption fails: devices that are out of range or poorly connected are
-skipped repeatedly, and rounds stall. UAV data mules can carry model updates to
-and from such devices, but a mule has a finite mission budget, and its radio
-decides how far it reaches. We present FeRRy, a Federated RF-aware Routing
-framework that treats a mule's reach as a decision. Before each flight, a
-band-aware mission planner chooses the contact band class, which trades range for
-rate, together with the route, under one feasibility test of per-device deadlines
-and the mission budget. In flight, a per-stop rule can switch to a faster band
-from the observed channel and reorder the remaining stops, each reorder checked
-by the same test, and the mule re-plans the rest of its route when the channel
-uses up the plan's slack. Updates are merged on each mule and then across mules
-at the edge server, with stale updates weighted down, and a coverage term keeps
-devices from being starved. In a prototype whose server, mules and devices run as
-separate processes over TCP and train a real intrusion-detection model on
-CICIoT2023, with flight time, the radio channel and energy simulated, we compare
-FeRRy with seven baseline schedulers, including adaptations of FedEx, Oort, FedCS
-and a Whittle-index age-of-update scheduler. With six devices, one mule and a
-moderate budget, FeRRy reaches the target accuracy 27--31\% sooner than each,
-because its plan chooses a long-reach narrow band that removes most of the
-transit between stops. Under tight budgets it keeps updates fresher than
-age-of-information schedulers, and without its coverage term the share of rounds
-that close at twelve devices falls from 99\% to 74\%.
+Federated learning (FL) supports privacy by letting devices train a shared model
+without sharing their raw data, but assumes every device can reach a central
+server. In contested and disaster-zone deployments that assumption fails:
+devices that are out of range or poorly connected are skipped repeatedly, and
+federation rounds stall. Unmanned aerial vehicles (UAVs) acting as data mules can
+carry model updates to and from such devices, but a mule has a finite mission
+budget, and its radio decides how far it reaches. We present FeRRy, a
+Federated RF-aware Routing framework that treats a mule's reach as a decision,
+through three components. First, before each flight, a band-aware mission planner
+chooses the contact band class, which trades range for rate, together with the
+route, under one feasibility test of per-device deadlines and the mission budget,
+with a coverage term that keeps devices from being starved. Second, in flight,
+the mule re-plans the rest of its route when the observed channel uses up the
+plan's slack, and a per-stop rule can switch to a faster band and reorder the
+remaining stops, each reorder checked by the same test. Third, a hierarchical
+aggregation layer merges updates on each mule, then across mules at the edge
+server, weighting stale updates down. In a prototype whose server, mules and
+devices run as separate processes over TCP and train a real intrusion-detection
+model on CICIoT2023, with flight time, the radio channel and energy simulated, we
+compare FeRRy with seven baseline schedulers, including adaptations of
+mobile-transporter federated learning (FedEx), Oort, FedCS and a Whittle-index
+age-of-update scheduler. With six devices, one mule and a moderate budget, FeRRy
+reaches the target accuracy 27--31\% sooner than each baseline, because its plan
+chooses a long-reach narrow band that removes most of the transit between stops.
+Under tight budgets, it keeps the age of updates about a quarter lower than
+age-of-information schedulers and, with 24 devices, reaches the target 12\%
+sooner than FedEx's route. Its plans stay within a tight budget in 70\% of
+missions, overrunning by only 8.5\,s on average otherwise.
 \end{abstract}
 
 \begin{IEEEkeywords}

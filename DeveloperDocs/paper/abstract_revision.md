@@ -1,7 +1,8 @@
-# Abstract revision (adopted 8 Oct 2026)
+# Abstract revision
 
-**Status:** adopted. The abstract below is the paper's abstract (`front.tex`,
-rebuilt into `ferry_paper.tex`). It is the proposal written earlier the same day,
+**Status (8 Oct 2026, latest):** the paper's abstract is the **short hybrid**
+(341 words, section below). The 305-word abstract that follows was the
+paper's abstract until then (`front.tex`, rebuilt into `ferry_paper.tex`). It is the proposal written earlier the same day,
 with two corrections from the methods audit (`methods_audit.md`):
 
 - **Flight sentence.** The proposal said "the same test gates a per-stop choice
@@ -47,6 +48,117 @@ because its plan chooses a long-reach narrow band that removes most of the
 transit between stops. Under tight budgets it keeps updates fresher than
 age-of-information schedulers, and without its coverage term the share of rounds
 that close at twelve devices falls from 99\% to 74\%.
+```
+
+## Short hybrid (341 words; adopted, in the paper)
+
+Written 8 Oct 2026 when the user asked for a hybrid nearer 300–350 words. It is
+the 441-word hybrid below, shortened. It keeps:
+- the numbered components;
+- the privacy framing;
+- FedEx's full name;
+- the headline result with its cause;
+- the freshness result, as about a quarter lower age of updates (0.78 against 1.06
+  and 1.07, C5);
+- the N = 24 result against FedEx's route, as 12% sooner (661 against 752 s);
+- the budget result, framed positively: 70% of missions within a tight budget,
+  overruns 8.5 s on average.
+
+The training-time limit is left to the conclusion, which names a compute term
+in the plan as future work.
+
+It drops the analysis-plan clause, MAX-AoI by name, the 99% to 74% coverage
+result, the planning time at 96 devices, and the learning null. The coverage term
+moves into the first component. All of these remain in the paper's body.
+
+```latex
+Federated learning (FL) supports privacy by letting devices train a shared model
+without sharing their raw data, but assumes every device can reach a central
+server. In contested and disaster-zone deployments that assumption fails:
+devices that are out of range or poorly connected are skipped repeatedly, and
+federation rounds stall. Unmanned aerial vehicles (UAVs) acting as data mules can
+carry model updates to and from such devices, but a mule has a finite mission
+budget, and its radio decides how far it reaches. We present FeRRy, a
+Federated RF-aware Routing framework that treats a mule's reach as a decision,
+through three components. First, before each flight, a band-aware mission planner
+chooses the contact band class, which trades range for rate, together with the
+route, under one feasibility test of per-device deadlines and the mission budget,
+with a coverage term that keeps devices from being starved. Second, in flight,
+the mule re-plans the rest of its route when the observed channel uses up the
+plan's slack, and a per-stop rule can switch to a faster band and reorder the
+remaining stops, each reorder checked by the same test. Third, a hierarchical
+aggregation layer merges updates on each mule, then across mules at the edge
+server, weighting stale updates down. In a prototype whose server, mules and
+devices run as separate processes over TCP and train a real intrusion-detection
+model on CICIoT2023, with flight time, the radio channel and energy simulated, we
+compare FeRRy with seven baseline schedulers, including adaptations of
+mobile-transporter federated learning (FedEx), Oort, FedCS and a Whittle-index
+age-of-update scheduler. With six devices, one mule and a moderate budget, FeRRy
+reaches the target accuracy 27--31\% sooner than each baseline, because its plan
+chooses a long-reach narrow band that removes most of the transit between stops.
+Under tight budgets, it keeps the age of updates about a quarter lower than
+age-of-information schedulers and, with 24 devices, reaches the target 12\%
+sooner than FedEx's route. Its plans stay within a tight budget in 70\% of
+missions, overrunning by only 8.5\,s on average otherwise.
+```
+
+## Hybrid candidate (441 words; not yet in the paper)
+
+Written 8 Oct 2026 after the user set the abstract limit at 500 words. It keeps
+the adopted abstract's claims and adds back the original's strengths: the
+numbered components, FedEx's full name ("mobile-transporter federated
+learning") and the privacy framing. It also reports what the extra room allows:
+the N = 24 result, decision cost, the learning null and the two limitations.
+Every number is in the paper:
+
+- 27–31%: s53x, N = 6, K = 1, knee.
+- 99% to 74%: C2, s57, N = 12.
+- Fresher updates: C5, s58.
+- N = 24 under the stress budget: 661 vs 752 s, s59x claim.
+- 1.5 s per plan: 5.11 (a) rerun.
+- 36% exploratory gap: FQ vs E3.
+- 30% overruns: F under the stress budget.
+- Reach under training time: 5.12.
+
+The second component now separates the departure check and re-plan, which every
+FeRRy arm runs, from the per-stop rule (FX and FQ).
+
+```latex
+Federated learning (FL) supports privacy by letting devices train a shared model
+without sharing their raw data, but it assumes that every device can reach a
+central server during federation. In contested and disaster-zone deployments that
+assumption fails: devices that are out of range or poorly connected are skipped
+repeatedly or never reached, and federation rounds stall. Unmanned aerial vehicles
+(UAVs) acting as data mules can carry model updates to and from such devices, but
+a mule has a finite mission budget, and its radio decides how far it reaches. This
+paper presents FeRRy, a Federated RF-aware Routing framework that treats a mule's
+reach as a decision, through three components. First, before each flight, a
+band-aware mission planner chooses the contact band class, which trades range for
+rate, together with the route, under one feasibility test of per-device deadlines
+and the mission budget. Second, in flight, the mule checks the rest of its route
+at every departure and re-plans it when the observed channel has used up the
+plan's slack; a per-stop rule can also switch to a faster band and reorder the
+remaining stops, each reorder checked by the same test. Third, a hierarchical
+aggregation layer merges updates on each mule and then across mules at the edge
+server, weighting stale updates down. A coverage term in the planner keeps
+devices from being starved. The prototype runs the edge server, the mules and the
+devices as separate processes that communicate over TCP, with flight time, the
+radio channel and energy simulated, and the devices train a real
+intrusion-detection model on the CICIoT2023 dataset. On paired trials, under an
+analysis plan fixed in advance, we compare FeRRy with seven baseline schedulers,
+including adaptations of mobile-transporter federated learning (FedEx), Oort,
+FedCS, a maximum age-of-information scheduler and a Whittle-index age-of-update
+scheduler. With six devices, one mule and a moderate budget, FeRRy reaches the
+target accuracy 27--31\% sooner than each baseline, because its plan chooses a
+long-reach narrow band that removes most of the transit between stops. Under
+tight budgets it keeps updates fresher than the age-of-information schedulers,
+and without its coverage term the share of rounds that close at twelve devices
+falls from 99\% to 74\%. With 24 devices under a tight budget it is faster than
+FedEx's route, and it plans in 1.5\,s for 96 devices. A learned per-stop score
+performs like the fixed rule; in an exploratory comparison, its 36\% advantage
+over a learned scheduler without a plan comes from the plan. Because FeRRy's plan
+prices the mean channel and ignores training time, it overruns tight budgets in
+30\% of missions and becomes less reliable when devices need time to train.
 ```
 
 ## Audit of the previous abstract
