@@ -47,7 +47,7 @@ its missions are 22--26\% shorter. FX and FQ inherit the plan's reach: they fly 
 narrow or medium band on 95\% and 98\% of missions and spend the same 15\,s in
 transit (Fig.~\ref{fig:exp5_learning}b). Pinning F to each band class isolates this
 effect: pinned to the wide band, F reaches $\tau$ in 265\,s, D4's own time;
-pinned to the narrow band, in 196\,s, F's own. (Study~5.4's pre-registered
+pinned to the narrow band, in 196\,s, F's own. (The band-pinning study's pre-registered
 metric is the age of updates, on which the pinned bands do not differ; these
 times to $\tau$ are descriptive.) The choice also adapts
 (Fig.~\ref{fig:exp5_bands}). As the field fills and the budget tightens, F
@@ -65,7 +65,7 @@ Table~\ref{tab:exp5_scale} follows the comparison to larger fields. At $N=24$, F
 is significantly faster than H1 and D3 at the knee (749 against 951 and 911\,s)
 and ties the FedEx route (752\,s); under the stress budget it beats the FedEx
 route (661 against 752\,s). At $N=12$ no comparison is a claim; FQ, flown in the
-same cells in Study~5.5's stack check, takes 461\,s at the knee and 389\,s under
+same cells in the learned-score study's full-system check, takes 461\,s at the knee and 389\,s under
 the stress budget, not significantly different from FX (424 and 386\,s). FeRRy's planning
 stays affordable (Fig.~\ref{fig:exp5_systems}a): the planner takes 0.04\,s per
 plan at $N=6$ and 1.5\,s at $N=96$ (p95 2.0\,s), a small share of a mission.
@@ -104,7 +104,7 @@ stress budget), but not significantly.
 \subsection{Learning Inside the Plan}
 \label{sec:res:rl}
 
-Study~5.5's result is flat: no $\gamma$ beats $\gamma=0$ by the pre-registered
+The learned-score study's result is flat: no $\gamma$ beats $\gamma=0$ by the pre-registered
 margin, and the best learned score ($\gamma=0.75$) matches FeRRy's fixed rule
 (FX) while trailing the one-step greedy rule. In the full system FQ is again
 indistinguishable from FX at $N=12$ (C4 in Table~\ref{tab:exp5_claims}), as it is
@@ -117,7 +117,7 @@ the comparison is of two rules, not of two rankings over the same choice.
 \paragraph{Learning inside the plan, against learning without one}
 The exploratory comparison asks how a learner inside FeRRy's plan fares against
 a published learned scheduler. FQ, FeRRy's plan with the $\gamma=0.75$ score,
-flew 5.3's one-mule cells on the same 20 seeds as E3, our single-agent DQN after
+flew the scheduler comparison's one-mule cells on the same 20 seeds as E3, our single-agent DQN after
 Chen et al.~\cite{chen2023model}, which picks every next stop with no dock-time
 plan (Fig.~\ref{fig:exp5_learning}). At the knee budget FQ reaches $\tau$ in 180\,s
 against E3's 280\,s, a paired difference of 100\,s (95\% CI [63, 141]; Holm
@@ -142,7 +142,7 @@ plan and gates against one without them. It supports the two-clock structure
 Table~\ref{tab:exp5_robust} varies the data, the channel and the devices'
 compute. With strongly non-IID data (Dirichlet $\alpha=0.1$), every arm reaches
 $\tau$ in only about half of the trials, and F remains significantly faster than
-H1 and D3 where both reach it. Study~5.15 flies the time-varying backhaul
+H1 and D3 where both reach it. The radio study flies the time-varying backhaul
 throughout, so its default column (F at 216\,s) is not the main configuration
 (194\,s). Under its harsher channels F stays ahead of H1 without a claim, and
 FX's per-stop rule is significantly faster than F on the default channel and
@@ -150,7 +150,7 @@ with 8\,dB shadowing. Two limitations stand out.
 First, FeRRy's plan prices the mean SNR, so under the stress budget 30\% of its
 missions overrun the budget, by 8.5\,s on average
 (Fig.~\ref{fig:exp5_budget}); the FedEx route, which never skips a device,
-overruns in 85\%. Second, when devices take time to train (Study~5.12), F's
+overruns in 85\%. Second, when devices take time to train (the training-time study), F's
 update yield falls from 3.5 to 0.7 updates per round and it reaches $\tau$ in
 only 70--75\% of trials, while H1, D4 and D5 keep 85--100\%: FeRRy's plan does
 not price training time, so it reaches devices whose updates are not ready.
