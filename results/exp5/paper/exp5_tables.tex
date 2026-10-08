@@ -30,7 +30,7 @@ E3 & Single-agent next-stop DQN after Chen et al.\ \cite{chen2023model}, trained
 
 \begin{table}[t]
 \centering
-\caption{Whole-scheduler comparison at $N=6$ (Study~5.3): mean simulated time to $\tau=0.71$ in seconds (lower is better), 20 paired trials per cell; reach rate in brackets when below 1. $^{\dagger}$ significantly slower than F (paired bootstrap CI excludes 0, Holm $p<0.05$). $^{\S}$FQ flew the $K=1$ cells after the pre-registered study, on the same seeds; its exploratory comparisons find it no different from F or FX. D4 flies its whole tour whatever the budget, so its two budget columns coincide.}
+\caption{Scheduler comparison at $N=6$: mean simulated time to $\tau=0.71$ in seconds (lower is better), 20 paired trials per cell; reach rate in brackets when below 1. $^{\dagger}$ significantly slower than F (paired bootstrap CI excludes 0, Holm $p<0.05$). $^{\S}$FQ flew the $K=1$ cells after the pre-registered study, on the same seeds; its exploratory comparisons find it no different from F or FX. D4 flies its whole tour whatever the budget, so its two budget columns coincide.}
 \label{tab:exp5_headline}
 \resizebox{\columnwidth}{!}{%
 \begin{tabular}{l rr rr}
@@ -60,7 +60,7 @@ E3 (Chen) & 280$^{\dagger}$ & 211\,{\scriptsize(0.95)} & 65 & 64 \\
 
 \begin{table}[t]
 \centering
-\caption{Scale (Study~5.9): mean time to $\tau$ (s) with one mule as the device population grows, at each $N$'s knee and stress budgets. Notation as in Table~\ref{tab:exp5_headline}. $^{\S}$FQ at $N=6$ is the exploratory run and at $N=12$ Study~5.5's stack check, on the same cells and seeds (there it is tested against FX only); it was not flown at $N=24$.}
+\caption{Scale study: mean time to $\tau$ (s) with one mule as the device population grows, at each $N$'s knee and stress budgets. Notation as in Table~\ref{tab:exp5_headline}. $^{\S}$FQ at $N=6$ is the exploratory run and at $N=12$ the learned-score study's full-system check, on the same cells and seeds (there it is tested against FX only); it was not flown at $N=24$.}
 \label{tab:exp5_scale}
 \resizebox{\columnwidth}{!}{%
 \begin{tabular}{l rrr rrr}
@@ -82,7 +82,7 @@ D4 (FedEx route) & 264$^{\dagger}$ & 459\,{\scriptsize(0.95)} & 752 & 264$^{\dag
 
 \begin{table}[t]
 \centering
-\caption{Scaling out with mules (Study~5.11b), knee budget: mean time to $\tau$ (s). Weak scaling holds six devices per mule ($N/K$ = 6/1, 12/2, 18/3); strong scaling adds mules at $N=12$. Notation as in Table~\ref{tab:exp5_headline}.}
+\caption{Scaling out with mules (decision-cost study), knee budget: mean time to $\tau$ (s). Weak scaling holds six devices per mule ($N/K$ = 6/1, 12/2, 18/3); strong scaling adds mules at $N=12$. Notation as in Table~\ref{tab:exp5_headline}.}
 \label{tab:exp5_mules}
 \resizebox{\columnwidth}{!}{%
 \begin{tabular}{l rrr rr}
@@ -102,7 +102,7 @@ D4 (FedEx route) & 264$^{\dagger}$ & 222 & 186 & 459\,{\scriptsize(0.95)} & 128 
 
 \begin{table}[t]
 \centering
-\caption{Decision cost and scale (Study~5.11). Planner wall time per plan (mean / p95, s; one host, alone); for $N\ge 24$, FerrySim's served share of devices at each $N$'s knee budget under F and FX, 30 episodes.}
+\caption{Decision-cost study. Planner wall time per plan (mean / p95, s; one host, alone); for $N\ge 24$, FerrySim's served share of devices at each $N$'s knee budget under F and FX, 30 episodes.}
 \label{tab:exp5_cost}
 \resizebox{\columnwidth}{!}{%
 \begin{tabular}{r rr rrr}
@@ -156,7 +156,7 @@ $N$ & mean & p95 & budget (s) & F served & FX served \\
 \quad Coverage term removed (stress) & age of updates (missions) & 0.78 & 1.10 & +41\% [+34, +49] & 0.001 & \textbf{holds} \\
 \quad Age cap removed (stress) & age of updates (missions) & 0.78 & 0.78 & 0\% [0, 0] & 1.000 & no difference \\
 \midrule
-\multicolumn{7}{l}{\textit{Component ablations (Study 5.14)}} \\
+\multicolumn{7}{l}{\textit{Component ablations}} \\
 \quad Whole stops only (stress) & age of updates (missions) & 0.81 & 0.90 & +11\% [+4, +18] & 0.078 & no difference \\
 \quad Fixed backhaul carrier, no L1 & age of updates (missions) & 0.69 & 0.88 & +28\% [+18, +40] & $<$0.001 & \textbf{holds} \\
 \bottomrule
@@ -165,19 +165,19 @@ $N$ & mean & p95 & budget (s) & F served & FX served \\
 \par\smallskip
 \begin{minipage}{\textwidth}\footnotesize
 Time to $\tau$ is averaged over the seeds in which both arms reach $\tau$; a row that compares fewer seeds than its study's others says how many. The backhaul row flies the time-varying backhaul, whose adaptive controller sees the SNR that decides each upload's loss.
-C4 in FerrySim (Study~5.5, pre-registered; 60 trainings, six $\gamma$ from 0 to 0.99): flat, no $\gamma$ beats $\gamma=0$ by $\epsilon=0.01$; held-out return, best learned $-0.0774$, FX $-0.0786$, greedy-1 $-0.0716$.
+C4 in FerrySim (learned-score study, pre-registered; 60 trainings, six $\gamma$ from 0 to 0.99): flat, no $\gamma$ beats $\gamma=0$ by $\epsilon=0.01$; held-out return, best learned $-0.0774$, FX $-0.0786$, greedy-1 $-0.0716$.
 C1 optimality: against an exhaustive oracle (O1) over band class, clustering, route and per-stop band, F's plan serves the same share of devices at the knee (gap 0.00) and 0.04 less at the stress budget.
 \end{minipage}
 \end{table*}
 
 \begin{table*}[t]
 \centering
-\caption{Robustness at $N=6$, the knee budget: device training time (Study~5.12; median 68\,s, and with 20\% of devices $5\times$ slower), non-IID data (Study~5.13, Dirichlet $\alpha=0.1$) and harsher channels (Study~5.15). Mean time to $\tau$ (s), reach rate in brackets when below 1; notation as in Table~\ref{tab:exp5_headline}. Means are over trials that reach $\tau$: under training time F reaches it in fewer trials. Study~5.15's cells, its default included, fly the time-varying backhaul, so its default is not the main configuration of Table~\ref{tab:exp5_headline}.}
+\caption{Robustness at $N=6$, the knee budget: device training time (training-time study; median 68\,s, and with 20\% of devices $5\times$ slower), non-IID data (non-IID study, Dirichlet $\alpha=0.1$) and harsher channels (radio study). Mean time to $\tau$ (s), reach rate in brackets when below 1; notation as in Table~\ref{tab:exp5_headline}. Means are over trials that reach $\tau$: under training time F reaches it in fewer trials. The radio study's cells, its default included, fly the time-varying backhaul, so its default is not the main configuration of Table~\ref{tab:exp5_headline}.}
 \label{tab:exp5_robust}
 \small
 \begin{tabular}{l rr r rrrr}
 \toprule
- & \multicolumn{2}{c}{compute (5.12)} & data (5.13) & \multicolumn{4}{c}{channel (5.15)} \\
+ & \multicolumn{2}{c}{compute (Study 10)} & data (Study 11) & \multicolumn{4}{c}{channel (Study 13)} \\
 \cmidrule(lr){2-3}\cmidrule(lr){4-4}\cmidrule(lr){5-8}
 \textbf{Arm} & train spread & stragglers & Dir(0.1) & default & 17 dB interf. & $n_{\text{pl}}{=}2.7$ & $\sigma{=}8$ dB \\
 \midrule
