@@ -14,8 +14,8 @@
 Every trial runs the full system described above: the server, each
 mule, and each device are separate processes that exchange messages over TCP,
 and the devices train the real intrusion-detection model on CICIoT2023.
-Mission time, the radio channel, and energy come from the simulated clock and
-channel described above, in the interference-limited (jittery)
+Mission time, the radio channel, and energy are simulated as described
+above, in the interference-limited (jittery)
 regime. A trial flies four missions with a 1~MB model payload and records every
 event, from which a separate scorer computes the metrics. The learned per-stop
 score and the learned baseline E3 are trained in FerrySim, which also runs the
@@ -87,7 +87,8 @@ merged update), the round-close rate, the deadline-miss rate, the update yield
 so every arm in a cell sees the same layout, channel and data. Each comparison
 is the paired mean difference with a 95\% percentile-bootstrap CI (2000
 resamples) and a Wilcoxon signed-rank $p$, Holm-corrected across each study's
-comparisons. A comparison is a \emph{claim} when the CI excludes 0 and the Holm
+comparisons; time to $\tau$ is compared over the seeds in which both arms reach
+it. A comparison is a \emph{claim} when the CI excludes 0 and the Holm
 $p<0.05$. Each study's cells, arms, primary metric and reference arm, the test
 families, and the pilot rules were fixed in an analysis plan before the studies
 ran.
@@ -116,9 +117,8 @@ described rather than tested.
 
 \begin{table*}[t]
 \centering
-\caption{The studies of the evaluation. Q: the question each answers; C: the
-design claim it tests. Unless stated, one mule and 20 paired trials per cell.
-$^{\dagger}$Flies the time-varying backhaul.}
+\caption{The studies of the evaluation. $^{\dagger}$Flies the time-varying
+backhaul.}
 \label{tab:studies}
 \footnotesize
 \begin{tabularx}{\textwidth}{@{}r l c L l l@{}}
