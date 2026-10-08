@@ -1,0 +1,155 @@
+% Results and discussion section for the FeRRy paper (draft, 8 Oct 2026); the
+% setup and the design of each study are in setup.tex. Assembled into the
+% full paper by DeveloperDocs/paper/assemble.py, which replaces each
+%   %%TABLE:<label>%%  and  %%FIGURE:<label>%%
+% line with the block of that label from results/exp5/paper/exp5_tables.tex or
+% exp5_figures.tex (generated from the scores). Numbers in the prose come from
+% results/exp5/scores (the FQ-vs-E3 paragraph from
+% results/exp5/scores/b2/exploratory_fq_vs_e3.md) and the FerrySim reports.
+%%%%% BEGIN SECTION %%%%%
+\section{Evaluation Results and Discussion}
+\label{sec:results}
+
+\subsection{Against the State of the Art}
+\label{sec:res:sota}
+
+Table~\ref{tab:exp5_headline} sets FeRRy against every baseline at $N=6$. With
+one mule at the knee budget, F reaches $\tau$ in 194\,s, and each of the seven
+baselines needs 264--282\,s: F is 27--31\% faster, and every comparison is a
+claim. FedEx with its own merge (D4$_{\text{FedEx}}$), a variant of D4, is as
+slow (281\,s) but misses $\tau$ in one trial, and its comparison is not a claim. Paired seed by seed, F reaches $\tau$ first in 80--90\% of the trials
+against each baseline. FeRRy's other two arms are as fast: FX reaches $\tau$ in
+178\,s and FQ in 180\,s, and neither differs significantly from F. FQ, flown
+after the pre-registered study, is also faster than D4 and E3 at the knee in
+its own exploratory family (Holm $p<0.001$). Under the stress budget, only the FedEx route (D4) is
+significantly slower. The other baselines trail by 28--60\,s, but they keep
+within the budget by leaving devices out, which widens their spread. With three
+mules every scheduler reaches $\tau$ in 52--65\,s, except FedEx with its own
+merge (D4$_{\text{FedEx}}$), which needs 101\,s: its unweighted accumulation of
+one-tour-old updates slows learning. Without a mule (H0), federated learning
+over the degraded live link merges 0.5 updates per round and ends at an
+accuracy of 0.686, against F's 3.5 updates and 0.831.
+
+%%TABLE:tab:exp5_headline%%
+
+\subsection{Why FeRRy Is Faster: Reach}
+\label{sec:res:mechanism}
+
+F does not need fewer rounds than the baselines: all of them reach $\tau$ in
+1.65--1.84 rounds on average, with near-identical update yield. F's rounds are
+shorter. Fig.~\ref{fig:exp5_mechanism} shows where a mission's time goes. Every
+baseline flies the wide band, which reaches a device only from nearby, so it
+spends about 140\,s of a mission in transit between stops. F's plan chooses the
+narrow band in 89\% of missions: its range covers the field from about one
+stop, so F spends 15\,s in transit and 107\,s dwelling at the lower rate, and
+its missions are 22--26\% shorter. FX and FQ inherit the plan's reach: they fly the
+narrow or medium band on 95\% and 98\% of missions and spend the same 15\,s in
+transit (Fig.~\ref{fig:exp5_learning}b). Pinning F to each band class isolates this
+effect: pinned to the wide band, F reaches $\tau$ in 265\,s, D4's own time;
+pinned to the narrow band, in 196\,s, F's own. (Study~5.4's pre-registered
+metric is the age of updates, on which the pinned bands do not differ; these
+times to $\tau$ are descriptive.) The choice also adapts
+(Fig.~\ref{fig:exp5_bands}). As the field fills and the budget tightens, F
+shifts to the faster medium and wide classes, mostly wide at $N=24$ under the
+stress budget, where the narrow band's dwell would no longer fit.
+
+%%FIGURE:fig:exp5_mechanism%%
+
+%%FIGURE:fig:exp5_bands%%
+
+\subsection{Scale and Decision Cost}
+\label{sec:res:scale}
+
+Table~\ref{tab:exp5_scale} follows the comparison to larger fields. At $N=24$, F
+is significantly faster than H1 and D3 at the knee (749 against 951 and 911\,s)
+and ties the FedEx route (752\,s); under the stress budget it beats the FedEx
+route (661 against 752\,s). At $N=12$ no comparison is a claim; FQ, flown in the
+same cells in Study~5.5's stack check, takes 461\,s at the knee and 389\,s under
+the stress budget, not significantly different from FX (424 and 386\,s). FeRRy's planning
+stays affordable (Fig.~\ref{fig:exp5_systems}a): the planner takes 0.04\,s per
+plan at $N=6$ and 1.5\,s at $N=96$ (p95 2.0\,s), a small share of a mission.
+In FerrySim, the plan serves 54--57\% of the devices at each scale's knee
+budget from $N=24$ to $96$ (Fig.~\ref{fig:exp5_systems}b). Adding mules divides
+the work: at $N=12$, F's time to $\tau$ falls from 486\,s with one mule to
+226\,s with two and 151\,s with three (Fig.~\ref{fig:exp5_systems}c).
+
+%%TABLE:tab:exp5_scale%%
+
+%%FIGURE:fig:exp5_systems%%
+
+\subsection{The Design Claims}
+\label{sec:res:claims}
+
+Table~\ref{tab:exp5_claims} tests each claim against an alternative that
+removes or replaces one part of FeRRy's design. Five tests hold. The coverage
+term keeps rounds closing: without it, the round-close rate falls from 99\% to
+74\% (C2). FeRRy keeps updates fresher than the fairness baselines under the
+stress budget: its network age of updates is 0.78 missions, against 1.06 for
+MAX-AoI and 1.07 for Cui's Whittle index, and 1.10 without the coverage term
+(C5). The adaptive backhaul lowers it from 0.88 to 0.69. Several parts of the
+design show no measurable effect at these settings, and we report them as such.
+Pinning the band does not change the age of updates (its effect is on time,
+Section~\ref{sec:res:mechanism}). The dwell term and the age cap change nothing
+over four missions. The merge rules tie: with every device served in Pass~2,
+collected updates almost always have merge age zero, so the age weighting
+rarely acts; FedBuff's buffering slows learning, and FedProx is not
+significantly faster. The selection literature's deadline forms miss slightly
+more deadlines than FeRRy's per-device deadline (47\% against 42\% under the
+stress budget), but not significantly.
+
+%%TABLE:tab:exp5_claims%%
+
+\subsection{Learning Inside the Plan}
+\label{sec:res:rl}
+
+Study~5.5's result is flat: no $\gamma$ beats $\gamma=0$ by the pre-registered
+margin, and the best learned score ($\gamma=0.75$) matches FeRRy's fixed rule
+(FX) while trailing the one-step greedy rule. In the full system FQ is again
+indistinguishable from FX at $N=12$ (C4 in Table~\ref{tab:exp5_claims}), as it is
+from F and FX at $N=6$ (Table~\ref{tab:exp5_headline}). FX is therefore FeRRy's
+per-stop rule, and the null is reported here.
+
+\paragraph{Learning inside the plan, against learning without one}
+The exploratory comparison asks how a learner inside FeRRy's plan fares against
+a published learned scheduler. FQ, FeRRy's plan with the $\gamma=0.75$ score,
+flew 5.3's one-mule cells on the same 20 seeds as E3, our single-agent DQN after
+Chen et al.~\cite{chen2023model}, which picks every next stop with no dock-time
+plan (Fig.~\ref{fig:exp5_learning}). At the knee budget FQ reaches $\tau$ in 180\,s
+against E3's 280\,s, a paired difference of 100\,s (95\% CI [63, 141]; Holm
+$p<0.001$ across the eight exploratory comparisons). Under the stress budget, FQ
+is faster over the 19 seeds in which both reach $\tau$ (174 against 211\,s), but
+the CI includes zero. FQ is indistinguishable from F and FX at both budgets. Its
+advantage therefore comes from the plan, not from learning. FQ inherits the
+plan's choice of band (narrow or medium on 98\% of missions) and spends 15\,s of
+a 155\,s mission in transit, whereas E3 flies the wide band and spends 144\,s of
+a 228\,s mission in transit. The same ordering holds in FerrySim, where each
+learner is scored on its own objective: E3's held-out return falls 6\% below
+FX's, while FQ's matches FX's. We did not build a single learner that also makes
+the plan's decisions, so this is our closest test of a learner inside FeRRy's
+plan and gates against one without them. It supports the two-clock structure
+(C4), not a gain from learning.
+
+%%FIGURE:fig:exp5_learning%%
+
+\subsection{Robustness and Limitations}
+\label{sec:res:robust}
+
+Table~\ref{tab:exp5_robust} varies the data, the channel and the devices'
+compute. With strongly non-IID data (Dirichlet $\alpha=0.1$), every arm reaches
+$\tau$ in only about half of the trials, and F remains significantly faster than
+H1 and D3 where both reach it. Under harsher channels F stays ahead of H1
+without a claim, and FX's per-stop band choice is significantly faster than F
+on the default channel and with 8\,dB shadowing. Two limitations stand out.
+First, FeRRy's plan prices the mean SNR, so under the stress budget 30\% of its
+missions overrun the budget, by 8.5\,s on average
+(Fig.~\ref{fig:exp5_budget}); the FedEx route, which never skips a device,
+overruns in 85\%. Second, when devices take time to train (Study~5.12), F's
+update yield falls from 3.5 to 0.7 updates per round and it reaches $\tau$ in
+only 70--75\% of trials, while H1, D4 and D5 keep 85--100\%: FeRRy's plan does
+not price training time, so it reaches devices whose updates are not ready.
+Adding a compute term to the plan is future work.
+
+%%TABLE:tab:exp5_robust%%
+
+%%FIGURE:fig:exp5_budget%%
+%%%%% END SECTION %%%%%
