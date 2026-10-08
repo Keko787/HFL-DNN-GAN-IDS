@@ -95,90 +95,68 @@ ran.
 \subsection{Experiment Design}
 \label{sec:setup:design}
 
-The evaluation answers six questions. Each is answered by one or more studies,
-numbered as in our analysis plan, and each study has its own pre-registered
-primary metric. Unless stated, a study flies $N=6$ devices and one mule, with
-20 paired trials per cell.
+The evaluation answers six questions: Q1, does \sysname{} beat the state of the
+art; Q2, where does its advantage come from; Q3, how does it scale, and what does
+deciding cost; Q4, does each part of its design matter; Q5, does learning help
+inside its plan; and Q6, how robust is it. Table~\ref{tab:studies} lists the
+studies that answer them. Each study's cells, arms, primary metric and Holm
+family were fixed in our analysis plan before the studies ran;
+unless stated, a study flies one mule with 20 paired trials per cell. Q4 tests
+five claims about the design, each against an alternative that removes or
+replaces one part of it: C1, reach is a decision; C2, one derived objective; C3,
+one deadline in three roles; C4, two clocks, re-decided per stop; and C5,
+fairness under physical cost. For Q2, the scheduler comparison's traces also
+split each arm's mission time into transit, dwell, and the return, upload and
+turnaround. The learned-score study trains the learned pair score at six
+discount factors, ten seeds each, and keeps it only if some $\gamma$ beats
+$\gamma=0$ by $\epsilon=0.01$ in held-out return over 1000 episodes per cell.
+The FQ-vs-E3 comparison was added after that verdict, so it is exploratory and
+Holm-corrected across its own eight comparisons; H0, which has no mule, is
+described rather than tested.
 
-\paragraph{Q1: Does \sysname{} beat the state of the art?}
-Study~5.3 flies every arm of Table~\ref{tab:exp5_arms} but FQ with one and with
-three mules, at the knee and stress budgets, and compares each baseline with F on
-time to $\tau$. H0, which has no mule, flies one cell over the live link and is
-described rather than tested. FQ joined the one-mule cells after Study~5.5's
-verdict (Q5), on the same seeds; its comparisons form their own exploratory
-family.
-
-\paragraph{Q2: Where does the advantage come from?}
-From 5.3's traces we split each arm's mission time into transit between stops,
-dwell, and the return, upload and dock turnaround. Study~5.4 pins F to each band class at the knee budget, with
-the 1~MB payload and with the measured 18.8~KB one; its primary metric is the
-network age of updates. In FerrySim, an exhaustive oracle over band class,
-clustering, route and per-stop band measures how far F's plan is from the best
-plan.
-
-\paragraph{Q3: How does it scale, and what does deciding cost?}
-Study~5.9 grows the field to $N=12$ and $24$ with one mule and flies F, FX, H1,
-D3 and D4 at each $N$'s knee and stress budgets; FQ flies the same $N=12$ cells,
-on the same seeds, in Study~5.5's stack check. Study~5.11 measures (a) the
-planner's wall time per plan from $N=6$ to $96$ in FerrySim, run alone on the
-host; (b) one to three mules at $N=12$, and six devices per mule up to $N=18$
-with three mules; and (c) FerrySim budget sweeps at $N=24$, 48 and 96, whose
-knees set the budgets at which we report the share of devices served.
-
-\paragraph{Q4: Does each part of the design matter?}
-We test five claims about the design, each against an alternative that removes
-or replaces one part of it, on the claim's own metric. C1, reach is a decision: F pinned to one band
-class (Study~5.4). C2, one derived objective: FX without its coverage term or
-its dwell term, at $N=12$, on the round-close rate (Study~5.7). C3, one deadline
-in three roles: plain averaging, FedBuff~\cite{nguyen2022federated},
-Async-HFL~\cite{yu2023async}, and \sysname{}'s merge with FedProx's proximal
-term~\cite{li2020federated} in place of \sysname{}'s merge on the same route, on
-time to $\tau$ (Study~5.1); and the round deadline of FedCS and the preferred
-duration of Oort in place of the per-device deadline, on the deadline-miss rate
-(Study~5.2). C4, two clocks re-decided per stop: FQ against FX in the full system
-at $N=12$ (Study~5.5's stack check). C5, fairness under physical
-cost: MAX-AoI, the Whittle index, and F without its coverage term or age cap,
-over four missions, on the age of updates (Study~5.8). Study~5.14 also flips one
-component of F at a time, with 40 trials per cell: whole stops only, the local
-search only, a weighted coverage rank, the age cap raised or removed, no hover
-stops, and the adaptive backhaul (F+L1) against the fixed carrier, both on the
-time-varying backhaul.
-
-\paragraph{Q5: Does learning help inside the plan?}
-Study~5.5 trains FQ's learned pair score in
-FerrySim at six discount factors ($\gamma\in\{0, 0.25, 0.5, 0.75, 0.9, 0.99\}$),
-ten seeds each, and evaluates the median-validation seed of each on 1000
-held-out episodes per cell, against FX and a one-step greedy rule. The learned
-score is kept only if some $\gamma$ beats $\gamma=0$ by $\epsilon=0.01$ in
-held-out return. Its stack check then flies FQ with the chosen $\gamma$ (and
-with $\gamma=0$) against FX and F in the full system at $N=12$. After that
-verdict, an exploratory comparison, not pre-registered, flies FQ in 5.3's
-one-mule cells against E3, F, FX and D4, Holm-corrected across its eight
-comparisons.
-
-\paragraph{Q6: How robust is it?}
-At the knee budget, three studies each change one condition. Study~5.12 gives each device a training time,
-log-normal with median 68\,s and $\sigma=0.5$ (the median set by a pilot), and
-in a second cell makes 20\% of the devices five times slower (arms F, FX, H1,
-D4, D5). Study~5.13 splits the data across devices by a Dirichlet draw
-($\alpha=0.1$) over the dataset's attack families (F, FX, H1, D3). Study~5.15
-varies the channel one axis at a time from the jittery default: the
-interference amplitude (1 and 17\,dB, against 5), the path-loss exponent (2.7,
-against 2.2), and the shadowing (8\,dB, against 4) (F, FX, H1). Its cells, the
-default included, fly the time-varying backhaul, so its default cell is not the main
-configuration.
+\begin{table*}[t]
+\centering
+\caption{The studies of the evaluation. Q: the question each answers; C: the
+design claim it tests. Unless stated, one mule and 20 paired trials per cell.
+$^{\dagger}$Flies the time-varying backhaul.}
+\label{tab:studies}
+\footnotesize
+\begin{tabularx}{\textwidth}{@{}r l c L l l@{}}
+\toprule
+\textbf{\#} & \textbf{Study} & \textbf{Q / C} & \textbf{Compares} & \textbf{Cells} & \textbf{Primary metric} \\
+\midrule
+1 & Merge rules & Q4, C3 & Plain mean, FedBuff, Async-HFL and a FedProx term against \sysname{}'s merge & $N{=}6$; knee, stress & time to $\tau$ \\
+2 & Deadline forms & Q4, C3 & FedCS's round deadline, Oort's preferred duration, an additive law & $N{=}6$; knee, stress & deadline-miss rate \\
+3 & Scheduler comparison & Q1 & F and FX against H1, D1--D5 and E3; H0 described & $N{=}6$; $K{=}1,3$; knee, stress & time to $\tau$ \\
+4 & Band pinning & Q2, C1 & F pinned to each band class; an exhaustive-plan oracle in FerrySim & $N{=}6$; knee; 1~MB, 18.8~KB & age of updates \\
+5 & Learned score & Q5, C4 & FerrySim: $\gamma$ from 0 to 0.99 against FX and a greedy rule; full system: FQ against FX and F & FerrySim; $N{=}12$ & held-out return; time to $\tau$ \\
+6 & Objective terms & Q4, C2 & FX without its coverage term or its dwell term; D4 & $N{=}12$; knee, stress & round-close rate \\
+7 & Fairness & Q4, C5 & MAX-AoI, Whittle index, FedEx route; F without coverage term, age cap or miss priority & $N{=}6$; knee, stress; 4 missions & age of updates \\
+8 & Scale & Q3 & F, FX, H1, D3, D4 as the field fills (FQ at $N{=}12$) & $N{=}6,12,24$; knee, stress & time to $\tau$ \\
+9 & Decision cost & Q3 & (a) planner wall time; (b) one to three mules; (c) FerrySim budget sweeps & $N{=}6$--$96$; $K{\le}3$ & plan time; time to $\tau$ \\
+10 & Training time & Q6 & Log-normal training time (median 68\,s), and 20\% of devices $5\times$ slower; F, FX, H1, D4, D5 & $N{=}6$; knee & time to $\tau$ \\
+11 & Non-IID data & Q6 & Dirichlet split ($\alpha{=}0.1$) over attack families; F, FX, H1, D3 & $N{=}6$; knee & time to $\tau$ \\
+12 & Component ablations & Q4 & F with one switch flipped (whole stops, local search, cap, hover, adaptive backhaul$^{\dagger}$) & $N{=}6$; knee, stress; 40 trials & age of updates \\
+13 & Radio$^{\dagger}$ & Q6 & Interference 1 or 17\,dB, path-loss exponent 2.7, shadowing 8\,dB; F, FX, H1 & $N{=}6$; knee & time to $\tau$ \\
+\midrule
+-- & FQ vs E3 (exploratory) & Q5 & FQ against E3, F, FX and D4 & $N{=}6$; knee, stress & time to $\tau$ \\
+\bottomrule
+\end{tabularx}
+\end{table*}
 
 \paragraph{What was run}
-To meet the submission date, we cut the later studies. Studies~5.1, 5.2, 5.5's
-stack check, 5.7, and 5.3's two added baselines (D5 and E3) flew 20 of their
-planned 40 trials per cell. We dropped 5.1's H1 route with an unbudgeted Pass~2,
-5.3's relaxed budget, 5.4's range-ratio and far-device settings, 5.8's
-eight-mission horizon, 5.9's two- and three-mule cells and its clean channel,
-5.12's measured and 10~MB payloads, 5.13's Dirichlet $\alpha=1$ and
-quantity-skew partitions, and 5.15's adaptive-backhaul arms. Study~5.6, on when
-learning helps, was not run, and Study~5.10, on real radios, awaits testbed
-access. The remaining trials extend the same seeds. FQ was planned in 5.3 and
-5.9 but left them, as the plan specified, when Study~5.5 did not keep the
-learned score; its later flights in 5.3's one-mule cells are the exploratory
-addition above.
+To meet the submission date, we cut the later studies. The merge-rule,
+deadline-form and objective-terms studies, the learned score's full-system
+check, and the scheduler comparison's two added baselines (D5 and E3) flew 20 of
+their planned 40 trials per cell. We dropped the merge-rule study's H1 route with
+an unbudgeted Pass~2, the scheduler comparison's relaxed budget, the band-pinning
+study's range-ratio and far-device settings, the fairness study's eight-mission
+horizon, the scale study's two- and three-mule cells and its clean channel, the
+training-time study's measured and 10~MB payloads, the non-IID study's Dirichlet
+$\alpha=1$ and quantity-skew partitions, and the radio study's adaptive-backhaul
+arms. Two planned studies did not run: one on when learning helps, and one on
+real radios, which awaits testbed access. The remaining trials extend the same seeds. FQ was planned in the
+scheduler comparison and the scale study but left them, as the plan specified,
+when the learned-score study did not keep the learned score; its later flights
+are the exploratory FQ-vs-E3 comparison.
 %%%%% END SECTION %%%%%
