@@ -1,0 +1,16 @@
+[
+ "-m",
+ "experiments.analysis.traces_scorer",
+ "--traces",
+ "results/exp5/b3/s512/n6k1_knee_1mb_stragglers__FX_traces",
+ "--status-csv",
+ "results/exp5/b3/s512/n6k1_knee_1mb_stragglers__FX.csv",
+ "--tau",
+ "0.71",
+ "0.82",
+ "--cost-columns",
+ "--pair-columns",
+ "--compute-columns",
+ "--csv",
+ "results/exp5/b3/s512/n6k1_knee_1mb_stragglers__FX_scored_comp.csv"
+]

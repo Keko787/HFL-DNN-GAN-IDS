@@ -1,0 +1,21 @@
+[
+ "-m",
+ "experiments.exp4.runner_main",
+ "--csv",
+ "results/exp5/b2/s53x/n6_wall__H0.csv",
+ "--arms",
+ "H0",
+ "--N",
+ "6",
+ "--n-missions",
+ "4",
+ "--regime",
+ "jittery",
+ "--n-trials",
+ "20",
+ "--base-seed",
+ "20261005",
+ "--real-model",
+ "--realism",
+ "--keep-event-traces"
+]
