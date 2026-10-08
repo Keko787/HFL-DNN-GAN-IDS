@@ -28,7 +28,8 @@ mules every scheduler reaches $\tau$ in 52--65\,s, except FedEx with its own
 merge (D4$_{\text{FedEx}}$), which needs 101\,s: its unweighted accumulation of
 one-tour-old updates slows learning. Without a mule (H0), federated learning
 over the degraded live link merges 0.5 updates per round and ends at an
-accuracy of 0.686, against F's 3.5 updates and 0.831.
+accuracy of 0.686, barely above the 0.667 of labelling every flow benign,
+against F's 3.5 updates and 0.831.
 
 %%TABLE:tab:exp5_headline%%
 
@@ -86,7 +87,10 @@ term keeps rounds closing: without it, the round-close rate falls from 99\% to
 74\% (C2). FeRRy keeps updates fresher than the fairness baselines under the
 stress budget: its network age of updates is 0.78 missions, against 1.06 for
 MAX-AoI and 1.07 for Cui's Whittle index, and 1.10 without the coverage term
-(C5). The adaptive backhaul lowers it from 0.88 to 0.69. Several parts of the
+(C5). On the time-varying backhaul, the adaptive controller lowers it from
+0.88 to 0.69. That controller observes the SNR that decides each upload's loss
+(Section~\ref{sec:method:l1}), so this is close to the most that adapting the
+backhaul can give. Several parts of the
 design show no measurable effect at these settings, and we report them as such.
 Pinning the band does not change the age of updates (its effect is on time,
 Section~\ref{sec:res:mechanism}). The dwell term and the age cap change nothing
@@ -107,7 +111,10 @@ margin, and the best learned score ($\gamma=0.75$) matches FeRRy's fixed rule
 (FX) while trailing the one-step greedy rule. In the full system FQ is again
 indistinguishable from FX at $N=12$ (C4 in Table~\ref{tab:exp5_claims}), as it is
 from F and FX at $N=6$ (Table~\ref{tab:exp5_headline}). FX is therefore FeRRy's
-per-stop rule, and the null is reported here.
+per-stop rule, and the null is reported here. The two do not decide on the
+same information: FQ picks its next stop on arrival, from the priced dwell, and
+FX after serving, from the realized clock (Section~\ref{sec:method:flight}), so
+the comparison is of two rules, not of two rankings over the same choice.
 
 \paragraph{Learning inside the plan, against learning without one}
 The exploratory comparison asks how a learner inside FeRRy's plan fares against
@@ -137,9 +144,11 @@ plan and gates against one without them. It supports the two-clock structure
 Table~\ref{tab:exp5_robust} varies the data, the channel and the devices'
 compute. With strongly non-IID data (Dirichlet $\alpha=0.1$), every arm reaches
 $\tau$ in only about half of the trials, and F remains significantly faster than
-H1 and D3 where both reach it. Under harsher channels F stays ahead of H1
-without a claim, and FX's per-stop band choice is significantly faster than F
-on the default channel and with 8\,dB shadowing. Two limitations stand out.
+H1 and D3 where both reach it. Study~5.15 flies the time-varying backhaul
+throughout, so its default column (F at 216\,s) is not the main configuration
+(194\,s). Under its harsher channels F stays ahead of H1 without a claim, and
+FX's per-stop rule is significantly faster than F on the default channel and
+with 8\,dB shadowing. Two limitations stand out.
 First, FeRRy's plan prices the mean SNR, so under the stress budget 30\% of its
 missions overrun the budget, by 8.5\,s on average
 (Fig.~\ref{fig:exp5_budget}); the FedEx route, which never skips a device,
