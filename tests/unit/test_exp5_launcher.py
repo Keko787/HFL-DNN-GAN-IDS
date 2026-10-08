@@ -557,3 +557,25 @@ def test_a_stage_runs_its_jobs_unthrottled_and_records_it(tmp_path):
     power = _json.loads(manifest.read_text(encoding="utf-8"))["power"]
     assert power["unthrottle"] is True and power["keep_awake"] is True
     assert power["processes_unthrottled"] >= 3 and power["refused"] == 0
+
+
+def test_a_shared_cell_reads_the_csv_batch_1_wrote_under_a_trials_lever(tmp_path):
+    """Batch 1 flew 5.3's F cell inside 5.14's (40 trials beat 20). Under
+    --trials 20 the two tie, and the dedupe would name 5.3's CSV, never
+    written; a later cell that shares it must read 5.14's, the one with rows."""
+    s = _filled_settings()
+    b1 = L.Builder(L.Settings(copy.deepcopy(s.data)), str(tmp_path))
+    b1.batch1()
+    flown = L.dedupe(b1.jobs)
+    cap = next(j for j in flown if j.name == "s514/n6k1_knee__capS")
+    f53 = next(j for j in flown if j.name == "s53/n6k1_knee__F")
+    assert L._key(cap) == L._key(f53) and f53.alias_of == cap.name
+    out = L.REPO / cap.out                 # the root is tmp_path, so this is absolute
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text("trial_index,status\n" + "".join(f"{i},ok\n" for i in range(40)),
+                   encoding="utf-8")
+    d = copy.deepcopy(s.data)
+    L.set_everywhere(d, "n_trials", 20)
+    jobs = L.build("batch2", L.Settings(d), ["s51"], str(tmp_path))
+    (j,) = [j for j in jobs if j.name == "s51/n6k1_knee_F_unbud__cutoff"]
+    assert j.alias_of == f"batch1:{cap.name}" and j.out == cap.out
