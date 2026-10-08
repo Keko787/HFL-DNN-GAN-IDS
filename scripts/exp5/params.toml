@@ -121,7 +121,7 @@ stress_meas_s = { "6" = 60.0 }
 # (by N at the knee: 6 -> 0.82, 12 -> 0.72, 18 and 24 -> 0.71; the smallest).
 tau = 0.71
 # From stage pilot3 (p512's rule): Study 5.12's training-time levels.
-# train_levels  = { none = [0.0, 0.0, 0.0, 1.0], spread = [60.0, 0.5, 0.0, 1.0], stragglers = [60.0, 0.5, 0.2, 5.0] }
+train_levels = { none = [0.0, 0.0, 0.0, 1.0], spread = [68.0, 0.5, 0.0, 1.0], stragglers = [68.0, 0.5, 0.2, 5.0] }
 
 # --------------------------------------------------------------------------
 # Stage ttl: the session-TTL pilot (fit_time_probe.py at each N, with as many
@@ -442,7 +442,10 @@ N = 6
 # straggler_share of the devices at straggler_factor; "none" is no training time.
 # `report pilot3 --apply` writes the three as pilot_outputs.train_levels.
 N = 6
-cycle_factors = [0.25, 0.5, 1.0, 2.0]
+# 7 Oct 2026: no level of the first grid (0.25, 0.5, 1, 2) fell in the band (45 s:
+# 7.8%, 90 s: 36.0% after the first mission), so 0.3, 0.375 and 0.45 were added and
+# flown, as the report prescribes; the rule picked 0.375 (68 s, 21.4%).
+cycle_factors = [0.25, 0.3, 0.375, 0.45, 0.5, 1.0, 2.0]
 turnaround_s = 30.0
 sigma = 0.5
 not_ready_band = [0.1, 0.3]
@@ -474,9 +477,12 @@ arms = ["F", "FX", "H1", "H1+L1", "F+L1"]
 backhaul = "seconds"          # every cell, so the L1 arms fly their adaptive backhaul
 shadow_sigmas_db = [8.0]      # beside the default 4
 amps_db = [1.0]               # beside the jittery default 5 (plus the harsher level below)
-# UNSET until p515 reports: the harsher amplitude, and the lossier path-loss exponent.
-# harsher_amp_db = 11.0
-# lossier_n_pl = 2.7
+# Set 7 Oct 2026 from pilot3 (user-approved). H1's served share at the N = 6 knee:
+# 57.7% at the jittery 5 dB (batch 1), 55.0 / 53.8 / 48.8 / 41.7% at 8 / 11 / 14 / 17 dB;
+# the harshest tested level that still serves at least half the default's share.
+harsher_amp_db = 17.0
+# The lossier path-loss exponent, beside the default 2.2 (light suburban obstruction).
+lossier_n_pl = 2.7
 mission_backhaul_arms = ["F", "FX", "H1"]   # also once on the recorded mission backhaul
 budget = "knee"
 N = 6
@@ -487,8 +493,11 @@ payload_bytes = 1000000
 policies = ["F", "FX", "greedy_1", "hyb"]
 episodes = 30
 workers = 8
-# UNSET until p511c reports: each scale cell's knee (s).
-# knee_s = { "scl-n24-350" = 350.0, "scl-n48-680" = 680.0, "scl-n96-1330" = 1330.0 }
+# Set 7 Oct 2026 from pilot3's p511c by the [knee] rule (the smallest budget whose FX
+# served share reaches 95% of the grid's largest): 350 s (53.7% of a 55.7% plateau),
+# 850 s (56.2% of 56.4%), 1660 s (56.9% of 57.0%). The cells' named budgets (680, 1330)
+# reach 91% of the plateau at N = 48 and 96.
+knee_s = { "scl-n24-350" = 350.0, "scl-n48-680" = 850.0, "scl-n96-1330" = 1660.0 }
 
 # ==========================================================================
 # Scoring (launch.py score <batch>; scoring.py): the analysis plan, fixed
