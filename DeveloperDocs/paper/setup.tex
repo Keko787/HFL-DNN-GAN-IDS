@@ -11,15 +11,10 @@
 \subsection{Testbed}
 \label{sec:setup:testbed}
 
-Every trial runs the full system described above: the server, each
-mule, and each device are separate processes that exchange messages over TCP,
-and the devices train the real intrusion-detection model on CICIoT2023.
-Mission time, the radio channel, and energy are simulated as described
-above, in the interference-limited (jittery)
-regime. A trial flies four missions with a 1~MB model payload and records every
-event, from which a separate scorer computes the metrics. The learned per-stop
-score and the learned baseline E3 are trained in FerrySim, which also runs the
-largest problems ($N=48$ and $96$).
+Each trial flies four missions of the full system with a 1~MB payload, in the
+interference-limited (jittery) regime, and a separate scorer computes the
+metrics from the events it records. FerrySim trains the learned per-stop score
+and the learned baseline E3, and runs the largest problems ($N=48$ and $96$).
 
 \subsection{Cells, Budgets, and the Accuracy Target}
 \label{sec:setup:cells}
@@ -27,71 +22,54 @@ largest problems ($N=48$ and $96$).
 A cell fixes the number of devices $N$, the number of mules $K$, and the mission
 budget. Devices are static and placed uniformly at random on a $200\times200$~m
 square centred on the dock, a new layout per trial; the square is the same at
-every $N$, so the field grows denser as $N$ grows (FerrySim's scale cells grow
-it instead). We evaluate $N\in\{6,12,24\}$ devices with one mule, and up to three
-mules at $N=12$ and $18$. Each $N$ has two mission budgets, set by pilots before
-the studies ran. The \emph{knee} is the smallest budget whose mean update yield
-reaches 95\% of the best on a budget grid (150, 180 and 262\,s at $N=6$, 12 and
-24), and the \emph{stress} budget is half of it. The accuracy target
-$\tau=0.71$ is the largest value, on a 0.01 grid, that at least 80\% of the
-baseline H1's trials reach at every $N$'s knee. It lies 4.3 points above the
-0.667 that labelling every test flow benign would score, so time to $\tau$ measures how soon a model
-becomes useful, not how good it ends; Table~\ref{tab:exp5_headline} also reports
-F's and H0's final accuracy. The age cap is $S=2$.
+every $N$, so the field grows denser with $N$. Pilots set two budgets per $N$
+before the studies ran: the \emph{knee}, the smallest budget whose mean update
+yield reaches 95\% of the best on a grid (150, 180 and 262\,s at $N=6$, 12 and
+24), and the \emph{stress} budget, half of it. The accuracy target $\tau=0.71$
+is the largest value, on a 0.01 grid, that at least 80\% of H1's trials reach at
+every $N$'s knee. It lies 4.3 points above the 0.667 of labelling every test flow
+benign, so time to $\tau$ measures how soon a model becomes useful, not how good
+it ends.
 
 \subsection{Arms}
 \label{sec:setup:arms}
 
-Table~\ref{tab:exp5_arms} lists the arms. \sysname{} has three, which share the
-dock-time plan and differ only in how they fill the flight slot: F leaves it empty and flies the plan as
-committed, FX fills it with the fixed cross-layer rule, and FQ with the learned
-pair score. Every baseline is a whole scheduler,
-flown in the same simulator, at the same budgets, on the same seeds, and on the
-wide contact band. Each baseline's departure from its paper is stated in the
-table: for instance, D3 flies our expected-connectivity variant of Cui et al.'s
-index, D4 runs FedEx's tour with one transporter, and D5 is FedCS without its
-resource-request phase.
+Table~\ref{tab:exp5_arms} lists the arms: \sysname{}'s three fillings of the
+flight slot (F, FX, FQ) and the baselines, each a whole scheduler flown in the
+same simulator, at the same budgets, on the same seeds and on the wide contact
+band, with its departures from its paper stated.
 
 %%TABLE:tab:exp5_arms%%
 
 \paragraph{How the baselines fly}
-The baselines share \sysname{}'s first stages: they cluster the devices into
-stops at the wide band's range, price a stop with the same feasibility test,
-and deliver in an unbudgeted, nearest-first Pass~2. Unlike \sysname{}, they
-serve whole stops only, have no age cap, and use an additive deadline law: a
-device's window shrinks by $5\sigma$~s after a clean contact and widens by
-$10\sigma$~s after a miss, with a floor of $5\sigma$~s and no ceiling. H1 admits
-stops in deadline order under the deadline and budget clauses, flies them by
-priority bucket (new devices first) and then by distance from the dock, and
-trims at each departure as \sysname{} does. D1--D3 rank the stops by their own
-key (age of information, statistical utility, the Whittle index) and walk the
-ranking under the budget clause alone, skipping what fails; D5 adds stops in
-order of least marginal time while they fit one round deadline. These four fly
-their admitted order, re-check only the budget at each departure, and re-admit
-by their own rule. D4 flies FedEx's visit-all tour with no budget check, so it
-can overrun the budget, and with three mules it splits the devices by FedEx's
-own assignment rather than by sectors. E3 admits every stop and, at takeoff and
-at each departure, picks the next stop by its learned Q-values among the stops
-that still fit the budget, with no re-plan. It is trained in FerrySim with one
-mule (learning rate $5\times10^{-4}$, $\gamma=0.99$) and flown per mule with
-three.
+The baselines share \sysname{}'s clustering at the wide band's range, its
+feasibility test and its unbudgeted, nearest-first Pass~2, but they serve whole
+stops only, have no age cap, and use an additive deadline law: a device's window
+shrinks by $5\sigma$~s after a clean contact and widens by $10\sigma$~s after a
+miss, with no ceiling. H1 admits stops in deadline order under the deadline and
+budget clauses, flies new devices first and then by distance from the dock, and
+trims at each departure. D1--D3 walk their own ranking (age of information,
+statistical utility, the Whittle index) under the budget alone, and D5 adds
+stops by least marginal time while they fit one round deadline; in flight, these
+four re-check only the budget and re-admit by their own rule. D4 flies FedEx's
+visit-all tour with no budget check, and with three mules splits the devices by
+FedEx's own assignment. E3 picks each next stop by its learned Q-values among the
+stops that still fit the budget, with no re-plan; it is trained with one mule
+(learning rate $5\times10^{-4}$, $\gamma=0.99$) and flown per mule with three.
 
 \subsection{Metrics and Statistics}
 \label{sec:setup:metrics}
 
-The primary metric is the simulated time to $\tau$: from the first takeoff to
-the first evaluation of the global model that reaches $\tau$. We also report the
-network age of updates (the mean number of missions since each device's last
-merged update), the round-close rate, the deadline-miss rate, the update yield
-(updates merged per round), and the mission energy. Trials are paired by seed,
-so every arm in a cell sees the same layout, channel and data. Each comparison
-is the paired mean difference with a 95\% percentile-bootstrap CI (2000
-resamples) and a Wilcoxon signed-rank $p$, Holm-corrected across each study's
-comparisons; time to $\tau$ is compared over the seeds in which both arms reach
-it. A comparison is a \emph{claim} when the CI excludes 0 and the Holm
-$p<0.05$. Each study's cells, arms, primary metric and reference arm, the test
-families, and the pilot rules were fixed in an analysis plan before the studies
-ran.
+The primary metric is the simulated time to $\tau$, from the first takeoff to the
+first global model that reaches it. We also report the network age of updates
+(the mean number of missions since each device's last merged update), the
+round-close and deadline-miss rates, the update yield (updates merged per
+round), and mission energy. Trials are paired by seed, so every arm in a cell
+sees the same layout, channel and data. Each comparison is the paired mean
+difference with a 95\% percentile-bootstrap CI (2000 resamples) and a Wilcoxon
+signed-rank $p$, Holm-corrected within each study; time to $\tau$ is compared
+over the seeds in which both arms reach it. A comparison is a \emph{claim} when
+the CI excludes 0 and the Holm $p<0.05$.
 
 \subsection{Experiment Design}
 \label{sec:setup:design}
@@ -100,20 +78,15 @@ The evaluation answers six questions: Q1, does \sysname{} beat the state of the
 art; Q2, where does its advantage come from; Q3, how does it scale, and what does
 deciding cost; Q4, does each part of its design matter; Q5, does learning help
 inside its plan; and Q6, how robust is it. Table~\ref{tab:studies} lists the
-studies that answer them. Each study's cells, arms, primary metric and Holm
-family were fixed in our analysis plan before the studies ran;
-unless stated, a study flies one mule with 20 paired trials per cell. Q4 tests
-five claims about the design, each against an alternative that removes or
-replaces one part of it: C1, reach is a decision; C2, one derived objective; C3,
-one deadline in three roles; C4, two clocks, re-decided per stop; and C5,
-fairness under physical cost. For Q2, the scheduler comparison's traces also
-split each arm's mission time into transit, dwell, and the return, upload and
-turnaround. The learned-score study trains the learned pair score at six
-discount factors, ten seeds each, and keeps it only if some $\gamma$ beats
-$\gamma=0$ by $\epsilon=0.01$ in held-out return over 1000 episodes per cell.
-The FQ-vs-E3 comparison was added after that verdict, so it is exploratory and
-Holm-corrected across its own eight comparisons; H0, which has no mule, is
-described rather than tested.
+studies that answer them. An analysis plan fixed each study's cells, arms,
+primary metric and test family before it ran; unless stated, a study flies one
+mule with 20 paired trials per cell. Q4 tests five design claims, each against an
+alternative that removes or replaces one part of the design: C1, reach is a
+decision; C2, one derived objective; C3, one deadline in three roles; C4, two
+clocks, re-decided per stop; and C5, fairness under physical cost. The
+learned-score study keeps the learned score only if some $\gamma$ beats
+$\gamma=0$ by 0.01 in held-out return (ten seeds per $\gamma$, 1000 episodes per
+cell); the FQ-vs-E3 comparison, added after that verdict, is exploratory.
 
 \begin{table*}[t]
 \centering
@@ -145,18 +118,16 @@ backhaul.}
 \end{table*}
 
 \paragraph{What was run}
-To meet the submission date, we cut the later studies. The merge-rule,
-deadline-form and objective-terms studies, the learned score's full-system
-check, and the scheduler comparison's two added baselines (D5 and E3) flew 20 of
-their planned 40 trials per cell. We dropped the merge-rule study's H1 route with
-an unbudgeted Pass~2, the scheduler comparison's relaxed budget, the band-pinning
-study's range-ratio and far-device settings, the fairness study's eight-mission
-horizon, the scale study's two- and three-mule cells and its clean channel, the
-training-time study's measured and 10~MB payloads, the non-IID study's Dirichlet
-$\alpha=1$ and quantity-skew partitions, and the radio study's adaptive-backhaul
-arms. Two planned studies did not run: one on when learning helps, and one on
-real radios, which awaits testbed access. The remaining trials extend the same seeds. FQ was planned in the
-scheduler comparison and the scale study but left them, as the plan specified,
-when the learned-score study did not keep the learned score; its later flights
-are the exploratory FQ-vs-E3 comparison.
+To meet the submission date, the merge-rule, deadline-form and objective-terms
+studies, the learned score's full-system check, and the scheduler comparison's
+D5 and E3 arms flew 20 of their planned 40 trials per cell; the remaining trials
+extend the same seeds. We dropped the merge-rule study's H1 route with an
+unbudgeted Pass~2, the scheduler comparison's relaxed budget, the band-pinning
+study's range and far-device settings, the fairness study's eight-mission
+horizon, the scale study's multi-mule and clean-channel cells, the training-time
+study's other payloads, the non-IID study's other partitions, and the radio
+study's adaptive-backhaul arms. Two planned studies, on when learning helps and
+on real radios (which awaits testbed access), did not run. FQ left the scheduler
+comparison and the scale study, as the plan specified, when the learned-score
+study did not keep the learned score.
 %%%%% END SECTION %%%%%
