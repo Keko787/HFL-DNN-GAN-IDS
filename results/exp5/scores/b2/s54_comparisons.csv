@@ -1,0 +1,7 @@
+study,cell,variant,reference,metric,better,n_pairs,ref_mean,variant_mean,mean_diff,ci_low,ci_high,p_value,p_holm,cliffs_delta,claim,favours,pairing_errors,note
+s54,n6k1_knee_1mb,FBpwide,F,network_aou_mean,lower,20,0.7,0.7208333333333332,-0.020833333333333322,-0.0520833333333333,5.551115123125783e-18,0.17177277759571152,1.0,-0.065,False,no claim,0,
+s54,n6k1_knee_1mb,FBpmedium,F,network_aou_mean,lower,20,0.7,0.70625,-0.00625,-0.02088541666666659,0.004166666666666674,0.4142161782425252,1.0,-0.0025,False,no claim,0,
+s54,n6k1_knee_1mb,FBpnarrow,F,network_aou_mean,lower,20,0.7,0.7,0.0,0.0,0.0,1.0,1.0,0.0,False,no claim,0,
+s54,n6k1_knee_meas_meas,FBpwide,F,network_aou_mean,lower,20,0.7020833333333333,0.7124999999999999,-0.010416666666666657,-0.031249999999999972,0.0062500000000000056,0.41636567790816525,1.0,-0.015,False,no claim,0,
+s54,n6k1_knee_meas_meas,FBpmedium,F,network_aou_mean,lower,20,0.7020833333333333,0.7229166666666667,-0.020833333333333325,-0.06874999999999999,0.008333333333333337,0.8539232992870668,1.0,-0.0025,False,no claim,0,
+s54,n6k1_knee_meas_meas,FBpnarrow,F,network_aou_mean,lower,20,0.7020833333333333,0.7020833333333333,0.0,0.0,0.0,1.0,1.0,0.0,False,no claim,0,

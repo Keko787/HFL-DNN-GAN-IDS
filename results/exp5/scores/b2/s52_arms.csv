@@ -1,0 +1,9 @@
+study,cell,variant,arm,trials,rows,rows_not_ok,scored,metric,metric_n,metric_mean,metric_median,metric_sd,reach_rate_tau0.71,mean_round_close_rate_kmin1,mean_network_aou_mean,mean_reached_tau0.71,mean_sim_s_to_tau0.71
+s52,n6k1_knee,F,F,20,20,0,20,deadline_miss_rate,20,0.410417,0.4375,0.15723,1.0,0.9625,0.7,1.0,194.048
+s52,n6k1_stress,F,F,20,20,0,20,deadline_miss_rate,20,0.421587,0.408333,0.144782,1.0,0.95,0.775,1.0,178.032
+s52,n6k1_knee,F-add,F,20,20,0,20,deadline_miss_rate,20,0.410417,0.4375,0.15723,1.0,0.9625,0.7,1.0,194.048
+s52,n6k1_knee,F-round,F-round,20,20,0,20,deadline_miss_rate,20,0.425,0.458333,0.154489,1.0,0.9625,0.7,1.0,195.273
+s52,n6k1_knee,F-pref,F-pref,20,20,0,20,deadline_miss_rate,20,0.425,0.458333,0.154489,1.0,0.9625,0.7,1.0,195.273
+s52,n6k1_stress,F-add,F,20,20,0,20,deadline_miss_rate,20,0.420117,0.408333,0.144091,1.0,0.9625,0.772917,1.0,177.831
+s52,n6k1_stress,F-round,F-round,20,20,0,20,deadline_miss_rate,20,0.474462,0.464461,0.120502,1.0,0.95,0.814583,1.0,176.651
+s52,n6k1_stress,F-pref,F-pref,20,20,0,20,deadline_miss_rate,20,0.472081,0.464461,0.118946,1.0,0.9625,0.789583,1.0,176.651

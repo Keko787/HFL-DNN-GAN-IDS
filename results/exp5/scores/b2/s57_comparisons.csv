@@ -1,0 +1,7 @@
+study,cell,variant,reference,metric,better,n_pairs,ref_mean,variant_mean,mean_diff,ci_low,ci_high,p_value,p_holm,cliffs_delta,claim,favours,pairing_errors,note
+s57,n12k1_stress,FX-dwell,FX,round_close_rate_kmin1,higher,20,0.9875,0.9875,0.0,0.0,0.0,1.0,1.0,0.0,False,no claim,0,
+s57,n12k1_stress,FX-cov,FX,round_close_rate_kmin1,higher,20,0.9875,0.7375,0.25,0.25,0.25,7.74421643104407e-06,4.646529858626442e-05,0.9525,True,FX,0,
+s57,n12k1_stress,D4,FX,round_close_rate_kmin1,higher,20,0.9875,0.9875,0.0,0.0,0.0,1.0,1.0,0.0,False,no claim,0,
+s57,n12k1_knee,FX-dwell,FX,round_close_rate_kmin1,higher,20,0.9875,0.9875,0.0,0.0,0.0,1.0,1.0,0.0,False,no claim,0,
+s57,n12k1_knee,FX-cov,FX,round_close_rate_kmin1,higher,20,0.9875,0.7375,0.25,0.25,0.25,7.74421643104407e-06,4.646529858626442e-05,0.9525,True,FX,0,
+s57,n12k1_knee,D4,FX,round_close_rate_kmin1,higher,20,0.9875,0.9875,0.0,0.0,0.0,1.0,1.0,0.0,False,no claim,0,

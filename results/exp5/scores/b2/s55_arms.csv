@@ -1,0 +1,9 @@
+study,cell,variant,arm,trials,rows,rows_not_ok,scored,metric,metric_n,metric_mean,metric_median,metric_sd,reach_rate_tau0.71,mean_reached_tau0.71,mean_sim_s_to_tau0.71,mean_round_close_rate_kmin1,mean_pair_fx_agree_share
+s55,n12k1_stress,FQ-g75,FQ-g75,20,20,0,20,sim_s_to_tau0.71,18,388.747,346.915,209.077,0.9,0.9,388.747,0.9875,0.87736
+s55,n12k1_stress,FQ-g0,FQ-g0,20,20,0,20,sim_s_to_tau0.71,18,368.31,331.641,199.437,0.9,0.9,368.31,0.9875,0.835568
+s55,n12k1_stress,FX,FX,20,20,0,20,sim_s_to_tau0.71,18,385.8,322.4,210.89,0.9,0.9,385.8,0.9875,
+s55,n12k1_stress,F,F,20,20,0,20,sim_s_to_tau0.71,20,371.284,297.068,204.8,1.0,1.0,371.284,0.9875,
+s55,n12k1_knee,FQ-g75,FQ-g75,20,20,0,20,sim_s_to_tau0.71,18,461.287,435.04,264.672,0.9,0.9,461.287,0.9875,0.755308
+s55,n12k1_knee,FQ-g0,FQ-g0,20,20,0,20,sim_s_to_tau0.71,18,461.176,439.042,253.467,0.9,0.9,461.176,0.9875,0.681806
+s55,n12k1_knee,FX,FX,20,20,0,20,sim_s_to_tau0.71,18,424.204,435.005,203.92,0.9,0.9,424.204,0.9875,
+s55,n12k1_knee,F,F,20,20,0,20,sim_s_to_tau0.71,19,486.436,444.087,259.205,0.95,0.95,486.436,0.9875,

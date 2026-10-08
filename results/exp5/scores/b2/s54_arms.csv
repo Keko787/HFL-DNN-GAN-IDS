@@ -1,0 +1,9 @@
+study,cell,variant,arm,trials,rows,rows_not_ok,scored,metric,metric_n,metric_mean,metric_median,metric_sd,reach_rate_tau0.71,mean_far_served_share,mean_round_close_rate_kmin1,mean_reached_tau0.71,mean_sim_s_to_tau0.71
+s54,n6k1_knee_1mb,F,F,20,20,0,20,network_aou_mean,20,0.7,0.770833,0.318646,1.0,0.556458,0.9625,1.0,194.048
+s54,n6k1_knee_meas_meas,F,F,20,20,0,20,network_aou_mean,20,0.702083,0.770833,0.315671,1.0,0.554375,0.9625,1.0,58.6597
+s54,n6k1_knee_meas_meas,FBpwide,FB+wide,20,20,0,20,network_aou_mean,20,0.7125,0.770833,0.329723,1.0,0.556458,0.9625,1.0,236.762
+s54,n6k1_knee_meas_meas,FBpmedium,FB+medium,20,20,0,20,network_aou_mean,20,0.722917,0.770833,0.354399,1.0,0.549167,0.9625,1.0,165.021
+s54,n6k1_knee_meas_meas,FBpnarrow,FB+narrow,20,20,0,20,network_aou_mean,20,0.702083,0.770833,0.315671,1.0,0.554375,0.9625,1.0,58.6597
+s54,n6k1_knee_1mb,FBpwide,FB+wide,20,20,0,20,network_aou_mean,20,0.720833,0.791667,0.328112,1.0,0.55125,0.9625,1.0,264.479
+s54,n6k1_knee_1mb,FBpmedium,FB+medium,20,20,0,20,network_aou_mean,20,0.70625,0.770833,0.31486,1.0,0.555,0.9625,1.0,213.661
+s54,n6k1_knee_1mb,FBpnarrow,FB+narrow,20,20,0,20,network_aou_mean,20,0.7,0.770833,0.318646,1.0,0.556458,0.9625,1.0,195.835
