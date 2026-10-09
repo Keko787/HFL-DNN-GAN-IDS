@@ -61,8 +61,16 @@ the 441-word hybrid below, shortened. It keeps:
 - the freshness result, as about a quarter lower age of updates (0.78 against 1.06
   and 1.07, C5);
 - the N = 24 result against FedEx's route, as 12% sooner (661 against 752 s);
-- the budget result, framed positively: 70% of missions within a tight budget,
-  overruns 8.5 s on average.
+- the budget result: 70% of missions within a tight budget, and the rest overrun
+  it by 28 s on average.
+
+**Correction (8 Oct 2026).** The first adopted text said the overrunning missions
+went over by "only 8.5 s on average". The scorer's `sim_budget_overrun_s_mean`
+averages over every mission, including the 70% that overrun by zero. From the
+mission traces of the 20 compared trials (80 missions, stress budget, N = 6, one
+mule), 24 missions overrun, by 28.5 s on average (median 19.7 s, maximum
+152.7 s); the FedEx route's overrunning missions go over by 22.3 s. The abstract
+and the results text now give 28 s.
 
 The training-time limit is left to the conclusion, which names a compute term
 in the plan as future work.
@@ -99,7 +107,7 @@ chooses a long-reach narrow band that removes most of the transit between stops.
 Under tight budgets, it keeps the age of updates about a quarter lower than
 age-of-information schedulers and, with 24 devices, reaches the target 12\%
 sooner than FedEx's route. Its plans stay within a tight budget in 70\% of
-missions, overrunning by only 8.5\,s on average otherwise.
+missions; the rest overrun it by 28\,s on average.
 ```
 
 ## Hybrid candidate (441 words; not yet in the paper)
