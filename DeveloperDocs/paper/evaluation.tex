@@ -120,9 +120,10 @@ flies the time-varying backhaul, so its default (F at 216\,s) is not the main
 configuration (194\,s); under its harsher channels F stays ahead of H1 without a
 claim, and FX is significantly faster than F on the default channel and with
 8\,dB shadowing. Two limitations stand out. FeRRy's plan prices the mean SNR, so
-under the stress budget 30\% of its missions overrun, by 8.5\,s on average
-(Table~\ref{tab:exp5_headline}); the FedEx route, which never skips a device,
-overruns in 85\%, and F keeps nearly its update yield with fewer stops. And the
+under the stress budget 30\% of its missions overrun, by 28\,s on average
+(median 20\,s; Table~\ref{tab:exp5_headline}); the FedEx route, which never skips
+a device, overruns in 85\%, by 22\,s on average, and F keeps nearly its update
+yield with fewer stops. And the
 plan does not price training time: when devices take time to train, F's yield
 falls from 3.5 to 0.7 updates per round and it reaches $\tau$ in only 70--75\% of
 trials, while H1, D4 and D5 keep 85--100\%.
