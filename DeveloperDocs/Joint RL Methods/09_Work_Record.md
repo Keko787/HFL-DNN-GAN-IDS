@@ -47,7 +47,7 @@ Two things from this period shaped what followed:
 
 The team's own methodology review (a document the memo names, *HEREMES Methodology REDEFINED.docx*, which is **not in the repository**; unverified beyond the memo's account of it) judged the problem novel and drones-as-relay-hosts somewhat novel, but the solution method too simple to justify RL, with the open worry that a cross-heuristic would do as well. The proposal on the table was a trajectory-navigation layer plus joint optimisation with RF band selection.
 
-The answer is the decision memo, built as an interactive artifact over 26 Aug to 16 Sep and committed on 17 Sep (`c27a6a29`, `229a093b`; [the memo](../architecture%20review/rl-decision-memo/HERMES_Layer_Redefinition_and_RL_Decision.md)). Its argument:
+The answer is the decision memo, built as an interactive artifact over 26 Aug to 16 Sep and committed on 17 Sep (`fe1c9ed0`, `605c3aec`; [the memo](../architecture%20review/rl-decision-memo/HERMES_Layer_Redefinition_and_RL_Decision.md)). Its argument:
 
 - A trajectory layer composes into a chain, and a cross-heuristic solves a chain. **A coupling does not decompose**, and that is testable.
 - The coupling was severed in code at three cuts: the contact link had no band variable (cut 1); the band was decided once per mission, not per arrival (cut 2); dwell was a 1 s constant and the only upward edge could abort but not re-plan (cut 3).
@@ -60,11 +60,11 @@ The memo also fixes in advance what each outcome of its delayed-consequence test
 
 ### 1.4 The prototype lineage
 
-`hermes_rl/` is the original joint-action prototype: one discrete action (waypoint × base station × channel), a hybrid trainer that fixes the waypoint by heuristic and learns (base station, channel). It is a separate repository (initial commit `a8a453f`, 28 Apr 2026, by FyneappleJuice; its own `.git`, untracked in this one). A seeded, golden-pinned copy lives at `experiments/sim/drone_env/` (`6458c785`, 28 Sep). Its trainer selected its best checkpoint and ran its final evaluation on one fixed episode, so SEC'26 Table VI's 76.40 is a best-of-about-30 on one instance; the vendored copy has no licence from its author (open item).
+`hermes_rl/` is the original joint-action prototype: one discrete action (waypoint × base station × channel), a hybrid trainer that fixes the waypoint by heuristic and learns (base station, channel). It is a separate repository (initial commit `a8a453f`, 28 Apr 2026, by FyneappleJuice; its own `.git`, untracked in this one). A seeded, golden-pinned copy lives at `experiments/sim/drone_env/` (`c4fc2ddc`, 28 Sep). Its trainer selected its best checkpoint and ran its final evaluation on one fixed episode, so SEC'26 Table VI's 76.40 is a best-of-about-30 on one instance; the vendored copy has no licence from its author (open item).
 
 ### 1.5 The build plan (27 to 28 Sep)
 
-[FeRRy_Build_Plan.html](../FeRRy_Build_Plan.html) (dated 27 Sep; first committed with `cf403221`, 28 Sep) fixes five contributions: **C1** reach is a decision, **C2** one derived objective, **C3** one deadline in three roles, **C4** two clocks re-decided per stop, **C5** fairness under physical cost. It sets seven phases, one learned object, and a rule that every hard gate stays deterministic. Its inputs include a Novelty Audit Rev. 3 (23 Sep) and a Chen comparison note, which the Related Work Notes say **are not in the repository**, and a deck of 23 Sep, which I did not find either (unverified).
+[FeRRy_Build_Plan.html](../FeRRy_Build_Plan.html) (dated 27 Sep; first committed with `9cc2c369`, 28 Sep) fixes five contributions: **C1** reach is a decision, **C2** one derived objective, **C3** one deadline in three roles, **C4** two clocks re-decided per stop, **C5** fairness under physical cost. It sets seven phases, one learned object, and a rule that every hard gate stays deterministic. Its inputs include a Novelty Audit Rev. 3 (23 Sep) and a Chen comparison note, which the Related Work Notes say **are not in the repository**, and a deck of 23 Sep, which I did not find either (unverified).
 
 ---
 
@@ -78,17 +78,17 @@ The memo also fixes in advance what each outcome of its delayed-consequence test
 | 13 Aug | Layer-1 effect retracted; L2 pipeline frozen; Amendments 1–3; Phase-3 matrix (640 trials) | `7549c80d`, `db60fc7c`, `85f6d0d5`, `d0dca4b4`, `7a9a38ce`, `e5eea925` |
 | 17 Aug | τ set to 0.82; whole-scheduler baselines D1/D2; SOTA pilot; tight-budget result at n = 40 | `29ac8375`, `2e9fdc9e`, `c765ac45`, `fe021b12`, `61f6343e` |
 | 26 Aug–16 Sep | RL decision memo built as an artifact (off-repo) | memo header |
-| 17 Sep | Memo committed | `c27a6a29`, `229a093b` |
-| 28 Sep | Phase 0 (defects, statistics, trace scorer, `drone_env` vendored) and Phase 1 (age-aware aggregation) | `96a7d952`, `dc90f84f`, `6458c785`, `8f23f02d`, `cf403221` |
-| 29 Sep | Phase 0/1 audit fixes and Phase 2 (baselines D3–D5, multi-mule); Phase 3 (mission clock, contact link, Amendment 10); route-level delivery bound | `c4175541`, `afa95268`, `ef1faa10`, `84ad38e5`, `d175afa9`, `6e6f92da` |
-| 30 Sep (docs); commit dated 1 Oct | Phase 4 (plan clock) | `69b551fc`, `386c2755` |
-| 2 Oct | Phase 5 (flight clock, FerrySim, E3); addendum Studies 5.11–5.15 written | `96947752`, `409fbd99`, `05768f7a`, `8967ba82` |
-| 2–3 Oct | Addendum builds: decision cost, scale family, interference settings, F+L1, hover switch, non-IID data, training time, `--model-arch` | `d4b940a1`, `b69ecd21`, `d449ca96`, `fa6131a7`, `d844f7f3`, `7a54c28e`, `17e4ec76`, `7fca650a`, `44898174`; merge `8fbb20eb` |
-| 5 Oct | FQ design note; MIT `LICENSE`; the `exp5` launcher; TTL pilot, knee pilot, S\* pilot; U10, U11, O1; Amendment 11; the FerrySim re-pin | `96a6be57`, `60e5ccfd`, `259e0821`, `09be6544`, `6e4b6c32`, `20d14d65`, `5da9a2d1`, `01fa3888`, `50065698`, `77880dc2` |
-| 5–6 Oct | Smoke run of every stage; code gate (6,375 tests) | `b54185a0`, `c461552f` |
-| 6 Oct | Batch 1 and `sens` run (00:36–06:40) and scored; RL headroom (06:42) and calibration (to 09:17); findings written; **option A chosen at 13:58**; Study 5.5 sweep (13:58–23:10); verdict applied | `ff90bbf3`, `53bdfc5f`, `df4797c5`, `6040250f`, `9ffb12b0`, `c9a70b93`, `6ab046fb`, `2a12bd55` |
-| 6–7 Oct | E3's five trainings (23:10–00:10) and checkpoint; batch 2's settings complete | `626cc8d8` |
-| 7 Oct | FX-dwell, FX-cov, `agg:asynchfl` polynomial, power-throttling opt-out; Study 5.11 (a) rerun alone | `aedae8b6`, `1d22d64a`, `39b20b84` |
+| 17 Sep | Memo committed | `fe1c9ed0`, `605c3aec` |
+| 28 Sep | Phase 0 (defects, statistics, trace scorer, `drone_env` vendored) and Phase 1 (age-aware aggregation) | `b8f2e3d3`, `3dc06ac6`, `c4fc2ddc`, `25062c93`, `9cc2c369` |
+| 29 Sep | Phase 0/1 audit fixes and Phase 2 (baselines D3–D5, multi-mule); Phase 3 (mission clock, contact link, Amendment 10); route-level delivery bound | `edda564d`, `9147211c`, `7c7a269d`, `9cd1c48e`, `80ea8d19`, `6de4cd2b` |
+| 30 Sep (docs); commit dated 1 Oct | Phase 4 (plan clock) | `48deb740`, `969cc408` |
+| 2 Oct | Phase 5 (flight clock, FerrySim, E3); addendum Studies 5.11–5.15 written | `9c918188`, `12a9aab4`, `f3d8e695`, `e50495b5` |
+| 2–3 Oct | Addendum builds: decision cost, scale family, interference settings, F+L1, hover switch, non-IID data, training time, `--model-arch` | `66eb58a7`, `6ba4ae38`, `79531f6c`, `c73b65e9`, `06c2bca2`, `6ec3826a`, `fdc716fb`, `41c4f78f`, `81b36e5e`; merge `524f6e69` |
+| 5 Oct | FQ design note; MIT `LICENSE`; the `exp5` launcher; TTL pilot, knee pilot, S\* pilot; U10, U11, O1; Amendment 11; the FerrySim re-pin | `bf3e5792`, `7d52958d`, `fea3fc75`, `a92e15cd`, `0aa4f41b`, `c78759ac`, `c0b710aa`, `1b8da50d`, `be555cf8`, `4d3baadb` |
+| 5–6 Oct | Smoke run of every stage; code gate (6,375 tests) | `fd81a60b`, `5636d68a` |
+| 6 Oct | Batch 1 and `sens` run (00:36–06:40) and scored; RL headroom (06:42) and calibration (to 09:17); findings written; **option A chosen at 13:58**; Study 5.5 sweep (13:58–23:10); verdict applied | `6f6f2bd6`, `c7846991`, `78070e38`, `663ebb8e`, `cbc1b7a9`, `93eefc72`, `5585a490`, `a7604125` |
+| 6–7 Oct | E3's five trainings (23:10–00:10) and checkpoint; batch 2's settings complete | `cef6d5af` |
+| 7 Oct | FX-dwell, FX-cov, `agg:asynchfl` polynomial, power-throttling opt-out; Study 5.11 (a) rerun alone | `62640438`, `deb1c9fb`, `c5b1b88f` |
 | **8 Oct** | **Full paper due (IPDPS 2027, AoE)** | build plan, addendum |
 
 Authorship of the 81 commits since 17 Sep, from `git log`: 42 under the account name Keko787, 24 Kevin Kostage, 3 Kevin S Kostage and 12 as Claude; 56 carry a `Co-Authored-By: Claude` trailer. IPDPS requires AI-generated text to be declared in the Acknowledgements (build plan).
@@ -101,18 +101,18 @@ Sizes and test counts are the build plan's and the Freeze's own figures, "includ
 
 | Phase | What was built | Commits | Tests added (per the record) | Exit gate |
 |---|---|---|---|---|
-| **0** Ground truth | Backhaul index and baseline-age fixes; per-mission budget stamp; `holm_bonferroni`, `friedman_test`, `factorial_2x2`, `compare_to_reference`; the trace scorer; `drone_env` vendored | `96a7d952`, `dc90f84f`, `6458c785` | 81 new, plus the prototype's 33; suite 944 passing | The plan's gate is a re-run of the L1 cell and the 60 s SOTA cell on fixed code; **the records do not say it was run** (unverified) |
-| **1** Age-aware aggregation | Version threading on four message types; delta-form merge with w = n·v·s(age) and the cutoff; cluster fold at rate η; FedProx; budgeted Pass 2; the multiplicative deadline law and priority key; agg:plain/cutoff/fedbuff/asynchfl | `8f23f02d` | 70 new; agg:plain byte-identical to before | Study 5.1 (not run) |
-| **2** Baselines without a channel | 2-OPT; D4 (FedEx with CARP); D3 (Whittle); D5 (FedCS, degraded); `agg:fedex`; multi-mule runtime hardening; Amendments 8 and 9 | `c4175541`, `afa95268` | adversarial review with mutation checks; a 2-mule integration test | The plan's gate is 5.3's channel-free cells at 30 and 60 s, n = 40; not stated as run. Batch 1's 5.3 core flies the same arms on the simulated clock |
-| **3** Mission clock and contact link | `l1/mission_clock.py`, `channel_model.py`, `contact_link.py`; one predicate for every walk; re-plan instead of abort; Amendment 10 (RF link) | `ef1faa10`, `84ad38e5`, `d175afa9`, `6e6f92da` | 1,238 new in 36 files; 2,798 tests match the pre-edit baseline (29 Sep) | Re-baseline of H1, D1–D4 on the new clock at 40 paired seeds, after the pilots; batch 1's 5.3 core flies these arms at 20 trials per cell |
-| **4** Plan clock | `plan/` (types, score, search, member subsets, hover); `s3d_age_cap.py`; `build_ferry_plan`; flight slot fillings F and FX; arms F, FX, FB+, F-cov, F-cap, F-prio | `69b551fc`, `386c2755` | 1,862 new in 15 files; the search equals brute force up to 6 devices | FX end to end at 30 s and 60 s; 5.4 and 5.8 pilots |
-| **5** Flight clock | `pair_features`, `pair_q`, `pair_replay`, `pair_slot`; FerrySim (`experiments/ferrysim/`); E3 (`chen_dqn`, `next_stop`); checkpoint format 2 with refusals | `96947752`, `409fbd99` | 1,310 new in 14 files; 6,133 tests on 2 Oct, five known failures | **Split**: code gate met; campaign gate = headroom, sweep, verdict, stack trials (now run) |
-| **5 addendum** Studies 5.11–5.15 | Planner-time and footprint columns; scale family to N = 96; interference as flags; F+L1; hover switch; non-IID shards and detection metrics; training time and device energy on the clock; `--model-arch` | `d4b940a1` … `8fbb20eb` | in the merge (55 files, +6,459 lines) | Part of the campaign |
-| **6** Campaign | `scripts/exp5/{launch,scoring,repin,fit_time_probe}.py` and `params.toml`; the pilots; batch 1; the RL stages; scoring | `60e5ccfd` … `39b20b84` | code gate 6,375 (6 Oct) and 6,396 (7 Oct, `aedae8b6`) | Batches 2 and 3 pending |
+| **0** Ground truth | Backhaul index and baseline-age fixes; per-mission budget stamp; `holm_bonferroni`, `friedman_test`, `factorial_2x2`, `compare_to_reference`; the trace scorer; `drone_env` vendored | `b8f2e3d3`, `3dc06ac6`, `c4fc2ddc` | 81 new, plus the prototype's 33; suite 944 passing | The plan's gate is a re-run of the L1 cell and the 60 s SOTA cell on fixed code; **the records do not say it was run** (unverified) |
+| **1** Age-aware aggregation | Version threading on four message types; delta-form merge with w = n·v·s(age) and the cutoff; cluster fold at rate η; FedProx; budgeted Pass 2; the multiplicative deadline law and priority key; agg:plain/cutoff/fedbuff/asynchfl | `25062c93` | 70 new; agg:plain byte-identical to before | Study 5.1 (not run) |
+| **2** Baselines without a channel | 2-OPT; D4 (FedEx with CARP); D3 (Whittle); D5 (FedCS, degraded); `agg:fedex`; multi-mule runtime hardening; Amendments 8 and 9 | `edda564d`, `9147211c` | adversarial review with mutation checks; a 2-mule integration test | The plan's gate is 5.3's channel-free cells at 30 and 60 s, n = 40; not stated as run. Batch 1's 5.3 core flies the same arms on the simulated clock |
+| **3** Mission clock and contact link | `l1/mission_clock.py`, `channel_model.py`, `contact_link.py`; one predicate for every walk; re-plan instead of abort; Amendment 10 (RF link) | `7c7a269d`, `9cd1c48e`, `80ea8d19`, `6de4cd2b` | 1,238 new in 36 files; 2,798 tests match the pre-edit baseline (29 Sep) | Re-baseline of H1, D1–D4 on the new clock at 40 paired seeds, after the pilots; batch 1's 5.3 core flies these arms at 20 trials per cell |
+| **4** Plan clock | `plan/` (types, score, search, member subsets, hover); `s3d_age_cap.py`; `build_ferry_plan`; flight slot fillings F and FX; arms F, FX, FB+, F-cov, F-cap, F-prio | `48deb740`, `969cc408` | 1,862 new in 15 files; the search equals brute force up to 6 devices | FX end to end at 30 s and 60 s; 5.4 and 5.8 pilots |
+| **5** Flight clock | `pair_features`, `pair_q`, `pair_replay`, `pair_slot`; FerrySim (`experiments/ferrysim/`); E3 (`chen_dqn`, `next_stop`); checkpoint format 2 with refusals | `9c918188`, `12a9aab4` | 1,310 new in 14 files; 6,133 tests on 2 Oct, five known failures | **Split**: code gate met; campaign gate = headroom, sweep, verdict, stack trials (now run) |
+| **5 addendum** Studies 5.11–5.15 | Planner-time and footprint columns; scale family to N = 96; interference as flags; F+L1; hover switch; non-IID shards and detection metrics; training time and device energy on the clock; `--model-arch` | `66eb58a7` … `524f6e69` | in the merge (55 files, +6,459 lines) | Part of the campaign |
+| **6** Campaign | `scripts/exp5/{launch,scoring,repin,fit_time_probe}.py` and `params.toml`; the pilots; batch 1; the RL stages; scoring | `7d52958d` … `c5b1b88f` | code gate 6,375 (6 Oct) and 6,396 (7 Oct, `62640438`) | Batches 2 and 3 pending |
 
 Checked by me on 7 Oct: `pytest --collect-only` on this checkout collects 6,387 tests and fails to import two files (`test_exp4_analysis.py`, `test_exp4_no_eval_guard.py`, a `numpy.dtype size changed` binary mismatch), which fits the record's 6,396 but does not prove it. The suite was not run.
 
-**Build-plan items that landed elsewhere or differently.** The plan's `experiments/exp5/` and `experiments/analysis/exp5.py` were built as `scripts/exp5/` (launcher and scorer); tables, figures and a provenance table are not built. `oracle/zhai_oracle.py` (O1) landed as `experiments/analysis/o1_oracle.py` (`01fa3888`, 5 Oct), although the build plan's Phase 5 rows still call it deferred. `monolithic_ho.py` (M1) is not built, by design. FerrySim lives in `experiments/ferrysim/`, not `selector/ferry_sim.py`, because `hermes/` may not import `experiments/`.
+**Build-plan items that landed elsewhere or differently.** The plan's `experiments/exp5/` and `experiments/analysis/exp5.py` were built as `scripts/exp5/` (launcher and scorer); tables, figures and a provenance table are not built. `oracle/zhai_oracle.py` (O1) landed as `experiments/analysis/o1_oracle.py` (`1b8da50d`, 5 Oct), although the build plan's Phase 5 rows still call it deferred. `monolithic_ho.py` (M1) is not built, by design. FerrySim lives in `experiments/ferrysim/`, not `selector/ferry_sim.py`, because `hermes/` may not import `experiments/`.
 
 ### 3.1 Scheduler Freeze amendments
 
@@ -122,13 +122,13 @@ Checked by me on 7 Oct: `pytest --collect-only` on this checkout collects 6,387 
 | 2 | 13 Aug | S3c, mission-level widening of every window; off by default | `d0dca4b4`; §5b |
 | 3 | 13 Aug | Raw loss and example counts carried on the device-to-mule path for the Oort baseline | `7a9a38ce`; §5c |
 | 4 | 17 Aug | Whole-scheduler baselines D1/D2 own admission and order (the ordering-only arms were vacuous) | `2e9fdc9e`; §5d |
-| 5 | 27 Sep | Backhaul schedule indexed by mission; D1/D2 age from the last CLEAN | `dc90f84f`; §5e |
-| 6 | 28 Sep | Every mission's budget runs from its own start | `dc90f84f`; §5f |
-| 7 | 28 Sep | The FeRRy build opens the frozen surface behind switches; principles 1, 5 and 12 restated | `cf403221`; §5g |
-| 8 | 28 Sep | Baselines are budget-checked in flight, not held to our per-device deadline; a plan's diagnostics are its own | `c4175541`; §5h |
-| 9 | 28 Sep | A mule failure fails the trial; bootstrap and reconnects survive | `c4175541`; §5i |
-| 10 | 29 Sep | A silent device keeps its RF link (finding P-02) | `ef1faa10`; §5j |
-| 11 | 5 Oct | A trial that fails before its shutdown shuts its processes down | `50065698`; §5m |
+| 5 | 27 Sep | Backhaul schedule indexed by mission; D1/D2 age from the last CLEAN | `3dc06ac6`; §5e |
+| 6 | 28 Sep | Every mission's budget runs from its own start | `3dc06ac6`; §5f |
+| 7 | 28 Sep | The FeRRy build opens the frozen surface behind switches; principles 1, 5 and 12 restated | `9cc2c369`; §5g |
+| 8 | 28 Sep | Baselines are budget-checked in flight, not held to our per-device deadline; a plan's diagnostics are its own | `edda564d`; §5h |
+| 9 | 28 Sep | A mule failure fails the trial; bootstrap and reconnects survive | `edda564d`; §5i |
+| 10 | 29 Sep | A silent device keeps its RF link (finding P-02) | `7c7a269d`; §5j |
+| 11 | 5 Oct | A trial that fails before its shutdown shuts its processes down | `be555cf8`; §5m |
 
 Phases 4 and 5 and unit U11 needed no amendment (§5k, §5l, §5n): every change sits behind a switch whose default keeps the pinned pipeline. The code behind every recorded Exp 4 result is the tag `exp4-recorded`.
 
@@ -141,7 +141,7 @@ The launcher stages are in [the reproducibility guide](../Experiment_5_Reproduci
 | Study | Question | Batch | Status on 7 Oct | Headline where scored |
 |---|---|---|---|---|
 | **5.1** Aggregation with age | Does age-weighted merging with the deadline as cutoff beat plain and async rules? | 2 | **Ready**; one open decision (bound-derived weights); `agg:seq` decided out | none |
-| **5.2** Deadline form | Does one per-device deadline beat FedCS's and Oort's? | 2 | **Ready** (F-round, F-pref built 5 Oct, `5da9a2d1`) | none |
+| **5.2** Deadline form | Does one per-device deadline beat FedCS's and Oort's? | 2 | **Ready** (F-round, F-pref built 5 Oct, `c0b710aa`) | none |
 | **5.3** Whole-scheduler comparison | Where does F stand against D1–D5, H1, E3? | core in 1; rest in 2 | **Core done and scored** (640 trials); D5, H0, E3, relaxed budget ready | section 5.1 |
 | **5.4** Reach | Is choosing b̄ at plan time worth it? | 2 | **Ready**; O1 oracle and sweep knobs built 5 Oct | none |
 | **5.5** γ sweep | Does the in-flight choice need a horizon? | sweep done; stack check in 2 | **Verdict: flat** (6 Oct) | section 5.3 |
@@ -152,7 +152,7 @@ The launcher stages are in [the reproducibility guide](../Experiment_5_Reproduci
 | **5.10** Real radios | AERPAW validation | — | **Blocked**: needs testbed access | none |
 | **5.11** Decision cost and scaling | What do F's own decisions cost as N grows; does it scale with mules? | (a), (b) in 1; (c) in 3 | (a) done twice, (b) done and scored; (c) waits for its pilot | section 5.1, 5.2 |
 | **5.12** Compute heterogeneity | Does F hold up with stragglers and larger models? | 3 | **Blocked** on `pilot3` (p512 sets the training-time levels); built 3 Oct | none |
-| **5.13** Data heterogeneity | Do age and coverage matter more under non-IID data? | 2 | **Ready**; built 3 Oct (`7a54c28e`) | none |
+| **5.13** Data heterogeneity | Do age and coverage matter more under non-IID data? | 2 | **Ready**; built 3 Oct (`6ec3826a`) | none |
 | **5.14** Component ablations | What does each mechanism contribute? | 1 | **Done and scored** (720 trials) | section 5.1 |
 | **5.15** Radio layer | How sensitive is F to the channel; does an adaptive backhaul pay? | 3 | **Blocked** on `pilot3` (harsher amplitude, lossier exponent) | none |
 
@@ -164,7 +164,7 @@ The launcher stages are in [the reproducibility guide](../Experiment_5_Reproduci
 
 ### 5.1 The stack (batch 1 and `sens`, 6 Oct)
 
-Time to τ = 0.71, simulated seconds, lower is better, 20 paired trials per cell; Holm family = the study. Source: `results/exp5/scores/b1/{s53,s59,s511b,s514}.md`, commit `53bdfc5f`.
+Time to τ = 0.71, simulated seconds, lower is better, 20 paired trials per cell; Holm family = the study. Source: `results/exp5/scores/b1/{s53,s59,s511b,s514}.md`, commit `c7846991`.
 
 | Cell | F | FX | H1 | D1 | D2 | D3 | D4 | Which differences are claims |
 |---|---|---|---|---|---|---|---|---|
@@ -184,11 +184,11 @@ What this supports and what it does not:
 
 **5.14, component ablations (network AoU, N = 6, 40 trials, 720 in all).** At the knee, whole stops, forced local search, S\* + 1, cap off and hover off are all identical to F with cap S\* (0.715), and the weighted coverage rank differs by 0.002. At the stress budget whole stops differs most (0.897 against 0.810, not a claim; Holm p = 0.078) and the weighted rank by 0.005 (0.805). **Of the switches only F+L1 against F on the seconds backhaul is a claim**: 0.689 against 0.883 at the knee and 0.786 against 0.970 at stress (p = 1.7e-4 both). At N = 6, most mechanisms are inert; they are reported as inert, not dropped.
 
-**5.11 (a), decision cost.** The batch-1 run was side by side with all other jobs and possibly throttled; the rerun alone on 7 Oct (`39b20b84`) made the same plans episode for episode and ran 1.5 to 2.5 times faster. Mean plan time in auto mode: N = 6 0.037 s, N = 24 0.142 s, N = 48 0.409 s, N = 96 1.531 s (p95 1.996 s). Report from the rerun.
+**5.11 (a), decision cost.** The batch-1 run was side by side with all other jobs and possibly throttled; the rerun alone on 7 Oct (`c5b1b88f`) made the same plans episode for episode and ran 1.5 to 2.5 times faster. Mean plan time in auto mode: N = 6 0.037 s, N = 24 0.142 s, N = 48 0.409 s, N = 96 1.531 s (p95 1.996 s). Report from the rerun.
 
 ### 5.2 The learned score's calibration (6 Oct)
 
-Source: [the calibration findings](../Experiment_5_RL_Calibration_Findings.md), `results/exp5/rl/{headroom,calibration}/`, commit `df4797c5` (the stages ran from `705235f0` and `53bdfc5f`, per their launcher manifests).
+Source: [the calibration findings](../Experiment_5_RL_Calibration_Findings.md), `results/exp5/rl/{headroom,calibration}/`, commit `78070e38` (the stages ran from `cb292ae5` and `c7846991`, per their launcher manifests).
 
 | | Result |
 |---|---|
@@ -202,7 +202,7 @@ The findings document proposes a one-revision screen on the clean cells (more ex
 
 ### 5.3 Study 5.5's sweep and verdict (6 Oct, 23:10): flat, FX stays
 
-Source: `results/exp5/rl/s55/verdict.json`, commit `c9a70b93`. Sixty trainings (γ ∈ {0, 0.25, 0.5, 0.75, 0.9, 0.99} × 10 seeds, family `jittery56`, default learner), 1,000 held-out episodes per cell. The headline means below are over the two N = 12 cells (`jit-n12-90`, `jit-n12-180`); the N = 6 cells are flown as the control and appear in the file's `per_cell` block.
+Source: `results/exp5/rl/s55/verdict.json`, commit `93eefc72`. Sixty trainings (γ ∈ {0, 0.25, 0.5, 0.75, 0.9, 0.99} × 10 seeds, family `jittery56`, default learner), 1,000 held-out episodes per cell. The headline means below are over the two N = 12 cells (`jit-n12-90`, `jit-n12-180`); the N = 6 cells are flown as the control and appear in the file's `per_cell` block.
 
 | γ | 0 | 0.25 | 0.5 | 0.75 | 0.9 | 0.99 |
 |---|---|---|---|---|---|---|
@@ -232,22 +232,22 @@ Source: `results/exp5/rl/s55/verdict.json`, commit `c9a70b93`. Sixty trainings (
 |---|---|---|---|---|
 | 1 | A contaminated dead-zone sweep (22 rows with no model; unpaired effect size) showed a layer-1 effect that a clean re-run did not | 13 Aug, `7549c80d` | A reported positive effect retracted; no end-to-end benefit claimed for L1 | Rebuttal draft, "LAYER-1 RUN" |
 | 2 | L2 defects: the deadline was a sort key only (nothing compared it to a clock), and the selector's init was unseeded | 13 Aug, `e14ad268` | S3b added as a hard gate, opt-in | `s3b_feasibility.py` header; Freeze |
-| 3 | **Backhaul loss schedule read only at mission 1** (`UpBundle` has no `mission_round`) | found 27 Sep, fixed `dc90f84f` | Every `--l1-channel` cell compared mission-1 bands held for the whole trial. Round closure at k = 1 re-scores from 0.831 to 0.675 (H2) and from 0.838 to 0.813 (H3). The L1 confirmation "measured that difference, not per-mission adaptation" | Freeze Amendment 5 |
+| 3 | **Backhaul loss schedule read only at mission 1** (`UpBundle` has no `mission_round`) | found 27 Sep, fixed `3dc06ac6` | Every `--l1-channel` cell compared mission-1 bands held for the whole trial. Round closure at k = 1 re-scores from 0.831 to 0.675 (H2) and from 0.838 to 0.813 (H3). The L1 confirmation "measured that difference, not per-mission adaptation" | Freeze Amendment 5 |
 | 4 | **Any non-CLEAN outcome reset a D1/D2 device's age** | found 27 Sep, corrected 28 Sep (first said "rarely") | In the 60 s traces only 34 of 608 scheduled D1 devices came back CLEAN, so D1's route and admission change in most missions of every realism cell | Amendment 5 |
-| 5 | **Stale budget stamp**: stamped only on a DOWN, so an empty mission planned against the old stamp | `dc90f84f`, Amendment 6 | 72–81 % of missions were empty at 60 s; in one D1 trial the budget at planning fell from 60 s to about 39 s by mission 4. Every budgeted recorded cell is affected | Amendment 6 |
-| 6 | The in-flight re-check held D1/D2 to our per-device deadline | 28 Sep, `c4175541` | A baseline's first choice could be refused by our gate | Amendment 8 |
-| 7 | RF sockets dropped a device silent for 30 s and its loop then spun (353,202 calls in 0.2 s) | 29 Sep, `ef1faa10` | None expected on recorded runs (longest silence in kept traces 23.3 s) | Amendment 10 |
+| 5 | **Stale budget stamp**: stamped only on a DOWN, so an empty mission planned against the old stamp | `3dc06ac6`, Amendment 6 | 72–81 % of missions were empty at 60 s; in one D1 trial the budget at planning fell from 60 s to about 39 s by mission 4. Every budgeted recorded cell is affected | Amendment 6 |
+| 6 | The in-flight re-check held D1/D2 to our per-device deadline | 28 Sep, `edda564d` | A baseline's first choice could be refused by our gate | Amendment 8 |
+| 7 | RF sockets dropped a device silent for 30 s and its loop then spun (353,202 calls in 0.2 s) | 29 Sep, `7c7a269d` | None expected on recorded runs (longest silence in kept traces 23.3 s) | Amendment 10 |
 | 8 | **`drone_env` evaluates on its training instance**: seeds ignored by default, best of about 30 evaluations on one episode | found 28 Sep, **left as found** | SEC'26 Table VI's 76.40 is a best-of-about-30 score on one instance | `experiments/sim/drone_env/README.md` |
 | 9 | S2A/S2B never run; the live utility gate is a no-op | audit 21 Jul; Freeze D3 13 Aug | Documented, not fixed | Audit §C |
 | 10 | V alone let the empty plan beat a device that fits | 30 Sep (R11) | The plan key ranks served share before V | Build plan, Phase 4 |
 | 11 | A capped far device could be starved for good (PLAN-1, E2E2-01) | 30 Sep, the user's decision | Hover stops added | Build plan, Phase 4 |
 | 12 | Phase 5 final check: five confirmed findings (5.6's cells not built; FQ-dwell and FQ-cov untrainable on their own plans; no tie between a checkpoint and its tag; device-serve columns are harness artifacts; one false rationale) | 2 Oct | Each fixed or recorded (Freeze §5l, R21–R25) | Build plan, Phase 5 |
-| 13 | A driver leak: a trial failing at startup left processes running | R14; accepted 5 Oct, `50065698` | None changed a result | Amendment 11 |
-| 14 | **FerrySim's cells flew placeholder budgets** (N = 6: 45 / 90 s; N = 12: 120 / 180 s) | 5 Oct, `77880dc2` | Re-pinned to the stack's measured (75, 150) and (90, 180) s; two tests that held a budget as a literal were fixed. At the measured N = 6 budgets the control mostly gives the slot the dock alone | Re-pin commit message |
-| 15 | **p512's not-ready band was out of reach**: every device's first fit starts at the first takeoff, so mission 1 adds about 20 points | 6 Oct, `4e6f06fe` | The band is read after each mule's first mission | Commit message |
-| 16 | Smoke trainings stopped short of the learner's warm-up | 5 Oct, `b54185a0` | Smoke-only | Readiness |
-| 17 | **Windows power throttling** held jobs on efficiency cores (about 28 % CPU on the second host) | 6 Oct; opt-out `aedae8b6`; rerun `39b20b84` | The first hour of the sweep's trainings ran throttled (outcomes seeded and simulated, so unaffected); wall-clock measurements taken while throttled are suspect, and batch 1 may have been throttled (Readiness); 5.11 (a) rerun | Commit messages |
-| 18 | `agg:asynchfl` used an exponential, which Async-HFL does not | 7 Oct, `aedae8b6` | No recorded run used it; switched to the polynomial (a + 1)^−q | Commit message |
+| 13 | A driver leak: a trial failing at startup left processes running | R14; accepted 5 Oct, `be555cf8` | None changed a result | Amendment 11 |
+| 14 | **FerrySim's cells flew placeholder budgets** (N = 6: 45 / 90 s; N = 12: 120 / 180 s) | 5 Oct, `4d3baadb` | Re-pinned to the stack's measured (75, 150) and (90, 180) s; two tests that held a budget as a literal were fixed. At the measured N = 6 budgets the control mostly gives the slot the dock alone | Re-pin commit message |
+| 15 | **p512's not-ready band was out of reach**: every device's first fit starts at the first takeoff, so mission 1 adds about 20 points | 6 Oct, `e27f475d` | The band is read after each mule's first mission | Commit message |
+| 16 | Smoke trainings stopped short of the learner's warm-up | 5 Oct, `fd81a60b` | Smoke-only | Readiness |
+| 17 | **Windows power throttling** held jobs on efficiency cores (about 28 % CPU on the second host) | 6 Oct; opt-out `62640438`; rerun `c5b1b88f` | The first hour of the sweep's trainings ran throttled (outcomes seeded and simulated, so unaffected); wall-clock measurements taken while throttled are suspect, and batch 1 may have been throttled (Readiness); 5.11 (a) rerun | Commit messages |
+| 18 | `agg:asynchfl` used an exponential, which Async-HFL does not | 7 Oct, `62640438` | No recorded run used it; switched to the polynomial (a + 1)^−q | Commit message |
 | 19 | The Matrix Results header said 560 trials; the runs are 640 (A1 40 + A2 480 + C1 80 + C2 40) | uncommitted edit in the working tree | Count corrected | `git diff` |
 
 ---
@@ -265,8 +265,8 @@ The records name "the user" for decisions and "the orchestrator" for the resolut
 | 1 Oct | Phase 5: the score chooses within the plan, FX's pair when nothing fits; FerrySim is the real system in one process; one score per channel regime; the reward is the merge weight; Study 5.5's rule fixed in advance; E3 is a numpy port; **H2 and H3 leave Exp 5**; checkpoints committed only with consent and after a LICENSE | Build plan, Phase 5 |
 | 2 Oct | The addendum and its split: pilots and cores before 8 Oct, the rest in the revision window | Build plan, addendum |
 | 5 Oct | The whole campaign flies the jittery contact channel; τ from the knee pilot; F-family law multiplicative; merge period T = T_nom; N = 6's knee accepted at the grid's edge; second host; E3 at γ = 0.99 and Chen's settings; FedProx ρ = 0.01; 5.6 at 40 trials; `agg:seq` out; Amendment 11; U11 approved (option A) | `params.toml`; Freeze §5m, §5n |
-| 6 Oct | p512's band read after the first mission; **option A**, the 5.5 sweep as pre-registered (13:58); the verdict applied by rule | `4e6f06fe`; findings; `6ab046fb` |
-| 7 Oct | FX-dwell and FX-cov built; `agg:asynchfl` polynomial; 5.11 (a) reported from the rerun | `aedae8b6`, `39b20b84` |
+| 6 Oct | p512's band read after the first mission; **option A**, the 5.5 sweep as pre-registered (13:58); the verdict applied by rule | `e27f475d`; findings; `5585a490` |
+| 7 Oct | FX-dwell and FX-cov built; `agg:asynchfl` polynomial; 5.11 (a) reported from the rerun | `62640438`, `c5b1b88f` |
 
 ---
 
@@ -298,15 +298,15 @@ These do not change a result; each is a place where two records disagree or one 
 2. **Reproducibility Guide §11 is stale.** It is headed "As of 6 Oct 2026" and lists "Next: batch 1, and the RL campaign" and "p512's band, to decide", though batch 1 ran 00:36–06:40 on 6 Oct and the p512 band was decided the same day.
 3. **Batch sizes disagree.** The guide's stage table gives batch 2 as "about 9,100–10,100" trials and 35 h, and batch 3 as 1,060 trials and 1.5 h; Readiness gives 9,220 trials and roughly 50 h, and about 1,460 trials and roughly 3 h.
 4. **The calibration findings describe the family means as taken over "the four jittery cells".** The verdict files list two cells (`jit-n12-90`, `jit-n12-180`, plus `cln-n12-90`, `cln-n12-180` for the clean family), and FX's −0.0786 reproduces as the mean of those two cells' `per_cell` values; the N = 6 cells are in the file but outside the headline mean.
-5. **The build plan's Phase 5 rows call O1 deferred** while `01fa3888` built it on 5 Oct; its Study 5.5 and 5.6 rows still say "needs the training campaign".
+5. **The build plan's Phase 5 rows call O1 deferred** while `1b8da50d` built it on 5 Oct; its Study 5.5 and 5.6 rows still say "needs the training campaign".
 6. **Phase 4's date.** Docs date it 30 Sep (Freeze §5k, build plan); the commits are dated 1 Oct.
-7. **An open item already done.** HERMES_Joint_RL_Methods lists Chen et al. 2023 as still to add to the Related Work Notes; it was added on 6 Oct (`5999e21f`). Bayerlein 2021 is still absent.
+7. **An open item already done.** HERMES_Joint_RL_Methods lists Chen et al. 2023 as still to add to the Related Work Notes; it was added on 6 Oct (`5b9a7aec`). Bayerlein 2021 is still absent.
 8. **Two same-day verdicts on layer 1.** The retraction of 13 Aug (no end-to-end L1 effect) and Matrix Results' "L1 CONFIRMED" (also 13 Aug, n = 40, AUC +0.046) are at different operating points and are not reconciled in either document; Amendment 5 then says the matrix's L1 cells are re-run before they are cited.
 
 ---
 
 ## 10. Sources
 
-Git: `git log` of the main branch to `39b20b84` (1,215 commits; 81 since 17 Sep). Records: [Experiment_5_Readiness.md](../Experiment_5_Readiness.md), [Experiment_5_RL_Calibration_Findings.md](../Experiment_5_RL_Calibration_Findings.md), [Experiment_5_Reproducibility_Guide.md](../Experiment_5_Reproducibility_Guide.md), [FeRRy_Build_Plan.html](../FeRRy_Build_Plan.html), [HERMES_Scheduler_Freeze.md](../HERMES_Scheduler_Freeze.md), [HERMES_Matrix_Results.md](../HERMES_Matrix_Results.md), [SEC26_Code_Audit.md](../SEC26_Code_Audit.md), [SEC26_Rebuttal_Draft.md](../SEC26_Rebuttal_Draft.md), [EX4_Development_Record.md](../Experiment%20documents/EX4_Development_Record.md), [HERMES_Paper_Revision_Plan.md](../Paper%20Revision/HERMES_Paper_Revision_Plan.md), [the decision memo](../architecture%20review/rl-decision-memo/HERMES_Layer_Redefinition_and_RL_Decision.md). Result files: `results/exp5/scores/{b1,sens}/`, `results/exp5/rl/{headroom,calibration,s55,e3}/`, `scripts/exp5/params.toml`.
+Git: `git log` of the main branch to `c5b1b88f` (1,215 commits; 81 since 17 Sep). Records: [Experiment_5_Readiness.md](../Experiment_5_Readiness.md), [Experiment_5_RL_Calibration_Findings.md](../Experiment_5_RL_Calibration_Findings.md), [Experiment_5_Reproducibility_Guide.md](../Experiment_5_Reproducibility_Guide.md), [FeRRy_Build_Plan.html](../FeRRy_Build_Plan.html), [HERMES_Scheduler_Freeze.md](../HERMES_Scheduler_Freeze.md), [HERMES_Matrix_Results.md](../HERMES_Matrix_Results.md), [SEC26_Code_Audit.md](../SEC26_Code_Audit.md), [SEC26_Rebuttal_Draft.md](../SEC26_Rebuttal_Draft.md), [EX4_Development_Record.md](../Experiment%20documents/EX4_Development_Record.md), [HERMES_Paper_Revision_Plan.md](../Paper%20Revision/HERMES_Paper_Revision_Plan.md), [the decision memo](../architecture%20review/rl-decision-memo/HERMES_Layer_Redefinition_and_RL_Decision.md). Result files: `results/exp5/scores/{b1,sens}/`, `results/exp5/rl/{headroom,calibration,s55,e3}/`, `scripts/exp5/params.toml`.
 
 *Numbers are copied from those records and files as of 7 Oct 2026; none of the experiments was re-run for this document. Statements marked unverified rest on a record alone.*

@@ -283,7 +283,7 @@ Rows: joint optimisations. Columns: layers. Each cell says what that layer does 
 - [ ] **The one-revision screen** (option B in the calibration findings) — only if reviewers press on "the learner copied FX". It must run on the clean control cells, not the family the sweep flies.
 - [ ] **A plan-time (b) test** — γ swept across missions — is untested; the decision memo's rule says do not build a learned planner without it.
 - [ ] **Bound-derived merge weights (J4)** — a derivation, a sensitivity check on the hand-set constants, or drop it; decided before batch 2's 5.1 and 5.7.
-- [ ] **Citations** — Bayerlein et al. 2021 into `HERMES_Related_Work_Notes.md` §3 and §7, with a full-text verification mark. (Chen 2023 was added on 6 Oct, commit `5999e21f`.)
+- [ ] **Citations** — Bayerlein et al. 2021 into `HERMES_Related_Work_Notes.md` §3 and §7, with a full-text verification mark. (Chen 2023 was added on 6 Oct, commit `5b9a7aec`.)
 - [ ] **`drone_env` licence** — ask the author or remove the vendored copy.
 
 ---

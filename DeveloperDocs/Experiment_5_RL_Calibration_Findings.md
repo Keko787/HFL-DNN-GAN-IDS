@@ -18,7 +18,7 @@ Before the sweep, two stages run:
   - `jittery56` is the family the sweep flies.
   - `clean` is the negative control (critic C3).
 
-**Where the outputs are** (from commits `705235f` for the headroom stage and `53bdfc5` for the calibration; their code is the same):
+**Where the outputs are** (from commits `cb292ae` for the headroom stage and `c784699` for the calibration; their code is the same):
 - **Headroom:** `results/exp5/rl/headroom/headroom.json`.
 - **Calibration:** `results/exp5/rl/calibration/{jittery56,clean}_evaluation.json` and `_verdict.json`.
 - **Checkpoints:** `results/exp5/checkpoints/5.5-calibration-{jittery56,clean}/g{0,90}/`. Each manifest holds its validation history.
@@ -196,7 +196,7 @@ Option B's screen stays fixed above. If the sweep reads flat and the copy-FX dia
 
 **The run.**
 - **Trainings:** Study 5.5's 60 trainings (γ ∈ {0, 0.25, 0.5, 0.75, 0.9, 0.99} × 10 seeds on `jittery56`, with the default learner), 13:58–19:53.
-- **Evaluation:** 197 min on 1,000 held-out episodes per cell, from commit `9ffb12b`.
+- **Evaluation:** 197 min on 1,000 held-out episodes per cell, from commit `cbc1b7a`.
 - **Reports:** `results/exp5/rl/s55/{evaluation,verdict}.json`. The verdict is **pre-registered**.
 
 | γ | 0 | 0.25 | 0.5 | 0.75 | 0.9 | 0.99 |

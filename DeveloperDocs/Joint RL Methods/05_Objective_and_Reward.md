@@ -1,6 +1,6 @@
 # One objective — the plan score V, the flight reward, and what "one" means in the code
 
-*7 Oct 2026. A reading document in the Joint RL Methods series: it restates the code and the records and decides nothing. It is the detail behind J4 ("one objective across layers") in [HERMES_Joint_RL_Methods.md](../HERMES_Joint_RL_Methods.md) §4, and it leans on [04_Age_Staleness_Weight.md](04_Age_Staleness_Weight.md) for the merge weight and the ages. Code references are file:line as of commit `39b20b84`; numbers are copied from the named record, and the only things executed for this document are the test runs named in §9. Anything I could not check is marked "unverified".*
+*7 Oct 2026. A reading document in the Joint RL Methods series: it restates the code and the records and decides nothing. It is the detail behind J4 ("one objective across layers") in [HERMES_Joint_RL_Methods.md](../HERMES_Joint_RL_Methods.md) §4, and it leans on [04_Age_Staleness_Weight.md](04_Age_Staleness_Weight.md) for the merge weight and the ages. Code references are file:line as of commit `c5b1b88f`; numbers are copied from the named record, and the only things executed for this document are the test runs named in §9. Anything I could not check is marked "unverified".*
 
 ---
 
@@ -170,7 +170,7 @@ My reading, not a claim in the repo: V and the merge share the *idea* "a device 
 | Cells | N = 12, stress and knee budgets, 40 trials per cell, 1 MB; primary metric **round closure** (`round_close_rate_kmin1`, higher is better) against FX; also time to τ, reached τ, Network AoU |
 | Pre-registered ε | **none** (R28) |
 | **Left with the learned scores** | F·hand (FQ-hand), FQ-dwell and FQ-cov, and the c_t × c_cov reward grid (`[rl.s57]`, `grid_c_t = [0.03, 0.1, 0.3]`, `grid_c_cov = [0.25, 1, 4]`; (0.1, 1) is 5.5's own). The grid is still defined in `reward.grid_specs` but nothing flies it |
-| Built | 7 Oct 2026 (`aedae8b`); 10 tests in `test_exp5_fx_ablations.py` pass (run 7 Oct) |
+| Built | 7 Oct 2026 (`6264043`); 10 tests in `test_exp5_fx_ablations.py` pass (run 7 Oct) |
 | Status | **Not run** (batch 2) |
 
 What this study can and cannot say once it runs. It can say whether turning off the dwell or the coverage term changes round closure at N = 12 with FX in the flight slot, and where D4's travel-only plan stands. It **cannot** say anything about the reward's constants, the derived-versus-hand-set reward, or whether any c_t × c_cov setting would have changed Study 5.5's ranking, because those arms were learned scores. The 5.5 verdict is conditional on the one reward it was trained and judged under.

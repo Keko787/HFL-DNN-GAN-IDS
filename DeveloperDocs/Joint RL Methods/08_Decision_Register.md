@@ -310,6 +310,6 @@ Found while building the register; each was checked against code.
 
 ## 9. Sources
 
-Code as read on 7 Oct 2026 (HEAD `39b20b84`): the modules in each row. Records: [HERMES_Scheduler_Freeze.md](../HERMES_Scheduler_Freeze.md) (§1, §2 D3 and D6, §5e–5n); [FeRRy_Build_Plan.html](../FeRRy_Build_Plan.html) (module map, phases 3–5, studies); [Experiment_5_Readiness.md](../Experiment_5_Readiness.md); [Experiment_5_RL_Calibration_Findings.md](../Experiment_5_RL_Calibration_Findings.md); [SEC26_Code_Audit.md](../SEC26_Code_Audit.md) (§B, §C); `scripts/exp5/params.toml` and `scripts/exp5/launch.py`; module docstrings in `stages/`, `plan/`, `policies/`, `mission/aggregation_rules.py`, `mule/mule_main.py`.
+Code as read on 7 Oct 2026 (HEAD `c5b1b88f`): the modules in each row. Records: [HERMES_Scheduler_Freeze.md](../HERMES_Scheduler_Freeze.md) (§1, §2 D3 and D6, §5e–5n); [FeRRy_Build_Plan.html](../FeRRy_Build_Plan.html) (module map, phases 3–5, studies); [Experiment_5_Readiness.md](../Experiment_5_Readiness.md); [Experiment_5_RL_Calibration_Findings.md](../Experiment_5_RL_Calibration_Findings.md); [SEC26_Code_Audit.md](../SEC26_Code_Audit.md) (§B, §C); `scripts/exp5/params.toml` and `scripts/exp5/launch.py`; module docstrings in `stages/`, `plan/`, `policies/`, `mission/aggregation_rules.py`, `mule/mule_main.py`.
 
 *Numbers are copied from the code defaults and the records as of 7 Oct 2026; nothing was re-run for this document except a repo-wide search for callers.*

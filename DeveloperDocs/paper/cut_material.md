@@ -6,7 +6,7 @@ trim removed, as source for the reproducibility appendix required after
 acceptance. Read it with `methods_audit.md`, whose section C lists the
 implementation details the paper never carried.
 
-## Methodology (full text before the trim, commit `b1e8b07`)
+## Methodology (full text before the trim, commit `77af6a2`)
 
 The condensed section in `methods.tex` keeps every rule and number the
 evaluation depends on. These were cut or shortened:

@@ -10,7 +10,7 @@ significant in the code base and the evaluated configuration.
   simulators.
 - Each review checked its findings against the code. I re-checked the
   high-severity ones myself.
-- The baseline is code at `1f529c8` on `main`.
+- The baseline is code at `99e7008` on `main`.
 - The **evaluated configuration** is `COMMON_FLAGS` and `_runner` in
   `scripts/exp5/launch.py`, with `scripts/exp5/params.toml`.
 

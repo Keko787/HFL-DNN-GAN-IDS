@@ -26,8 +26,8 @@ hold. The status of 2026-08-13 follows it, kept for the record.
 > - **Re-runs owed, in order:** the L1 confirmation cells C1 (H3 vs H2, n = 40, jittery, 120 s) and
 >   C2; the 60 s SOTA cell (H1, D1, D2, n = 40); then each other cell in Amendment 6's list before
 >   it is cited.
-> - **Before any of them runs:** (1) run on commit `c417554` (Amendment 8) or a later one (for the
->   L1 cells, which have no D arm, `dc90f84` with Amendments 5 and 6 is enough),
+> - **Before any of them runs:** (1) run on commit `edda564` (Amendment 8) or a later one (for the
+>   L1 cells, which have no D arm, `3dc06ac` with Amendments 5 and 6 is enough),
 >   and record the commit with the rows; later commits add FeRRy switches whose defaults are pinned
 >   to this behaviour (the code behind the recorded rows is the tag `exp4-recorded`); (2) write to a fresh CSV
 >   path, because the runner skips (cell, arm, trial) keys already in a file and a reused file
@@ -40,7 +40,7 @@ hold. The status of 2026-08-13 follows it, kept for the record.
 >   contact link, seconds-axis backhaul) re-baselines every mule arm for Exp 5, the bill the build
 >   plan accepts in its decision D2; H0 stays on the wall clock (critic A5). New ledger rows are in
 >   §1, the amendments in §1a.
-> - **Phase 3 has landed behind its switches (commit `ef1faa1`; Freeze §5j, 2026-09-29).** Before its re-runs: (1)
+> - **Phase 3 has landed behind its switches (commit `7c7a269`; Freeze §5j, 2026-09-29).** Before its re-runs: (1)
 >   the pilots, which set the ferry session TTL from the measured real-model fit time (at least
 >   2×), T_nom per cell, the deadline time unit (at the default 1.0 the law cannot keep up with
 >   simulated missions; Configuration Reference §17.4), the budget knee re-measured with the ferry model, and the H
@@ -49,13 +49,13 @@ hold. The status of 2026-08-13 follows it, kept for the record.
 >   `train_offline` time with N devices training at once; the knee from an H1 sweep of
 >   `--mission-budget-s` on wide, per N of the gate's grid (narrow and medium knees wait for Study
 >   5.4); and `replan` with `trim`; (2) the commit that lands Phase 3, recorded with the rows. The
->   route-level `--deadline-bounds delivery` lands in commit `d175afa`; at `ef1faa1` that name
->   was the per-stop check, now `delivery_per_stop`, so a row that uses either needs `d175afa`
+>   route-level `--deadline-bounds delivery` lands in commit `80ea8d1`; at `7c7a269` that name
+>   was the per-stop check, now `delivery_per_stop`, so a row that uses either needs `80ea8d1`
 >   or a later commit; (3) fresh CSV paths, since the 13 provenance and 15 simulated columns
 >   change every header; (4) the exit gate
 >   (H1, D1, D2, D3 and D4 re-baselined on the new clock, then the Phase 1–2 studies re-run) only
 >   on the user's go-ahead.
-> - **Phase 4 has landed behind its switches (commit `69b551f`; Freeze §5k, 2026-09-30).** No
+> - **Phase 4 has landed behind its switches (commit `48deb74`; Freeze §5k, 2026-09-30).** No
 >   amendment: at the defaults nothing changes the wall clock or Phase 3's simulated clock, and the
 >   one trace-event field that can appear at the defaults is `pass_1_policy_drops`, on a
 >   simulated-clock D-arm mission that leaves a contact out (reported, never widened); every mule's
@@ -67,9 +67,9 @@ hold. The status of 2026-08-13 follows it, kept for the record.
 >   budget; (3) the commit that lands Phase 4, recorded with the rows; (4) fresh CSV paths, one per
 >   setting of a sweep (κ, S), since no Phase 4 flag is part of a trial's key; (5) a base seed of
 >   the pilots' own; (6) the pilots only on the user's go-ahead. "The full suite passes" now means
->   the same as both test baselines, afa9526 and 6e6f92d (§1), and the Phase 4 tree's full run
+>   the same as both test baselines, 9147211 and 6de4cd2 (§1), and the Phase 4 tree's full run
 >   (4,696 tests, 2026-09-30) is the same as both.
-> - **Phase 5 has landed behind its switches (commit `9694775`; Freeze §5l, 2026-10-02).** No
+> - **Phase 5 has landed behind its switches (commit `9c91818`; Freeze §5l, 2026-10-02).** No
 >   amendment: at the defaults nothing changes the wall clock, Phase 3's simulated clock or Phase 4's
 >   plan arms; no trace event gains a field, and every mule's per-role JSON gains the six checkpoint
 >   keys at null. The trial CSV header is unchanged; the scorer gains seven columns, only with
@@ -81,7 +81,7 @@ hold. The status of 2026-08-13 follows it, kept for the record.
 >   rows; (3) fresh CSV paths, one per setting (each checkpoint, each Study 5.6 period), since no
 >   Phase 5 flag is part of a trial's key; (4) the LICENSE (MIT, as the README names) before any
 >   checkpoint commit. "The full suite passes" now means the same as all three test baselines,
->   afa9526, 6e6f92d and 386c275 (§1). The full run of the Phase 5 tree: 6,133 tests on 2026-10-02: 6,128 passed, and the five known failures failed their recorded way; `make_baseline.py compare` exits 0, the same as all three baselines (new tests: 4,573 against afa9526, 3,215 against 6e6f92d, 1,309 against 386c275, none failing; the flaky real-model smoke test went failed to passed, which is allowed). One later change, the headroom and evaluate commands making their `--out` folder before flying (resolution R28), passed its own and its neighbours' tests; the full re-run after it was stopped.
+>   9147211, 6de4cd2 and 969cc40 (§1). The full run of the Phase 5 tree: 6,133 tests on 2026-10-02: 6,128 passed, and the five known failures failed their recorded way; `make_baseline.py compare` exits 0, the same as all three baselines (new tests: 4,573 against 9147211, 3,215 against 6de4cd2, 1,309 against 969cc40, none failing; the flaky real-model smoke test went failed to passed, which is allowed). One later change, the headroom and evaluate commands making their `--out` folder before flying (resolution R28), passed its own and its neighbours' tests; the full re-run after it was stopped.
 
 **Status on 2026-08-13:** ✅ **GATE OPEN.** All six exit criteria met; the matrix in §5.1 is cleared
 to run.
@@ -178,10 +178,10 @@ The single most useful distinction here. Most open items do **not** need new tri
 | The scorer's pair columns (`traces_scorer.py --pair-columns`, 7 columns) | **No** | Re-analysis of kept traces; without the flag the scorer's row is the Phase 4 one, byte for byte. The agreement and re-order shares count choices, not flights (R21), and no Study 5.5 step reads them |
 | FerrySim campaigns (`python -m experiments.ferrysim`: the trainings, the held-out evaluation, Study 5.5's report) | **No** stack trial, but each needs the user's go-ahead | In-process FerrySim runs, not stack trials; they make the checkpoints the learned arms fly. Only the headroom report has run (decision 10 (i)(a)). The calibration and the controls come first; the pilots then re-pin the N = 12 cells and Study 5.6's lags and periods (Freeze §5l, Run Guide §2.8) |
 | Commit a checkpoint (FeRRy Phase 5, decision 9) | **No** | Each study's final checkpoints are committed with their manifests under `results/exp5/checkpoints/`, each commit only with the user's consent and only after a LICENSE file is added: the README names MIT, there is no LICENSE file yet, and one is added only with the user's approval. Nothing was committed during the build |
-| The full-suite gate: `tests/golden/make_baseline.py compare` against all three baselines | **No** (a test gate, not a trial change) | "The full suite passes" now means the same as `pytest_baseline.txt` (afa9526, before Phase 3: 1,560 tests, 6 failures, signed off 2026-09-29), as `pytest_baseline_6e6f92d.txt` (6e6f92d, before any Phase 4 code change, with UG4's goldens added: 2,918 tests, the 84 of `test_golden_p3_sim.py` among them, and the five deterministic afa9526 failures) and as `pytest_baseline_386c275.txt` (386c275, before any Phase 5 change, with UG5's goldens added: 4,824 tests, the 128 of `test_golden_p4_plan.py` among them; 4,819 passed and the five deterministic afa9526 failures): the same outcome per test and the same signature per known failure, new tests allowed. `compare` checks every baseline by default and exits 0 when the run is the same as each, 1 when it differs from one and 2 when a baseline file is missing; the real-model smoke test may pass or fail its known way (`FLAKY`; `--flaky NODE_ID` adds a test, `--strict` drops the allow-list). Phase 5's code gate (decision 10 (ii)) is met once the full suite is the same as all three |
+| The full-suite gate: `tests/golden/make_baseline.py compare` against all three baselines | **No** (a test gate, not a trial change) | "The full suite passes" now means the same as `pytest_baseline.txt` (9147211, before Phase 3: 1,560 tests, 6 failures, signed off 2026-09-29), as `pytest_baseline_6e6f92d.txt` (6de4cd2, before any Phase 4 code change, with UG4's goldens added: 2,918 tests, the 84 of `test_golden_p3_sim.py` among them, and the five deterministic 9147211 failures) and as `pytest_baseline_386c275.txt` (969cc40, before any Phase 5 change, with UG5's goldens added: 4,824 tests, the 128 of `test_golden_p4_plan.py` among them; 4,819 passed and the five deterministic 9147211 failures): the same outcome per test and the same signature per known failure, new tests allowed. `compare` checks every baseline by default and exits 0 when the run is the same as each, 1 when it differs from one and 2 when a baseline file is missing; the real-model smoke test may pass or fail its known way (`FLAKY`; `--flaky NODE_ID` adds a test, `--strict` drops the allow-list). Phase 5's code gate (decision 10 (ii)) is met once the full suite is the same as all three |
 | — | — | — |
 | P-02 transport fix (Freeze Amendment 10) | **No** for any recorded run | It changes legacy behaviour only where a device is silent for more than 30 s of wall time (a quorum wait with several mules, a long fit, a slow startup), where the cluster's dock send on Windows blocks for more than 60 ms (the dock link's bound, meant as 60 s), or where a device's link drops for another reason (the device now re-dials and re-registers instead of spinning). None is expected in the recorded runs: the longest silence in the 600 kept traces is 23.3 s, and K = 2 and real-model trials before and after it are identical. Every multi-mule run must use the fixed code |
-| Land a FeRRy switch at its legacy default (Amendment 7) | **No** | Legacy behaviour unchanged; each switch lands with a test that pins its default to the frozen pipeline. Phase 3's are also pinned by the afa9526 golden fixtures (`tests/golden/`, 144 tests), Phase 4's by those and by oracles of Phase 3's simulated clock captured at 6e6f92d (`p3_sim.json`; 84 tests), and Phase 5's by those and by UG5's oracles of Phase 4's plan arms captured at 386c275 (`p4_plan.json`, flight-slot calls included; the goldens are now 356 tests) |
+| Land a FeRRy switch at its legacy default (Amendment 7) | **No** | Legacy behaviour unchanged; each switch lands with a test that pins its default to the frozen pipeline. Phase 3's are also pinned by the 9147211 golden fixtures (`tests/golden/`, 144 tests), Phase 4's by those and by oracles of Phase 3's simulated clock captured at 6de4cd2 (`p3_sim.json`; 84 tests), and Phase 5's by those and by UG5's oracles of Phase 4's plan arms captured at 969cc40 (`p4_plan.json`, flight-slot calls included; the goldens are now 356 tests) |
 | Phase 3's new CSV columns (13 provenance, 15 simulated) | **No**, but start a new CSV | Additive, but they change every header, so the runner refuses to append to an older file. The 15 simulated columns are blank on the wall clock. The provenance columns are blank at the driver's defaults, but `realism`, `l1_channel` and `input_dim` are filled whenever set, on either clock (a wall-clock re-run of a recorded real-model `--realism` cell gets `realism` 1 and `input_dim` 21), as are a deadline time scale other than 1.0, an `initial_window_s` and a session TTL other than 3 s |
 | Re-score retained traces with `traces_scorer.py` | **No** | Re-analysis of kept JSONL; possible only where `--keep-event-traces` was on |
 | `ε_prop` calibration | **No** | Energy is a post-hoc function of recorded columns |
@@ -241,7 +241,7 @@ defect fixes, so their default *is* the corrected behaviour, and they change rec
 
 The caveat above now applies to the numbers as well as the files: `main` does not reproduce the
 recorded budgeted, `--l1-channel` or D1/D2 rows. Re-derive a recorded number from the tag
-`exp4-recorded` (commit `229a093`, code as of `d0e80d4`).
+`exp4-recorded` (commit `605c3ae`, code as of `d0e80d4`).
 
 ---
 

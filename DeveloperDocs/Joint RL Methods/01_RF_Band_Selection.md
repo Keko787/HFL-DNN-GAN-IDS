@@ -382,8 +382,8 @@ N = 6, one mule, time to τ = 0.71 (lower is better), 20 paired seeds, Holm acro
 
 ## 11. Discrepancies noted while writing (docs against code or records)
 
-1. **`FeRRy_Build_Plan.html`, 5.4 caveats:** "The sweep knobs (unit U10) are not built." They are: `narrow_range_ratio` (`contact_link.py:463`), `--far-share` (`driver.py:827`), and the launcher settings (`launch.py:973-989`); commit `20d14d65`. `HERMES_Configuration_Reference.md` §20.10 is current.
-2. **`FeRRy_Build_Plan.html`, 5.15:** lists "Interference amplitude and noise as flags" and the F+L1 arm under "To build". Both exist (`--interference-amp-db`, `--interference-sigma-db`; `F+L1` in `driver.ADDENDUM_ARMS`, commit `fa6131a7`).
+1. **`FeRRy_Build_Plan.html`, 5.4 caveats:** "The sweep knobs (unit U10) are not built." They are: `narrow_range_ratio` (`contact_link.py:463`), `--far-share` (`driver.py:827`), and the launcher settings (`launch.py:973-989`); commit `c78759ac`. `HERMES_Configuration_Reference.md` §20.10 is current.
+2. **`FeRRy_Build_Plan.html`, 5.15:** lists "Interference amplitude and noise as flags" and the F+L1 arm under "To build". Both exist (`--interference-amp-db`, `--interference-sigma-db`; `F+L1` in `driver.ADDENDUM_ARMS`, commit `c73b65e9`).
 3. **`HERMES_Joint_RL_Methods.md` §1.1** says wide "carries up to 75.4 Mb/s" and narrow "up to 4.39 Mb/s". Those are CQI-15 peak rates that no class reaches at h = 25 m (`contact_link.py:178`: "no class reaches CQI 15"); the realised ceilings are 20.0 and 3.6 Mb/s at a stop directly below.
 4. **`HERMES_Joint_RL_Methods.md` §1.4:** "each a claim (Holm p ≤ 0.008)" for F against H1, D1–D4 at the knee. The scorer gives D4's Holm p as 0.00829 (`s53.md`), so the bound is "≤ 0.0083".
 5. **`HERMES_Matrix_Results.md`** reports the L1 confirmation as "CONFIRMED" with no in-file note that Amendment 5 changed what C1 measured; the caveat lives in `HERMES_PreRerun_Checklist.md` and the Freeze §5e. The doc is modified in the working tree (header count only).
