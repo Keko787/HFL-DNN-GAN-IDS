@@ -11,5 +11,8 @@ results/exp5/.launcher.lock
 # archives them; archives/SHA256SUMS and the listings are committed, the archives
 # go to a release.
 results/exp5/**/*_traces/
+# ... and in the runs flown under an out-root of their own (e.g. results/exp5_relaxed1800)
+results/exp5_*/**/*_traces/
+results/exp5_*/.launcher.lock
 results/exp5/archives/*.tar.gz
 results/exp5/archives/*.part
