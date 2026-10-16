@@ -2,7 +2,7 @@
 
 What is left before the Exp 5 sweep can run, stage by stage: what is ready, what is not, and why.
 
-*As of 7 Oct 2026, 07:00: batch 2 is ready (its builds in `6264043`), and 5.11 (a) was rerun alone, unthrottled (the `batch1` row). As of 6 Oct 2026, about 10:00: batch 1 and `sens` done and scored (`6f6f2bd`, `c784699`), and the RL campaign paused after its calibration for a decision ([findings](Experiment_5_RL_Calibration_Findings.md)). Before that: the S\* pilot (commit `0aa4f41`), the re-pin (`4d3baad`), the smoke run of every stage (its fixes `fd81a60`) and the code gate; the `"auto"` machine limits are `d7c31ee`. The live view is `exp5 status` (or `exp5 check`); the full procedure is the [reproducibility guide](Experiment_5_Reproducibility_Guide.md).*
+*As of 16 Oct 2026: after the deadline, 5.3's relaxed budget (300 s) and a 1800 s check were flown at N = 6, one mule, and the energy cost and budget trade-off were analysed ([findings](Experiment_5_Energy_and_Budget_Findings.md)). As of 7 Oct 2026, 07:00: batch 2 is ready (its builds in `6264043`), and 5.11 (a) was rerun alone, unthrottled (the `batch1` row). As of 6 Oct 2026, about 10:00: batch 1 and `sens` done and scored (`6f6f2bd`, `c784699`), and the RL campaign paused after its calibration for a decision ([findings](Experiment_5_RL_Calibration_Findings.md)). Before that: the S\* pilot (commit `0aa4f41`), the re-pin (`4d3baad`), the smoke run of every stage (its fixes `fd81a60`) and the code gate; the `"auto"` machine limits are `d7c31ee`. The live view is `exp5 status` (or `exp5 check`); the full procedure is the [reproducibility guide](Experiment_5_Reproducibility_Guide.md).*
 
 ---
 
