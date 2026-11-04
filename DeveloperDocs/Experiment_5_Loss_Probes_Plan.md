@@ -1,6 +1,6 @@
 # Experiment 5 — loss probes: where FeRRy could lose
 
-*Draft, 29 Oct 2026. **Status, 4 Nov 2026:** P1, P4 and P9 have run (scorer `72b8e59c`, results `3cffc966`; reports in `results/exp5/scores/probes/`). The other probes have not. None of it is in Exp 5's pre-registered analysis plan: every probe is exploratory, added after the CARE room's sweep (21 Oct) and Exp 5's own near-misses. This page is the probes' analysis plan; change it before a probe flies, never after. Status of the pre-registered stages: [Experiment_5_Readiness.md](Experiment_5_Readiness.md).*
+*Draft, 29 Oct 2026. **Status, 4 Nov 2026:** P1, P4 and P9 have run (scorer `72b8e59c`, results `3cffc966`), and so has P2 (results `35e75e41`); reports in `results/exp5/scores/probes/`. The other probes have not. None of it is in Exp 5's pre-registered analysis plan: every probe is exploratory, added after the CARE room's sweep (21 Oct) and Exp 5's own near-misses. This page is the probes' analysis plan; change it before a probe flies, never after. Status of the pre-registered stages: [Experiment_5_Readiness.md](Experiment_5_Readiness.md).*
 
 ---
 

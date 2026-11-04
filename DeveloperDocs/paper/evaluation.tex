@@ -6,7 +6,8 @@
 % exp5_figures.tex (generated from the scores). Numbers in the prose come from
 % results/exp5/scores (the FQ-vs-E3 paragraph from
 % results/exp5/scores/b2/exploratory_fq_vs_e3.md, the exploratory cells from
-% results/exp5/scores/fills/fills.md) and the FerrySim reports.
+% results/exp5/scores/fills/fills.md, the budgets below stress from
+% results/exp5/scores/probes/P2.md) and the FerrySim reports.
 %%%%% BEGIN SECTION %%%%%
 \section{Evaluation Results and Discussion}
 \label{sec:results}
@@ -19,14 +20,20 @@ seven baselines needs 232--263\,s (Table~\ref{tab:exp5_headline}): F is
 23--32\% faster, every comparison is a claim, and F gets there first in
 73--85\% of paired seeds. FedEx with its own merge (D4$_{\text{FedEx}}$) is
 slower still (296\,s) and misses $\tau$ in 3 of 40 trials. FX (168\,s) does not
-differ significantly from F (11\,s faster, 95\% CI [3, 20], Holm $p=0.052$).
+differ significantly from F (11\,s faster, 95\% CI [3, 20], Holm $p=0.072$).
 FQ (169\,s) does not differ from F or FX, and it beats D4 and E3 at the knee in
-its exploratory family. Under the stress budget the gaps narrow: the FedEx route,
-with or without its merge, and MAX-AoI are significantly slower, and the other
-baselines trail by 37--63\,s without a claim, staying within the budget by
-leaving devices out. With three mules every scheduler, FQ included, reaches
+its exploratory family. Doubling the budget to 300\,s does not close the gap: F
+flies the same missions, the baselines need 229--248\,s, F stays 22--28\% faster
+and every comparison is again a claim. Under the stress budget the gaps narrow:
+the FedEx route, with or without its merge, is significantly slower, and the other
+baselines trail by 37--64\,s without a claim, staying within the budget by
+leaving devices out. Below it (exploratory, 20 seeds) no baseline overtakes F: at
+60 and 45\,s F takes 143 and 142\,s and FedCS, the fastest baseline, 175 and
+171\,s, without a claim, while F reaches $\tau$ in 95\% of trials and overruns
+29\% and 40\% of its missions. With three mules every scheduler, FQ included, reaches
 $\tau$ in 53--64\,s except D4$_{\text{FedEx}}$ (111\,s), whose unweighted, one-tour-old
-updates slow learning. Without a mule (H0), FL over the degraded link merges
+updates slow learning; the budget does not bind there, and at 300\,s no arm of the
+study moves by more than 1\,s. Without a mule (H0), FL over the degraded link merges
 0.5 updates per round and ends at 0.693 accuracy, barely above the all-benign
 0.667, against F's 3.4 and 0.837.
 

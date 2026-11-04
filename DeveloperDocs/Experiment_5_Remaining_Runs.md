@@ -1,6 +1,6 @@
 # Experiment 5 — what is left to run
 
-*29 Oct 2026. Every Exp 5 run still to fly, pre-registered or added since, ranked by whether the paper needs it. **Status, 4 Nov 2026:** the Needed tier has flown and been scored (scorer `72b8e59c`, results `3cffc966`), and the paper reads it. 5.3 is scored with budgets knee and stress until its relaxed cells are complete. The Should, Optional and acceptance tiers have not run; the rest of this page is as drafted. Sources: the launcher's full plan (`launch.py plan batch2`, `plan batch3`) set against the trial rows on disk; the loss-probe plan, [Experiment_5_Loss_Probes_Plan.md](Experiment_5_Loss_Probes_Plan.md); the stage-by-stage status in [Experiment_5_Readiness.md](Experiment_5_Readiness.md).*
+*29 Oct 2026. Every Exp 5 run still to fly, pre-registered or added since, ranked by whether the paper needs it. **Status, 4 Nov 2026:** the Needed tier has flown and been scored (scorer `72b8e59c`, results `3cffc966`), and the paper reads it. Groups 1 and 2 of the Should tier and the table fills have flown too (see below), and 5.3 is scored in full, relaxed cells included. The rest of the Should tier and the Optional and acceptance tiers have not run; the rest of this page is as drafted. Sources: the launcher's full plan (`launch.py plan batch2`, `plan batch3`) set against the trial rows on disk; the loss-probe plan, [Experiment_5_Loss_Probes_Plan.md](Experiment_5_Loss_Probes_Plan.md); the stage-by-stage status in [Experiment_5_Readiness.md](Experiment_5_Readiness.md).*
 
 ---
 
@@ -83,11 +83,13 @@ Added 4 Nov 2026. Run in this order. Rescore a study only once all its cells hav
 
 List `s54` in Group 1's command and `s55 s57` in Group 5's, or the launcher re-flies 80 trials it already has.
 
+**Status, 4 Nov 2026:** Groups 1 and 2 have flown and been scored, with no failures. Group 2 flew on `f1e71559` (results `35e75e41`); 5.3's family grew from 36 to 54 comparisons and its claims from 13 to 21. Its one risk came true: MAX-AoI at stress is no longer a claim (Holm 0.0494 to 0.068), and FX against F moved from 0.052 to 0.072, still no claim. Eleven of the 18 new tests copy a knee test exactly, because the 300 s budget does not change F, FX or the FedEx route, nor any arm but E3 with three mules. The family stays as the plan set it. At 300 s F stays faster than all seven baselines (179 against 229-248 s, all claims). P2 is in `results/exp5/scores/probes/P2.md`: at 60 and 45 s no baseline overtakes F, and nothing is a claim. The paper reports both in its text, with no relaxed column, because FQ has 20 of 40 trials at K = 1 and none at K = 3 there (60 trials would fill them, exploratory). Groups 3-5 have not run.
+
 ---
 
 ## Filling the tables' blanks
 
-**Status, 4 Nov 2026: flown and scored.** Group 1 and all four fill flights finished with no failures. Group 1 is in `results/exp5/scores/b2`; the fill cells are in `results/exp5/scores/fills`, written by `scripts/exp5/fill_scores.py`. The paper reads both as of 4 Nov 2026 (not committed).
+**Status, 4 Nov 2026: flown and scored.** Group 1 and all four fill flights finished with no failures. Group 1 is in `results/exp5/scores/b2`; the fill cells are in `results/exp5/scores/fills`, written by `scripts/exp5/fill_scores.py`. The paper reads both (`f1e71559`).
 
 Added 4 Nov 2026. The paper's tables have 26 empty cells. The tables stay as they are and these cells get filled. Every run here is exploratory and outside every Holm family, so no pre-registered comparison changes; the tables mark these cells as exploratory.
 
