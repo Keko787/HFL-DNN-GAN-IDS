@@ -69,6 +69,53 @@ The revision is clearly stronger with these, and a reviewer is likely to ask for
 
 ---
 
+### The Should tier in groups
+
+Added 4 Nov 2026. Run in this order. Rescore a study only once all its cells have flown, one study at a time. The last column is the worst case, with every added comparison finding nothing, because Holm runs across each study.
+
+| Group | Runs | Question | Trials | ~h | Needs first | Claims at risk |
+|---|---|---|---|---|---|---|
+| 1. Design claims | S1, S3, plus FQ and the pinned bands to 40 | Do the near-claims become real? | 1,500 | 4.2 | nothing | none; 5.1's family grows from 16 to 24 but it has no claims at tau 0.71 |
+| 2. Budget curve | S2, S8 (P2) | Does F's lead flip below stress or hold above the knee? | 1,000 | 2.9 | nothing | MAX-AoI at stress (0.0495 to 0.087) |
+| 3. Narrow-band limits | S5, S10 (P5, P6) | Where does F's reach stop paying off? | 2,440 | 8.9 | B1, P6's budget decision | 4 of 5.12's 7 claims |
+| 4. Completeness | S6, S7, S11 | Can we fill in what the paper says was dropped? | 960 | 3.0 | nothing | FX over F in the radio study; 2 non-IID claims |
+| 5. Scale | S4, S9 (P3) | Do baselines overtake with more mules? | 1,080 | ~14 | Group 1 flown | the abstract's 24-device FedEx claim (0.039 to 0.35) |
+
+List `s54` in Group 1's command and `s55 s57` in Group 5's, or the launcher re-flies 80 trials it already has.
+
+---
+
+## Filling the tables' blanks
+
+**Status, 4 Nov 2026: flown and scored.** Group 1 and all four fill flights finished with no failures. Group 1 is in `results/exp5/scores/b2`; the fill cells are in `results/exp5/scores/fills`, written by `scripts/exp5/fill_scores.py`. The paper reads both as of 4 Nov 2026 (not committed).
+
+Added 4 Nov 2026. The paper's tables have 26 empty cells. The tables stay as they are and these cells get filled. Every run here is exploratory and outside every Holm family, so no pre-registered comparison changes; the tables mark these cells as exploratory.
+
+| Table | Empty cells | Data on disk | What fills them | New trials |
+|---|---|---|---|---|
+| Scheduler comparison | FQ with 3 mules, knee and stress (2) | no | FQ flight | 80 |
+| Scale | FQ at N = 24, knee and stress (2) | no | FQ flight | 40 |
+| Decision cost | budget, F served, FX served at N = 6 and 12 (6) | FX at N = 6 only (57 %, 20 episodes) | FerrySim at 150 s and 180 s | none |
+| Robustness | D3, D4, D5 in the four radio columns (12) | **yes, P1** | `paper_tables.py` only | 0 |
+| Robustness | D3 under training time (2); D4 and D5 non-IID (2) | no | D3 and D4/D5 flights | 60 + 40 |
+| | | | | **220** |
+
+About 1.2 h in all, including Group 1's FQ add-on, which the first command absorbs (K = 1 to 40 trials). FQ's network handles N = 24 and 3 mules by design, but it was trained on N = 6 and 12 cells, so N = 24 is outside its training range and the paper should say so. Scoring reads these through the exploratory path, not `launch.py score`.
+
+```bash
+py -3.11 scripts/exp5/launch.py run batch2 --study s53x s55 s513 --arms FQ-g75 D4 D5 --set "s53x.arms=['FQ-g75']" --set "s53x.K=[1,3]" --set "s53x.budgets=['knee','stress']" --set s53x.d4_faithful=false --set s53x.h0=false --set rl.keep_learned=true --set s55.N=24 --set s55.n_trials=20 --set "s513.route_arms=['D4','D5']" --set "s513.partitions=[['dirichlet',0.1]]"
+```
+
+```bash
+py -3.11 scripts/exp5/launch.py run batch3 --study s512 --set "s512.arms=['D3']" --set "s512.payloads=[1000000]"
+```
+
+```bash
+py -3.11 scripts/exp5/launch.py run batch3 --study s511c --set "p511c.cells=['jit-n6-150','jit-n12-180']" --set s511c.knee_s.jit-n6-150=150 --set s511c.knee_s.jit-n12-180=180
+```
+
+---
+
 ## Optional
 
 | # | Run | Kind | Why it can wait | Trials | ~h |

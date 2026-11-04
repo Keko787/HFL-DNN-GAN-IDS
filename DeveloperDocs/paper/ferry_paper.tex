@@ -889,13 +889,13 @@ backhaul.}
 \toprule
 \textbf{\#} & \textbf{Study} & \textbf{Q / C} & \textbf{Compares} & \textbf{Cells} & \textbf{Primary metric} \\
 \midrule
-1 & Merge rules & Q4, C3 & Plain mean, FedBuff, Async-HFL and a FedProx term against \sysname{}'s merge & $N{=}6$; knee, stress & time to $\tau$ \\
-2 & Deadline forms & Q4, C3 & FedCS's round deadline, Oort's preferred duration, an additive law & $N{=}6$; knee, stress & deadline-miss rate \\
+1 & Merge rules & Q4, C3 & Plain mean, FedBuff, Async-HFL and a FedProx term against \sysname{}'s merge & $N{=}6$; F, H1 routes; knee, stress; 40 trials & time to $\tau$ \\
+2 & Deadline forms & Q4, C3 & FedCS's round deadline, Oort's preferred duration, an additive law & $N{=}6$; knee, stress; 40 trials & deadline-miss rate \\
 3 & Scheduler comparison & Q1 & F and FX against H1, D1--D5 and E3; H0 described & $N{=}6$; $K{=}1,3$; knee, stress; 40 trials & time to $\tau$ \\
 4 & Band pinning & Q2, C1 & F pinned to each band class; an exhaustive-plan oracle in FerrySim & $N{=}6$; knee; 1~MB, 18.8~KB; range, far share & age of updates \\
-5 & Learned score & Q5, C4 & FerrySim: $\gamma$ from 0 to 0.99 against FX and a greedy rule; full system: FQ against FX and F & FerrySim; $N{=}12$ & held-out return; time to $\tau$ \\
-6 & Objective terms & Q4, C2 & FX without its coverage term or its dwell term; D4 & $N{=}12$; knee, stress & round-close rate \\
-7 & Fairness & Q4, C5 & MAX-AoI, Whittle index, FedEx route; F without coverage term, age cap or miss priority & $N{=}6$; knee, stress; 4 missions & age of updates \\
+5 & Learned score & Q5, C4 & FerrySim: $\gamma$ from 0 to 0.99 against FX and a greedy rule; full system: FQ against FX and F & FerrySim; $N{=}12$; 40 trials & held-out return; time to $\tau$ \\
+6 & Objective terms & Q4, C2 & FX without its coverage term or its dwell term; D4 & $N{=}12$; knee, stress; 40 trials & round-close rate \\
+7 & Fairness & Q4, C5 & MAX-AoI, Whittle index, FedEx route; F without coverage term, age cap or miss priority & $N{=}6$; knee, stress; 4, 8 missions & age of updates \\
 8 & Scale & Q3 & F, FX, H1, D3, D4 as the field fills (FQ at $N{=}12$) & $N{=}6,12,24$; knee, stress & time to $\tau$ \\
 9 & Decision cost & Q3 & (a) planner wall time; (b) one to three mules; (c) FerrySim budget sweeps & $N{=}6$--$96$; $K{\le}3$ & plan time; time to $\tau$ \\
 10 & Training time & Q6 & Log-normal training time (median 68\,s), and 20\% of devices $5\times$ slower; F, FX, H1, D4, D5 & $N{=}6$; knee & time to $\tau$ \\
@@ -903,28 +903,29 @@ backhaul.}
 12 & Component ablations & Q4 & F with one switch flipped (whole stops, local search, cap, hover, adaptive backhaul$^{\dagger}$) & $N{=}6$; knee, stress; 40 trials & age of updates \\
 13 & Radio$^{\dagger}$ & Q6 & Interference 1 or 17\,dB, path-loss exponent 2.7, shadowing 8\,dB; F, FX, H1 & $N{=}6$; knee & time to $\tau$ \\
 \midrule
--- & FQ vs E3 (exploratory) & Q5 & FQ against E3, F, FX and D4 & $N{=}6$; knee, stress & time to $\tau$ \\
+-- & Exploratory cells & Q5, Q6 & FQ against E3, F, FX and D4; FQ with three mules and at $N{=}24$; D3, D4 and D5 added to studies 10, 11 and 13 & $N{=}6,24$; $K{=}1,3$; knee, stress & time to $\tau$ \\
 \bottomrule
 \end{tabularx}
 \end{table*}
 
 \paragraph{What was run}
-The scheduler comparison flew all 40 of its planned trials per cell, and
-Tables~\ref{tab:exp5_scale} and~\ref{tab:exp5_mules} take their $N=6$ cells from
-it. Studies flown at 20 trials, FQ and the band-pinned runs share the first 20 of
-those seeds, so a comparison with any of them reads those 20, over which F
-reaches $\tau$ in 194\,s at the knee rather than 179\,s. The
-merge-rule, deadline-form and objective-terms studies and the learned score's
-full-system check flew 20 of their planned 40 trials per cell; the remaining
-trials extend the same seeds. We dropped the merge-rule study's H1 route with an
-unbudgeted Pass~2, the fairness study's eight-mission horizon, the scale study's
-multi-mule and clean-channel cells, the training-time study's other payloads, the
-non-IID study's other partitions, and the radio study's adaptive-backhaul arms;
-the scheduler comparison's relaxed budget flew with one mule only and is not
-reported here. Two planned studies, on when learning helps and
-on real radios (which awaits testbed access), did not run. FQ left the scheduler
-comparison and the scale study, as the plan specified, when the learned-score
-study did not keep the learned score.
+The merge-rule, deadline-form, scheduler-comparison, objective-terms and
+component studies and the learned score's full-system check flew 40 trials per
+cell. The other studies flew 20, on the first 20 of those seeds, so a comparison
+with one of them reads those 20, over which F reaches $\tau$ in 194\,s at the
+knee rather than 179\,s; Tables~\ref{tab:exp5_scale} and~\ref{tab:exp5_mules}
+take their $N=6$ cells from the scheduler comparison. The band-pinning study is
+tested on its 20 trials, and its 1~MB pinned runs continue to 40 to read time to
+$\tau$. We dropped the scale study's multi-mule and clean-channel cells, the
+training-time study's other payloads, the non-IID study's other partitions, and
+the radio study's adaptive-backhaul arms; the scheduler comparison's relaxed
+budget flew with one mule only and is not reported here. Two planned studies, on
+when learning helps and on real radios (which awaits testbed access), did not
+run. FQ left the scheduler comparison and the scale study, as the plan specified,
+when the learned-score study did not keep the learned score. We flew it there
+afterwards, and D3, D4 and D5 in the robustness cells the plan left them out of,
+as exploratory cells: they stand outside each study's test family and make no
+claims.
 
 \section{Evaluation Results and Discussion}
 \label{sec:results}
@@ -938,20 +939,19 @@ seven baselines needs 232--263\,s (Table~\ref{tab:exp5_headline}): F is
 73--85\% of paired seeds. FedEx with its own merge (D4$_{\text{FedEx}}$) is
 slower still (296\,s) and misses $\tau$ in 3 of 40 trials. FX (168\,s) does not
 differ significantly from F (11\,s faster, 95\% CI [3, 20], Holm $p=0.052$).
-FQ, flown later on the first 20 seeds, over which F averages 194\,s, takes
-180\,s: it does not differ from F, and it beats D4 and E3 at the knee in its
-exploratory family. Under the stress budget the gaps narrow: the FedEx route,
+FQ (169\,s) does not differ from F or FX, and it beats D4 and E3 at the knee in
+its exploratory family. Under the stress budget the gaps narrow: the FedEx route,
 with or without its merge, and MAX-AoI are significantly slower, and the other
 baselines trail by 37--63\,s without a claim, staying within the budget by
-leaving devices out. With three mules every scheduler reaches $\tau$ in
-53--64\,s except D4$_{\text{FedEx}}$ (111\,s), whose unweighted, one-tour-old
+leaving devices out. With three mules every scheduler, FQ included, reaches
+$\tau$ in 53--64\,s except D4$_{\text{FedEx}}$ (111\,s), whose unweighted, one-tour-old
 updates slow learning. Without a mule (H0), FL over the degraded link merges
 0.5 updates per round and ends at 0.693 accuracy, barely above the all-benign
 0.667, against F's 3.4 and 0.837.
 
 \begin{table}[t]
 \centering
-\caption{Scheduler comparison at $N=6$: time to $\tau=0.71$, with the share of trials that reach it in brackets when below 100\%, and with one mule under the stress budget, the share of missions that overran it and the updates merged per round (yield). $^{\dagger}$Significantly slower than F. $^{\S}$Exploratory, over the first 20 seeds.}
+\caption{Scheduler comparison at $N=6$: time to $\tau=0.71$, with the share of trials that reach it in brackets when below 100\%, and with one mule under the stress budget, the share of missions that overran it and the updates merged per round (yield). $^{\dagger}$Significantly slower than F. $^{\S}$Exploratory, outside the study's tests.}
 \label{tab:exp5_headline}
 \resizebox{\columnwidth}{!}{%
 \begin{tabular}{l rr rr rr}
@@ -962,7 +962,7 @@ updates slow learning. Without a mule (H0), FL over the degraded link merges
 \midrule
 F & \textbf{179\,s} & \textbf{168\,s} & \textbf{53\,s} & \textbf{53\,s} & 29\% & 3.1 \\
 FX & 168\,s & 165\,s & 53\,s & 53\,s & 21\% & 3.1 \\
-FQ$^{\S}$ & 180\,s & 182\,s & -- & -- & 24\% & 3.2 \\
+FQ$^{\S}$ & 169\,s & 166\,s & 62\,s & 61\,s & 20\% & 3.1 \\
 \midrule
 H1 & 254\,s$^{\dagger}$ & 209\,s\,{\scriptsize(92\%)} & 60\,s & 60\,s & 1\% & 2.0 \\
 D1 (MAX-AoI) & 263\,s$^{\dagger}$ & 232\,s$^{\dagger}$ & 60\,s & 60\,s & 2\% & 2.3 \\
@@ -979,17 +979,16 @@ E3 (Chen) & 252\,s$^{\dagger}$ & 201\,s\,{\scriptsize(98\%)} & 63\,s & 63\,s & 6
 \subsection{Why FeRRy Is Faster: Reach}
 \label{sec:res:mechanism}
 
-This subsection reads the 20 seeds the band-pinned runs flew, over which F
-reaches $\tau$ in 194\,s. F does not need fewer rounds (every arm reaches $\tau$ in 1.65--1.84 rounds,
+F does not need fewer rounds (every arm reaches $\tau$ in 1.55--1.68 rounds,
 with near-identical update yield); its rounds are shorter
 (Fig.~\ref{fig:exp5_mechanism}). Every baseline flies the wide band, which
 reaches a device only from nearby, and spends about 140\,s of a mission in
-transit. F's plan chooses the narrow band in 89\% of missions, whose range
-covers the field from about one stop: F spends 15\,s in transit and 107\,s
-dwelling, and its missions are 22--26\% shorter. FX and FQ inherit this reach
-(narrow or medium on 95\% and 98\% of missions; Fig.~\ref{fig:exp5_learning}b).
-Pinned to the wide band, F reaches $\tau$ in 265\,s, D4's own time; pinned to
-narrow, in 196\,s. (These times are descriptive: the band-pinning study's
+transit. F's plan chooses the narrow band in 83\% of missions, whose range
+covers the field from about one stop: F spends 18\,s in transit and 106\,s
+dwelling, and its missions are 21--25\% shorter. FX and FQ inherit this reach
+(narrow or medium on 95\% and 97\% of missions; Fig.~\ref{fig:exp5_learning}b).
+Pinned to the wide band, F reaches $\tau$ in 232\,s, D4's own time; pinned to
+narrow, in 184\,s. (These times are descriptive: the band-pinning study's
 pre-registered metric, the age of updates, does not differ.) The choice is near
 the best, serving as many devices as an exhaustive oracle at the knee budget and
 4 points fewer under stress, and it adapts (Fig.~\ref{fig:exp5_mechanism}c): as the
@@ -1001,8 +1000,7 @@ $N=24$ under stress.
 \includegraphics[width=\textwidth]{Figures/exp5/fig_exp5_mechanism.pdf}
 \caption{Where F's advantage comes from: (a)~mean mission time by component and (b)~time
 to $\tau$, mean and 95\% CI over the trials that reach it ($N=6$, one mule, knee
-budget, the 20 seeds the pinned runs flew); (c)~share of F's plans flying each band
-class, by cell.}
+budget); (c)~share of F's plans flying each band class, by cell.}
 \label{fig:exp5_mechanism}
 \end{figure*}
 \subsection{Scale and Decision Cost}
@@ -1011,16 +1009,19 @@ class, by cell.}
 At $N=24$ (Table~\ref{tab:exp5_scale}), F is significantly faster than H1 and D3
 at the knee (749 against 951 and 911\,s), ties the FedEx route (752\,s), and
 beats it under the stress budget (661 against 752\,s); at $N=12$ no comparison
-is a claim, and FQ (461 and 389\,s) does not differ from FX (424 and 386\,s).
+in the table is a claim. Over the 40 seeds of the learned score's full-system
+check, FX is significantly faster than F at $N=12$ at the knee (428 against
+461\,s, Holm $p=0.032$) but not under stress, and FQ (454 and 385\,s) does not
+differ from FX (428 and 385\,s).
 Planning stays cheap (Table~\ref{tab:exp5_cost}): alone on one host, a plan
 takes 0.04\,s at $N=6$ and 1.5\,s at $N=96$ (p95 2.0\,s). In FerrySim the plan
-serves 54--57\% of the devices at each scale's knee budget up to $N=96$, and at
+serves 54--59\% of the devices at each scale's knee budget up to $N=96$, and at
 $N=12$ more mules cut F's time to $\tau$ from 486\,s to 226\,s with two and
 151\,s with three (Table~\ref{tab:exp5_mules}).
 
 \begin{table}[t]
 \centering
-\caption{Scale study: time to $\tau$ with one mule, at each $N$'s knee and stress budgets. Notation as in Table~\ref{tab:exp5_headline}; FQ, flown in other studies, is not tested against F.}
+\caption{Scale study: time to $\tau$ with one mule, at each $N$'s knee and stress budgets. Notation as in Table~\ref{tab:exp5_headline}.}
 \label{tab:exp5_scale}
 \resizebox{\columnwidth}{!}{%
 \begin{tabular}{l rrr rrr}
@@ -1031,7 +1032,7 @@ $N=12$ more mules cut F's time to $\tau$ from 486\,s to 226\,s with two and
 \midrule
 F & \textbf{179\,s} & \textbf{486\,s}\,{\scriptsize(95\%)} & \textbf{749\,s} & \textbf{168\,s} & \textbf{371\,s} & \textbf{661\,s} \\
 FX & 168\,s & 424\,s\,{\scriptsize(90\%)} & 789\,s & 165\,s & 386\,s\,{\scriptsize(90\%)} & 658\,s \\
-FQ & 180\,s$^{\S}$ & 461\,s\,{\scriptsize(90\%)} & -- & 182\,s$^{\S}$ & 389\,s\,{\scriptsize(90\%)} & -- \\
+FQ & 169\,s$^{\S}$ & 461\,s\,{\scriptsize(90\%)} & 897\,s$^{\S}$ & 166\,s$^{\S}$ & 389\,s\,{\scriptsize(90\%)} & 678\,s$^{\S}$ \\
 H1 & 254\,s$^{\dagger}$ & 589\,s\,{\scriptsize(95\%)} & 951\,s$^{\dagger}$ & 209\,s\,{\scriptsize(92\%)} & 446\,s\,{\scriptsize(95\%)} & 651\,s\,{\scriptsize(95\%)} \\
 D3 (Cui) & 262\,s$^{\dagger}$ & 507\,s\,{\scriptsize(95\%)} & 911\,s$^{\dagger}$ & 213\,s & 460\,s\,{\scriptsize(90\%)} & 662\,s\,{\scriptsize(95\%)} \\
 D4 (FedEx route) & 232\,s$^{\dagger}$ & 459\,s\,{\scriptsize(95\%)} & 752\,s & 232\,s$^{\dagger}$ & 459\,s\,{\scriptsize(95\%)} & 752\,s$^{\dagger}$ \\
@@ -1050,8 +1051,8 @@ D4 (FedEx route) & 232\,s$^{\dagger}$ & 459\,s\,{\scriptsize(95\%)} & 752\,s & 2
 \cmidrule(lr){2-3}\cmidrule(lr){4-6}
 $N$ & mean & p95 & budget & F served & FX served \\
 \midrule
-6 & 0.04\,s & 0.06\,s & -- & -- & -- \\
-12 & 0.02\,s & 0.04\,s & -- & -- & -- \\
+6 & 0.04\,s & 0.06\,s & 150\,s & 57\% & 58\% \\
+12 & 0.02\,s & 0.04\,s & 180\,s & 59\% & 59\% \\
 24 & 0.14\,s & 0.26\,s & 350\,s & 54\% & 54\% \\
 48 & 0.41\,s & 0.83\,s & 850\,s & 56\% & 56\% \\
 96 & 1.53\,s & 2.00\,s & 1660\,s & 56\% & 57\% \\
@@ -1081,19 +1082,25 @@ D4 (FedEx route) & 232\,s$^{\dagger}$ & 222\,s & 186\,s & 459\,s\,{\scriptsize(9
 \subsection{The Design Claims}
 \label{sec:res:claims}
 
-Five tests hold (Table~\ref{tab:exp5_claims}). Without the coverage term the
-round-close rate falls from 99\% to 74\% (C2). Under the stress budget FeRRy's
-age of updates is 0.78 missions, against 1.06 for MAX-AoI, 1.07 for the Whittle
-index and 1.10 without the coverage term (C5). On the time-varying backhaul the
-adaptive controller lowers it from 0.88 to 0.69, close to the most adaptation
+Nine tests hold (Table~\ref{tab:exp5_claims}). Without the coverage term the
+round-close rate falls from 98\% to 73\% (C2). FedBuff's buffering slows learning
+in five of its six cells: at the knee it reaches $\tau$ in 65\% of trials and, on
+the 26 seeds where both do, takes 375\,s against 157\,s. The selection
+literature's deadline forms miss more deadlines, 49\% against 43\% under stress
+and 44\% against 43\% at the knee (C3). At $N=12$ the per-stop rule beats the plan
+alone at the knee (C4). Under the stress budget FeRRy's age of updates is 0.78
+missions, against 1.06 for MAX-AoI, 1.07 for the Whittle index and 1.10 without
+the coverage term (C5). Over eight missions the gap widens, to 1.22 against 1.64,
+1.66 and 1.59, while the FedEx route, which never skips a device, stays ahead of
+F without a claim at both horizons (0.72 and 1.13). On the time-varying backhaul the
+adaptive controller lowers the age of updates from 0.88 to 0.69, close to the most adaptation
 can give, since the controller sees the SNR that decides each loss. Other parts
 show no measurable effect here: pinning the band leaves the age of updates
 unchanged in all twelve cells, including a shorter narrow-band reach and more
-devices beyond the wide band's reach (its effect is on time), the dwell term and the age cap change nothing
-over four missions, and the merge rules tie because collected updates almost
-always have merge age zero (FedBuff's buffering slows learning, and FedProx is
-not significantly faster). The selection literature's deadline forms miss
-slightly more deadlines (47\% against 42\% under stress), but not significantly.
+devices beyond the wide band's reach (its effect is on time); the dwell term
+changes nothing, nor does the age cap over four or eight missions; and the
+plain-mean and Async-HFL merges tie FeRRy's because collected updates almost
+always have merge age zero, while FedProx is not significantly faster.
 
 \begin{table*}[t]
 \centering
@@ -1110,24 +1117,25 @@ slightly more deadlines (47\% against 42\% under stress), but not significantly.
 \quad Band class pinned to narrow & age of updates (missions) & 0.70 & 0.70 & 0\% [0, 0] & 1.000 & no difference \\
 \midrule
 \multicolumn{7}{l}{\textit{C2: one derived objective}} \\
-\quad Coverage term removed ($N{=}12$) & round-close rate & 99\% & 74\% & +25\% [+25, +25] & $<$0.001 & \textbf{holds} \\
-\quad Dwell term removed ($N{=}12$) & round-close rate & 99\% & 99\% & 0\% [0, 0] & 1.000 & no difference \\
+\quad Coverage term removed ($N{=}12$) & round-close rate & 98\% & 73\% & +25\% [+25, +25] & $<$0.001 & \textbf{holds} \\
+\quad Dwell term removed ($N{=}12$) & round-close rate & 98\% & 98\% & 0\% [0, 0] & 1.000 & no difference \\
 \midrule
 \multicolumn{7}{l}{\textit{C3: one deadline, three roles}} \\
-\quad Plain-mean merge & time to $\tau$ & 194\,s & 194\,s & 0\% [0, 0] & 1.000 & no difference \\
-\quad Async-HFL merge & time to $\tau$ & 194\,s & 194\,s & 0\% [0, 0] & 1.000 & no difference \\
-\quad FedBuff merge & time to $\tau$ & 159\,s & 346\,s (13 seeds) & +117\% [+59, +183] & 0.117 & no difference \\
-\quad FeRRy's merge with FedProx & time to $\tau$ & 194\,s & 146\,s & $-$25\% [$-$64, +10] & 1.000 & no difference \\
-\quad Round deadline, after FedCS (stress) & deadline-miss rate & 42.2\% & 47.4\% & +13\% [+3, +23] & 0.152 & no difference \\
-\quad Preferred duration, after Oort (stress) & deadline-miss rate & 42.2\% & 47.2\% & +12\% [+3, +22] & 0.152 & no difference \\
+\quad Plain-mean merge & time to $\tau$ & 179\,s & 179\,s & 0\% [0, 0] & 1.000 & no difference \\
+\quad Async-HFL merge & time to $\tau$ & 179\,s & 179\,s & 0\% [0, 0] & 1.000 & no difference \\
+\quad FedBuff merge & time to $\tau$ & 157\,s & 375\,s (26 seeds) & +138\% [+93, +187] & 0.004 & \textbf{holds} \\
+\quad FeRRy's merge with FedProx & time to $\tau$ & 179\,s & 168\,s & $-$6\% [$-$34, +20] & 1.000 & no difference \\
+\quad Round deadline, after FedCS (stress) & deadline-miss rate & 43.4\% & 48.7\% & +12\% [+5, +20] & 0.010 & \textbf{holds} \\
+\quad Preferred duration, after Oort (stress) & deadline-miss rate & 43.4\% & 48.6\% & +12\% [+5, +19] & 0.010 & \textbf{holds} \\
 \midrule
 \multicolumn{7}{l}{\textit{C4: two clocks, re-decided per stop}} \\
-\quad Learned per-stop score, FQ ($N{=}12$) & time to $\tau$ & 424\,s & 461\,s & +9\% [0, +23] & 0.555 & no difference \\
+\quad No per-stop rule, the plan alone ($N{=}12$) & time to $\tau$ & 428\,s & 461\,s & +8\% [+2, +16] & 0.032 & \textbf{holds} \\
+\quad Learned per-stop score, FQ ($N{=}12$) & time to $\tau$ & 428\,s & 454\,s & +6\% [+1, +14] & 0.110 & no difference \\
 \midrule
 \multicolumn{7}{l}{\textit{C5: fairness under physical cost}} \\
-\quad MAX-AoI scheduler, D1 (stress) & age of updates (missions) & 0.78 & 1.06 & +37\% [+21, +53] & 0.009 & \textbf{holds} \\
-\quad Whittle index, D3 (stress) & age of updates (missions) & 0.78 & 1.07 & +38\% [+23, +55] & 0.007 & \textbf{holds} \\
-\quad Coverage term removed (stress) & age of updates (missions) & 0.78 & 1.10 & +41\% [+34, +49] & 0.001 & \textbf{holds} \\
+\quad MAX-AoI scheduler, D1 (stress) & age of updates (missions) & 0.78 & 1.06 & +37\% [+21, +53] & 0.017 & \textbf{holds} \\
+\quad Whittle index, D3 (stress) & age of updates (missions) & 0.78 & 1.07 & +38\% [+23, +55] & 0.013 & \textbf{holds} \\
+\quad Coverage term removed (stress) & age of updates (missions) & 0.78 & 1.10 & +41\% [+34, +49] & 0.002 & \textbf{holds} \\
 \quad Age cap removed (stress) & age of updates (missions) & 0.78 & 0.78 & 0\% [0, 0] & 1.000 & no difference \\
 \midrule
 \multicolumn{7}{l}{\textit{Component ablations}} \\
@@ -1145,16 +1153,19 @@ pre-registered margin, and the best ($\gamma=0.75$) matches FX while trailing a
 one-step greedy rule. In the full system FQ is again indistinguishable from FX
 (C4) and, at $N=6$, from F, so FX is FeRRy's per-stop rule. The two decide on
 different information (FQ before serving, from the priced dwell; FX after, from
-the realized mission time), so this compares two rules, not two rankings.
+the realized mission time), so this compares two rules, not two rankings. FQ
+trained with one mule at $N=6$ and 12, and beyond that it falls behind
+(exploratory): F leads it by 9\,s with three mules (95\% CI [3, 16]) and, at
+$N=24$, by 148\,s at the knee ([103, 200]) and 17\,s under stress ([1, 37]).
 
 The exploratory comparison sets FQ against E3, a single-agent DQN after Chen et
-al.~\cite{chen2023model} that picks every next stop with no plan, on the same 20
-seeds (Fig.~\ref{fig:exp5_learning}). At the knee FQ reaches $\tau$ in 180\,s
-against E3's 280\,s (difference 100\,s, 95\% CI [63, 141], Holm $p<0.001$ across
-the eight exploratory comparisons); under stress it is faster over 19 shared
-seeds (174 against 211\,s), but the CI includes zero. FQ inherits the plan's
-band and spends 15\,s of a 155\,s mission in transit, against E3's 144\,s of
-228\,s, and in FerrySim E3's held-out return falls 6\% below FX's while FQ's
+al.~\cite{chen2023model} that picks every next stop with no plan, on the same 40
+seeds (Fig.~\ref{fig:exp5_learning}). At the knee FQ reaches $\tau$ in 169\,s
+against E3's 252\,s (difference 83\,s, 95\% CI [54, 119], Holm $p<0.001$ across
+the eight exploratory comparisons); under stress it is faster over 39 shared
+seeds (162 against 201\,s), but the CI includes zero. FQ inherits the plan's
+band and spends 17\,s of a 157\,s mission in transit, against E3's 142\,s of
+225\,s, and in FerrySim E3's held-out return falls 6\% below FX's while FQ's
 matches it. The gain comes from the plan, not from learning, which supports the
 two-clock structure (C4).
 
@@ -1162,7 +1173,7 @@ two-clock structure (C4).
 \centering
 \includegraphics[width=\textwidth]{Figures/exp5/fig_exp5_learning.pdf}
 \caption{Learning inside the plan against learning without one ($N=6$, one mule;
-exploratory, the 20 seeds FQ flew). (a)~Time to $\tau$ at the knee (filled) and stress (hollow) budgets,
+exploratory). (a)~Time to $\tau$ at the knee (filled) and stress (hollow) budgets,
 mean and 95\% CI, reach rate in brackets when below 1; $^{\ddagger}$slower than FQ.
 (b)~Mean mission time at the knee by component, and each arm's band.}
 \label{fig:exp5_learning}
@@ -1172,18 +1183,22 @@ mean and 95\% CI, reach rate in brackets when below 1; $^{\ddagger}$slower than 
 
 With strongly non-IID data (Dirichlet $\alpha=0.1$;
 Table~\ref{tab:exp5_robust}), every arm reaches $\tau$ in about half the trials,
-and F stays significantly faster than H1 and D3 where both do. The radio study
+and F stays significantly faster than H1 and D3 where both do; D4 and D5 trail it
+by about 100\,s (exploratory). The radio study
 flies the time-varying backhaul, so its default (F at 216\,s) is not the main
 configuration (194\,s on the same 20 seeds); under its harsher channels F stays ahead of H1 without a
 claim, and FX is significantly faster than F on the default channel and with
-8\,dB shadowing. Two limitations stand out. FeRRy's plan prices the mean SNR, so
+8\,dB shadowing. Among the exploratory arms, D3, D4 and D5 mostly trail F, but
+with 17\,dB of interference none of them differs from it (264, 276 and 315
+against 255\,s), and at $n_{\text{pl}}=2.7$ the FedEx route leads without
+significance (237 against 257\,s, reaching $\tau$ in 90\% of trials). Two limitations stand out. FeRRy's plan prices the mean SNR, so
 under the stress budget 29\% of its missions overrun, by 33\,s on average
 (median 20\,s; Table~\ref{tab:exp5_headline}); the FedEx route, which never skips
 a device, overruns in 84\%, by 24\,s on average, and F keeps nearly its update
 yield with fewer stops. And the
 plan does not price training time: when devices take time to train, F's yield
 falls from 3.5 to 0.7 updates per round over the same 20 seeds and it reaches $\tau$ in only 70--75\% of
-trials, while H1, D4 and D5 keep 85--100\%.
+trials, while H1, D3, D4 and D5 keep 85--100\%.
 
 \begin{table*}[t]
 \centering
@@ -1199,9 +1214,9 @@ trials, while H1, D4 and D5 keep 85--100\%.
 F & \textbf{137\,s}\,{\scriptsize(75\%)} & \textbf{159\,s}\,{\scriptsize(70\%)} & \textbf{378\,s}\,{\scriptsize(55\%)} & \textbf{216\,s}\,{\scriptsize(95\%)} & \textbf{255\,s}\,{\scriptsize(95\%)} & \textbf{257\,s} & \textbf{219\,s}\,{\scriptsize(90\%)} \\
 FX & 120\,s\,{\scriptsize(75\%)} & 146\,s\,{\scriptsize(70\%)} & 329\,s\,{\scriptsize(55\%)}$^{\ast}$ & 192\,s\,{\scriptsize(95\%)}$^{\ast}$ & 209\,s\,{\scriptsize(95\%)} & 263\,s & 183\,s\,{\scriptsize(85\%)}$^{\ast}$ \\
 H1 & 325\,s$^{\dagger}$ & 296\,s\,{\scriptsize(95\%)} & 507\,s\,{\scriptsize(55\%)}$^{\dagger}$ & 274\,s & 332\,s & 261\,s & 281\,s \\
-D3 (Cui) & -- & -- & 519\,s\,{\scriptsize(50\%)}$^{\dagger}$ & -- & -- & -- & -- \\
-D4 (FedEx route) & 333\,s$^{\dagger}$ & 304\,s\,{\scriptsize(90\%)} & -- & -- & -- & -- & -- \\
-D5 (FedCS) & 222\,s\,{\scriptsize(95\%)}$^{\dagger}$ & 250\,s\,{\scriptsize(85\%)} & -- & -- & -- & -- & -- \\
+D3 (Cui) & 293\,s$^{\S}$ & 317\,s$^{\S}$ & 519\,s\,{\scriptsize(50\%)}$^{\dagger}$ & 293\,s$^{\S}$ & 264\,s\,{\scriptsize(90\%)}$^{\S}$ & 303\,s$^{\S}$ & 264\,s$^{\S}$ \\
+D4 (FedEx route) & 333\,s$^{\dagger}$ & 304\,s\,{\scriptsize(90\%)} & 471\,s\,{\scriptsize(50\%)}$^{\S}$ & 257\,s$^{\S}$ & 276\,s$^{\S}$ & 237\,s\,{\scriptsize(90\%)}$^{\S}$ & 262\,s$^{\S}$ \\
+D5 (FedCS) & 222\,s\,{\scriptsize(95\%)}$^{\dagger}$ & 250\,s\,{\scriptsize(85\%)} & 482\,s\,{\scriptsize(55\%)}$^{\S}$ & 309\,s\,{\scriptsize(95\%)}$^{\S}$ & 315\,s\,{\scriptsize(95\%)}$^{\S}$ & 296\,s\,{\scriptsize(95\%)}$^{\S}$ & 292\,s\,{\scriptsize(95\%)}$^{\S}$ \\
 \bottomrule
 \end{tabular}
 \end{table*}
@@ -1221,7 +1236,8 @@ accuracy 23--32\% sooner than seven whole schedulers at six devices, because its
 plan chose a long-reach narrow band that removed most of the transit between
 stops. It kept updates fresher than age-of-information schedulers under tight
 budgets, beat the FedEx route at 24 devices under the stress budget, and planned
-in 1.5\,s at 96 devices. Several elements of the design showed no measurable
+in 1.5\,s at 96 devices. At 12 devices and the knee budget its fixed per-stop rule
+was significantly faster than the plan alone. Several elements of the design showed no measurable
 effect at our settings. Among them is a learned per-stop score: FQ performed like
 the fixed rule, and its exploratory advantage over a learned scheduler without a
 plan came from the plan it flies inside.
