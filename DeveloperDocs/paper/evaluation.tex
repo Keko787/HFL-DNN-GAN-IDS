@@ -13,26 +13,30 @@
 \subsection{Against the State of the Art}
 \label{sec:res:sota}
 
-With one mule at the knee budget, F reaches $\tau$ in 194\,s and each of the
-seven baselines needs 264--282\,s (Table~\ref{tab:exp5_headline}): F is
-27--31\% faster, every comparison is a claim, and F gets there first in
-80--90\% of paired seeds. FedEx with its own merge (D4$_{\text{FedEx}}$) is as
-slow (281\,s) but misses $\tau$ once, so its comparison is not a claim. FX
-(178\,s) and FQ (180\,s) do not differ from F; FQ, flown later, also beats D4
-and E3 at the knee in its exploratory family. Under the stress budget only the
-FedEx route is significantly slower: the other baselines trail by 28--60\,s but
-stay within the budget by leaving devices out. With three mules every scheduler
-reaches $\tau$ in 52--65\,s except D4$_{\text{FedEx}}$ (101\,s), whose
-unweighted, one-tour-old updates slow learning. Without a mule (H0), FL over the
-degraded link merges 0.5 updates per round and ends at 0.686 accuracy, barely
-above the all-benign 0.667, against F's 3.5 and 0.831.
+With one mule at the knee budget, F reaches $\tau$ in 179\,s and each of the
+seven baselines needs 232--263\,s (Table~\ref{tab:exp5_headline}): F is
+23--32\% faster, every comparison is a claim, and F gets there first in
+73--85\% of paired seeds. FedEx with its own merge (D4$_{\text{FedEx}}$) is
+slower still (296\,s) and misses $\tau$ in 3 of 40 trials. FX (168\,s) does not
+differ significantly from F (11\,s faster, 95\% CI [3, 20], Holm $p=0.052$).
+FQ, flown later on the first 20 seeds, over which F averages 194\,s, takes
+180\,s: it does not differ from F, and it beats D4 and E3 at the knee in its
+exploratory family. Under the stress budget the gaps narrow: the FedEx route,
+with or without its merge, and MAX-AoI are significantly slower, and the other
+baselines trail by 37--63\,s without a claim, staying within the budget by
+leaving devices out. With three mules every scheduler reaches $\tau$ in
+53--64\,s except D4$_{\text{FedEx}}$ (111\,s), whose unweighted, one-tour-old
+updates slow learning. Without a mule (H0), FL over the degraded link merges
+0.5 updates per round and ends at 0.693 accuracy, barely above the all-benign
+0.667, against F's 3.4 and 0.837.
 
 %%TABLE:tab:exp5_headline%%
 
 \subsection{Why FeRRy Is Faster: Reach}
 \label{sec:res:mechanism}
 
-F does not need fewer rounds (every arm reaches $\tau$ in 1.65--1.84 rounds,
+This subsection reads the 20 seeds the band-pinned runs flew, over which F
+reaches $\tau$ in 194\,s. F does not need fewer rounds (every arm reaches $\tau$ in 1.65--1.84 rounds,
 with near-identical update yield); its rounds are shorter
 (Fig.~\ref{fig:exp5_mechanism}). Every baseline flies the wide band, which
 reaches a device only from nearby, and spends about 140\,s of a mission in
@@ -79,7 +83,8 @@ index and 1.10 without the coverage term (C5). On the time-varying backhaul the
 adaptive controller lowers it from 0.88 to 0.69, close to the most adaptation
 can give, since the controller sees the SNR that decides each loss. Other parts
 show no measurable effect here: pinning the band leaves the age of updates
-unchanged (its effect is on time), the dwell term and the age cap change nothing
+unchanged in all twelve cells, including a shorter narrow-band reach and more
+devices beyond the wide band's reach (its effect is on time), the dwell term and the age cap change nothing
 over four missions, and the merge rules tie because collected updates almost
 always have merge age zero (FedBuff's buffering slows learning, and FedProx is
 not significantly faster). The selection literature's deadline forms miss
@@ -117,15 +122,15 @@ With strongly non-IID data (Dirichlet $\alpha=0.1$;
 Table~\ref{tab:exp5_robust}), every arm reaches $\tau$ in about half the trials,
 and F stays significantly faster than H1 and D3 where both do. The radio study
 flies the time-varying backhaul, so its default (F at 216\,s) is not the main
-configuration (194\,s); under its harsher channels F stays ahead of H1 without a
+configuration (194\,s on the same 20 seeds); under its harsher channels F stays ahead of H1 without a
 claim, and FX is significantly faster than F on the default channel and with
 8\,dB shadowing. Two limitations stand out. FeRRy's plan prices the mean SNR, so
-under the stress budget 30\% of its missions overrun, by 28\,s on average
+under the stress budget 29\% of its missions overrun, by 33\,s on average
 (median 20\,s; Table~\ref{tab:exp5_headline}); the FedEx route, which never skips
-a device, overruns in 85\%, by 22\,s on average, and F keeps nearly its update
+a device, overruns in 84\%, by 24\,s on average, and F keeps nearly its update
 yield with fewer stops. And the
 plan does not price training time: when devices take time to train, F's yield
-falls from 3.5 to 0.7 updates per round and it reaches $\tau$ in only 70--75\% of
+falls from 3.5 to 0.7 updates per round over the same 20 seeds and it reaches $\tau$ in only 70--75\% of
 trials, while H1, D4 and D5 keep 85--100\%.
 
 %%TABLE:tab:exp5_robust%%

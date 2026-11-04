@@ -12,7 +12,7 @@ deadlines and the mission budget. In flight, the same test gates a per-stop
 decision and a re-plan, and staleness-weighted merges on the mule and at the
 server close rounds with the updates that arrive. In a multi-process prototype
 that trains a real intrusion-detection model, \sysname{} reached the target
-accuracy 27--31\% sooner than seven whole schedulers at six devices, because its
+accuracy 23--32\% sooner than seven whole schedulers at six devices, because its
 plan chose a long-reach narrow band that removed most of the transit between
 stops. It kept updates fresher than age-of-information schedulers under tight
 budgets, beat the FedEx route at 24 devices under the stress budget, and planned
@@ -22,7 +22,7 @@ the fixed rule, and its exploratory advantage over a learned scheduler without a
 plan came from the plan it flies inside.
 
 Future work follows from the limitations we measured. \sysname{}'s plan prices
-the mean channel, so it overran tight budgets in 30\% of missions; pricing the
+the mean channel, so it overran tight budgets in 29\% of missions; pricing the
 channel's variation, or reserving slack for it, is a first step. The plan also
 ignores training time, so when devices need time to train it reaches devices
 whose updates are not ready; adding a compute term to the plan is a second.
