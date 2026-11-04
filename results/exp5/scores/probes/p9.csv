@@ -1,0 +1,721 @@
+batch,test,study,cell,variant,reference,metric,better,n_pairs,ref_mean,variant_mean,mean_diff,ci_low,ci_high,p_value,p_holm,cliffs_delta,claim,favours,pairing_errors,note
+b1,reach0.71,p9/batch1/s53/reach0.71,n6k1_knee,FX,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by FX only"
+b1,time0.82,p9/batch1/s53/time0.82,n6k1_knee,FX,F,sim_s_to_tau0.82,lower,16,369.3557554059298,321.648242382209,47.70751302372082,21.62178040963445,83.61084541176186,0.002976637011170516,0.05357946620106929,0.21484375,False,no claim,0,
+b1,reach0.82,p9/batch1/s53/reach0.82,n6k1_knee,FX,F,reached_tau0.82,higher,20,0.8,0.8,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by FX only"
+b1,reach0.71,p9/batch1/s53/reach0.71,n6k1_knee,H1,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by H1 only"
+b1,time0.82,p9/batch1/s53/time0.82,n6k1_knee,H1,F,sim_s_to_tau0.82,lower,16,369.3557554059298,493.4351223968115,-124.07936699088168,-169.89501950051144,-84.26795811208508,6.103515625e-05,0.001708984375,-0.4453125,True,F,0,
+b1,reach0.82,p9/batch1/s53/reach0.82,n6k1_knee,H1,F,reached_tau0.82,higher,20,0.8,0.85,-0.05,-0.15,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 1 by H1 only"
+b1,reach0.71,p9/batch1/s53/reach0.71,n6k1_knee,D1,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D1 only"
+b1,time0.82,p9/batch1/s53/time0.82,n6k1_knee,D1,F,sim_s_to_tau0.82,lower,16,369.3557554059298,522.3879507723905,-153.03219536646066,-220.55519240024987,-95.6008923073834,6.103515625e-05,0.001708984375,-0.4453125,True,F,0,
+b1,reach0.82,p9/batch1/s53/reach0.82,n6k1_knee,D1,F,reached_tau0.82,higher,20,0.8,0.85,-0.05,-0.15,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 1 by D1 only"
+b1,reach0.71,p9/batch1/s53/reach0.71,n6k1_knee,D2,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D2 only"
+b1,time0.82,p9/batch1/s53/time0.82,n6k1_knee,D2,F,sim_s_to_tau0.82,lower,16,369.3557554059298,482.3079218058483,-112.9521663999185,-173.5614801769283,-71.0286392887294,6.103515625e-05,0.001708984375,-0.453125,True,F,0,
+b1,reach0.82,p9/batch1/s53/reach0.82,n6k1_knee,D2,F,reached_tau0.82,higher,20,0.8,0.85,-0.05,-0.15,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 1 by D2 only"
+b1,reach0.71,p9/batch1/s53/reach0.71,n6k1_knee,D3,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D3 only"
+b1,time0.82,p9/batch1/s53/time0.82,n6k1_knee,D3,F,sim_s_to_tau0.82,lower,16,369.3557554059298,481.43694491700444,-112.08118951107463,-144.60222478925024,-82.67777392804875,6.103515625e-05,0.001708984375,-0.4609375,True,F,0,
+b1,reach0.82,p9/batch1/s53/reach0.82,n6k1_knee,D3,F,reached_tau0.82,higher,20,0.8,0.85,-0.05,-0.15,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 1 by D3 only"
+b1,reach0.71,p9/batch1/s53/reach0.71,n6k1_knee,D4,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D4 only"
+b1,time0.82,p9/batch1/s53/time0.82,n6k1_knee,D4,F,sim_s_to_tau0.82,lower,16,369.3557554059298,449.1696118298714,-79.81385642394162,-110.87260058385509,-52.38811924821169,6.103515625e-05,0.001708984375,-0.40625,True,F,0,
+b1,reach0.82,p9/batch1/s53/reach0.82,n6k1_knee,D4,F,reached_tau0.82,higher,20,0.8,0.85,-0.05,-0.15,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 1 by D4 only"
+b1,reach0.71,p9/batch1/s53/reach0.71,n6k1_knee,D4fedex,F,reached_tau0.71,higher,20,1.0,0.95,0.05,0.0,0.15,1.0,1.0,,False,no claim,0,"1 reached by F only, 0 by D4fedex only"
+b1,time0.82,p9/batch1/s53/time0.82,n6k1_knee,D4fedex,F,sim_s_to_tau0.82,lower,9,354.74324031577754,667.9356421786101,-313.19240186283264,-413.9481112546527,-209.86227312978878,0.00390625,0.06640625,-0.9012345679012346,False,no claim,0,
+b1,reach0.82,p9/batch1/s53/reach0.82,n6k1_knee,D4fedex,F,reached_tau0.82,higher,20,0.8,0.55,0.25,0.0,0.55,0.1796875,1.0,,False,no claim,0,"7 reached by F only, 2 by D4fedex only"
+b1,reach0.71,p9/batch1/s53/reach0.71,n6k1_stress,FX,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by FX only"
+b1,time0.82,p9/batch1/s53/time0.82,n6k1_stress,FX,F,sim_s_to_tau0.82,lower,15,339.684068138067,325.47297786801744,14.21109027004956,-8.767945863899655,38.27926116844289,0.38235208985751545,1.0,0.09333333333333334,False,no claim,0,
+b1,reach0.82,p9/batch1/s53/reach0.82,n6k1_stress,FX,F,reached_tau0.82,higher,20,0.75,0.75,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by FX only"
+b1,reach0.71,p9/batch1/s53/reach0.71,n6k1_stress,H1,F,reached_tau0.71,higher,20,1.0,0.9,0.1,0.0,0.25,0.5,1.0,,False,no claim,0,"2 reached by F only, 0 by H1 only"
+b1,time0.82,p9/batch1/s53/time0.82,n6k1_stress,H1,F,sim_s_to_tau0.82,lower,13,322.40094832659594,481.25846940257514,-158.85752107597924,-251.34344678276727,-71.63161531413925,0.000732421875,0.0146484375,-0.7041420118343196,True,F,0,
+b1,reach0.82,p9/batch1/s53/reach0.82,n6k1_stress,H1,F,reached_tau0.82,higher,20,0.75,0.8,-0.05,-0.25,0.15,1.0,1.0,,False,no claim,0,"2 reached by F only, 3 by H1 only"
+b1,reach0.71,p9/batch1/s53/reach0.71,n6k1_stress,D1,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D1 only"
+b1,time0.82,p9/batch1/s53/time0.82,n6k1_stress,D1,F,sim_s_to_tau0.82,lower,13,328.7427105459367,404.94636021846406,-76.20364967252736,-130.84350904708126,-28.037930161333357,0.004638671875,0.069580078125,-0.38461538461538464,False,no claim,0,
+b1,reach0.82,p9/batch1/s53/reach0.82,n6k1_stress,D1,F,reached_tau0.82,higher,20,0.75,0.7,0.05,-0.1,0.25,1.0,1.0,,False,no claim,0,"2 reached by F only, 1 by D1 only"
+b1,reach0.71,p9/batch1/s53/reach0.71,n6k1_stress,D2,F,reached_tau0.71,higher,20,1.0,0.9,0.1,0.0,0.25,0.5,1.0,,False,no claim,0,"2 reached by F only, 0 by D2 only"
+b1,time0.82,p9/batch1/s53/time0.82,n6k1_stress,D2,F,sim_s_to_tau0.82,lower,14,328.53502875692874,446.1092394261172,-117.57421066918843,-204.53875543975383,-31.265700126331314,0.013427734375,0.147705078125,-0.42857142857142855,False,no claim,0,
+b1,reach0.82,p9/batch1/s53/reach0.82,n6k1_stress,D2,F,reached_tau0.82,higher,20,0.75,0.85,-0.1,-0.3,0.1,0.625,1.0,,False,no claim,0,"1 reached by F only, 3 by D2 only"
+b1,reach0.71,p9/batch1/s53/reach0.71,n6k1_stress,D3,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D3 only"
+b1,time0.82,p9/batch1/s53/time0.82,n6k1_stress,D3,F,sim_s_to_tau0.82,lower,12,339.35500998660183,438.3026561771403,-98.94764619053846,-149.92316998513292,-50.849318200863515,0.00244140625,0.04638671875,-0.4305555555555556,True,F,0,
+b1,reach0.82,p9/batch1/s53/reach0.82,n6k1_stress,D3,F,reached_tau0.82,higher,20,0.75,0.7,0.05,-0.2,0.25,1.0,1.0,,False,no claim,0,"3 reached by F only, 2 by D3 only"
+b1,reach0.71,p9/batch1/s53/reach0.71,n6k1_stress,D4,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D4 only"
+b1,time0.82,p9/batch1/s53/time0.82,n6k1_stress,D4,F,sim_s_to_tau0.82,lower,15,339.684068138067,447.211837628476,-107.52776949040903,-135.14874697641412,-79.55173327635858,6.103515625e-05,0.001708984375,-0.4488888888888889,True,F,0,
+b1,reach0.82,p9/batch1/s53/reach0.82,n6k1_stress,D4,F,reached_tau0.82,higher,20,0.75,0.85,-0.1,-0.25,0.0,0.5,1.0,,False,no claim,0,"0 reached by F only, 2 by D4 only"
+b1,reach0.71,p9/batch1/s53/reach0.71,n6k1_stress,D4fedex,F,reached_tau0.71,higher,20,1.0,0.95,0.05,0.0,0.15,1.0,1.0,,False,no claim,0,"1 reached by F only, 0 by D4fedex only"
+b1,time0.82,p9/batch1/s53/time0.82,n6k1_stress,D4fedex,F,sim_s_to_tau0.82,lower,9,332.40428505876724,667.9356421786101,-335.53135711984294,-435.2383621433821,-244.93979472029542,0.00390625,0.06640625,-1.0,False,no claim,0,
+b1,reach0.82,p9/batch1/s53/reach0.82,n6k1_stress,D4fedex,F,reached_tau0.82,higher,20,0.75,0.55,0.2,-0.05,0.45,0.2890625,1.0,,False,no claim,0,"6 reached by F only, 2 by D4fedex only"
+b1,reach0.71,p9/batch1/s53/reach0.71,n6k3_knee,FX,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by FX only"
+b1,time0.82,p9/batch1/s53/time0.82,n6k3_knee,FX,F,sim_s_to_tau0.82,lower,20,164.17065392005026,157.77595517213922,6.394698747911025,1.7973356720052835,11.356045772793877,0.009725523541639646,0.1264318060413154,0.08,False,no claim,0,
+b1,reach0.82,p9/batch1/s53/reach0.82,n6k3_knee,FX,F,reached_tau0.82,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by FX only"
+b1,reach0.71,p9/batch1/s53/reach0.71,n6k3_knee,H1,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by H1 only"
+b1,time0.82,p9/batch1/s53/time0.82,n6k3_knee,H1,F,sim_s_to_tau0.82,lower,20,164.17065392005026,202.01653663376928,-37.845882713719035,-70.12158948031326,-10.582531460962493,0.025842854459788903,0.25842854459788905,-0.195,False,no claim,0,
+b1,reach0.82,p9/batch1/s53/reach0.82,n6k3_knee,H1,F,reached_tau0.82,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by H1 only"
+b1,reach0.71,p9/batch1/s53/reach0.71,n6k3_knee,D1,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D1 only"
+b1,time0.82,p9/batch1/s53/time0.82,n6k3_knee,D1,F,sim_s_to_tau0.82,lower,20,164.17065392005026,202.03989655735205,-37.869242637301795,-70.21444517655472,-10.582531460962493,0.025842854459788903,0.25842854459788905,-0.195,False,no claim,0,
+b1,reach0.82,p9/batch1/s53/reach0.82,n6k3_knee,D1,F,reached_tau0.82,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D1 only"
+b1,reach0.71,p9/batch1/s53/reach0.71,n6k3_knee,D2,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D2 only"
+b1,time0.82,p9/batch1/s53/time0.82,n6k3_knee,D2,F,sim_s_to_tau0.82,lower,20,164.17065392005026,201.83533350372454,-37.6646795836743,-69.70617572172834,-10.566434356530824,0.025842854459788903,0.25842854459788905,-0.195,False,no claim,0,
+b1,reach0.82,p9/batch1/s53/reach0.82,n6k3_knee,D2,F,reached_tau0.82,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D2 only"
+b1,reach0.71,p9/batch1/s53/reach0.71,n6k3_knee,D3,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D3 only"
+b1,time0.82,p9/batch1/s53/time0.82,n6k3_knee,D3,F,sim_s_to_tau0.82,lower,20,164.17065392005026,201.9755213094235,-37.80486738937325,-69.84285883228482,-10.601486366430622,0.025842854459788903,0.25842854459788905,-0.195,False,no claim,0,
+b1,reach0.82,p9/batch1/s53/reach0.82,n6k3_knee,D3,F,reached_tau0.82,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D3 only"
+b1,reach0.71,p9/batch1/s53/reach0.71,n6k3_knee,D4,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D4 only"
+b1,time0.82,p9/batch1/s53/time0.82,n6k3_knee,D4,F,sim_s_to_tau0.82,lower,20,164.17065392005026,162.43805042628665,1.7326034937635995,-21.924716634404607,25.095458152596834,0.7771175732880233,1.0,0.03,False,no claim,0,
+b1,reach0.82,p9/batch1/s53/reach0.82,n6k3_knee,D4,F,reached_tau0.82,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D4 only"
+b1,reach0.71,p9/batch1/s53/reach0.71,n6k3_knee,D4fedex,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D4fedex only"
+b1,time0.82,p9/batch1/s53/time0.82,n6k3_knee,D4fedex,F,sim_s_to_tau0.82,lower,12,149.65517440841845,384.5478189016285,-234.89264449321004,-270.24179874020916,-203.41690494876752,0.00048828125,0.0107421875,-1.0,True,F,0,
+b1,reach0.82,p9/batch1/s53/reach0.82,n6k3_knee,D4fedex,F,reached_tau0.82,higher,20,1.0,0.6,0.4,0.2,0.6,0.0078125,0.21875,,False,no claim,0,"8 reached by F only, 0 by D4fedex only"
+b1,reach0.71,p9/batch1/s53/reach0.71,n6k3_stress,FX,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by FX only"
+b1,time0.82,p9/batch1/s53/time0.82,n6k3_stress,FX,F,sim_s_to_tau0.82,lower,20,164.17065392005026,157.77595517213922,6.394698747911025,1.7973356720052835,11.356045772793877,0.009725523541639646,0.1264318060413154,0.08,False,no claim,0,
+b1,reach0.82,p9/batch1/s53/reach0.82,n6k3_stress,FX,F,reached_tau0.82,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by FX only"
+b1,reach0.71,p9/batch1/s53/reach0.71,n6k3_stress,H1,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by H1 only"
+b1,time0.82,p9/batch1/s53/time0.82,n6k3_stress,H1,F,sim_s_to_tau0.82,lower,20,164.17065392005026,196.88556944747688,-32.71491552742664,-66.78556537409226,-3.147455330251743,0.030908013652429556,0.25842854459788905,-0.1725,False,no claim,0,
+b1,reach0.82,p9/batch1/s53/reach0.82,n6k3_stress,H1,F,reached_tau0.82,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by H1 only"
+b1,reach0.71,p9/batch1/s53/reach0.71,n6k3_stress,D1,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D1 only"
+b1,time0.82,p9/batch1/s53/time0.82,n6k3_stress,D1,F,sim_s_to_tau0.82,lower,20,164.17065392005026,204.96445321582723,-40.79379929577699,-71.48778775368439,-14.749533704953066,0.007630414739245609,0.10682580634943852,-0.24,False,no claim,0,
+b1,reach0.82,p9/batch1/s53/reach0.82,n6k3_stress,D1,F,reached_tau0.82,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D1 only"
+b1,reach0.71,p9/batch1/s53/reach0.71,n6k3_stress,D2,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D2 only"
+b1,time0.82,p9/batch1/s53/time0.82,n6k3_stress,D2,F,sim_s_to_tau0.82,lower,20,164.17065392005026,196.8445541231311,-32.67390020308085,-66.63272062349861,-3.210228350095192,0.030908013652429556,0.25842854459788905,-0.1725,False,no claim,0,
+b1,reach0.82,p9/batch1/s53/reach0.82,n6k3_stress,D2,F,reached_tau0.82,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D2 only"
+b1,reach0.71,p9/batch1/s53/reach0.71,n6k3_stress,D3,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D3 only"
+b1,time0.82,p9/batch1/s53/time0.82,n6k3_stress,D3,F,sim_s_to_tau0.82,lower,20,164.17065392005026,196.8445541231311,-32.67390020308085,-66.63272062349861,-3.210228350095192,0.030908013652429556,0.25842854459788905,-0.1725,False,no claim,0,
+b1,reach0.82,p9/batch1/s53/reach0.82,n6k3_stress,D3,F,reached_tau0.82,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D3 only"
+b1,reach0.71,p9/batch1/s53/reach0.71,n6k3_stress,D4,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D4 only"
+b1,time0.82,p9/batch1/s53/time0.82,n6k3_stress,D4,F,sim_s_to_tau0.82,lower,20,164.17065392005026,162.43805042628665,1.7326034937635995,-21.924716634404607,25.095458152596834,0.7771175732880233,1.0,0.03,False,no claim,0,
+b1,reach0.82,p9/batch1/s53/reach0.82,n6k3_stress,D4,F,reached_tau0.82,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D4 only"
+b1,reach0.71,p9/batch1/s53/reach0.71,n6k3_stress,D4fedex,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D4fedex only"
+b1,time0.82,p9/batch1/s53/time0.82,n6k3_stress,D4fedex,F,sim_s_to_tau0.82,lower,12,149.65517440841845,384.5478189016285,-234.89264449321004,-270.24179874020916,-203.41690494876752,0.00048828125,0.0107421875,-1.0,True,F,0,
+b1,reach0.82,p9/batch1/s53/reach0.82,n6k3_stress,D4fedex,F,reached_tau0.82,higher,20,1.0,0.6,0.4,0.2,0.6,0.0078125,0.21875,,False,no claim,0,"8 reached by F only, 0 by D4fedex only"
+b1,reach0.71,p9/batch1/s59/reach0.71,n6k1_knee,FX,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by FX only"
+b1,time0.82,p9/batch1/s59/time0.82,n6k1_knee,FX,F,sim_s_to_tau0.82,lower,16,369.3557554059298,321.648242382209,47.70751302372082,21.62178040963445,83.61084541176186,0.002976637011170516,0.011906548044682065,0.21484375,True,FX,0,
+b1,reach0.82,p9/batch1/s59/reach0.82,n6k1_knee,FX,F,reached_tau0.82,higher,20,0.8,0.8,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by FX only"
+b1,reach0.71,p9/batch1/s59/reach0.71,n6k1_knee,H1,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by H1 only"
+b1,time0.82,p9/batch1/s59/time0.82,n6k1_knee,H1,F,sim_s_to_tau0.82,lower,16,369.3557554059298,493.4351223968115,-124.07936699088168,-169.89501950051144,-84.26795811208508,6.103515625e-05,0.00042724609375,-0.4453125,True,F,0,
+b1,reach0.82,p9/batch1/s59/reach0.82,n6k1_knee,H1,F,reached_tau0.82,higher,20,0.8,0.85,-0.05,-0.15,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 1 by H1 only"
+b1,reach0.71,p9/batch1/s59/reach0.71,n6k1_knee,D3,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D3 only"
+b1,time0.82,p9/batch1/s59/time0.82,n6k1_knee,D3,F,sim_s_to_tau0.82,lower,16,369.3557554059298,481.43694491700444,-112.08118951107463,-144.60222478925024,-82.67777392804875,6.103515625e-05,0.00042724609375,-0.4609375,True,F,0,
+b1,reach0.82,p9/batch1/s59/reach0.82,n6k1_knee,D3,F,reached_tau0.82,higher,20,0.8,0.85,-0.05,-0.15,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 1 by D3 only"
+b1,reach0.71,p9/batch1/s59/reach0.71,n6k1_knee,D4,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D4 only"
+b1,time0.82,p9/batch1/s59/time0.82,n6k1_knee,D4,F,sim_s_to_tau0.82,lower,16,369.3557554059298,449.1696118298714,-79.81385642394162,-110.87260058385509,-52.38811924821169,6.103515625e-05,0.00042724609375,-0.40625,True,F,0,
+b1,reach0.82,p9/batch1/s59/reach0.82,n6k1_knee,D4,F,reached_tau0.82,higher,20,0.8,0.85,-0.05,-0.15,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 1 by D4 only"
+b1,reach0.71,p9/batch1/s59/reach0.71,n12k1_knee,FX,F,reached_tau0.71,higher,20,0.95,0.9,0.05,0.0,0.15,1.0,1.0,,False,no claim,0,"1 reached by F only, 0 by FX only"
+b1,time0.82,p9/batch1/s59/time0.82,n12k1_knee,FX,F,sim_s_to_tau0.82,lower,3,836.5407941674736,799.9078410100968,36.63295315737681,-54.28065871342551,108.07303332956508,0.5,1.0,0.1111111111111111,False,no claim,0,
+b1,reach0.82,p9/batch1/s59/reach0.82,n12k1_knee,FX,F,reached_tau0.82,higher,20,0.2,0.15,0.05,0.0,0.15,1.0,1.0,,False,no claim,0,"1 reached by F only, 0 by FX only"
+b1,reach0.71,p9/batch1/s59/reach0.71,n12k1_knee,H1,F,reached_tau0.71,higher,20,0.95,0.95,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by H1 only"
+b1,time0.82,p9/batch1/s59/time0.82,n12k1_knee,H1,F,sim_s_to_tau0.82,lower,1,,,,,,,,,False,,0,fewer than 2 complete pairs
+b1,reach0.82,p9/batch1/s59/reach0.82,n12k1_knee,H1,F,reached_tau0.82,higher,20,0.2,0.05,0.15,0.0,0.3,0.25,1.0,,False,no claim,0,"3 reached by F only, 0 by H1 only"
+b1,reach0.71,p9/batch1/s59/reach0.71,n12k1_knee,D3,F,reached_tau0.71,higher,20,0.95,0.95,0.0,-0.15,0.15,1.0,1.0,,False,no claim,0,"1 reached by F only, 1 by D3 only"
+b1,time0.82,p9/batch1/s59/time0.82,n12k1_knee,D3,F,sim_s_to_tau0.82,lower,4,815.6472569583566,957.4366636343766,-141.78940667602,-246.12885712488787,-37.44995622715214,0.25,0.75,-0.25,False,no claim,0,
+b1,reach0.82,p9/batch1/s59/reach0.82,n12k1_knee,D3,F,reached_tau0.82,higher,20,0.2,0.2,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D3 only"
+b1,reach0.71,p9/batch1/s59/reach0.71,n12k1_knee,D4,F,reached_tau0.71,higher,20,0.95,0.95,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D4 only"
+b1,time0.82,p9/batch1/s59/time0.82,n12k1_knee,D4,F,sim_s_to_tau0.82,lower,3,790.9566075991219,873.3254052331904,-82.36879763406857,-245.99825939070433,39.230333496583626,0.5,1.0,-0.1111111111111111,False,no claim,0,
+b1,reach0.82,p9/batch1/s59/reach0.82,n12k1_knee,D4,F,reached_tau0.82,higher,20,0.2,0.2,0.0,-0.15,0.15,1.0,1.0,,False,no claim,0,"1 reached by F only, 1 by D4 only"
+b1,reach0.71,p9/batch1/s59/reach0.71,n24k1_knee,FX,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by FX only"
+b1,time0.82,p9/batch1/s59/time0.82,n24k1_knee,FX,F,sim_s_to_tau0.82,lower,0,,,,,,,,,False,,0,fewer than 2 complete pairs
+b1,reach0.82,p9/batch1/s59/reach0.82,n24k1_knee,FX,F,reached_tau0.82,higher,20,0.0,0.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by FX only"
+b1,reach0.71,p9/batch1/s59/reach0.71,n24k1_knee,H1,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by H1 only"
+b1,time0.82,p9/batch1/s59/time0.82,n24k1_knee,H1,F,sim_s_to_tau0.82,lower,0,,,,,,,,,False,,0,fewer than 2 complete pairs
+b1,reach0.82,p9/batch1/s59/reach0.82,n24k1_knee,H1,F,reached_tau0.82,higher,20,0.0,0.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by H1 only"
+b1,reach0.71,p9/batch1/s59/reach0.71,n24k1_knee,D3,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D3 only"
+b1,time0.82,p9/batch1/s59/time0.82,n24k1_knee,D3,F,sim_s_to_tau0.82,lower,0,,,,,,,,,False,,0,fewer than 2 complete pairs
+b1,reach0.82,p9/batch1/s59/reach0.82,n24k1_knee,D3,F,reached_tau0.82,higher,20,0.0,0.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D3 only"
+b1,reach0.71,p9/batch1/s59/reach0.71,n24k1_knee,D4,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D4 only"
+b1,time0.82,p9/batch1/s59/time0.82,n24k1_knee,D4,F,sim_s_to_tau0.82,lower,0,,,,,,,,,False,,0,fewer than 2 complete pairs
+b1,reach0.82,p9/batch1/s59/reach0.82,n24k1_knee,D4,F,reached_tau0.82,higher,20,0.0,0.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D4 only"
+b1,reach0.71,p9/batch1/s511b/reach0.71,n6k1_knee,FX,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by FX only"
+b1,time0.82,p9/batch1/s511b/time0.82,n6k1_knee,FX,F,sim_s_to_tau0.82,lower,16,369.3557554059298,321.648242382209,47.70751302372082,21.62178040963445,83.61084541176186,0.002976637011170516,0.026789733100534646,0.21484375,True,FX,0,
+b1,reach0.82,p9/batch1/s511b/reach0.82,n6k1_knee,FX,F,reached_tau0.82,higher,20,0.8,0.8,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by FX only"
+b1,reach0.71,p9/batch1/s511b/reach0.71,n6k1_knee,H1,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by H1 only"
+b1,time0.82,p9/batch1/s511b/time0.82,n6k1_knee,H1,F,sim_s_to_tau0.82,lower,16,369.3557554059298,493.4351223968115,-124.07936699088168,-169.89501950051144,-84.26795811208508,6.103515625e-05,0.00067138671875,-0.4453125,True,F,0,
+b1,reach0.82,p9/batch1/s511b/reach0.82,n6k1_knee,H1,F,reached_tau0.82,higher,20,0.8,0.85,-0.05,-0.15,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 1 by H1 only"
+b1,reach0.71,p9/batch1/s511b/reach0.71,n6k1_knee,D4,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D4 only"
+b1,time0.82,p9/batch1/s511b/time0.82,n6k1_knee,D4,F,sim_s_to_tau0.82,lower,16,369.3557554059298,449.1696118298714,-79.81385642394162,-110.87260058385509,-52.38811924821169,6.103515625e-05,0.00067138671875,-0.40625,True,F,0,
+b1,reach0.82,p9/batch1/s511b/reach0.82,n6k1_knee,D4,F,reached_tau0.82,higher,20,0.8,0.85,-0.05,-0.15,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 1 by D4 only"
+b1,reach0.71,p9/batch1/s511b/reach0.71,n12k1_knee,FX,F,reached_tau0.71,higher,20,0.95,0.9,0.05,0.0,0.15,1.0,1.0,,False,no claim,0,"1 reached by F only, 0 by FX only"
+b1,time0.82,p9/batch1/s511b/time0.82,n12k1_knee,FX,F,sim_s_to_tau0.82,lower,3,836.5407941674736,799.9078410100968,36.63295315737681,-54.28065871342551,108.07303332956508,0.5,1.0,0.1111111111111111,False,no claim,0,
+b1,reach0.82,p9/batch1/s511b/reach0.82,n12k1_knee,FX,F,reached_tau0.82,higher,20,0.2,0.15,0.05,0.0,0.15,1.0,1.0,,False,no claim,0,"1 reached by F only, 0 by FX only"
+b1,reach0.71,p9/batch1/s511b/reach0.71,n12k1_knee,H1,F,reached_tau0.71,higher,20,0.95,0.95,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by H1 only"
+b1,time0.82,p9/batch1/s511b/time0.82,n12k1_knee,H1,F,sim_s_to_tau0.82,lower,1,,,,,,,,,False,,0,fewer than 2 complete pairs
+b1,reach0.82,p9/batch1/s511b/reach0.82,n12k1_knee,H1,F,reached_tau0.82,higher,20,0.2,0.05,0.15,0.0,0.3,0.25,1.0,,False,no claim,0,"3 reached by F only, 0 by H1 only"
+b1,reach0.71,p9/batch1/s511b/reach0.71,n12k1_knee,D4,F,reached_tau0.71,higher,20,0.95,0.95,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D4 only"
+b1,time0.82,p9/batch1/s511b/time0.82,n12k1_knee,D4,F,sim_s_to_tau0.82,lower,3,790.9566075991219,873.3254052331904,-82.36879763406857,-245.99825939070433,39.230333496583626,0.5,1.0,-0.1111111111111111,False,no claim,0,
+b1,reach0.82,p9/batch1/s511b/reach0.82,n12k1_knee,D4,F,reached_tau0.82,higher,20,0.2,0.2,0.0,-0.15,0.15,1.0,1.0,,False,no claim,0,"1 reached by F only, 1 by D4 only"
+b1,reach0.71,p9/batch1/s511b/reach0.71,n12k2_knee,FX,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by FX only"
+b1,time0.82,p9/batch1/s511b/time0.82,n12k2_knee,FX,F,sim_s_to_tau0.82,lower,10,508.33461627343206,452.23436111951014,56.1002551539219,-3.888495873301868,110.66254058345743,0.09765625,0.68359375,0.41,False,no claim,0,
+b1,reach0.82,p9/batch1/s511b/reach0.82,n12k2_knee,FX,F,reached_tau0.82,higher,20,0.55,0.6,-0.05,-0.25,0.1,1.0,1.0,,False,no claim,0,"1 reached by F only, 2 by FX only"
+b1,reach0.71,p9/batch1/s511b/reach0.71,n12k2_knee,H1,F,reached_tau0.71,higher,20,1.0,0.95,0.05,0.0,0.15,1.0,1.0,,False,no claim,0,"1 reached by F only, 0 by H1 only"
+b1,time0.82,p9/batch1/s511b/time0.82,n12k2_knee,H1,F,sim_s_to_tau0.82,lower,7,468.80785239248405,544.0584761466931,-75.25062375420904,-137.7324516997681,-21.47988666495907,0.109375,0.68359375,-0.46938775510204084,False,no claim,0,
+b1,reach0.82,p9/batch1/s511b/reach0.82,n12k2_knee,H1,F,reached_tau0.82,higher,20,0.55,0.4,0.15,-0.05,0.35,0.375,1.0,,False,no claim,0,"4 reached by F only, 1 by H1 only"
+b1,reach0.71,p9/batch1/s511b/reach0.71,n12k2_knee,D4,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D4 only"
+b1,time0.82,p9/batch1/s511b/time0.82,n12k2_knee,D4,F,sim_s_to_tau0.82,lower,5,473.00285317052624,554.2089586691,-81.20610549857375,-139.5217078595655,-22.89050313758198,0.125,0.68359375,-0.36,False,no claim,0,
+b1,reach0.82,p9/batch1/s511b/reach0.82,n12k2_knee,D4,F,reached_tau0.82,higher,20,0.55,0.3,0.25,0.0,0.45,0.125,1.0,,False,no claim,0,"6 reached by F only, 1 by D4 only"
+b1,reach0.71,p9/batch1/s511b/reach0.71,n18k3_knee,FX,F,reached_tau0.71,higher,20,1.0,0.95,0.05,0.0,0.15,1.0,1.0,,False,no claim,0,"1 reached by F only, 0 by FX only"
+b1,time0.82,p9/batch1/s511b/time0.82,n18k3_knee,FX,F,sim_s_to_tau0.82,lower,0,,,,,,,,,False,,0,fewer than 2 complete pairs
+b1,reach0.82,p9/batch1/s511b/reach0.82,n18k3_knee,FX,F,reached_tau0.82,higher,20,0.0,0.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by FX only"
+b1,reach0.71,p9/batch1/s511b/reach0.71,n18k3_knee,H1,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by H1 only"
+b1,time0.82,p9/batch1/s511b/time0.82,n18k3_knee,H1,F,sim_s_to_tau0.82,lower,0,,,,,,,,,False,,0,fewer than 2 complete pairs
+b1,reach0.82,p9/batch1/s511b/reach0.82,n18k3_knee,H1,F,reached_tau0.82,higher,20,0.0,0.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by H1 only"
+b1,reach0.71,p9/batch1/s511b/reach0.71,n18k3_knee,D4,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D4 only"
+b1,time0.82,p9/batch1/s511b/time0.82,n18k3_knee,D4,F,sim_s_to_tau0.82,lower,0,,,,,,,,,False,,0,fewer than 2 complete pairs
+b1,reach0.82,p9/batch1/s511b/reach0.82,n18k3_knee,D4,F,reached_tau0.82,higher,20,0.0,0.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D4 only"
+b1,reach0.71,p9/batch1/s511b/reach0.71,n12k3_knee,FX,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by FX only"
+b1,time0.82,p9/batch1/s511b/time0.82,n12k3_knee,FX,F,sim_s_to_tau0.82,lower,13,366.7485059739735,361.12182700629523,5.6266789676782745,-26.89841769512187,44.4622848587457,0.85009765625,1.0,-0.08284023668639054,False,no claim,0,
+b1,reach0.82,p9/batch1/s511b/reach0.82,n12k3_knee,FX,F,reached_tau0.82,higher,20,0.65,0.75,-0.1,-0.25,0.0,0.5,1.0,,False,no claim,0,"0 reached by F only, 2 by FX only"
+b1,reach0.71,p9/batch1/s511b/reach0.71,n12k3_knee,H1,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by H1 only"
+b1,time0.82,p9/batch1/s511b/time0.82,n12k3_knee,H1,F,sim_s_to_tau0.82,lower,12,363.8993117797945,431.652980270844,-67.75366849104951,-117.34585833504265,-20.58460852201002,0.02099609375,0.16796875,-0.375,False,no claim,0,
+b1,reach0.82,p9/batch1/s511b/reach0.82,n12k3_knee,H1,F,reached_tau0.82,higher,20,0.65,0.7,-0.05,-0.25,0.1,1.0,1.0,,False,no claim,0,"1 reached by F only, 2 by H1 only"
+b1,reach0.71,p9/batch1/s511b/reach0.71,n12k3_knee,D4,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D4 only"
+b1,time0.82,p9/batch1/s511b/time0.82,n12k3_knee,D4,F,sim_s_to_tau0.82,lower,10,366.8861707436037,400.98753957797305,-34.10136883436935,-154.29417160307668,82.78565799996866,0.6953125,1.0,-0.14,False,no claim,0,
+b1,reach0.82,p9/batch1/s511b/reach0.82,n12k3_knee,D4,F,reached_tau0.82,higher,20,0.65,0.6,0.05,-0.2,0.25,1.0,1.0,,False,no claim,0,"3 reached by F only, 2 by D4 only"
+b1,reach0.71,p9/batch1/s514/reach0.71,n6k1_knee,whole,capS,reached_tau0.71,higher,40,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by capS only, 0 by whole only"
+b1,time0.82,p9/batch1/s514/time0.82,n6k1_knee,whole,capS,sim_s_to_tau0.82,lower,35,417.9717545539008,417.9717545539008,0.0,0.0,0.0,1.0,1.0,0.0,False,no claim,0,
+b1,reach0.82,p9/batch1/s514/reach0.82,n6k1_knee,whole,capS,reached_tau0.82,higher,40,0.875,0.875,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by capS only, 0 by whole only"
+b1,reach0.71,p9/batch1/s514/reach0.71,n6k1_knee,local,capS,reached_tau0.71,higher,40,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by capS only, 0 by local only"
+b1,time0.82,p9/batch1/s514/time0.82,n6k1_knee,local,capS,sim_s_to_tau0.82,lower,35,417.9717545539008,417.9717545539008,0.0,0.0,0.0,1.0,1.0,0.0,False,no claim,0,
+b1,reach0.82,p9/batch1/s514/reach0.82,n6k1_knee,local,capS,reached_tau0.82,higher,40,0.875,0.875,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by capS only, 0 by local only"
+b1,reach0.71,p9/batch1/s514/reach0.71,n6k1_knee,wcov,capS,reached_tau0.71,higher,40,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by capS only, 0 by wcov only"
+b1,time0.82,p9/batch1/s514/time0.82,n6k1_knee,wcov,capS,sim_s_to_tau0.82,lower,35,417.9717545539008,416.50674847111304,1.4650060827877107,0.0,4.395018248363132,0.17971249487899976,1.0,0.0032653061224489797,False,no claim,0,
+b1,reach0.82,p9/batch1/s514/reach0.82,n6k1_knee,wcov,capS,reached_tau0.82,higher,40,0.875,0.875,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by capS only, 0 by wcov only"
+b1,reach0.71,p9/batch1/s514/reach0.71,n6k1_knee,capS1,capS,reached_tau0.71,higher,40,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by capS only, 0 by capS1 only"
+b1,time0.82,p9/batch1/s514/time0.82,n6k1_knee,capS1,capS,sim_s_to_tau0.82,lower,35,417.9717545539008,417.9717545539008,0.0,0.0,0.0,1.0,1.0,0.0,False,no claim,0,
+b1,reach0.82,p9/batch1/s514/reach0.82,n6k1_knee,capS1,capS,reached_tau0.82,higher,40,0.875,0.875,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by capS only, 0 by capS1 only"
+b1,reach0.71,p9/batch1/s514/reach0.71,n6k1_knee,capoff,capS,reached_tau0.71,higher,40,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by capS only, 0 by capoff only"
+b1,time0.82,p9/batch1/s514/time0.82,n6k1_knee,capoff,capS,sim_s_to_tau0.82,lower,35,417.9717545539008,417.9717545539008,0.0,0.0,0.0,1.0,1.0,0.0,False,no claim,0,
+b1,reach0.82,p9/batch1/s514/reach0.82,n6k1_knee,capoff,capS,reached_tau0.82,higher,40,0.875,0.875,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by capS only, 0 by capoff only"
+b1,reach0.71,p9/batch1/s514/reach0.71,n6k1_knee,hoveroff,capS,reached_tau0.71,higher,40,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by capS only, 0 by hoveroff only"
+b1,time0.82,p9/batch1/s514/time0.82,n6k1_knee,hoveroff,capS,sim_s_to_tau0.82,lower,35,417.9717545539008,417.9717545539008,0.0,0.0,0.0,1.0,1.0,0.0,False,no claim,0,
+b1,reach0.82,p9/batch1/s514/reach0.82,n6k1_knee,hoveroff,capS,reached_tau0.82,higher,40,0.875,0.875,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by capS only, 0 by hoveroff only"
+b1,reach0.71,p9/batch1/s514/reach0.71,n6k1_knee,secFL1,secF,reached_tau0.71,higher,40,0.95,1.0,-0.05,-0.125,0.0,0.5,1.0,,False,no claim,0,"0 reached by secF only, 2 by secFL1 only"
+b1,time0.82,p9/batch1/s514/time0.82,n6k1_knee,secFL1,secF,sim_s_to_tau0.82,lower,28,491.2104009660834,380.7713156029516,110.43908536313185,66.02364269449505,159.65584093267844,9.67546354728976e-05,0.0013545648966205664,0.34438775510204084,True,secFL1,0,
+b1,reach0.82,p9/batch1/s514/reach0.82,n6k1_knee,secFL1,secF,reached_tau0.82,higher,40,0.725,0.875,-0.15,-0.275,-0.025,0.0703125,0.984375,,False,no claim,0,"1 reached by secF only, 7 by secFL1 only"
+b1,reach0.71,p9/batch1/s514/reach0.71,n6k1_stress,whole,capS,reached_tau0.71,higher,40,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by capS only, 0 by whole only"
+b1,time0.82,p9/batch1/s514/time0.82,n6k1_stress,whole,capS,sim_s_to_tau0.82,lower,32,361.60730061975846,364.61372187783854,-3.0064212580800813,-46.88904316813059,33.34987467728286,0.6092350686367863,1.0,0.0322265625,False,no claim,0,
+b1,reach0.82,p9/batch1/s514/reach0.82,n6k1_stress,whole,capS,reached_tau0.82,higher,40,0.825,0.825,0.0,-0.075,0.075,1.0,1.0,,False,no claim,0,"1 reached by capS only, 1 by whole only"
+b1,reach0.71,p9/batch1/s514/reach0.71,n6k1_stress,local,capS,reached_tau0.71,higher,40,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by capS only, 0 by local only"
+b1,time0.82,p9/batch1/s514/time0.82,n6k1_stress,local,capS,sim_s_to_tau0.82,lower,33,360.5183246987872,366.954119042317,-6.4357943435298335,-35.77553415676035,17.07880235321098,0.7353166906373405,1.0,-0.01928374655647383,False,no claim,0,
+b1,reach0.82,p9/batch1/s514/reach0.82,n6k1_stress,local,capS,reached_tau0.82,higher,40,0.825,0.85,-0.025,-0.075,0.0,1.0,1.0,,False,no claim,0,"0 reached by capS only, 1 by local only"
+b1,reach0.71,p9/batch1/s514/reach0.71,n6k1_stress,wcov,capS,reached_tau0.71,higher,40,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by capS only, 0 by wcov only"
+b1,time0.82,p9/batch1/s514/time0.82,n6k1_stress,wcov,capS,sim_s_to_tau0.82,lower,33,360.5183246987872,359.48227328514315,1.0360514136440488,-2.4045536078258674,4.891164100178602,0.5929800980174267,1.0,0.006427915518824609,False,no claim,0,
+b1,reach0.82,p9/batch1/s514/reach0.82,n6k1_stress,wcov,capS,reached_tau0.82,higher,40,0.825,0.825,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by capS only, 0 by wcov only"
+b1,reach0.71,p9/batch1/s514/reach0.71,n6k1_stress,capS1,capS,reached_tau0.71,higher,40,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by capS only, 0 by capS1 only"
+b1,time0.82,p9/batch1/s514/time0.82,n6k1_stress,capS1,capS,sim_s_to_tau0.82,lower,33,360.5183246987872,360.5183246987872,0.0,0.0,0.0,1.0,1.0,0.0,False,no claim,0,
+b1,reach0.82,p9/batch1/s514/reach0.82,n6k1_stress,capS1,capS,reached_tau0.82,higher,40,0.825,0.825,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by capS only, 0 by capS1 only"
+b1,reach0.71,p9/batch1/s514/reach0.71,n6k1_stress,capoff,capS,reached_tau0.71,higher,40,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by capS only, 0 by capoff only"
+b1,time0.82,p9/batch1/s514/time0.82,n6k1_stress,capoff,capS,sim_s_to_tau0.82,lower,33,360.5183246987872,360.5183246987872,0.0,0.0,0.0,1.0,1.0,0.0,False,no claim,0,
+b1,reach0.82,p9/batch1/s514/reach0.82,n6k1_stress,capoff,capS,reached_tau0.82,higher,40,0.825,0.825,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by capS only, 0 by capoff only"
+b1,reach0.71,p9/batch1/s514/reach0.71,n6k1_stress,hoveroff,capS,reached_tau0.71,higher,40,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by capS only, 0 by hoveroff only"
+b1,time0.82,p9/batch1/s514/time0.82,n6k1_stress,hoveroff,capS,sim_s_to_tau0.82,lower,33,360.5183246987872,360.5183246987872,0.0,0.0,0.0,1.0,1.0,0.0,False,no claim,0,
+b1,reach0.82,p9/batch1/s514/reach0.82,n6k1_stress,hoveroff,capS,reached_tau0.82,higher,40,0.825,0.825,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by capS only, 0 by hoveroff only"
+b1,reach0.71,p9/batch1/s514/reach0.71,n6k1_stress,secFL1,secF,reached_tau0.71,higher,40,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by secF only, 0 by secFL1 only"
+b1,time0.82,p9/batch1/s514/time0.82,n6k1_stress,secFL1,secF,sim_s_to_tau0.82,lower,27,432.13803968334537,344.05588527248864,88.08215441085675,48.15617027286822,132.54354158344648,0.00018180139687899507,0.002363418159426936,0.45816186556927296,True,secFL1,0,
+b1,reach0.82,p9/batch1/s514/reach0.82,n6k1_stress,secFL1,secF,reached_tau0.82,higher,40,0.7,0.825,-0.125,-0.25,0.0,0.125,1.0,,False,no claim,0,"1 reached by secF only, 6 by secFL1 only"
+sens,reach0.71,p9/sens/ttl/reach0.71,n6k1_knee_ttl0.75,FX,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by FX only"
+sens,time0.82,p9/sens/ttl/time0.82,n6k1_knee_ttl0.75,FX,F,sim_s_to_tau0.82,lower,16,369.3557554059298,321.648242382209,47.70751302372082,21.62178040963445,83.61084541176186,0.002976637011170516,0.008929911033511548,0.21484375,True,FX,0,
+sens,reach0.82,p9/sens/ttl/reach0.82,n6k1_knee_ttl0.75,FX,F,reached_tau0.82,higher,20,0.8,0.8,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by FX only"
+sens,reach0.71,p9/sens/ttl/reach0.71,n6k1_knee_ttl0.75,H1,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by H1 only"
+sens,time0.82,p9/sens/ttl/time0.82,n6k1_knee_ttl0.75,H1,F,sim_s_to_tau0.82,lower,16,369.3557554059298,493.4351223968115,-124.07936699088168,-169.89501950051144,-84.26795811208508,6.103515625e-05,0.0003662109375,-0.4453125,True,F,0,
+sens,reach0.82,p9/sens/ttl/reach0.82,n6k1_knee_ttl0.75,H1,F,reached_tau0.82,higher,20,0.8,0.85,-0.05,-0.15,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 1 by H1 only"
+sens,reach0.71,p9/sens/ttl/reach0.71,n6k1_knee_ttl1,FX,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by FX only"
+sens,time0.82,p9/sens/ttl/time0.82,n6k1_knee_ttl1,FX,F,sim_s_to_tau0.82,lower,16,369.3557554059298,321.648242382209,47.70751302372082,21.62178040963445,83.61084541176186,0.002976637011170516,0.008929911033511548,0.21484375,True,FX,0,
+sens,reach0.82,p9/sens/ttl/reach0.82,n6k1_knee_ttl1,FX,F,reached_tau0.82,higher,20,0.8,0.8,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by FX only"
+sens,reach0.71,p9/sens/ttl/reach0.71,n6k1_knee_ttl1,H1,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by H1 only"
+sens,time0.82,p9/sens/ttl/time0.82,n6k1_knee_ttl1,H1,F,sim_s_to_tau0.82,lower,16,369.3557554059298,493.4351223968115,-124.07936699088168,-169.89501950051144,-84.26795811208508,6.103515625e-05,0.0003662109375,-0.4453125,True,F,0,
+sens,reach0.82,p9/sens/ttl/reach0.82,n6k1_knee_ttl1,H1,F,reached_tau0.82,higher,20,0.8,0.85,-0.05,-0.15,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 1 by H1 only"
+sens,reach0.71,p9/sens/ttl/reach0.71,n6k1_knee_ttl1.5,FX,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by FX only"
+sens,time0.82,p9/sens/ttl/time0.82,n6k1_knee_ttl1.5,FX,F,sim_s_to_tau0.82,lower,16,369.3557554059298,321.648242382209,47.70751302372082,21.62178040963445,83.61084541176186,0.002976637011170516,0.008929911033511548,0.21484375,True,FX,0,
+sens,reach0.82,p9/sens/ttl/reach0.82,n6k1_knee_ttl1.5,FX,F,reached_tau0.82,higher,20,0.8,0.8,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by FX only"
+sens,reach0.71,p9/sens/ttl/reach0.71,n6k1_knee_ttl1.5,H1,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by H1 only"
+sens,time0.82,p9/sens/ttl/time0.82,n6k1_knee_ttl1.5,H1,F,sim_s_to_tau0.82,lower,16,369.3557554059298,493.4351223968115,-124.07936699088168,-169.89501950051144,-84.26795811208508,6.103515625e-05,0.0003662109375,-0.4453125,True,F,0,
+sens,reach0.82,p9/sens/ttl/reach0.82,n6k1_knee_ttl1.5,H1,F,reached_tau0.82,higher,20,0.8,0.85,-0.05,-0.15,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 1 by H1 only"
+b2,reach0.71,p9/batch2/s51/reach0.71,n6k1_knee_H1_budge,plain,cutoff,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by cutoff only, 0 by plain only"
+b2,time0.82,p9/batch2/s51/time0.82,n6k1_knee_H1_budge,plain,cutoff,sim_s_to_tau0.82,lower,16,555.533191307004,575.0603173428171,-19.527126035813126,-58.58137810743938,0.0,0.31731050786291415,1.0,-0.01953125,False,no claim,0,
+b2,reach0.82,p9/batch2/s51/reach0.82,n6k1_knee_H1_budge,plain,cutoff,reached_tau0.82,higher,20,0.8,0.85,-0.05,-0.15,0.0,1.0,1.0,,False,no claim,0,"0 reached by cutoff only, 1 by plain only"
+b2,reach0.71,p9/batch2/s51/reach0.71,n6k1_knee_H1_budge,cutoff_fedprox,cutoff,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by cutoff only, 0 by cutoff_fedprox only"
+b2,time0.82,p9/batch2/s51/time0.82,n6k1_knee_H1_budge,cutoff_fedprox,cutoff,sim_s_to_tau0.82,lower,16,555.533191307004,623.910470572213,-68.37727926520893,-154.2636118955077,13.75682024987891,0.09096894797535775,0.9096894797535775,-0.22265625,False,no claim,0,
+b2,reach0.82,p9/batch2/s51/reach0.82,n6k1_knee_H1_budge,cutoff_fedprox,cutoff,reached_tau0.82,higher,20,0.8,1.0,-0.2,-0.4,-0.05,0.125,1.0,,False,no claim,0,"0 reached by cutoff only, 4 by cutoff_fedprox only"
+b2,reach0.71,p9/batch2/s51/reach0.71,n6k1_knee_H1_budge,fedbuff,cutoff,reached_tau0.71,higher,20,1.0,0.65,0.35,0.15,0.55,0.015625,0.234375,,False,no claim,0,"7 reached by cutoff only, 0 by fedbuff only"
+b2,time0.82,p9/batch2/s51/time0.82,n6k1_knee_H1_budge,fedbuff,cutoff,sim_s_to_tau0.82,lower,1,,,,,,,,,False,,0,fewer than 2 complete pairs
+b2,reach0.82,p9/batch2/s51/reach0.82,n6k1_knee_H1_budge,fedbuff,cutoff,reached_tau0.82,higher,20,0.8,0.1,0.7,0.45,0.9,0.000518798828125,0.006744384765625,,True,cutoff,0,"15 reached by cutoff only, 1 by fedbuff only"
+b2,reach0.71,p9/batch2/s51/reach0.71,n6k1_knee_H1_budge,asynchfl,cutoff,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by cutoff only, 0 by asynchfl only"
+b2,time0.82,p9/batch2/s51/time0.82,n6k1_knee_H1_budge,asynchfl,cutoff,sim_s_to_tau0.82,lower,16,555.533191307004,555.533191307004,0.0,0.0,0.0,1.0,1.0,0.0,False,no claim,0,
+b2,reach0.82,p9/batch2/s51/reach0.82,n6k1_knee_H1_budge,asynchfl,cutoff,reached_tau0.82,higher,20,0.8,0.85,-0.05,-0.15,0.0,1.0,1.0,,False,no claim,0,"0 reached by cutoff only, 1 by asynchfl only"
+b2,reach0.71,p9/batch2/s51/reach0.71,n6k1_stress_H1_budge,plain,cutoff,reached_tau0.71,higher,20,0.9,0.9,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by cutoff only, 0 by plain only"
+b2,time0.82,p9/batch2/s51/time0.82,n6k1_stress_H1_budge,plain,cutoff,sim_s_to_tau0.82,lower,13,414.95163769070774,413.152795752,1.7988419387077625,-32.47869706770871,37.875222883831995,1.0,1.0,0.011834319526627219,False,no claim,0,
+b2,reach0.82,p9/batch2/s51/reach0.82,n6k1_stress_H1_budge,plain,cutoff,reached_tau0.82,higher,20,0.7,0.7,0.0,-0.15,0.15,1.0,1.0,,False,no claim,0,"1 reached by cutoff only, 1 by plain only"
+b2,reach0.71,p9/batch2/s51/reach0.71,n6k1_stress_H1_budge,cutoff_fedprox,cutoff,reached_tau0.71,higher,20,0.9,0.9,0.0,-0.15,0.15,1.0,1.0,,False,no claim,0,"1 reached by cutoff only, 1 by cutoff_fedprox only"
+b2,time0.82,p9/batch2/s51/time0.82,n6k1_stress_H1_budge,cutoff_fedprox,cutoff,sim_s_to_tau0.82,lower,10,436.82830649625976,380.9891427955241,55.83916370073566,-22.621923155382383,126.14007885632655,0.4375,1.0,0.22,False,no claim,0,
+b2,reach0.82,p9/batch2/s51/reach0.82,n6k1_stress_H1_budge,cutoff_fedprox,cutoff,reached_tau0.82,higher,20,0.7,0.7,0.0,-0.3,0.3,1.0,1.0,,False,no claim,0,"4 reached by cutoff only, 4 by cutoff_fedprox only"
+b2,reach0.71,p9/batch2/s51/reach0.71,n6k1_stress_H1_budge,fedbuff,cutoff,reached_tau0.71,higher,20,0.9,0.3,0.6,0.4,0.8,0.00048828125,0.0078125,,True,cutoff,0,"12 reached by cutoff only, 0 by fedbuff only"
+b2,time0.82,p9/batch2/s51/time0.82,n6k1_stress_H1_budge,fedbuff,cutoff,sim_s_to_tau0.82,lower,0,,,,,,,,,False,,0,fewer than 2 complete pairs
+b2,reach0.82,p9/batch2/s51/reach0.82,n6k1_stress_H1_budge,fedbuff,cutoff,reached_tau0.82,higher,20,0.7,0.0,0.7,0.5,0.9,0.0001220703125,0.0018310546875,,True,cutoff,0,"14 reached by cutoff only, 0 by fedbuff only"
+b2,reach0.71,p9/batch2/s51/reach0.71,n6k1_stress_H1_budge,asynchfl,cutoff,reached_tau0.71,higher,20,0.9,0.9,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by cutoff only, 0 by asynchfl only"
+b2,time0.82,p9/batch2/s51/time0.82,n6k1_stress_H1_budge,asynchfl,cutoff,sim_s_to_tau0.82,lower,13,430.10578964685556,405.4606133584882,24.64517628836732,0.0,73.93552886510196,1.0,1.0,0.11242603550295859,False,no claim,0,
+b2,reach0.82,p9/batch2/s51/reach0.82,n6k1_stress_H1_budge,asynchfl,cutoff,reached_tau0.82,higher,20,0.7,0.65,0.05,0.0,0.15,1.0,1.0,,False,no claim,0,"1 reached by cutoff only, 0 by asynchfl only"
+b2,reach0.71,p9/batch2/s51/reach0.71,n6k1_knee_F_unbud,plain,cutoff,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by cutoff only, 0 by plain only"
+b2,time0.82,p9/batch2/s51/time0.82,n6k1_knee_F_unbud,plain,cutoff,sim_s_to_tau0.82,lower,16,369.3557554059298,369.3557554059298,0.0,0.0,0.0,1.0,1.0,0.0,False,no claim,0,
+b2,reach0.82,p9/batch2/s51/reach0.82,n6k1_knee_F_unbud,plain,cutoff,reached_tau0.82,higher,20,0.8,0.85,-0.05,-0.15,0.0,1.0,1.0,,False,no claim,0,"0 reached by cutoff only, 1 by plain only"
+b2,reach0.71,p9/batch2/s51/reach0.71,n6k1_knee_F_unbud,cutoff_fedprox,cutoff,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by cutoff only, 0 by cutoff_fedprox only"
+b2,time0.82,p9/batch2/s51/time0.82,n6k1_knee_F_unbud,cutoff_fedprox,cutoff,sim_s_to_tau0.82,lower,14,342.03652007494486,469.428212501724,-127.3916924267791,-192.2171733715027,-59.78971239190872,0.011718685599768628,0.14062422719722353,-0.5816326530612245,False,no claim,0,
+b2,reach0.82,p9/batch2/s51/reach0.82,n6k1_knee_F_unbud,cutoff_fedprox,cutoff,reached_tau0.82,higher,20,0.8,0.9,-0.1,-0.35,0.10124999999999318,0.6875,1.0,,False,no claim,0,"2 reached by cutoff only, 4 by cutoff_fedprox only"
+b2,reach0.71,p9/batch2/s51/reach0.71,n6k1_knee_F_unbud,fedbuff,cutoff,reached_tau0.71,higher,20,1.0,0.65,0.35,0.15,0.55,0.015625,0.234375,,False,no claim,0,"7 reached by cutoff only, 0 by fedbuff only"
+b2,time0.82,p9/batch2/s51/time0.82,n6k1_knee_F_unbud,fedbuff,cutoff,sim_s_to_tau0.82,lower,1,,,,,,,,,False,,0,fewer than 2 complete pairs
+b2,reach0.82,p9/batch2/s51/reach0.82,n6k1_knee_F_unbud,fedbuff,cutoff,reached_tau0.82,higher,20,0.8,0.05,0.75,0.55,0.9,6.103515625e-05,0.0009765625,,True,cutoff,0,"15 reached by cutoff only, 0 by fedbuff only"
+b2,reach0.71,p9/batch2/s51/reach0.71,n6k1_knee_F_unbud,asynchfl,cutoff,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by cutoff only, 0 by asynchfl only"
+b2,time0.82,p9/batch2/s51/time0.82,n6k1_knee_F_unbud,asynchfl,cutoff,sim_s_to_tau0.82,lower,16,369.3557554059298,369.3557554059298,0.0,0.0,0.0,1.0,1.0,0.0,False,no claim,0,
+b2,reach0.82,p9/batch2/s51/reach0.82,n6k1_knee_F_unbud,asynchfl,cutoff,reached_tau0.82,higher,20,0.8,0.8,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by cutoff only, 0 by asynchfl only"
+b2,reach0.71,p9/batch2/s51/reach0.71,n6k1_stress_F_unbud,plain,cutoff,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by cutoff only, 0 by plain only"
+b2,time0.82,p9/batch2/s51/time0.82,n6k1_stress_F_unbud,plain,cutoff,sim_s_to_tau0.82,lower,15,339.684068138067,339.684068138067,0.0,0.0,0.0,1.0,1.0,0.0,False,no claim,0,
+b2,reach0.82,p9/batch2/s51/reach0.82,n6k1_stress_F_unbud,plain,cutoff,reached_tau0.82,higher,20,0.75,0.8,-0.05,-0.15,0.0,1.0,1.0,,False,no claim,0,"0 reached by cutoff only, 1 by plain only"
+b2,reach0.71,p9/batch2/s51/reach0.71,n6k1_stress_F_unbud,cutoff_fedprox,cutoff,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by cutoff only, 0 by cutoff_fedprox only"
+b2,time0.82,p9/batch2/s51/time0.82,n6k1_stress_F_unbud,cutoff_fedprox,cutoff,sim_s_to_tau0.82,lower,14,328.53502875692874,429.4984069144869,-100.96337815755813,-150.7106105631658,-52.42822870425551,0.011718685599768628,0.14062422719722353,-0.3979591836734694,False,no claim,0,
+b2,reach0.82,p9/batch2/s51/reach0.82,n6k1_stress_F_unbud,cutoff_fedprox,cutoff,reached_tau0.82,higher,20,0.75,0.95,-0.2,-0.40124999999999783,0.0,0.21875,1.0,,False,no claim,0,"1 reached by cutoff only, 5 by cutoff_fedprox only"
+b2,reach0.71,p9/batch2/s51/reach0.71,n6k1_stress_F_unbud,fedbuff,cutoff,reached_tau0.71,higher,20,1.0,0.65,0.35,0.15,0.55,0.015625,0.234375,,False,no claim,0,"7 reached by cutoff only, 0 by fedbuff only"
+b2,time0.82,p9/batch2/s51/time0.82,n6k1_stress_F_unbud,fedbuff,cutoff,sim_s_to_tau0.82,lower,1,,,,,,,,,False,,0,fewer than 2 complete pairs
+b2,reach0.82,p9/batch2/s51/reach0.82,n6k1_stress_F_unbud,fedbuff,cutoff,reached_tau0.82,higher,20,0.75,0.05,0.7,0.5,0.9,0.0001220703125,0.0018310546875,,True,cutoff,0,"14 reached by cutoff only, 0 by fedbuff only"
+b2,reach0.71,p9/batch2/s51/reach0.71,n6k1_stress_F_unbud,asynchfl,cutoff,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by cutoff only, 0 by asynchfl only"
+b2,time0.82,p9/batch2/s51/time0.82,n6k1_stress_F_unbud,asynchfl,cutoff,sim_s_to_tau0.82,lower,15,339.684068138067,339.684068138067,0.0,0.0,0.0,1.0,1.0,0.0,False,no claim,0,
+b2,reach0.82,p9/batch2/s51/reach0.82,n6k1_stress_F_unbud,asynchfl,cutoff,reached_tau0.82,higher,20,0.75,0.75,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by cutoff only, 0 by asynchfl only"
+b2,reach0.71,p9/batch2/s53x/reach0.71,n6k1_knee,H1,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by H1 only"
+b2,time0.82,p9/batch2/s53x/time0.82,n6k1_knee,H1,F,sim_s_to_tau0.82,lower,16,369.3557554059298,493.4351223968115,-124.07936699088168,-169.89501950051144,-84.26795811208508,6.103515625e-05,0.00274658203125,-0.4453125,True,F,0,
+b2,reach0.82,p9/batch2/s53x/reach0.82,n6k1_knee,H1,F,reached_tau0.82,higher,20,0.8,0.85,-0.05,-0.15,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 1 by H1 only"
+b2,reach0.71,p9/batch2/s53x/reach0.71,n6k1_knee,FX,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by FX only"
+b2,time0.82,p9/batch2/s53x/time0.82,n6k1_knee,FX,F,sim_s_to_tau0.82,lower,16,369.3557554059298,321.648242382209,47.70751302372082,21.62178040963445,83.61084541176186,0.002976637011170516,0.07739256229043343,0.21484375,False,no claim,0,
+b2,reach0.82,p9/batch2/s53x/reach0.82,n6k1_knee,FX,F,reached_tau0.82,higher,20,0.8,0.8,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by FX only"
+b2,reach0.71,p9/batch2/s53x/reach0.71,n6k1_knee,D1,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D1 only"
+b2,time0.82,p9/batch2/s53x/time0.82,n6k1_knee,D1,F,sim_s_to_tau0.82,lower,16,369.3557554059298,522.3879507723905,-153.03219536646066,-220.55519240024987,-95.6008923073834,6.103515625e-05,0.00274658203125,-0.4453125,True,F,0,
+b2,reach0.82,p9/batch2/s53x/reach0.82,n6k1_knee,D1,F,reached_tau0.82,higher,20,0.8,0.85,-0.05,-0.15,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 1 by D1 only"
+b2,reach0.71,p9/batch2/s53x/reach0.71,n6k1_knee,D2,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D2 only"
+b2,time0.82,p9/batch2/s53x/time0.82,n6k1_knee,D2,F,sim_s_to_tau0.82,lower,16,369.3557554059298,482.3079218058483,-112.9521663999185,-173.5614801769283,-71.0286392887294,6.103515625e-05,0.00274658203125,-0.453125,True,F,0,
+b2,reach0.82,p9/batch2/s53x/reach0.82,n6k1_knee,D2,F,reached_tau0.82,higher,20,0.8,0.85,-0.05,-0.15,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 1 by D2 only"
+b2,reach0.71,p9/batch2/s53x/reach0.71,n6k1_knee,D3,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D3 only"
+b2,time0.82,p9/batch2/s53x/time0.82,n6k1_knee,D3,F,sim_s_to_tau0.82,lower,16,369.3557554059298,481.43694491700444,-112.08118951107463,-144.60222478925024,-82.67777392804875,6.103515625e-05,0.00274658203125,-0.4609375,True,F,0,
+b2,reach0.82,p9/batch2/s53x/reach0.82,n6k1_knee,D3,F,reached_tau0.82,higher,20,0.8,0.85,-0.05,-0.15,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 1 by D3 only"
+b2,reach0.71,p9/batch2/s53x/reach0.71,n6k1_knee,D4,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D4 only"
+b2,time0.82,p9/batch2/s53x/time0.82,n6k1_knee,D4,F,sim_s_to_tau0.82,lower,16,369.3557554059298,449.1696118298714,-79.81385642394162,-110.87260058385509,-52.38811924821169,6.103515625e-05,0.00274658203125,-0.40625,True,F,0,
+b2,reach0.82,p9/batch2/s53x/reach0.82,n6k1_knee,D4,F,reached_tau0.82,higher,20,0.8,0.85,-0.05,-0.15,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 1 by D4 only"
+b2,reach0.71,p9/batch2/s53x/reach0.71,n6k1_knee,D5,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D5 only"
+b2,time0.82,p9/batch2/s53x/time0.82,n6k1_knee,D5,F,sim_s_to_tau0.82,lower,16,369.3557554059298,444.013248790885,-74.65749338495516,-97.10736008134826,-52.52775777482349,6.103515625e-05,0.00274658203125,-0.3671875,True,F,0,
+b2,reach0.82,p9/batch2/s53x/reach0.82,n6k1_knee,D5,F,reached_tau0.82,higher,20,0.8,0.85,-0.05,-0.15,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 1 by D5 only"
+b2,reach0.71,p9/batch2/s53x/reach0.71,n6k1_knee,E3,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by E3 only"
+b2,time0.82,p9/batch2/s53x/time0.82,n6k1_knee,E3,F,sim_s_to_tau0.82,lower,15,373.6456093060551,483.66855691319023,-110.0229476071351,-140.38683138973215,-79.98026989074948,0.0001220703125,0.0037841796875,-0.4222222222222222,True,F,0,
+b2,reach0.82,p9/batch2/s53x/reach0.82,n6k1_knee,E3,F,reached_tau0.82,higher,20,0.8,0.8,0.0,-0.15,0.15,1.0,1.0,,False,no claim,0,"1 reached by F only, 1 by E3 only"
+b2,reach0.71,p9/batch2/s53x/reach0.71,n6k1_knee,D4fedex,F,reached_tau0.71,higher,20,1.0,0.95,0.05,0.0,0.15,1.0,1.0,,False,no claim,0,"1 reached by F only, 0 by D4fedex only"
+b2,time0.82,p9/batch2/s53x/time0.82,n6k1_knee,D4fedex,F,sim_s_to_tau0.82,lower,9,354.74324031577754,667.9356421786101,-313.19240186283264,-413.9481112546527,-209.86227312978878,0.00390625,0.09375,-0.9012345679012346,False,no claim,0,
+b2,reach0.82,p9/batch2/s53x/reach0.82,n6k1_knee,D4fedex,F,reached_tau0.82,higher,20,0.8,0.55,0.25,0.0,0.55,0.1796875,1.0,,False,no claim,0,"7 reached by F only, 2 by D4fedex only"
+b2,reach0.71,p9/batch2/s53x/reach0.71,n6k1_stress,H1,F,reached_tau0.71,higher,20,1.0,0.9,0.1,0.0,0.25,0.5,1.0,,False,no claim,0,"2 reached by F only, 0 by H1 only"
+b2,time0.82,p9/batch2/s53x/time0.82,n6k1_stress,H1,F,sim_s_to_tau0.82,lower,13,322.40094832659594,481.25846940257514,-158.85752107597924,-251.34344678276727,-71.63161531413925,0.000732421875,0.0205078125,-0.7041420118343196,True,F,0,
+b2,reach0.82,p9/batch2/s53x/reach0.82,n6k1_stress,H1,F,reached_tau0.82,higher,20,0.75,0.8,-0.05,-0.25,0.15,1.0,1.0,,False,no claim,0,"2 reached by F only, 3 by H1 only"
+b2,reach0.71,p9/batch2/s53x/reach0.71,n6k1_stress,FX,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by FX only"
+b2,time0.82,p9/batch2/s53x/time0.82,n6k1_stress,FX,F,sim_s_to_tau0.82,lower,15,339.684068138067,325.47297786801744,14.21109027004956,-8.767945863899655,38.27926116844289,0.38235208985751545,1.0,0.09333333333333334,False,no claim,0,
+b2,reach0.82,p9/batch2/s53x/reach0.82,n6k1_stress,FX,F,reached_tau0.82,higher,20,0.75,0.75,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by FX only"
+b2,reach0.71,p9/batch2/s53x/reach0.71,n6k1_stress,D1,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D1 only"
+b2,time0.82,p9/batch2/s53x/time0.82,n6k1_stress,D1,F,sim_s_to_tau0.82,lower,13,328.7427105459367,404.94636021846406,-76.20364967252736,-130.84350904708126,-28.037930161333357,0.004638671875,0.097412109375,-0.38461538461538464,False,no claim,0,
+b2,reach0.82,p9/batch2/s53x/reach0.82,n6k1_stress,D1,F,reached_tau0.82,higher,20,0.75,0.7,0.05,-0.1,0.25,1.0,1.0,,False,no claim,0,"2 reached by F only, 1 by D1 only"
+b2,reach0.71,p9/batch2/s53x/reach0.71,n6k1_stress,D2,F,reached_tau0.71,higher,20,1.0,0.9,0.1,0.0,0.25,0.5,1.0,,False,no claim,0,"2 reached by F only, 0 by D2 only"
+b2,time0.82,p9/batch2/s53x/time0.82,n6k1_stress,D2,F,sim_s_to_tau0.82,lower,14,328.53502875692874,446.1092394261172,-117.57421066918843,-204.53875543975383,-31.265700126331314,0.013427734375,0.21484375,-0.42857142857142855,False,no claim,0,
+b2,reach0.82,p9/batch2/s53x/reach0.82,n6k1_stress,D2,F,reached_tau0.82,higher,20,0.75,0.85,-0.1,-0.3,0.1,0.625,1.0,,False,no claim,0,"1 reached by F only, 3 by D2 only"
+b2,reach0.71,p9/batch2/s53x/reach0.71,n6k1_stress,D3,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D3 only"
+b2,time0.82,p9/batch2/s53x/time0.82,n6k1_stress,D3,F,sim_s_to_tau0.82,lower,12,339.35500998660183,438.3026561771403,-98.94764619053846,-149.92316998513292,-50.849318200863515,0.00244140625,0.06591796875,-0.4305555555555556,False,no claim,0,
+b2,reach0.82,p9/batch2/s53x/reach0.82,n6k1_stress,D3,F,reached_tau0.82,higher,20,0.75,0.7,0.05,-0.2,0.25,1.0,1.0,,False,no claim,0,"3 reached by F only, 2 by D3 only"
+b2,reach0.71,p9/batch2/s53x/reach0.71,n6k1_stress,D4,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D4 only"
+b2,time0.82,p9/batch2/s53x/time0.82,n6k1_stress,D4,F,sim_s_to_tau0.82,lower,15,339.684068138067,447.211837628476,-107.52776949040903,-135.14874697641412,-79.55173327635858,6.103515625e-05,0.00274658203125,-0.4488888888888889,True,F,0,
+b2,reach0.82,p9/batch2/s53x/reach0.82,n6k1_stress,D4,F,reached_tau0.82,higher,20,0.75,0.85,-0.1,-0.25,0.0,0.5,1.0,,False,no claim,0,"0 reached by F only, 2 by D4 only"
+b2,reach0.71,p9/batch2/s53x/reach0.71,n6k1_stress,D5,F,reached_tau0.71,higher,20,1.0,0.95,0.05,0.0,0.15,1.0,1.0,,False,no claim,0,"1 reached by F only, 0 by D5 only"
+b2,time0.82,p9/batch2/s53x/time0.82,n6k1_stress,D5,F,sim_s_to_tau0.82,lower,13,347.0628211735658,402.3098892879744,-55.24706811440858,-102.11830837703778,-14.356942790338124,0.026611328125,0.34643598926199837,-0.2781065088757396,False,no claim,0,
+b2,reach0.82,p9/batch2/s53x/reach0.82,n6k1_stress,D5,F,reached_tau0.82,higher,20,0.75,0.7,0.05,-0.1,0.2,1.0,1.0,,False,no claim,0,"2 reached by F only, 1 by D5 only"
+b2,reach0.71,p9/batch2/s53x/reach0.71,n6k1_stress,E3,F,reached_tau0.71,higher,20,1.0,0.95,0.05,0.0,0.15,1.0,1.0,,False,no claim,0,"1 reached by F only, 0 by E3 only"
+b2,time0.82,p9/batch2/s53x/time0.82,n6k1_stress,E3,F,sim_s_to_tau0.82,lower,13,328.7427105459367,403.0707962316497,-74.328085685713,-157.0660725900236,-5.557289126808225,0.010498046875,0.18478494729115327,-0.3136094674556213,False,no claim,0,
+b2,reach0.82,p9/batch2/s53x/reach0.82,n6k1_stress,E3,F,reached_tau0.82,higher,20,0.75,0.7,0.05,-0.1,0.25,1.0,1.0,,False,no claim,0,"2 reached by F only, 1 by E3 only"
+b2,reach0.71,p9/batch2/s53x/reach0.71,n6k1_stress,D4fedex,F,reached_tau0.71,higher,20,1.0,0.95,0.05,0.0,0.15,1.0,1.0,,False,no claim,0,"1 reached by F only, 0 by D4fedex only"
+b2,time0.82,p9/batch2/s53x/time0.82,n6k1_stress,D4fedex,F,sim_s_to_tau0.82,lower,9,332.40428505876724,667.9356421786101,-335.53135711984294,-435.2383621433821,-244.93979472029542,0.00390625,0.09375,-1.0,False,no claim,0,
+b2,reach0.82,p9/batch2/s53x/reach0.82,n6k1_stress,D4fedex,F,reached_tau0.82,higher,20,0.75,0.55,0.2,-0.05,0.45,0.2890625,1.0,,False,no claim,0,"6 reached by F only, 2 by D4fedex only"
+b2,reach0.71,p9/batch2/s53x/reach0.71,n6k1_relaxed,FX,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by FX only"
+b2,time0.82,p9/batch2/s53x/time0.82,n6k1_relaxed,FX,F,sim_s_to_tau0.82,lower,16,369.3557554059298,321.648242382209,47.70751302372082,21.62178040963445,83.61084541176186,0.002976637011170516,0.07739256229043343,0.21484375,False,no claim,0,
+b2,reach0.82,p9/batch2/s53x/reach0.82,n6k1_relaxed,FX,F,reached_tau0.82,higher,20,0.8,0.8,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by FX only"
+b2,reach0.71,p9/batch2/s53x/reach0.71,n6k1_relaxed,H1,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by H1 only"
+b2,time0.82,p9/batch2/s53x/time0.82,n6k1_relaxed,H1,F,sim_s_to_tau0.82,lower,16,369.3557554059298,487.6059837340654,-118.25022832813556,-157.7804871035387,-83.91077517437864,6.103515625e-05,0.00274658203125,-0.4453125,True,F,0,
+b2,reach0.82,p9/batch2/s53x/reach0.82,n6k1_relaxed,H1,F,reached_tau0.82,higher,20,0.8,0.85,-0.05,-0.15,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 1 by H1 only"
+b2,reach0.71,p9/batch2/s53x/reach0.71,n6k1_relaxed,D1,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D1 only"
+b2,time0.82,p9/batch2/s53x/time0.82,n6k1_relaxed,D1,F,sim_s_to_tau0.82,lower,16,369.3557554059298,488.4168663659075,-119.06111095997767,-157.9407243953943,-84.93908081974061,6.103515625e-05,0.00274658203125,-0.4296875,True,F,0,
+b2,reach0.82,p9/batch2/s53x/reach0.82,n6k1_relaxed,D1,F,reached_tau0.82,higher,20,0.8,0.85,-0.05,-0.15,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 1 by D1 only"
+b2,reach0.71,p9/batch2/s53x/reach0.71,n6k1_relaxed,D2,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D2 only"
+b2,time0.82,p9/batch2/s53x/time0.82,n6k1_relaxed,D2,F,sim_s_to_tau0.82,lower,16,369.3557554059298,466.6321380478912,-97.27638264196139,-126.53166103373769,-70.42426889287654,6.103515625e-05,0.00274658203125,-0.4375,True,F,0,
+b2,reach0.82,p9/batch2/s53x/reach0.82,n6k1_relaxed,D2,F,reached_tau0.82,higher,20,0.8,0.85,-0.05,-0.15,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 1 by D2 only"
+b2,reach0.71,p9/batch2/s53x/reach0.71,n6k1_relaxed,D3,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D3 only"
+b2,time0.82,p9/batch2/s53x/time0.82,n6k1_relaxed,D3,F,sim_s_to_tau0.82,lower,16,369.3557554059298,486.0024301995727,-116.64667479364289,-148.95805778928423,-87.47993712341069,6.103515625e-05,0.00274658203125,-0.4609375,True,F,0,
+b2,reach0.82,p9/batch2/s53x/reach0.82,n6k1_relaxed,D3,F,reached_tau0.82,higher,20,0.8,0.85,-0.05,-0.15,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 1 by D3 only"
+b2,reach0.71,p9/batch2/s53x/reach0.71,n6k1_relaxed,D4,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D4 only"
+b2,time0.82,p9/batch2/s53x/time0.82,n6k1_relaxed,D4,F,sim_s_to_tau0.82,lower,16,369.3557554059298,449.1696118298714,-79.81385642394162,-110.87260058385509,-52.38811924821169,6.103515625e-05,0.00274658203125,-0.40625,True,F,0,
+b2,reach0.82,p9/batch2/s53x/reach0.82,n6k1_relaxed,D4,F,reached_tau0.82,higher,20,0.8,0.85,-0.05,-0.15,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 1 by D4 only"
+b2,reach0.71,p9/batch2/s53x/reach0.71,n6k1_relaxed,D5,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D5 only"
+b2,time0.82,p9/batch2/s53x/time0.82,n6k1_relaxed,D5,F,sim_s_to_tau0.82,lower,16,369.3557554059298,448.4276153774772,-79.07185997154738,-104.9489684383412,-54.07415824997537,6.103515625e-05,0.00274658203125,-0.390625,True,F,0,
+b2,reach0.82,p9/batch2/s53x/reach0.82,n6k1_relaxed,D5,F,reached_tau0.82,higher,20,0.8,0.85,-0.05,-0.15,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 1 by D5 only"
+b2,reach0.71,p9/batch2/s53x/reach0.71,n6k1_relaxed,E3,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by E3 only"
+b2,time0.82,p9/batch2/s53x/time0.82,n6k1_relaxed,E3,F,sim_s_to_tau0.82,lower,16,369.3557554059298,498.8089810077872,-129.4532256018574,-168.76841041027527,-93.38380841404032,6.103515625e-05,0.00274658203125,-0.484375,True,F,0,
+b2,reach0.82,p9/batch2/s53x/reach0.82,n6k1_relaxed,E3,F,reached_tau0.82,higher,20,0.8,0.85,-0.05,-0.15,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 1 by E3 only"
+b2,reach0.71,p9/batch2/s53x/reach0.71,n6k1_relaxed,D4fedex,F,reached_tau0.71,higher,20,1.0,0.95,0.05,0.0,0.15,1.0,1.0,,False,no claim,0,"1 reached by F only, 0 by D4fedex only"
+b2,time0.82,p9/batch2/s53x/time0.82,n6k1_relaxed,D4fedex,F,sim_s_to_tau0.82,lower,9,354.74324031577754,667.9356421786101,-313.19240186283264,-413.9481112546527,-209.86227312978878,0.00390625,0.09375,-0.9012345679012346,False,no claim,0,
+b2,reach0.82,p9/batch2/s53x/reach0.82,n6k1_relaxed,D4fedex,F,reached_tau0.82,higher,20,0.8,0.55,0.25,0.0,0.55,0.1796875,1.0,,False,no claim,0,"7 reached by F only, 2 by D4fedex only"
+b2,reach0.71,p9/batch2/s53x/reach0.71,n6k3_knee,FX,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by FX only"
+b2,time0.82,p9/batch2/s53x/time0.82,n6k3_knee,FX,F,sim_s_to_tau0.82,lower,20,164.17065392005026,157.77595517213922,6.394698747911025,1.7973356720052835,11.356045772793877,0.009725523541639646,0.18478494729115327,0.08,False,no claim,0,
+b2,reach0.82,p9/batch2/s53x/reach0.82,n6k3_knee,FX,F,reached_tau0.82,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by FX only"
+b2,reach0.71,p9/batch2/s53x/reach0.71,n6k3_knee,H1,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by H1 only"
+b2,time0.82,p9/batch2/s53x/time0.82,n6k3_knee,H1,F,sim_s_to_tau0.82,lower,20,164.17065392005026,202.01653663376928,-37.845882713719035,-70.12158948031326,-10.582531460962493,0.025842854459788903,0.34643598926199837,-0.195,False,no claim,0,
+b2,reach0.82,p9/batch2/s53x/reach0.82,n6k3_knee,H1,F,reached_tau0.82,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by H1 only"
+b2,reach0.71,p9/batch2/s53x/reach0.71,n6k3_knee,D1,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D1 only"
+b2,time0.82,p9/batch2/s53x/time0.82,n6k3_knee,D1,F,sim_s_to_tau0.82,lower,20,164.17065392005026,202.03989655735205,-37.869242637301795,-70.21444517655472,-10.582531460962493,0.025842854459788903,0.34643598926199837,-0.195,False,no claim,0,
+b2,reach0.82,p9/batch2/s53x/reach0.82,n6k3_knee,D1,F,reached_tau0.82,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D1 only"
+b2,reach0.71,p9/batch2/s53x/reach0.71,n6k3_knee,D2,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D2 only"
+b2,time0.82,p9/batch2/s53x/time0.82,n6k3_knee,D2,F,sim_s_to_tau0.82,lower,20,164.17065392005026,201.83533350372454,-37.6646795836743,-69.70617572172834,-10.566434356530824,0.025842854459788903,0.34643598926199837,-0.195,False,no claim,0,
+b2,reach0.82,p9/batch2/s53x/reach0.82,n6k3_knee,D2,F,reached_tau0.82,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D2 only"
+b2,reach0.71,p9/batch2/s53x/reach0.71,n6k3_knee,D3,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D3 only"
+b2,time0.82,p9/batch2/s53x/time0.82,n6k3_knee,D3,F,sim_s_to_tau0.82,lower,20,164.17065392005026,201.9755213094235,-37.80486738937325,-69.84285883228482,-10.601486366430622,0.025842854459788903,0.34643598926199837,-0.195,False,no claim,0,
+b2,reach0.82,p9/batch2/s53x/reach0.82,n6k3_knee,D3,F,reached_tau0.82,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D3 only"
+b2,reach0.71,p9/batch2/s53x/reach0.71,n6k3_knee,D4,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D4 only"
+b2,time0.82,p9/batch2/s53x/time0.82,n6k3_knee,D4,F,sim_s_to_tau0.82,lower,20,164.17065392005026,162.43805042628665,1.7326034937635995,-21.924716634404607,25.095458152596834,0.7771175732880233,1.0,0.03,False,no claim,0,
+b2,reach0.82,p9/batch2/s53x/reach0.82,n6k3_knee,D4,F,reached_tau0.82,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D4 only"
+b2,reach0.71,p9/batch2/s53x/reach0.71,n6k3_knee,D5,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D5 only"
+b2,time0.82,p9/batch2/s53x/time0.82,n6k3_knee,D5,F,sim_s_to_tau0.82,lower,20,164.17065392005026,202.0276252037671,-37.856971283716845,-70.14404383455883,-10.593342816710358,0.025842854459788903,0.34643598926199837,-0.195,False,no claim,0,
+b2,reach0.82,p9/batch2/s53x/reach0.82,n6k3_knee,D5,F,reached_tau0.82,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D5 only"
+b2,reach0.71,p9/batch2/s53x/reach0.71,n6k3_knee,E3,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by E3 only"
+b2,time0.82,p9/batch2/s53x/time0.82,n6k3_knee,E3,F,sim_s_to_tau0.82,lower,20,164.17065392005026,202.0276252037671,-37.856971283716845,-70.14404383455883,-10.593342816710358,0.025842854459788903,0.34643598926199837,-0.195,False,no claim,0,
+b2,reach0.82,p9/batch2/s53x/reach0.82,n6k3_knee,E3,F,reached_tau0.82,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by E3 only"
+b2,reach0.71,p9/batch2/s53x/reach0.71,n6k3_knee,D4fedex,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D4fedex only"
+b2,time0.82,p9/batch2/s53x/time0.82,n6k3_knee,D4fedex,F,sim_s_to_tau0.82,lower,12,149.65517440841845,384.5478189016285,-234.89264449321004,-270.24179874020916,-203.41690494876752,0.00048828125,0.0146484375,-1.0,True,F,0,
+b2,reach0.82,p9/batch2/s53x/reach0.82,n6k3_knee,D4fedex,F,reached_tau0.82,higher,20,1.0,0.6,0.4,0.2,0.6,0.0078125,0.3515625,,False,no claim,0,"8 reached by F only, 0 by D4fedex only"
+b2,reach0.71,p9/batch2/s53x/reach0.71,n6k3_stress,FX,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by FX only"
+b2,time0.82,p9/batch2/s53x/time0.82,n6k3_stress,FX,F,sim_s_to_tau0.82,lower,20,164.17065392005026,157.77595517213922,6.394698747911025,1.7973356720052835,11.356045772793877,0.009725523541639646,0.18478494729115327,0.08,False,no claim,0,
+b2,reach0.82,p9/batch2/s53x/reach0.82,n6k3_stress,FX,F,reached_tau0.82,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by FX only"
+b2,reach0.71,p9/batch2/s53x/reach0.71,n6k3_stress,H1,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by H1 only"
+b2,time0.82,p9/batch2/s53x/time0.82,n6k3_stress,H1,F,sim_s_to_tau0.82,lower,20,164.17065392005026,196.88556944747688,-32.71491552742664,-66.78556537409226,-3.147455330251743,0.030908013652429556,0.34643598926199837,-0.1725,False,no claim,0,
+b2,reach0.82,p9/batch2/s53x/reach0.82,n6k3_stress,H1,F,reached_tau0.82,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by H1 only"
+b2,reach0.71,p9/batch2/s53x/reach0.71,n6k3_stress,D1,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D1 only"
+b2,time0.82,p9/batch2/s53x/time0.82,n6k3_stress,D1,F,sim_s_to_tau0.82,lower,20,164.17065392005026,204.96445321582723,-40.79379929577699,-71.48778775368439,-14.749533704953066,0.007630414739245609,0.15260829478491217,-0.24,False,no claim,0,
+b2,reach0.82,p9/batch2/s53x/reach0.82,n6k3_stress,D1,F,reached_tau0.82,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D1 only"
+b2,reach0.71,p9/batch2/s53x/reach0.71,n6k3_stress,D2,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D2 only"
+b2,time0.82,p9/batch2/s53x/time0.82,n6k3_stress,D2,F,sim_s_to_tau0.82,lower,20,164.17065392005026,196.8445541231311,-32.67390020308085,-66.63272062349861,-3.210228350095192,0.030908013652429556,0.34643598926199837,-0.1725,False,no claim,0,
+b2,reach0.82,p9/batch2/s53x/reach0.82,n6k3_stress,D2,F,reached_tau0.82,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D2 only"
+b2,reach0.71,p9/batch2/s53x/reach0.71,n6k3_stress,D3,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D3 only"
+b2,time0.82,p9/batch2/s53x/time0.82,n6k3_stress,D3,F,sim_s_to_tau0.82,lower,20,164.17065392005026,196.8445541231311,-32.67390020308085,-66.63272062349861,-3.210228350095192,0.030908013652429556,0.34643598926199837,-0.1725,False,no claim,0,
+b2,reach0.82,p9/batch2/s53x/reach0.82,n6k3_stress,D3,F,reached_tau0.82,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D3 only"
+b2,reach0.71,p9/batch2/s53x/reach0.71,n6k3_stress,D4,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D4 only"
+b2,time0.82,p9/batch2/s53x/time0.82,n6k3_stress,D4,F,sim_s_to_tau0.82,lower,20,164.17065392005026,162.43805042628665,1.7326034937635995,-21.924716634404607,25.095458152596834,0.7771175732880233,1.0,0.03,False,no claim,0,
+b2,reach0.82,p9/batch2/s53x/reach0.82,n6k3_stress,D4,F,reached_tau0.82,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D4 only"
+b2,reach0.71,p9/batch2/s53x/reach0.71,n6k3_stress,D5,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D5 only"
+b2,time0.82,p9/batch2/s53x/time0.82,n6k3_stress,D5,F,sim_s_to_tau0.82,lower,20,164.17065392005026,200.44801785026212,-36.27736393021187,-68.21669412807996,-9.894293083262896,0.023095732617466558,0.34643598926199837,-0.2225,False,no claim,0,
+b2,reach0.82,p9/batch2/s53x/reach0.82,n6k3_stress,D5,F,reached_tau0.82,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D5 only"
+b2,reach0.71,p9/batch2/s53x/reach0.71,n6k3_stress,E3,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by E3 only"
+b2,time0.82,p9/batch2/s53x/time0.82,n6k3_stress,E3,F,sim_s_to_tau0.82,lower,20,164.17065392005026,200.44801785026212,-36.27736393021187,-68.21669412807996,-9.894293083262896,0.023095732617466558,0.34643598926199837,-0.2225,False,no claim,0,
+b2,reach0.82,p9/batch2/s53x/reach0.82,n6k3_stress,E3,F,reached_tau0.82,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by E3 only"
+b2,reach0.71,p9/batch2/s53x/reach0.71,n6k3_stress,D4fedex,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D4fedex only"
+b2,time0.82,p9/batch2/s53x/time0.82,n6k3_stress,D4fedex,F,sim_s_to_tau0.82,lower,12,149.65517440841845,384.5478189016285,-234.89264449321004,-270.24179874020916,-203.41690494876752,0.00048828125,0.0146484375,-1.0,True,F,0,
+b2,reach0.82,p9/batch2/s53x/reach0.82,n6k3_stress,D4fedex,F,reached_tau0.82,higher,20,1.0,0.6,0.4,0.2,0.6,0.0078125,0.3515625,,False,no claim,0,"8 reached by F only, 0 by D4fedex only"
+b2,reach0.71,p9/batch2/s59x/reach0.71,n6k1_knee,H1,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by H1 only"
+b2,time0.82,p9/batch2/s59x/time0.82,n6k1_knee,H1,F,sim_s_to_tau0.82,lower,16,369.3557554059298,493.4351223968115,-124.07936699088168,-169.89501950051144,-84.26795811208508,6.103515625e-05,0.00177001953125,-0.4453125,True,F,0,
+b2,reach0.82,p9/batch2/s59x/reach0.82,n6k1_knee,H1,F,reached_tau0.82,higher,20,0.8,0.85,-0.05,-0.15,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 1 by H1 only"
+b2,reach0.71,p9/batch2/s59x/reach0.71,n6k1_knee,FX,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by FX only"
+b2,time0.82,p9/batch2/s59x/time0.82,n6k1_knee,FX,F,sim_s_to_tau0.82,lower,16,369.3557554059298,321.648242382209,47.70751302372082,21.62178040963445,83.61084541176186,0.002976637011170516,0.06846265125692187,0.21484375,False,no claim,0,
+b2,reach0.82,p9/batch2/s59x/reach0.82,n6k1_knee,FX,F,reached_tau0.82,higher,20,0.8,0.8,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by FX only"
+b2,reach0.71,p9/batch2/s59x/reach0.71,n6k1_knee,D3,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D3 only"
+b2,time0.82,p9/batch2/s59x/time0.82,n6k1_knee,D3,F,sim_s_to_tau0.82,lower,16,369.3557554059298,481.43694491700444,-112.08118951107463,-144.60222478925024,-82.67777392804875,6.103515625e-05,0.00177001953125,-0.4609375,True,F,0,
+b2,reach0.82,p9/batch2/s59x/reach0.82,n6k1_knee,D3,F,reached_tau0.82,higher,20,0.8,0.85,-0.05,-0.15,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 1 by D3 only"
+b2,reach0.71,p9/batch2/s59x/reach0.71,n6k1_knee,D4,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D4 only"
+b2,time0.82,p9/batch2/s59x/time0.82,n6k1_knee,D4,F,sim_s_to_tau0.82,lower,16,369.3557554059298,449.1696118298714,-79.81385642394162,-110.87260058385509,-52.38811924821169,6.103515625e-05,0.00177001953125,-0.40625,True,F,0,
+b2,reach0.82,p9/batch2/s59x/reach0.82,n6k1_knee,D4,F,reached_tau0.82,higher,20,0.8,0.85,-0.05,-0.15,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 1 by D4 only"
+b2,reach0.71,p9/batch2/s59x/reach0.71,n6k1_stress,H1,F,reached_tau0.71,higher,20,1.0,0.9,0.1,0.0,0.25,0.5,1.0,,False,no claim,0,"2 reached by F only, 0 by H1 only"
+b2,time0.82,p9/batch2/s59x/time0.82,n6k1_stress,H1,F,sim_s_to_tau0.82,lower,13,322.40094832659594,481.25846940257514,-158.85752107597924,-251.34344678276727,-71.63161531413925,0.000732421875,0.018310546875,-0.7041420118343196,True,F,0,
+b2,reach0.82,p9/batch2/s59x/reach0.82,n6k1_stress,H1,F,reached_tau0.82,higher,20,0.75,0.8,-0.05,-0.25,0.15,1.0,1.0,,False,no claim,0,"2 reached by F only, 3 by H1 only"
+b2,reach0.71,p9/batch2/s59x/reach0.71,n6k1_stress,FX,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by FX only"
+b2,time0.82,p9/batch2/s59x/time0.82,n6k1_stress,FX,F,sim_s_to_tau0.82,lower,15,339.684068138067,325.47297786801744,14.21109027004956,-8.767945863899655,38.27926116844289,0.38235208985751545,1.0,0.09333333333333334,False,no claim,0,
+b2,reach0.82,p9/batch2/s59x/reach0.82,n6k1_stress,FX,F,reached_tau0.82,higher,20,0.75,0.75,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by FX only"
+b2,reach0.71,p9/batch2/s59x/reach0.71,n6k1_stress,D3,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D3 only"
+b2,time0.82,p9/batch2/s59x/time0.82,n6k1_stress,D3,F,sim_s_to_tau0.82,lower,12,339.35500998660183,438.3026561771403,-98.94764619053846,-149.92316998513292,-50.849318200863515,0.00244140625,0.05859375,-0.4305555555555556,False,no claim,0,
+b2,reach0.82,p9/batch2/s59x/reach0.82,n6k1_stress,D3,F,reached_tau0.82,higher,20,0.75,0.7,0.05,-0.2,0.25,1.0,1.0,,False,no claim,0,"3 reached by F only, 2 by D3 only"
+b2,reach0.71,p9/batch2/s59x/reach0.71,n6k1_stress,D4,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D4 only"
+b2,time0.82,p9/batch2/s59x/time0.82,n6k1_stress,D4,F,sim_s_to_tau0.82,lower,15,339.684068138067,447.211837628476,-107.52776949040903,-135.14874697641412,-79.55173327635858,6.103515625e-05,0.00177001953125,-0.4488888888888889,True,F,0,
+b2,reach0.82,p9/batch2/s59x/reach0.82,n6k1_stress,D4,F,reached_tau0.82,higher,20,0.75,0.85,-0.1,-0.25,0.0,0.5,1.0,,False,no claim,0,"0 reached by F only, 2 by D4 only"
+b2,reach0.71,p9/batch2/s59x/reach0.71,n6k3_knee,FX,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by FX only"
+b2,time0.82,p9/batch2/s59x/time0.82,n6k3_knee,FX,F,sim_s_to_tau0.82,lower,20,164.17065392005026,157.77595517213922,6.394698747911025,1.7973356720052835,11.356045772793877,0.009725523541639646,0.2139615179160722,0.08,False,no claim,0,
+b2,reach0.82,p9/batch2/s59x/reach0.82,n6k3_knee,FX,F,reached_tau0.82,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by FX only"
+b2,reach0.71,p9/batch2/s59x/reach0.71,n6k3_knee,H1,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by H1 only"
+b2,time0.82,p9/batch2/s59x/time0.82,n6k3_knee,H1,F,sim_s_to_tau0.82,lower,20,164.17065392005026,202.01653663376928,-37.845882713719035,-70.12158948031326,-10.582531460962493,0.025842854459788903,0.49101423473598915,-0.195,False,no claim,0,
+b2,reach0.82,p9/batch2/s59x/reach0.82,n6k3_knee,H1,F,reached_tau0.82,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by H1 only"
+b2,reach0.71,p9/batch2/s59x/reach0.71,n6k3_knee,D3,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D3 only"
+b2,time0.82,p9/batch2/s59x/time0.82,n6k3_knee,D3,F,sim_s_to_tau0.82,lower,20,164.17065392005026,201.9755213094235,-37.80486738937325,-69.84285883228482,-10.601486366430622,0.025842854459788903,0.49101423473598915,-0.195,False,no claim,0,
+b2,reach0.82,p9/batch2/s59x/reach0.82,n6k3_knee,D3,F,reached_tau0.82,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D3 only"
+b2,reach0.71,p9/batch2/s59x/reach0.71,n6k3_knee,D4,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D4 only"
+b2,time0.82,p9/batch2/s59x/time0.82,n6k3_knee,D4,F,sim_s_to_tau0.82,lower,20,164.17065392005026,162.43805042628665,1.7326034937635995,-21.924716634404607,25.095458152596834,0.7771175732880233,1.0,0.03,False,no claim,0,
+b2,reach0.82,p9/batch2/s59x/reach0.82,n6k3_knee,D4,F,reached_tau0.82,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D4 only"
+b2,reach0.71,p9/batch2/s59x/reach0.71,n6k3_stress,FX,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by FX only"
+b2,time0.82,p9/batch2/s59x/time0.82,n6k3_stress,FX,F,sim_s_to_tau0.82,lower,20,164.17065392005026,157.77595517213922,6.394698747911025,1.7973356720052835,11.356045772793877,0.009725523541639646,0.2139615179160722,0.08,False,no claim,0,
+b2,reach0.82,p9/batch2/s59x/reach0.82,n6k3_stress,FX,F,reached_tau0.82,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by FX only"
+b2,reach0.71,p9/batch2/s59x/reach0.71,n6k3_stress,H1,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by H1 only"
+b2,time0.82,p9/batch2/s59x/time0.82,n6k3_stress,H1,F,sim_s_to_tau0.82,lower,20,164.17065392005026,196.88556944747688,-32.71491552742664,-66.78556537409226,-3.147455330251743,0.030908013652429556,0.5254362320913024,-0.1725,False,no claim,0,
+b2,reach0.82,p9/batch2/s59x/reach0.82,n6k3_stress,H1,F,reached_tau0.82,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by H1 only"
+b2,reach0.71,p9/batch2/s59x/reach0.71,n6k3_stress,D3,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D3 only"
+b2,time0.82,p9/batch2/s59x/time0.82,n6k3_stress,D3,F,sim_s_to_tau0.82,lower,20,164.17065392005026,196.8445541231311,-32.67390020308085,-66.63272062349861,-3.210228350095192,0.030908013652429556,0.5254362320913024,-0.1725,False,no claim,0,
+b2,reach0.82,p9/batch2/s59x/reach0.82,n6k3_stress,D3,F,reached_tau0.82,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D3 only"
+b2,reach0.71,p9/batch2/s59x/reach0.71,n6k3_stress,D4,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D4 only"
+b2,time0.82,p9/batch2/s59x/time0.82,n6k3_stress,D4,F,sim_s_to_tau0.82,lower,20,164.17065392005026,162.43805042628665,1.7326034937635995,-21.924716634404607,25.095458152596834,0.7771175732880233,1.0,0.03,False,no claim,0,
+b2,reach0.82,p9/batch2/s59x/reach0.82,n6k3_stress,D4,F,reached_tau0.82,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D4 only"
+b2,reach0.71,p9/batch2/s59x/reach0.71,n12k1_stress,FX,F,reached_tau0.71,higher,20,1.0,0.9,0.1,0.0,0.25,0.5,1.0,,False,no claim,0,"2 reached by F only, 0 by FX only"
+b2,time0.82,p9/batch2/s59x/time0.82,n12k1_stress,FX,F,sim_s_to_tau0.82,lower,2,679.0508128398214,744.5455634375685,-65.49475059774704,-69.69173354026861,-61.29776765522547,0.5,1.0,-1.0,False,no claim,0,
+b2,reach0.82,p9/batch2/s59x/reach0.82,n12k1_stress,FX,F,reached_tau0.82,higher,20,0.2,0.15,0.05,-0.1,0.2,1.0,1.0,,False,no claim,0,"2 reached by F only, 1 by FX only"
+b2,reach0.71,p9/batch2/s59x/reach0.71,n12k1_stress,D4,F,reached_tau0.71,higher,20,1.0,0.95,0.05,0.0,0.15,1.0,1.0,,False,no claim,0,"1 reached by F only, 0 by D4 only"
+b2,time0.82,p9/batch2/s59x/time0.82,n12k1_stress,D4,F,sim_s_to_tau0.82,lower,4,671.6920436119835,928.2547363055346,-256.56269269355107,-425.4299220259418,-87.69546336116036,0.125,1.0,-1.0,False,no claim,0,
+b2,reach0.82,p9/batch2/s59x/reach0.82,n12k1_stress,D4,F,reached_tau0.82,higher,20,0.2,0.2,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D4 only"
+b2,reach0.71,p9/batch2/s59x/reach0.71,n12k1_stress,H1,F,reached_tau0.71,higher,20,1.0,0.95,0.05,0.0,0.15,1.0,1.0,,False,no claim,0,"1 reached by F only, 0 by H1 only"
+b2,time0.82,p9/batch2/s59x/time0.82,n12k1_stress,H1,F,sim_s_to_tau0.82,lower,2,669.3814414560329,672.3869789367309,-3.005537480697967,-6.812877806602046,0.8018028452061117,1.0,1.0,0.0,False,no claim,0,
+b2,reach0.82,p9/batch2/s59x/reach0.82,n12k1_stress,H1,F,reached_tau0.82,higher,20,0.2,0.15,0.05,-0.1,0.2,1.0,1.0,,False,no claim,0,"2 reached by F only, 1 by H1 only"
+b2,reach0.71,p9/batch2/s59x/reach0.71,n12k1_stress,D3,F,reached_tau0.71,higher,20,1.0,0.9,0.1,0.0,0.25,0.5,1.0,,False,no claim,0,"2 reached by F only, 0 by D3 only"
+b2,time0.82,p9/batch2/s59x/time0.82,n12k1_stress,D3,F,sim_s_to_tau0.82,lower,2,669.3814414560329,656.4511915229377,12.930249933095183,-23.022320766584016,48.88282063277438,1.0,1.0,0.0,False,no claim,0,
+b2,reach0.82,p9/batch2/s59x/reach0.82,n12k1_stress,D3,F,reached_tau0.82,higher,20,0.2,0.15,0.05,-0.1,0.2,1.0,1.0,,False,no claim,0,"2 reached by F only, 1 by D3 only"
+b2,reach0.71,p9/batch2/s59x/reach0.71,n12k1_knee,FX,F,reached_tau0.71,higher,20,0.95,0.9,0.05,0.0,0.15,1.0,1.0,,False,no claim,0,"1 reached by F only, 0 by FX only"
+b2,time0.82,p9/batch2/s59x/time0.82,n12k1_knee,FX,F,sim_s_to_tau0.82,lower,3,836.5407941674736,799.9078410100968,36.63295315737681,-54.28065871342551,108.07303332956508,0.5,1.0,0.1111111111111111,False,no claim,0,
+b2,reach0.82,p9/batch2/s59x/reach0.82,n12k1_knee,FX,F,reached_tau0.82,higher,20,0.2,0.15,0.05,0.0,0.15,1.0,1.0,,False,no claim,0,"1 reached by F only, 0 by FX only"
+b2,reach0.71,p9/batch2/s59x/reach0.71,n12k1_knee,D4,F,reached_tau0.71,higher,20,0.95,0.95,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D4 only"
+b2,time0.82,p9/batch2/s59x/time0.82,n12k1_knee,D4,F,sim_s_to_tau0.82,lower,3,790.9566075991219,873.3254052331904,-82.36879763406857,-245.99825939070433,39.230333496583626,0.5,1.0,-0.1111111111111111,False,no claim,0,
+b2,reach0.82,p9/batch2/s59x/reach0.82,n12k1_knee,D4,F,reached_tau0.82,higher,20,0.2,0.2,0.0,-0.15,0.15,1.0,1.0,,False,no claim,0,"1 reached by F only, 1 by D4 only"
+b2,reach0.71,p9/batch2/s59x/reach0.71,n12k1_knee,H1,F,reached_tau0.71,higher,20,0.95,0.95,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by H1 only"
+b2,time0.82,p9/batch2/s59x/time0.82,n12k1_knee,H1,F,sim_s_to_tau0.82,lower,1,,,,,,,,,False,,0,fewer than 2 complete pairs
+b2,reach0.82,p9/batch2/s59x/reach0.82,n12k1_knee,H1,F,reached_tau0.82,higher,20,0.2,0.05,0.15,0.0,0.3,0.25,1.0,,False,no claim,0,"3 reached by F only, 0 by H1 only"
+b2,reach0.71,p9/batch2/s59x/reach0.71,n12k1_knee,D3,F,reached_tau0.71,higher,20,0.95,0.95,0.0,-0.15,0.15,1.0,1.0,,False,no claim,0,"1 reached by F only, 1 by D3 only"
+b2,time0.82,p9/batch2/s59x/time0.82,n12k1_knee,D3,F,sim_s_to_tau0.82,lower,4,815.6472569583566,957.4366636343766,-141.78940667602,-246.12885712488787,-37.44995622715214,0.25,1.0,-0.25,False,no claim,0,
+b2,reach0.82,p9/batch2/s59x/reach0.82,n12k1_knee,D3,F,reached_tau0.82,higher,20,0.2,0.2,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D3 only"
+b2,reach0.71,p9/batch2/s59x/reach0.71,n12k2_knee,FX,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by FX only"
+b2,time0.82,p9/batch2/s59x/time0.82,n12k2_knee,FX,F,sim_s_to_tau0.82,lower,10,508.33461627343206,452.23436111951014,56.1002551539219,-3.888495873301868,110.66254058345743,0.09765625,1.0,0.41,False,no claim,0,
+b2,reach0.82,p9/batch2/s59x/reach0.82,n12k2_knee,FX,F,reached_tau0.82,higher,20,0.55,0.6,-0.05,-0.25,0.1,1.0,1.0,,False,no claim,0,"1 reached by F only, 2 by FX only"
+b2,reach0.71,p9/batch2/s59x/reach0.71,n12k2_knee,H1,F,reached_tau0.71,higher,20,1.0,0.95,0.05,0.0,0.15,1.0,1.0,,False,no claim,0,"1 reached by F only, 0 by H1 only"
+b2,time0.82,p9/batch2/s59x/time0.82,n12k2_knee,H1,F,sim_s_to_tau0.82,lower,7,468.80785239248405,544.0584761466931,-75.25062375420904,-137.7324516997681,-21.47988666495907,0.109375,1.0,-0.46938775510204084,False,no claim,0,
+b2,reach0.82,p9/batch2/s59x/reach0.82,n12k2_knee,H1,F,reached_tau0.82,higher,20,0.55,0.4,0.15,-0.05,0.35,0.375,1.0,,False,no claim,0,"4 reached by F only, 1 by H1 only"
+b2,reach0.71,p9/batch2/s59x/reach0.71,n12k2_knee,D4,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D4 only"
+b2,time0.82,p9/batch2/s59x/time0.82,n12k2_knee,D4,F,sim_s_to_tau0.82,lower,5,473.00285317052624,554.2089586691,-81.20610549857375,-139.5217078595655,-22.89050313758198,0.125,1.0,-0.36,False,no claim,0,
+b2,reach0.82,p9/batch2/s59x/reach0.82,n12k2_knee,D4,F,reached_tau0.82,higher,20,0.55,0.3,0.25,0.0,0.45,0.125,1.0,,False,no claim,0,"6 reached by F only, 1 by D4 only"
+b2,reach0.71,p9/batch2/s59x/reach0.71,n12k3_knee,FX,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by FX only"
+b2,time0.82,p9/batch2/s59x/time0.82,n12k3_knee,FX,F,sim_s_to_tau0.82,lower,13,366.7485059739735,361.12182700629523,5.6266789676782745,-26.89841769512187,44.4622848587457,0.85009765625,1.0,-0.08284023668639054,False,no claim,0,
+b2,reach0.82,p9/batch2/s59x/reach0.82,n12k3_knee,FX,F,reached_tau0.82,higher,20,0.65,0.75,-0.1,-0.25,0.0,0.5,1.0,,False,no claim,0,"0 reached by F only, 2 by FX only"
+b2,reach0.71,p9/batch2/s59x/reach0.71,n12k3_knee,H1,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by H1 only"
+b2,time0.82,p9/batch2/s59x/time0.82,n12k3_knee,H1,F,sim_s_to_tau0.82,lower,12,363.8993117797945,431.652980270844,-67.75366849104951,-117.34585833504265,-20.58460852201002,0.02099609375,0.419921875,-0.375,False,no claim,0,
+b2,reach0.82,p9/batch2/s59x/reach0.82,n12k3_knee,H1,F,reached_tau0.82,higher,20,0.65,0.7,-0.05,-0.25,0.1,1.0,1.0,,False,no claim,0,"1 reached by F only, 2 by H1 only"
+b2,reach0.71,p9/batch2/s59x/reach0.71,n12k3_knee,D4,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D4 only"
+b2,time0.82,p9/batch2/s59x/time0.82,n12k3_knee,D4,F,sim_s_to_tau0.82,lower,10,366.8861707436037,400.98753957797305,-34.10136883436935,-154.29417160307668,82.78565799996866,0.6953125,1.0,-0.14,False,no claim,0,
+b2,reach0.82,p9/batch2/s59x/reach0.82,n12k3_knee,D4,F,reached_tau0.82,higher,20,0.65,0.6,0.05,-0.2,0.25,1.0,1.0,,False,no claim,0,"3 reached by F only, 2 by D4 only"
+b2,reach0.71,p9/batch2/s59x/reach0.71,n24k1_knee,FX,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by FX only"
+b2,time0.82,p9/batch2/s59x/time0.82,n24k1_knee,FX,F,sim_s_to_tau0.82,lower,0,,,,,,,,,False,,0,fewer than 2 complete pairs
+b2,reach0.82,p9/batch2/s59x/reach0.82,n24k1_knee,FX,F,reached_tau0.82,higher,20,0.0,0.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by FX only"
+b2,reach0.71,p9/batch2/s59x/reach0.71,n24k1_knee,H1,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by H1 only"
+b2,time0.82,p9/batch2/s59x/time0.82,n24k1_knee,H1,F,sim_s_to_tau0.82,lower,0,,,,,,,,,False,,0,fewer than 2 complete pairs
+b2,reach0.82,p9/batch2/s59x/reach0.82,n24k1_knee,H1,F,reached_tau0.82,higher,20,0.0,0.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by H1 only"
+b2,reach0.71,p9/batch2/s59x/reach0.71,n24k1_knee,D3,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D3 only"
+b2,time0.82,p9/batch2/s59x/time0.82,n24k1_knee,D3,F,sim_s_to_tau0.82,lower,0,,,,,,,,,False,,0,fewer than 2 complete pairs
+b2,reach0.82,p9/batch2/s59x/reach0.82,n24k1_knee,D3,F,reached_tau0.82,higher,20,0.0,0.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D3 only"
+b2,reach0.71,p9/batch2/s59x/reach0.71,n24k1_knee,D4,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D4 only"
+b2,time0.82,p9/batch2/s59x/time0.82,n24k1_knee,D4,F,sim_s_to_tau0.82,lower,0,,,,,,,,,False,,0,fewer than 2 complete pairs
+b2,reach0.82,p9/batch2/s59x/reach0.82,n24k1_knee,D4,F,reached_tau0.82,higher,20,0.0,0.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D4 only"
+b2,reach0.71,p9/batch2/s59x/reach0.71,n24k1_stress,FX,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by FX only"
+b2,time0.82,p9/batch2/s59x/time0.82,n24k1_stress,FX,F,sim_s_to_tau0.82,lower,0,,,,,,,,,False,,0,fewer than 2 complete pairs
+b2,reach0.82,p9/batch2/s59x/reach0.82,n24k1_stress,FX,F,reached_tau0.82,higher,20,0.0,0.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by FX only"
+b2,reach0.71,p9/batch2/s59x/reach0.71,n24k1_stress,H1,F,reached_tau0.71,higher,20,1.0,0.95,0.05,0.0,0.15,1.0,1.0,,False,no claim,0,"1 reached by F only, 0 by H1 only"
+b2,time0.82,p9/batch2/s59x/time0.82,n24k1_stress,H1,F,sim_s_to_tau0.82,lower,0,,,,,,,,,False,,0,fewer than 2 complete pairs
+b2,reach0.82,p9/batch2/s59x/reach0.82,n24k1_stress,H1,F,reached_tau0.82,higher,20,0.0,0.05,-0.05,-0.15,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 1 by H1 only"
+b2,reach0.71,p9/batch2/s59x/reach0.71,n24k1_stress,D3,F,reached_tau0.71,higher,20,1.0,0.95,0.05,0.0,0.15,1.0,1.0,,False,no claim,0,"1 reached by F only, 0 by D3 only"
+b2,time0.82,p9/batch2/s59x/time0.82,n24k1_stress,D3,F,sim_s_to_tau0.82,lower,0,,,,,,,,,False,,0,fewer than 2 complete pairs
+b2,reach0.82,p9/batch2/s59x/reach0.82,n24k1_stress,D3,F,reached_tau0.82,higher,20,0.0,0.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D3 only"
+b2,reach0.71,p9/batch2/s59x/reach0.71,n24k1_stress,D4,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D4 only"
+b2,time0.82,p9/batch2/s59x/time0.82,n24k1_stress,D4,F,sim_s_to_tau0.82,lower,0,,,,,,,,,False,,0,fewer than 2 complete pairs
+b2,reach0.82,p9/batch2/s59x/reach0.82,n24k1_stress,D4,F,reached_tau0.82,higher,20,0.0,0.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D4 only"
+b2,reach0.71,p9/batch2/s52/reach0.71,n6k1_knee,F-add,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by F-add only"
+b2,time0.82,p9/batch2/s52/time0.82,n6k1_knee,F-add,F,sim_s_to_tau0.82,lower,16,369.3557554059298,369.3557554059298,0.0,0.0,0.0,1.0,1.0,0.0,False,no claim,0,
+b2,reach0.82,p9/batch2/s52/reach0.82,n6k1_knee,F-add,F,reached_tau0.82,higher,20,0.8,0.8,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by F-add only"
+b2,reach0.71,p9/batch2/s52/reach0.71,n6k1_knee,F-round,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by F-round only"
+b2,time0.82,p9/batch2/s52/time0.82,n6k1_knee,F-round,F,sim_s_to_tau0.82,lower,16,369.3557554059298,357.4165674376709,11.93918796825892,-10.562277953707408,36.305327759330766,0.21147639221681047,1.0,0.02734375,False,no claim,0,
+b2,reach0.82,p9/batch2/s52/reach0.82,n6k1_knee,F-round,F,reached_tau0.82,higher,20,0.8,0.8,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by F-round only"
+b2,reach0.71,p9/batch2/s52/reach0.71,n6k1_knee,F-pref,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by F-pref only"
+b2,time0.82,p9/batch2/s52/time0.82,n6k1_knee,F-pref,F,sim_s_to_tau0.82,lower,16,369.3557554059298,357.4165674376709,11.93918796825892,-10.562277953707408,36.305327759330766,0.21147639221681047,1.0,0.02734375,False,no claim,0,
+b2,reach0.82,p9/batch2/s52/reach0.82,n6k1_knee,F-pref,F,reached_tau0.82,higher,20,0.8,0.8,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by F-pref only"
+b2,reach0.71,p9/batch2/s52/reach0.71,n6k1_stress,F-add,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by F-add only"
+b2,time0.82,p9/batch2/s52/time0.82,n6k1_stress,F-add,F,sim_s_to_tau0.82,lower,15,339.684068138067,329.8775369533648,9.80653118470218,0.0,26.76353993654872,0.10880943004054569,0.6528565802432742,0.03111111111111111,False,no claim,0,
+b2,reach0.82,p9/batch2/s52/reach0.82,n6k1_stress,F-add,F,reached_tau0.82,higher,20,0.75,0.75,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by F-add only"
+b2,reach0.71,p9/batch2/s52/reach0.71,n6k1_stress,F-round,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by F-round only"
+b2,time0.82,p9/batch2/s52/time0.82,n6k1_stress,F-round,F,sim_s_to_tau0.82,lower,15,339.684068138067,326.2326032580342,13.451464880032775,-26.842991745013663,64.48205319792264,1.0,1.0,0.0044444444444444444,False,no claim,0,
+b2,reach0.82,p9/batch2/s52/reach0.82,n6k1_stress,F-round,F,reached_tau0.82,higher,20,0.75,0.75,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by F-round only"
+b2,reach0.71,p9/batch2/s52/reach0.71,n6k1_stress,F-pref,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by F-pref only"
+b2,time0.82,p9/batch2/s52/time0.82,n6k1_stress,F-pref,F,sim_s_to_tau0.82,lower,15,339.684068138067,332.252967481936,7.431100656130972,-37.952777796514944,61.680818653296036,0.93408203125,1.0,-0.013333333333333334,False,no claim,0,
+b2,reach0.82,p9/batch2/s52/reach0.82,n6k1_stress,F-pref,F,reached_tau0.82,higher,20,0.75,0.75,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by F-pref only"
+b2,reach0.71,p9/batch2/s54/reach0.71,n6k1_knee_1mb,FBpwide,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by FBpwide only"
+b2,time0.82,p9/batch2/s54/time0.82,n6k1_knee_1mb,FBpwide,F,sim_s_to_tau0.82,lower,16,369.3557554059298,449.3065968912706,-79.95084148534079,-111.0408885291139,-52.38811924821169,6.103515625e-05,0.00030517578125,-0.40625,True,F,0,
+b2,reach0.82,p9/batch2/s54/reach0.82,n6k1_knee_1mb,FBpwide,F,reached_tau0.82,higher,20,0.8,0.85,-0.05,-0.15,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 1 by FBpwide only"
+b2,reach0.71,p9/batch2/s54/reach0.71,n6k1_knee_1mb,FBpmedium,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by FBpmedium only"
+b2,time0.82,p9/batch2/s54/time0.82,n6k1_knee_1mb,FBpmedium,F,sim_s_to_tau0.82,lower,16,369.3557554059298,389.50980112030084,-20.154045714371023,-45.25743232494696,6.388012925501045,0.12515345696288432,0.375460370888653,-0.14453125,False,no claim,0,
+b2,reach0.82,p9/batch2/s54/reach0.82,n6k1_knee_1mb,FBpmedium,F,reached_tau0.82,higher,20,0.8,0.85,-0.05,-0.15,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 1 by FBpmedium only"
+b2,reach0.71,p9/batch2/s54/reach0.71,n6k1_knee_1mb,FBpnarrow,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by FBpnarrow only"
+b2,time0.82,p9/batch2/s54/time0.82,n6k1_knee_1mb,FBpnarrow,F,sim_s_to_tau0.82,lower,16,369.3557554059298,373.7766083580573,-4.420852952127461,-11.731442755284661,0.0,0.17971249487899976,0.375460370888653,-0.0234375,False,no claim,0,
+b2,reach0.82,p9/batch2/s54/reach0.82,n6k1_knee_1mb,FBpnarrow,F,reached_tau0.82,higher,20,0.8,0.8,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by FBpnarrow only"
+b2,reach0.71,p9/batch2/s54/reach0.71,n6k1_knee_meas_meas,FBpwide,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by FBpwide only"
+b2,time0.82,p9/batch2/s54/time0.82,n6k1_knee_meas_meas,FBpwide,F,sim_s_to_tau0.82,lower,16,127.27330315419385,419.31777293749474,-292.0444697833009,-345.40553878661467,-243.6815566219133,3.0517578125e-05,0.00018310546875,-0.984375,True,F,0,
+b2,reach0.82,p9/batch2/s54/reach0.82,n6k1_knee_meas_meas,FBpwide,F,reached_tau0.82,higher,20,0.8,0.85,-0.05,-0.15,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 1 by FBpwide only"
+b2,reach0.71,p9/batch2/s54/reach0.71,n6k1_knee_meas_meas,FBpmedium,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by FBpmedium only"
+b2,time0.82,p9/batch2/s54/time0.82,n6k1_knee_meas_meas,FBpmedium,F,sim_s_to_tau0.82,lower,15,131.7795481970301,307.4860842384398,-175.70653604140972,-217.64329292532386,-133.22353977194118,6.103515625e-05,0.00030517578125,-0.8488888888888889,True,F,0,
+b2,reach0.82,p9/batch2/s54/reach0.82,n6k1_knee_meas_meas,FBpmedium,F,reached_tau0.82,higher,20,0.8,0.8,0.0,-0.15,0.15,1.0,1.0,,False,no claim,0,"1 reached by F only, 1 by FBpmedium only"
+b2,reach0.71,p9/batch2/s54/reach0.71,n6k1_knee_meas_meas,FBpnarrow,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by FBpnarrow only"
+b2,time0.82,p9/batch2/s54/time0.82,n6k1_knee_meas_meas,FBpnarrow,F,sim_s_to_tau0.82,lower,16,127.27330315419385,127.27330315419385,0.0,0.0,0.0,1.0,1.0,0.0,False,no claim,0,
+b2,reach0.82,p9/batch2/s54/reach0.82,n6k1_knee_meas_meas,FBpnarrow,F,reached_tau0.82,higher,20,0.8,0.8,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by FBpnarrow only"
+b2,reach0.71,p9/batch2/s58/reach0.71,n6k1_knee_m4,D1,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D1 only"
+b2,time0.82,p9/batch2/s58/time0.82,n6k1_knee_m4,D1,F,sim_s_to_tau0.82,lower,16,369.3557554059298,522.3879507723905,-153.03219536646066,-220.55519240024987,-95.6008923073834,6.103515625e-05,0.0008544921875,-0.4453125,True,F,0,
+b2,reach0.82,p9/batch2/s58/reach0.82,n6k1_knee_m4,D1,F,reached_tau0.82,higher,20,0.8,0.85,-0.05,-0.15,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 1 by D1 only"
+b2,reach0.71,p9/batch2/s58/reach0.71,n6k1_knee_m4,D3,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D3 only"
+b2,time0.82,p9/batch2/s58/time0.82,n6k1_knee_m4,D3,F,sim_s_to_tau0.82,lower,16,369.3557554059298,481.43694491700444,-112.08118951107463,-144.60222478925024,-82.67777392804875,6.103515625e-05,0.0008544921875,-0.4609375,True,F,0,
+b2,reach0.82,p9/batch2/s58/reach0.82,n6k1_knee_m4,D3,F,reached_tau0.82,higher,20,0.8,0.85,-0.05,-0.15,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 1 by D3 only"
+b2,reach0.71,p9/batch2/s58/reach0.71,n6k1_knee_m4,D4,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D4 only"
+b2,time0.82,p9/batch2/s58/time0.82,n6k1_knee_m4,D4,F,sim_s_to_tau0.82,lower,16,369.3557554059298,449.1696118298714,-79.81385642394162,-110.87260058385509,-52.38811924821169,6.103515625e-05,0.0008544921875,-0.40625,True,F,0,
+b2,reach0.82,p9/batch2/s58/reach0.82,n6k1_knee_m4,D4,F,reached_tau0.82,higher,20,0.8,0.85,-0.05,-0.15,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 1 by D4 only"
+b2,reach0.71,p9/batch2/s58/reach0.71,n6k1_knee_m4,FBpwide,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by FBpwide only"
+b2,time0.82,p9/batch2/s58/time0.82,n6k1_knee_m4,FBpwide,F,sim_s_to_tau0.82,lower,16,369.3557554059298,449.3065968912706,-79.95084148534079,-111.0408885291139,-52.38811924821169,6.103515625e-05,0.0008544921875,-0.40625,True,F,0,
+b2,reach0.82,p9/batch2/s58/reach0.82,n6k1_knee_m4,FBpwide,F,reached_tau0.82,higher,20,0.8,0.85,-0.05,-0.15,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 1 by FBpwide only"
+b2,reach0.71,p9/batch2/s58/reach0.71,n6k1_knee_m4,F-cov,F,reached_tau0.71,higher,20,1.0,0.95,0.05,0.0,0.15,1.0,1.0,,False,no claim,0,"1 reached by F only, 0 by F-cov only"
+b2,time0.82,p9/batch2/s58/time0.82,n6k1_knee_m4,F-cov,F,sim_s_to_tau0.82,lower,8,337.7167600465327,362.68062504174304,-24.963864995210315,-129.07916652516576,87.88527254507314,0.84375,1.0,-0.09375,False,no claim,0,
+b2,reach0.82,p9/batch2/s58/reach0.82,n6k1_knee_m4,F-cov,F,reached_tau0.82,higher,20,0.8,0.4,0.4,0.2,0.6,0.0078125,0.109375,,False,no claim,0,"8 reached by F only, 0 by F-cov only"
+b2,reach0.71,p9/batch2/s58/reach0.71,n6k1_knee_m4,F-cap,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by F-cap only"
+b2,time0.82,p9/batch2/s58/time0.82,n6k1_knee_m4,F-cap,F,sim_s_to_tau0.82,lower,16,369.3557554059298,369.3557554059298,0.0,0.0,0.0,1.0,1.0,0.0,False,no claim,0,
+b2,reach0.82,p9/batch2/s58/reach0.82,n6k1_knee_m4,F-cap,F,reached_tau0.82,higher,20,0.8,0.8,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by F-cap only"
+b2,reach0.71,p9/batch2/s58/reach0.71,n6k1_knee_m4,F-prio,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by F-prio only"
+b2,time0.82,p9/batch2/s58/time0.82,n6k1_knee_m4,F-prio,F,sim_s_to_tau0.82,lower,16,369.3557554059298,369.3557554059298,0.0,0.0,0.0,1.0,1.0,0.0,False,no claim,0,
+b2,reach0.82,p9/batch2/s58/reach0.82,n6k1_knee_m4,F-prio,F,reached_tau0.82,higher,20,0.8,0.8,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by F-prio only"
+b2,reach0.71,p9/batch2/s58/reach0.71,n6k1_stress_m4,D1,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D1 only"
+b2,time0.82,p9/batch2/s58/time0.82,n6k1_stress_m4,D1,F,sim_s_to_tau0.82,lower,13,328.7427105459367,404.94636021846406,-76.20364967252736,-130.84350904708126,-28.037930161333357,0.004638671875,0.037109375,-0.38461538461538464,True,F,0,
+b2,reach0.82,p9/batch2/s58/reach0.82,n6k1_stress_m4,D1,F,reached_tau0.82,higher,20,0.75,0.7,0.05,-0.1,0.25,1.0,1.0,,False,no claim,0,"2 reached by F only, 1 by D1 only"
+b2,reach0.71,p9/batch2/s58/reach0.71,n6k1_stress_m4,D3,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D3 only"
+b2,time0.82,p9/batch2/s58/time0.82,n6k1_stress_m4,D3,F,sim_s_to_tau0.82,lower,12,339.35500998660183,438.3026561771403,-98.94764619053846,-149.92316998513292,-50.849318200863515,0.00244140625,0.02197265625,-0.4305555555555556,True,F,0,
+b2,reach0.82,p9/batch2/s58/reach0.82,n6k1_stress_m4,D3,F,reached_tau0.82,higher,20,0.75,0.7,0.05,-0.2,0.25,1.0,1.0,,False,no claim,0,"3 reached by F only, 2 by D3 only"
+b2,reach0.71,p9/batch2/s58/reach0.71,n6k1_stress_m4,D4,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D4 only"
+b2,time0.82,p9/batch2/s58/time0.82,n6k1_stress_m4,D4,F,sim_s_to_tau0.82,lower,15,339.684068138067,447.211837628476,-107.52776949040903,-135.14874697641412,-79.55173327635858,6.103515625e-05,0.0008544921875,-0.4488888888888889,True,F,0,
+b2,reach0.82,p9/batch2/s58/reach0.82,n6k1_stress_m4,D4,F,reached_tau0.82,higher,20,0.75,0.85,-0.1,-0.25,0.0,0.5,1.0,,False,no claim,0,"0 reached by F only, 2 by D4 only"
+b2,reach0.71,p9/batch2/s58/reach0.71,n6k1_stress_m4,F-cov,F,reached_tau0.71,higher,20,1.0,0.95,0.05,0.0,0.15,1.0,1.0,,False,no claim,0,"1 reached by F only, 0 by F-cov only"
+b2,time0.82,p9/batch2/s58/time0.82,n6k1_stress_m4,F-cov,F,sim_s_to_tau0.82,lower,7,326.4761214423592,359.8395192938624,-33.36339785150319,-113.89616541117097,58.04516145841998,0.6875,1.0,0.02040816326530612,False,no claim,0,
+b2,reach0.82,p9/batch2/s58/reach0.82,n6k1_stress_m4,F-cov,F,reached_tau0.82,higher,20,0.75,0.4,0.35,0.1,0.6,0.0390625,0.5078125,,False,no claim,0,"8 reached by F only, 1 by F-cov only"
+b2,reach0.71,p9/batch2/s58/reach0.71,n6k1_stress_m4,F-cap,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by F-cap only"
+b2,time0.82,p9/batch2/s58/time0.82,n6k1_stress_m4,F-cap,F,sim_s_to_tau0.82,lower,15,339.684068138067,339.684068138067,0.0,0.0,0.0,1.0,1.0,0.0,False,no claim,0,
+b2,reach0.82,p9/batch2/s58/reach0.82,n6k1_stress_m4,F-cap,F,reached_tau0.82,higher,20,0.75,0.75,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by F-cap only"
+b2,reach0.71,p9/batch2/s58/reach0.71,n6k1_stress_m4,F-prio,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by F-prio only"
+b2,time0.82,p9/batch2/s58/time0.82,n6k1_stress_m4,F-prio,F,sim_s_to_tau0.82,lower,15,339.684068138067,339.684068138067,0.0,0.0,0.0,1.0,1.0,0.0,False,no claim,0,
+b2,reach0.82,p9/batch2/s58/reach0.82,n6k1_stress_m4,F-prio,F,reached_tau0.82,higher,20,0.75,0.75,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by F-prio only"
+b2,reach0.71,p9/batch2/s58/reach0.71,n6k1_stress_m4,FBpwide,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by FBpwide only"
+b2,time0.82,p9/batch2/s58/time0.82,n6k1_stress_m4,FBpwide,F,sim_s_to_tau0.82,lower,15,339.684068138067,390.5087784292021,-50.824710291135126,-147.02896397603632,38.23311316972598,0.22930908203125,1.0,-0.24444444444444444,False,no claim,0,
+b2,reach0.82,p9/batch2/s58/reach0.82,n6k1_stress_m4,FBpwide,F,reached_tau0.82,higher,20,0.75,0.9,-0.15,-0.35,0.0,0.25,1.0,,False,no claim,0,"0 reached by F only, 3 by FBpwide only"
+b2,reach0.71,p9/batch2/s55/reach0.71,n12k1_stress,FQ-g75,FX,reached_tau0.71,higher,20,0.9,0.9,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by FX only, 0 by FQ-g75 only"
+b2,time0.82,p9/batch2/s55/time0.82,n12k1_stress,FQ-g75,FX,sim_s_to_tau0.82,lower,3,716.0441469645593,713.9939494869517,2.0501974776076772,0.0,6.150592432823032,1.0,1.0,0.1111111111111111,False,no claim,0,
+b2,reach0.82,p9/batch2/s55/reach0.82,n12k1_stress,FQ-g75,FX,reached_tau0.82,higher,20,0.15,0.2,-0.05,-0.15,0.0,1.0,1.0,,False,no claim,0,"0 reached by FX only, 1 by FQ-g75 only"
+b2,reach0.71,p9/batch2/s55/reach0.71,n12k1_stress,FQ-g0,FX,reached_tau0.71,higher,20,0.9,0.9,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by FX only, 0 by FQ-g0 only"
+b2,time0.82,p9/batch2/s55/time0.82,n12k1_stress,FQ-g0,FX,sim_s_to_tau0.82,lower,3,716.0441469645593,713.9939494869517,2.0501974776076772,0.0,6.150592432823032,1.0,1.0,0.1111111111111111,False,no claim,0,
+b2,reach0.82,p9/batch2/s55/reach0.82,n12k1_stress,FQ-g0,FX,reached_tau0.82,higher,20,0.15,0.25,-0.1,-0.25,0.0,0.5,1.0,,False,no claim,0,"0 reached by FX only, 2 by FQ-g0 only"
+b2,reach0.71,p9/batch2/s55/reach0.71,n12k1_stress,F,FX,reached_tau0.71,higher,20,0.9,1.0,-0.1,-0.25,0.0,0.5,1.0,,False,no claim,0,"0 reached by FX only, 2 by F only"
+b2,time0.82,p9/batch2/s55/time0.82,n12k1_stress,F,FX,sim_s_to_tau0.82,lower,2,744.5455634375685,679.0508128398214,65.49475059774704,61.29776765522547,69.69173354026861,0.5,1.0,1.0,False,no claim,0,
+b2,reach0.82,p9/batch2/s55/reach0.82,n12k1_stress,F,FX,reached_tau0.82,higher,20,0.15,0.2,-0.05,-0.2,0.1,1.0,1.0,,False,no claim,0,"1 reached by FX only, 2 by F only"
+b2,reach0.71,p9/batch2/s55/reach0.71,n12k1_knee,FQ-g75,FX,reached_tau0.71,higher,20,0.9,0.9,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by FX only, 0 by FQ-g75 only"
+b2,time0.82,p9/batch2/s55/time0.82,n12k1_knee,FQ-g75,FX,sim_s_to_tau0.82,lower,3,799.9078410100968,805.8071290141282,-5.899288004031405,-69.76666101126466,52.068796999170445,1.0,1.0,0.0,False,no claim,0,
+b2,reach0.82,p9/batch2/s55/reach0.82,n12k1_knee,FQ-g75,FX,reached_tau0.82,higher,20,0.15,0.2,-0.05,-0.15,0.0,1.0,1.0,,False,no claim,0,"0 reached by FX only, 1 by FQ-g75 only"
+b2,reach0.71,p9/batch2/s55/reach0.71,n12k1_knee,FQ-g0,FX,reached_tau0.71,higher,20,0.9,0.9,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by FX only, 0 by FQ-g0 only"
+b2,time0.82,p9/batch2/s55/time0.82,n12k1_knee,FQ-g0,FX,sim_s_to_tau0.82,lower,3,799.9078410100968,821.8072119301263,-21.89937092002947,-116.9793176118983,51.28120485180989,1.0,1.0,0.0,False,no claim,0,
+b2,reach0.82,p9/batch2/s55/reach0.82,n12k1_knee,FQ-g0,FX,reached_tau0.82,higher,20,0.15,0.2,-0.05,-0.15,0.0,1.0,1.0,,False,no claim,0,"0 reached by FX only, 1 by FQ-g0 only"
+b2,reach0.71,p9/batch2/s55/reach0.71,n12k1_knee,F,FX,reached_tau0.71,higher,20,0.9,0.95,-0.05,-0.15,0.0,1.0,1.0,,False,no claim,0,"0 reached by FX only, 1 by F only"
+b2,time0.82,p9/batch2/s55/time0.82,n12k1_knee,F,FX,sim_s_to_tau0.82,lower,3,799.9078410100968,836.5407941674736,-36.63295315737681,-108.07303332956508,54.28065871342551,0.5,1.0,-0.1111111111111111,False,no claim,0,
+b2,reach0.82,p9/batch2/s55/reach0.82,n12k1_knee,F,FX,reached_tau0.82,higher,20,0.15,0.2,-0.05,-0.15,0.0,1.0,1.0,,False,no claim,0,"0 reached by FX only, 1 by F only"
+b2,reach0.71,p9/batch2/s57/reach0.71,n12k1_stress,FX-dwell,FX,reached_tau0.71,higher,20,0.9,0.9,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by FX only, 0 by FX-dwell only"
+b2,time0.82,p9/batch2/s57/time0.82,n12k1_stress,FX-dwell,FX,sim_s_to_tau0.82,lower,3,716.0441469645593,716.0441469645593,0.0,0.0,0.0,1.0,1.0,0.0,False,no claim,0,
+b2,reach0.82,p9/batch2/s57/reach0.82,n12k1_stress,FX-dwell,FX,reached_tau0.82,higher,20,0.15,0.15,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by FX only, 0 by FX-dwell only"
+b2,reach0.71,p9/batch2/s57/reach0.71,n12k1_stress,FX-cov,FX,reached_tau0.71,higher,20,0.9,0.85,0.05,0.0,0.15,1.0,1.0,,False,no claim,0,"1 reached by FX only, 0 by FX-cov only"
+b2,time0.82,p9/batch2/s57/time0.82,n12k1_stress,FX-cov,FX,sim_s_to_tau0.82,lower,0,,,,,,,,,False,,0,fewer than 2 complete pairs
+b2,reach0.82,p9/batch2/s57/reach0.82,n12k1_stress,FX-cov,FX,reached_tau0.82,higher,20,0.15,0.0,0.15,0.0,0.3,0.25,1.0,,False,no claim,0,"3 reached by FX only, 0 by FX-cov only"
+b2,reach0.71,p9/batch2/s57/reach0.71,n12k1_stress,D4,FX,reached_tau0.71,higher,20,0.9,0.95,-0.05,-0.15,0.0,1.0,1.0,,False,no claim,0,"0 reached by FX only, 1 by D4 only"
+b2,time0.82,p9/batch2/s57/time0.82,n12k1_stress,D4,FX,sim_s_to_tau0.82,lower,2,744.5455634375685,953.1199519325746,-208.57438849500613,-351.6582109371666,-65.49056605284568,0.5,1.0,-1.0,False,no claim,0,
+b2,reach0.82,p9/batch2/s57/reach0.82,n12k1_stress,D4,FX,reached_tau0.82,higher,20,0.15,0.2,-0.05,-0.2,0.1,1.0,1.0,,False,no claim,0,"1 reached by FX only, 2 by D4 only"
+b2,reach0.71,p9/batch2/s57/reach0.71,n12k1_knee,FX-dwell,FX,reached_tau0.71,higher,20,0.9,0.9,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by FX only, 0 by FX-dwell only"
+b2,time0.82,p9/batch2/s57/time0.82,n12k1_knee,FX-dwell,FX,sim_s_to_tau0.82,lower,3,799.9078410100968,949.8108831321975,-149.9030421221008,-256.41249139537103,-93.02464925427921,0.25,1.0,-0.5555555555555556,False,no claim,0,
+b2,reach0.82,p9/batch2/s57/reach0.82,n12k1_knee,FX-dwell,FX,reached_tau0.82,higher,20,0.15,0.2,-0.05,-0.15,0.0,1.0,1.0,,False,no claim,0,"0 reached by FX only, 1 by FX-dwell only"
+b2,reach0.71,p9/batch2/s57/reach0.71,n12k1_knee,FX-cov,FX,reached_tau0.71,higher,20,0.9,0.65,0.25,0.1,0.45,0.0625,0.375,,False,no claim,0,"5 reached by FX only, 0 by FX-cov only"
+b2,time0.82,p9/batch2/s57/time0.82,n12k1_knee,FX-cov,FX,sim_s_to_tau0.82,lower,0,,,,,,,,,False,,0,fewer than 2 complete pairs
+b2,reach0.82,p9/batch2/s57/reach0.82,n12k1_knee,FX-cov,FX,reached_tau0.82,higher,20,0.15,0.0,0.15,0.0,0.3,0.25,1.0,,False,no claim,0,"3 reached by FX only, 0 by FX-cov only"
+b2,reach0.71,p9/batch2/s57/reach0.71,n12k1_knee,D4,FX,reached_tau0.71,higher,20,0.9,0.95,-0.05,-0.15,0.0,1.0,1.0,,False,no claim,0,"0 reached by FX only, 1 by D4 only"
+b2,time0.82,p9/batch2/s57/time0.82,n12k1_knee,D4,FX,sim_s_to_tau0.82,lower,2,783.0554014251102,953.1199519325746,-170.06455050746445,-191.71760067727882,-148.41150033765007,0.5,1.0,-0.5,False,no claim,0,
+b2,reach0.82,p9/batch2/s57/reach0.82,n12k1_knee,D4,FX,reached_tau0.82,higher,20,0.15,0.2,-0.05,-0.2,0.1,1.0,1.0,,False,no claim,0,"1 reached by FX only, 2 by D4 only"
+b2,reach0.71,p9/batch2/s513/reach0.71,n6k1_knee_dirichlet0.1,FX,F,reached_tau0.71,higher,20,0.55,0.55,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by FX only"
+b2,time0.82,p9/batch2/s513/time0.82,n6k1_knee_dirichlet0.1,FX,F,sim_s_to_tau0.82,lower,5,343.57064334447495,272.36581945684736,71.20482388762757,23.41478247682098,132.34709604089147,0.125,0.5,0.4,False,no claim,0,
+b2,reach0.82,p9/batch2/s513/reach0.82,n6k1_knee_dirichlet0.1,FX,F,reached_tau0.82,higher,20,0.25,0.25,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by FX only"
+b2,reach0.71,p9/batch2/s513/reach0.71,n6k1_knee_dirichlet0.1,H1,F,reached_tau0.71,higher,20,0.55,0.55,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by H1 only"
+b2,time0.82,p9/batch2/s513/time0.82,n6k1_knee_dirichlet0.1,H1,F,sim_s_to_tau0.82,lower,5,343.57064334447495,409.7094912235392,-66.13884787906427,-108.48692826093175,-17.370725136133842,0.125,0.5,-0.28,False,no claim,0,
+b2,reach0.82,p9/batch2/s513/reach0.82,n6k1_knee_dirichlet0.1,H1,F,reached_tau0.82,higher,20,0.25,0.25,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by H1 only"
+b2,reach0.71,p9/batch2/s513/reach0.71,n6k1_knee_dirichlet0.1,D3,F,reached_tau0.71,higher,20,0.55,0.5,0.05,0.0,0.15,1.0,1.0,,False,no claim,0,"1 reached by F only, 0 by D3 only"
+b2,time0.82,p9/batch2/s513/time0.82,n6k1_knee_dirichlet0.1,D3,F,sim_s_to_tau0.82,lower,5,343.57064334447495,440.1813712474424,-96.61072790296748,-156.86943716718815,-28.991527960961683,0.125,0.5,-0.28,False,no claim,0,
+b2,reach0.82,p9/batch2/s513/reach0.82,n6k1_knee_dirichlet0.1,D3,F,reached_tau0.82,higher,20,0.25,0.3,-0.05,-0.15,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 1 by D3 only"
+b2,reach0.71,p9/batch2/s513/reach0.71,n6k1_knee_dirichlet0.1,Fplain,F,reached_tau0.71,higher,20,0.55,0.5,0.05,0.0,0.15,1.0,1.0,,False,no claim,0,"1 reached by F only, 0 by Fplain only"
+b2,time0.82,p9/batch2/s513/time0.82,n6k1_knee_dirichlet0.1,Fplain,F,sim_s_to_tau0.82,lower,5,343.57064334447495,343.57064334447495,0.0,0.0,0.0,1.0,1.0,0.0,False,no claim,0,
+b2,reach0.82,p9/batch2/s513/reach0.82,n6k1_knee_dirichlet0.1,Fplain,F,reached_tau0.82,higher,20,0.25,0.25,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by Fplain only"
+b3,reach0.71,p9/batch3/s512/reach0.71,n6k1_knee_1mb_none,FX,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by FX only"
+b3,time0.82,p9/batch3/s512/time0.82,n6k1_knee_1mb_none,FX,F,sim_s_to_tau0.82,lower,16,369.3557554059298,321.648242382209,47.70751302372082,21.62178040963445,83.61084541176186,0.002976637011170516,0.02381309608936413,0.21484375,True,FX,0,
+b3,reach0.82,p9/batch3/s512/reach0.82,n6k1_knee_1mb_none,FX,F,reached_tau0.82,higher,20,0.8,0.8,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by FX only"
+b3,reach0.71,p9/batch3/s512/reach0.71,n6k1_knee_1mb_none,H1,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by H1 only"
+b3,time0.82,p9/batch3/s512/time0.82,n6k1_knee_1mb_none,H1,F,sim_s_to_tau0.82,lower,16,369.3557554059298,493.4351223968115,-124.07936699088168,-169.89501950051144,-84.26795811208508,6.103515625e-05,0.00067138671875,-0.4453125,True,F,0,
+b3,reach0.82,p9/batch3/s512/reach0.82,n6k1_knee_1mb_none,H1,F,reached_tau0.82,higher,20,0.8,0.85,-0.05,-0.15,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 1 by H1 only"
+b3,reach0.71,p9/batch3/s512/reach0.71,n6k1_knee_1mb_none,D5,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D5 only"
+b3,time0.82,p9/batch3/s512/time0.82,n6k1_knee_1mb_none,D5,F,sim_s_to_tau0.82,lower,16,369.3557554059298,444.013248790885,-74.65749338495516,-97.10736008134826,-52.52775777482349,6.103515625e-05,0.00067138671875,-0.3671875,True,F,0,
+b3,reach0.82,p9/batch3/s512/reach0.82,n6k1_knee_1mb_none,D5,F,reached_tau0.82,higher,20,0.8,0.85,-0.05,-0.15,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 1 by D5 only"
+b3,reach0.71,p9/batch3/s512/reach0.71,n6k1_knee_1mb_none,D4,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D4 only"
+b3,time0.82,p9/batch3/s512/time0.82,n6k1_knee_1mb_none,D4,F,sim_s_to_tau0.82,lower,16,369.3557554059298,449.1696118298714,-79.81385642394162,-110.87260058385509,-52.38811924821169,6.103515625e-05,0.00067138671875,-0.40625,True,F,0,
+b3,reach0.82,p9/batch3/s512/reach0.82,n6k1_knee_1mb_none,D4,F,reached_tau0.82,higher,20,0.8,0.85,-0.05,-0.15,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 1 by D4 only"
+b3,reach0.71,p9/batch3/s512/reach0.71,n6k1_knee_1mb_spread,FX,F,reached_tau0.71,higher,20,0.75,0.75,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by FX only"
+b3,time0.82,p9/batch3/s512/time0.82,n6k1_knee_1mb_spread,FX,F,sim_s_to_tau0.82,lower,3,214.66906147640353,214.87133309986288,-0.20227162345933417,-10.83512287621852,10.228308005840518,1.0,1.0,0.0,False,no claim,0,
+b3,reach0.82,p9/batch3/s512/reach0.82,n6k1_knee_1mb_spread,FX,F,reached_tau0.82,higher,20,0.15,0.15,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by FX only"
+b3,reach0.71,p9/batch3/s512/reach0.71,n6k1_knee_1mb_spread,H1,F,reached_tau0.71,higher,20,0.75,1.0,-0.25,-0.45,-0.1,0.0625,0.75,,False,no claim,0,"0 reached by F only, 5 by H1 only"
+b3,time0.82,p9/batch3/s512/time0.82,n6k1_knee_1mb_spread,H1,F,sim_s_to_tau0.82,lower,3,214.66906147640353,469.43278900130343,-254.76372752489988,-381.3368201806443,-47.125799381989054,0.25,1.0,-1.0,False,no claim,0,
+b3,reach0.82,p9/batch3/s512/reach0.82,n6k1_knee_1mb_spread,H1,F,reached_tau0.82,higher,20,0.15,0.55,-0.4,-0.6,-0.2,0.0078125,0.078125,,False,no claim,0,"0 reached by F only, 8 by H1 only"
+b3,reach0.71,p9/batch3/s512/reach0.71,n6k1_knee_1mb_spread,D5,F,reached_tau0.71,higher,20,0.75,0.95,-0.2,-0.4,0.0,0.21875,1.0,,False,no claim,0,"1 reached by F only, 5 by D5 only"
+b3,time0.82,p9/batch3/s512/time0.82,n6k1_knee_1mb_spread,D5,F,sim_s_to_tau0.82,lower,2,242.57321441196837,422.4421407681657,-179.86892635619733,-257.7445541425841,-101.99329856981058,0.5,1.0,-1.0,False,no claim,0,
+b3,reach0.82,p9/batch3/s512/reach0.82,n6k1_knee_1mb_spread,D5,F,reached_tau0.82,higher,20,0.15,0.45,-0.3,-0.55,-0.05,0.0703125,0.5234375,,False,no claim,0,"1 reached by F only, 7 by D5 only"
+b3,reach0.71,p9/batch3/s512/reach0.71,n6k1_knee_1mb_spread,D4,F,reached_tau0.71,higher,20,0.75,1.0,-0.25,-0.45,-0.1,0.0625,0.75,,False,no claim,0,"0 reached by F only, 5 by D4 only"
+b3,time0.82,p9/batch3/s512/time0.82,n6k1_knee_1mb_spread,D4,F,sim_s_to_tau0.82,lower,3,214.66906147640353,465.9009008684273,-251.23183939202377,-370.741155782016,-47.125799381989054,0.25,1.0,-1.0,False,no claim,0,
+b3,reach0.82,p9/batch3/s512/reach0.82,n6k1_knee_1mb_spread,D4,F,reached_tau0.82,higher,20,0.15,0.6,-0.45,-0.65,-0.25,0.00390625,0.04296875,,True,D4,0,"0 reached by F only, 9 by D4 only"
+b3,reach0.71,p9/batch3/s512/reach0.71,n6k1_knee_1mb_stragglers,FX,F,reached_tau0.71,higher,20,0.7,0.7,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by FX only"
+b3,time0.82,p9/batch3/s512/time0.82,n6k1_knee_1mb_stragglers,FX,F,sim_s_to_tau0.82,lower,3,211.6137580423771,202.41848126046048,9.195276781916618,0.0,21.132104924414307,0.5,1.0,0.2222222222222222,False,no claim,0,
+b3,reach0.82,p9/batch3/s512/reach0.82,n6k1_knee_1mb_stragglers,FX,F,reached_tau0.82,higher,20,0.15,0.15,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by FX only"
+b3,reach0.71,p9/batch3/s512/reach0.71,n6k1_knee_1mb_stragglers,H1,F,reached_tau0.71,higher,20,0.7,0.95,-0.25,-0.45,-0.1,0.0625,0.75,,False,no claim,0,"0 reached by F only, 5 by H1 only"
+b3,time0.82,p9/batch3/s512/time0.82,n6k1_knee_1mb_stragglers,H1,F,sim_s_to_tau0.82,lower,3,211.6137580423771,509.1921158079446,-297.5783577655675,-450.08015192870516,-46.8992256851634,0.25,1.0,-1.0,False,no claim,0,
+b3,reach0.82,p9/batch3/s512/reach0.82,n6k1_knee_1mb_stragglers,H1,F,reached_tau0.82,higher,20,0.15,0.65,-0.5,-0.7,-0.3,0.001953125,0.0234375,,True,H1,0,"0 reached by F only, 10 by H1 only"
+b3,reach0.71,p9/batch3/s512/reach0.71,n6k1_knee_1mb_stragglers,D5,F,reached_tau0.71,higher,20,0.7,0.85,-0.15,-0.35,0.05,0.375,1.0,,False,no claim,0,"1 reached by F only, 4 by D5 only"
+b3,time0.82,p9/batch3/s512/time0.82,n6k1_knee_1mb_stragglers,D5,F,sim_s_to_tau0.82,lower,1,,,,,,,,,False,,0,fewer than 2 complete pairs
+b3,reach0.82,p9/batch3/s512/reach0.82,n6k1_knee_1mb_stragglers,D5,F,reached_tau0.82,higher,20,0.15,0.5,-0.35,-0.65,-0.05,0.0654296875,0.5234375,,False,no claim,0,"2 reached by F only, 9 by D5 only"
+b3,reach0.71,p9/batch3/s512/reach0.71,n6k1_knee_1mb_stragglers,D4,F,reached_tau0.71,higher,20,0.7,0.9,-0.2,-0.4,-0.05,0.125,1.0,,False,no claim,0,"0 reached by F only, 4 by D4 only"
+b3,time0.82,p9/batch3/s512/time0.82,n6k1_knee_1mb_stragglers,D4,F,sim_s_to_tau0.82,lower,3,211.6137580423771,492.6955268435413,-281.0817688011642,-412.11084187426604,-46.8992256851634,0.25,1.0,-1.0,False,no claim,0,
+b3,reach0.82,p9/batch3/s512/reach0.82,n6k1_knee_1mb_stragglers,D4,F,reached_tau0.82,higher,20,0.15,0.55,-0.4,-0.6,-0.2,0.0078125,0.078125,,False,no claim,0,"0 reached by F only, 8 by D4 only"
+b3,reach0.71,p9/batch3/s515/reach0.71,n6k1_knee_base,FX,F,reached_tau0.71,higher,20,0.95,0.95,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by FX only"
+b3,time0.82,p9/batch3/s515/time0.82,n6k1_knee_base,FX,F,sim_s_to_tau0.82,lower,16,466.63378461435786,428.8025620903645,37.83122252399335,-0.632769236609593,69.36019772870968,0.02312980249735946,0.18503841997887568,0.12890625,False,no claim,0,
+b3,reach0.82,p9/batch3/s515/reach0.82,n6k1_knee_base,FX,F,reached_tau0.82,higher,20,0.8,0.8,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by FX only"
+b3,reach0.71,p9/batch3/s515/reach0.71,n6k1_knee_base,H1,F,reached_tau0.71,higher,20,0.95,1.0,-0.05,-0.15,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 1 by H1 only"
+b3,time0.82,p9/batch3/s515/time0.82,n6k1_knee_base,H1,F,sim_s_to_tau0.82,lower,14,494.17661838181084,563.2319418033252,-69.05532342151439,-148.2778364442659,4.022077131647401,0.090576171875,0.54345703125,-0.11224489795918367,False,no claim,0,
+b3,reach0.82,p9/batch3/s515/reach0.82,n6k1_knee_base,H1,F,reached_tau0.82,higher,20,0.8,0.75,0.05,-0.1,0.2,1.0,1.0,,False,no claim,0,"2 reached by F only, 1 by H1 only"
+b3,reach0.71,p9/batch3/s515/reach0.71,n6k1_knee_amp1,FX,F,reached_tau0.71,higher,20,0.95,0.95,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by FX only"
+b3,time0.82,p9/batch3/s515/time0.82,n6k1_knee_amp1,FX,F,sim_s_to_tau0.82,lower,17,385.2689993631519,430.42200032883215,-45.153000965680214,-96.51365341112162,3.17068610400071,0.24549352944751968,0.60546875,-0.17993079584775087,False,no claim,0,
+b3,reach0.82,p9/batch3/s515/reach0.82,n6k1_knee_amp1,FX,F,reached_tau0.82,higher,20,0.85,0.85,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by FX only"
+b3,reach0.71,p9/batch3/s515/reach0.71,n6k1_knee_amp1,H1,F,reached_tau0.71,higher,20,0.95,0.95,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by H1 only"
+b3,time0.82,p9/batch3/s515/time0.82,n6k1_knee_amp1,H1,F,sim_s_to_tau0.82,lower,17,385.2689993631519,543.5778477831935,-158.3088484200416,-216.98549419715846,-111.4937782873059,3.0517578125e-05,0.0003662109375,-0.5155709342560554,True,F,0,
+b3,reach0.82,p9/batch3/s515/reach0.82,n6k1_knee_amp1,H1,F,reached_tau0.82,higher,20,0.85,0.85,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by H1 only"
+b3,reach0.71,p9/batch3/s515/reach0.71,n6k1_knee_ampharsh,FX,F,reached_tau0.71,higher,20,0.95,0.95,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by FX only"
+b3,time0.82,p9/batch3/s515/time0.82,n6k1_knee_ampharsh,FX,F,sim_s_to_tau0.82,lower,12,598.0982776273837,513.4633607599923,84.63491686739144,12.073148314801564,173.2701075966082,0.09375,0.54345703125,0.20833333333333334,False,no claim,0,
+b3,reach0.82,p9/batch3/s515/reach0.82,n6k1_knee_ampharsh,FX,F,reached_tau0.82,higher,20,0.7,0.75,-0.05,-0.25,0.15,1.0,1.0,,False,no claim,0,"2 reached by F only, 3 by FX only"
+b3,reach0.71,p9/batch3/s515/reach0.71,n6k1_knee_ampharsh,H1,F,reached_tau0.71,higher,20,0.95,1.0,-0.05,-0.15,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 1 by H1 only"
+b3,time0.82,p9/batch3/s515/time0.82,n6k1_knee_ampharsh,H1,F,sim_s_to_tau0.82,lower,12,625.2340694729161,535.243691029289,89.99037844362708,-13.069135393848645,187.91907589903786,0.1513671875,0.60546875,0.2638888888888889,False,no claim,0,
+b3,reach0.82,p9/batch3/s515/reach0.82,n6k1_knee_ampharsh,H1,F,reached_tau0.82,higher,20,0.7,0.75,-0.05,-0.25,0.15,1.0,1.0,,False,no claim,0,"2 reached by F only, 3 by H1 only"
+b3,reach0.71,p9/batch3/s515/reach0.71,n6k1_knee_npl,FX,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by FX only"
+b3,time0.82,p9/batch3/s515/time0.82,n6k1_knee_npl,FX,F,sim_s_to_tau0.82,lower,17,473.04728776020653,492.26932526623614,-19.222037506029558,-70.09163137104427,18.839237330264837,0.8752911852109797,0.8752911852109797,-0.11764705882352941,False,no claim,0,
+b3,reach0.82,p9/batch3/s515/reach0.82,n6k1_knee_npl,FX,F,reached_tau0.82,higher,20,0.85,0.85,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by FX only"
+b3,reach0.71,p9/batch3/s515/reach0.71,n6k1_knee_npl,H1,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by H1 only"
+b3,time0.82,p9/batch3/s515/time0.82,n6k1_knee_npl,H1,F,sim_s_to_tau0.82,lower,14,473.06152328927834,563.0737683953319,-90.01224510605347,-158.10385844727423,-21.804990771727798,0.029541015625,0.206787109375,-0.24489795918367346,False,no claim,0,
+b3,reach0.82,p9/batch3/s515/reach0.82,n6k1_knee_npl,H1,F,reached_tau0.82,higher,20,0.85,0.75,0.1,-0.1,0.3,0.625,1.0,,False,no claim,0,"3 reached by F only, 1 by H1 only"
+b3,reach0.71,p9/batch3/s515/reach0.71,n6k1_knee_sigma8,FX,F,reached_tau0.71,higher,20,0.9,0.85,0.05,0.0,0.15,1.0,1.0,,False,no claim,0,"1 reached by F only, 0 by FX only"
+b3,time0.82,p9/batch3/s515/time0.82,n6k1_knee_sigma8,FX,F,sim_s_to_tau0.82,lower,13,447.50604990758717,364.19708830109226,83.30896160649493,38.91357823436355,139.25658361866775,0.0048828125,0.0439453125,0.33727810650887574,True,FX,0,
+b3,reach0.82,p9/batch3/s515/reach0.82,n6k1_knee_sigma8,FX,F,reached_tau0.82,higher,20,0.65,0.7,-0.05,-0.15,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 1 by FX only"
+b3,reach0.71,p9/batch3/s515/reach0.71,n6k1_knee_sigma8,H1,F,reached_tau0.71,higher,20,0.9,1.0,-0.1,-0.25,0.0,0.5,1.0,,False,no claim,0,"0 reached by F only, 2 by H1 only"
+b3,time0.82,p9/batch3/s515/time0.82,n6k1_knee_sigma8,H1,F,sim_s_to_tau0.82,lower,12,461.37470677607536,529.8603435433373,-68.4856367672619,-159.36332689151408,25.40718683990193,0.1513671875,0.60546875,-0.125,False,no claim,0,
+b3,reach0.82,p9/batch3/s515/reach0.82,n6k1_knee_sigma8,H1,F,reached_tau0.82,higher,20,0.65,0.75,-0.1,-0.3,0.1,0.625,1.0,,False,no claim,0,"1 reached by F only, 3 by H1 only"
+b3,reach0.71,p9/batch3/s515/reach0.71,n6k1_knee_missionbh,FX,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by FX only"
+b3,time0.82,p9/batch3/s515/time0.82,n6k1_knee_missionbh,FX,F,sim_s_to_tau0.82,lower,16,369.3557554059298,321.648242382209,47.70751302372082,21.62178040963445,83.61084541176186,0.002976637011170516,0.029766370111705163,0.21484375,True,FX,0,
+b3,reach0.82,p9/batch3/s515/reach0.82,n6k1_knee_missionbh,FX,F,reached_tau0.82,higher,20,0.8,0.8,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by FX only"
+b3,reach0.71,p9/batch3/s515/reach0.71,n6k1_knee_missionbh,H1,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by H1 only"
+b3,time0.82,p9/batch3/s515/time0.82,n6k1_knee_missionbh,H1,F,sim_s_to_tau0.82,lower,16,369.3557554059298,493.4351223968115,-124.07936699088168,-169.89501950051144,-84.26795811208508,6.103515625e-05,0.00067138671875,-0.4453125,True,F,0,
+b3,reach0.82,p9/batch3/s515/reach0.82,n6k1_knee_missionbh,H1,F,reached_tau0.82,higher,20,0.8,0.85,-0.05,-0.15,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 1 by H1 only"

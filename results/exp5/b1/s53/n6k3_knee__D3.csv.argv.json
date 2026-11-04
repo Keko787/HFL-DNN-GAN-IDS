@@ -12,7 +12,7 @@
  "--regime",
  "jittery",
  "--n-trials",
- "20",
+ "40",
  "--base-seed",
  "20261005",
  "--mission-budget-s",

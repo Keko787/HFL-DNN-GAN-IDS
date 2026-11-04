@@ -6,7 +6,7 @@
 \centering
 \includegraphics[width=\textwidth]{Figures/exp5/fig_exp5_convergence.pdf}
 \caption{Test accuracy over simulated time at $N=6$ with one mule (scheduler comparison), the mean
-of 20 paired trials per arm, at the knee (150\,s) and stress (75\,s) budgets. F and FX
+of 40 paired trials per arm, at the knee (150\,s) and stress (75\,s) budgets. F and FX
 cross $\tau=0.71$ first; gray lines are the seven baselines (H1, D1--D5, E3).}
 \label{fig:exp5_convergence}
 \end{figure*}
@@ -25,7 +25,7 @@ is below 1. $^{\dagger}$Slower than F (paired by seed, Holm $p<0.05$).}
 \includegraphics[width=\textwidth]{Figures/exp5/fig_exp5_scale.pdf}
 \caption{Time to $\tau$ as the device population grows (scale study), one mule, each $N$
 at its own knee and stress budget: mean and 95\% bootstrap CI over the trials that reach
-$\tau$, 20 paired trials per arm. Markers are offset horizontally for legibility.}
+$\tau$, 40 paired trials per arm at $N=6$ and 20 above it. Markers are offset horizontally for legibility.}
 \label{fig:exp5_scale}
 \end{figure*}
 
@@ -43,7 +43,8 @@ $\tau$ at $N=12$ as mules are added, mean and 95\% CI.}
 \includegraphics[width=\textwidth]{Figures/exp5/fig_exp5_mechanism.pdf}
 \caption{Where F's advantage comes from: (a)~mean mission time by component and (b)~time
 to $\tau$, mean and 95\% CI over the trials that reach it ($N=6$, one mule, knee
-budget); (c)~share of F's plans flying each band class, by cell.}
+budget, the 20 seeds the pinned runs flew); (c)~share of F's plans flying each band
+class, by cell.}
 \label{fig:exp5_mechanism}
 \end{figure*}
 
@@ -57,7 +58,7 @@ budget); (c)~share of F's plans flying each band class, by cell.}
 \begin{figure}[t]
 \centering
 \includegraphics[width=\columnwidth]{Figures/exp5/fig_exp5_paired.pdf}
-\caption{Seed-paired comparison at $N=6$, one mule: the share of the 20 paired seeds (same
+\caption{Seed-paired comparison at $N=6$, one mule: the share of the 40 paired seeds (same
 layout, channel and data) in which F reaches $\tau$ before each baseline. A seed in which
 only F reaches $\tau$ counts as a win, and a tie as half.}
 \label{fig:exp5_paired}
@@ -75,7 +76,7 @@ only F reaches $\tau$ counts as a win, and a tie as half.}
 \centering
 \includegraphics[width=\textwidth]{Figures/exp5/fig_exp5_learning.pdf}
 \caption{Learning inside the plan against learning without one ($N=6$, one mule;
-exploratory). (a)~Time to $\tau$ at the knee (filled) and stress (hollow) budgets,
+exploratory, the 20 seeds FQ flew). (a)~Time to $\tau$ at the knee (filled) and stress (hollow) budgets,
 mean and 95\% CI, reach rate in brackets when below 1; $^{\ddagger}$slower than FQ.
 (b)~Mean mission time at the knee by component, and each arm's band.}
 \label{fig:exp5_learning}
