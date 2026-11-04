@@ -1,0 +1,37 @@
+study,cell,variant,reference,metric,better,n_pairs,ref_mean,variant_mean,mean_diff,ci_low,ci_high,p_value,p_holm,cliffs_delta,claim,favours,pairing_errors,note
+P2/ferry/time,60 s: n6k1_relaxed,FX,F,sim_s_to_tau0.71,lower,19,142.51486488311602,133.48688922592095,9.027975657195048,-18.948051818947942,30.457507728466197,0.1095109374886408,0.1095109374886408,0.11357340720221606,False,no claim,0,
+P2/ferry/reach,60 s: n6k1_relaxed,FX,F,reached_tau0.71,higher,20,0.95,0.95,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by FX only"
+P2/baselines/time,60 s: n6k1_relaxed,H1,F,sim_s_to_tau0.71,lower,17,137.68769179966628,205.89246943317053,-68.20477763350424,-147.59792222956054,11.416166606482202,0.023223876953125,0.2786865234375,-0.2664359861591695,False,no claim,0,
+P2/baselines/reach,60 s: n6k1_relaxed,H1,F,reached_tau0.71,higher,20,0.95,0.9,0.05,-0.1,0.2,1.0,1.0,,False,no claim,0,"2 reached by F only, 1 by H1 only"
+P2/baselines/time,60 s: n6k1_relaxed,D1,F,sim_s_to_tau0.71,lower,19,142.51486488311602,205.38360884294258,-62.86874395982657,-120.38864703316494,3.1950121445754145,0.014068603515625,0.19696044921875,-0.25761772853185594,False,no claim,0,
+P2/baselines/reach,60 s: n6k1_relaxed,D1,F,reached_tau0.71,higher,20,0.95,0.95,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D1 only"
+P2/baselines/time,60 s: n6k1_relaxed,D2,F,sim_s_to_tau0.71,lower,17,137.68769179966628,175.32880818364484,-37.64111638397855,-91.06005210203806,26.520011046021335,0.079681396484375,0.637451171875,-0.27335640138408307,False,no claim,0,
+P2/baselines/reach,60 s: n6k1_relaxed,D2,F,reached_tau0.71,higher,20,0.95,0.85,0.1,0.0,0.25,0.5,1.0,,False,no claim,0,"2 reached by F only, 0 by D2 only"
+P2/baselines/time,60 s: n6k1_relaxed,D3,F,sim_s_to_tau0.71,lower,19,142.51486488311602,232.3940045609151,-89.87913967779912,-174.74674270012045,-8.046738245503676,0.025821685791015625,0.2840385437011719,-0.37950138504155123,False,no claim,0,
+P2/baselines/reach,60 s: n6k1_relaxed,D3,F,reached_tau0.71,higher,20,0.95,0.95,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D3 only"
+P2/baselines/time,60 s: n6k1_relaxed,D4,F,sim_s_to_tau0.71,lower,19,142.51486488311602,258.62760164421417,-116.11273676109819,-212.31471244565586,-30.493895197884925,0.020412445068359375,0.2653617858886719,-0.5013850415512465,False,no claim,0,
+P2/baselines/reach,60 s: n6k1_relaxed,D4,F,reached_tau0.71,higher,20,0.95,1.0,-0.05,-0.15,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 1 by D4 only"
+P2/baselines/time,60 s: n6k1_relaxed,D5,F,sim_s_to_tau0.71,lower,19,142.51486488311602,174.99708266655523,-32.48221778343922,-91.94923257567217,30.729012163888992,0.09551239013671875,0.6685867309570312,-0.19667590027700832,False,no claim,0,
+P2/baselines/reach,60 s: n6k1_relaxed,D5,F,reached_tau0.71,higher,20,0.95,0.95,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D5 only"
+P2/baselines/time,60 s: n6k1_relaxed,E3,F,sim_s_to_tau0.71,lower,19,142.51486488311602,208.08660546896098,-65.57174058584496,-124.62120889321031,-1.7097609253521395,0.025821685791015625,0.2840385437011719,-0.4182825484764543,False,no claim,0,
+P2/baselines/reach,60 s: n6k1_relaxed,E3,F,reached_tau0.71,higher,20,0.95,0.95,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by E3 only"
+P2/baselines/time,60 s: n6k1_relaxed,D4fedex,F,sim_s_to_tau0.71,lower,18,140.78550363896,275.33812589639433,-134.55262225743434,-241.96532017008752,-30.242578317360966,0.03849029541015625,0.34641265869140625,-0.5185185185185185,False,no claim,0,
+P2/baselines/reach,60 s: n6k1_relaxed,D4fedex,F,reached_tau0.71,higher,20,0.95,0.95,0.0,-0.15,0.15,1.0,1.0,,False,no claim,0,"1 reached by F only, 1 by D4fedex only"
+P2/ferry/time,45 s: n6k1_relaxed,FX,F,sim_s_to_tau0.71,lower,19,141.878261216089,144.46931015872886,-2.5910489426398846,-27.41888578931853,12.485319693424845,0.030327342511675306,0.06065468502335061,0.09418282548476455,False,no claim,0,
+P2/ferry/reach,45 s: n6k1_relaxed,FX,F,reached_tau0.71,higher,20,0.95,0.95,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by FX only"
+P2/baselines/time,45 s: n6k1_relaxed,H1,F,sim_s_to_tau0.71,lower,18,140.1135331015426,179.06937464945563,-38.955841547913025,-126.69284702271834,42.53831757622247,0.49507904052734375,1.0,-0.17901234567901234,False,no claim,0,
+P2/baselines/reach,45 s: n6k1_relaxed,H1,F,reached_tau0.71,higher,20,0.95,0.95,0.0,-0.15,0.15,1.0,1.0,,False,no claim,0,"1 reached by F only, 1 by H1 only"
+P2/baselines/time,45 s: n6k1_relaxed,D1,F,sim_s_to_tau0.71,lower,18,140.96197547307625,177.4279336287873,-36.46595815571103,-113.55140349006943,37.3817045204864,0.39273834228515625,1.0,-0.20987654320987653,False,no claim,0,
+P2/baselines/reach,45 s: n6k1_relaxed,D1,F,reached_tau0.71,higher,20,0.95,0.95,0.0,-0.15,0.15,1.0,1.0,,False,no claim,0,"1 reached by F only, 1 by D1 only"
+P2/baselines/time,45 s: n6k1_relaxed,D2,F,sim_s_to_tau0.71,lower,18,140.1135331015426,208.51961807415742,-68.40608497261483,-153.48180363659193,11.558326326932962,0.11870574951171875,0.7122344970703125,-0.4012345679012346,False,no claim,0,
+P2/baselines/reach,45 s: n6k1_relaxed,D2,F,reached_tau0.71,higher,20,0.95,0.95,0.0,-0.15,0.15,1.0,1.0,,False,no claim,0,"1 reached by F only, 1 by D2 only"
+P2/baselines/time,45 s: n6k1_relaxed,D3,F,sim_s_to_tau0.71,lower,18,140.1135331015426,195.07087978789866,-54.95734668635608,-143.1498558813395,26.701125896351158,0.22875213623046875,1.0,-0.25925925925925924,False,no claim,0,
+P2/baselines/reach,45 s: n6k1_relaxed,D3,F,reached_tau0.71,higher,20,0.95,0.95,0.0,-0.15,0.15,1.0,1.0,,False,no claim,0,"1 reached by F only, 1 by D3 only"
+P2/baselines/time,45 s: n6k1_relaxed,D4,F,sim_s_to_tau0.71,lower,19,141.878261216089,258.62760164421417,-116.74934042812521,-213.03255919876239,-35.107797799038394,0.005329132080078125,0.08526611328125,-0.4293628808864266,False,no claim,0,
+P2/baselines/reach,45 s: n6k1_relaxed,D4,F,reached_tau0.71,higher,20,0.95,1.0,-0.05,-0.15,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 1 by D4 only"
+P2/baselines/time,45 s: n6k1_relaxed,D5,F,sim_s_to_tau0.71,lower,19,141.878261216089,166.51764140969854,-24.639380193609547,-84.61918942246749,36.60620453842182,0.2934989929199219,1.0,-0.2520775623268698,False,no claim,0,
+P2/baselines/reach,45 s: n6k1_relaxed,D5,F,reached_tau0.71,higher,20,0.95,1.0,-0.05,-0.15,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 1 by D5 only"
+P2/baselines/time,45 s: n6k1_relaxed,E3,F,sim_s_to_tau0.71,lower,19,141.878261216089,168.67633285418177,-26.79807163809279,-88.68298161097674,32.69265277910177,0.312408447265625,1.0,-0.2853185595567867,False,no claim,0,
+P2/baselines/reach,45 s: n6k1_relaxed,E3,F,reached_tau0.71,higher,20,0.95,1.0,-0.05,-0.15,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 1 by E3 only"
+P2/baselines/time,45 s: n6k1_relaxed,D4fedex,F,sim_s_to_tau0.71,lower,18,140.1135331015426,275.33812589639433,-135.22459279485176,-233.72294578674772,-48.270598417326006,0.0065765380859375,0.0986480712890625,-0.41975308641975306,False,no claim,0,
+P2/baselines/reach,45 s: n6k1_relaxed,D4fedex,F,reached_tau0.71,higher,20,0.95,0.95,0.0,-0.15,0.15,1.0,1.0,,False,no claim,0,"1 reached by F only, 1 by D4fedex only"
