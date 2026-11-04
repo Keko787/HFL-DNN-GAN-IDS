@@ -57,9 +57,9 @@ TAU_COL = "sim_s_to_tau0.71"
 
 # The run flags of each stage (the deadline campaign of 7 Oct 2026), so the score
 # plan names the same cells and trials the scorer compared. 5.3 is read with its
-# full arm set, as it was scored: at its 40 trials (S53, flown 3-4 Nov 2026), or at
-# the first 20 under "batch2" where it stands beside the arms that flew only those
-# (the pinned bands, FQ), so every arm of a panel shares its seeds.
+# full arm set, as it was scored, at its 40 trials (S53, flown 3-4 Nov 2026). FQ and
+# the 1 MB pinned bands reached the same 40 seeds on 4 Nov 2026, so every arm of a panel
+# shares them; the pinned bands' study is still scored on its first 20 ("batch2").
 STAGE_SETS: Dict[str, Tuple[Optional[int], List[str], Optional[List[str]]]] = {
     "batch1": (None, [], None),
     "batch2": (20, ["s51.pass_2=['budgeted']",
@@ -75,14 +75,17 @@ STAGE_SETS: Dict[str, Tuple[Optional[int], List[str], Optional[List[str]]]] = {
     "batch2s53": (40, ["s53x.arms=['F','FX','H1','D1','D2','D3','D4','D5','E3']",
                        "s53x.budgets=['knee','stress']", "s53x.d4_faithful=true",
                        "s53x.h0=true"], ["s53x"]),
-    # The exploratory FQ run of 8 Oct 2026 (scripts/exp5/fq_vs_e3.py): FQ in 5.3's
-    # N = 6, one-mule cells beside F, FX, D4 and E3.
-    "batch2fq": (20, ["s53x.arms=['F','FX','D4','E3','FQ-g75']", "s53x.K=[1]",
+    # The exploratory FQ run (scripts/exp5/fq_vs_e3.py): FQ in 5.3's N = 6, one-mule
+    # cells beside F, FX, D4 and E3.
+    "batch2fq": (40, ["s53x.arms=['F','FX','D4','E3','FQ-g75']", "s53x.K=[1]",
                       "s53x.budgets=['knee','stress']", "s53x.d4_faithful=false",
                       "s53x.h0=false", "rl.keep_learned=true"], ["s53x"]),
+    "batch2pins": (40, ["s54.payloads=[1000000]", "s54.narrow_range_ratios=[]",
+                        "s54.far_shares=[]", "s54.o1=false", "s54.n_trials=40"], ["s54"]),
 }
-LAUNCH_STAGE = {"batch2fq": "batch2", "batch2s53": "batch2"}
+LAUNCH_STAGE = {"batch2fq": "batch2", "batch2s53": "batch2", "batch2pins": "batch2"}
 S53 = "batch2s53"
+PINS = "batch2pins"
 
 # --------------------------------------------------------------------------- #
 # Style (the dataviz reference palette and chrome, light, for print)
@@ -607,18 +610,18 @@ def _band_shares(e) -> Dict[str, float]:
 
 
 MECH_ROWS = [  # (label, stage, study, cell, variant, kind)
-    ("F (band chosen per mission)", "batch2", "s53x", "n6k1_knee", "F", "F"),
-    ("FX", "batch2", "s53x", "n6k1_knee", "FX", "FX"),
-    ("F, band pinned narrow", "batch2", "s54", "n6k1_knee_1mb", "FBpnarrow", "pin"),
-    ("F, band pinned medium", "batch2", "s54", "n6k1_knee_1mb", "FBpmedium", "pin"),
-    ("F, band pinned wide", "batch2", "s54", "n6k1_knee_1mb", "FBpwide", "pin"),
-    ("D4 (FedEx route)", "batch2", "s53x", "n6k1_knee", "D4", "base"),
-    ("D2 (Oort)", "batch2", "s53x", "n6k1_knee", "D2", "base"),
-    ("D5 (FedCS)", "batch2", "s53x", "n6k1_knee", "D5", "base"),
-    ("D3 (Cui)", "batch2", "s53x", "n6k1_knee", "D3", "base"),
-    ("E3 (Chen)", "batch2", "s53x", "n6k1_knee", "E3", "base"),
-    ("D1 (MAX-AoI)", "batch2", "s53x", "n6k1_knee", "D1", "base"),
-    ("H1", "batch2", "s53x", "n6k1_knee", "H1", "base"),
+    ("F (band chosen per mission)", S53, "s53x", "n6k1_knee", "F", "F"),
+    ("FX", S53, "s53x", "n6k1_knee", "FX", "FX"),
+    ("F, band pinned narrow", PINS, "s54", "n6k1_knee_1mb", "FBpnarrow", "pin"),
+    ("F, band pinned medium", PINS, "s54", "n6k1_knee_1mb", "FBpmedium", "pin"),
+    ("F, band pinned wide", PINS, "s54", "n6k1_knee_1mb", "FBpwide", "pin"),
+    ("D4 (FedEx route)", S53, "s53x", "n6k1_knee", "D4", "base"),
+    ("D2 (Oort)", S53, "s53x", "n6k1_knee", "D2", "base"),
+    ("D5 (FedCS)", S53, "s53x", "n6k1_knee", "D5", "base"),
+    ("D3 (Cui)", S53, "s53x", "n6k1_knee", "D3", "base"),
+    ("E3 (Chen)", S53, "s53x", "n6k1_knee", "E3", "base"),
+    ("D1 (MAX-AoI)", S53, "s53x", "n6k1_knee", "D1", "base"),
+    ("H1", S53, "s53x", "n6k1_knee", "H1", "base"),
 ]
 
 
@@ -718,8 +721,8 @@ def fig_mechanism(out: Path) -> None:
 
 
 BAND_CELLS = [  # (label, stage, study, cell)
-    ("N = 6, knee", "batch2", "s53x", "n6k1_knee"),
-    ("N = 6, stress", "batch2", "s53x", "n6k1_stress"),
+    ("N = 6, knee", S53, "s53x", "n6k1_knee"),
+    ("N = 6, stress", S53, "s53x", "n6k1_stress"),
     ("N = 12, knee", "batch1", "s59", "n12k1_knee"),
     ("N = 12, stress", "batch2", "s59x", "n12k1_stress"),
     ("N = 24, knee", "batch1", "s59", "n24k1_knee"),
@@ -958,8 +961,7 @@ $\tau$ at $N=12$ as mules are added, mean and 95\% CI.}
 \includegraphics[width=\textwidth]{Figures/exp5/fig_exp5_mechanism.pdf}
 \caption{Where F's advantage comes from: (a)~mean mission time by component and (b)~time
 to $\tau$, mean and 95\% CI over the trials that reach it ($N=6$, one mule, knee
-budget, the 20 seeds the pinned runs flew); (c)~share of F's plans flying each band
-class, by cell.}
+budget); (c)~share of F's plans flying each band class, by cell.}
 \label{fig:exp5_mechanism}
 \end{figure*}
 
@@ -991,7 +993,7 @@ only F reaches $\tau$ counts as a win, and a tie as half.}
 \centering
 \includegraphics[width=\textwidth]{Figures/exp5/fig_exp5_learning.pdf}
 \caption{Learning inside the plan against learning without one ($N=6$, one mule;
-exploratory, the 20 seeds FQ flew). (a)~Time to $\tau$ at the knee (filled) and stress (hollow) budgets,
+exploratory). (a)~Time to $\tau$ at the knee (filled) and stress (hollow) budgets,
 mean and 95\% CI, reach rate in brackets when below 1; $^{\ddagger}$slower than FQ.
 (b)~Mean mission time at the knee by component, and each arm's band.}
 \label{fig:exp5_learning}

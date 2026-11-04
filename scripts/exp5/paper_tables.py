@@ -4,7 +4,8 @@
 
 Every number comes from results/exp5/scores/<batch>/<study>_{arms,comparisons}.csv
 (``launch.py score``), the 5.11 (a) rerun's and 5.11 (c)'s FerrySim reports, O1's
-report and H0's trial CSV, so the tables regenerate whenever a study is rescored.
+report, H0's trial CSV and the exploratory fill cells (scripts/exp5/fill_scores.py), so
+the tables regenerate whenever a study is rescored.
 Time to tau is the simulated seconds to tau = 0.71 (``sim_s_to_tau0.71``) over the
 trials that reach it; a claim is the scorer's (paired seeds, bootstrap CI excludes
 0, Holm p < 0.05). The tables use booktabs and \\resizebox (graphicx), as the paper
@@ -132,25 +133,38 @@ E3 & Single-agent next-stop DQN after Chen et al.\ \cite{chen2023model}, trained
 \end{table}
 """.strip("\n")
 
-SECT = r"$^{\S}$"               # FQ: flown outside the pre-registered study's family
+SECT = r"$^{\S}$"               # flown outside the pre-registered study's family
 FQ = "FQ-g75"                  # Study 5.5's gamma = 0.75 pick
 
 
-def fq_n6_cell(cell: str) -> str:
-    """FQ's time to tau in 5.3's one-mule cells, from the exploratory run's scored
-    trials (results/exp5/b2/s53x/<cell>__FQ-g75_scored.csv; scripts/exp5/fq_vs_e3.py
-    pairs it with the other arms). The run left 5.3's own score files untouched."""
-    rows = _rows(REPO / "results" / "exp5" / "b2" / "s53x" / f"{cell}__{FQ}_scored.csv")
-    ok = [r for r in rows if r.get("status", "ok") == "ok"]
-    times = [float(r[f"sim_s_to_tau{TAU}"]) for r in ok
-             if r.get(f"sim_s_to_tau{TAU}") not in ("", None, "nan")]
-    if not times:
-        return "--"
-    text = f"{statistics.mean(times):.0f}\\,s"
-    reach = len(times) / len(ok)
+def time_cell(mean: float, reach: float) -> str:
+    """Mean time to tau (s), with the reach rate in brackets when below 1."""
+    text = f"{mean:.0f}\\,s"
     if reach < 0.995:
         text += rf"\,{{\scriptsize({reach * 100:.0f}\%)}}"
     return text
+
+
+def fill_rows() -> Dict[Tuple[str, str], Dict[str, str]]:
+    """The exploratory fill cells' time to tau, by (cell, variant)."""
+    return {(r["cell"], r["variant"]): r for r in _rows(SCORES / "fills" / "fills.csv")
+            if r["metric"] == f"sim_s_to_tau{TAU}" and r["table"] != "pins"}
+
+
+def fill_cell(cell: str, variant: str, mark: str = SECT) -> str:
+    """One fill cell: scored outside its study's family, so it carries no claim mark."""
+    r = fill_rows()[(cell, variant)]
+    return time_cell(float(r["variant_mean"]), float(r["reach_variant"])) + mark
+
+
+def first_trials(path: Path, trials: int) -> Tuple[float, float]:
+    """(mean time to tau, reach rate) over a scored CSV's first ``trials`` trials, for a
+    study that flew more than the table it stands in."""
+    ok = [r for r in _rows(path) if int(r["trial_index"]) < trials
+          and r.get("status", "ok") == "ok"]
+    times = [float(r[f"sim_s_to_tau{TAU}"]) for r in ok
+             if r.get(f"sim_s_to_tau{TAU}") not in ("", None, "nan")]
+    return statistics.mean(times), len(times) / len(ok)
 
 
 HEADLINE_ARMS = [("F", "F"), ("FX", "FX"), ("H1", "H1"), ("D1", "D1 (MAX-AoI)"),
@@ -177,7 +191,7 @@ def headline_table() -> str:
              r"of trials that reach it in brackets when below 100\%, and with one mule under "
              r"the stress budget, the share of missions that overran it and the updates merged "
              r"per round (yield). " + DAG + r"Significantly slower than F. " + SECT
-             + r"Exploratory, over the first 20 seeds.}",
+             + r"Exploratory, outside the study's tests.}",
              r"\label{tab:exp5_headline}",
              r"\resizebox{\columnwidth}{!}{%",
              r"\begin{tabular}{l rr rr rr}",
@@ -194,8 +208,8 @@ def headline_table() -> str:
         lines.append(f"{label} & " + " & ".join(cells) + r" \\")
         if variant == "FX":
             over, yld = stress_budget_cells(FQ, stage="batch2fq")
-            lines.append(f"FQ{SECT} & {fq_n6_cell('n6k1_knee')} & {fq_n6_cell('n6k1_stress')}"
-                         f" & -- & -- & {over} & {yld}" + r" \\")
+            fq = [fill_cell(cell, FQ, mark="") for cell, _ in HEADLINE_CELLS]
+            lines.append(f"FQ{SECT} & " + " & ".join(fq) + f" & {over} & {yld}" + r" \\")
             lines.append(r"\midrule")
     # H0 (no mule) is described in the results text, not in the table.
     lines += [r"\bottomrule", r"\end{tabular}%", "}", r"\end{table}"]
@@ -214,8 +228,7 @@ def scale_table() -> str:
             (h53, "n6k1_stress"), (ext, "n12k1_stress"), (ext, "n24k1_stress")]
     lines = [r"\begin{table}[t]", r"\centering",
              r"\caption{Scale study: time to $\tau$ with one mule, at each $N$'s knee and "
-             r"stress budgets. Notation as in Table~\ref{tab:exp5_headline}; FQ, flown in "
-             r"other studies, is not tested against F.}",
+             r"stress budgets. Notation as in Table~\ref{tab:exp5_headline}.}",
              r"\label{tab:exp5_scale}",
              r"\resizebox{\columnwidth}{!}{%",
              r"\begin{tabular}{l rrr rrr}",
@@ -224,18 +237,25 @@ def scale_table() -> str:
              r"\cmidrule(lr){2-4}\cmidrule(lr){5-7}",
              r"\textbf{Arm} & $N=6$ & $12$ & $24$ & $N=6$ & $12$ & $24$ \\",
              r"\midrule"]
-    s55 = Study("b2", "s55")           # FQ at N = 12: 5.9's cells, 5.5's stack check
-    for stx, cell in ((core, "n12k1_knee"), (ext, "n12k1_stress")):
-        for variant in ("F", "FX"):    # the cells are the same only if F and FX agree
-            assert stx.arm(cell, variant)["metric_mean"] == s55.arm(cell, variant)["metric_mean"], \
+    # FQ at N = 12: 5.9's cells, from 5.5's stack check, which flew 40 trials. This table
+    # reads 5.9's 20, so FQ does too. The cells are the same only if F and FX agree.
+    b2_s55 = REPO / "results" / "exp5" / "b2" / "s55"
+    b1_s59 = REPO / "results" / "exp5" / "b1" / "s59"
+    for stx, cell, home in ((core, "n12k1_knee", b1_s59), (ext, "n12k1_stress", b2_s55)):
+        for variant in ("F", "FX"):
+            mean, _ = first_trials(home / f"{cell}__{variant}_scored.csv", 20)
+            assert abs(float(stx.arm(cell, variant)["metric_mean"]) - mean) < 1e-3, \
                 (cell, variant)
+    fq_n12 = {cell: time_cell(*first_trials(b2_s55 / f"{cell}__{FQ}_scored.csv", 20))
+              for cell in ("n12k1_knee", "n12k1_stress")}
     for variant, label in SCALE_ARMS:
         cells = [tau_cell(stx, cell, variant, reference="F", bold=(variant == "F"))
                  for stx, cell in cols]
         lines.append(f"{label} & " + " & ".join(cells) + r" \\")
         if variant == "FX":
-            fq = [fq_n6_cell("n6k1_knee") + SECT, tau_cell(s55, "n12k1_knee", FQ), "--",
-                  fq_n6_cell("n6k1_stress") + SECT, tau_cell(s55, "n12k1_stress", FQ), "--"]
+            fq = [fill_cell("n6k1_knee", FQ), fq_n12["n12k1_knee"], fill_cell("n24k1_knee", FQ),
+                  fill_cell("n6k1_stress", FQ), fq_n12["n12k1_stress"],
+                  fill_cell("n24k1_stress", FQ)]
             lines.append("FQ & " + " & ".join(fq) + r" \\")
     lines += [r"\bottomrule", r"\end{tabular}%", "}", r"\end{table}"]
     return "\n".join(lines)
@@ -243,14 +263,16 @@ def scale_table() -> str:
 
 def decision_cost_table() -> str:
     """5.11 (a): the planner's time per plan, alone on the host (the 7 Oct rerun);
-    5.11 (c): FerrySim at each scale cell's knee, every in-flight rule."""
+    5.11 (c): FerrySim at each N's knee, every in-flight rule (N = 6 and 12 at the
+    full system's knees, added 4 Nov 2026)."""
     quiet = json.loads((REPO / "results/exp5/s511a_quiet/b1/s511a/auto.json")
                        .read_text(encoding="utf-8"))
     plan = {r["cell"]: r for r in quiet["table"]}
-    cells = [("jit-n6-150", 6), ("jit-n12-90", 12), ("scl-n24-350", 24),
-             ("scl-n48-680", 48), ("scl-n96-1330", 96)]
+    cells = [("jit-n6-150", "jit-n6-150", 6), ("jit-n12-90", "jit-n12-180", 12),
+             ("scl-n24-350", "scl-n24-350", 24), ("scl-n48-680", "scl-n48-680", 48),
+             ("scl-n96-1330", "scl-n96-1330", 96)]
     ferry = {}
-    for cell in ("scl-n24-350", "scl-n48-680", "scl-n96-1330"):
+    for _, cell, _ in cells:
         rep = json.loads((REPO / f"results/exp5/b3/s511c/{cell}.json").read_text(encoding="utf-8"))
         ferry[cell] = {r["policy"]: r for r in rep["table"]}
     lines = [r"\begin{table}[t]", r"\centering",
@@ -264,15 +286,11 @@ def decision_cost_table() -> str:
              r"\cmidrule(lr){2-3}\cmidrule(lr){4-6}",
              r"$N$ & mean & p95 & budget & F served & FX served \\",
              r"\midrule"]
-    for cell, n in cells:
-        p = plan[cell]
-        row = [str(n), f"{p['plan_wall_s_mean']:.2f}\\,s", f"{p['plan_wall_s_p95']:.2f}\\,s"]
-        if cell in ferry:
-            fr = ferry[cell]
-            row += [f"{fr['F']['budget_s']:.0f}\\,s", f"{fr['F']['served_share_mean'] * 100:.0f}\\%",
-                    f"{fr['FX']['served_share_mean'] * 100:.0f}\\%"]
-        else:
-            row += ["--", "--", "--"]
+    for plan_cell, ferry_cell, n in cells:
+        p, fr = plan[plan_cell], ferry[ferry_cell]
+        row = [str(n), f"{p['plan_wall_s_mean']:.2f}\\,s", f"{p['plan_wall_s_p95']:.2f}\\,s",
+               f"{fr['F']['budget_s']:.0f}\\,s", f"{fr['F']['served_share_mean'] * 100:.0f}\\%",
+               f"{fr['FX']['served_share_mean'] * 100:.0f}\\%"]
         lines.append(" & ".join(row) + r" \\")
     lines += [r"\bottomrule", r"\end{tabular}%", "}", r"\end{table}"]
     return "\n".join(lines)
@@ -335,7 +353,9 @@ CLAIM_ROWS = [
      "F-round", False),
     ("", "Preferred duration, after Oort (stress)", "miss", "b2", "s52", "n6k1_stress",
      "F-pref", False),
-    ("C4 two clocks", r"Learned per-stop score, FQ ($N{=}12$)", "tau", "b2", "s55",
+    ("C4 two clocks", r"No per-stop rule, the plan alone ($N{=}12$)", "tau", "b2", "s55",
+     "n12k1_knee", "F", False),
+    ("", r"Learned per-stop score, FQ ($N{=}12$)", "tau", "b2", "s55",
      "n12k1_knee", "FQ-g75", False),
     ("C5 fairness", "MAX-AoI scheduler, D1 (stress)", "aou", "b2", "s58", "n6k1_stress_m4",
      "D1", False),
@@ -463,7 +483,7 @@ def robustness_table() -> str:
             if (cell, variant) in st.arms:
                 cells.append(tau_cell(st, cell, variant, reference="F", bold=(variant == "F")))
             else:
-                cells.append("--")
+                cells.append(fill_cell(cell, variant))
         lines.append(f"{label} & " + " & ".join(cells) + r" \\")
     lines += [r"\bottomrule", r"\end{tabular}", r"\end{table*}"]
     return "\n".join(lines)
