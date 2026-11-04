@@ -57,7 +57,9 @@ TAU_COL = "sim_s_to_tau0.71"
 
 # The run flags of each stage (the deadline campaign of 7 Oct 2026), so the score
 # plan names the same cells and trials the scorer compared. 5.3 is read with its
-# full arm set, as it was scored.
+# full arm set, as it was scored: at its 40 trials (S53, flown 3-4 Nov 2026), or at
+# the first 20 under "batch2" where it stands beside the arms that flew only those
+# (the pinned bands, FQ), so every arm of a panel shares its seeds.
 STAGE_SETS: Dict[str, Tuple[Optional[int], List[str], Optional[List[str]]]] = {
     "batch1": (None, [], None),
     "batch2": (20, ["s51.pass_2=['budgeted']",
@@ -70,13 +72,17 @@ STAGE_SETS: Dict[str, Tuple[Optional[int], List[str], Optional[List[str]]]] = {
                ["s51", "s52", "s53x", "s54", "s55", "s57", "s58", "s59x", "s513"]),
     "batch3": (None, ["s512.payloads=[1000000]", "s515.arms=['F','FX','H1']",
                       "s515.mission_backhaul_arms=[]"], None),
+    "batch2s53": (40, ["s53x.arms=['F','FX','H1','D1','D2','D3','D4','D5','E3']",
+                       "s53x.budgets=['knee','stress']", "s53x.d4_faithful=true",
+                       "s53x.h0=true"], ["s53x"]),
     # The exploratory FQ run of 8 Oct 2026 (scripts/exp5/fq_vs_e3.py): FQ in 5.3's
     # N = 6, one-mule cells beside F, FX, D4 and E3.
     "batch2fq": (20, ["s53x.arms=['F','FX','D4','E3','FQ-g75']", "s53x.K=[1]",
                       "s53x.budgets=['knee','stress']", "s53x.d4_faithful=false",
                       "s53x.h0=false", "rl.keep_learned=true"], ["s53x"]),
 }
-LAUNCH_STAGE = {"batch2fq": "batch2"}
+LAUNCH_STAGE = {"batch2fq": "batch2", "batch2s53": "batch2"}
+S53 = "batch2s53"
 
 # --------------------------------------------------------------------------- #
 # Style (the dataviz reference palette and chrome, light, for print)
@@ -277,10 +283,10 @@ def fig_convergence(out: Path) -> None:
     grid = [i * 2.0 for i in range(0, 451)]          # 0..900 s
     for ax, (cell, title) in zip(axes, cells):
         for arm in BASELINES:
-            e = entry("batch2", "s53x", cell, arm)
+            e = entry(S53, "s53x", cell, arm)
             ax.plot(grid, mean_curve(curves(e, 6), grid), color=CONTEXT, lw=0.9, zorder=2)
         for arm in ("FX", "F"):
-            e = entry("batch2", "s53x", cell, arm)
+            e = entry(S53, "s53x", cell, arm)
             ax.plot(grid, mean_curve(curves(e, 6), grid), color=ARM_COLOR[arm], lw=1.8,
                     zorder=4)
         ax.axhline(TAU, color=MUTED, lw=0.7, ls=(0, (3, 2)), zorder=1)
@@ -289,7 +295,7 @@ def fig_convergence(out: Path) -> None:
         ax.set_title(title, color=INK2, loc="left")
         ax.set_xlabel("simulated time (s)")
         ax.set_xlim(0, grid[-1])
-    axes[0].set_ylabel("test accuracy (mean of 20 trials)")
+    axes[0].set_ylabel("test accuracy (mean of 40 trials)")
     axes[0].set_ylim(0.35, 0.88)
     handles = [Line2D([], [], color=ARM_COLOR["F"], lw=1.8, label="F"),
                Line2D([], [], color=ARM_COLOR["FX"], lw=1.8, label="FX"),
@@ -308,7 +314,7 @@ def fig_tau(out: Path) -> None:
     for ax, (cell, title) in zip(axes, cells):
         for i, arm in enumerate(arms):
             y = len(arms) - 1 - i
-            e = entry("batch2", "s53x", cell, arm)
+            e = entry(S53, "s53x", cell, arm)
             xs = values(e, TAU_COL)
             rng = random.Random(i)
             ax.scatter(xs, [y + rng.uniform(-0.18, 0.18) for _ in xs], s=4, color=CONTEXT,
@@ -347,9 +353,9 @@ SCALE_ARMS = ["F", "FX", "H1", "D3", "D4"]
 
 def fig_scale(out: Path) -> None:
     ns = [6, 12, 24]
-    src = {"knee": {6: ("batch1", "s59", "n6k1_knee"), 12: ("batch1", "s59", "n12k1_knee"),
+    src = {"knee": {6: (S53, "s53x", "n6k1_knee"), 12: ("batch1", "s59", "n12k1_knee"),
                     24: ("batch1", "s59", "n24k1_knee")},
-           "stress": {6: ("batch2", "s53x", "n6k1_stress"),
+           "stress": {6: (S53, "s53x", "n6k1_stress"),
                       12: ("batch2", "s59x", "n12k1_stress"),
                       24: ("batch2", "s59x", "n24k1_stress")}}
     fig, axes = plt.subplots(1, 2, figsize=(COL2, 2.3), sharey=True)
@@ -760,8 +766,8 @@ def _win_share(cell: str, arm: str) -> Tuple[float, int]:
     """Share of seeds where F reaches tau first (ties half), over seeds where either reaches."""
     def by_trial(e):
         return {int(r["trial_index"]): SC._num(r.get(TAU_COL)) for r in e.scored_rows}
-    f = by_trial(entry("batch2", "s53x", cell, "F"))
-    b = by_trial(entry("batch2", "s53x", cell, arm))
+    f = by_trial(entry(S53, "s53x", cell, "F"))
+    b = by_trial(entry(S53, "s53x", cell, arm))
     score, n = 0.0, 0
     for t in set(f) & set(b):
         fv, bv = f[t], b[t]
@@ -810,7 +816,7 @@ def fig_budget(out: Path) -> None:
     fig, ax = plt.subplots(figsize=(COL1, 1.95))
     pts = {}
     for arm in arms:
-        e = entry("batch2", "s53x", "n6k1_stress", arm)
+        e = entry(S53, "s53x", "n6k1_stress", arm)
         pts[arm] = (_mean(e, "sim_budget_overrun_rate"), _mean(e, "update_yield"))
         color = ARM_COLOR.get(arm) if arm in ("F", "FX", "D4") else MUTED
         ax.scatter([pts[arm][0]], [pts[arm][1]], s=30, color=color,
@@ -915,7 +921,7 @@ FIGURE_TEX = r"""% Experiment 5 figures, generated by scripts/exp5/paper_figures
 \centering
 \includegraphics[width=\textwidth]{Figures/exp5/fig_exp5_convergence.pdf}
 \caption{Test accuracy over simulated time at $N=6$ with one mule (scheduler comparison), the mean
-of 20 paired trials per arm, at the knee (150\,s) and stress (75\,s) budgets. F and FX
+of 40 paired trials per arm, at the knee (150\,s) and stress (75\,s) budgets. F and FX
 cross $\tau=0.71$ first; gray lines are the seven baselines (H1, D1--D5, E3).}
 \label{fig:exp5_convergence}
 \end{figure*}
@@ -934,7 +940,7 @@ is below 1. $^{\dagger}$Slower than F (paired by seed, Holm $p<0.05$).}
 \includegraphics[width=\textwidth]{Figures/exp5/fig_exp5_scale.pdf}
 \caption{Time to $\tau$ as the device population grows (scale study), one mule, each $N$
 at its own knee and stress budget: mean and 95\% bootstrap CI over the trials that reach
-$\tau$, 20 paired trials per arm. Markers are offset horizontally for legibility.}
+$\tau$, 40 paired trials per arm at $N=6$ and 20 above it. Markers are offset horizontally for legibility.}
 \label{fig:exp5_scale}
 \end{figure*}
 
@@ -952,7 +958,8 @@ $\tau$ at $N=12$ as mules are added, mean and 95\% CI.}
 \includegraphics[width=\textwidth]{Figures/exp5/fig_exp5_mechanism.pdf}
 \caption{Where F's advantage comes from: (a)~mean mission time by component and (b)~time
 to $\tau$, mean and 95\% CI over the trials that reach it ($N=6$, one mule, knee
-budget); (c)~share of F's plans flying each band class, by cell.}
+budget, the 20 seeds the pinned runs flew); (c)~share of F's plans flying each band
+class, by cell.}
 \label{fig:exp5_mechanism}
 \end{figure*}
 
@@ -966,7 +973,7 @@ budget); (c)~share of F's plans flying each band class, by cell.}
 \begin{figure}[t]
 \centering
 \includegraphics[width=\columnwidth]{Figures/exp5/fig_exp5_paired.pdf}
-\caption{Seed-paired comparison at $N=6$, one mule: the share of the 20 paired seeds (same
+\caption{Seed-paired comparison at $N=6$, one mule: the share of the 40 paired seeds (same
 layout, channel and data) in which F reaches $\tau$ before each baseline. A seed in which
 only F reaches $\tau$ counts as a win, and a tie as half.}
 \label{fig:exp5_paired}
@@ -984,7 +991,7 @@ only F reaches $\tau$ counts as a win, and a tie as half.}
 \centering
 \includegraphics[width=\textwidth]{Figures/exp5/fig_exp5_learning.pdf}
 \caption{Learning inside the plan against learning without one ($N=6$, one mule;
-exploratory). (a)~Time to $\tau$ at the knee (filled) and stress (hollow) budgets,
+exploratory, the 20 seeds FQ flew). (a)~Time to $\tau$ at the knee (filled) and stress (hollow) budgets,
 mean and 95\% CI, reach rate in brackets when below 1; $^{\ddagger}$slower than FQ.
 (b)~Mean mission time at the knee by component, and each arm's band.}
 \label{fig:exp5_learning}
@@ -1008,8 +1015,8 @@ def write_tex(out: Path) -> None:
                                       "update_yield")) for lvl in ("spread", "stragglers")]
     reaches = [reach_rate(entry("batch3", "s512", f"n6k1_knee_1mb_{lvl}", "F")) * 100
                for lvl in ("spread", "stragglers")]
-    stress_f = entry("batch2", "s53x", "n6k1_stress", "F")
-    stress_d4 = entry("batch2", "s53x", "n6k1_stress", "D4")
+    stress_f = entry(S53, "s53x", "n6k1_stress", "F")
+    stress_d4 = entry(S53, "s53x", "n6k1_stress", "D4")
     text = (FIGURE_TEX.replace("@F_YIELD@", f"{max(yields):.1f}")
             .replace("@F_REACH@", f"{min(reaches):.0f}--{max(reaches):.0f}")
             .replace("@D4_OVER@", f"{_mean(stress_d4, 'sim_budget_overrun_rate') * 100:.0f}")

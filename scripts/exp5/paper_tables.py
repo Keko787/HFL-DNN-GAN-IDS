@@ -160,7 +160,7 @@ HEADLINE_CELLS = [("n6k1_knee", "knee"), ("n6k1_stress", "stress"),
                   ("n6k3_knee", "knee"), ("n6k3_stress", "stress")]
 
 
-def stress_budget_cells(variant: str, stage: str = "batch2") -> Tuple[str, str]:
+def stress_budget_cells(variant: str, stage: str = "batch2s53") -> Tuple[str, str]:
     """(share of missions that overran the stress budget, updates merged per round)
     at N = 6 with one mule, from the trials the scorer compared (the figure script's
     entries, which resolve each arm's shared and reused cells)."""
@@ -177,7 +177,7 @@ def headline_table() -> str:
              r"of trials that reach it in brackets when below 100\%, and with one mule under "
              r"the stress budget, the share of missions that overran it and the updates merged "
              r"per round (yield). " + DAG + r"Significantly slower than F. " + SECT
-             + r"Exploratory.}",
+             + r"Exploratory, over the first 20 seeds.}",
              r"\label{tab:exp5_headline}",
              r"\resizebox{\columnwidth}{!}{%",
              r"\begin{tabular}{l rr rr rr}",
@@ -209,8 +209,8 @@ SCALE_ARMS = [("F", "F"), ("FX", "FX"), ("H1", "H1"), ("D3", "D3 (Cui)"),
 def scale_table() -> str:
     core = Study("b1", "s59")          # the knee, N = 6, 12, 24
     ext = Study("b2", "s59x")          # the stress budget, N = 12, 24
-    h53 = Study("b2", "s53x")          # N = 6 stress
-    cols = [(core, "n6k1_knee"), (core, "n12k1_knee"), (core, "n24k1_knee"),
+    h53 = Study("b2", "s53x")          # N = 6: 5.9's cells, at 5.3's 40 trials
+    cols = [(h53, "n6k1_knee"), (core, "n12k1_knee"), (core, "n24k1_knee"),
             (h53, "n6k1_stress"), (ext, "n12k1_stress"), (ext, "n24k1_stress")]
     lines = [r"\begin{table}[t]", r"\centering",
              r"\caption{Scale study: time to $\tau$ with one mule, at each $N$'s knee and "
@@ -234,8 +234,8 @@ def scale_table() -> str:
                  for stx, cell in cols]
         lines.append(f"{label} & " + " & ".join(cells) + r" \\")
         if variant == "FX":
-            fq = [fq_n6_cell("n6k1_knee"), tau_cell(s55, "n12k1_knee", FQ), "--",
-                  fq_n6_cell("n6k1_stress"), tau_cell(s55, "n12k1_stress", FQ), "--"]
+            fq = [fq_n6_cell("n6k1_knee") + SECT, tau_cell(s55, "n12k1_knee", FQ), "--",
+                  fq_n6_cell("n6k1_stress") + SECT, tau_cell(s55, "n12k1_stress", FQ), "--"]
             lines.append("FQ & " + " & ".join(fq) + r" \\")
     lines += [r"\bottomrule", r"\end{tabular}%", "}", r"\end{table}"]
     return "\n".join(lines)
@@ -281,8 +281,9 @@ def decision_cost_table() -> str:
 def mules_table() -> str:
     """5.11 (b): weak scaling (six devices a mule) and strong scaling (N = 12)."""
     st = Study("b1", "s511b")
-    cols = [("n6k1_knee", "6/1"), ("n12k2_knee", "12/2"), ("n18k3_knee", "18/3"),
-            ("n12k1_knee", "12/1"), ("n12k3_knee", "12/3")]
+    h53 = Study("b2", "s53x")          # N/K = 6/1: this study's cell, at 5.3's 40 trials
+    cols = [(h53, "n6k1_knee", "6/1"), (st, "n12k2_knee", "12/2"), (st, "n18k3_knee", "18/3"),
+            (st, "n12k1_knee", "12/1"), (st, "n12k3_knee", "12/3")]
     lines = [r"\begin{table}[t]", r"\centering",
              r"\caption{Scaling out with mules (decision-cost study), knee budget: time to "
              r"$\tau$. Weak scaling holds six devices per mule; strong scaling adds mules at "
@@ -294,11 +295,11 @@ def mules_table() -> str:
              r"\toprule",
              r" & \multicolumn{3}{c}{weak scaling} & \multicolumn{2}{c}{strong scaling} \\",
              r"\cmidrule(lr){2-4}\cmidrule(lr){5-6}",
-             r"\textbf{Arm} & " + " & ".join(f"$N/K$={c}" for _, c in cols) + r" \\",
+             r"\textbf{Arm} & " + " & ".join(f"$N/K$={c}" for _, _, c in cols) + r" \\",
              r"\midrule"]
     for variant, label in [("F", "F"), ("FX", "FX"), ("H1", "H1"), ("D4", "D4 (FedEx route)")]:
-        cells = [tau_cell(st, cell, variant, reference="F", bold=(variant == "F"))
-                 for cell, _ in cols]
+        cells = [tau_cell(stx, cell, variant, reference="F", bold=(variant == "F"))
+                 for stx, cell, _ in cols]
         lines.append(f"{label} & " + " & ".join(cells) + r" \\")
     lines += [r"\bottomrule", r"\end{tabular}%", "}", r"\end{table}"]
     return "\n".join(lines)
