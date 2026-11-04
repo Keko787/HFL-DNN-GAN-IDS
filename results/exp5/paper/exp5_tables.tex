@@ -28,7 +28,7 @@ E3 & Single-agent next-stop DQN after Chen et al.\ \cite{chen2023model}, trained
 
 \begin{table}[t]
 \centering
-\caption{Scheduler comparison at $N=6$: time to $\tau=0.71$, with the share of trials that reach it in brackets when below 100\%, and with one mule under the stress budget, the share of missions that overran it and the updates merged per round (yield). $^{\dagger}$Significantly slower than F. $^{\S}$Exploratory, over the first 20 seeds.}
+\caption{Scheduler comparison at $N=6$: time to $\tau=0.71$, with the share of trials that reach it in brackets when below 100\%, and with one mule under the stress budget, the share of missions that overran it and the updates merged per round (yield). $^{\dagger}$Significantly slower than F. $^{\S}$Exploratory, outside the study's tests.}
 \label{tab:exp5_headline}
 \resizebox{\columnwidth}{!}{%
 \begin{tabular}{l rr rr rr}
@@ -39,7 +39,7 @@ E3 & Single-agent next-stop DQN after Chen et al.\ \cite{chen2023model}, trained
 \midrule
 F & \textbf{179\,s} & \textbf{168\,s} & \textbf{53\,s} & \textbf{53\,s} & 29\% & 3.1 \\
 FX & 168\,s & 165\,s & 53\,s & 53\,s & 21\% & 3.1 \\
-FQ$^{\S}$ & 180\,s & 182\,s & -- & -- & 24\% & 3.2 \\
+FQ$^{\S}$ & 169\,s & 166\,s & 62\,s & 61\,s & 20\% & 3.1 \\
 \midrule
 H1 & 254\,s$^{\dagger}$ & 209\,s\,{\scriptsize(92\%)} & 60\,s & 60\,s & 1\% & 2.0 \\
 D1 (MAX-AoI) & 263\,s$^{\dagger}$ & 232\,s$^{\dagger}$ & 60\,s & 60\,s & 2\% & 2.3 \\
@@ -56,7 +56,7 @@ E3 (Chen) & 252\,s$^{\dagger}$ & 201\,s\,{\scriptsize(98\%)} & 63\,s & 63\,s & 6
 
 \begin{table}[t]
 \centering
-\caption{Scale study: time to $\tau$ with one mule, at each $N$'s knee and stress budgets. Notation as in Table~\ref{tab:exp5_headline}; FQ, flown in other studies, is not tested against F.}
+\caption{Scale study: time to $\tau$ with one mule, at each $N$'s knee and stress budgets. Notation as in Table~\ref{tab:exp5_headline}.}
 \label{tab:exp5_scale}
 \resizebox{\columnwidth}{!}{%
 \begin{tabular}{l rrr rrr}
@@ -67,7 +67,7 @@ E3 (Chen) & 252\,s$^{\dagger}$ & 201\,s\,{\scriptsize(98\%)} & 63\,s & 63\,s & 6
 \midrule
 F & \textbf{179\,s} & \textbf{486\,s}\,{\scriptsize(95\%)} & \textbf{749\,s} & \textbf{168\,s} & \textbf{371\,s} & \textbf{661\,s} \\
 FX & 168\,s & 424\,s\,{\scriptsize(90\%)} & 789\,s & 165\,s & 386\,s\,{\scriptsize(90\%)} & 658\,s \\
-FQ & 180\,s$^{\S}$ & 461\,s\,{\scriptsize(90\%)} & -- & 182\,s$^{\S}$ & 389\,s\,{\scriptsize(90\%)} & -- \\
+FQ & 169\,s$^{\S}$ & 461\,s\,{\scriptsize(90\%)} & 897\,s$^{\S}$ & 166\,s$^{\S}$ & 389\,s\,{\scriptsize(90\%)} & 678\,s$^{\S}$ \\
 H1 & 254\,s$^{\dagger}$ & 589\,s\,{\scriptsize(95\%)} & 951\,s$^{\dagger}$ & 209\,s\,{\scriptsize(92\%)} & 446\,s\,{\scriptsize(95\%)} & 651\,s\,{\scriptsize(95\%)} \\
 D3 (Cui) & 262\,s$^{\dagger}$ & 507\,s\,{\scriptsize(95\%)} & 911\,s$^{\dagger}$ & 213\,s & 460\,s\,{\scriptsize(90\%)} & 662\,s\,{\scriptsize(95\%)} \\
 D4 (FedEx route) & 232\,s$^{\dagger}$ & 459\,s\,{\scriptsize(95\%)} & 752\,s & 232\,s$^{\dagger}$ & 459\,s\,{\scriptsize(95\%)} & 752\,s$^{\dagger}$ \\
@@ -107,8 +107,8 @@ D4 (FedEx route) & 232\,s$^{\dagger}$ & 222\,s & 186\,s & 459\,s\,{\scriptsize(9
 \cmidrule(lr){2-3}\cmidrule(lr){4-6}
 $N$ & mean & p95 & budget & F served & FX served \\
 \midrule
-6 & 0.04\,s & 0.06\,s & -- & -- & -- \\
-12 & 0.02\,s & 0.04\,s & -- & -- & -- \\
+6 & 0.04\,s & 0.06\,s & 150\,s & 57\% & 58\% \\
+12 & 0.02\,s & 0.04\,s & 180\,s & 59\% & 59\% \\
 24 & 0.14\,s & 0.26\,s & 350\,s & 54\% & 54\% \\
 48 & 0.41\,s & 0.83\,s & 850\,s & 56\% & 56\% \\
 96 & 1.53\,s & 2.00\,s & 1660\,s & 56\% & 57\% \\
@@ -132,24 +132,25 @@ $N$ & mean & p95 & budget & F served & FX served \\
 \quad Band class pinned to narrow & age of updates (missions) & 0.70 & 0.70 & 0\% [0, 0] & 1.000 & no difference \\
 \midrule
 \multicolumn{7}{l}{\textit{C2: one derived objective}} \\
-\quad Coverage term removed ($N{=}12$) & round-close rate & 99\% & 74\% & +25\% [+25, +25] & $<$0.001 & \textbf{holds} \\
-\quad Dwell term removed ($N{=}12$) & round-close rate & 99\% & 99\% & 0\% [0, 0] & 1.000 & no difference \\
+\quad Coverage term removed ($N{=}12$) & round-close rate & 98\% & 73\% & +25\% [+25, +25] & $<$0.001 & \textbf{holds} \\
+\quad Dwell term removed ($N{=}12$) & round-close rate & 98\% & 98\% & 0\% [0, 0] & 1.000 & no difference \\
 \midrule
 \multicolumn{7}{l}{\textit{C3: one deadline, three roles}} \\
-\quad Plain-mean merge & time to $\tau$ & 194\,s & 194\,s & 0\% [0, 0] & 1.000 & no difference \\
-\quad Async-HFL merge & time to $\tau$ & 194\,s & 194\,s & 0\% [0, 0] & 1.000 & no difference \\
-\quad FedBuff merge & time to $\tau$ & 159\,s & 346\,s (13 seeds) & +117\% [+59, +183] & 0.117 & no difference \\
-\quad FeRRy's merge with FedProx & time to $\tau$ & 194\,s & 146\,s & $-$25\% [$-$64, +10] & 1.000 & no difference \\
-\quad Round deadline, after FedCS (stress) & deadline-miss rate & 42.2\% & 47.4\% & +13\% [+3, +23] & 0.152 & no difference \\
-\quad Preferred duration, after Oort (stress) & deadline-miss rate & 42.2\% & 47.2\% & +12\% [+3, +22] & 0.152 & no difference \\
+\quad Plain-mean merge & time to $\tau$ & 179\,s & 179\,s & 0\% [0, 0] & 1.000 & no difference \\
+\quad Async-HFL merge & time to $\tau$ & 179\,s & 179\,s & 0\% [0, 0] & 1.000 & no difference \\
+\quad FedBuff merge & time to $\tau$ & 157\,s & 375\,s (26 seeds) & +138\% [+93, +187] & 0.004 & \textbf{holds} \\
+\quad FeRRy's merge with FedProx & time to $\tau$ & 179\,s & 168\,s & $-$6\% [$-$34, +20] & 1.000 & no difference \\
+\quad Round deadline, after FedCS (stress) & deadline-miss rate & 43.4\% & 48.7\% & +12\% [+5, +20] & 0.010 & \textbf{holds} \\
+\quad Preferred duration, after Oort (stress) & deadline-miss rate & 43.4\% & 48.6\% & +12\% [+5, +19] & 0.010 & \textbf{holds} \\
 \midrule
 \multicolumn{7}{l}{\textit{C4: two clocks, re-decided per stop}} \\
-\quad Learned per-stop score, FQ ($N{=}12$) & time to $\tau$ & 424\,s & 461\,s & +9\% [0, +23] & 0.555 & no difference \\
+\quad No per-stop rule, the plan alone ($N{=}12$) & time to $\tau$ & 428\,s & 461\,s & +8\% [+2, +16] & 0.032 & \textbf{holds} \\
+\quad Learned per-stop score, FQ ($N{=}12$) & time to $\tau$ & 428\,s & 454\,s & +6\% [+1, +14] & 0.110 & no difference \\
 \midrule
 \multicolumn{7}{l}{\textit{C5: fairness under physical cost}} \\
-\quad MAX-AoI scheduler, D1 (stress) & age of updates (missions) & 0.78 & 1.06 & +37\% [+21, +53] & 0.009 & \textbf{holds} \\
-\quad Whittle index, D3 (stress) & age of updates (missions) & 0.78 & 1.07 & +38\% [+23, +55] & 0.007 & \textbf{holds} \\
-\quad Coverage term removed (stress) & age of updates (missions) & 0.78 & 1.10 & +41\% [+34, +49] & 0.001 & \textbf{holds} \\
+\quad MAX-AoI scheduler, D1 (stress) & age of updates (missions) & 0.78 & 1.06 & +37\% [+21, +53] & 0.017 & \textbf{holds} \\
+\quad Whittle index, D3 (stress) & age of updates (missions) & 0.78 & 1.07 & +38\% [+23, +55] & 0.013 & \textbf{holds} \\
+\quad Coverage term removed (stress) & age of updates (missions) & 0.78 & 1.10 & +41\% [+34, +49] & 0.002 & \textbf{holds} \\
 \quad Age cap removed (stress) & age of updates (missions) & 0.78 & 0.78 & 0\% [0, 0] & 1.000 & no difference \\
 \midrule
 \multicolumn{7}{l}{\textit{Component ablations}} \\
@@ -174,9 +175,9 @@ $N$ & mean & p95 & budget & F served & FX served \\
 F & \textbf{137\,s}\,{\scriptsize(75\%)} & \textbf{159\,s}\,{\scriptsize(70\%)} & \textbf{378\,s}\,{\scriptsize(55\%)} & \textbf{216\,s}\,{\scriptsize(95\%)} & \textbf{255\,s}\,{\scriptsize(95\%)} & \textbf{257\,s} & \textbf{219\,s}\,{\scriptsize(90\%)} \\
 FX & 120\,s\,{\scriptsize(75\%)} & 146\,s\,{\scriptsize(70\%)} & 329\,s\,{\scriptsize(55\%)}$^{\ast}$ & 192\,s\,{\scriptsize(95\%)}$^{\ast}$ & 209\,s\,{\scriptsize(95\%)} & 263\,s & 183\,s\,{\scriptsize(85\%)}$^{\ast}$ \\
 H1 & 325\,s$^{\dagger}$ & 296\,s\,{\scriptsize(95\%)} & 507\,s\,{\scriptsize(55\%)}$^{\dagger}$ & 274\,s & 332\,s & 261\,s & 281\,s \\
-D3 (Cui) & -- & -- & 519\,s\,{\scriptsize(50\%)}$^{\dagger}$ & -- & -- & -- & -- \\
-D4 (FedEx route) & 333\,s$^{\dagger}$ & 304\,s\,{\scriptsize(90\%)} & -- & -- & -- & -- & -- \\
-D5 (FedCS) & 222\,s\,{\scriptsize(95\%)}$^{\dagger}$ & 250\,s\,{\scriptsize(85\%)} & -- & -- & -- & -- & -- \\
+D3 (Cui) & 293\,s$^{\S}$ & 317\,s$^{\S}$ & 519\,s\,{\scriptsize(50\%)}$^{\dagger}$ & 293\,s$^{\S}$ & 264\,s\,{\scriptsize(90\%)}$^{\S}$ & 303\,s$^{\S}$ & 264\,s$^{\S}$ \\
+D4 (FedEx route) & 333\,s$^{\dagger}$ & 304\,s\,{\scriptsize(90\%)} & 471\,s\,{\scriptsize(50\%)}$^{\S}$ & 257\,s$^{\S}$ & 276\,s$^{\S}$ & 237\,s\,{\scriptsize(90\%)}$^{\S}$ & 262\,s$^{\S}$ \\
+D5 (FedCS) & 222\,s\,{\scriptsize(95\%)}$^{\dagger}$ & 250\,s\,{\scriptsize(85\%)} & 482\,s\,{\scriptsize(55\%)}$^{\S}$ & 309\,s\,{\scriptsize(95\%)}$^{\S}$ & 315\,s\,{\scriptsize(95\%)}$^{\S}$ & 296\,s\,{\scriptsize(95\%)}$^{\S}$ & 292\,s\,{\scriptsize(95\%)}$^{\S}$ \\
 \bottomrule
 \end{tabular}
 \end{table*}
