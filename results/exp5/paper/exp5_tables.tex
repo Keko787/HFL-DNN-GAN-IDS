@@ -70,7 +70,10 @@ FX & 168\,s & 424\,s\,{\scriptsize(90\%)} & 789\,s & 165\,s & 386\,s\,{\scriptsi
 FQ & 169\,s$^{\S}$ & 461\,s\,{\scriptsize(90\%)} & 897\,s$^{\S}$ & 166\,s$^{\S}$ & 389\,s\,{\scriptsize(90\%)} & 678\,s$^{\S}$ \\
 H1 & 254\,s$^{\dagger}$ & 589\,s\,{\scriptsize(95\%)} & 951\,s$^{\dagger}$ & 209\,s\,{\scriptsize(92\%)} & 446\,s\,{\scriptsize(95\%)} & 651\,s\,{\scriptsize(95\%)} \\
 D3 (Cui) & 262\,s$^{\dagger}$ & 507\,s\,{\scriptsize(95\%)} & 911\,s$^{\dagger}$ & 213\,s & 460\,s\,{\scriptsize(90\%)} & 662\,s\,{\scriptsize(95\%)} \\
-D4 (FedEx route) & 232\,s$^{\dagger}$ & 459\,s\,{\scriptsize(95\%)} & 752\,s & 232\,s$^{\dagger}$ & 459\,s\,{\scriptsize(95\%)} & 752\,s$^{\dagger}$ \\
+D4 (FedEx route) & 232\,s$^{\dagger}$ & 459\,s\,{\scriptsize(95\%)} & 752\,s & 232\,s$^{\dagger}$ & 459\,s\,{\scriptsize(95\%)} & 752\,s \\
+D1 (MAX-AoI) & 263\,s$^{\dagger}$ & 579\,s\,{\scriptsize(95\%)}$^{\S}$ & 948\,s$^{\S}$ & 232\,s & 432\,s\,{\scriptsize(95\%)}$^{\S}$ & 692\,s\,{\scriptsize(95\%)}$^{\S}$ \\
+D2 (Oort) & 235\,s$^{\dagger}$ & 530\,s\,{\scriptsize(90\%)}$^{\S}$ & 876\,s$^{\S}$ & 236\,s\,{\scriptsize(95\%)} & 367\,s\,{\scriptsize(85\%)}$^{\S}$ & 682\,s$^{\S}$ \\
+D5 (FedCS) & 236\,s$^{\dagger}$ & 500\,s\,{\scriptsize(95\%)}$^{\S}$ & 771\,s$^{\S}$ & 206\,s\,{\scriptsize(98\%)} & 515\,s\,{\scriptsize(90\%)}$^{\S}$ & 754\,s\,{\scriptsize(85\%)}$^{\S}$ \\
 \bottomrule
 \end{tabular}%
 }
@@ -78,19 +81,19 @@ D4 (FedEx route) & 232\,s$^{\dagger}$ & 459\,s\,{\scriptsize(95\%)} & 752\,s & 2
 
 \begin{table}[t]
 \centering
-\caption{Scaling out with mules (decision-cost study), knee budget: time to $\tau$. Weak scaling holds six devices per mule; strong scaling adds mules at $N=12$. Notation as in Table~\ref{tab:exp5_headline}; $^{\ast}$significantly faster than F.}
+\caption{Scaling out with mules, knee budget: time to $\tau$ (s). Weak scaling holds six devices per mule; strong scaling adds mules at $N=12$ and 24. Notation as in Table~\ref{tab:exp5_headline}; $^{\ast}$significantly faster than F.}
 \label{tab:exp5_mules}
 \resizebox{\columnwidth}{!}{%
-\begin{tabular}{l rrr rr}
+\begin{tabular}{l rrr rrrrr}
 \toprule
- & \multicolumn{3}{c}{weak scaling} & \multicolumn{2}{c}{strong scaling} \\
-\cmidrule(lr){2-4}\cmidrule(lr){5-6}
-\textbf{Arm} & $N/K$=6/1 & $N/K$=12/2 & $N/K$=18/3 & $N/K$=12/1 & $N/K$=12/3 \\
+ & \multicolumn{3}{c}{weak scaling} & \multicolumn{5}{c}{strong scaling} \\
+\cmidrule(lr){2-4}\cmidrule(lr){5-9}
+\textbf{Arm}, $N/K$ & 6/1 & 12/2 & 18/3 & 12/1 & 12/3 & 24/1 & 24/2 & 24/3 \\
 \midrule
-F & \textbf{179\,s} & \textbf{226\,s} & \textbf{186\,s} & \textbf{486\,s}\,{\scriptsize(95\%)} & \textbf{151\,s} \\
-FX & 168\,s & 205\,s & 131\,s\,{\scriptsize(95\%)} & 424\,s\,{\scriptsize(90\%)} & 102\,s$^{\ast}$ \\
-H1 & 254\,s$^{\dagger}$ & 263\,s\,{\scriptsize(95\%)} & 149\,s & 589\,s\,{\scriptsize(95\%)} & 165\,s \\
-D4 (FedEx route) & 232\,s$^{\dagger}$ & 222\,s & 186\,s & 459\,s\,{\scriptsize(95\%)} & 128\,s \\
+F & \textbf{179} & \textbf{226} & \textbf{186} & \textbf{486}\,{\scriptsize(95\%)} & \textbf{151} & \textbf{749} & \textbf{327}\,{\scriptsize(95\%)} & \textbf{198} \\
+FX & 168 & 205 & 131\,{\scriptsize(95\%)} & 424\,{\scriptsize(90\%)} & 102$^{\ast}$ & 789 & 308 & 185\,{\scriptsize(95\%)} \\
+H1 & 254$^{\dagger}$ & 263\,{\scriptsize(95\%)} & 149 & 589\,{\scriptsize(95\%)} & 165 & 951$^{\dagger}$ & 362 & 222 \\
+D4 & 232$^{\dagger}$ & 222 & 186 & 459\,{\scriptsize(95\%)} & 128 & 752 & 319 & 222 \\
 \bottomrule
 \end{tabular}%
 }

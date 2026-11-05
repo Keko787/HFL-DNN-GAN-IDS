@@ -220,6 +220,8 @@ def headline_table() -> str:
 
 SCALE_ARMS = [("F", "F"), ("FX", "FX"), ("H1", "H1"), ("D3", "D3 (Cui)"),
               ("D4", "D4 (FedEx route)")]
+# The scale study leaves these out. N = 6 is 5.3's; N = 12 and 24 are probe P3, exploratory.
+SCALE_PROBE_ARMS = [("D1", "D1 (MAX-AoI)"), ("D2", "D2 (Oort)"), ("D5", "D5 (FedCS)")]
 
 
 def scale_table() -> str:
@@ -259,6 +261,12 @@ def scale_table() -> str:
                   fill_cell("n6k1_stress", FQ), fq_n12["n12k1_stress"],
                   fill_cell("n24k1_stress", FQ)]
             lines.append("FQ & " + " & ".join(fq) + r" \\")
+    b2_s59x = REPO / "results" / "exp5" / "b2" / "s59x"
+    for variant, label in SCALE_PROBE_ARMS:
+        cells = [tau_cell(h53, cell, variant, reference="F") if stx is h53 else
+                 time_cell(*first_trials(b2_s59x / f"{cell}__{variant}_scored.csv", 20)) + SECT
+                 for stx, cell in cols]
+        lines.append(f"{label} & " + " & ".join(cells) + r" \\")
     lines += [r"\bottomrule", r"\end{tabular}%", "}", r"\end{table}"]
     return "\n".join(lines)
 
@@ -299,27 +307,30 @@ def decision_cost_table() -> str:
 
 
 def mules_table() -> str:
-    """5.11 (b): weak scaling (six devices a mule) and strong scaling (N = 12)."""
+    """5.11 (b): weak scaling (six devices a mule) and strong scaling at N = 12; 5.9's at 24."""
     st = Study("b1", "s511b")
     h53 = Study("b2", "s53x")          # N/K = 6/1: this study's cell, at 5.3's 40 trials
+    ext = Study("b2", "s59x")          # N = 24: 5.9's cells, marked from 5.9's family
     cols = [(h53, "n6k1_knee", "6/1"), (st, "n12k2_knee", "12/2"), (st, "n18k3_knee", "18/3"),
-            (st, "n12k1_knee", "12/1"), (st, "n12k3_knee", "12/3")]
+            (st, "n12k1_knee", "12/1"), (st, "n12k3_knee", "12/3"),
+            (ext, "n24k1_knee", "24/1"), (ext, "n24k2_knee", "24/2"), (ext, "n24k3_knee", "24/3")]
     lines = [r"\begin{table}[t]", r"\centering",
-             r"\caption{Scaling out with mules (decision-cost study), knee budget: time to "
-             r"$\tau$. Weak scaling holds six devices per mule; strong scaling adds mules at "
-             r"$N=12$. Notation as in Table~\ref{tab:exp5_headline}; " + STAR
+             r"\caption{Scaling out with mules, knee budget: time to "
+             r"$\tau$ (s). Weak scaling holds six devices per mule; strong scaling adds mules at "
+             r"$N=12$ and 24. Notation as in Table~\ref{tab:exp5_headline}; " + STAR
              + r"significantly faster than F.}",
              r"\label{tab:exp5_mules}",
              r"\resizebox{\columnwidth}{!}{%",
-             r"\begin{tabular}{l rrr rr}",
+             r"\begin{tabular}{l rrr rrrrr}",
              r"\toprule",
-             r" & \multicolumn{3}{c}{weak scaling} & \multicolumn{2}{c}{strong scaling} \\",
-             r"\cmidrule(lr){2-4}\cmidrule(lr){5-6}",
-             r"\textbf{Arm} & " + " & ".join(f"$N/K$={c}" for _, _, c in cols) + r" \\",
+             r" & \multicolumn{3}{c}{weak scaling} & \multicolumn{5}{c}{strong scaling} \\",
+             r"\cmidrule(lr){2-4}\cmidrule(lr){5-9}",
+             r"\textbf{Arm}, $N/K$ & " + " & ".join(c for _, _, c in cols) + r" \\",
              r"\midrule"]
-    for variant, label in [("F", "F"), ("FX", "FX"), ("H1", "H1"), ("D4", "D4 (FedEx route)")]:
+    for variant, label in [("F", "F"), ("FX", "FX"), ("H1", "H1"), ("D4", "D4")]:
+        # Seconds are in the caption: eight columns have to fit one.
         cells = [tau_cell(stx, cell, variant, reference="F", bold=(variant == "F"))
-                 for stx, cell, _ in cols]
+                 .replace(r"\,s", "") for stx, cell, _ in cols]
         lines.append(f"{label} & " + " & ".join(cells) + r" \\")
     lines += [r"\bottomrule", r"\end{tabular}%", "}", r"\end{table}"]
     return "\n".join(lines)

@@ -16,9 +16,9 @@ accuracy 23--32\% sooner than seven whole schedulers at six devices and a 1~MB
 update, because its
 plan chose a long-reach narrow band that removed most of the transit between
 stops. It kept updates fresher than age-of-information schedulers under tight
-budgets, beat the FedEx route at 24 devices under the stress budget, and planned
-in 1.5\,s at 96 devices. At 12 devices and the knee budget its fixed per-stop rule
-was significantly faster than the plan alone. Several elements of the design showed no measurable
+budgets and planned in 1.5\,s at 96 devices. At 12 devices its fixed per-stop rule
+was significantly faster than the plan alone, with one mule at the knee budget and
+with three mules. Several elements of the design showed no measurable
 effect at our settings. Among them is a learned per-stop score: FQ performed like
 the fixed rule, and its exploratory advantage over a learned scheduler without a
 plan came from the plan it flies inside.
@@ -29,7 +29,8 @@ channel's variation, or reserving slack for it, is a first step. The plan also
 ignores training time, so when devices need time to train it reaches devices
 whose updates are not ready; adding a compute term to the plan is a second.
 \sysname{}'s lead also needs a small update: at 10~MB it flew the wide band and the lead was
-no longer significant, so compressing updates is a third.
+no longer significant, so compressing updates is a third. With two or three mules
+the lead shrank, and only FedEx with its own merge stayed significantly behind.
 Beyond these, mission time, the radio channel and energy are simulated in this
 evaluation. Validating the band trade over the air on a UAV testbed, with
 measured channels and battery limits, and coordinating mules that share

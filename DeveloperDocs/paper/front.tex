@@ -113,10 +113,11 @@ budget, FeRRy
 reaches the target accuracy 23--32\% sooner than each baseline, because its plan
 chooses a long-reach narrow band that removes most of the transit between stops.
 Under tight budgets, it keeps the age of updates about a quarter lower than
-age-of-information schedulers and, with 24 devices, reaches the target 12\%
-sooner than FedEx's route. Its plans stay within a tight budget in 71\% of
-missions; the rest overrun it by 33\,s on average. Its lead needs a small update:
-at 10~MB it flies the wide band and the lead is no longer significant.
+age-of-information schedulers. Its plans stay within a tight budget in 71\% of
+missions; the rest overrun it by 33\,s on average. Its lead needs a small update
+and one mule: at 10~MB it flies the wide band and the lead is no longer
+significant, and with two or three mules only FedEx with its own merge stays
+significantly behind.
 \end{abstract}
 
 \begin{IEEEkeywords}
@@ -182,8 +183,10 @@ adds nothing to the fixed per-stop rule, and an exploratory comparison locates
 the gain in the plan: inside it, the learned score reaches the target 36\%
 sooner than a learned scheduler without one. We also report \sysname{}'s limits:
 its plan prices the mean channel, so it overruns tight budgets in 29\% of
-missions, it does not price training time, and its lead needs a small update: at
-10~MB it flies the wide band and the lead is no longer significant.
+missions, it does not price training time, and its lead needs a small update and
+one mule: at 10~MB it flies the wide band and the lead is no longer significant,
+and with two or three mules only FedEx with its own merge stays significantly
+behind.
 
 The contributions of this paper are:
 

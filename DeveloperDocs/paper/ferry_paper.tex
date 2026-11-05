@@ -116,10 +116,11 @@ budget, FeRRy
 reaches the target accuracy 23--32\% sooner than each baseline, because its plan
 chooses a long-reach narrow band that removes most of the transit between stops.
 Under tight budgets, it keeps the age of updates about a quarter lower than
-age-of-information schedulers and, with 24 devices, reaches the target 12\%
-sooner than FedEx's route. Its plans stay within a tight budget in 71\% of
-missions; the rest overrun it by 33\,s on average. Its lead needs a small update:
-at 10~MB it flies the wide band and the lead is no longer significant.
+age-of-information schedulers. Its plans stay within a tight budget in 71\% of
+missions; the rest overrun it by 33\,s on average. Its lead needs a small update
+and one mule: at 10~MB it flies the wide band and the lead is no longer
+significant, and with two or three mules only FedEx with its own merge stays
+significantly behind.
 \end{abstract}
 
 \begin{IEEEkeywords}
@@ -185,8 +186,10 @@ adds nothing to the fixed per-stop rule, and an exploratory comparison locates
 the gain in the plan: inside it, the learned score reaches the target 36\%
 sooner than a learned scheduler without one. We also report \sysname{}'s limits:
 its plan prices the mean channel, so it overruns tight budgets in 29\% of
-missions, it does not price training time, and its lead needs a small update: at
-10~MB it flies the wide band and the lead is no longer significant.
+missions, it does not price training time, and its lead needs a small update and
+one mule: at 10~MB it flies the wide band and the lead is no longer significant,
+and with two or three mules only FedEx with its own merge stays significantly
+behind.
 
 The contributions of this paper are:
 
@@ -902,7 +905,7 @@ backhaul.}
 5 & Learned score & Q5, C4 & FerrySim: $\gamma$ from 0 to 0.99 against FX and a greedy rule; full system: FQ against FX and F & FerrySim; $N{=}12$; 40 trials & held-out return; time to $\tau$ \\
 6 & Objective terms & Q4, C2 & FX without its coverage term or its dwell term; D4 & $N{=}12$; knee, stress; 40 trials & round-close rate \\
 7 & Fairness & Q4, C5 & MAX-AoI, Whittle index, FedEx route; F without coverage term, age cap or miss priority & $N{=}6$; knee, stress; 4, 8 missions & age of updates \\
-8 & Scale & Q3 & F, FX, H1, D3, D4 as the field fills (FQ at $N{=}12$) & $N{=}6,12,24$; knee, stress & time to $\tau$ \\
+8 & Scale & Q3 & F, FX, H1, D3, D4 as the field fills (FQ at $N{=}12$) & $N{=}6,12,24$; $K{\le}3$; knee, stress & time to $\tau$ \\
 9 & Decision cost & Q3 & (a) planner wall time; (b) one to three mules; (c) FerrySim budget sweeps & $N{=}6$--$96$; $K{\le}3$ & plan time; time to $\tau$ \\
 10 & Training time & Q6 & Log-normal training time (median 68\,s), and 20\% of devices $5\times$ slower; F, FX, H1, D4, D5 & $N{=}6$; knee; 18.8~KB, 1, 10~MB & time to $\tau$ \\
 11 & Non-IID data & Q6 & IID; Dirichlet split ($\alpha{=}1$, 0.1) over attack families; skewed shard sizes; F, FX, H1, D3, F with the plain mean & $N{=}6$; knee & time to $\tau$ \\
@@ -910,7 +913,7 @@ backhaul.}
 13 & Radio$^{\dagger}$ & Q6 & Interference 1 or 17\,dB, path-loss exponent 2.7, shadowing 8\,dB; F, FX, H1, and F and H1 with the adaptive carrier; F, FX, H1 also on the main backhaul & $N{=}6$; knee & time to $\tau$ \\
 14 & When learning helps & Q5 & FX against E3 with $P_c$ at $4\times$ and $2\times$ FX's time between arrivals, and on a clean channel & $N{=}12$; knee, stress; 40 trials & time to $\tau$ \\
 \midrule
--- & Exploratory cells & Q1, Q5, Q6 & FQ against E3, F, FX and D4; FQ with three mules and at $N{=}24$; D3, D4 and D5 added to studies 10, 11 and 13; study 3's arms at 60 and 45\,s; those arms but E3 at 2, 5 and 10~MB & $N{=}6,24$; $K{=}1,3$; knee, stress, $2\times$ knee; 60, 45\,s & time to $\tau$ \\
+-- & Exploratory cells & Q1, Q3, Q5, Q6 & FQ against E3, F, FX and D4; FQ with three mules and at $N{=}24$; D3, D4 and D5 added to studies 10, 11 and 13; D1, D2 and D5 added to study 8; study 3's arms at 60 and 45\,s; those arms but E3 at 2, 5 and 10~MB & $N{=}6,12,24$; $K{=}1,3$; knee, stress, $2\times$ knee; 60, 45\,s & time to $\tau$ \\
 \bottomrule
 \end{tabularx}
 \end{table*}
@@ -923,11 +926,12 @@ with one of them reads those 20, over which F reaches $\tau$ in 194\,s at the
 knee rather than 179\,s; Tables~\ref{tab:exp5_scale} and~\ref{tab:exp5_mules}
 take their $N=6$ cells from the scheduler comparison. The band-pinning study is
 tested on its 20 trials, and its 1~MB pinned runs continue to 40 to read time to
-$\tau$. We dropped the scale study's multi-mule and clean-channel cells. A planned study on real radios, which
+$\tau$. We dropped the scale study's clean-channel cells. A planned study on real radios, which
 awaits testbed access, did not run. FQ left the scheduler comparison, the scale
 study and the study of when learning helps, as the plan specified, when the
 learned-score study did not keep the learned score. We flew it in the first two
-afterwards, D3, D4 and D5 in the robustness cells the plan left them out of, and the
+afterwards, D3, D4 and D5 in the robustness cells the plan left them out of, MAX-AoI,
+Oort and FedCS in the scale study's one-mule cells, and the
 scheduler comparison's arms at budgets below stress
 (60 and 45\,s) and, without E3, at 2, 5 and 10~MB ($N=6$, one mule, 20 trials), as exploratory cells: they stand
 outside each study's test family and make no claims.
@@ -1018,17 +1022,29 @@ budget); (c)~share of F's plans flying each band class, by cell.}
 \label{sec:res:scale}
 
 At $N=24$ (Table~\ref{tab:exp5_scale}), F is significantly faster than H1 and D3
-at the knee (749 against 951 and 911\,s), ties the FedEx route (752\,s), and
-beats it under the stress budget (661 against 752\,s); at $N=12$ no comparison
-in the table is a claim. Over the 40 seeds of the learned score's full-system
-check, FX is significantly faster than F at $N=12$ at the knee (428 against
+at the knee (749 against 951 and 911\,s) and ties the FedEx route (752\,s). Under
+the stress budget its lead over that route (661 against 752\,s) is not significant
+(Holm $p=0.29$), and at $N=12$ no comparison in the table is a claim. MAX-AoI, Oort
+and FedCS (exploratory) are slower than F on paired seeds in every cell, by at most
+199\,s (MAX-AoI at the $N=24$ knee, 95\% CI [144, 262]). Over the 40 seeds of the
+learned score's full-system check, FX is significantly faster than F at $N=12$ at the knee (428 against
 461\,s, Holm $p=0.032$) but not under stress, and FQ (454 and 385\,s) does not
 differ from FX (428 and 385\,s).
 Planning stays cheap (Table~\ref{tab:exp5_cost}): alone on one host, a plan
 takes 0.04\,s at $N=6$ and 1.5\,s at $N=96$ (p95 2.0\,s). In FerrySim the plan
-serves 54--59\% of the devices at each scale's knee budget up to $N=96$, and at
-$N=12$ more mules cut F's time to $\tau$ from 486\,s to 226\,s with two and
-151\,s with three (Table~\ref{tab:exp5_mules}).
+serves 54--59\% of the devices at each scale's knee budget up to $N=96$.
+
+More mules speed up every arm and shrink F's lead (Table~\ref{tab:exp5_mules}). F's
+time to $\tau$ falls from 486\,s to 226\,s with two mules and 151\,s with three at
+$N=12$, and from 749\,s to 327\,s and 198\,s at $N=24$. F stays ahead of H1 and D3
+on the mean in 11 of the scale study's 12 multi-mule cells, but neither it nor any
+baseline makes a claim there; the one baseline still significantly behind is FedEx
+with its own merge, at $N=6$ with three mules (Table~\ref{tab:exp5_headline}). FX
+is significantly faster than F at $N=12$ with three mules (102 against 151\,s, Holm
+$p=0.033$), reaching $\tau$ within 45\,s in 13 of 20 trials to F's 8. Each tour now
+nearly always fits inside half the budget: halving it changes F's missions in at
+most 3 of 20 trials per cell, so 12 of the study's 72 tests are exact copies, and
+removing them changes no verdict.
 
 \begin{table}[t]
 \centering
@@ -1046,7 +1062,10 @@ FX & 168\,s & 424\,s\,{\scriptsize(90\%)} & 789\,s & 165\,s & 386\,s\,{\scriptsi
 FQ & 169\,s$^{\S}$ & 461\,s\,{\scriptsize(90\%)} & 897\,s$^{\S}$ & 166\,s$^{\S}$ & 389\,s\,{\scriptsize(90\%)} & 678\,s$^{\S}$ \\
 H1 & 254\,s$^{\dagger}$ & 589\,s\,{\scriptsize(95\%)} & 951\,s$^{\dagger}$ & 209\,s\,{\scriptsize(92\%)} & 446\,s\,{\scriptsize(95\%)} & 651\,s\,{\scriptsize(95\%)} \\
 D3 (Cui) & 262\,s$^{\dagger}$ & 507\,s\,{\scriptsize(95\%)} & 911\,s$^{\dagger}$ & 213\,s & 460\,s\,{\scriptsize(90\%)} & 662\,s\,{\scriptsize(95\%)} \\
-D4 (FedEx route) & 232\,s$^{\dagger}$ & 459\,s\,{\scriptsize(95\%)} & 752\,s & 232\,s$^{\dagger}$ & 459\,s\,{\scriptsize(95\%)} & 752\,s$^{\dagger}$ \\
+D4 (FedEx route) & 232\,s$^{\dagger}$ & 459\,s\,{\scriptsize(95\%)} & 752\,s & 232\,s$^{\dagger}$ & 459\,s\,{\scriptsize(95\%)} & 752\,s \\
+D1 (MAX-AoI) & 263\,s$^{\dagger}$ & 579\,s\,{\scriptsize(95\%)}$^{\S}$ & 948\,s$^{\S}$ & 232\,s & 432\,s\,{\scriptsize(95\%)}$^{\S}$ & 692\,s\,{\scriptsize(95\%)}$^{\S}$ \\
+D2 (Oort) & 235\,s$^{\dagger}$ & 530\,s\,{\scriptsize(90\%)}$^{\S}$ & 876\,s$^{\S}$ & 236\,s\,{\scriptsize(95\%)} & 367\,s\,{\scriptsize(85\%)}$^{\S}$ & 682\,s$^{\S}$ \\
+D5 (FedCS) & 236\,s$^{\dagger}$ & 500\,s\,{\scriptsize(95\%)}$^{\S}$ & 771\,s$^{\S}$ & 206\,s\,{\scriptsize(98\%)} & 515\,s\,{\scriptsize(90\%)}$^{\S}$ & 754\,s\,{\scriptsize(85\%)}$^{\S}$ \\
 \bottomrule
 \end{tabular}%
 }
@@ -1073,19 +1092,19 @@ $N$ & mean & p95 & budget & F served & FX served \\
 \end{table}
 \begin{table}[t]
 \centering
-\caption{Scaling out with mules (decision-cost study), knee budget: time to $\tau$. Weak scaling holds six devices per mule; strong scaling adds mules at $N=12$. Notation as in Table~\ref{tab:exp5_headline}; $^{\ast}$significantly faster than F.}
+\caption{Scaling out with mules, knee budget: time to $\tau$ (s). Weak scaling holds six devices per mule; strong scaling adds mules at $N=12$ and 24. Notation as in Table~\ref{tab:exp5_headline}; $^{\ast}$significantly faster than F.}
 \label{tab:exp5_mules}
 \resizebox{\columnwidth}{!}{%
-\begin{tabular}{l rrr rr}
+\begin{tabular}{l rrr rrrrr}
 \toprule
- & \multicolumn{3}{c}{weak scaling} & \multicolumn{2}{c}{strong scaling} \\
-\cmidrule(lr){2-4}\cmidrule(lr){5-6}
-\textbf{Arm} & $N/K$=6/1 & $N/K$=12/2 & $N/K$=18/3 & $N/K$=12/1 & $N/K$=12/3 \\
+ & \multicolumn{3}{c}{weak scaling} & \multicolumn{5}{c}{strong scaling} \\
+\cmidrule(lr){2-4}\cmidrule(lr){5-9}
+\textbf{Arm}, $N/K$ & 6/1 & 12/2 & 18/3 & 12/1 & 12/3 & 24/1 & 24/2 & 24/3 \\
 \midrule
-F & \textbf{179\,s} & \textbf{226\,s} & \textbf{186\,s} & \textbf{486\,s}\,{\scriptsize(95\%)} & \textbf{151\,s} \\
-FX & 168\,s & 205\,s & 131\,s\,{\scriptsize(95\%)} & 424\,s\,{\scriptsize(90\%)} & 102\,s$^{\ast}$ \\
-H1 & 254\,s$^{\dagger}$ & 263\,s\,{\scriptsize(95\%)} & 149\,s & 589\,s\,{\scriptsize(95\%)} & 165\,s \\
-D4 (FedEx route) & 232\,s$^{\dagger}$ & 222\,s & 186\,s & 459\,s\,{\scriptsize(95\%)} & 128\,s \\
+F & \textbf{179} & \textbf{226} & \textbf{186} & \textbf{486}\,{\scriptsize(95\%)} & \textbf{151} & \textbf{749} & \textbf{327}\,{\scriptsize(95\%)} & \textbf{198} \\
+FX & 168 & 205 & 131\,{\scriptsize(95\%)} & 424\,{\scriptsize(90\%)} & 102$^{\ast}$ & 789 & 308 & 185\,{\scriptsize(95\%)} \\
+H1 & 254$^{\dagger}$ & 263\,{\scriptsize(95\%)} & 149 & 589\,{\scriptsize(95\%)} & 165 & 951$^{\dagger}$ & 362 & 222 \\
+D4 & 232$^{\dagger}$ & 222 & 186 & 459\,{\scriptsize(95\%)} & 128 & 752 & 319 & 222 \\
 \bottomrule
 \end{tabular}%
 }
@@ -1294,9 +1313,9 @@ accuracy 23--32\% sooner than seven whole schedulers at six devices and a 1~MB
 update, because its
 plan chose a long-reach narrow band that removed most of the transit between
 stops. It kept updates fresher than age-of-information schedulers under tight
-budgets, beat the FedEx route at 24 devices under the stress budget, and planned
-in 1.5\,s at 96 devices. At 12 devices and the knee budget its fixed per-stop rule
-was significantly faster than the plan alone. Several elements of the design showed no measurable
+budgets and planned in 1.5\,s at 96 devices. At 12 devices its fixed per-stop rule
+was significantly faster than the plan alone, with one mule at the knee budget and
+with three mules. Several elements of the design showed no measurable
 effect at our settings. Among them is a learned per-stop score: FQ performed like
 the fixed rule, and its exploratory advantage over a learned scheduler without a
 plan came from the plan it flies inside.
@@ -1307,7 +1326,8 @@ channel's variation, or reserving slack for it, is a first step. The plan also
 ignores training time, so when devices need time to train it reaches devices
 whose updates are not ready; adding a compute term to the plan is a second.
 \sysname{}'s lead also needs a small update: at 10~MB it flew the wide band and the lead was
-no longer significant, so compressing updates is a third.
+no longer significant, so compressing updates is a third. With two or three mules
+the lead shrank, and only FedEx with its own merge stayed significantly behind.
 Beyond these, mission time, the radio channel and energy are simulated in this
 evaluation. Validating the band trade over the air on a UAV testbed, with
 measured channels and battery limits, and coordinating mules that share
