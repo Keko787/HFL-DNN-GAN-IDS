@@ -202,7 +202,8 @@ dock-time plan and in-flight per-stop decisions, with adaptive per-device
 deadlines, a coverage weight and age cap against starvation, and
 staleness-weighted merges; learning ranks only what the gates admit.
 
-\item \textbf{A prototype and a simulator built from the same code.} A
+\item \textbf{A prototype and a simulator that share one planner,
+feasibility test, RF model and mission logic.} A
 multi-process prototype that trains a real model, and FerrySim, which trains the
 learned components and plans for up to 96 devices.
 

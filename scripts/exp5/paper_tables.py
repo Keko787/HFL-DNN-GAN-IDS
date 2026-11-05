@@ -188,8 +188,8 @@ def stress_budget_cells(variant: str, stage: str = "batch2s53") -> Tuple[str, st
 def headline_table() -> str:
     st = Study("b2", "s53x")
     lines = [r"\begin{table}[t]", r"\centering",
-             r"\caption{Scheduler comparison at $N=6$: time to $\tau=0.71$, with the share "
-             r"of trials that reach it in brackets when below 100\%, and with one mule under "
+             r"\caption{Scheduler comparison at $N=6$: time to $\tau=0.71$, averaged over the "
+             r"trials that reach it, with their share in brackets when below 100\%, and with one mule under "
              r"the stress budget, the share of missions that overran it and the updates merged "
              r"per round (yield). " + DAG + r"Significantly slower than F. " + SECT
              + r"Exploratory, outside the study's tests.}",
@@ -392,21 +392,25 @@ CLAIM_GROUPS = {
 }
 
 
-def _pct(x: float, signed: bool = True) -> str:
-    """A rounded percentage with no negative zero."""
-    r = round(x)
+#: The claims table's advantage, by metric: (factor to the unit shown, decimals, unit).
+CLAIM_NATIVE = {"aou": (1.0, 2, ""), "close": (100.0, 1, r"\,pp"), "tau": (1.0, 0, r"\,s"),
+                "miss": (100.0, 1, r"\,pp")}
+
+
+def _signed(x: float, digits: int) -> str:
+    """A rounded signed value with no negative zero."""
+    r = round(x, digits)
     if r == 0:
         return "0"
-    if r < 0:
-        return f"$-${-r}"                       # a typeset minus, not a hyphen
-    return f"+{r}" if signed else f"{r}"
+    text = f"{abs(r):.{digits}f}"
+    return f"$-${text}" if r < 0 else f"+{text}"      # a typeset minus, not a hyphen
 
 
 def claims_table() -> str:
     """One row per test of a design claim, under its claim's header row: the
     alternative to FeRRy's design, the study's metric with its unit, both means,
-    FeRRy's advantage as a percentage of its own value with the CI, Holm p and a
-    plain verdict."""
+    FeRRy's advantage as the paired difference in the metric's own units with the CI,
+    Holm p and a plain verdict."""
     studies: Dict[Tuple[str, str], Study] = {}
     rows = []
     for group, test, metric, sdir, study, cell, variant, flip in CLAIM_ROWS:
@@ -421,9 +425,9 @@ def claims_table() -> str:
         full[study] = max(full.get(study, 0), int(c["n_pairs"]))
     lines = [r"\begin{table*}[t]", r"\centering",
              r"\caption{Tests of the design claims, each against an alternative that "
-             r"replaces one part of FeRRy's design. Advantage: the paired difference as a "
-             r"share of FeRRy's value, positive when FeRRy's design does better, with its "
-             r"95\% CI. \emph{Holds}: significant at Holm $p<0.05$.}",
+             r"replaces one part of FeRRy's design. Advantage: the paired difference in the "
+             r"metric's own units (pp, percentage points), positive when FeRRy's design does "
+             r"better, with its 95\% CI. \emph{Holds}: significant at Holm $p<0.05$.}",
              r"\label{tab:exp5_claims}",
              r"\footnotesize",
              r"\resizebox{\textwidth}{!}{%",
@@ -442,8 +446,9 @@ def claims_table() -> str:
         else:
             ferry, alt, gap, gap_ci = ref_m, var_m, -d, (-hi, -lo)
         sign = 1.0 if lower else -1.0            # positive: FeRRy's design better
-        adv = sign * gap / ferry * 100
-        adv_lo, adv_hi = sorted(sign * g / ferry * 100 for g in gap_ci)
+        factor, digits, unit = CLAIM_NATIVE[metric]
+        adv = sign * gap * factor
+        adv_lo, adv_hi = sorted(sign * g * factor for g in gap_ci)
         ferry_name = c["variant"] if flip else c["reference"]
         holm = float(c["p_holm"])
         if c.get("claim", "").lower() in ("true", "1"):
@@ -458,7 +463,7 @@ def claims_table() -> str:
                       rf"\multicolumn{{7}}{{l}}{{\textit{{{CLAIM_GROUPS[group]}}}}} \\"]
         lines.append(
             f"\\quad {test} & {name} & {fmt(ferry)} & {fmt(alt)}{seeds} & "
-            f"{_pct(adv)}\\% [{_pct(adv_lo)}, {_pct(adv_hi)}] & "
+            f"{_signed(adv, digits)}{unit} [{_signed(adv_lo, digits)}, {_signed(adv_hi, digits)}] & "
             f"{'$<$0.001' if holm < 0.001 else f'{holm:.3f}'} & {verdict}" + r" \\")
     # The learned score's FerrySim verdict and the oracle gap are in the results text.
     lines += [r"\bottomrule", r"\end{tabular}%", "}", r"\end{table*}"]
@@ -479,7 +484,8 @@ def robustness_table() -> str:
     arms = [("F", "F"), ("FX", "FX"), ("H1", "H1"), ("D3", "D3 (Cui)"),
             ("D4", "D4 (FedEx route)"), ("D5", "D5 (FedCS)")]
     lines = [r"\begin{table*}[t]", r"\centering",
-             r"\caption{Robustness at $N=6$ and the knee budget: time to $\tau$. Notation as "
+             r"\caption{Robustness at $N=6$ and the knee budget: time to $\tau$, averaged over "
+             r"the trials that reach it. Notation as "
              r"in Table~\ref{tab:exp5_headline}; " + STAR + r"significantly faster than F.}",
              r"\label{tab:exp5_robust}",
              r"\small",

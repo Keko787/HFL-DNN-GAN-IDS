@@ -28,7 +28,7 @@ E3 & Single-agent next-stop DQN after Chen et al.\ \cite{chen2023model}, trained
 
 \begin{table}[t]
 \centering
-\caption{Scheduler comparison at $N=6$: time to $\tau=0.71$, with the share of trials that reach it in brackets when below 100\%, and with one mule under the stress budget, the share of missions that overran it and the updates merged per round (yield). $^{\dagger}$Significantly slower than F. $^{\S}$Exploratory, outside the study's tests.}
+\caption{Scheduler comparison at $N=6$: time to $\tau=0.71$, averaged over the trials that reach it, with their share in brackets when below 100\%, and with one mule under the stress budget, the share of missions that overran it and the updates merged per round (yield). $^{\dagger}$Significantly slower than F. $^{\S}$Exploratory, outside the study's tests.}
 \label{tab:exp5_headline}
 \resizebox{\columnwidth}{!}{%
 \begin{tabular}{l rrr rr rr}
@@ -122,7 +122,7 @@ $N$ & mean & p95 & budget & F served & FX served \\
 
 \begin{table*}[t]
 \centering
-\caption{Tests of the design claims, each against an alternative that replaces one part of FeRRy's design. Advantage: the paired difference as a share of FeRRy's value, positive when FeRRy's design does better, with its 95\% CI. \emph{Holds}: significant at Holm $p<0.05$.}
+\caption{Tests of the design claims, each against an alternative that replaces one part of FeRRy's design. Advantage: the paired difference in the metric's own units (pp, percentage points), positive when FeRRy's design does better, with its 95\% CI. \emph{Holds}: significant at Holm $p<0.05$.}
 \label{tab:exp5_claims}
 \footnotesize
 \resizebox{\textwidth}{!}{%
@@ -131,34 +131,34 @@ $N$ & mean & p95 & budget & F served & FX served \\
 \textbf{Alternative tested} & \textbf{Metric} & \textbf{FeRRy} & \textbf{Alternative} & \textbf{FeRRy's advantage [95\% CI]} & \textbf{Holm $p$} & \textbf{Verdict} \\
 \midrule
 \multicolumn{7}{l}{\textit{C1: reach is a decision}} \\
-\quad Band class pinned to wide & age of updates (missions) & 0.70 & 0.72 & +3\% [0, +7] & 1.000 & no difference \\
-\quad Band class pinned to narrow & age of updates (missions) & 0.70 & 0.70 & 0\% [0, 0] & 1.000 & no difference \\
+\quad Band class pinned to wide & age of updates (missions) & 0.70 & 0.72 & +0.02 [0, +0.05] & 1.000 & no difference \\
+\quad Band class pinned to narrow & age of updates (missions) & 0.70 & 0.70 & 0 [0, 0] & 1.000 & no difference \\
 \midrule
 \multicolumn{7}{l}{\textit{C2: one derived objective}} \\
-\quad Coverage term removed ($N{=}12$) & round-close rate & 98\% & 73\% & +25\% [+25, +25] & $<$0.001 & \textbf{holds} \\
-\quad Dwell term removed ($N{=}12$) & round-close rate & 98\% & 98\% & 0\% [0, 0] & 1.000 & no difference \\
+\quad Coverage term removed ($N{=}12$) & round-close rate & 98\% & 73\% & +25.0\,pp [+25.0, +25.0] & $<$0.001 & \textbf{holds} \\
+\quad Dwell term removed ($N{=}12$) & round-close rate & 98\% & 98\% & 0\,pp [0, 0] & 1.000 & no difference \\
 \midrule
 \multicolumn{7}{l}{\textit{C3: one deadline, three roles}} \\
-\quad Plain-mean merge & time to $\tau$ & 179\,s & 179\,s & 0\% [0, 0] & 1.000 & no difference \\
-\quad Async-HFL merge & time to $\tau$ & 179\,s & 179\,s & 0\% [0, 0] & 1.000 & no difference \\
-\quad FedBuff merge & time to $\tau$ & 157\,s & 375\,s (26 seeds) & +138\% [+93, +187] & 0.004 & \textbf{holds} \\
-\quad FeRRy's merge with FedProx & time to $\tau$ & 179\,s & 168\,s & $-$6\% [$-$34, +20] & 1.000 & no difference \\
-\quad Round deadline, after FedCS (stress) & deadline-miss rate & 43.4\% & 48.7\% & +12\% [+5, +20] & 0.010 & \textbf{holds} \\
-\quad Preferred duration, after Oort (stress) & deadline-miss rate & 43.4\% & 48.6\% & +12\% [+5, +19] & 0.010 & \textbf{holds} \\
+\quad Plain-mean merge & time to $\tau$ & 179\,s & 179\,s & 0\,s [0, 0] & 1.000 & no difference \\
+\quad Async-HFL merge & time to $\tau$ & 179\,s & 179\,s & 0\,s [0, 0] & 1.000 & no difference \\
+\quad FedBuff merge & time to $\tau$ & 157\,s & 375\,s (26 seeds) & +218\,s [+146, +295] & 0.004 & \textbf{holds} \\
+\quad FeRRy's merge with FedProx & time to $\tau$ & 179\,s & 168\,s & $-$11\,s [$-$61, +36] & 1.000 & no difference \\
+\quad Round deadline, after FedCS (stress) & deadline-miss rate & 43.4\% & 48.7\% & +5.3\,pp [+2.3, +8.5] & 0.010 & \textbf{holds} \\
+\quad Preferred duration, after Oort (stress) & deadline-miss rate & 43.4\% & 48.6\% & +5.2\,pp [+2.1, +8.4] & 0.010 & \textbf{holds} \\
 \midrule
 \multicolumn{7}{l}{\textit{C4: two clocks, re-decided per stop}} \\
-\quad No per-stop rule, the plan alone ($N{=}12$) & time to $\tau$ & 428\,s & 461\,s & +8\% [+2, +16] & 0.032 & \textbf{holds} \\
-\quad Learned per-stop score, FQ ($N{=}12$) & time to $\tau$ & 428\,s & 454\,s & +6\% [+1, +14] & 0.110 & no difference \\
+\quad No per-stop rule, the plan alone ($N{=}12$) & time to $\tau$ & 428\,s & 461\,s & +33\,s [+8, +67] & 0.032 & \textbf{holds} \\
+\quad Learned per-stop score, FQ ($N{=}12$) & time to $\tau$ & 428\,s & 454\,s & +26\,s [+4, +60] & 0.110 & no difference \\
 \midrule
 \multicolumn{7}{l}{\textit{C5: fairness under physical cost}} \\
-\quad MAX-AoI scheduler, D1 (stress) & age of updates (missions) & 0.78 & 1.06 & +37\% [+21, +53] & 0.017 & \textbf{holds} \\
-\quad Whittle index, D3 (stress) & age of updates (missions) & 0.78 & 1.07 & +38\% [+23, +55] & 0.013 & \textbf{holds} \\
-\quad Coverage term removed (stress) & age of updates (missions) & 0.78 & 1.10 & +41\% [+34, +49] & 0.002 & \textbf{holds} \\
-\quad Age cap removed (stress) & age of updates (missions) & 0.78 & 0.78 & 0\% [0, 0] & 1.000 & no difference \\
+\quad MAX-AoI scheduler, D1 (stress) & age of updates (missions) & 0.78 & 1.06 & +0.29 [+0.16, +0.41] & 0.017 & \textbf{holds} \\
+\quad Whittle index, D3 (stress) & age of updates (missions) & 0.78 & 1.07 & +0.30 [+0.18, +0.42] & 0.013 & \textbf{holds} \\
+\quad Coverage term removed (stress) & age of updates (missions) & 0.78 & 1.10 & +0.32 [+0.26, +0.38] & 0.002 & \textbf{holds} \\
+\quad Age cap removed (stress) & age of updates (missions) & 0.78 & 0.78 & 0 [0, 0] & 1.000 & no difference \\
 \midrule
 \multicolumn{7}{l}{\textit{Component ablations}} \\
-\quad Whole stops only (stress) & age of updates (missions) & 0.81 & 0.90 & +11\% [+4, +18] & 0.078 & no difference \\
-\quad Fixed backhaul carrier, no L1 & age of updates (missions) & 0.69 & 0.88 & +28\% [+18, +40] & $<$0.001 & \textbf{holds} \\
+\quad Whole stops only (stress) & age of updates (missions) & 0.81 & 0.90 & +0.09 [+0.03, +0.15] & 0.078 & no difference \\
+\quad Fixed backhaul carrier, no L1 & age of updates (missions) & 0.69 & 0.88 & +0.19 [+0.13, +0.28] & $<$0.001 & \textbf{holds} \\
 \bottomrule
 \end{tabular}%
 }
@@ -166,7 +166,7 @@ $N$ & mean & p95 & budget & F served & FX served \\
 
 \begin{table*}[t]
 \centering
-\caption{Robustness at $N=6$ and the knee budget: time to $\tau$. Notation as in Table~\ref{tab:exp5_headline}; $^{\ast}$significantly faster than F.}
+\caption{Robustness at $N=6$ and the knee budget: time to $\tau$, averaged over the trials that reach it. Notation as in Table~\ref{tab:exp5_headline}; $^{\ast}$significantly faster than F.}
 \label{tab:exp5_robust}
 \small
 \begin{tabular}{l rr r rrrr}

@@ -89,7 +89,7 @@ learned-score study keeps the learned score only if some $\gamma$ beats
 $\gamma=0$ by 0.01 in held-out return (ten seeds per $\gamma$, 1000 episodes per
 cell); the FQ-vs-E3 comparison, added after that verdict, is exploratory.
 
-\begin{table*}[t]
+\begin{table*}[tp]
 \centering
 \caption{The studies of the evaluation. $^{\dagger}$Flies the time-varying
 backhaul.}
@@ -124,8 +124,8 @@ The merge-rule, deadline-form, scheduler-comparison, objective-terms, component
 and when-learning-helps studies and the learned score's full-system check flew
 40 trials per cell. The other studies flew 20, on the first 20 of those seeds, so a comparison
 with one of them reads those 20, over which F reaches $\tau$ in 194\,s at the
-knee rather than 179\,s; Tables~\ref{tab:exp5_scale} and~\ref{tab:exp5_mules}
-take their $N=6$ cells from the scheduler comparison. The band-pinning study is
+knee rather than 179\,s; Fig.~\ref{fig:exp5_scale} takes its one-mule $N=6$
+cell from the scheduler comparison. The band-pinning study is
 tested on its 20 trials, and its 1~MB pinned runs continue to 40 to read time to
 $\tau$. We dropped the scale study's clean-channel cells. A planned study on real radios, which
 awaits testbed access, did not run. FQ left the scheduler comparison, the scale

@@ -205,7 +205,8 @@ dock-time plan and in-flight per-stop decisions, with adaptive per-device
 deadlines, a coverage weight and age cap against starvation, and
 staleness-weighted merges; learning ranks only what the gates admit.
 
-\item \textbf{A prototype and a simulator built from the same code.} A
+\item \textbf{A prototype and a simulator that share one planner,
+feasibility test, RF model and mission logic.} A
 multi-process prototype that trains a real model, and FerrySim, which trains the
 learned components and plans for up to 96 devices.
 
@@ -379,8 +380,9 @@ its two main decisions each span the radio, scheduling and learning layers.
 \paragraph{Setting}
 A cluster has one edge server, one or more mules, and static field devices whose
 positions the server's registry holds. Each mule gets a disjoint slice
-$\mathcal{M}$ of the registry for the trial; with $K>1$ mules the slices are
-angular sectors around the shared dock, within one device of equal size, and the
+$\mathcal{M}$ of the registry for the trial. With $K>1$ mules we sort the devices
+by angle around the shared dock, starting after the widest empty arc, and cut them
+into $K$ contiguous sectors whose sizes differ by at most one device, and the
 mules fly concurrently. Devices train offline between visits, so a contact is
 exchange only: the mule pushes the global model and pulls the device's prepared
 update. In \textsc{Pass 1} of a mission the mule collects updates along a route,
@@ -397,7 +399,10 @@ balanced training flows split across them; a disjoint 6{,}000-flow test set
 scores each new global model, stamped when its closing upload completes. A device
 with no prepared update trains inside the contact, at no simulated cost. Every
 transfer is priced as $S=1$~MB unless stated; the model's own update is
-18.8~KB.
+18.8~KB. We price 1~MB as a stand-in for a larger model: within 60~m an 18.8~KB
+session takes under 0.2~s on any class, too short for the rate to matter, while at
+1~MB it takes about 1--8~s, so reach trades against rate. We also report 18.8~KB
+and 2, 5 and 10~MB.
 
 \paragraph{Layer roles and clocks}
 Table~\ref{tab:layer-roles} gives each layer's role. Hard gates (eligibility, the
@@ -471,8 +476,9 @@ The contact link offers three band classes $\mathcal{B}$ on one carrier, LTE
 channel bandwidths~\cite{3gpp36104} with occupied bandwidth
 $B_b=N_{\mathrm{RB}}\times180$~kHz: \textsf{wide} (20~MHz, 100 resource blocks),
 \textsf{medium} (5~MHz, 25) and \textsf{narrow} (1.4~MHz, 6). With a common
-transmit power and a noise floor that scales with $B_b$, a narrower class
-reaches farther at a lower rate:
+transmit power and a noise floor that scales with $B_b$, a narrower class has
+more SNR to spend (\textsf{medium} 6.0~dB and \textsf{narrow} 12.2~dB above
+\textsf{wide}), so it reaches farther at a lower rate:
 \begin{equation}
 R_b^{3D} = R_0^{3D}\left(\frac{B_0}{B_b}\right)^{1/n},
 \qquad
@@ -482,7 +488,9 @@ R_b = \sqrt{\left(R_b^{3D}\right)^2 - h^2},
 relative to a reference class $(B_0,R_0^{3D})$, with path-loss exponent $n=2.2$
 and altitude $h=25$~m. Anchoring \textsf{wide} at 60~m gives planar ranges of
 60, 120 and 232~m, at which the mean SNR clears the decoding floor by a 5.1~dB
-shadowing margin $M_{\mathrm{sh}}$ (reach probability 0.9 under shadowing).
+shadowing margin $M_{\mathrm{sh}}$ (reach probability 0.9 under shadowing). The
+60~m anchor is a simulation assumption, set so that range binds in our field, not
+a measured value.
 
 \paragraph{Rate and dwell}
 The mean SNR at distance $d$ is
@@ -638,7 +646,7 @@ Routes pass the feasibility test stop by stop. Up to six devices, an exact searc
 enumerates every ordered sequence of stops and member subsets and is optimal over
 what the score prices; with up to six stops, it searches ordered stop subsets;
 beyond that, a deterministic local search (2-OPT, then first-improvement moves,
-at most 2000 evaluations per class) runs. The empty plan is chosen only if no
+at most 50 passes or 2000 evaluations per class) runs. The empty plan is chosen only if no
 other is admitted.
 
 \paragraph{Plan score and plan key}
@@ -656,7 +664,9 @@ L=\frac{\sum_{\text{served}}w_j\,p_{\mathrm{out}}(\bbar,d_j)}{\sum_{\text{demand
 the weighted coverage shortfall and expected link loss ($c_1=1$,
 $c_2=c_3=N_{\mathrm{demand}}$, $c_4=0.1$). The form follows FedEx's
 route-dependent bound~\cite{bian2025indirect}, but the constants are hand-set and
-the term in $\Delta$ is a staleness surrogate. Since every non-empty plan pays
+the term in $\Delta$ is a staleness surrogate: $c_2$ makes one average device worth
+a mission of length $\Tnom$, and $c_4$ is small because energy moves almost in
+step with $\Delta$. Since every non-empty plan pays
 for a whole Pass~2, $V$ alone can prefer to fly empty, so the mule commits the
 plan with the smallest key
 \begin{equation}
@@ -779,9 +789,9 @@ and the devices train the real model; mission time, the channel and energy are
 simulated. Updates carry integrity checks but no authentication;
 poisoning-robust aggregation and privacy are out of scope. The learned score, E3
 and the largest problems ($N=48$, $96$) run in FerrySim, an in-process simulator
-built from the same code that omits model training, flies one mule, uses an
-additive deadline law and no merge cutoff, and grows the field with $N$ in its
-scale cells.
+that shares the prototype's planner, feasibility test, RF model and mission logic
+but omits model training, flies one mule, uses an additive deadline law and no
+merge cutoff, and grows the field with $N$ in its scale cells.
 
 \section{Experimental Setup and Design}
 \label{sec:setup}
@@ -888,7 +898,7 @@ learned-score study keeps the learned score only if some $\gamma$ beats
 $\gamma=0$ by 0.01 in held-out return (ten seeds per $\gamma$, 1000 episodes per
 cell); the FQ-vs-E3 comparison, added after that verdict, is exploratory.
 
-\begin{table*}[t]
+\begin{table*}[tp]
 \centering
 \caption{The studies of the evaluation. $^{\dagger}$Flies the time-varying
 backhaul.}
@@ -923,8 +933,8 @@ The merge-rule, deadline-form, scheduler-comparison, objective-terms, component
 and when-learning-helps studies and the learned score's full-system check flew
 40 trials per cell. The other studies flew 20, on the first 20 of those seeds, so a comparison
 with one of them reads those 20, over which F reaches $\tau$ in 194\,s at the
-knee rather than 179\,s; Tables~\ref{tab:exp5_scale} and~\ref{tab:exp5_mules}
-take their $N=6$ cells from the scheduler comparison. The band-pinning study is
+knee rather than 179\,s; Fig.~\ref{fig:exp5_scale} takes its one-mule $N=6$
+cell from the scheduler comparison. The band-pinning study is
 tested on its 20 trials, and its 1~MB pinned runs continue to 40 to read time to
 $\tau$. We dropped the scale study's clean-channel cells. A planned study on real radios, which
 awaits testbed access, did not run. FQ left the scheduler comparison, the scale
@@ -966,7 +976,7 @@ by more than 1\,s. Without a mule (H0), FL over the degraded link merges
 
 \begin{table}[t]
 \centering
-\caption{Scheduler comparison at $N=6$: time to $\tau=0.71$, with the share of trials that reach it in brackets when below 100\%, and with one mule under the stress budget, the share of missions that overran it and the updates merged per round (yield). $^{\dagger}$Significantly slower than F. $^{\S}$Exploratory, outside the study's tests.}
+\caption{Scheduler comparison at $N=6$: time to $\tau=0.71$, averaged over the trials that reach it, with their share in brackets when below 100\%, and with one mule under the stress budget, the share of missions that overran it and the updates merged per round (yield). $^{\dagger}$Significantly slower than F. $^{\S}$Exploratory, outside the study's tests.}
 \label{tab:exp5_headline}
 \resizebox{\columnwidth}{!}{%
 \begin{tabular}{l rrr rr rr}
@@ -1021,22 +1031,23 @@ budget); (c)~share of F's plans flying each band class, by cell.}
 \subsection{Scale and Decision Cost}
 \label{sec:res:scale}
 
-At $N=24$ (Table~\ref{tab:exp5_scale}), F is significantly faster than H1 and D3
+At $N=24$ (Fig.~\ref{fig:exp5_scale}a), F is significantly faster than H1 and D3
 at the knee (749 against 951 and 911\,s) and ties the FedEx route (752\,s). Under
-the stress budget its lead over that route (661 against 752\,s) is not significant
-(Holm $p=0.29$), and at $N=12$ no comparison in the table is a claim. MAX-AoI, Oort
-and FedCS (exploratory) are slower than F on paired seeds in every cell, by at most
+the stress budget F sits with FX, H1 and D3 at 651--662\,s, and its lead over the
+FedEx route (661 against 752\,s) is not significant (Holm $p=0.29$). At $N=12$, on
+these 20 seeds, no comparison is a claim. MAX-AoI, Oort and FedCS (exploratory) are slower than F on paired seeds in every cell, by at most
 199\,s (MAX-AoI at the $N=24$ knee, 95\% CI [144, 262]). Over the 40 seeds of the
 learned score's full-system check, FX is significantly faster than F at $N=12$ at the knee (428 against
 461\,s, Holm $p=0.032$) but not under stress, and FQ (454 and 385\,s) does not
 differ from FX (428 and 385\,s).
-Planning stays cheap (Table~\ref{tab:exp5_cost}): alone on one host, a plan
+Planning stays cheap (Fig.~\ref{fig:exp5_scale}b): alone on one host, a plan
 takes 0.04\,s at $N=6$ and 1.5\,s at $N=96$ (p95 2.0\,s). In FerrySim the plan
 serves 54--59\% of the devices at each scale's knee budget up to $N=96$.
 
-More mules speed up every arm and shrink F's lead (Table~\ref{tab:exp5_mules}). F's
+More mules speed up every arm and shrink F's lead (Fig.~\ref{fig:exp5_scale}c). F's
 time to $\tau$ falls from 486\,s to 226\,s with two mules and 151\,s with three at
-$N=12$, and from 749\,s to 327\,s and 198\,s at $N=24$. F stays ahead of H1 and D3
+$N=12$, and from 749\,s to 327\,s and 198\,s at $N=24$; holding six devices per mule,
+it takes 179, 226 and 186\,s with one, two and three. F stays ahead of H1 and D3
 on the mean in 11 of the scale study's 12 multi-mule cells, but neither it nor any
 baseline makes a claim there; the one baseline still significantly behind is FedEx
 with its own merge, at $N=6$ with three mules (Table~\ref{tab:exp5_headline}). FX
@@ -1046,69 +1057,15 @@ nearly always fits inside half the budget: halving it changes F's missions in at
 most 3 of 20 trials per cell, so 12 of the study's 72 tests are exact copies, and
 removing them changes no verdict.
 
-\begin{table}[t]
+\begin{figure*}[t]
 \centering
-\caption{Scale study: time to $\tau$ with one mule, at each $N$'s knee and stress budgets. Notation as in Table~\ref{tab:exp5_headline}.}
-\label{tab:exp5_scale}
-\resizebox{\columnwidth}{!}{%
-\begin{tabular}{l rrr rrr}
-\toprule
- & \multicolumn{3}{c}{knee budget} & \multicolumn{3}{c}{stress budget} \\
-\cmidrule(lr){2-4}\cmidrule(lr){5-7}
-\textbf{Arm} & $N=6$ & $12$ & $24$ & $N=6$ & $12$ & $24$ \\
-\midrule
-F & \textbf{179\,s} & \textbf{486\,s}\,{\scriptsize(95\%)} & \textbf{749\,s} & \textbf{168\,s} & \textbf{371\,s} & \textbf{661\,s} \\
-FX & 168\,s & 424\,s\,{\scriptsize(90\%)} & 789\,s & 165\,s & 386\,s\,{\scriptsize(90\%)} & 658\,s \\
-FQ & 169\,s$^{\S}$ & 461\,s\,{\scriptsize(90\%)} & 897\,s$^{\S}$ & 166\,s$^{\S}$ & 389\,s\,{\scriptsize(90\%)} & 678\,s$^{\S}$ \\
-H1 & 254\,s$^{\dagger}$ & 589\,s\,{\scriptsize(95\%)} & 951\,s$^{\dagger}$ & 209\,s\,{\scriptsize(92\%)} & 446\,s\,{\scriptsize(95\%)} & 651\,s\,{\scriptsize(95\%)} \\
-D3 (Cui) & 262\,s$^{\dagger}$ & 507\,s\,{\scriptsize(95\%)} & 911\,s$^{\dagger}$ & 213\,s & 460\,s\,{\scriptsize(90\%)} & 662\,s\,{\scriptsize(95\%)} \\
-D4 (FedEx route) & 232\,s$^{\dagger}$ & 459\,s\,{\scriptsize(95\%)} & 752\,s & 232\,s$^{\dagger}$ & 459\,s\,{\scriptsize(95\%)} & 752\,s \\
-D1 (MAX-AoI) & 263\,s$^{\dagger}$ & 579\,s\,{\scriptsize(95\%)}$^{\S}$ & 948\,s$^{\S}$ & 232\,s & 432\,s\,{\scriptsize(95\%)}$^{\S}$ & 692\,s\,{\scriptsize(95\%)}$^{\S}$ \\
-D2 (Oort) & 235\,s$^{\dagger}$ & 530\,s\,{\scriptsize(90\%)}$^{\S}$ & 876\,s$^{\S}$ & 236\,s\,{\scriptsize(95\%)} & 367\,s\,{\scriptsize(85\%)}$^{\S}$ & 682\,s$^{\S}$ \\
-D5 (FedCS) & 236\,s$^{\dagger}$ & 500\,s\,{\scriptsize(95\%)}$^{\S}$ & 771\,s$^{\S}$ & 206\,s\,{\scriptsize(98\%)} & 515\,s\,{\scriptsize(90\%)}$^{\S}$ & 754\,s\,{\scriptsize(85\%)}$^{\S}$ \\
-\bottomrule
-\end{tabular}%
-}
-\end{table}
-\begin{table}[t]
-\centering
-\caption{Decision-cost study: planner time per plan, and FerrySim's share of devices served at each $N$'s knee budget.}
-\label{tab:exp5_cost}
-\resizebox{\columnwidth}{!}{%
-\begin{tabular}{r rr rrr}
-\toprule
- & \multicolumn{2}{c}{plan time} & \multicolumn{3}{c}{FerrySim at the knee} \\
-\cmidrule(lr){2-3}\cmidrule(lr){4-6}
-$N$ & mean & p95 & budget & F served & FX served \\
-\midrule
-6 & 0.04\,s & 0.06\,s & 150\,s & 57\% & 58\% \\
-12 & 0.02\,s & 0.04\,s & 180\,s & 59\% & 59\% \\
-24 & 0.14\,s & 0.26\,s & 350\,s & 54\% & 54\% \\
-48 & 0.41\,s & 0.83\,s & 850\,s & 56\% & 56\% \\
-96 & 1.53\,s & 2.00\,s & 1660\,s & 56\% & 57\% \\
-\bottomrule
-\end{tabular}%
-}
-\end{table}
-\begin{table}[t]
-\centering
-\caption{Scaling out with mules, knee budget: time to $\tau$ (s). Weak scaling holds six devices per mule; strong scaling adds mules at $N=12$ and 24. Notation as in Table~\ref{tab:exp5_headline}; $^{\ast}$significantly faster than F.}
-\label{tab:exp5_mules}
-\resizebox{\columnwidth}{!}{%
-\begin{tabular}{l rrr rrrrr}
-\toprule
- & \multicolumn{3}{c}{weak scaling} & \multicolumn{5}{c}{strong scaling} \\
-\cmidrule(lr){2-4}\cmidrule(lr){5-9}
-\textbf{Arm}, $N/K$ & 6/1 & 12/2 & 18/3 & 12/1 & 12/3 & 24/1 & 24/2 & 24/3 \\
-\midrule
-F & \textbf{179} & \textbf{226} & \textbf{186} & \textbf{486}\,{\scriptsize(95\%)} & \textbf{151} & \textbf{749} & \textbf{327}\,{\scriptsize(95\%)} & \textbf{198} \\
-FX & 168 & 205 & 131\,{\scriptsize(95\%)} & 424\,{\scriptsize(90\%)} & 102$^{\ast}$ & 789 & 308 & 185\,{\scriptsize(95\%)} \\
-H1 & 254$^{\dagger}$ & 263\,{\scriptsize(95\%)} & 149 & 589\,{\scriptsize(95\%)} & 165 & 951$^{\dagger}$ & 362 & 222 \\
-D4 & 232$^{\dagger}$ & 222 & 186 & 459\,{\scriptsize(95\%)} & 128 & 752 & 319 & 222 \\
-\bottomrule
-\end{tabular}%
-}
-\end{table}
+\includegraphics[width=\textwidth]{Figures/exp5/fig_exp5_scale.pdf}
+\caption{Scalability at each $N$'s knee budget: means with 95\% bootstrap CIs, on 40 trials at
+$N=6$ with one mule and 20 elsewhere. (a) One mule; gray lines are MAX-AoI, Oort and FedCS, exploratory at
+$N=12$ and 24. (b) One plan, alone on one host. (c) One to three mules. Times average the trials that reach
+$\tau$; a hollow marker means some trials did not. Markers are offset for legibility.}
+\label{fig:exp5_scale}
+\end{figure*}
 \subsection{The Design Claims}
 \label{sec:res:claims}
 
@@ -1134,7 +1091,7 @@ always have merge age zero, while FedProx is not significantly faster.
 
 \begin{table*}[t]
 \centering
-\caption{Tests of the design claims, each against an alternative that replaces one part of FeRRy's design. Advantage: the paired difference as a share of FeRRy's value, positive when FeRRy's design does better, with its 95\% CI. \emph{Holds}: significant at Holm $p<0.05$.}
+\caption{Tests of the design claims, each against an alternative that replaces one part of FeRRy's design. Advantage: the paired difference in the metric's own units (pp, percentage points), positive when FeRRy's design does better, with its 95\% CI. \emph{Holds}: significant at Holm $p<0.05$.}
 \label{tab:exp5_claims}
 \footnotesize
 \resizebox{\textwidth}{!}{%
@@ -1143,34 +1100,34 @@ always have merge age zero, while FedProx is not significantly faster.
 \textbf{Alternative tested} & \textbf{Metric} & \textbf{FeRRy} & \textbf{Alternative} & \textbf{FeRRy's advantage [95\% CI]} & \textbf{Holm $p$} & \textbf{Verdict} \\
 \midrule
 \multicolumn{7}{l}{\textit{C1: reach is a decision}} \\
-\quad Band class pinned to wide & age of updates (missions) & 0.70 & 0.72 & +3\% [0, +7] & 1.000 & no difference \\
-\quad Band class pinned to narrow & age of updates (missions) & 0.70 & 0.70 & 0\% [0, 0] & 1.000 & no difference \\
+\quad Band class pinned to wide & age of updates (missions) & 0.70 & 0.72 & +0.02 [0, +0.05] & 1.000 & no difference \\
+\quad Band class pinned to narrow & age of updates (missions) & 0.70 & 0.70 & 0 [0, 0] & 1.000 & no difference \\
 \midrule
 \multicolumn{7}{l}{\textit{C2: one derived objective}} \\
-\quad Coverage term removed ($N{=}12$) & round-close rate & 98\% & 73\% & +25\% [+25, +25] & $<$0.001 & \textbf{holds} \\
-\quad Dwell term removed ($N{=}12$) & round-close rate & 98\% & 98\% & 0\% [0, 0] & 1.000 & no difference \\
+\quad Coverage term removed ($N{=}12$) & round-close rate & 98\% & 73\% & +25.0\,pp [+25.0, +25.0] & $<$0.001 & \textbf{holds} \\
+\quad Dwell term removed ($N{=}12$) & round-close rate & 98\% & 98\% & 0\,pp [0, 0] & 1.000 & no difference \\
 \midrule
 \multicolumn{7}{l}{\textit{C3: one deadline, three roles}} \\
-\quad Plain-mean merge & time to $\tau$ & 179\,s & 179\,s & 0\% [0, 0] & 1.000 & no difference \\
-\quad Async-HFL merge & time to $\tau$ & 179\,s & 179\,s & 0\% [0, 0] & 1.000 & no difference \\
-\quad FedBuff merge & time to $\tau$ & 157\,s & 375\,s (26 seeds) & +138\% [+93, +187] & 0.004 & \textbf{holds} \\
-\quad FeRRy's merge with FedProx & time to $\tau$ & 179\,s & 168\,s & $-$6\% [$-$34, +20] & 1.000 & no difference \\
-\quad Round deadline, after FedCS (stress) & deadline-miss rate & 43.4\% & 48.7\% & +12\% [+5, +20] & 0.010 & \textbf{holds} \\
-\quad Preferred duration, after Oort (stress) & deadline-miss rate & 43.4\% & 48.6\% & +12\% [+5, +19] & 0.010 & \textbf{holds} \\
+\quad Plain-mean merge & time to $\tau$ & 179\,s & 179\,s & 0\,s [0, 0] & 1.000 & no difference \\
+\quad Async-HFL merge & time to $\tau$ & 179\,s & 179\,s & 0\,s [0, 0] & 1.000 & no difference \\
+\quad FedBuff merge & time to $\tau$ & 157\,s & 375\,s (26 seeds) & +218\,s [+146, +295] & 0.004 & \textbf{holds} \\
+\quad FeRRy's merge with FedProx & time to $\tau$ & 179\,s & 168\,s & $-$11\,s [$-$61, +36] & 1.000 & no difference \\
+\quad Round deadline, after FedCS (stress) & deadline-miss rate & 43.4\% & 48.7\% & +5.3\,pp [+2.3, +8.5] & 0.010 & \textbf{holds} \\
+\quad Preferred duration, after Oort (stress) & deadline-miss rate & 43.4\% & 48.6\% & +5.2\,pp [+2.1, +8.4] & 0.010 & \textbf{holds} \\
 \midrule
 \multicolumn{7}{l}{\textit{C4: two clocks, re-decided per stop}} \\
-\quad No per-stop rule, the plan alone ($N{=}12$) & time to $\tau$ & 428\,s & 461\,s & +8\% [+2, +16] & 0.032 & \textbf{holds} \\
-\quad Learned per-stop score, FQ ($N{=}12$) & time to $\tau$ & 428\,s & 454\,s & +6\% [+1, +14] & 0.110 & no difference \\
+\quad No per-stop rule, the plan alone ($N{=}12$) & time to $\tau$ & 428\,s & 461\,s & +33\,s [+8, +67] & 0.032 & \textbf{holds} \\
+\quad Learned per-stop score, FQ ($N{=}12$) & time to $\tau$ & 428\,s & 454\,s & +26\,s [+4, +60] & 0.110 & no difference \\
 \midrule
 \multicolumn{7}{l}{\textit{C5: fairness under physical cost}} \\
-\quad MAX-AoI scheduler, D1 (stress) & age of updates (missions) & 0.78 & 1.06 & +37\% [+21, +53] & 0.017 & \textbf{holds} \\
-\quad Whittle index, D3 (stress) & age of updates (missions) & 0.78 & 1.07 & +38\% [+23, +55] & 0.013 & \textbf{holds} \\
-\quad Coverage term removed (stress) & age of updates (missions) & 0.78 & 1.10 & +41\% [+34, +49] & 0.002 & \textbf{holds} \\
-\quad Age cap removed (stress) & age of updates (missions) & 0.78 & 0.78 & 0\% [0, 0] & 1.000 & no difference \\
+\quad MAX-AoI scheduler, D1 (stress) & age of updates (missions) & 0.78 & 1.06 & +0.29 [+0.16, +0.41] & 0.017 & \textbf{holds} \\
+\quad Whittle index, D3 (stress) & age of updates (missions) & 0.78 & 1.07 & +0.30 [+0.18, +0.42] & 0.013 & \textbf{holds} \\
+\quad Coverage term removed (stress) & age of updates (missions) & 0.78 & 1.10 & +0.32 [+0.26, +0.38] & 0.002 & \textbf{holds} \\
+\quad Age cap removed (stress) & age of updates (missions) & 0.78 & 0.78 & 0 [0, 0] & 1.000 & no difference \\
 \midrule
 \multicolumn{7}{l}{\textit{Component ablations}} \\
-\quad Whole stops only (stress) & age of updates (missions) & 0.81 & 0.90 & +11\% [+4, +18] & 0.078 & no difference \\
-\quad Fixed backhaul carrier, no L1 & age of updates (missions) & 0.69 & 0.88 & +28\% [+18, +40] & $<$0.001 & \textbf{holds} \\
+\quad Whole stops only (stress) & age of updates (missions) & 0.81 & 0.90 & +0.09 [+0.03, +0.15] & 0.078 & no difference \\
+\quad Fixed backhaul carrier, no L1 & age of updates (missions) & 0.69 & 0.88 & +0.19 [+0.13, +0.28] & $<$0.001 & \textbf{holds} \\
 \bottomrule
 \end{tabular}%
 }
@@ -1279,7 +1236,7 @@ updates: at 18.8~KB and 1~MB F reaches $\tau$ in 70--80\% of trials and closes
 
 \begin{table*}[t]
 \centering
-\caption{Robustness at $N=6$ and the knee budget: time to $\tau$. Notation as in Table~\ref{tab:exp5_headline}; $^{\ast}$significantly faster than F.}
+\caption{Robustness at $N=6$ and the knee budget: time to $\tau$, averaged over the trials that reach it. Notation as in Table~\ref{tab:exp5_headline}; $^{\ast}$significantly faster than F.}
 \label{tab:exp5_robust}
 \small
 \begin{tabular}{l rr r rrrr}

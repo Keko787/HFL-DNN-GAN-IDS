@@ -7,7 +7,8 @@ Writes a PDF (vector, for LaTeX) and a 300-dpi PNG of each figure:
 * ``fig_exp5_convergence``: test accuracy over simulated time at N = 6, one mule,
   the knee and stress budgets (Study 5.3): F and FX against every baseline.
 * ``fig_exp5_tau``: time to tau by arm with 95% bootstrap CIs (Study 5.3).
-* ``fig_exp5_scale``: time to tau as N grows, both budgets (Study 5.9).
+* ``fig_exp5_scale``: scalability at the knee: time to tau against N (Study 5.9), planner
+  time against N (5.11 a) and time to tau against mules (5.9's multi-mule cells).
 * ``fig_exp5_systems``: planner time against N (5.11 a), FerrySim's served share
   at each scale's knee (5.11 c) and time to tau as mules are added (5.11 b).
 * ``fig_exp5_claims``: every claim test as a relative effect with its CI.
@@ -33,6 +34,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import csv
 import importlib.util
 import io
 import json
@@ -82,9 +84,13 @@ STAGE_SETS: Dict[str, Tuple[Optional[int], List[str], Optional[List[str]]]] = {
                       "s53x.h0=false", "rl.keep_learned=true"], ["s53x"]),
     "batch2pins": (40, ["s54.payloads=[1000000]", "s54.narrow_range_ratios=[]",
                         "s54.far_shares=[]", "s54.o1=false", "s54.n_trials=40"], ["s54"]),
+    # 5.9's multi-mule cells as they were scored: 5.5 and 5.7 listed for their shared cells.
+    "batch2s59x": (20, ["s59x.contact_regimes=['jittery']"], ["s59x", "s55", "s57"]),
 }
-LAUNCH_STAGE = {"batch2fq": "batch2", "batch2s53": "batch2", "batch2pins": "batch2"}
+LAUNCH_STAGE = {"batch2fq": "batch2", "batch2s53": "batch2", "batch2pins": "batch2",
+                "batch2s59x": "batch2"}
 S53 = "batch2s53"
+S59X = "batch2s59x"
 PINS = "batch2pins"
 
 # --------------------------------------------------------------------------- #
@@ -354,38 +360,125 @@ def fig_tau(out: Path) -> None:
 SCALE_ARMS = ["F", "FX", "H1", "D3", "D4"]
 
 
+def _probe_times(cell: str, arm: str) -> Tuple[float, float]:
+    """(mean time to tau, reach rate) of an arm the scale study leaves out (probe P3)."""
+    path = REPO / "results" / "exp5" / "b2" / "s59x" / f"{cell}__{arm}_scored.csv"
+    with path.open(encoding="utf-8", newline="") as f:
+        rows = list(csv.DictReader(f))
+    xs = [v for v in (SC._num(r.get(TAU_COL)) for r in rows) if v is not None]
+    return statistics.fmean(xs), len(xs) / len(rows)
+
+
+def _ci_line(ax, xs, stats, arm: str, *, ls: str = "-", label: Optional[str] = None,
+             zorder: Optional[int] = None) -> None:
+    """A line of means with 95% CIs. A hollow marker: not every trial reached tau."""
+    color = ARM_COLOR[arm]
+    ms = [s[0] for s in stats]
+    low = [s[0] - s[1] for s in stats]
+    high = [s[2] - s[0] for s in stats]
+    order = zorder if zorder is not None else (4 if arm == "F" else 3)
+    ax.errorbar(xs, ms, yerr=[low, high], color=color, lw=1.8 if arm == "F" else 1.2, ls=ls,
+                elinewidth=0.7, capsize=0, zorder=order)
+    for x, m, s in zip(xs, ms, stats):
+        full = s[3] >= 0.995
+        ax.plot([x], [m], ls="none", marker=ARM_MARKER[arm], ms=4.2, zorder=order + 1,
+                mfc=color if full else SURFACE, mec=SURFACE if full else color,
+                mew=0.8 if full else 0.9)
+    if label:
+        ax.plot([], [], color=color, lw=1.8 if arm == "F" else 1.2, marker=ARM_MARKER[arm],
+                ms=4.2, mfc=color, mec=SURFACE, mew=0.8, label=label)
+
+
 def fig_scale(out: Path) -> None:
+    """Scalability at the knee: (a) time to tau against N, (b) planner time against N,
+    (c) time to tau against K at N = 12 and 24."""
+    fig = plt.figure(figsize=(COL2, 2.35))
+    grid = fig.add_gridspec(1, 3, width_ratios=[1.12, 0.82, 1.12], wspace=0.34)
+    ax_n, ax_plan, ax_k = (fig.add_subplot(grid[0, i]) for i in range(3))
+
+    # (a) One mule. N = 6 is 5.3's, at 40 trials; the rest are 5.9's, at 20.
     ns = [6, 12, 24]
-    src = {"knee": {6: (S53, "s53x", "n6k1_knee"), 12: ("batch1", "s59", "n12k1_knee"),
-                    24: ("batch1", "s59", "n24k1_knee")},
-           "stress": {6: (S53, "s53x", "n6k1_stress"),
-                      12: ("batch2", "s59x", "n12k1_stress"),
-                      24: ("batch2", "s59x", "n24k1_stress")}}
-    fig, axes = plt.subplots(1, 2, figsize=(COL2, 2.3), sharey=True)
-    dodge = {a: (i - 2) * 0.07 for i, a in enumerate(SCALE_ARMS)}
-    for ax, budget in zip(axes, ("knee", "stress")):
+    src = {6: (S53, "s53x", "n6k1_knee"), 12: ("batch1", "s59", "n12k1_knee"),
+           24: ("batch1", "s59", "n24k1_knee")}
+    for i, arm in enumerate(("D1", "D2", "D5")):
+        e = entry(*src[6], arm)
+        pts = [(statistics.fmean(values(e, TAU_COL)), reach_rate(e))]
+        pts += [_probe_times(f"n{n}k1_knee", arm) for n in ns[1:]]
+        ax_n.plot(range(len(ns)), [m for m, _ in pts], color=CONTEXT, lw=0.9, zorder=1,
+                  marker=ARM_MARKER[arm], ms=2.8, mec=SURFACE, mew=0.4)
+    dodge = {a: (i - 2) * 0.05 for i, a in enumerate(SCALE_ARMS)}
+    for arm in SCALE_ARMS:
+        stats = []
+        for n in ns:
+            e = entry(*src[n], arm)
+            stats.append(mean_ci(values(e, TAU_COL)) + (reach_rate(e),))
+        _ci_line(ax_n, [k + dodge[arm] for k in range(len(ns))], stats, arm, label=ARM_LABEL[arm])
+    ax_n.plot([], [], color=CONTEXT, lw=0.9, label="D1, D2, D5")
+    ax_n.set_xticks(range(len(ns)))
+    ax_n.set_xticklabels([str(n) for n in ns])
+    ax_n.set_xlabel("devices $N$")
+    ax_n.set_ylabel(r"time to $\tau$ (s)")
+    ax_n.set_ylim(0, 1040)
+    ax_n.set_title(r"(a) Time to $\tau$ against devices", color=INK2, loc="left")
+    ax_n.grid(axis="x", visible=False)
+
+    # (b) The planner alone on one host; the same cells as the decision-cost table.
+    quiet = json.loads((REPO / "results/exp5/s511a_quiet/b1/s511a/auto.json")
+                       .read_text(encoding="utf-8"))
+    plan = {r["cell"]: r for r in quiet["table"]}
+    cells = [("jit-n6-150", 6), ("jit-n12-90", 12), ("scl-n24-350", 24),
+             ("scl-n48-680", 48), ("scl-n96-1330", 96)]
+    xs = [n for _, n in cells]
+    color = ARM_COLOR["F"]
+    ax_plan.plot(xs, [plan[c]["plan_wall_s_p95"] for c, _ in cells], color=color, lw=1.2, ls="--",
+                 marker="o", ms=3.4, mfc=SURFACE, mec=color, mew=0.8, label="p95")
+    ax_plan.plot(xs, [plan[c]["plan_wall_s_mean"] for c, _ in cells], color=color, lw=1.8,
+                 marker="o", ms=4.2, mec=SURFACE, mew=0.8, label="mean")
+    ax_plan.set_xscale("log", base=2)
+    ax_plan.set_yscale("log")
+    ax_plan.set_xticks(xs)
+    ax_plan.set_xticklabels([str(n) for n in xs])
+    ax_plan.minorticks_off()
+    ax_plan.set_yticks([0.01, 0.1, 1])
+    ax_plan.set_yticklabels(["0.01", "0.1", "1"])
+    ax_plan.set_ylim(0.01, 5)
+    ax_plan.set_xlabel("devices $N$")
+    ax_plan.set_ylabel("planner time per plan (s)")
+    ax_plan.set_title("(b) Planner time", color=INK2, loc="left")
+    ax_plan.grid(axis="x", visible=False)
+    ax_plan.legend(loc="upper left", handlelength=1.8, labelspacing=0.25, borderaxespad=0.1)
+    last = plan["scl-n96-1330"]
+    ax_plan.set_xlim(5, 190)
+    for key, shift in (("plan_wall_s_p95", 2.5), ("plan_wall_s_mean", -2.5)):
+        ax_plan.annotate(f"{last[key]:.1f} s", (96, last[key]), xytext=(5, shift),
+                         textcoords="offset points", ha="left", va="center", color=INK2,
+                         fontsize=6.8)
+
+    # (c) 5.9's cells at the knee. Line style is N; colour stays the arm's.
+    ks = [1, 2, 3]
+    dodge = {a: (i - 2) * 0.035 for i, a in enumerate(SCALE_ARMS)}
+    for n, ls in ((24, "-"), (12, "--")):
         for arm in SCALE_ARMS:
-            xs, ms, los, his = [], [], [], []
-            for k, n in enumerate(ns):
-                stage, study, cell = src[budget][n]
-                m, lo, hi = mean_ci(values(entry(stage, study, cell, arm), TAU_COL))
-                xs.append(k + dodge[arm])
-                ms.append(m)
-                los.append(m - lo)
-                his.append(hi - m)
-            lw = 1.8 if arm == "F" else 1.2
-            ax.errorbar(xs, ms, yerr=[los, his], color=ARM_COLOR[arm], lw=lw,
-                        marker=ARM_MARKER[arm], ms=4.2, mec=SURFACE, mew=0.8,
-                        elinewidth=0.8, capsize=0, zorder=4 if arm == "F" else 3,
-                        label=ARM_LABEL[arm])
-        ax.set_xticks(range(len(ns)))
-        ax.set_xticklabels([f"N = {n}" for n in ns])
-        ax.set_title(f"{budget} budget", color=INK2, loc="left")
-        ax.grid(axis="x", visible=False)
-    axes[0].set_ylabel(r"simulated time to $\tau$ (s)")
-    axes[0].set_ylim(0, None)
-    axes[1].legend(loc="upper left", ncol=1, handlelength=1.6)
-    fig.subplots_adjust(wspace=0.08)
+            stats = []
+            for k in ks:
+                e = entry(S59X, "s59x", f"n{n}k{k}_knee", arm)
+                stats.append(mean_ci(values(e, TAU_COL)) + (reach_rate(e),))
+            _ci_line(ax_k, [k + dodge[arm] for k in ks], stats, arm, ls=ls)
+    ax_k.set_xticks(ks)
+    ax_k.set_xlim(0.8, 3.2)
+    ax_k.set_ylim(0, 1040)
+    ax_k.set_xlabel("mules $K$")
+    ax_k.set_ylabel(r"time to $\tau$ (s)")
+    ax_k.set_title(r"(c) Time to $\tau$ against mules", color=INK2, loc="left")
+    ax_k.grid(axis="x", visible=False)
+    ax_k.legend(handles=[Line2D([], [], color=INK2, lw=1.2, ls="-", label="$N=24$"),
+                         Line2D([], [], color=INK2, lw=1.2, ls="--", label="$N=12$")],
+                loc="upper right", handlelength=2.2, labelspacing=0.25, borderaxespad=0.1)
+    handles, labels = ax_n.get_legend_handles_labels()
+    handles.append(Line2D([], [], ls="none", marker="o", ms=4.2, mfc=SURFACE, mec=INK2, mew=0.9))
+    labels.append(r"not all trials reach $\tau$")
+    fig.legend(handles, labels, loc="upper center", bbox_to_anchor=(0.5, -0.03), ncol=7,
+               handlelength=1.6, columnspacing=1.1)
     save(fig, out, "fig_exp5_scale")
 
 
@@ -941,9 +1034,10 @@ is below 1. $^{\dagger}$Slower than F (paired by seed, Holm $p<0.05$).}
 \begin{figure*}[t]
 \centering
 \includegraphics[width=\textwidth]{Figures/exp5/fig_exp5_scale.pdf}
-\caption{Time to $\tau$ as the device population grows (scale study), one mule, each $N$
-at its own knee and stress budget: mean and 95\% bootstrap CI over the trials that reach
-$\tau$, 40 paired trials per arm at $N=6$ and 20 above it. Markers are offset horizontally for legibility.}
+\caption{Scalability at each $N$'s knee budget: means with 95\% bootstrap CIs, on 40 trials at
+$N=6$ with one mule and 20 elsewhere. (a) One mule; gray lines are MAX-AoI, Oort and FedCS, exploratory at
+$N=12$ and 24. (b) One plan, alone on one host. (c) One to three mules. Times average the trials that reach
+$\tau$; a hollow marker means some trials did not. Markers are offset for legibility.}
 \label{fig:exp5_scale}
 \end{figure*}
 

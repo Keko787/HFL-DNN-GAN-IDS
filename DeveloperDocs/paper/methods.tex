@@ -52,8 +52,9 @@ its two main decisions each span the radio, scheduling and learning layers.
 \paragraph{Setting}
 A cluster has one edge server, one or more mules, and static field devices whose
 positions the server's registry holds. Each mule gets a disjoint slice
-$\mathcal{M}$ of the registry for the trial; with $K>1$ mules the slices are
-angular sectors around the shared dock, within one device of equal size, and the
+$\mathcal{M}$ of the registry for the trial. With $K>1$ mules we sort the devices
+by angle around the shared dock, starting after the widest empty arc, and cut them
+into $K$ contiguous sectors whose sizes differ by at most one device, and the
 mules fly concurrently. Devices train offline between visits, so a contact is
 exchange only: the mule pushes the global model and pulls the device's prepared
 update. In \textsc{Pass 1} of a mission the mule collects updates along a route,
@@ -70,7 +71,10 @@ balanced training flows split across them; a disjoint 6{,}000-flow test set
 scores each new global model, stamped when its closing upload completes. A device
 with no prepared update trains inside the contact, at no simulated cost. Every
 transfer is priced as $S=1$~MB unless stated; the model's own update is
-18.8~KB.
+18.8~KB. We price 1~MB as a stand-in for a larger model: within 60~m an 18.8~KB
+session takes under 0.2~s on any class, too short for the rate to matter, while at
+1~MB it takes about 1--8~s, so reach trades against rate. We also report 18.8~KB
+and 2, 5 and 10~MB.
 
 \paragraph{Layer roles and clocks}
 Table~\ref{tab:layer-roles} gives each layer's role. Hard gates (eligibility, the
@@ -144,8 +148,9 @@ The contact link offers three band classes $\mathcal{B}$ on one carrier, LTE
 channel bandwidths~\cite{3gpp36104} with occupied bandwidth
 $B_b=N_{\mathrm{RB}}\times180$~kHz: \textsf{wide} (20~MHz, 100 resource blocks),
 \textsf{medium} (5~MHz, 25) and \textsf{narrow} (1.4~MHz, 6). With a common
-transmit power and a noise floor that scales with $B_b$, a narrower class
-reaches farther at a lower rate:
+transmit power and a noise floor that scales with $B_b$, a narrower class has
+more SNR to spend (\textsf{medium} 6.0~dB and \textsf{narrow} 12.2~dB above
+\textsf{wide}), so it reaches farther at a lower rate:
 \begin{equation}
 R_b^{3D} = R_0^{3D}\left(\frac{B_0}{B_b}\right)^{1/n},
 \qquad
@@ -155,7 +160,9 @@ R_b = \sqrt{\left(R_b^{3D}\right)^2 - h^2},
 relative to a reference class $(B_0,R_0^{3D})$, with path-loss exponent $n=2.2$
 and altitude $h=25$~m. Anchoring \textsf{wide} at 60~m gives planar ranges of
 60, 120 and 232~m, at which the mean SNR clears the decoding floor by a 5.1~dB
-shadowing margin $M_{\mathrm{sh}}$ (reach probability 0.9 under shadowing).
+shadowing margin $M_{\mathrm{sh}}$ (reach probability 0.9 under shadowing). The
+60~m anchor is a simulation assumption, set so that range binds in our field, not
+a measured value.
 
 \paragraph{Rate and dwell}
 The mean SNR at distance $d$ is
@@ -311,7 +318,7 @@ Routes pass the feasibility test stop by stop. Up to six devices, an exact searc
 enumerates every ordered sequence of stops and member subsets and is optimal over
 what the score prices; with up to six stops, it searches ordered stop subsets;
 beyond that, a deterministic local search (2-OPT, then first-improvement moves,
-at most 2000 evaluations per class) runs. The empty plan is chosen only if no
+at most 50 passes or 2000 evaluations per class) runs. The empty plan is chosen only if no
 other is admitted.
 
 \paragraph{Plan score and plan key}
@@ -329,7 +336,9 @@ L=\frac{\sum_{\text{served}}w_j\,p_{\mathrm{out}}(\bbar,d_j)}{\sum_{\text{demand
 the weighted coverage shortfall and expected link loss ($c_1=1$,
 $c_2=c_3=N_{\mathrm{demand}}$, $c_4=0.1$). The form follows FedEx's
 route-dependent bound~\cite{bian2025indirect}, but the constants are hand-set and
-the term in $\Delta$ is a staleness surrogate. Since every non-empty plan pays
+the term in $\Delta$ is a staleness surrogate: $c_2$ makes one average device worth
+a mission of length $\Tnom$, and $c_4$ is small because energy moves almost in
+step with $\Delta$. Since every non-empty plan pays
 for a whole Pass~2, $V$ alone can prefer to fly empty, so the mule commits the
 plan with the smallest key
 \begin{equation}
@@ -452,9 +461,9 @@ and the devices train the real model; mission time, the channel and energy are
 simulated. Updates carry integrity checks but no authentication;
 poisoning-robust aggregation and privacy are out of scope. The learned score, E3
 and the largest problems ($N=48$, $96$) run in FerrySim, an in-process simulator
-built from the same code that omits model training, flies one mule, uses an
-additive deadline law and no merge cutoff, and grows the field with $N$ in its
-scale cells.
+that shares the prototype's planner, feasibility test, RF model and mission logic
+but omits model training, flies one mule, uses an additive deadline law and no
+merge cutoff, and grows the field with $N$ in its scale cells.
 %%%%% END SECTION %%%%%
 
 \end{document}

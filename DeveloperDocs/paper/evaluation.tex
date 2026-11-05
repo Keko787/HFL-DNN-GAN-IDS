@@ -64,22 +64,23 @@ $N=24$ under stress.
 \subsection{Scale and Decision Cost}
 \label{sec:res:scale}
 
-At $N=24$ (Table~\ref{tab:exp5_scale}), F is significantly faster than H1 and D3
+At $N=24$ (Fig.~\ref{fig:exp5_scale}a), F is significantly faster than H1 and D3
 at the knee (749 against 951 and 911\,s) and ties the FedEx route (752\,s). Under
-the stress budget its lead over that route (661 against 752\,s) is not significant
-(Holm $p=0.29$), and at $N=12$ no comparison in the table is a claim. MAX-AoI, Oort
-and FedCS (exploratory) are slower than F on paired seeds in every cell, by at most
+the stress budget F sits with FX, H1 and D3 at 651--662\,s, and its lead over the
+FedEx route (661 against 752\,s) is not significant (Holm $p=0.29$). At $N=12$, on
+these 20 seeds, no comparison is a claim. MAX-AoI, Oort and FedCS (exploratory) are slower than F on paired seeds in every cell, by at most
 199\,s (MAX-AoI at the $N=24$ knee, 95\% CI [144, 262]). Over the 40 seeds of the
 learned score's full-system check, FX is significantly faster than F at $N=12$ at the knee (428 against
 461\,s, Holm $p=0.032$) but not under stress, and FQ (454 and 385\,s) does not
 differ from FX (428 and 385\,s).
-Planning stays cheap (Table~\ref{tab:exp5_cost}): alone on one host, a plan
+Planning stays cheap (Fig.~\ref{fig:exp5_scale}b): alone on one host, a plan
 takes 0.04\,s at $N=6$ and 1.5\,s at $N=96$ (p95 2.0\,s). In FerrySim the plan
 serves 54--59\% of the devices at each scale's knee budget up to $N=96$.
 
-More mules speed up every arm and shrink F's lead (Table~\ref{tab:exp5_mules}). F's
+More mules speed up every arm and shrink F's lead (Fig.~\ref{fig:exp5_scale}c). F's
 time to $\tau$ falls from 486\,s to 226\,s with two mules and 151\,s with three at
-$N=12$, and from 749\,s to 327\,s and 198\,s at $N=24$. F stays ahead of H1 and D3
+$N=12$, and from 749\,s to 327\,s and 198\,s at $N=24$; holding six devices per mule,
+it takes 179, 226 and 186\,s with one, two and three. F stays ahead of H1 and D3
 on the mean in 11 of the scale study's 12 multi-mule cells, but neither it nor any
 baseline makes a claim there; the one baseline still significantly behind is FedEx
 with its own merge, at $N=6$ with three mules (Table~\ref{tab:exp5_headline}). FX
@@ -89,11 +90,7 @@ nearly always fits inside half the budget: halving it changes F's missions in at
 most 3 of 20 trials per cell, so 12 of the study's 72 tests are exact copies, and
 removing them changes no verdict.
 
-%%TABLE:tab:exp5_scale%%
-
-%%TABLE:tab:exp5_cost%%
-
-%%TABLE:tab:exp5_mules%%
+%%FIGURE:fig:exp5_scale%%
 
 \subsection{The Design Claims}
 \label{sec:res:claims}
