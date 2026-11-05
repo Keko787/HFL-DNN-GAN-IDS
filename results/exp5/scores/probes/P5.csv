@@ -1,0 +1,43 @@
+study,cell,variant,reference,metric,better,n_pairs,ref_mean,variant_mean,mean_diff,ci_low,ci_high,p_value,p_holm,cliffs_delta,claim,favours,pairing_errors,note
+P5/ferry/time,2 MB: n6k1_knee,FX,F,sim_s_to_tau0.71,lower,20,268.1830592875194,257.0957685936999,11.087290693819522,-4.03592889495572,26.03327688578966,0.06372261047363281,0.19116783142089844,0.08,False,no claim,0,
+P5/ferry/reach,2 MB: n6k1_knee,FX,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by FX only"
+P5/baselines/time,2 MB: n6k1_knee,H1,F,sim_s_to_tau0.71,lower,20,268.1830592875194,302.17757644057275,-33.99451715305331,-81.03186024196532,8.201321355589446,0.3719737719646685,1.0,-0.135,False,no claim,0,
+P5/baselines/reach,2 MB: n6k1_knee,H1,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by H1 only"
+P5/baselines/time,2 MB: n6k1_knee,D1,F,sim_s_to_tau0.71,lower,20,268.1830592875194,301.3589066139422,-33.17584732642281,-77.75129799658723,7.834644718095614,0.3957522466577532,1.0,-0.12,False,no claim,0,
+P5/baselines/reach,2 MB: n6k1_knee,D1,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D1 only"
+P5/baselines/time,2 MB: n6k1_knee,D2,F,sim_s_to_tau0.71,lower,20,268.1830592875194,305.57249756488017,-37.38943827736075,-81.45347197006384,3.145066350062404,0.07661792341167123,1.0,-0.1525,False,no claim,0,
+P5/baselines/reach,2 MB: n6k1_knee,D2,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D2 only"
+P5/baselines/time,2 MB: n6k1_knee,D3,F,sim_s_to_tau0.71,lower,20,268.1830592875194,325.349329365493,-57.16627007797361,-119.01575989085713,-4.487233912407127,0.07661792341167123,1.0,-0.1475,False,no claim,0,
+P5/baselines/reach,2 MB: n6k1_knee,D3,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D3 only"
+P5/baselines/time,2 MB: n6k1_knee,D4,F,sim_s_to_tau0.71,lower,20,268.1830592875194,271.3982202363492,-3.2151609488297255,-39.559712150599076,24.72916796436547,0.7764250047999479,1.0,0.0025,False,no claim,0,
+P5/baselines/reach,2 MB: n6k1_knee,D4,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D4 only"
+P5/baselines/time,2 MB: n6k1_knee,D5,F,sim_s_to_tau0.71,lower,20,268.1830592875194,284.6711035700573,-16.488044282537885,-56.07416483246633,14.73774549132504,0.5565794125211807,1.0,-0.05,False,no claim,0,
+P5/baselines/reach,2 MB: n6k1_knee,D5,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D5 only"
+P5/ferry/time,5 MB: n6k1_knee,FX,F,sim_s_to_tau0.71,lower,20,284.2680097798817,316.9843238834525,-32.71631410357077,-146.2028169776755,53.06508894129277,0.836138661741041,0.836138661741041,-0.095,False,no claim,0,
+P5/ferry/reach,5 MB: n6k1_knee,FX,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by FX only"
+P5/baselines/time,5 MB: n6k1_knee,H1,F,sim_s_to_tau0.71,lower,20,284.2680097798817,330.8344041838078,-46.5663944039261,-156.89505961000157,32.80386770445473,0.2659466461059248,1.0,-0.1525,False,no claim,0,
+P5/baselines/reach,5 MB: n6k1_knee,H1,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by H1 only"
+P5/baselines/time,5 MB: n6k1_knee,D1,F,sim_s_to_tau0.71,lower,20,284.2680097798817,330.30583550930606,-46.03782572942437,-129.2289845964845,24.819299152935233,0.2659466461059248,1.0,-0.2075,False,no claim,0,
+P5/baselines/reach,5 MB: n6k1_knee,D1,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D1 only"
+P5/baselines/time,5 MB: n6k1_knee,D2,F,sim_s_to_tau0.71,lower,20,284.2680097798817,347.42353388604243,-63.15552410616074,-160.39987246532297,24.373223724694647,0.13297131332886625,1.0,-0.25,False,no claim,0,
+P5/baselines/reach,5 MB: n6k1_knee,D2,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D2 only"
+P5/baselines/time,5 MB: n6k1_knee,D3,F,sim_s_to_tau0.71,lower,20,284.2680097798817,325.68681091275647,-41.4188011328748,-115.42552695702237,27.22952915403977,0.11192770811902444,1.0,-0.21,False,no claim,0,
+P5/baselines/reach,5 MB: n6k1_knee,D3,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D3 only"
+P5/baselines/time,5 MB: n6k1_knee,D4,F,sim_s_to_tau0.71,lower,20,284.2680097798817,331.31278092362334,-47.04477114374167,-158.63514713027655,27.73351546804188,0.5001842570707944,1.0,-0.1075,False,no claim,0,
+P5/baselines/reach,5 MB: n6k1_knee,D4,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D4 only"
+P5/baselines/time,5 MB: n6k1_knee,D5,F,sim_s_to_tau0.71,lower,20,284.2680097798817,276.3877449518419,7.880264828039799,-44.61664306600693,61.52374766631312,0.9587607499379828,1.0,-0.015,False,no claim,0,
+P5/baselines/reach,5 MB: n6k1_knee,D5,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D5 only"
+P5/ferry/time,10 MB: n6k1_knee,FX,F,sim_s_to_tau0.71,lower,20,343.62486592811763,313.00788916184683,30.616976766270817,-31.86876436072705,99.687078932454,0.3811632511856291,0.7623265023712582,0.0625,False,no claim,0,
+P5/ferry/reach,10 MB: n6k1_knee,FX,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by FX only"
+P5/baselines/time,10 MB: n6k1_knee,H1,F,sim_s_to_tau0.71,lower,20,343.62486592811763,321.70188220335984,21.922983724757795,-88.72174697789465,122.58704240440983,0.46911315243545415,1.0,0.08,False,no claim,0,
+P5/baselines/reach,10 MB: n6k1_knee,H1,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by H1 only"
+P5/baselines/time,10 MB: n6k1_knee,D1,F,sim_s_to_tau0.71,lower,20,343.62486592811763,320.2697621175263,23.35510381059139,-22.776582401215848,67.24026204436333,0.39424586721077726,1.0,0.0775,False,no claim,0,
+P5/baselines/reach,10 MB: n6k1_knee,D1,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D1 only"
+P5/baselines/time,10 MB: n6k1_knee,D2,F,sim_s_to_tau0.71,lower,20,343.62486592811763,379.60636617287525,-35.981500244757626,-149.84921226633494,71.4315497857284,0.24846555845586238,1.0,-0.075,False,no claim,0,
+P5/baselines/reach,10 MB: n6k1_knee,D2,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D2 only"
+P5/baselines/time,10 MB: n6k1_knee,D3,F,sim_s_to_tau0.71,lower,20,343.62486592811763,336.96907613785004,6.65578979026759,-101.53347286339921,111.1535546926582,0.6164914109936318,1.0,0.03,False,no claim,0,
+P5/baselines/reach,10 MB: n6k1_knee,D3,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D3 only"
+P5/baselines/time,10 MB: n6k1_knee,D4,F,sim_s_to_tau0.71,lower,20,343.62486592811763,382.0588586636819,-38.433992735564246,-171.430414737778,57.159982468189085,0.11176874513967607,1.0,-0.1275,False,no claim,0,
+P5/baselines/reach,10 MB: n6k1_knee,D4,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D4 only"
+P5/baselines/time,10 MB: n6k1_knee,D5,F,sim_s_to_tau0.71,lower,20,343.62486592811763,314.9659160536248,28.658949874492826,-28.011259380948754,89.67154864178505,0.6164914109936318,1.0,0.075,False,no claim,0,
+P5/baselines/reach,10 MB: n6k1_knee,D5,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D5 only"
