@@ -5,7 +5,7 @@
 | study | primary metric | variants | comparisons | claims | trials scored |
 |---|---|---|---|---|---|
 | [s512](s512.md) | sim_s_to_tau0.71 | 15 | 12 | 7 | 300/300 |
-| [s515](s515.md) | sim_s_to_tau0.71 | 15 | 10 | 2 | 300/300 |
+| [s515](s515.md) | sim_s_to_tau0.71 | 28 | 22 | 4 | 560/560 |
 
 Outputs the score step does not read (FerrySim and tool jobs; each is a JSON report of its own):
 

@@ -12,7 +12,8 @@
 | [s55](s55.md) | sim_s_to_tau0.71 | 8 | 6 | 1 | 320/320 |
 | [s57](s57.md) | round_close_rate_kmin1 | 8 | 6 | 2 | 320/320 |
 | [s59x](s59x.md) | sim_s_to_tau0.71 | 10 | 8 | 1 | 200/200 |
-| [s513](s513.md) | sim_s_to_tau0.71 | 5 | 4 | 3 | 100/100 |
+| [s513](s513.md) | sim_s_to_tau0.71 | 20 | 16 | 9 | 400/400 |
+| [s56](s56.md) | sim_s_to_tau0.71 | 12 | 6 | 3 | 480/480 |
 
 Outputs the score step does not read (FerrySim and tool jobs; each is a JSON report of its own):
 
