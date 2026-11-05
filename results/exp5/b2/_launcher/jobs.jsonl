@@ -573,3 +573,7 @@
 {"event": "end", "job": "s53x/n6k3_relaxed__E3", "rc": 0, "wall_s": 2611.2, "rows": 40, "rows_not_ok": 0, "at": "2026-11-04T14:21:34"}
 {"event": "end", "job": "s53x/n6k1_relaxed__E3", "rc": 0, "wall_s": 702.2, "rows": 40, "rows_not_ok": 0, "at": "2026-11-04T14:26:09"}
 {"event": "end", "job": "s53x/n6k1_relaxed__D4fedex", "rc": 0, "wall_s": 683.8, "rows": 40, "rows_not_ok": 0, "at": "2026-11-04T14:26:23"}
+{"event": "start", "job": "s53x/n6k3_relaxed__FQ-g75", "pid": 33572, "at": "2026-11-04T17:59:40"}
+{"event": "start", "job": "s53x/n6k1_relaxed__FQ-g75", "pid": 49964, "at": "2026-11-04T17:59:40"}
+{"event": "end", "job": "s53x/n6k1_relaxed__FQ-g75", "rc": 0, "wall_s": 426.2, "rows": 40, "rows_not_ok": 0, "at": "2026-11-04T18:06:46"}
+{"event": "end", "job": "s53x/n6k3_relaxed__FQ-g75", "rc": 0, "wall_s": 1024.8, "rows": 40, "rows_not_ok": 0, "at": "2026-11-04T18:16:44"}

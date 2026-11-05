@@ -31,24 +31,24 @@ E3 & Single-agent next-stop DQN after Chen et al.\ \cite{chen2023model}, trained
 \caption{Scheduler comparison at $N=6$: time to $\tau=0.71$, with the share of trials that reach it in brackets when below 100\%, and with one mule under the stress budget, the share of missions that overran it and the updates merged per round (yield). $^{\dagger}$Significantly slower than F. $^{\S}$Exploratory, outside the study's tests.}
 \label{tab:exp5_headline}
 \resizebox{\columnwidth}{!}{%
-\begin{tabular}{l rr rr rr}
+\begin{tabular}{l rrr rr rr}
 \toprule
- & \multicolumn{2}{c}{$K=1$ mule} & \multicolumn{2}{c}{$K=3$ mules} & \multicolumn{2}{c}{$K=1$, stress} \\
-\cmidrule(lr){2-3}\cmidrule(lr){4-5}\cmidrule(lr){6-7}
-\textbf{Arm} & knee & stress & knee & stress & overrun & yield \\
+ & \multicolumn{3}{c}{$K=1$ mule} & \multicolumn{2}{c}{$K=3$ mules} & \multicolumn{2}{c}{$K=1$, stress} \\
+\cmidrule(lr){2-4}\cmidrule(lr){5-6}\cmidrule(lr){7-8}
+\textbf{Arm} & knee & stress & 300\,s & knee & stress & overrun & yield \\
 \midrule
-F & \textbf{179\,s} & \textbf{168\,s} & \textbf{53\,s} & \textbf{53\,s} & 29\% & 3.1 \\
-FX & 168\,s & 165\,s & 53\,s & 53\,s & 21\% & 3.1 \\
-FQ$^{\S}$ & 169\,s & 166\,s & 62\,s & 61\,s & 20\% & 3.1 \\
+F & \textbf{179\,s} & \textbf{168\,s} & \textbf{179\,s} & \textbf{53\,s} & \textbf{53\,s} & 29\% & 3.1 \\
+FX & 168\,s & 165\,s & 168\,s & 53\,s & 53\,s & 21\% & 3.1 \\
+FQ$^{\S}$ & 169\,s & 166\,s & 168\,s & 62\,s & 61\,s & 20\% & 3.1 \\
 \midrule
-H1 & 254\,s$^{\dagger}$ & 209\,s\,{\scriptsize(92\%)} & 60\,s & 60\,s & 1\% & 2.0 \\
-D1 (MAX-AoI) & 263\,s$^{\dagger}$ & 232\,s & 60\,s & 60\,s & 2\% & 2.3 \\
-D2 (Oort) & 235\,s$^{\dagger}$ & 236\,s\,{\scriptsize(95\%)} & 64\,s & 64\,s & 4\% & 2.2 \\
-D3 (Cui) & 262\,s$^{\dagger}$ & 213\,s & 63\,s & 63\,s & 2\% & 2.3 \\
-D4 (FedEx route) & 232\,s$^{\dagger}$ & 232\,s$^{\dagger}$ & 60\,s & 60\,s & 84\% & 3.4 \\
-D4$_{\text{FedEx}}$ & 296\,s\,{\scriptsize(92\%)}$^{\dagger}$ & 296\,s\,{\scriptsize(92\%)}$^{\dagger}$ & 111\,s$^{\dagger}$ & 111\,s$^{\dagger}$ & 84\% & 3.4 \\
-D5 (FedCS) & 236\,s$^{\dagger}$ & 206\,s\,{\scriptsize(98\%)} & 60\,s & 60\,s & 2\% & 2.4 \\
-E3 (Chen) & 252\,s$^{\dagger}$ & 201\,s\,{\scriptsize(98\%)} & 63\,s & 63\,s & 6\% & 2.6 \\
+H1 & 254\,s$^{\dagger}$ & 209\,s\,{\scriptsize(92\%)} & 247\,s$^{\dagger}$ & 60\,s & 60\,s & 1\% & 2.0 \\
+D1 (MAX-AoI) & 263\,s$^{\dagger}$ & 232\,s & 247\,s$^{\dagger}$ & 60\,s & 60\,s & 2\% & 2.3 \\
+D2 (Oort) & 235\,s$^{\dagger}$ & 236\,s\,{\scriptsize(95\%)} & 238\,s$^{\dagger}$ & 64\,s & 64\,s & 4\% & 2.2 \\
+D3 (Cui) & 262\,s$^{\dagger}$ & 213\,s & 244\,s$^{\dagger}$ & 63\,s & 63\,s & 2\% & 2.3 \\
+D4 (FedEx route) & 232\,s$^{\dagger}$ & 232\,s$^{\dagger}$ & 232\,s$^{\dagger}$ & 60\,s & 60\,s & 84\% & 3.4 \\
+D4$_{\text{FedEx}}$ & 296\,s\,{\scriptsize(92\%)}$^{\dagger}$ & 296\,s\,{\scriptsize(92\%)}$^{\dagger}$ & 296\,s\,{\scriptsize(92\%)}$^{\dagger}$ & 111\,s$^{\dagger}$ & 111\,s$^{\dagger}$ & 84\% & 3.4 \\
+D5 (FedCS) & 236\,s$^{\dagger}$ & 206\,s\,{\scriptsize(98\%)} & 229\,s$^{\dagger}$ & 60\,s & 60\,s & 2\% & 2.4 \\
+E3 (Chen) & 252\,s$^{\dagger}$ & 201\,s\,{\scriptsize(98\%)} & 248\,s$^{\dagger}$ & 63\,s & 63\,s & 6\% & 2.6 \\
 \bottomrule
 \end{tabular}%
 }
