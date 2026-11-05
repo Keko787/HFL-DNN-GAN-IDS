@@ -171,6 +171,7 @@ HEADLINE_ARMS = [("F", "F"), ("FX", "FX"), ("H1", "H1"), ("D1", "D1 (MAX-AoI)"),
                  ("D2", "D2 (Oort)"), ("D3", "D3 (Cui)"), ("D4", "D4 (FedEx route)"),
                  ("D4fedex", r"D4$_{\text{FedEx}}$"), ("D5", "D5 (FedCS)"), ("E3", "E3 (Chen)")]
 HEADLINE_CELLS = [("n6k1_knee", "knee"), ("n6k1_stress", "stress"),
+                  ("n6k1_relaxed", r"300\,s"),
                   ("n6k3_knee", "knee"), ("n6k3_stress", "stress")]
 
 
@@ -194,12 +195,13 @@ def headline_table() -> str:
              + r"Exploratory, outside the study's tests.}",
              r"\label{tab:exp5_headline}",
              r"\resizebox{\columnwidth}{!}{%",
-             r"\begin{tabular}{l rr rr rr}",
+             r"\begin{tabular}{l rrr rr rr}",
              r"\toprule",
-             r" & \multicolumn{2}{c}{$K=1$ mule} & \multicolumn{2}{c}{$K=3$ mules} "
+             r" & \multicolumn{3}{c}{$K=1$ mule} & \multicolumn{2}{c}{$K=3$ mules} "
              r"& \multicolumn{2}{c}{$K=1$, stress} \\",
-             r"\cmidrule(lr){2-3}\cmidrule(lr){4-5}\cmidrule(lr){6-7}",
-             r"\textbf{Arm} & knee & stress & knee & stress & overrun & yield \\",
+             r"\cmidrule(lr){2-4}\cmidrule(lr){5-6}\cmidrule(lr){7-8}",
+             r"\textbf{Arm} & " + " & ".join(name for _, name in HEADLINE_CELLS)
+             + r" & overrun & yield \\",
              r"\midrule"]
     for variant, label in HEADLINE_ARMS:
         cells = [tau_cell(st, cell, variant, reference="F", bold=(variant == "F"))

@@ -29,7 +29,8 @@ OUT = REPO / "results" / "exp5" / "scores" / "fills"
 ROOT = "results/exp5"
 TIME = "sim_s_to_tau"
 
-FQ_SETS = ["s53x.arms=['FQ-g75']", "s53x.K=[1,3]", "s53x.budgets=['knee','stress']",
+FQ_SETS = ["s53x.arms=['FQ-g75']", "s53x.K=[1,3]",
+           "s53x.budgets=['knee','stress','relaxed']",
            "s53x.d4_faithful=false", "s53x.h0=false", "rl.keep_learned=true"]
 EIGHT = "['F','H1','D1','D2','D3','D4','D5','E3']"
 
