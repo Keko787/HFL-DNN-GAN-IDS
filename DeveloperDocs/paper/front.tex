@@ -108,13 +108,15 @@ devices run as separate processes over TCP and train a real intrusion-detection
 model on CICIoT2023, with flight time, the radio channel and energy simulated, we
 compare FeRRy with seven baseline schedulers, including adaptations of
 mobile-transporter federated learning (FedEx), Oort, FedCS and a Whittle-index
-age-of-update scheduler. With six devices, one mule and a moderate budget, FeRRy
+age-of-update scheduler. With six devices, one mule, a 1~MB update and a moderate
+budget, FeRRy
 reaches the target accuracy 23--32\% sooner than each baseline, because its plan
 chooses a long-reach narrow band that removes most of the transit between stops.
 Under tight budgets, it keeps the age of updates about a quarter lower than
 age-of-information schedulers and, with 24 devices, reaches the target 12\%
 sooner than FedEx's route. Its plans stay within a tight budget in 71\% of
-missions; the rest overrun it by 33\,s on average.
+missions; the rest overrun it by 33\,s on average. Its lead needs a small update:
+at 10~MB it flies the wide band and the lead is no longer significant.
 \end{abstract}
 
 \begin{IEEEkeywords}
@@ -170,7 +172,8 @@ fixed per-stop rule, and FQ a learned one.
 In a multi-process prototype that trains a real intrusion-detection model on
 CICIoT2023~\cite{CiCIoT2023}, with mission time, the channel and energy
 simulated, we compare \sysname{} with seven whole schedulers under a
-pre-registered analysis plan. With six devices and one mule, it reaches the
+pre-registered analysis plan. With six devices, one mule and a 1~MB update, it
+reaches the
 target accuracy 23--32\% sooner than each, because its plan chooses the
 long-reach narrow band and cuts the transit between stops from about 140\,s to
 under 20\,s; pinned to the wide band, it is no faster than FedEx's route. Under tight
@@ -179,7 +182,8 @@ adds nothing to the fixed per-stop rule, and an exploratory comparison locates
 the gain in the plan: inside it, the learned score reaches the target 36\%
 sooner than a learned scheduler without one. We also report \sysname{}'s limits:
 its plan prices the mean channel, so it overruns tight budgets in 29\% of
-missions, and it does not price training time.
+missions, it does not price training time, and its lead needs a small update: at
+10~MB it flies the wide band and the lead is no longer significant.
 
 The contributions of this paper are:
 

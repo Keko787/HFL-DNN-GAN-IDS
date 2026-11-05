@@ -111,13 +111,15 @@ devices run as separate processes over TCP and train a real intrusion-detection
 model on CICIoT2023, with flight time, the radio channel and energy simulated, we
 compare FeRRy with seven baseline schedulers, including adaptations of
 mobile-transporter federated learning (FedEx), Oort, FedCS and a Whittle-index
-age-of-update scheduler. With six devices, one mule and a moderate budget, FeRRy
+age-of-update scheduler. With six devices, one mule, a 1~MB update and a moderate
+budget, FeRRy
 reaches the target accuracy 23--32\% sooner than each baseline, because its plan
 chooses a long-reach narrow band that removes most of the transit between stops.
 Under tight budgets, it keeps the age of updates about a quarter lower than
 age-of-information schedulers and, with 24 devices, reaches the target 12\%
 sooner than FedEx's route. Its plans stay within a tight budget in 71\% of
-missions; the rest overrun it by 33\,s on average.
+missions; the rest overrun it by 33\,s on average. Its lead needs a small update:
+at 10~MB it flies the wide band and the lead is no longer significant.
 \end{abstract}
 
 \begin{IEEEkeywords}
@@ -173,7 +175,8 @@ fixed per-stop rule, and FQ a learned one.
 In a multi-process prototype that trains a real intrusion-detection model on
 CICIoT2023~\cite{CiCIoT2023}, with mission time, the channel and energy
 simulated, we compare \sysname{} with seven whole schedulers under a
-pre-registered analysis plan. With six devices and one mule, it reaches the
+pre-registered analysis plan. With six devices, one mule and a 1~MB update, it
+reaches the
 target accuracy 23--32\% sooner than each, because its plan chooses the
 long-reach narrow band and cuts the transit between stops from about 140\,s to
 under 20\,s; pinned to the wide band, it is no faster than FedEx's route. Under tight
@@ -182,7 +185,8 @@ adds nothing to the fixed per-stop rule, and an exploratory comparison locates
 the gain in the plan: inside it, the learned score reaches the target 36\%
 sooner than a learned scheduler without one. We also report \sysname{}'s limits:
 its plan prices the mean channel, so it overruns tight budgets in 29\% of
-missions, and it does not price training time.
+missions, it does not price training time, and its lead needs a small update: at
+10~MB it flies the wide band and the lead is no longer significant.
 
 The contributions of this paper are:
 
@@ -389,7 +393,8 @@ multilayer perceptron trained for one local epoch per model received, on 20{,}00
 balanced training flows split across them; a disjoint 6{,}000-flow test set
 scores each new global model, stamped when its closing upload completes. A device
 with no prepared update trains inside the contact, at no simulated cost. Every
-transfer is priced as $S=1$~MB.
+transfer is priced as $S=1$~MB unless stated; the model's own update is
+18.8~KB.
 
 \paragraph{Layer roles and clocks}
 Table~\ref{tab:layer-roles} gives each layer's role. Hard gates (eligibility, the
@@ -781,7 +786,8 @@ scale cells.
 \subsection{Testbed}
 \label{sec:setup:testbed}
 
-Each trial flies four missions of the full system with a 1~MB payload, in the
+Each trial flies four missions of the full system with a 1~MB payload unless
+stated, in the
 interference-limited (jittery) regime, and a separate scorer computes the
 metrics from the events it records. FerrySim trains the learned per-stop score
 and the learned baseline E3, and runs the largest problems ($N=48$ and $96$).
@@ -898,13 +904,13 @@ backhaul.}
 7 & Fairness & Q4, C5 & MAX-AoI, Whittle index, FedEx route; F without coverage term, age cap or miss priority & $N{=}6$; knee, stress; 4, 8 missions & age of updates \\
 8 & Scale & Q3 & F, FX, H1, D3, D4 as the field fills (FQ at $N{=}12$) & $N{=}6,12,24$; knee, stress & time to $\tau$ \\
 9 & Decision cost & Q3 & (a) planner wall time; (b) one to three mules; (c) FerrySim budget sweeps & $N{=}6$--$96$; $K{\le}3$ & plan time; time to $\tau$ \\
-10 & Training time & Q6 & Log-normal training time (median 68\,s), and 20\% of devices $5\times$ slower; F, FX, H1, D4, D5 & $N{=}6$; knee & time to $\tau$ \\
+10 & Training time & Q6 & Log-normal training time (median 68\,s), and 20\% of devices $5\times$ slower; F, FX, H1, D4, D5 & $N{=}6$; knee; 18.8~KB, 1, 10~MB & time to $\tau$ \\
 11 & Non-IID data & Q6 & IID; Dirichlet split ($\alpha{=}1$, 0.1) over attack families; skewed shard sizes; F, FX, H1, D3, F with the plain mean & $N{=}6$; knee & time to $\tau$ \\
 12 & Component ablations & Q4 & F with one switch flipped (whole stops, local search, cap, hover, adaptive backhaul$^{\dagger}$) & $N{=}6$; knee, stress; 40 trials & age of updates \\
 13 & Radio$^{\dagger}$ & Q6 & Interference 1 or 17\,dB, path-loss exponent 2.7, shadowing 8\,dB; F, FX, H1, and F and H1 with the adaptive carrier; F, FX, H1 also on the main backhaul & $N{=}6$; knee & time to $\tau$ \\
 14 & When learning helps & Q5 & FX against E3 with $P_c$ at $4\times$ and $2\times$ FX's time between arrivals, and on a clean channel & $N{=}12$; knee, stress; 40 trials & time to $\tau$ \\
 \midrule
--- & Exploratory cells & Q1, Q5, Q6 & FQ against E3, F, FX and D4; FQ with three mules and at $N{=}24$; D3, D4 and D5 added to studies 10, 11 and 13; study 3's arms at 60 and 45\,s & $N{=}6,24$; $K{=}1,3$; knee, stress, $2\times$ knee; 60, 45\,s & time to $\tau$ \\
+-- & Exploratory cells & Q1, Q5, Q6 & FQ against E3, F, FX and D4; FQ with three mules and at $N{=}24$; D3, D4 and D5 added to studies 10, 11 and 13; study 3's arms at 60 and 45\,s; those arms but E3 at 2, 5 and 10~MB & $N{=}6,24$; $K{=}1,3$; knee, stress, $2\times$ knee; 60, 45\,s & time to $\tau$ \\
 \bottomrule
 \end{tabularx}
 \end{table*}
@@ -917,14 +923,13 @@ with one of them reads those 20, over which F reaches $\tau$ in 194\,s at the
 knee rather than 179\,s; Tables~\ref{tab:exp5_scale} and~\ref{tab:exp5_mules}
 take their $N=6$ cells from the scheduler comparison. The band-pinning study is
 tested on its 20 trials, and its 1~MB pinned runs continue to 40 to read time to
-$\tau$. We dropped the scale study's multi-mule and clean-channel cells and the
-training-time study's other payloads. A planned study on real radios, which
+$\tau$. We dropped the scale study's multi-mule and clean-channel cells. A planned study on real radios, which
 awaits testbed access, did not run. FQ left the scheduler comparison, the scale
 study and the study of when learning helps, as the plan specified, when the
 learned-score study did not keep the learned score. We flew it in the first two
 afterwards, D3, D4 and D5 in the robustness cells the plan left them out of, and the
 scheduler comparison's arms at budgets below stress
-(60 and 45\,s, $N=6$, one mule, 20 trials), as exploratory cells: they stand
+(60 and 45\,s) and, without E3, at 2, 5 and 10~MB ($N=6$, one mule, 20 trials), as exploratory cells: they stand
 outside each study's test family and make no claims.
 
 \section{Evaluation Results and Discussion}
@@ -1225,14 +1230,33 @@ with 17\,dB of interference none of them differs from it (264, 276 and 315
 against 255\,s), and at $n_{\text{pl}}=2.7$ the FedEx route leads without
 significance (237 against 257\,s, reaching $\tau$ in 90\% of trials).
 
-Two limitations stand out. FeRRy's plan prices the mean SNR, so
+F's lead rests on the narrow band, so it depends on the size of the update. With
+the model's own 18.8~KB update, at that payload's knee of 120\,s, F flies only
+the narrow band, its missions last 61\,s against the 203--205\,s of H1, D4 and
+D5, and it reaches $\tau$ in 59\,s, significantly sooner than they do (272, 239
+and 243\,s); FX ties it. At 1~MB, 89\% of its stops are on the narrow band and
+its lead over the three is 70--88\,s. Larger updates move it off that band
+(exploratory, 20 seeds, at the 150\,s knee): at 2~MB 66\% of its stops are on the
+medium band and its lead over H1 is 34\,s, and at 5~MB 99\% are on the wide band,
+its missions match H1's (256\,s) and the lead is 47\,s. At 10~MB it flies only
+the wide band and takes 344\,s, against H1's 322\,s and 315--382\,s for D1--D5.
+No baseline differs significantly from F at 2, 5 or 10~MB, on time or on reach,
+and every arm reaches $\tau$ in every trial; the training-time study's 10~MB
+cells make no claims either. F's times at 10~MB jump with the mission that
+crosses $\tau$ (91--177\,s in 7 trials, 371--658\,s in 13), so the CI on its
+difference from H1 is 211\,s wide: the lead can no longer be detected, which does
+not make the arms equal.
+
+Two further limitations stand out. FeRRy's plan prices the mean SNR, so
 under the stress budget 29\% of its missions overrun, by 33\,s on average
 (median 20\,s; Table~\ref{tab:exp5_headline}); the FedEx route, which never skips
 a device, overruns in 84\%, by 24\,s on average, and F keeps nearly its update
 yield with fewer stops. And the
 plan does not price training time: when devices take time to train, F's yield
 falls from 3.5 to 0.7 updates per round over the same 20 seeds and it reaches $\tau$ in only 70--75\% of
-trials, while H1, D3, D4 and D5 keep 85--100\%.
+trials, while H1, D3, D4 and D5 keep 85--100\%. The loss belongs to the small
+updates: at 18.8~KB and 1~MB F reaches $\tau$ in 70--80\% of trials and closes
+40--47\% of rounds, and at 10~MB, on the wide band, 95\% and 80--82\%.
 
 \begin{table*}[t]
 \centering
@@ -1247,10 +1271,10 @@ trials, while H1, D3, D4 and D5 keep 85--100\%.
 \midrule
 F & \textbf{137\,s}\,{\scriptsize(75\%)} & \textbf{159\,s}\,{\scriptsize(70\%)} & \textbf{378\,s}\,{\scriptsize(55\%)} & \textbf{216\,s}\,{\scriptsize(95\%)} & \textbf{255\,s}\,{\scriptsize(95\%)} & \textbf{257\,s} & \textbf{219\,s}\,{\scriptsize(90\%)} \\
 FX & 120\,s\,{\scriptsize(75\%)} & 146\,s\,{\scriptsize(70\%)} & 329\,s\,{\scriptsize(55\%)}$^{\ast}$ & 192\,s\,{\scriptsize(95\%)} & 209\,s\,{\scriptsize(95\%)} & 263\,s & 183\,s\,{\scriptsize(85\%)} \\
-H1 & 325\,s$^{\dagger}$ & 296\,s\,{\scriptsize(95\%)} & 507\,s\,{\scriptsize(55\%)}$^{\dagger}$ & 274\,s & 332\,s & 261\,s & 281\,s \\
+H1 & 325\,s & 296\,s\,{\scriptsize(95\%)} & 507\,s\,{\scriptsize(55\%)}$^{\dagger}$ & 274\,s & 332\,s & 261\,s & 281\,s \\
 D3 (Cui) & 293\,s$^{\S}$ & 317\,s$^{\S}$ & 519\,s\,{\scriptsize(50\%)}$^{\dagger}$ & 293\,s$^{\S}$ & 264\,s\,{\scriptsize(90\%)}$^{\S}$ & 303\,s$^{\S}$ & 264\,s$^{\S}$ \\
 D4 (FedEx route) & 333\,s$^{\dagger}$ & 304\,s\,{\scriptsize(90\%)} & 471\,s\,{\scriptsize(50\%)}$^{\S}$ & 257\,s$^{\S}$ & 276\,s$^{\S}$ & 237\,s\,{\scriptsize(90\%)}$^{\S}$ & 262\,s$^{\S}$ \\
-D5 (FedCS) & 222\,s\,{\scriptsize(95\%)}$^{\dagger}$ & 250\,s\,{\scriptsize(85\%)} & 482\,s\,{\scriptsize(55\%)}$^{\S}$ & 309\,s\,{\scriptsize(95\%)}$^{\S}$ & 315\,s\,{\scriptsize(95\%)}$^{\S}$ & 296\,s\,{\scriptsize(95\%)}$^{\S}$ & 292\,s\,{\scriptsize(95\%)}$^{\S}$ \\
+D5 (FedCS) & 222\,s\,{\scriptsize(95\%)} & 250\,s\,{\scriptsize(85\%)} & 482\,s\,{\scriptsize(55\%)}$^{\S}$ & 309\,s\,{\scriptsize(95\%)}$^{\S}$ & 315\,s\,{\scriptsize(95\%)}$^{\S}$ & 296\,s\,{\scriptsize(95\%)}$^{\S}$ & 292\,s\,{\scriptsize(95\%)}$^{\S}$ \\
 \bottomrule
 \end{tabular}
 \end{table*}
@@ -1266,7 +1290,8 @@ deadlines and the mission budget. In flight, the same test gates a per-stop
 decision and a re-plan, and staleness-weighted merges on the mule and at the
 server close rounds with the updates that arrive. In a multi-process prototype
 that trains a real intrusion-detection model, \sysname{} reached the target
-accuracy 23--32\% sooner than seven whole schedulers at six devices, because its
+accuracy 23--32\% sooner than seven whole schedulers at six devices and a 1~MB
+update, because its
 plan chose a long-reach narrow band that removed most of the transit between
 stops. It kept updates fresher than age-of-information schedulers under tight
 budgets, beat the FedEx route at 24 devices under the stress budget, and planned
@@ -1281,6 +1306,8 @@ the mean channel, so it overran tight budgets in 29\% of missions; pricing the
 channel's variation, or reserving slack for it, is a first step. The plan also
 ignores training time, so when devices need time to train it reaches devices
 whose updates are not ready; adding a compute term to the plan is a second.
+\sysname{}'s lead also needs a small update: at 10~MB it flew the wide band and the lead was
+no longer significant, so compressing updates is a third.
 Beyond these, mission time, the radio channel and energy are simulated in this
 evaluation. Validating the band trade over the air on a UAV testbed, with
 measured channels and battery limits, and coordinating mules that share

@@ -11,7 +11,8 @@
 \subsection{Testbed}
 \label{sec:setup:testbed}
 
-Each trial flies four missions of the full system with a 1~MB payload, in the
+Each trial flies four missions of the full system with a 1~MB payload unless
+stated, in the
 interference-limited (jittery) regime, and a separate scorer computes the
 metrics from the events it records. FerrySim trains the learned per-stop score
 and the learned baseline E3, and runs the largest problems ($N=48$ and $96$).
@@ -107,13 +108,13 @@ backhaul.}
 7 & Fairness & Q4, C5 & MAX-AoI, Whittle index, FedEx route; F without coverage term, age cap or miss priority & $N{=}6$; knee, stress; 4, 8 missions & age of updates \\
 8 & Scale & Q3 & F, FX, H1, D3, D4 as the field fills (FQ at $N{=}12$) & $N{=}6,12,24$; knee, stress & time to $\tau$ \\
 9 & Decision cost & Q3 & (a) planner wall time; (b) one to three mules; (c) FerrySim budget sweeps & $N{=}6$--$96$; $K{\le}3$ & plan time; time to $\tau$ \\
-10 & Training time & Q6 & Log-normal training time (median 68\,s), and 20\% of devices $5\times$ slower; F, FX, H1, D4, D5 & $N{=}6$; knee & time to $\tau$ \\
+10 & Training time & Q6 & Log-normal training time (median 68\,s), and 20\% of devices $5\times$ slower; F, FX, H1, D4, D5 & $N{=}6$; knee; 18.8~KB, 1, 10~MB & time to $\tau$ \\
 11 & Non-IID data & Q6 & IID; Dirichlet split ($\alpha{=}1$, 0.1) over attack families; skewed shard sizes; F, FX, H1, D3, F with the plain mean & $N{=}6$; knee & time to $\tau$ \\
 12 & Component ablations & Q4 & F with one switch flipped (whole stops, local search, cap, hover, adaptive backhaul$^{\dagger}$) & $N{=}6$; knee, stress; 40 trials & age of updates \\
 13 & Radio$^{\dagger}$ & Q6 & Interference 1 or 17\,dB, path-loss exponent 2.7, shadowing 8\,dB; F, FX, H1, and F and H1 with the adaptive carrier; F, FX, H1 also on the main backhaul & $N{=}6$; knee & time to $\tau$ \\
 14 & When learning helps & Q5 & FX against E3 with $P_c$ at $4\times$ and $2\times$ FX's time between arrivals, and on a clean channel & $N{=}12$; knee, stress; 40 trials & time to $\tau$ \\
 \midrule
--- & Exploratory cells & Q1, Q5, Q6 & FQ against E3, F, FX and D4; FQ with three mules and at $N{=}24$; D3, D4 and D5 added to studies 10, 11 and 13; study 3's arms at 60 and 45\,s & $N{=}6,24$; $K{=}1,3$; knee, stress, $2\times$ knee; 60, 45\,s & time to $\tau$ \\
+-- & Exploratory cells & Q1, Q5, Q6 & FQ against E3, F, FX and D4; FQ with three mules and at $N{=}24$; D3, D4 and D5 added to studies 10, 11 and 13; study 3's arms at 60 and 45\,s; those arms but E3 at 2, 5 and 10~MB & $N{=}6,24$; $K{=}1,3$; knee, stress, $2\times$ knee; 60, 45\,s & time to $\tau$ \\
 \bottomrule
 \end{tabularx}
 \end{table*}
@@ -126,13 +127,12 @@ with one of them reads those 20, over which F reaches $\tau$ in 194\,s at the
 knee rather than 179\,s; Tables~\ref{tab:exp5_scale} and~\ref{tab:exp5_mules}
 take their $N=6$ cells from the scheduler comparison. The band-pinning study is
 tested on its 20 trials, and its 1~MB pinned runs continue to 40 to read time to
-$\tau$. We dropped the scale study's multi-mule and clean-channel cells and the
-training-time study's other payloads. A planned study on real radios, which
+$\tau$. We dropped the scale study's multi-mule and clean-channel cells. A planned study on real radios, which
 awaits testbed access, did not run. FQ left the scheduler comparison, the scale
 study and the study of when learning helps, as the plan specified, when the
 learned-score study did not keep the learned score. We flew it in the first two
 afterwards, D3, D4 and D5 in the robustness cells the plan left them out of, and the
 scheduler comparison's arms at budgets below stress
-(60 and 45\,s, $N=6$, one mule, 20 trials), as exploratory cells: they stand
+(60 and 45\,s) and, without E3, at 2, 5 and 10~MB ($N=6$, one mule, 20 trials), as exploratory cells: they stand
 outside each study's test family and make no claims.
 %%%%% END SECTION %%%%%

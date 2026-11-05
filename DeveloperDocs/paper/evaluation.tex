@@ -174,14 +174,33 @@ with 17\,dB of interference none of them differs from it (264, 276 and 315
 against 255\,s), and at $n_{\text{pl}}=2.7$ the FedEx route leads without
 significance (237 against 257\,s, reaching $\tau$ in 90\% of trials).
 
-Two limitations stand out. FeRRy's plan prices the mean SNR, so
+F's lead rests on the narrow band, so it depends on the size of the update. With
+the model's own 18.8~KB update, at that payload's knee of 120\,s, F flies only
+the narrow band, its missions last 61\,s against the 203--205\,s of H1, D4 and
+D5, and it reaches $\tau$ in 59\,s, significantly sooner than they do (272, 239
+and 243\,s); FX ties it. At 1~MB, 89\% of its stops are on the narrow band and
+its lead over the three is 70--88\,s. Larger updates move it off that band
+(exploratory, 20 seeds, at the 150\,s knee): at 2~MB 66\% of its stops are on the
+medium band and its lead over H1 is 34\,s, and at 5~MB 99\% are on the wide band,
+its missions match H1's (256\,s) and the lead is 47\,s. At 10~MB it flies only
+the wide band and takes 344\,s, against H1's 322\,s and 315--382\,s for D1--D5.
+No baseline differs significantly from F at 2, 5 or 10~MB, on time or on reach,
+and every arm reaches $\tau$ in every trial; the training-time study's 10~MB
+cells make no claims either. F's times at 10~MB jump with the mission that
+crosses $\tau$ (91--177\,s in 7 trials, 371--658\,s in 13), so the CI on its
+difference from H1 is 211\,s wide: the lead can no longer be detected, which does
+not make the arms equal.
+
+Two further limitations stand out. FeRRy's plan prices the mean SNR, so
 under the stress budget 29\% of its missions overrun, by 33\,s on average
 (median 20\,s; Table~\ref{tab:exp5_headline}); the FedEx route, which never skips
 a device, overruns in 84\%, by 24\,s on average, and F keeps nearly its update
 yield with fewer stops. And the
 plan does not price training time: when devices take time to train, F's yield
 falls from 3.5 to 0.7 updates per round over the same 20 seeds and it reaches $\tau$ in only 70--75\% of
-trials, while H1, D3, D4 and D5 keep 85--100\%.
+trials, while H1, D3, D4 and D5 keep 85--100\%. The loss belongs to the small
+updates: at 18.8~KB and 1~MB F reaches $\tau$ in 70--80\% of trials and closes
+40--47\% of rounds, and at 10~MB, on the wide band, 95\% and 80--82\%.
 
 %%TABLE:tab:exp5_robust%%
 %%%%% END SECTION %%%%%
