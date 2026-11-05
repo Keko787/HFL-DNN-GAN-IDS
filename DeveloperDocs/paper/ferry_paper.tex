@@ -899,9 +899,10 @@ backhaul.}
 8 & Scale & Q3 & F, FX, H1, D3, D4 as the field fills (FQ at $N{=}12$) & $N{=}6,12,24$; knee, stress & time to $\tau$ \\
 9 & Decision cost & Q3 & (a) planner wall time; (b) one to three mules; (c) FerrySim budget sweeps & $N{=}6$--$96$; $K{\le}3$ & plan time; time to $\tau$ \\
 10 & Training time & Q6 & Log-normal training time (median 68\,s), and 20\% of devices $5\times$ slower; F, FX, H1, D4, D5 & $N{=}6$; knee & time to $\tau$ \\
-11 & Non-IID data & Q6 & Dirichlet split ($\alpha{=}0.1$) over attack families; F, FX, H1, D3 & $N{=}6$; knee & time to $\tau$ \\
+11 & Non-IID data & Q6 & IID; Dirichlet split ($\alpha{=}1$, 0.1) over attack families; skewed shard sizes; F, FX, H1, D3, F with the plain mean & $N{=}6$; knee & time to $\tau$ \\
 12 & Component ablations & Q4 & F with one switch flipped (whole stops, local search, cap, hover, adaptive backhaul$^{\dagger}$) & $N{=}6$; knee, stress; 40 trials & age of updates \\
-13 & Radio$^{\dagger}$ & Q6 & Interference 1 or 17\,dB, path-loss exponent 2.7, shadowing 8\,dB; F, FX, H1 & $N{=}6$; knee & time to $\tau$ \\
+13 & Radio$^{\dagger}$ & Q6 & Interference 1 or 17\,dB, path-loss exponent 2.7, shadowing 8\,dB; F, FX, H1, and F and H1 with the adaptive carrier; F, FX, H1 also on the main backhaul & $N{=}6$; knee & time to $\tau$ \\
+14 & When learning helps & Q5 & FX against E3 with $P_c$ at $4\times$ and $2\times$ FX's time between arrivals, and on a clean channel & $N{=}12$; knee, stress; 40 trials & time to $\tau$ \\
 \midrule
 -- & Exploratory cells & Q1, Q5, Q6 & FQ against E3, F, FX and D4; FQ with three mules and at $N{=}24$; D3, D4 and D5 added to studies 10, 11 and 13; study 3's arms at 60 and 45\,s & $N{=}6,24$; $K{=}1,3$; knee, stress, $2\times$ knee; 60, 45\,s & time to $\tau$ \\
 \bottomrule
@@ -909,20 +910,19 @@ backhaul.}
 \end{table*}
 
 \paragraph{What was run}
-The merge-rule, deadline-form, scheduler-comparison, objective-terms and
-component studies and the learned score's full-system check flew 40 trials per
-cell. The other studies flew 20, on the first 20 of those seeds, so a comparison
+The merge-rule, deadline-form, scheduler-comparison, objective-terms, component
+and when-learning-helps studies and the learned score's full-system check flew
+40 trials per cell. The other studies flew 20, on the first 20 of those seeds, so a comparison
 with one of them reads those 20, over which F reaches $\tau$ in 194\,s at the
 knee rather than 179\,s; Tables~\ref{tab:exp5_scale} and~\ref{tab:exp5_mules}
 take their $N=6$ cells from the scheduler comparison. The band-pinning study is
 tested on its 20 trials, and its 1~MB pinned runs continue to 40 to read time to
-$\tau$. We dropped the scale study's multi-mule and clean-channel cells, the
-training-time study's other payloads, the non-IID study's other partitions, and
-the radio study's adaptive-backhaul arms. Two planned studies, on when learning
-helps and on real radios (which awaits testbed access), did not run. FQ left the
-scheduler comparison and the scale study, as the plan specified, when the
-learned-score study did not keep the learned score. We flew it there afterwards,
-D3, D4 and D5 in the robustness cells the plan left them out of, and the
+$\tau$. We dropped the scale study's multi-mule and clean-channel cells and the
+training-time study's other payloads. A planned study on real radios, which
+awaits testbed access, did not run. FQ left the scheduler comparison, the scale
+study and the study of when learning helps, as the plan specified, when the
+learned-score study did not keep the learned score. We flew it in the first two
+afterwards, D3, D4 and D5 in the robustness cells the plan left them out of, and the
 scheduler comparison's arms at budgets below stress
 (60 and 45\,s, $N=6$, one mule, 20 trials), as exploratory cells: they stand
 outside each study's test family and make no claims.
@@ -1175,6 +1175,17 @@ band and spends 17\,s of a 157\,s mission in transit, against E3's 142\,s of
 matches it. The gain comes from the plan, not from learning, which supports the
 two-clock structure (C4).
 
+The study of when learning helps asks whether a learned scheduler gains when the
+channel's period is tuned to the pace of its decisions. At $N=12$, over 40 seeds,
+it flies FX against E3 with $P_c$ at four and two times FX's median time between
+arrivals (108 and 54\,s under stress, 136 and 68\,s at the knee), beside a clean
+channel. FX is significantly faster at the knee in all
+three channels, by 78--89\,s (Holm $p\le0.002$), and leads under stress by
+20--62\,s without a claim. E3 is never faster over the seeds both reach and the
+CIs overlap across channels, though at $P_c=68$\,s it reaches $\tau$ in 39 of 40
+trials against FX's 36. E3 flies the score it trained at $P_c=60$\,s, so this
+shows that it does not gain away from that period, not that retraining could not.
+
 \begin{figure*}[t]
 \centering
 \includegraphics[width=\textwidth]{Figures/exp5/fig_exp5_learning.pdf}
@@ -1190,14 +1201,31 @@ mean and 95\% CI, reach rate in brackets when below 1; $^{\ddagger}$slower than 
 With strongly non-IID data (Dirichlet $\alpha=0.1$;
 Table~\ref{tab:exp5_robust}), every arm reaches $\tau$ in about half the trials,
 and F stays significantly faster than H1 and D3 where both do; D4 and D5 trail it
-by about 100\,s (exploratory). The radio study
+by about 100\,s (exploratory). At $\alpha=1$ the arms reach $\tau$ in 65--75\% of
+trials, and F stays significantly faster than D3 (321 against 444\,s) but not H1
+(304 against 382\,s on the 13 seeds both reach, Holm $p=0.40$). On IID shards and
+with skewed shard sizes every arm reaches $\tau$ in every trial, and F is
+significantly faster than both (194 against 282 and 280\,s; 127 against 174 and
+179\,s). FX's lead over F is a claim only under label skew (52 and 49\,s at
+$\alpha=1$ and 0.1; 16 and 9\,s otherwise), and the plain-mean merge ties F in
+every partition.
+
+The radio study
 flies the time-varying backhaul, so its default (F at 216\,s) is not the main
 configuration (194\,s on the same 20 seeds); under its harsher channels F stays ahead of H1 without a
-claim, and FX is significantly faster than F on the default channel and with
-8\,dB shadowing. Among the exploratory arms, D3, D4 and D5 mostly trail F, but
+claim, and FX leads F on the default channel and with 8\,dB shadowing, by 24 and
+31\,s, without a claim (Holm $p=0.081$ and 0.051). The adaptive carrier controller
+gains more: F+L1 reaches $\tau$ in every trial on all five channels, closes
+94--98\% of rounds against F's 73--84\%, and is significantly faster than F with
+17\,dB of interference, at $n_{\text{pl}}=2.7$ and with 8\,dB shadowing (by 18, 62
+and 45\,s; by 53\,s on the default channel, Holm $p=0.051$, no claim). Given to H1
+it saves 15--81\,s, without a claim. These gains are near the most adaptation can
+give, since the controller sees the SNR that decides each loss. Among the exploratory arms, D3, D4 and D5 mostly trail F, but
 with 17\,dB of interference none of them differs from it (264, 276 and 315
 against 255\,s), and at $n_{\text{pl}}=2.7$ the FedEx route leads without
-significance (237 against 257\,s, reaching $\tau$ in 90\% of trials). Two limitations stand out. FeRRy's plan prices the mean SNR, so
+significance (237 against 257\,s, reaching $\tau$ in 90\% of trials).
+
+Two limitations stand out. FeRRy's plan prices the mean SNR, so
 under the stress budget 29\% of its missions overrun, by 33\,s on average
 (median 20\,s; Table~\ref{tab:exp5_headline}); the FedEx route, which never skips
 a device, overruns in 84\%, by 24\,s on average, and F keeps nearly its update
@@ -1218,7 +1246,7 @@ trials, while H1, D3, D4 and D5 keep 85--100\%.
 \textbf{Arm} & train spread & stragglers & Dir(0.1) & default & 17 dB interf. & $n_{\text{pl}}{=}2.7$ & $\sigma{=}8$ dB \\
 \midrule
 F & \textbf{137\,s}\,{\scriptsize(75\%)} & \textbf{159\,s}\,{\scriptsize(70\%)} & \textbf{378\,s}\,{\scriptsize(55\%)} & \textbf{216\,s}\,{\scriptsize(95\%)} & \textbf{255\,s}\,{\scriptsize(95\%)} & \textbf{257\,s} & \textbf{219\,s}\,{\scriptsize(90\%)} \\
-FX & 120\,s\,{\scriptsize(75\%)} & 146\,s\,{\scriptsize(70\%)} & 329\,s\,{\scriptsize(55\%)}$^{\ast}$ & 192\,s\,{\scriptsize(95\%)}$^{\ast}$ & 209\,s\,{\scriptsize(95\%)} & 263\,s & 183\,s\,{\scriptsize(85\%)}$^{\ast}$ \\
+FX & 120\,s\,{\scriptsize(75\%)} & 146\,s\,{\scriptsize(70\%)} & 329\,s\,{\scriptsize(55\%)}$^{\ast}$ & 192\,s\,{\scriptsize(95\%)} & 209\,s\,{\scriptsize(95\%)} & 263\,s & 183\,s\,{\scriptsize(85\%)} \\
 H1 & 325\,s$^{\dagger}$ & 296\,s\,{\scriptsize(95\%)} & 507\,s\,{\scriptsize(55\%)}$^{\dagger}$ & 274\,s & 332\,s & 261\,s & 281\,s \\
 D3 (Cui) & 293\,s$^{\S}$ & 317\,s$^{\S}$ & 519\,s\,{\scriptsize(50\%)}$^{\dagger}$ & 293\,s$^{\S}$ & 264\,s\,{\scriptsize(90\%)}$^{\S}$ & 303\,s$^{\S}$ & 264\,s$^{\S}$ \\
 D4 (FedEx route) & 333\,s$^{\dagger}$ & 304\,s\,{\scriptsize(90\%)} & 471\,s\,{\scriptsize(50\%)}$^{\S}$ & 257\,s$^{\S}$ & 276\,s$^{\S}$ & 237\,s\,{\scriptsize(90\%)}$^{\S}$ & 262\,s$^{\S}$ \\
