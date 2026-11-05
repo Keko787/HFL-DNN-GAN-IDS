@@ -903,7 +903,7 @@ backhaul.}
 12 & Component ablations & Q4 & F with one switch flipped (whole stops, local search, cap, hover, adaptive backhaul$^{\dagger}$) & $N{=}6$; knee, stress; 40 trials & age of updates \\
 13 & Radio$^{\dagger}$ & Q6 & Interference 1 or 17\,dB, path-loss exponent 2.7, shadowing 8\,dB; F, FX, H1 & $N{=}6$; knee & time to $\tau$ \\
 \midrule
--- & Exploratory cells & Q1, Q5, Q6 & FQ against E3, F, FX and D4; FQ with three mules and at $N{=}24$; D3, D4 and D5 added to studies 10, 11 and 13; study 3's arms at 60 and 45\,s & $N{=}6,24$; $K{=}1,3$; knee, stress; 60, 45\,s & time to $\tau$ \\
+-- & Exploratory cells & Q1, Q5, Q6 & FQ against E3, F, FX and D4; FQ with three mules and at $N{=}24$; D3, D4 and D5 added to studies 10, 11 and 13; study 3's arms at 60 and 45\,s & $N{=}6,24$; $K{=}1,3$; knee, stress, $2\times$ knee; 60, 45\,s & time to $\tau$ \\
 \bottomrule
 \end{tabularx}
 \end{table*}
@@ -922,8 +922,8 @@ the radio study's adaptive-backhaul arms. Two planned studies, on when learning
 helps and on real radios (which awaits testbed access), did not run. FQ left the
 scheduler comparison and the scale study, as the plan specified, when the
 learned-score study did not keep the learned score. We flew it there afterwards,
-at the knee and stress budgets, D3, D4 and D5 in the robustness cells the plan
-left them out of, and the scheduler comparison's arms at budgets below stress
+D3, D4 and D5 in the robustness cells the plan left them out of, and the
+scheduler comparison's arms at budgets below stress
 (60 and 45\,s, $N=6$, one mule, 20 trials), as exploratory cells: they stand
 outside each study's test family and make no claims.
 
@@ -950,8 +950,8 @@ leaving devices out. Below it (exploratory, 20 seeds) no baseline overtakes F: a
 171\,s, without a claim, while F reaches $\tau$ in 95\% of trials and overruns
 29\% and 40\% of its missions. With three mules every scheduler, FQ included, reaches
 $\tau$ in 53--64\,s except D4$_{\text{FedEx}}$ (111\,s), whose unweighted, one-tour-old
-updates slow learning; the budget does not bind there, and at 300\,s no arm of the
-study moves by more than 1\,s. Without a mule (H0), FL over the degraded link merges
+updates slow learning; the budget does not bind there, and at 300\,s no arm moves
+by more than 1\,s. Without a mule (H0), FL over the degraded link merges
 0.5 updates per round and ends at 0.693 accuracy, barely above the all-benign
 0.667, against F's 3.4 and 0.837.
 
@@ -960,24 +960,24 @@ study moves by more than 1\,s. Without a mule (H0), FL over the degraded link me
 \caption{Scheduler comparison at $N=6$: time to $\tau=0.71$, with the share of trials that reach it in brackets when below 100\%, and with one mule under the stress budget, the share of missions that overran it and the updates merged per round (yield). $^{\dagger}$Significantly slower than F. $^{\S}$Exploratory, outside the study's tests.}
 \label{tab:exp5_headline}
 \resizebox{\columnwidth}{!}{%
-\begin{tabular}{l rr rr rr}
+\begin{tabular}{l rrr rr rr}
 \toprule
- & \multicolumn{2}{c}{$K=1$ mule} & \multicolumn{2}{c}{$K=3$ mules} & \multicolumn{2}{c}{$K=1$, stress} \\
-\cmidrule(lr){2-3}\cmidrule(lr){4-5}\cmidrule(lr){6-7}
-\textbf{Arm} & knee & stress & knee & stress & overrun & yield \\
+ & \multicolumn{3}{c}{$K=1$ mule} & \multicolumn{2}{c}{$K=3$ mules} & \multicolumn{2}{c}{$K=1$, stress} \\
+\cmidrule(lr){2-4}\cmidrule(lr){5-6}\cmidrule(lr){7-8}
+\textbf{Arm} & knee & stress & 300\,s & knee & stress & overrun & yield \\
 \midrule
-F & \textbf{179\,s} & \textbf{168\,s} & \textbf{53\,s} & \textbf{53\,s} & 29\% & 3.1 \\
-FX & 168\,s & 165\,s & 53\,s & 53\,s & 21\% & 3.1 \\
-FQ$^{\S}$ & 169\,s & 166\,s & 62\,s & 61\,s & 20\% & 3.1 \\
+F & \textbf{179\,s} & \textbf{168\,s} & \textbf{179\,s} & \textbf{53\,s} & \textbf{53\,s} & 29\% & 3.1 \\
+FX & 168\,s & 165\,s & 168\,s & 53\,s & 53\,s & 21\% & 3.1 \\
+FQ$^{\S}$ & 169\,s & 166\,s & 168\,s & 62\,s & 61\,s & 20\% & 3.1 \\
 \midrule
-H1 & 254\,s$^{\dagger}$ & 209\,s\,{\scriptsize(92\%)} & 60\,s & 60\,s & 1\% & 2.0 \\
-D1 (MAX-AoI) & 263\,s$^{\dagger}$ & 232\,s & 60\,s & 60\,s & 2\% & 2.3 \\
-D2 (Oort) & 235\,s$^{\dagger}$ & 236\,s\,{\scriptsize(95\%)} & 64\,s & 64\,s & 4\% & 2.2 \\
-D3 (Cui) & 262\,s$^{\dagger}$ & 213\,s & 63\,s & 63\,s & 2\% & 2.3 \\
-D4 (FedEx route) & 232\,s$^{\dagger}$ & 232\,s$^{\dagger}$ & 60\,s & 60\,s & 84\% & 3.4 \\
-D4$_{\text{FedEx}}$ & 296\,s\,{\scriptsize(92\%)}$^{\dagger}$ & 296\,s\,{\scriptsize(92\%)}$^{\dagger}$ & 111\,s$^{\dagger}$ & 111\,s$^{\dagger}$ & 84\% & 3.4 \\
-D5 (FedCS) & 236\,s$^{\dagger}$ & 206\,s\,{\scriptsize(98\%)} & 60\,s & 60\,s & 2\% & 2.4 \\
-E3 (Chen) & 252\,s$^{\dagger}$ & 201\,s\,{\scriptsize(98\%)} & 63\,s & 63\,s & 6\% & 2.6 \\
+H1 & 254\,s$^{\dagger}$ & 209\,s\,{\scriptsize(92\%)} & 247\,s$^{\dagger}$ & 60\,s & 60\,s & 1\% & 2.0 \\
+D1 (MAX-AoI) & 263\,s$^{\dagger}$ & 232\,s & 247\,s$^{\dagger}$ & 60\,s & 60\,s & 2\% & 2.3 \\
+D2 (Oort) & 235\,s$^{\dagger}$ & 236\,s\,{\scriptsize(95\%)} & 238\,s$^{\dagger}$ & 64\,s & 64\,s & 4\% & 2.2 \\
+D3 (Cui) & 262\,s$^{\dagger}$ & 213\,s & 244\,s$^{\dagger}$ & 63\,s & 63\,s & 2\% & 2.3 \\
+D4 (FedEx route) & 232\,s$^{\dagger}$ & 232\,s$^{\dagger}$ & 232\,s$^{\dagger}$ & 60\,s & 60\,s & 84\% & 3.4 \\
+D4$_{\text{FedEx}}$ & 296\,s\,{\scriptsize(92\%)}$^{\dagger}$ & 296\,s\,{\scriptsize(92\%)}$^{\dagger}$ & 296\,s\,{\scriptsize(92\%)}$^{\dagger}$ & 111\,s$^{\dagger}$ & 111\,s$^{\dagger}$ & 84\% & 3.4 \\
+D5 (FedCS) & 236\,s$^{\dagger}$ & 206\,s\,{\scriptsize(98\%)} & 229\,s$^{\dagger}$ & 60\,s & 60\,s & 2\% & 2.4 \\
+E3 (Chen) & 252\,s$^{\dagger}$ & 201\,s\,{\scriptsize(98\%)} & 248\,s$^{\dagger}$ & 63\,s & 63\,s & 6\% & 2.6 \\
 \bottomrule
 \end{tabular}%
 }
