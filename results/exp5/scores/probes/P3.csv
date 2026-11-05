@@ -1,0 +1,25 @@
+study,cell,variant,reference,metric,better,n_pairs,ref_mean,variant_mean,mean_diff,ci_low,ci_high,p_value,p_holm,cliffs_delta,claim,favours,pairing_errors,note
+P3/baselines/time,n12k1_stress,D1,F,sim_s_to_tau0.71,lower,19,375.40878214114224,431.90042180128665,-56.49163966014442,-167.71479409709082,43.291075163342335,0.2753410339355469,1.0,-0.14127423822714683,False,no claim,0,
+P3/baselines/reach,n12k1_stress,D1,F,reached_tau0.71,higher,20,1.0,0.95,0.05,0.0,0.15,1.0,1.0,,False,no claim,0,"1 reached by F only, 0 by D1 only"
+P3/baselines/time,n12k1_stress,D2,F,sim_s_to_tau0.71,lower,17,332.8588536766234,367.1808792212978,-34.322025544674354,-119.92645714665568,59.19497914371635,0.352874755859375,1.0,-0.22491349480968859,False,no claim,0,
+P3/baselines/reach,n12k1_stress,D2,F,reached_tau0.71,higher,20,1.0,0.85,0.15,0.0,0.35,0.25,1.0,,False,no claim,0,"3 reached by F only, 0 by D2 only"
+P3/baselines/time,n12k1_stress,D5,F,sim_s_to_tau0.71,lower,18,380.6999784709963,515.0909680711726,-134.3909896001763,-264.1403579274779,2.0785984101091852,0.04827880859375,0.38623046875,-0.32098765432098764,False,no claim,0,
+P3/baselines/reach,n12k1_stress,D5,F,reached_tau0.71,higher,20,1.0,0.9,0.1,0.0,0.25,0.5,1.0,,False,no claim,0,"2 reached by F only, 0 by D5 only"
+P3/baselines/time,n12k1_knee,D1,F,sim_s_to_tau0.71,lower,19,486.43586247552213,579.4798837445896,-93.04402126906758,-227.1403667771939,26.61817589777828,0.03234100341796875,0.29106903076171875,-0.1634349030470914,False,no claim,0,
+P3/baselines/reach,n12k1_knee,D1,F,reached_tau0.71,higher,20,0.95,0.95,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D1 only"
+P3/baselines/time,n12k1_knee,D2,F,sim_s_to_tau0.71,lower,18,475.73568947504583,529.9296950504197,-54.19400557537382,-121.96280733451599,6.615515756220275,0.0987396240234375,0.6911773681640625,-0.08641975308641975,False,no claim,0,
+P3/baselines/reach,n12k1_knee,D2,F,reached_tau0.71,higher,20,0.95,0.9,0.05,0.0,0.15,1.0,1.0,,False,no claim,0,"1 reached by F only, 0 by D2 only"
+P3/baselines/time,n12k1_knee,D5,F,sim_s_to_tau0.71,lower,19,486.43586247552213,499.90508801926933,-13.469225543747214,-67.91317177644338,41.53289287452808,0.4413337707519531,1.0,-0.013850415512465374,False,no claim,0,
+P3/baselines/reach,n12k1_knee,D5,F,reached_tau0.71,higher,20,0.95,0.95,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D5 only"
+P3/baselines/time,n24k1_knee,D1,F,sim_s_to_tau0.71,lower,20,749.135801508138,948.3462867520866,-199.21048524394865,-262.47504681623394,-144.18058844274233,1.9073486328125e-06,2.288818359375e-05,-0.775,True,F,0,
+P3/baselines/reach,n24k1_knee,D1,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D1 only"
+P3/baselines/time,n24k1_knee,D2,F,sim_s_to_tau0.71,lower,20,749.135801508138,876.1155504704686,-126.97974896233063,-203.67992316339544,-53.26899820565716,0.005580902099609375,0.0612640380859375,-0.485,False,no claim,0,
+P3/baselines/reach,n24k1_knee,D2,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D2 only"
+P3/baselines/time,n24k1_knee,D5,F,sim_s_to_tau0.71,lower,20,749.135801508138,771.3729948321183,-22.237193323980318,-77.92642430915467,32.37028696159248,0.20244979858398438,1.0,-0.105,False,no claim,0,
+P3/baselines/reach,n24k1_knee,D5,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D5 only"
+P3/baselines/time,n24k1_stress,D1,F,sim_s_to_tau0.71,lower,19,660.1532414513579,691.883629026063,-31.730387574705098,-95.23113065545697,24.696965763029773,0.5412178039550781,1.0,-0.030470914127423823,False,no claim,0,
+P3/baselines/reach,n24k1_stress,D1,F,reached_tau0.71,higher,20,1.0,0.95,0.05,0.0,0.15,1.0,1.0,,False,no claim,0,"1 reached by F only, 0 by D1 only"
+P3/baselines/time,n24k1_stress,D2,F,sim_s_to_tau0.71,lower,20,661.0275501412573,682.2340863439255,-21.20653620266821,-96.34022269041363,49.21992822823782,0.8123550415039062,1.0,0.0,False,no claim,0,
+P3/baselines/reach,n24k1_stress,D2,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D2 only"
+P3/baselines/time,n24k1_stress,D5,F,sim_s_to_tau0.71,lower,17,630.5631391750306,754.2302397319239,-123.66710055689327,-193.66133939570776,-58.11623575295932,0.0055694580078125,0.0612640380859375,-0.4117647058823529,False,no claim,0,
+P3/baselines/reach,n24k1_stress,D5,F,reached_tau0.71,higher,20,1.0,0.85,0.15,0.0,0.3,0.25,1.0,,False,no claim,0,"3 reached by F only, 0 by D5 only"
