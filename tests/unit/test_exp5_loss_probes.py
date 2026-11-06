@@ -6,6 +6,7 @@ a probe's stand-in cells and families, and that every registered probe's flights
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -115,6 +116,41 @@ def test_a_cell_without_its_reference_is_not_compared(tmp_path):
     assert LP.probe_comparisons(LP.Probe("PX", "test", []), cells, plan, SC, tau=TAU) == []
 
 
+def test_p10_compares_a_baseline_with_f_pinned_f_and_itself_on_wide(tmp_path):
+    plan = _plan()
+    pool = {name: _entry(tmp_path, name, [t] * 8)
+            for name, t in (("F", 100.0), ("F@narrow", 105.0), ("H1@wide", 150.0),
+                            ("H1@narrow", 110.0))}
+    comps = LP.p10_comparisons({"knee": pool}, plan, SC, tau=TAU)
+    times = {c.reference: c for c in comps if c.metric.startswith("sim")}
+    assert set(times) == {"F", "F@narrow", "H1@wide"}
+    assert times["F"].mean_diff == pytest.approx(-10.0)
+    assert times["F@narrow"].mean_diff == pytest.approx(-5.0)
+    assert times["H1@wide"].mean_diff == pytest.approx(40.0)
+    assert len({c.study for c in comps}) == 6                # three references, two metrics
+
+
+def test_p10_flights_build_their_cells_at_40_trials():
+    want = [(LP.P10_WIDE, {"H1", "D4"}), (LP.P10_FLOWN["narrow"], {"H1", "D4"}),
+            (LP.P10_FLOWN["medium"], {"H1", "D4"}),
+            (LP.P10_PINNED[0], {"FBpnarrow", "FBpmedium"}),
+            (LP.P10_PINNED[1], {"FBpnarrow", "FBpmedium"})]
+    for flight, variants in want:
+        cells, _ = LP.flight_cells(L, SC, flight)
+        assert cells and all(set(vs) == variants for vs in cells.values()), flight.out_root
+        assert all(e.trials == 40 for vs in cells.values() for e in vs.values())
+    assert set(LP.flight_cells(L, SC, LP.P10_FLOWN["narrow"])[0]) == {"n6k1_knee", "n6k1_stress"}
+    assert set(LP.flight_cells(L, SC, LP.P10_PINNED[1])[0]) == {"n6k1_stress_1mb"}
+
+
+def test_p11_reads_the_ten_mission_compute_cells_at_40_trials():
+    cells, _ = LP.flight_cells(L, SC, LP.PROBES["P11"].flights[0])
+    assert set(cells) == {"n6k1_knee_1mb_spread", "n6k1_knee_1mb_stragglers"}
+    assert all(set(vs) == {"F", "FX", "H1", "D3", "D4", "D5"} for vs in cells.values())
+    assert all(e.trials == 40 for vs in cells.values() for e in vs.values())
+    assert all("exp5_rd10" in str(e.csv_path) for vs in cells.values() for e in vs.values())
+
+
 @pytest.mark.parametrize("name", sorted(LP.PROBES))
 def test_every_registered_probe_builds_its_cells_with_f_beside_its_arms(name):
     for flight in LP.PROBES[name].flights:
@@ -123,3 +159,56 @@ def test_every_registered_probe_builds_its_cells_with_f_beside_its_arms(name):
         with_f = [c for c, vs in cells.items() if "F" in vs]
         assert with_f, f"{name} / {flight.label or flight.study}: F in no cell"
         assert all(len(vs) > 1 for vs in cells.values())
+
+
+def _trial(tmp: Path, name: str, spans):
+    """A mule trace of missions (start, end, merged), with noise the reader must skip."""
+    folder = tmp / "F_traces" / name
+    folder.mkdir(parents=True)
+    rows = [{"event": "mule_ready"}]
+    rows += [{"event": "mission_completed", "sim_start_s": a, "sim_end_s": b,
+              "pass_1_merged_updates": m} for a, b, m in spans]
+    (folder / "mule-exp4-mule.jsonl").write_text("\n".join(json.dumps(r) for r in rows) + "\n",
+                                                 encoding="utf-8")
+
+
+def test_a_flight_runs_from_first_takeoff_to_last_landing(tmp_path):
+    _trial(tmp_path, "a", [(5.0, 100.0, 1), (100.0, 205.0, 2)])
+    _trial(tmp_path, "b", [(0.0, 50.0, 0)])
+    e = SC.Entry("sx", "c", "F", "F", tmp_path / "F.csv", tmp_path / "F_scored.csv", 20)
+    assert sorted(LP.trial_flights(e)) == [(50.0, 0, 1), (200.0, 3, 2)]
+
+
+def test_as_of_keeps_early_arrivals_and_counts_late_ones_and_misses_at_the_horizon(tmp_path):
+    e = _entry(tmp_path, "F", [100.0, 300.0, None])
+    seen = LP.as_of(e, 250.0, SC, tau=TAU)
+    assert [SC._num(r[f"sim_s_to_tau{TAU:g}"]) for r in seen.scored_rows] == [100.0, 250.0, 250.0]
+    assert [SC._num(r[f"reached_tau{TAU:g}"]) for r in seen.scored_rows] == [1.0, 0.0, 0.0]
+    assert [SC._num(r[f"sim_s_to_tau{TAU:g}"]) for r in e.scored_rows][1] == 300.0   # untouched
+
+
+def test_the_horizon_finds_the_gap_time_to_tau_drops(tmp_path):
+    """F is at tau early in some trials and never in the rest; the baseline is there a
+    little later in all of them. Over the trials both reach, F looks faster; at the horizon
+    the misses count and the claim goes to the baseline."""
+    plan = _plan()
+    f = _entry(tmp_path, "F", [100.0] * 6 + [None] * 14)
+    d = _entry(tmp_path, "D1", [150.0 + i for i in range(20)])
+    t = LP.compare_time(f, d, TAU, "time", plan, SC)
+    h = LP.compare_time(LP.as_of(f, 400.0, SC, tau=TAU), LP.as_of(d, 400.0, SC, tau=TAU), TAU,
+                        "horizon", plan, SC)
+    SC.holm([t, h], plan)
+    assert t.claim and t.favours == "F"
+    assert h.claim and h.favours == "D1"
+
+
+def test_the_delay_cost_is_the_difference_of_means_inside_its_ci():
+    d, lo, hi = LP.delay_cost([110.0, 120.0, 130.0, 140.0], [100.0, 105.0, 95.0], n=2000)
+    assert d == pytest.approx(25.0)
+    assert lo < d < hi
+    assert lo > 0.0
+
+
+def test_the_no_delay_cell_is_in_p11s_baseline_flight():
+    cells, _ = LP.flight_cells(L, SC, LP.P11_NO_DELAY)
+    assert set(cells[LP.P11_NO_DELAY_CELL]) == {"F", "FX", "H1", "D3", "D4", "D5"}

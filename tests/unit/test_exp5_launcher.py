@@ -256,6 +256,45 @@ def test_sstar_measures_on_the_campaigns_contact_channel(tmp_path):
             "contact_regime": "jittery"}
 
 
+def test_the_field_half_width_reaches_the_stack_and_s_star_only_when_set(tmp_path):
+    s = _filled_settings()
+    for stage in ("knee", "sstar", "batch2"):
+        for j in L.build(stage, s, None, str(tmp_path)):
+            assert "--h1-field-radius-m" not in j.args and "--field-radius-m" not in j.args
+    s = _filled_settings()
+    L.apply_levers(s, _ns(set=["campaign.field_half_width_m=300"]))
+    for j in L.build("knee", s, None, str(tmp_path)):
+        assert j.args[j.args.index("--h1-field-radius-m") + 1] == "300"
+    for j in L.build("sstar", s, None, str(tmp_path)):
+        assert j.args[j.args.index("--field-radius-m") + 1] == "300"
+    flown = [j for j in L.build("batch2", s, None, str(tmp_path)) if j.study == "s59x"]
+    assert flown and all("--h1-field-radius-m" in j.args for j in flown)
+
+
+def test_the_baseline_band_reaches_the_baselines_only_when_set(tmp_path):
+    def last_band(job):
+        at = len(job.args) - 1 - job.args[::-1].index("--contact-band")
+        return job.args[at + 1]
+
+    def is_arm(job, name):
+        return job.args[job.args.index("--arms") + 1] == name
+
+    def runners(settings):
+        return [j for j in L.build("batch2", settings, None, str(tmp_path))
+                if j.study == "s53x" and "--contact-band" in j.args]
+
+    assert all(last_band(j) == "wide" for j in runners(_filled_settings()))
+    s = _filled_settings()
+    L.apply_levers(s, _ns(set=["campaign.baseline_contact_band='narrow'"]))
+    jobs = runners(s)
+    for name in ("H1", "D1", "D2", "D3", "D4", "D5"):
+        moved = [j for j in jobs if is_arm(j, name)]
+        assert moved and all(last_band(j) == "narrow" for j in moved)
+    for name in ("F", "FX", "E3"):
+        kept = [j for j in jobs if is_arm(j, name)]
+        assert all(last_band(j) == "wide" for j in kept)
+
+
 def test_decided_values_are_set():
     s, _ = L.load_settings(L.PARAMS)
     assert s.get("rl.e3.gamma") == 0.99 and s.get("rl.e3.settings") == "chen"

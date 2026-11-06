@@ -39,6 +39,17 @@ contact_regime = "jittery"
 # cells fly the fixed field, and the re-pin reads the stack's N = 12 knee onto
 # them, so the stack must fly the same field.
 field_ref_n = 0
+# The realism field's half-width in metres, for the stack's runner jobs and S*
+# (--h1-field-radius-m). 0 = the driver's 100 m with no flag passed, so recorded
+# jobs keep their arguments. Loss probe P6 sets it per out-root; FerrySim's stages
+# do not read it.
+field_half_width_m = 0
+# The contact band of the H and D baselines, for loss probe P10. "" leaves every job
+# on COMMON_FLAGS' wide, so recorded jobs keep their arguments. A baseline clusters at
+# R(band), T_nom stays priced on wide and seeds do not depend on the band, so these
+# runs pair with recorded trials. Each band needs its own out-root. E3 stays on wide:
+# its checkpoint is bound to the band it trained on.
+baseline_contact_band = ""
 # The deadline law of the FeRRy arms (F, FX, FB+, F-cov, F-cap, F-prio, F+L1 and
 # the FQ arms). The build plan defines F with the multiplicative law; F-add, the
 # additive law, is Study 5.2's ablation. --deadline-law is one driver setting,

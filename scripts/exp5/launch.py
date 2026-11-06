@@ -170,6 +170,10 @@ FERRYSIM = ["-m", "experiments.ferrysim"]
 PLAN_ARMS = {"F", "FX", "FB+wide", "FB+medium", "FB+narrow", "F-cov", "F-prio", "F+L1",
              "F-round", "F-pref", "FX-dwell", "FX-cov"}
 
+#: The arms campaign.baseline_contact_band moves: the H and D baselines. E3 stays on
+#: wide, its checkpoint being bound to the band it trained on.
+BASELINE_BAND_ARMS = {"H1", "D1", "D2", "D3", "D4", "D5"}
+
 #: Unit U11's arms fly their own deadline law (the round's, after FedCS or Oort),
 #: whatever --deadline-law says, so the campaign's law is not passed to them.
 OWN_LAW_ARMS = {"F-round", "F-pref"}
@@ -671,6 +675,12 @@ class Builder:
         ref_n = int(s.get("campaign.field_ref_n", 0) or 0)
         if ref_n:
             args += ["--h1-field-ref-n", str(ref_n)]
+        half_width = s.get("campaign.field_half_width_m", 0)
+        if half_width:
+            args += ["--h1-field-radius-m", _fmt(half_width)]
+        band = s.get("campaign.baseline_contact_band", "")
+        if band and arm in BASELINE_BAND_ARMS:
+            args += ["--contact-band", str(band)]   # after COMMON_FLAGS' wide: the last wins
         if cap is not None:
             args += ["--age-cap-missions", _fmt(cap)]
         law = s.get("campaign.ferry_arm_deadline_law", None)
@@ -843,6 +853,9 @@ class Builder:
                 args += ["--ferry-physics", json.dumps({"contact_regime": str(contact)})]
             if ref_n:
                 args += ["--field-ref-n", str(ref_n)]
+            half_width = s.get("campaign.field_half_width_m", 0)
+            if half_width:
+                args += ["--field-radius-m", _fmt(half_width)]
             job = Job("sstar", "sstar", f"sstar/n{n}", args, out, "tool", n=n,
                       mem_gb=float(s.get("machine.gb_per_light_process")))
             job.blocked = sorted(set(s.missing[before:]))

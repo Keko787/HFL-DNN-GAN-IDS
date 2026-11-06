@@ -3,6 +3,7 @@ on every recorded comparison.
 
     py -3.11 scripts/exp5/loss_probes.py p9               # the recorded cells; no flights
     py -3.11 scripts/exp5/loss_probes.py P1 P4 [--score]  # a probe's cells, once flown
+    py -3.11 scripts/exp5/loss_probes.py P10 [--score]    # the baselines on other bands
     py -3.11 scripts/exp5/loss_probes.py all [--score]
 
 Added 3 Nov 2026; not pre-registered. The probes, their cells and the commands that fly
@@ -27,17 +28,19 @@ recorded time-to-tau claim whose favoured arm reached tau less often.
 
 --score runs the trace scorer on a probe's trial CSVs that have no scored file yet, as
 launch.py score does. Never run launch.py score with a probe's --set changes: it would
-overwrite the pre-registered score files. P6-P8 join the registry once their builds (B1,
-B2, B3) exist. Outputs: results/exp5/scores/probes/<name>.{md,csv}.
+overwrite the pre-registered score files. P7 and P8 join the registry once their builds
+(B2, B3) exist. Outputs: results/exp5/scores/probes/<name>.{md,csv}.
 """
 
 from __future__ import annotations
 
 import argparse
 import contextlib
+import copy
 import csv
 import importlib.util
 import io
+import json
 import math
 import subprocess
 import sys
@@ -68,8 +71,8 @@ def is_ferry(variant: str) -> bool:
 # --------------------------------------------------------------------- the probes
 @dataclass
 class Flight:
-    """One launcher run of a probe: its stage, out-root and --set changes (always at 20
-    trials), the study whose cells it scores, and optionally the arms it keeps."""
+    """One launcher run of a probe: its stage, out-root and --set changes, the study
+    whose cells it scores, and optionally the arms it keeps and its trials a cell."""
 
     label: str
     stage: str
@@ -77,6 +80,7 @@ class Flight:
     sets: List[str]
     study: str
     arms: Optional[List[str]] = None
+    trials: int = 20
 
 
 @dataclass
@@ -91,6 +95,19 @@ class Probe:
 
 def _s53x(extra: Sequence[str]) -> List[str]:
     return ["s53x.K=[1]", "s53x.h0=false", *extra]
+
+
+#: P6's 10 MB cells: the field's knee, and 12 x it with no limit in effect.
+P6_10MB = ["s59x.budgets=['knee','relaxed']", "s59x.payload_bytes=10000000",
+           "batch2.relaxed_factor=12"]
+
+
+def _p6(half_width: int, extra: Sequence[str]) -> List[str]:
+    """P6's N = 12 cells on a field: both fields' knee is 900 s (H1 pilots, 6 Nov 2026) and
+    S* is 2. The 1 MB cells' F, FX, H1, D3 and D4 fly as batch 1's s59 in the same out-root."""
+    return [f"campaign.field_half_width_m={half_width}", "pilot_outputs.knee_s.12=900",
+            "pilot_outputs.stress_s.12=450", f"s59x.arms={EIGHT}", "s59x.N=[12]", "s59x.K=[1]",
+            "s59x.contact_regimes=['jittery']", *extra]
 
 
 PROBES: Dict[str, Probe] = {p.name: p for p in [
@@ -125,6 +142,32 @@ PROBES: Dict[str, Probe] = {p.name: p for p in [
                       "s53x.d4_faithful=false"]), "s53x",
                arms=["F", "FX", "H1", "D1", "D2", "D3", "D4", "D5"])
         for mb in (2, 5, 10)
+    ]),
+    Probe("P6", "Fields beyond the narrow band's reach", [
+        Flight("200 m, 1 MB", "batch2", "results/exp5_probe_w200_1mb",
+               _p6(200, ["s59x.budgets=['knee']"]), "s59x"),
+        Flight("300 m, 1 MB", "batch2", "results/exp5_probe_w300r",
+               _p6(300, ["s59x.budgets=['knee']"]), "s59x"),
+        Flight("200 m, 10 MB", "batch2", "results/exp5_probe_w200_10mb",
+               _p6(200, P6_10MB), "s59x"),
+        Flight("300 m, 10 MB", "batch2", "results/exp5_probe_w300_10mb",
+               _p6(300, P6_10MB), "s59x"),
+        Flight("300 m, N = 24, 10 MB, 600 s", "batch2", "results/exp5_probe_w300_n24",
+               ["campaign.field_half_width_m=300", "pilot_outputs.knee_s.24=600",
+                "pilot_outputs.stress_s.24=300", "pilot_outputs.s_star.24=3",
+                f"s59x.arms={EIGHT}", "s59x.N=[24]", "s59x.K=[1]",
+                "s59x.contact_regimes=['jittery']", "s59x.budgets=['knee']",
+                "s59x.payload_bytes=10000000"], "s59x"),
+    ]),
+    # The 4-mission cap lets F stop at about 335 s while the baselines fly about 800 s, so the
+    # recorded compute cells compare unequal mission time. Ten missions gives every arm the
+    # time; n_missions is in the seed hash, so these 40 trials are new seeds, not an extension.
+    Probe("P11", "Compute cells flown to 10 missions", [
+        Flight("", "batch3", "results/exp5_rd10",
+               ["campaign.n_missions=10", "s512.arms=['F','FX','H1','D3','D4','D5']",
+                "s512.payloads=[1000000]",
+                "pilot_outputs.train_levels={spread=[68.0,0.5,0.0,1.0],"
+                "stragglers=[68.0,0.5,0.2,5.0]}"], "s512", trials=40),
     ]),
 ]}
 
@@ -238,7 +281,7 @@ def flight_cells(L, SC, flight: Flight, *, score: bool = False):
     plan. The whole stage is built, so a cell its study shares with another reads that
     study's CSV, as launch.py score reads it."""
     s, _ = L.load_settings(L.PARAMS)
-    ns = argparse.Namespace(trials=20, set=list(flight.sets), dataset=None,
+    ns = argparse.Namespace(trials=flight.trials, set=list(flight.sets), dataset=None,
                             **{o: None for o, _, _ in L.LEVERS})
     with contextlib.redirect_stdout(io.StringIO()):
         L.apply_levers(s, ns)
@@ -348,6 +391,240 @@ def probe_report(L, SC, probe: Probe, *, score: bool = False) -> List[str]:
     OUT.mkdir(parents=True, exist_ok=True)
     (OUT / f"{probe.name}.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
     _write_csv(OUT / f"{probe.name}.csv", [c.row() for c in comps])
+    return lines
+
+
+# --------------------------------------------------------------------- P11
+#: P11's other questions. Every arm reaches tau in every trial, so its time test counts every
+#: trial; the horizon check asks the same thing with the tail cut off at a time all arms flew.
+#: The recorded no-delay cell has 20 trials and other seeds, so the cost is compared unpaired.
+P11_TIMES = (150, 200, 250, 300, 400, 500)
+P11_NO_DELAY = Flight("", "batch3", "results/exp5",
+                      ["s512.arms=['F','FX','H1','D3','D4','D5']", "s512.payloads=[1000000]"], "s512")
+P11_NO_DELAY_CELL = "n6k1_knee_1mb_none"
+
+
+def trial_flights(entry) -> List[Tuple[float, int, int]]:
+    """Each trial's flight time (first takeoff to last landing), updates merged and missions,
+    from its mule trace."""
+    out: List[Tuple[float, int, int]] = []
+    for trace in Path(str(entry.csv_path)[:-4] + "_traces").glob("*/mule-exp4-mule.jsonl"):
+        missions = [e for e in map(json.loads, trace.read_text(encoding="utf-8").splitlines())
+                    if e.get("event") == "mission_completed"]
+        if missions:
+            out.append((max(m["sim_end_s"] for m in missions) -
+                        min(m["sim_start_s"] for m in missions),
+                        sum(m.get("pass_1_merged_updates") or 0 for m in missions),
+                        len(missions)))
+    return out
+
+
+def as_of(entry, horizon: float, SC, tau: float = TAU):
+    """The entry as seen at ``horizon``: a trial that reached tau later, or never, reached it
+    not at all and counts as the horizon, so the mean is a restricted mean with no misses
+    dropped."""
+    time_col, reach_col = f"sim_s_to_tau{tau:g}", f"reached_tau{tau:g}"
+    out = copy.copy(entry)
+    out.scored_rows = []
+    for row in entry.scored_rows:
+        t = SC._num(row.get(time_col))
+        made_it = t is not None and t <= horizon
+        out.scored_rows.append({**row, time_col: t if made_it else horizon,
+                                reach_col: 1.0 if made_it else 0.0})
+    return out
+
+
+def _times(entry, SC, tau: float = TAU) -> List[Optional[float]]:
+    return [SC._num(r.get(f"sim_s_to_tau{tau:g}")) for r in entry.scored_rows]
+
+
+def delay_cost(with_delay: Sequence[float], without: Sequence[float],
+               n: int = 10000) -> Tuple[float, float, float]:
+    """Mean(with_delay) - mean(without) and its 95% bootstrap CI, unpaired: the two runs have
+    different seeds."""
+    import numpy as np
+
+    a, b = np.asarray(with_delay, float), np.asarray(without, float)
+    rng = np.random.default_rng(0)
+    sims = (rng.choice(a, (n, a.size)).mean(axis=1) - rng.choice(b, (n, b.size)).mean(axis=1))
+    return float(a.mean() - b.mean()), *map(float, np.quantile(sims, [0.025, 0.975]))
+
+
+def p11_report(L, SC, *, score: bool = False) -> List[str]:
+    probe = PROBES["P11"]
+    lines = probe_report(L, SC, probe, score=score)
+    cells, plan = flight_cells(L, SC, probe.flights[0])
+    flown = {c: {v: trial_flights(e) for v, e in vs.items()} for c, vs in cells.items()}
+    horizons = {c: min(t[0] for fs in vs.values() for t in fs) for c, vs in flown.items()}
+    seen = {c: {v: as_of(e, horizons[c], SC) for v, e in vs.items()} for c, vs in cells.items()}
+    comps = probe_comparisons(Probe("P11 horizon", "", []), seen, plan, SC)
+    by = {(c.cell, c.variant, c.metric.startswith("reached")): c for c in comps}
+    no_delay = flight_cells(L, SC, P11_NO_DELAY)[0][P11_NO_DELAY_CELL]
+    for cell, variants in cells.items():
+        h = horizons[cell]
+        lines += ["", f"## {cell}: at equal mission time", "",
+                  f"The horizon, {h:.0f} s, is the shortest flight of any arm in any trial here, "
+                  "so every arm has flown to it in every trial. Restricted mean: time to tau "
+                  "capped at the horizon, with a miss counted as the horizon. Holm across "
+                  "both cells, one family per metric.", "",
+                  "| arm | flight mean (s) | merged per mission | restricted mean (s) | "
+                  "F − arm [95% CI] | Holm p | verdict | reached by horizon: F − arm [95% CI] | "
+                  "discordant | Holm p | verdict |", "|---|---|---|---|---|---|---|---|---|---|---|"]
+        for v, e in variants.items():
+            fs = flown[cell][v]
+            t, r = by.get((cell, v, False)), by.get((cell, v, True))
+            mean = sum(x for x in _times(seen[cell][v], SC)) / len(seen[cell][v].scored_rows)
+            lines.append(
+                f"| {NAMES.get(v, v)} | {sum(f[0] for f in fs) / len(fs):.0f} | "
+                f"{sum(f[1] for f in fs) / sum(f[2] for f in fs):.2f} | {mean:.1f} | {_diff(t)} | "
+                f"{'' if t is None or t.p_holm is None else f'{t.p_holm:.4f}'} | {_verdict(t)} | "
+                f"{_diff(r, 2)} | {'' if r is None else r.note.split('; ')[-1]} | "
+                f"{'' if r is None or r.p_holm is None else f'{r.p_holm:.4f}'} | {_verdict(r)} |")
+        lines += ["", "Share of trials at tau by each time:", "",
+                  "| arm | " + " | ".join(f"{x} s" for x in P11_TIMES) + " |",
+                  "|---|" + "---|" * len(P11_TIMES)]
+        for v, e in variants.items():
+            ts = _times(e, SC)
+            lines.append(f"| {NAMES.get(v, v)} | " + " | ".join(
+                f"{sum(t is not None and t <= x for t in ts) / len(ts):.2f}"
+                for x in P11_TIMES) + " |")
+        lines += ["", f"What the delay costs: time to tau here against the recorded "
+                  f"{P11_NO_DELAY_CELL} cell (no training delay, {P11_NO_DELAY.trials} trials, "
+                  "4 missions, every arm reaching tau in every trial; other seeds, so unpaired "
+                  "and for description, not a claim).", "",
+                  "| arm | no delay (s) | here (s) | cost [95% CI] |", "|---|---|---|---|"]
+        for v, e in variants.items():
+            if v not in no_delay:
+                continue
+            base = [t for t in _times(no_delay[v], SC) if t is not None]
+            here = [t for t in _times(e, SC) if t is not None]
+            d, lo, hi = delay_cost(here, base)
+            lines.append(f"| {NAMES.get(v, v)} | {sum(base) / len(base):.1f} | "
+                         f"{sum(here) / len(here):.1f} | {d:.1f} [{lo:.1f}, {hi:.1f}] |")
+    (OUT / "P11.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    _write_csv(OUT / "P11_horizon.csv", [c.row() for c in comps])
+    return lines
+
+
+# --------------------------------------------------------------------- P10
+#: P10: the baselines on the bands F can choose, at N = 6 and 40 trials (the NOMS review's
+#: comment 8). Every recorded baseline flew wide, so these runs ask how much of F's gain
+#: the band alone gives. Each band has an out-root of its own, and the runs use batch 1's
+#: study s53: under batch 2's s53x the launcher reads the cells as batch 1's.
+P10_BANDS = ("narrow", "medium")
+P10_ARMS = ("H1", "D4")
+P10_WIDE = Flight("", "batch1", "results/exp5", ["s53.K=[1]", "s53.d4_faithful=false"], "s53",
+                  arms=list(P10_ARMS), trials=40)
+#: F's recorded N = 6 cells. s53's F shares its job with s514's capS, which owns the
+#: files, and a stage built here resolves the pair to s53's path, which was never flown.
+P10_F_DIR = "results/exp5/b1/s514"
+P10_FLOWN = {band: Flight("", "batch1", f"results/exp5_probe_b{band}",
+                          [f"campaign.baseline_contact_band='{band}'", "s53.K=[1]",
+                           "s53.d4_faithful=false"], "s53", arms=list(P10_ARMS), trials=40)
+             for band in P10_BANDS}
+P10_PINNED_SETS = ["s54.arms=['FB+narrow','FB+medium']", "s54.narrow_range_ratios=[]",
+                   "s54.far_shares=[]", "s54.payloads=[1000000]", "s54.o1=false"]
+P10_PINNED = (Flight("", "batch2", "results/exp5", P10_PINNED_SETS, "s54", trials=40),
+              Flight("", "batch2", "results/exp5_probe_fbs",
+                     [*P10_PINNED_SETS, "s54.budget='stress'"], "s54", trials=40))
+
+
+def p10_f(SC, cell: str):
+    """F's recorded 40 trials in ``cell``, read from the files that hold them."""
+    base = REPO / P10_F_DIR
+    entry = SC.Entry("s514", cell, REFERENCE, REFERENCE, base / f"{cell}__capS.csv",
+                     base / f"{cell}__capS_scored.csv", 40)
+    SC.load(entry)
+    return entry
+
+
+def _renamed(entry, name: str):
+    """A copy of an entry under the name P10 compares it by (one arm flies three bands)."""
+    out = copy.copy(entry)
+    out.variant = name
+    return out
+
+
+def p10_comparisons(arms: Dict[str, Dict[str, Any]], plan, SC, tau: float = TAU) -> List[Any]:
+    """Each baseline on each band against F choosing its band, F pinned to that band, and
+    itself on wide, on time and on reach. Holm per family; ``arms`` is budget -> name ->
+    entry, named F, F@<band> and <arm>@<band>."""
+    comps = []
+    for budget, pool in arms.items():
+        for band in P10_BANDS:
+            for arm in P10_ARMS:
+                var = pool.get(f"{arm}@{band}")
+                if var is None or not var.scored_rows:
+                    continue
+                for family, name in (("against F", REFERENCE), ("against pinned F", f"F@{band}"),
+                                     ("against itself on wide", f"{arm}@wide")):
+                    ref = pool.get(name)
+                    if ref is None or not ref.scored_rows:
+                        continue
+                    for kind, fn in (("time", compare_time), ("reach", compare_reach)):
+                        c = fn(ref, var, tau, f"P10/{family}/{kind}", plan, SC)
+                        c.cell = budget
+                        comps.append(c)
+    SC.holm(comps, plan)
+    return comps
+
+
+def p10_report(L, SC, *, score: bool = False) -> List[str]:
+    arms: Dict[str, Dict[str, Any]] = {"knee": {}, "stress": {}}
+    plan = None
+
+    def take(flight: Flight, name, *, scores: bool = False) -> None:
+        nonlocal plan
+        got, plan = flight_cells(L, SC, flight, score=score and scores)
+        for cell, variants in got.items():
+            budget = next((b for b in arms if f"_{b}" in cell), None)
+            for v, e in variants.items():
+                if budget is not None and name(v):
+                    arms[budget][name(v)] = _renamed(e, name(v))
+
+    # Only the probe's own out-roots are scored: the recorded cells stay as they are.
+    take(P10_WIDE, lambda v: f"{v}@wide")
+    for band, flight in P10_FLOWN.items():
+        take(flight, lambda v, band=band: f"{v}@{band}", scores=True)
+    take(P10_PINNED[0], lambda v: f"F@{v[len('FBp'):]}")
+    take(P10_PINNED[1], lambda v: f"F@{v[len('FBp'):]}", scores=True)
+    for budget in arms:
+        arms[budget][REFERENCE] = p10_f(SC, f"n6k1_{budget}")
+    comps = p10_comparisons(arms, plan, SC)
+    lines = ["# P10: The baselines on the bands F can choose", "",
+             "Exploratory, not pre-registered (the NOMS review's comment 8). N = 6, one mule, "
+             "1 MB, 40 trials a cell, paired by seed. Time to tau = 0.71 over the trials both "
+             "arms reach it, and reach at tau (exact McNemar), each with a 95% bootstrap CI. "
+             "Holm per family: against F choosing its band, against F pinned to the same band, "
+             "and against the arm itself on wide, on each metric apart. Difference = reference "
+             "- arm: time, negative when the reference is faster.", ""]
+    for budget, pool in arms.items():
+        lines += [f"## {budget}", "", "| arm | trials scored | reach τ | mean time to τ (s) |",
+                  "|---|---|---|---|"]
+        for name, e in sorted(pool.items()):
+            n = len(e.scored_rows)
+            if not n:
+                lines.append(f"| {name} | not flown | | |")
+                continue
+            reach = [SC._num(r.get(f"reached_tau{TAU:g}")) for r in e.scored_rows]
+            reach = [x for x in reach if x is not None]
+            times = [SC._num(r.get(f"sim_s_to_tau{TAU:g}")) for r in e.scored_rows]
+            times = [x for x in times if x is not None]
+            lines.append(f"| {name} | {n} | {_f(sum(reach) / len(reach) if reach else None, 2)} | "
+                         f"{_f(sum(times) / len(times) if times else None)} |")
+        lines += ["", "| arm | reference | metric | pairs | difference [95% CI] | Holm p | verdict |",
+                  "|---|---|---|---|---|---|---|"]
+        for c in comps:
+            if c.cell != budget:
+                continue
+            is_reach = c.metric.startswith("reached")
+            p = "" if c.p_holm is None else f"{c.p_holm:.4f}"
+            lines.append(f"| {c.variant} | {c.reference} | {'reach' if is_reach else 'time'} | "
+                         f"{c.n_pairs} | {_diff(c, 2 if is_reach else 1)} | {p} | {_verdict(c)} |")
+        lines.append("")
+    OUT.mkdir(parents=True, exist_ok=True)
+    (OUT / "P10.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    _write_csv(OUT / "P10.csv", [c.row() for c in comps])
     return lines
 
 
@@ -479,21 +756,25 @@ def p9_report(L, SC) -> List[str]:
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("which", nargs="+", help="p9, a probe (" + ", ".join(PROBES) + ") or all")
+    ap.add_argument("which", nargs="+",
+                    help="p9, P10, a probe (" + ", ".join(PROBES) + ") or all")
     ap.add_argument("--score", action="store_true",
                     help="score a probe's trial CSVs that have no scored file yet")
     a = ap.parse_args(argv)
     sys.stdout.reconfigure(encoding="utf-8")
     which = [w.upper() if w.lower() != "p9" else "p9" for w in a.which]
     if "ALL" in which:
-        which = ["p9"] + list(PROBES)
-    unknown = [w for w in which if w != "p9" and w not in PROBES]
+        which = ["p9"] + list(PROBES) + ["P10"]
+    unknown = [w for w in which if w not in ("p9", "P10") and w not in PROBES]
     if unknown:
         sys.exit(f"unknown probe(s) {', '.join(unknown)}: p9, {', '.join(PROBES)} or all")
     L = _launcher()
     SC = L._scoring()
     for w in which:
-        lines = p9_report(L, SC) if w == "p9" else probe_report(L, SC, PROBES[w], score=a.score)
+        lines = (p9_report(L, SC) if w == "p9"
+                 else p10_report(L, SC, score=a.score) if w == "P10"
+                 else p11_report(L, SC, score=a.score) if w == "P11"
+                 else probe_report(L, SC, PROBES[w], score=a.score))
         print("\n".join(lines[:40]) + ("\n…" if len(lines) > 40 else ""))
         print(f"\nwritten: {OUT / (w + '.md')}\n")
     return 0
