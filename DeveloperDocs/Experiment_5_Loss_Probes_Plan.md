@@ -1,6 +1,6 @@
 # Experiment 5 — loss probes: where FeRRy could lose
 
-*Draft, 29 Oct 2026. **Status, 5 Nov 2026:** P1, P4 and P9 have run (scorer `72b8e59c`, results `3cffc966`), and so have P2 (results `35e75e41`) and P5 (results `654e095c`: F flies medium at 2 MB and wide from 5 MB, no baseline beats it on time or reach, and its lead is no claim from 2 MB up), and P3 (results `cf07705b`: no baseline beats F, and F beats MAX-AoI at the N = 24 knee); reports in `results/exp5/scores/probes/`. The other probes have not. None of it is in Exp 5's pre-registered analysis plan: every probe is exploratory, added after the CARE room's sweep (21 Oct) and Exp 5's own near-misses. This page is the probes' analysis plan; change it before a probe flies, never after. Status of the pre-registered stages: [Experiment_5_Readiness.md](Experiment_5_Readiness.md).*
+*Draft, 29 Oct 2026. **Status, 6 Nov 2026:** P1, P4 and P9 have run (scorer `72b8e59c`, results `3cffc966`), and so have P2 (results `35e75e41`) and P5 (results `654e095c`: F flies medium at 2 MB and wide from 5 MB, no baseline beats it on time or reach, and its lead is no claim from 2 MB up), and P3 (results `cf07705b`: no baseline beats F, and F beats MAX-AoI at the N = 24 knee); P6, P10 and P11 (results `131e8333`, scorer `3256bac2`; see their sections); reports in `results/exp5/scores/probes/`. P7 and P8 have not. None of it is in Exp 5's pre-registered analysis plan: every probe is exploratory, added after the CARE room's sweep (21 Oct) and Exp 5's own near-misses. This page is the probes' analysis plan; change it before a probe flies, never after. Status of the pre-registered stages: [Experiment_5_Readiness.md](Experiment_5_Readiness.md).*
 
 ---
 
@@ -75,7 +75,10 @@ The remaining pre-registered runs cover the mule and freshness items (the scale 
 | P7 | Clustered layouts | Long cluster (0.91), Tight clusters (0.93), Mid cluster (1.10) | B0, B2 | 1,200 | 4.8 |
 | P8 | A hard budget | F's 30 % overrun under stress | B0, B3 | 300 | 1.4 |
 | P9 | Analysis on recorded data | reach as a tested metric; τ = 0.82 | B0 | 0 | — |
-| | **All** | | | **5,380** | **~20** |
+| **Added 6 Nov** | | | | | |
+| P10 | The baselines on the bands F can choose | how much of F's gain the band alone gives | B0 | 400 | 0.9 |
+| P11 | Compute cells flown to 10 missions | whether F's reach loss comes from the 4-mission cap | B0 | 480 | 1.2 |
+| | **All** | | | **6,260** | **~22** |
 
 ### P1 — Harsh radio, every baseline
 
@@ -183,6 +186,8 @@ py -3.11 scripts/exp5/launch.py run batch2 --study s59x --out-root results/exp5_
 
 **Also.** Before this probe, re-fly the room's 15 Oct far-field race through the bridge, now that T_nom is priced on the room's field: a few minutes. If F still loses about 4×, add a sparse far cell here.
 
+**Flown 5–6 Nov 2026 (results `131e8333`).** The pilots gave a 900 s knee on both fields and S\* of 2 at N = 12, and 3 at N = 24 on ±300 m. The ±300 m pilot re-flew under `results/exp5_probe_w300r` after host low memory failed the first attempt, so that out-root replaces `exp5_probe_w300_1mb` above; the ±200 m pilot lost 2 of 120 rows and stands. All 1,120 cell trials are ok. The room's loss at 24 devices did not appear: no baseline beats F in any cell, on time or reach. F does not beat FedEx in any cell either, as the room's tie with no limit expected. With no limit at ±200 m and 10 MB the flights match the knee's. At ±300 m and 10 MB, F beats Whittle at the knee and four baselines (by 461–723 s) with no limit. At 24 devices no comparison is a claim, and the FedEx route overran every mission by 160 s. Report: `results/exp5/scores/probes/P6.md`.
+
 ### P7 — Clustered layouts
 
 **Question.** When devices sit in groups, wide's single hover can cover a group and reach buys nothing. Do the baselines win there, and is it the groups' size or their distance?
@@ -211,6 +216,28 @@ No flights.
 - **Reach as a tested metric:** the paired reach test on every recorded cell. The cells to watch are 5.12's, where F reaches τ in 70–75 % of trials against 85–100 % for H1, D4 and D5. (In 5.13's Dirichlet 0.1 cell every arm reaches it in only 50–55 %.)
 - **τ = 0.82:** a rescore where it's reachable. In the knee pilot, H1 reached 0.82 in 18 of 20 trials at N = 6, at most 4 of 20 at N = 12, and none at N = 18 or 24.
 
+### P10 — The baselines on the bands F can choose
+
+Added 6 Nov 2026 for the NOMS review's comment 8, so this page records it after it flew, not before.
+
+**Question.** Every recorded baseline flew wide. How much of F's gain does the band alone give?
+
+**Cells.** N = 6, one mule, 1 MB, 40 trials: H1 and the FedEx route on narrow and on medium at the knee and at stress, with `campaign.baseline_contact_band`, and F pinned to narrow and medium at stress. Each is compared with F, with F pinned to the band, and with itself on wide. Seeds don't depend on the band, so these runs pair with the recorded trials.
+
+**Flown 6 Nov 2026 (results `131e8333`).** 400 of 400 ok. At the knee the gap goes: the FedEx route takes 190 and 184 s on medium and narrow, the same as F pinned to those bands, and on narrow the three are identical in all 40 trials, because one stop serves every device. F's own choice of band (179 s) is not significantly faster. At stress planning still shows. Report: `results/exp5/scores/probes/P10.md`.
+
+### P11 — Compute cells flown to 10 missions
+
+Added 6 Nov 2026 to ask whether F handles devices that aren't ready, so this page records it after it flew, not before. The horizon check below was written before the results were read; its Holm family was then widened from one cell to both, which is stricter.
+
+**Question.** F reaches τ in 70–75 % of the compute cells' trials at 4 missions, but flies 312–335 s there against 572–853 s for the baselines. Is the reach loss the cap's?
+
+**Cells.** N = 6, one mule, 1 MB, knee, spread and stragglers, up to 10 missions, 40 trials: F, FX, H1, D3, D4, D5. `n_missions` is in the seed hash, so these are new seeds, paired among themselves, and not an extension of the recorded 20.
+
+**Tests.** Each probe's time and reach tests, with Holm across both cells. Then a horizon check, because time to τ drops the misses: each cell's horizon is the shortest flight of any arm in any trial, and a trial that has not reached τ by then counts as the horizon. The cost of the delay, against the recorded no-delay cell (20 trials, other seeds), is unpaired and descriptive.
+
+**Flown 6 Nov 2026 (results `131e8333`).** 480 of 480 ok, in 73 minutes. Every arm reaches τ in every trial, so the reach loss was the cap's. F takes 209 s on spread and 199 s with stragglers, against 276–317 s and 270–334 s. Four of the 8 time comparisons are claims for F: Whittle in both cells, FedCS on spread, the FedEx route with stragglers. The other four have Holm 0.077–0.081, and none favours a baseline. The horizon check, at 436 and 427 s, gives the same four. This is tolerance, not an edge at readiness: F already leads with no delay (194 s against 265–282 s in that cell), the delay's cost spans zero for every arm, F merges about the same per second of flight, and its planner ignores training time. Only N = 6, 1 MB and a 68 s median were tested. Report: `results/exp5/scores/probes/P11.md`.
+
 ---
 
 ## Builds
@@ -231,7 +258,7 @@ No flights.
 | 1 | B0, then P9 | 0 machine |
 | 2 | Tier 1: P1, P2, P3, P4 (with 5.4's F cells), P5; read the results | 7.2 |
 | 3 | The room's far-field re-check | minutes |
-| 4 | B1, P6's pilots, then P6 | 6.3 |
+| 4 | B1, P6's pilots, then P6 (done 6 Nov) | 6.3 |
 | 5 | B2, then P7 | 4.8 |
 | 6 | B3, then P8 | 1.4 |
 
@@ -242,7 +269,7 @@ The probes share the one host with the remaining pre-registered runs (about 45 h
 ## Decisions for you
 
 1. **The paper.** Report the probes in the revision (due 18 Jan 2027) as exploratory, motivated by the room's sweep, or keep them for a follow-up paper. Either way, the conclusion's limitations would then cite measured losses.
-2. **P6 and P7's budgets.** Each field's pilot knee plus no limit, as drafted; or the room's budgets only, which saves the 480 pilot trials (about 1.9 h) but leaves F without a knee on those fields.
+2. **P7's budgets.** P6 flew as drafted, at each field's pilot knee (900 s on both) plus no limit. For P7: each field's pilot knee plus no limit; or the room's budgets only, which saves its 240 pilot trials (about 1 h) but leaves F without a knee on those fields.
 3. **P8's rule.** Cut at the budget, as drafted, or keep a reserve for the flight home.
 4. **More arms.** E3 and FedEx with its merge fly only in P2; adding them elsewhere costs about 20 % more.
 5. **Where arm-only probes write.** Beside the recorded references in `results/exp5`, as drafted (P1's first command, P3, P4); or every probe in its own out-root, re-flying the references there, which costs more but keeps the campaign's folders as they were.
