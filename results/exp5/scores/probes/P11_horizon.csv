@@ -1,0 +1,21 @@
+study,cell,variant,reference,metric,better,n_pairs,ref_mean,variant_mean,mean_diff,ci_low,ci_high,p_value,p_holm,cliffs_delta,claim,favours,pairing_errors,note
+P11 horizon/ferry/time,n6k1_knee_1mb_spread,FX,F,sim_s_to_tau0.71,lower,40,208.20428665818764,202.46489460559968,5.739392052587936,-1.698795815254343,13.447963695714568,0.08534092651572474,0.17068185303144948,0.049375,False,no claim,0,
+P11 horizon/ferry/reach,n6k1_knee_1mb_spread,FX,F,reached_tau0.71,higher,40,0.975,0.925,0.05,0.0,0.125,0.5,1.0,,False,no claim,0,"2 reached by F only, 0 by FX only"
+P11 horizon/baselines/time,n6k1_knee_1mb_spread,H1,F,sim_s_to_tau0.71,lower,40,208.20428665818764,247.16384805844282,-38.95956140025519,-80.23054040019582,3.9018072349949944,0.09130478882450199,0.15738284125521662,-0.1925,False,no claim,0,
+P11 horizon/baselines/reach,n6k1_knee_1mb_spread,H1,F,reached_tau0.71,higher,40,0.975,0.8,0.175,0.075,0.3,0.015625,0.09375,,False,no claim,0,"7 reached by F only, 0 by H1 only"
+P11 horizon/baselines/time,n6k1_knee_1mb_spread,D3,F,sim_s_to_tau0.71,lower,40,208.20428665818764,278.52215324713035,-70.3178665889427,-115.84054560727854,-22.072977065518952,0.00737631298146197,0.041731157318281475,-0.330625,True,F,0,
+P11 horizon/baselines/reach,n6k1_knee_1mb_spread,D3,F,reached_tau0.71,higher,40,0.975,0.775,0.2,0.1,0.325,0.0078125,0.0546875,,False,no claim,0,"8 reached by F only, 0 by D3 only"
+P11 horizon/baselines/time,n6k1_knee_1mb_spread,D4,F,sim_s_to_tau0.71,lower,40,208.20428665818764,253.0929678376473,-44.888681179459674,-96.83142249032025,7.0049134379485904,0.07869142062760831,0.15738284125521662,-0.219375,False,no claim,0,
+P11 horizon/baselines/reach,n6k1_knee_1mb_spread,D4,F,reached_tau0.71,higher,40,0.975,0.825,0.15,0.05,0.275,0.03125,0.09375,,False,no claim,0,"6 reached by F only, 0 by D4 only"
+P11 horizon/baselines/time,n6k1_knee_1mb_spread,D5,F,sim_s_to_tau0.71,lower,40,208.20428665818764,261.41872037706196,-53.21443371887435,-85.66740378226166,-22.587304031781755,0.006955192886380246,0.041731157318281475,-0.24625,True,F,0,
+P11 horizon/baselines/reach,n6k1_knee_1mb_spread,D5,F,reached_tau0.71,higher,40,0.975,0.85,0.125,0.025,0.25,0.125,0.25,,False,no claim,0,"6 reached by F only, 1 by D5 only"
+P11 horizon/ferry/time,n6k1_knee_1mb_stragglers,FX,F,sim_s_to_tau0.71,lower,40,193.69543781439134,185.2820346544526,8.413403159938753,-1.6470944841836896,21.193155337345647,0.11688763780953301,0.17068185303144948,0.050625,False,no claim,0,
+P11 horizon/ferry/reach,n6k1_knee_1mb_stragglers,FX,F,reached_tau0.71,higher,40,0.975,0.95,0.025,0.0,0.075,1.0,1.0,,False,no claim,0,"1 reached by F only, 0 by FX only"
+P11 horizon/baselines/time,n6k1_knee_1mb_stragglers,H1,F,sim_s_to_tau0.71,lower,40,193.69543781439134,258.1529454547359,-64.45750764034456,-112.63334653951044,-18.019341278000805,0.021546060141190537,0.08618424056476215,-0.300625,False,no claim,0,
+P11 horizon/baselines/reach,n6k1_knee_1mb_stragglers,H1,F,reached_tau0.71,higher,40,0.975,0.775,0.2,0.05,0.35,0.021484375,0.09375,,False,no claim,0,"9 reached by F only, 1 by H1 only"
+P11 horizon/baselines/time,n6k1_knee_1mb_stragglers,D3,F,sim_s_to_tau0.71,lower,40,193.69543781439134,282.25590811536824,-88.56047030097689,-133.89784687374797,-39.844508412602686,0.0005698828390450217,0.0045590627123601735,-0.399375,True,F,0,
+P11 horizon/baselines/reach,n6k1_knee_1mb_stragglers,D3,F,reached_tau0.71,higher,40,0.975,0.725,0.25,0.1,0.4,0.00634765625,0.05078125,,False,no claim,0,"11 reached by F only, 1 by D3 only"
+P11 horizon/baselines/time,n6k1_knee_1mb_stragglers,D4,F,sim_s_to_tau0.71,lower,40,193.69543781439134,267.2689294326934,-73.57349161830207,-121.8772698363255,-23.441627706461613,0.0044158381980095845,0.03091086738606709,-0.3425,True,F,0,
+P11 horizon/baselines/reach,n6k1_knee_1mb_stragglers,D4,F,reached_tau0.71,higher,40,0.975,0.8,0.175,0.075,0.3,0.015625,0.09375,,False,no claim,0,"7 reached by F only, 0 by D4 only"
+P11 horizon/baselines/time,n6k1_knee_1mb_stragglers,D5,F,sim_s_to_tau0.71,lower,40,193.69543781439134,240.94194311076134,-47.24650529637002,-84.46274940584493,-9.658711775536089,0.02497325502190506,0.08618424056476215,-0.22875,False,no claim,0,
+P11 horizon/baselines/reach,n6k1_knee_1mb_stragglers,D5,F,reached_tau0.71,higher,40,0.975,0.9,0.075,-0.025,0.175,0.375,0.375,,False,no claim,0,"4 reached by F only, 1 by D5 only"

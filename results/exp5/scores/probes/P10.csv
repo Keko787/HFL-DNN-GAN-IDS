@@ -1,0 +1,49 @@
+study,cell,variant,reference,metric,better,n_pairs,ref_mean,variant_mean,mean_diff,ci_low,ci_high,p_value,p_holm,cliffs_delta,claim,favours,pairing_errors,note
+P10/against F/time,knee,H1@narrow,F,sim_s_to_tau0.71,lower,40,178.92332568052225,183.55960971410096,-4.636284033578704,-9.915619921358301,-0.1787929017276528,0.0687035743228782,0.41222144593726917,-0.0225,False,no claim,0,
+P10/against F/reach,knee,H1@narrow,F,reached_tau0.71,higher,40,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by H1@narrow only"
+P10/against pinned F/time,knee,H1@narrow,F@narrow,sim_s_to_tau0.71,lower,40,183.55960971410096,183.55960971410096,0.0,0.0,0.0,1.0,1.0,0.0,False,no claim,0,
+P10/against pinned F/reach,knee,H1@narrow,F@narrow,reached_tau0.71,higher,40,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F@narrow only, 0 by H1@narrow only"
+P10/against itself on wide/time,knee,H1@narrow,H1@wide,sim_s_to_tau0.71,lower,40,254.28225855985949,183.55960971410096,70.72264884575853,38.517146213155506,108.28372600991538,9.59746103035286e-06,6.718222721247002e-05,0.24875,True,H1@narrow,0,
+P10/against itself on wide/reach,knee,H1@narrow,H1@wide,reached_tau0.71,higher,40,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by H1@wide only, 0 by H1@narrow only"
+P10/against F/time,knee,D4@narrow,F,sim_s_to_tau0.71,lower,40,178.92332568052225,183.55960971410096,-4.636284033578704,-9.915619921358301,-0.1787929017276528,0.0687035743228782,0.41222144593726917,-0.0225,False,no claim,0,
+P10/against F/reach,knee,D4@narrow,F,reached_tau0.71,higher,40,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D4@narrow only"
+P10/against pinned F/time,knee,D4@narrow,F@narrow,sim_s_to_tau0.71,lower,40,183.55960971410096,183.55960971410096,0.0,0.0,0.0,1.0,1.0,0.0,False,no claim,0,
+P10/against pinned F/reach,knee,D4@narrow,F@narrow,reached_tau0.71,higher,40,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F@narrow only, 0 by D4@narrow only"
+P10/against itself on wide/time,knee,D4@narrow,D4@wide,sim_s_to_tau0.71,lower,40,232.10426454593545,183.55960971410096,48.544654831834485,21.24585139354619,78.34596885272491,0.0005381573264457984,0.0021526293057831936,0.17375,True,D4@narrow,0,
+P10/against itself on wide/reach,knee,D4@narrow,D4@wide,reached_tau0.71,higher,40,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by D4@wide only, 0 by D4@narrow only"
+P10/against F/time,knee,H1@medium,F,sim_s_to_tau0.71,lower,40,178.92332568052225,191.49067866905244,-12.567352988530184,-37.3350118307041,7.293549492562959,0.21928344456150684,0.6578503336845205,-0.044375,False,no claim,0,
+P10/against F/reach,knee,H1@medium,F,reached_tau0.71,higher,40,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by H1@medium only"
+P10/against pinned F/time,knee,H1@medium,F@medium,sim_s_to_tau0.71,lower,40,190.00808269012776,191.49067866905244,-1.4825959789246554,-5.398051835748409,1.58894830093253,0.5998023399346937,1.0,-0.014375,False,no claim,0,
+P10/against pinned F/reach,knee,H1@medium,F@medium,reached_tau0.71,higher,40,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F@medium only, 0 by H1@medium only"
+P10/against itself on wide/time,knee,H1@medium,H1@wide,sim_s_to_tau0.71,lower,40,254.28225855985949,191.49067866905244,62.79157989080704,41.371772314207696,85.87730625148615,5.029505700804293e-09,4.0236045606434345e-08,0.24,True,H1@medium,0,
+P10/against itself on wide/reach,knee,H1@medium,H1@wide,reached_tau0.71,higher,40,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by H1@wide only, 0 by H1@medium only"
+P10/against F/time,knee,D4@medium,F,sim_s_to_tau0.71,lower,40,178.92332568052225,190.00808269012776,-11.084757009605529,-36.135826265871586,8.714040462724213,0.330157497691709,0.6578503336845205,-0.041875,False,no claim,0,
+P10/against F/reach,knee,D4@medium,F,reached_tau0.71,higher,40,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D4@medium only"
+P10/against pinned F/time,knee,D4@medium,F@medium,sim_s_to_tau0.71,lower,40,190.00808269012776,190.00808269012776,0.0,0.0,0.0,1.0,1.0,0.0,False,no claim,0,
+P10/against pinned F/reach,knee,D4@medium,F@medium,reached_tau0.71,higher,40,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F@medium only, 0 by D4@medium only"
+P10/against itself on wide/time,knee,D4@medium,D4@wide,sim_s_to_tau0.71,lower,40,232.10426454593545,190.00808269012776,42.096181855807664,9.778367673058455,73.94926605690634,5.449729542306159e-05,0.0003269837725383695,0.14625,True,D4@medium,0,
+P10/against itself on wide/reach,knee,D4@medium,D4@wide,reached_tau0.71,higher,40,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by D4@wide only, 0 by D4@medium only"
+P10/against F/time,stress,H1@narrow,F,sim_s_to_tau0.71,lower,19,140.79687556326022,151.70873314427752,-10.911857581017294,-22.743509632768873,-1.2128633545331755,0.07473549830588248,0.41222144593726917,-0.0997229916897507,False,no claim,0,
+P10/against F/reach,stress,H1@narrow,F,reached_tau0.71,higher,40,1.0,0.475,0.525,0.375,0.675,9.5367431640625e-07,7.62939453125e-06,,True,F,0,"21 reached by F only, 0 by H1@narrow only"
+P10/against pinned F/time,stress,H1@narrow,F@narrow,sim_s_to_tau0.71,lower,19,147.4787433708246,151.70873314427752,-4.229989773452919,-12.689969320358758,0.0,0.31731050786291415,1.0,-0.030470914127423823,False,no claim,0,
+P10/against pinned F/reach,stress,H1@narrow,F@narrow,reached_tau0.71,higher,40,1.0,0.475,0.525,0.375,0.675,9.5367431640625e-07,7.62939453125e-06,,True,F@narrow,0,"21 reached by F@narrow only, 0 by H1@narrow only"
+P10/against itself on wide/time,stress,H1@narrow,H1@wide,sim_s_to_tau0.71,lower,18,157.3221928826016,152.53867403800055,4.7835188446010255,-22.67476765608444,29.414114443623735,0.32472991943359375,0.6494598388671875,0.08024691358024691,False,no claim,0,
+P10/against itself on wide/reach,stress,H1@narrow,H1@wide,reached_tau0.71,higher,40,0.925,0.475,0.45,0.275,0.625,4.00543212890625e-05,0.0003204345703125,,True,H1@wide,0,"19 reached by H1@wide only, 1 by H1@narrow only"
+P10/against F/time,stress,D4@narrow,F,sim_s_to_tau0.71,lower,40,167.63509078253992,183.55960971410096,-15.924518931561034,-31.70633137712997,0.14515785768904063,0.012250105740979877,0.08575074018685915,-0.09,False,no claim,0,
+P10/against F/reach,stress,D4@narrow,F,reached_tau0.71,higher,40,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D4@narrow only"
+P10/against pinned F/time,stress,D4@narrow,F@narrow,sim_s_to_tau0.71,lower,40,162.76418477424303,183.55960971410096,-20.795424939857913,-42.42510440104175,-1.7754494982748465,0.016270914794374737,0.1301673183549979,-0.129375,False,no claim,0,
+P10/against pinned F/reach,stress,D4@narrow,F@narrow,reached_tau0.71,higher,40,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F@narrow only, 0 by D4@narrow only"
+P10/against itself on wide/time,stress,D4@narrow,D4@wide,sim_s_to_tau0.71,lower,40,232.10426454593545,183.55960971410096,48.544654831834485,21.24585139354619,78.34596885272491,0.0005381573264457984,0.0021526293057831936,0.17375,True,D4@narrow,0,
+P10/against itself on wide/reach,stress,D4@narrow,D4@wide,reached_tau0.71,higher,40,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by D4@wide only, 0 by D4@narrow only"
+P10/against F/time,stress,H1@medium,F,sim_s_to_tau0.71,lower,37,175.5706097184825,178.88321882727354,-3.3126091087910323,-44.52424068748697,44.015529885410466,0.2639930136692148,0.6578503336845205,-0.02702702702702703,False,no claim,0,
+P10/against F/reach,stress,H1@medium,F,reached_tau0.71,higher,40,1.0,0.925,0.075,0.0,0.175,0.25,1.0,,False,no claim,0,"3 reached by F only, 0 by H1@medium only"
+P10/against pinned F/time,stress,H1@medium,F@medium,sim_s_to_tau0.71,lower,37,157.9761251965632,178.88321882727354,-20.90709363071034,-55.55836628620561,11.053959540560294,0.9291670099771987,1.0,-0.04821037253469686,False,no claim,0,
+P10/against pinned F/reach,stress,H1@medium,F@medium,reached_tau0.71,higher,40,1.0,0.925,0.075,0.0,0.175,0.25,1.0,,False,no claim,0,"3 reached by F@medium only, 0 by H1@medium only"
+P10/against itself on wide/time,stress,H1@medium,H1@wide,sim_s_to_tau0.71,lower,36,201.53817854164583,174.901636793359,26.63654174828682,-20.41894237873227,75.30830834861099,0.5393326855264604,0.6494598388671875,0.15895061728395063,False,no claim,0,
+P10/against itself on wide/reach,stress,H1@medium,H1@wide,reached_tau0.71,higher,40,0.925,0.925,0.0,-0.075,0.075,1.0,1.0,,False,no claim,0,"1 reached by H1@wide only, 1 by H1@medium only"
+P10/against F/time,stress,D4@medium,F,sim_s_to_tau0.71,lower,40,167.63509078253992,190.00808269012776,-22.372991907587856,-48.3930237129885,1.6430947373970333,0.0039813362062233555,0.031850689649786844,-0.135,False,no claim,0,
+P10/against F/reach,stress,D4@medium,F,reached_tau0.71,higher,40,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D4@medium only"
+P10/against pinned F/time,stress,D4@medium,F@medium,sim_s_to_tau0.71,lower,40,158.65213702521578,190.00808269012776,-31.355945664911996,-72.05497133412753,1.2828604180145589,0.05558365877076873,0.3890856113953811,-0.16375,False,no claim,0,
+P10/against pinned F/reach,stress,D4@medium,F@medium,reached_tau0.71,higher,40,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F@medium only, 0 by D4@medium only"
+P10/against itself on wide/time,stress,D4@medium,D4@wide,sim_s_to_tau0.71,lower,40,232.10426454593545,190.00808269012776,42.096181855807664,9.778367673058455,73.94926605690634,5.449729542306159e-05,0.0003269837725383695,0.14625,True,D4@medium,0,
+P10/against itself on wide/reach,stress,D4@medium,D4@wide,reached_tau0.71,higher,40,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by D4@wide only, 0 by D4@medium only"

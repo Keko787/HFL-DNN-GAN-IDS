@@ -1,0 +1,4 @@
+{"event": "start", "job": "s54/n6k1_stress_1mb__FBpnarrow", "pid": 41168, "at": "2026-11-06T00:34:42"}
+{"event": "start", "job": "s54/n6k1_stress_1mb__FBpmedium", "pid": 37968, "at": "2026-11-06T00:34:42"}
+{"event": "end", "job": "s54/n6k1_stress_1mb__FBpnarrow", "rc": 0, "wall_s": 1866.8, "rows": 40, "rows_not_ok": 0, "at": "2026-11-06T01:05:49"}
+{"event": "end", "job": "s54/n6k1_stress_1mb__FBpmedium", "rc": 0, "wall_s": 1888.9, "rows": 40, "rows_not_ok": 0, "at": "2026-11-06T01:06:11"}

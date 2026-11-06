@@ -1,0 +1,99 @@
+study,cell,variant,reference,metric,better,n_pairs,ref_mean,variant_mean,mean_diff,ci_low,ci_high,p_value,p_holm,cliffs_delta,claim,favours,pairing_errors,note
+P6/ferry/time,"200 m, 1 MB: n12k1_knee",FX,F,sim_s_to_tau0.71,lower,17,999.507095946766,1002.9362134932855,-3.4291175465195387,-22.56774181153519,16.28691340357677,0.644134521484375,1.0,-0.01730103806228374,False,no claim,0,
+P6/ferry/reach,"200 m, 1 MB: n12k1_knee",FX,F,reached_tau0.71,higher,20,0.85,0.9,-0.05,-0.15,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 1 by FX only"
+P6/baselines/time,"200 m, 1 MB: n12k1_knee",D4,F,sim_s_to_tau0.71,lower,17,999.507095946766,1079.425111126723,-79.91801517995704,-223.52494327202194,5.377613011221841,0.19144640357050802,1.0,-0.07958477508650519,False,no claim,0,
+P6/baselines/reach,"200 m, 1 MB: n12k1_knee",D4,F,reached_tau0.71,higher,20,0.85,0.95,-0.1,-0.25,0.0,0.5,1.0,,False,no claim,0,"0 reached by F only, 2 by D4 only"
+P6/baselines/time,"200 m, 1 MB: n12k1_knee",H1,F,sim_s_to_tau0.71,lower,17,999.507095946766,1419.2593106449622,-419.75221469819627,-561.0519893290664,-296.0761696116191,1.52587890625e-05,0.0006103515625,-0.314878892733564,True,F,0,
+P6/baselines/reach,"200 m, 1 MB: n12k1_knee",H1,F,reached_tau0.71,higher,20,0.85,0.95,-0.1,-0.25,0.0,0.5,1.0,,False,no claim,0,"0 reached by F only, 2 by H1 only"
+P6/baselines/time,"200 m, 1 MB: n12k1_knee",D1,F,sim_s_to_tau0.71,lower,17,999.507095946766,1419.1268967357944,-419.6198007890284,-552.5134047677898,-299.1152871034823,1.52587890625e-05,0.0006103515625,-0.314878892733564,True,F,0,
+P6/baselines/reach,"200 m, 1 MB: n12k1_knee",D1,F,reached_tau0.71,higher,20,0.85,0.95,-0.1,-0.25,0.0,0.5,1.0,,False,no claim,0,"0 reached by F only, 2 by D1 only"
+P6/baselines/time,"200 m, 1 MB: n12k1_knee",D2,F,sim_s_to_tau0.71,lower,17,999.507095946766,1434.7075013233869,-435.2004053766209,-560.325608793936,-319.8332804597879,1.52587890625e-05,0.0006103515625,-0.3633217993079585,True,F,0,
+P6/baselines/reach,"200 m, 1 MB: n12k1_knee",D2,F,reached_tau0.71,higher,20,0.85,0.9,-0.05,-0.15,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 1 by D2 only"
+P6/baselines/time,"200 m, 1 MB: n12k1_knee",D3,F,sim_s_to_tau0.71,lower,17,999.507095946766,1320.3597897025413,-320.8526937557754,-413.5126952061039,-231.69344027036928,1.52587890625e-05,0.0006103515625,-0.29411764705882354,True,F,0,
+P6/baselines/reach,"200 m, 1 MB: n12k1_knee",D3,F,reached_tau0.71,higher,20,0.85,0.9,-0.05,-0.15,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 1 by D3 only"
+P6/baselines/time,"200 m, 1 MB: n12k1_knee",D5,F,sim_s_to_tau0.71,lower,17,999.507095946766,1124.266759881599,-124.7596639348331,-270.8365869300501,-33.3033804027939,0.0006561279296875,0.01837158203125,-0.12802768166089964,True,F,0,
+P6/baselines/reach,"200 m, 1 MB: n12k1_knee",D5,F,reached_tau0.71,higher,20,0.85,0.9,-0.05,-0.15,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 1 by D5 only"
+P6/ferry/time,"300 m, 1 MB: n12k1_knee",FX,F,sim_s_to_tau0.71,lower,18,1533.7873889506704,1549.986391684991,-16.199002734320757,-47.06106615869001,8.97359007232249,0.8650436401367188,1.0,-0.012345679012345678,False,no claim,0,
+P6/ferry/reach,"300 m, 1 MB: n12k1_knee",FX,F,reached_tau0.71,higher,20,0.9,0.9,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by FX only"
+P6/baselines/time,"300 m, 1 MB: n12k1_knee",D4,F,sim_s_to_tau0.71,lower,18,1533.7873889506704,1513.3815618688177,20.4058270818528,-129.61318398079342,194.21355299220443,0.9587607499379828,1.0,-0.006172839506172839,False,no claim,0,
+P6/baselines/reach,"300 m, 1 MB: n12k1_knee",D4,F,reached_tau0.71,higher,20,0.9,0.9,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D4 only"
+P6/baselines/time,"300 m, 1 MB: n12k1_knee",H1,F,sim_s_to_tau0.71,lower,16,1492.1295949987325,2159.625243167553,-667.4956481688205,-909.0205098576417,-434.2851803004551,0.00030517578125,0.00885009765625,-0.375,True,F,0,
+P6/baselines/reach,"300 m, 1 MB: n12k1_knee",H1,F,reached_tau0.71,higher,20,0.9,0.8,0.1,0.0,0.25,0.5,1.0,,False,no claim,0,"2 reached by F only, 0 by H1 only"
+P6/baselines/time,"300 m, 1 MB: n12k1_knee",D1,F,sim_s_to_tau0.71,lower,17,1545.4440020701902,2240.764355606639,-695.3203535364489,-905.189487477513,-477.96332015486536,0.000152587890625,0.0048828125,-0.370242214532872,True,F,0,
+P6/baselines/reach,"300 m, 1 MB: n12k1_knee",D1,F,reached_tau0.71,higher,20,0.9,0.85,0.05,0.0,0.15,1.0,1.0,,False,no claim,0,"1 reached by F only, 0 by D1 only"
+P6/baselines/time,"300 m, 1 MB: n12k1_knee",D2,F,sim_s_to_tau0.71,lower,18,1533.7873889506704,2364.5132796581215,-830.725890707451,-1172.8500105494256,-577.0473378797406,7.62939453125e-06,0.0003204345703125,-0.4074074074074074,True,F,0,
+P6/baselines/reach,"300 m, 1 MB: n12k1_knee",D2,F,reached_tau0.71,higher,20,0.9,0.95,-0.05,-0.15,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 1 by D2 only"
+P6/baselines/time,"300 m, 1 MB: n12k1_knee",D3,F,sim_s_to_tau0.71,lower,18,1533.7873889506704,2093.8044048718875,-560.0170159212171,-693.6312211623313,-436.40180871424155,7.62939453125e-06,0.0003204345703125,-0.35185185185185186,True,F,0,
+P6/baselines/reach,"300 m, 1 MB: n12k1_knee",D3,F,reached_tau0.71,higher,20,0.9,0.9,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D3 only"
+P6/baselines/time,"300 m, 1 MB: n12k1_knee",D5,F,sim_s_to_tau0.71,lower,18,1533.7873889506704,1593.8793603223942,-60.09197137172386,-102.77662846919732,-19.118176864156005,0.03947435091450279,0.4342178600595307,-0.046296296296296294,False,no claim,0,
+P6/baselines/reach,"300 m, 1 MB: n12k1_knee",D5,F,reached_tau0.71,higher,20,0.9,0.9,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D5 only"
+P6/ferry/time,"200 m, 10 MB: n12k1_knee",FX,F,sim_s_to_tau0.71,lower,18,1433.7940333440654,1458.689790373862,-24.89575702979669,-60.091038631146255,9.553570167035499,0.2121429443359375,1.0,-0.018518518518518517,False,no claim,0,
+P6/ferry/reach,"200 m, 10 MB: n12k1_knee",FX,F,reached_tau0.71,higher,20,0.9,0.9,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by FX only"
+P6/baselines/time,"200 m, 10 MB: n12k1_knee",H1,F,sim_s_to_tau0.71,lower,17,1409.095966191716,1784.9226141450515,-375.82664795333574,-510.33764701324344,-256.68473809146934,1.52587890625e-05,0.0006103515625,-0.28719723183391005,True,F,0,
+P6/baselines/reach,"200 m, 10 MB: n12k1_knee",H1,F,reached_tau0.71,higher,20,0.9,0.85,0.05,0.0,0.15,1.0,1.0,,False,no claim,0,"1 reached by F only, 0 by H1 only"
+P6/baselines/time,"200 m, 10 MB: n12k1_knee",D1,F,sim_s_to_tau0.71,lower,17,1409.095966191716,1794.0595822844941,-384.96361609277835,-511.0177720087335,-269.410308268054,1.52587890625e-05,0.0006103515625,-0.28719723183391005,True,F,0,
+P6/baselines/reach,"200 m, 10 MB: n12k1_knee",D1,F,reached_tau0.71,higher,20,0.9,0.85,0.05,0.0,0.15,1.0,1.0,,False,no claim,0,"1 reached by F only, 0 by D1 only"
+P6/baselines/time,"200 m, 10 MB: n12k1_knee",D2,F,sim_s_to_tau0.71,lower,18,1433.7940333440654,1726.826805065994,-293.03277172192855,-398.13738426458275,-183.3829471232515,0.00019073486328125,0.00591278076171875,-0.24074074074074073,True,F,0,
+P6/baselines/reach,"200 m, 10 MB: n12k1_knee",D2,F,reached_tau0.71,higher,20,0.9,0.9,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D2 only"
+P6/baselines/time,"200 m, 10 MB: n12k1_knee",D3,F,sim_s_to_tau0.71,lower,18,1433.7940333440654,1668.2302613300335,-234.4362279859682,-374.16993352448026,-81.5795206202896,0.00400543212890625,0.0881195068359375,-0.2037037037037037,False,no claim,0,
+P6/baselines/reach,"200 m, 10 MB: n12k1_knee",D3,F,reached_tau0.71,higher,20,0.9,0.95,-0.05,-0.15,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 1 by D3 only"
+P6/baselines/time,"200 m, 10 MB: n12k1_knee",D4,F,sim_s_to_tau0.71,lower,18,1433.7940333440654,1380.5722154383936,53.22181790567184,-3.7563235254413376,149.42178781173794,0.20262160771231197,1.0,0.043209876543209874,False,no claim,0,
+P6/baselines/reach,"200 m, 10 MB: n12k1_knee",D4,F,reached_tau0.71,higher,20,0.9,0.9,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D4 only"
+P6/baselines/time,"200 m, 10 MB: n12k1_knee",D5,F,sim_s_to_tau0.71,lower,18,1433.7940333440654,1431.5851683355609,2.208865008504492,-59.330449148506474,96.98449718272302,0.02454049897109125,0.39264798353746,-0.015432098765432098,False,no claim,0,
+P6/baselines/reach,"200 m, 10 MB: n12k1_knee",D5,F,reached_tau0.71,higher,20,0.9,0.95,-0.05,-0.15,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 1 by D5 only"
+P6/ferry/time,"200 m, 10 MB: n12k1_relaxed",FX,F,sim_s_to_tau0.71,lower,18,1433.7940333440654,1458.689790373862,-24.89575702979669,-60.091038631146255,9.553570167035499,0.2121429443359375,1.0,-0.018518518518518517,False,no claim,0,
+P6/ferry/reach,"200 m, 10 MB: n12k1_relaxed",FX,F,reached_tau0.71,higher,20,0.9,0.9,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by FX only"
+P6/baselines/time,"200 m, 10 MB: n12k1_relaxed",H1,F,sim_s_to_tau0.71,lower,17,1409.095966191716,1784.9226141450515,-375.82664795333574,-510.33764701324344,-256.68473809146934,1.52587890625e-05,0.0006103515625,-0.28719723183391005,True,F,0,
+P6/baselines/reach,"200 m, 10 MB: n12k1_relaxed",H1,F,reached_tau0.71,higher,20,0.9,0.85,0.05,0.0,0.15,1.0,1.0,,False,no claim,0,"1 reached by F only, 0 by H1 only"
+P6/baselines/time,"200 m, 10 MB: n12k1_relaxed",D1,F,sim_s_to_tau0.71,lower,17,1409.095966191716,1794.0595822844941,-384.96361609277835,-511.0177720087335,-269.410308268054,1.52587890625e-05,0.0006103515625,-0.28719723183391005,True,F,0,
+P6/baselines/reach,"200 m, 10 MB: n12k1_relaxed",D1,F,reached_tau0.71,higher,20,0.9,0.85,0.05,0.0,0.15,1.0,1.0,,False,no claim,0,"1 reached by F only, 0 by D1 only"
+P6/baselines/time,"200 m, 10 MB: n12k1_relaxed",D2,F,sim_s_to_tau0.71,lower,18,1433.7940333440654,1726.826805065994,-293.03277172192855,-398.13738426458275,-183.3829471232515,0.00019073486328125,0.00591278076171875,-0.24074074074074073,True,F,0,
+P6/baselines/reach,"200 m, 10 MB: n12k1_relaxed",D2,F,reached_tau0.71,higher,20,0.9,0.9,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D2 only"
+P6/baselines/time,"200 m, 10 MB: n12k1_relaxed",D3,F,sim_s_to_tau0.71,lower,18,1433.7940333440654,1668.2302613300335,-234.4362279859682,-374.16993352448026,-81.5795206202896,0.00400543212890625,0.0881195068359375,-0.2037037037037037,False,no claim,0,
+P6/baselines/reach,"200 m, 10 MB: n12k1_relaxed",D3,F,reached_tau0.71,higher,20,0.9,0.95,-0.05,-0.15,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 1 by D3 only"
+P6/baselines/time,"200 m, 10 MB: n12k1_relaxed",D4,F,sim_s_to_tau0.71,lower,18,1433.7940333440654,1380.5722154383936,53.22181790567184,-3.7563235254413376,149.42178781173794,0.20262160771231197,1.0,0.043209876543209874,False,no claim,0,
+P6/baselines/reach,"200 m, 10 MB: n12k1_relaxed",D4,F,reached_tau0.71,higher,20,0.9,0.9,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D4 only"
+P6/baselines/time,"200 m, 10 MB: n12k1_relaxed",D5,F,sim_s_to_tau0.71,lower,18,1433.7940333440654,1431.5851683355609,2.208865008504492,-59.330449148506474,96.98449718272302,0.02454049897109125,0.39264798353746,-0.015432098765432098,False,no claim,0,
+P6/baselines/reach,"200 m, 10 MB: n12k1_relaxed",D5,F,reached_tau0.71,higher,20,0.9,0.95,-0.05,-0.15,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 1 by D5 only"
+P6/ferry/time,"300 m, 10 MB: n12k1_knee",FX,F,sim_s_to_tau0.71,lower,18,1931.2681636964617,1934.6080660306357,-3.3399023341739342,-230.39702662611924,280.6281173126633,0.24620819091796875,1.0,0.006172839506172839,False,no claim,0,
+P6/ferry/reach,"300 m, 10 MB: n12k1_knee",FX,F,reached_tau0.71,higher,20,0.9,0.95,-0.05,-0.15,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 1 by FX only"
+P6/baselines/time,"300 m, 10 MB: n12k1_knee",H1,F,sim_s_to_tau0.71,lower,17,1952.6262777248974,2889.189269623541,-936.5629918986439,-1661.7638276186913,-297.5293592321132,0.010986328125,0.18731689453125,-0.4186851211072664,False,no claim,0,
+P6/baselines/reach,"300 m, 10 MB: n12k1_knee",H1,F,reached_tau0.71,higher,20,0.9,0.85,0.05,0.0,0.15,1.0,1.0,,False,no claim,0,"1 reached by F only, 0 by H1 only"
+P6/baselines/time,"300 m, 10 MB: n12k1_knee",D1,F,sim_s_to_tau0.71,lower,18,1931.2681636964617,2874.9202401553694,-943.6520764589077,-1637.9292314734814,-355.93922346312263,0.0065765380859375,0.1249542236328125,-0.43209876543209874,False,no claim,0,
+P6/baselines/reach,"300 m, 10 MB: n12k1_knee",D1,F,reached_tau0.71,higher,20,0.9,0.9,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D1 only"
+P6/baselines/time,"300 m, 10 MB: n12k1_knee",D2,F,sim_s_to_tau0.71,lower,18,1931.2681636964617,2458.3950953949306,-527.126931698469,-922.2600066147564,-152.215231416464,0.010406494140625,0.18731689453125,-0.22839506172839505,False,no claim,0,
+P6/baselines/reach,"300 m, 10 MB: n12k1_knee",D2,F,reached_tau0.71,higher,20,0.9,0.9,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D2 only"
+P6/baselines/time,"300 m, 10 MB: n12k1_knee",D3,F,sim_s_to_tau0.71,lower,18,1931.2681636964617,2382.9607805558867,-451.6926168594251,-704.7103032235154,-148.03622800768753,0.00157928466796875,0.03948211669921875,-0.24074074074074073,True,F,0,
+P6/baselines/reach,"300 m, 10 MB: n12k1_knee",D3,F,reached_tau0.71,higher,20,0.9,0.9,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D3 only"
+P6/baselines/time,"300 m, 10 MB: n12k1_knee",D4,F,sim_s_to_tau0.71,lower,18,1931.2681636964617,1911.5638484017627,19.704315294699175,-216.87111485549465,320.29369162273196,0.38818640520827785,1.0,0.037037037037037035,False,no claim,0,
+P6/baselines/reach,"300 m, 10 MB: n12k1_knee",D4,F,reached_tau0.71,higher,20,0.9,0.9,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D4 only"
+P6/baselines/time,"300 m, 10 MB: n12k1_knee",D5,F,sim_s_to_tau0.71,lower,18,1931.2681636964617,2031.3159786425338,-100.04781494607192,-278.7763996311871,80.53156989792056,0.03124928092967935,0.4062406520858316,-0.06481481481481481,False,no claim,0,
+P6/baselines/reach,"300 m, 10 MB: n12k1_knee",D5,F,reached_tau0.71,higher,20,0.9,0.9,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D5 only"
+P6/ferry/time,"300 m, 10 MB: n12k1_relaxed",FX,F,sim_s_to_tau0.71,lower,18,1931.2681636964617,1934.6080660306357,-3.3399023341739342,-230.39702662611924,280.6281173126633,0.24620819091796875,1.0,0.006172839506172839,False,no claim,0,
+P6/ferry/reach,"300 m, 10 MB: n12k1_relaxed",FX,F,reached_tau0.71,higher,20,0.9,0.95,-0.05,-0.15,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 1 by FX only"
+P6/baselines/time,"300 m, 10 MB: n12k1_relaxed",H1,F,sim_s_to_tau0.71,lower,18,1931.2681636964617,2647.9159042276056,-716.6477405311437,-1059.8602664142236,-363.0601682057609,0.00128936767578125,0.03481292724609375,-0.3333333333333333,True,F,0,
+P6/baselines/reach,"300 m, 10 MB: n12k1_relaxed",H1,F,reached_tau0.71,higher,20,0.9,0.9,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by H1 only"
+P6/baselines/time,"300 m, 10 MB: n12k1_relaxed",D1,F,sim_s_to_tau0.71,lower,18,1931.2681636964617,2653.924060220455,-722.6558965239933,-1067.050902695214,-376.19973240555345,0.00128936767578125,0.03481292724609375,-0.345679012345679,True,F,0,
+P6/baselines/reach,"300 m, 10 MB: n12k1_relaxed",D1,F,reached_tau0.71,higher,20,0.9,0.9,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D1 only"
+P6/baselines/time,"300 m, 10 MB: n12k1_relaxed",D2,F,sim_s_to_tau0.71,lower,18,1931.2681636964617,2566.531835202173,-635.2636715057112,-959.5348801682326,-293.3835229967297,0.00157928466796875,0.03948211669921875,-0.30864197530864196,True,F,0,
+P6/baselines/reach,"300 m, 10 MB: n12k1_relaxed",D2,F,reached_tau0.71,higher,20,0.9,0.9,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D2 only"
+P6/baselines/time,"300 m, 10 MB: n12k1_relaxed",D3,F,sim_s_to_tau0.71,lower,18,1931.2681636964617,2392.411162542535,-461.14299884607317,-721.882932425454,-159.01975865402318,0.00157928466796875,0.03948211669921875,-0.24691358024691357,True,F,0,
+P6/baselines/reach,"300 m, 10 MB: n12k1_relaxed",D3,F,reached_tau0.71,higher,20,0.9,0.9,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D3 only"
+P6/baselines/time,"300 m, 10 MB: n12k1_relaxed",D4,F,sim_s_to_tau0.71,lower,18,1931.2681636964617,1911.5638484017627,19.704315294699175,-216.87111485549465,320.29369162273196,0.38818640520827785,1.0,0.037037037037037035,False,no claim,0,
+P6/baselines/reach,"300 m, 10 MB: n12k1_relaxed",D4,F,reached_tau0.71,higher,20,0.9,0.9,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D4 only"
+P6/baselines/time,"300 m, 10 MB: n12k1_relaxed",D5,F,sim_s_to_tau0.71,lower,18,1931.2681636964617,2031.3159786425338,-100.04781494607192,-278.7763996311871,80.53156989792056,0.03124928092967935,0.4062406520858316,-0.06481481481481481,False,no claim,0,
+P6/baselines/reach,"300 m, 10 MB: n12k1_relaxed",D5,F,reached_tau0.71,higher,20,0.9,0.9,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D5 only"
+P6/ferry/time,"300 m, N = 24, 10 MB, 600 s: n24k1_knee",FX,F,sim_s_to_tau0.71,lower,20,3360.4625907350915,3100.7328003636444,259.7297903714469,57.408853139662305,507.09514736556355,0.10539817810058594,0.7377872467041016,0.095,False,no claim,0,
+P6/ferry/reach,"300 m, N = 24, 10 MB, 600 s: n24k1_knee",FX,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by FX only"
+P6/baselines/time,"300 m, N = 24, 10 MB, 600 s: n24k1_knee",H1,F,sim_s_to_tau0.71,lower,18,3298.880895380791,2937.770067739113,361.11082764167804,36.42776466123575,682.0753415470301,0.00400543212890625,0.0881195068359375,0.345679012345679,False,no claim,0,
+P6/baselines/reach,"300 m, N = 24, 10 MB, 600 s: n24k1_knee",H1,F,reached_tau0.71,higher,20,1.0,0.9,0.1,0.0,0.25,0.5,1.0,,False,no claim,0,"2 reached by F only, 0 by H1 only"
+P6/baselines/time,"300 m, N = 24, 10 MB, 600 s: n24k1_knee",D1,F,sim_s_to_tau0.71,lower,20,3360.4625907350915,3164.0398117920327,196.4227789430588,-41.7811004108359,459.7940634607529,0.026641845703125,0.39264798353746,0.275,False,no claim,0,
+P6/baselines/reach,"300 m, N = 24, 10 MB, 600 s: n24k1_knee",D1,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D1 only"
+P6/baselines/time,"300 m, N = 24, 10 MB, 600 s: n24k1_knee",D2,F,sim_s_to_tau0.71,lower,19,3289.946237321539,3141.6914134249396,148.2548238965989,-82.03450068344488,406.7382765119792,0.2753410339355469,1.0,0.08587257617728532,False,no claim,0,
+P6/baselines/reach,"300 m, N = 24, 10 MB, 600 s: n24k1_knee",D2,F,reached_tau0.71,higher,20,1.0,0.95,0.05,0.0,0.15,1.0,1.0,,False,no claim,0,"1 reached by F only, 0 by D2 only"
+P6/baselines/time,"300 m, N = 24, 10 MB, 600 s: n24k1_knee",D3,F,sim_s_to_tau0.71,lower,20,3360.4625907350915,3261.4816198143467,98.98097092074458,-243.5587258137891,459.71183764480037,0.38837623596191406,1.0,-0.015,False,no claim,0,
+P6/baselines/reach,"300 m, N = 24, 10 MB, 600 s: n24k1_knee",D3,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D3 only"
+P6/baselines/time,"300 m, N = 24, 10 MB, 600 s: n24k1_knee",D4,F,sim_s_to_tau0.71,lower,19,3289.946237321539,3549.934321400434,-259.9880840788951,-514.5627495482277,22.984061566502557,0.1956329345703125,1.0,-0.5069252077562327,False,no claim,0,
+P6/baselines/reach,"300 m, N = 24, 10 MB, 600 s: n24k1_knee",D4,F,reached_tau0.71,higher,20,1.0,0.95,0.05,0.0,0.15,1.0,1.0,,False,no claim,0,"1 reached by F only, 0 by D4 only"
+P6/baselines/time,"300 m, N = 24, 10 MB, 600 s: n24k1_knee",D5,F,sim_s_to_tau0.71,lower,20,3360.4625907350915,3134.365610126691,226.0969806084002,-57.86296519535883,513.0827577979042,0.1893482208251953,1.0,0.22,False,no claim,0,
+P6/baselines/reach,"300 m, N = 24, 10 MB, 600 s: n24k1_knee",D5,F,reached_tau0.71,higher,20,1.0,1.0,0.0,0.0,0.0,1.0,1.0,,False,no claim,0,"0 reached by F only, 0 by D5 only"

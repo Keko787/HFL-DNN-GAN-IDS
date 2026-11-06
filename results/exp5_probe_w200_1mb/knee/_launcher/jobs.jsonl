@@ -1,0 +1,12 @@
+{"event": "start", "job": "knee/n12_1mb_b0180", "pid": 42404, "at": "2026-11-05T15:55:21"}
+{"event": "start", "job": "knee/n12_1mb_b0300", "pid": 47656, "at": "2026-11-05T15:55:21"}
+{"event": "start", "job": "knee/n12_1mb_b0450", "pid": 51752, "at": "2026-11-05T15:55:21"}
+{"event": "end", "job": "knee/n12_1mb_b0300", "rc": 0, "wall_s": 881.6, "rows": 20, "rows_not_ok": 0, "at": "2026-11-05T16:10:03"}
+{"event": "start", "job": "knee/n12_1mb_b0600", "pid": 2168, "at": "2026-11-05T16:10:03"}
+{"event": "end", "job": "knee/n12_1mb_b0450", "rc": 0, "wall_s": 1318.9, "rows": 20, "rows_not_ok": 1, "at": "2026-11-05T16:17:20"}
+{"event": "start", "job": "knee/n12_1mb_b0900", "pid": 6000, "at": "2026-11-05T16:17:20"}
+{"event": "end", "job": "knee/n12_1mb_b0180", "rc": 0, "wall_s": 1413.5, "rows": 20, "rows_not_ok": 0, "at": "2026-11-05T16:18:55"}
+{"event": "start", "job": "knee/n12_1mb_b1200", "pid": 18868, "at": "2026-11-05T16:18:55"}
+{"event": "end", "job": "knee/n12_1mb_b1200", "rc": 0, "wall_s": 1041.2, "rows": 20, "rows_not_ok": 0, "at": "2026-11-05T16:36:16"}
+{"event": "end", "job": "knee/n12_1mb_b0600", "rc": 0, "wall_s": 1625.4, "rows": 20, "rows_not_ok": 0, "at": "2026-11-05T16:37:08"}
+{"event": "end", "job": "knee/n12_1mb_b0900", "rc": 0, "wall_s": 10938.6, "rows": 20, "rows_not_ok": 1, "at": "2026-11-05T19:19:39"}

@@ -1,0 +1,2 @@
+{"event": "start", "job": "sstar/n12", "pid": 36636, "at": "2026-11-06T02:23:53"}
+{"event": "end", "job": "sstar/n12", "rc": 0, "wall_s": 2.0, "rows": null, "rows_not_ok": null, "at": "2026-11-06T02:23:56"}

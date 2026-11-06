@@ -1,0 +1,8 @@
+{"event": "start", "job": "s53/n6k1_knee__H1", "pid": 32884, "at": "2026-11-06T00:34:42"}
+{"event": "start", "job": "s53/n6k1_knee__D4", "pid": 17852, "at": "2026-11-06T00:34:42"}
+{"event": "start", "job": "s53/n6k1_stress__H1", "pid": 39576, "at": "2026-11-06T00:34:42"}
+{"event": "start", "job": "s53/n6k1_stress__D4", "pid": 34324, "at": "2026-11-06T00:34:42"}
+{"event": "end", "job": "s53/n6k1_stress__H1", "rc": 0, "wall_s": 1537.7, "rows": 40, "rows_not_ok": 0, "at": "2026-11-06T01:00:20"}
+{"event": "end", "job": "s53/n6k1_knee__H1", "rc": 0, "wall_s": 1863.0, "rows": 40, "rows_not_ok": 0, "at": "2026-11-06T01:05:45"}
+{"event": "end", "job": "s53/n6k1_knee__D4", "rc": 0, "wall_s": 1883.1, "rows": 40, "rows_not_ok": 0, "at": "2026-11-06T01:06:05"}
+{"event": "end", "job": "s53/n6k1_stress__D4", "rc": 0, "wall_s": 1887.1, "rows": 40, "rows_not_ok": 0, "at": "2026-11-06T01:06:09"}

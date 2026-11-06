@@ -1,0 +1,32 @@
+{"event": "start", "job": "s59x/n12k1_knee__F", "pid": 27836, "at": "2026-11-06T04:07:39"}
+{"event": "start", "job": "s59x/n12k1_knee__FX", "pid": 44268, "at": "2026-11-06T04:07:39"}
+{"event": "start", "job": "s59x/n12k1_knee__H1", "pid": 35752, "at": "2026-11-06T04:07:39"}
+{"event": "end", "job": "s59x/n12k1_knee__H1", "rc": 0, "wall_s": 997.4, "rows": 20, "rows_not_ok": 0, "at": "2026-11-06T04:24:17"}
+{"event": "start", "job": "s59x/n12k1_knee__D1", "pid": 38488, "at": "2026-11-06T04:24:17"}
+{"event": "end", "job": "s59x/n12k1_knee__FX", "rc": 0, "wall_s": 1029.7, "rows": 20, "rows_not_ok": 0, "at": "2026-11-06T04:24:49"}
+{"event": "start", "job": "s59x/n12k1_knee__D2", "pid": 36752, "at": "2026-11-06T04:24:49"}
+{"event": "end", "job": "s59x/n12k1_knee__F", "rc": 0, "wall_s": 1033.7, "rows": 20, "rows_not_ok": 0, "at": "2026-11-06T04:24:53"}
+{"event": "start", "job": "s59x/n12k1_knee__D3", "pid": 37620, "at": "2026-11-06T04:24:53"}
+{"event": "end", "job": "s59x/n12k1_knee__D1", "rc": 0, "wall_s": 1002.2, "rows": 20, "rows_not_ok": 0, "at": "2026-11-06T04:40:59"}
+{"event": "start", "job": "s59x/n12k1_knee__D4", "pid": 47444, "at": "2026-11-06T04:40:59"}
+{"event": "end", "job": "s59x/n12k1_knee__D2", "rc": 0, "wall_s": 972.0, "rows": 20, "rows_not_ok": 0, "at": "2026-11-06T04:41:01"}
+{"event": "start", "job": "s59x/n12k1_knee__D5", "pid": 42508, "at": "2026-11-06T04:41:01"}
+{"event": "end", "job": "s59x/n12k1_knee__D3", "rc": 0, "wall_s": 1008.3, "rows": 20, "rows_not_ok": 0, "at": "2026-11-06T04:41:41"}
+{"event": "start", "job": "s59x/n12k1_relaxed__F", "pid": 5728, "at": "2026-11-06T04:41:41"}
+{"event": "end", "job": "s59x/n12k1_knee__D4", "rc": 0, "wall_s": 972.6, "rows": 20, "rows_not_ok": 0, "at": "2026-11-06T04:57:11"}
+{"event": "start", "job": "s59x/n12k1_relaxed__FX", "pid": 35752, "at": "2026-11-06T04:57:11"}
+{"event": "end", "job": "s59x/n12k1_knee__D5", "rc": 0, "wall_s": 1006.8, "rows": 20, "rows_not_ok": 0, "at": "2026-11-06T04:57:48"}
+{"event": "start", "job": "s59x/n12k1_relaxed__H1", "pid": 47176, "at": "2026-11-06T04:57:48"}
+{"event": "end", "job": "s59x/n12k1_relaxed__F", "rc": 0, "wall_s": 970.5, "rows": 20, "rows_not_ok": 0, "at": "2026-11-06T04:57:52"}
+{"event": "start", "job": "s59x/n12k1_relaxed__D1", "pid": 48300, "at": "2026-11-06T04:57:52"}
+{"event": "end", "job": "s59x/n12k1_relaxed__FX", "rc": 0, "wall_s": 1010.4, "rows": 20, "rows_not_ok": 0, "at": "2026-11-06T05:14:02"}
+{"event": "start", "job": "s59x/n12k1_relaxed__D2", "pid": 47316, "at": "2026-11-06T05:14:02"}
+{"event": "end", "job": "s59x/n12k1_relaxed__H1", "rc": 0, "wall_s": 976.2, "rows": 20, "rows_not_ok": 0, "at": "2026-11-06T05:14:04"}
+{"event": "start", "job": "s59x/n12k1_relaxed__D3", "pid": 42320, "at": "2026-11-06T05:14:04"}
+{"event": "end", "job": "s59x/n12k1_relaxed__D1", "rc": 0, "wall_s": 976.1, "rows": 20, "rows_not_ok": 0, "at": "2026-11-06T05:14:08"}
+{"event": "start", "job": "s59x/n12k1_relaxed__D4", "pid": 6524, "at": "2026-11-06T05:14:08"}
+{"event": "end", "job": "s59x/n12k1_relaxed__D2", "rc": 0, "wall_s": 958.2, "rows": 20, "rows_not_ok": 0, "at": "2026-11-06T05:30:00"}
+{"event": "start", "job": "s59x/n12k1_relaxed__D5", "pid": 46284, "at": "2026-11-06T05:30:00"}
+{"event": "end", "job": "s59x/n12k1_relaxed__D3", "rc": 0, "wall_s": 1018.7, "rows": 20, "rows_not_ok": 0, "at": "2026-11-06T05:31:03"}
+{"event": "end", "job": "s59x/n12k1_relaxed__D4", "rc": 0, "wall_s": 1020.8, "rows": 20, "rows_not_ok": 0, "at": "2026-11-06T05:31:09"}
+{"event": "end", "job": "s59x/n12k1_relaxed__D5", "rc": 0, "wall_s": 663.6, "rows": 20, "rows_not_ok": 0, "at": "2026-11-06T05:41:04"}

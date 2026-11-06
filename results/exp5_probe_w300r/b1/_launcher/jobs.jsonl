@@ -1,0 +1,10 @@
+{"event": "start", "job": "s59/n12k1_knee__F", "pid": 47888, "at": "2026-11-06T03:15:41"}
+{"event": "start", "job": "s59/n12k1_knee__FX", "pid": 39016, "at": "2026-11-06T03:15:42"}
+{"event": "start", "job": "s59/n12k1_knee__H1", "pid": 30520, "at": "2026-11-06T03:15:42"}
+{"event": "end", "job": "s59/n12k1_knee__FX", "rc": 0, "wall_s": 1031.1, "rows": 20, "rows_not_ok": 0, "at": "2026-11-06T03:32:53"}
+{"event": "start", "job": "s59/n12k1_knee__D3", "pid": 28540, "at": "2026-11-06T03:32:53"}
+{"event": "end", "job": "s59/n12k1_knee__F", "rc": 0, "wall_s": 1033.1, "rows": 20, "rows_not_ok": 0, "at": "2026-11-06T03:32:55"}
+{"event": "start", "job": "s59/n12k1_knee__D4", "pid": 42984, "at": "2026-11-06T03:32:55"}
+{"event": "end", "job": "s59/n12k1_knee__H1", "rc": 0, "wall_s": 1053.3, "rows": 20, "rows_not_ok": 0, "at": "2026-11-06T03:33:15"}
+{"event": "end", "job": "s59/n12k1_knee__D3", "rc": 0, "wall_s": 966.6, "rows": 20, "rows_not_ok": 0, "at": "2026-11-06T03:48:59"}
+{"event": "end", "job": "s59/n12k1_knee__D4", "rc": 0, "wall_s": 966.6, "rows": 20, "rows_not_ok": 0, "at": "2026-11-06T03:49:01"}
