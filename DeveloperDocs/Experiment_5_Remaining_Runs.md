@@ -55,7 +55,7 @@ Also open, and not in these counts:
 | P11, 6 Nov | added | 480 | `131e8333` | NOMS review copy | At 10 missions every arm reaches tau in every trial, so the compute cells' 75% and 70% come from the 4-mission cap |
 | | | **11,140** | | | |
 
-The 11,140 includes 1,260 trials that were never on the list: Group 1's add-ons (100), the fills (220), FQ's relaxed cells (60), P10 (400) and P11 (480). P4 and P9 are not in the paper; their reports are in `results/exp5/scores/probes/`. P1, P2, P3 and P5 are, as exploratory results. P6, P10, P11 and the band-energy comparison are in the NOMS review copy only: that copy is not tracked here, and the tracked paper sources have none of them yet.
+The 11,140 includes 1,260 trials that were never on the list: Group 1's add-ons (100), the fills (220), FQ's relaxed cells (60), P10 (400) and P11 (480). P4 and P9 are not in the paper; their reports are in `results/exp5/scores/probes/`. P1, P2, P3 and P5 are, as exploratory results. P6, P10, P11 and the band-energy comparison are in the NOMS review copy only, `DeveloperDocs/paper/noms_review/main_review2.tex`: the paper sources in `DeveloperDocs/paper/` have none of them yet.
 
 **Keeping this page current:** after each flight, add its row to Done, take it out of Not done, update the totals, set the Status columns below, and cite the results commit.
 
