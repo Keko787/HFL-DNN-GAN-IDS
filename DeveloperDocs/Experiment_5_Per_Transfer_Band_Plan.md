@@ -12,6 +12,8 @@
 - **A bounded wait.** Step 3 waits up to `w` seconds when every remaining member is in a trough. Here that is left out of v1 (*Not in this plan*).
 - **Narrower bands.** Step 3 never moves to a narrower band on one arrival reading. In the 6 Nov paired traces, moves from medium to narrow looked faster at 25 of 25 stops and were faster at 5. That reading was taken at arrival, while each session is charged at its own start. This rule reads the SNR at the session's start, which on the recorded physics is the SNR the session is charged at, so its price is the charge. Under step 1's partway failures that no longer holds, and the guard may be needed here too.
 
+**Revised DDIL plan, 14 Nov 2026.** The DDIL plan's step 1 now lets a session's rate follow the channel, in the same switch as partway failures. Its new step 0 replays P1's traces to size how much of F's 17 dB hover comes from holding a session at its start rate. This rule gains mostly by avoiding that charge, so step 0 is this plan's go/no-go as well: it extends Stage 0 below with the rate-following pricing. If P12 flies on the recorded physics first, its result has to be read with that in mind.
+
 ---
 
 ## Why
@@ -247,6 +249,6 @@ P1's leads that cleared Holm at 20 trials were 70–88 s, hence 40 trials in the
 ## Not in this plan
 
 - A learned per-transfer decision (new action space, `pair_v2`).
-- Integrating the rate over a session's 1 s noise bins instead of fixing it at the session's start. That is a physics change for every arm; it needs its own justification and a re-fly of everything it touches.
+- Integrating the rate over a session's 1 s noise bins instead of fixing it at the session's start. That is a physics change for every arm; it needs its own justification and a re-fly of everything it touches. It is now in the DDIL plan's step 1 (revised 14 Nov 2026).
 - Rescuing a member that is below the floor on the stop's class at arrival but above it on another class. That changes the arrival gate, so reach as well as time.
 - Waiting in the hover for a trough to pass when every remaining session is deferred (an idle time W > 0).
