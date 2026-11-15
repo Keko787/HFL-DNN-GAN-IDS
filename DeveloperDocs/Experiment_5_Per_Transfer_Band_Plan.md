@@ -4,6 +4,16 @@
 
 ---
 
+## How this relates to the DDIL plan
+
+[FeRRy_DDIL_Robustness_Plan.md](FeRRy_DDIL_Robustness_Plan.md), written the same day, has the same idea as its step 3, "Decide per transfer, not per stop", as a new FX arm. This page details that step for FX and FQ: the rule, the arms, the builds and P12's analysis plan. The two differ in three places, to reconcile before anything is built (decision 8):
+
+- **Order.** The DDIL plan first makes the simulator harsher (step 1: sessions can fail partway, band-dependent losses), then flies step 3 on that model. This page flies the arms on the recorded physics, where a session's rate is fixed at its start.
+- **A bounded wait.** Step 3 waits up to `w` seconds when every remaining member is in a trough. Here that is left out of v1 (*Not in this plan*).
+- **Narrower bands.** Step 3 never moves to a narrower band on one arrival reading. In the 6 Nov paired traces, moves from medium to narrow looked faster at 25 of 25 stops and were faster at 5. That reading was taken at arrival, while each session is charged at its own start. This rule reads the SNR at the session's start, which on the recorded physics is the SNR the session is charged at, so its price is the charge. Under step 1's partway failures that no longer holds, and the guard may be needed here too.
+
+---
+
 ## Why
 
 At 17 dB of interference no baseline beats F, but F's lead is gone (P1, `results/exp5/scores/probes/P1.md`). On the default mission-backhaul channel F is significantly faster than all six baselines (Holm p 0.002–0.017). At 17 dB every comparison is "no claim", and the FedEx route is 16 s ahead on the mean (244 against 260 s).
@@ -230,6 +240,7 @@ P1's leads that cleared Holm at 20 trials were 70–88 s, hence 40 trials in the
    - The rebuttal is due 3 Dec and the revision 18 Jan 2027.
    - P12 could go into the revision as an exploratory result that motivates a limitation's fix, or into a follow-up paper.
    - Building and flying it takes Stages 1–4: about 12 h of machine time, plus the build and FQ's retraining.
+8. **The DDIL plan's step 3.** Fly these arms on the recorded physics first, as this page does, which isolates the rule's own effect; or only after the DDIL plan's step 1 changes the simulator, as that plan orders it, which tests the rule where it would have to work. Then decide whether to adopt step 3's bounded wait and its narrower-band guard.
 
 ---
 
