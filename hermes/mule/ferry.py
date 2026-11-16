@@ -119,6 +119,7 @@ import numpy as np
 
 from hermes.l1.channel_ddqn import L1_STATE_DIM
 from hermes.l1.channel_model import (
+    CONTACT_REGIMES,
     SALT_AVAILABILITY,
     SALT_BACKHAUL,
     SALT_CONTACT,
@@ -173,6 +174,16 @@ RESPONSES: Tuple[str, ...] = (RESPONSE_ABORT, RESPONSE_REPLAN)
 RELIABILITY_ORIGIN = "origin"
 RELIABILITY_CHANNEL = "channel"
 RELIABILITY_SOURCES: Tuple[str, ...] = (RELIABILITY_ORIGIN, RELIABILITY_CHANNEL)
+
+#: DDIL build D1, ``FerrySpec.channel_estimate``: what the plan score's outage
+#: reads besides the recorded channel's own sigmas (None). ``causal``: the
+#: mean offset and spread of the stops' arrival readings about the link's mean
+#: SNR, shrunk toward the regime's default values by
+#: :data:`CAUSAL_PRIOR_READINGS` pseudo-readings.
+CHANNEL_ESTIMATE_CAUSAL = "causal"
+CHANNEL_ESTIMATES: Tuple[str, ...] = (CHANNEL_ESTIMATE_CAUSAL,)
+#: The prior's weight, in readings (about two stops of six members).
+CAUSAL_PRIOR_READINGS = 12.0
 
 #: The backhaul carrier policy. ``fixed``: ``argmax_c g_c``, the noise-free
 #: long-run best carrier (every arm but H3). ``adaptive``: H3's
@@ -315,6 +326,22 @@ class FerrySpec:
       cluster, the route's landing plus the upload, by its own deadline).
       ``delivery`` changed meaning after ef1faa1 with no shim, as no
       recorded run or committed trace used it.
+
+    DDIL build D1 (the unified plan's step 1), each off in every recorded run
+    and left out of :meth:`describe` while off:
+
+    * ``session_t_out_s``: the session model (``ContactPlan.session_walk``):
+      the rate follows the channel, a session fails after this many seconds
+      below the floor and is retried once at the end of the stop's queue.
+      None: the recorded pricing, each session at its start SNR.
+    * ``session_resumable``: a retry sends only what the failed try did not.
+    * ``contact_repoll``: Pass 1, a member in range but below the floor at
+      arrival is solicited once more at the stop's end if it is above it then.
+    * ``channel_estimate``: what the plan score's outage reads. None, the
+      recorded run (and arms F-o, FX-o): the contact channel's own σ_sh, σ_I
+      and A. ``"causal"``: a mean offset and spread estimated from the stops'
+      arrival readings (:meth:`FerryRuntime.record_arrival`), from the
+      regime's default values as the prior.
     """
 
     band: Optional[str] = None
@@ -331,8 +358,28 @@ class FerrySpec:
     availability_salt: Optional[int] = field(default=None, repr=False)
     deadline_bounds: str = DEADLINE_BOUNDS_COLLECTION
     mission_upload_snr_db: Optional[float] = None
+    session_t_out_s: Optional[float] = None
+    session_resumable: bool = False
+    contact_repoll: bool = False
+    channel_estimate: Optional[str] = None
 
     def __post_init__(self) -> None:
+        if self.session_t_out_s is not None:
+            t_out = self.session_t_out_s
+            if (isinstance(t_out, bool) or not isinstance(t_out, numbers.Real)
+                    or not math.isfinite(t_out) or t_out <= 0.0):
+                raise ValueError(f"session_t_out_s must be a finite number > 0, got {t_out!r}")
+            object.__setattr__(self, "session_t_out_s", float(t_out))
+            if self.band is None:
+                raise ValueError("the session model (session_t_out_s) needs a contact band")
+        elif self.session_resumable:
+            raise ValueError("session_resumable needs the session model (session_t_out_s)")
+        if self.contact_repoll and self.band is None:
+            raise ValueError("contact_repoll needs a contact band: it re-reads the SNR gate")
+        if self.channel_estimate is not None:
+            _choice(self.channel_estimate, CHANNEL_ESTIMATES, "channel_estimate")
+            if self.band is None:
+                raise ValueError("channel_estimate needs a contact band")
         if self.mission_upload_snr_db is not None:
             snr = self.mission_upload_snr_db
             if isinstance(snr, bool) or not isinstance(snr, numbers.Real) or not math.isfinite(snr):
@@ -452,6 +499,14 @@ class FerrySpec:
         p_move_w: Optional[float] = None,
         p_hover_w: Optional[float] = None,
         deadline_bounds: str = DEADLINE_BOUNDS_COLLECTION,
+        session_t_out_s: Optional[float] = None,
+        session_resumable: Optional[bool] = None,
+        contact_repoll: Optional[bool] = None,
+        interference_shared: Optional[str] = None,
+        burst_duty: Optional[float] = None,
+        burst_mean_s: Optional[float] = None,
+        burst_depth_db: Optional[float] = None,
+        channel_estimate: Optional[str] = None,
     ) -> "FerrySpec":
         """A spec from plain values; every default is the design's.
 
@@ -494,6 +549,12 @@ class FerrySpec:
         narrow class's planar reach to that multiple of ``rf_range_m`` (None
         keeps the derivation's, 3.87 at the defaults); forwarded to
         ``ContactLink``.
+
+        DDIL build D1: ``interference_shared`` and the burst triple
+        (``burst_duty``, ``burst_mean_s``, ``burst_depth_db``) are forwarded to
+        ``ContactChannel.from_link``; ``session_t_out_s``,
+        ``session_resumable``, ``contact_repoll`` and ``channel_estimate`` are
+        the spec's own fields. None everywhere is the recorded run.
         """
         _choice(backhaul_model, BACKHAUL_MODELS, "backhaul_model")
         classes = {} if band_classes is None else {"classes": tuple(band_classes)}
@@ -504,13 +565,21 @@ class FerrySpec:
         )
         channel = None
         if contact_band is not None:
+            d1_channel = {k: v for k, v in (
+                ("interference_shared", interference_shared), ("burst_duty", burst_duty),
+                ("burst_mean_s", burst_mean_s), ("burst_depth_db", burst_depth_db),
+            ) if v is not None}
             channel = ContactChannel.from_link(
                 link, salt=ferry_salt(seed, SALT_CONTACT), regime=contact_regime,
                 interference_period_s=interference_period_s, noise_bin_s=noise_bin_s,
                 shadow_corr_s=shadow_corr_s, shadow_keying=shadow_keying,
                 interference_amp_db=interference_amp_db,
                 interference_sigma_db=interference_sigma_db,
+                **d1_channel,
             )
+        elif any(v is not None for v in (interference_shared, burst_duty, burst_mean_s,
+                                         burst_depth_db)):
+            raise ValueError("interference_shared and the burst process need a contact band")
         backhaul = None
         mission_upload_snr_db = None
         if backhaul_model == BACKHAUL_MODEL_SECONDS:
@@ -559,6 +628,10 @@ class FerrySpec:
             availability_salt=ferry_salt(seed, SALT_AVAILABILITY) if channel_reliability else None,
             deadline_bounds=deadline_bounds,
             mission_upload_snr_db=mission_upload_snr_db,
+            session_t_out_s=session_t_out_s,
+            session_resumable=bool(session_resumable),
+            contact_repoll=bool(contact_repoll),
+            channel_estimate=channel_estimate,
         )
 
     # ------------------------------------------------------------------ #
@@ -634,6 +707,13 @@ class FerrySpec:
             "dock_turnaround_s": self.flight.turnaround_s,
             "listen_s": self.flight.listen_s,
             "deadline_bounds": self.deadline_bounds,
+            # DDIL build D1: only while on, so a recorded run's record is unchanged.
+            **({} if self.session_t_out_s is None else {
+                "session_t_out_s": self.session_t_out_s,
+                "session_resumable": self.session_resumable}),
+            **({"contact_repoll": True} if self.contact_repoll else {}),
+            **({} if self.channel_estimate is None
+               else {"channel_estimate": self.channel_estimate}),
         }
 
 
@@ -766,6 +846,11 @@ class FerryRuntime:
             RFPriorProducer() if spec.backhaul is not None else None
         )
         self._warned_missing: set = set()
+        #: DDIL build D1's causal channel estimate: the count, sum and sum of
+        #: squares of the arrival readings' offsets from the link's mean SNR.
+        self._est_n = 0
+        self._est_s1 = 0.0
+        self._est_s2 = 0.0
 
     # ------------------------------------------------------------------ #
     # Payload
@@ -989,6 +1074,13 @@ class FerryRuntime:
         if d > link.range_planar_m(name):  # type: ignore[union-attr]
             return 1.0
         margin = link.snr_floor_db - link.mean_snr_db(name, d)  # type: ignore[union-attr]
+        if self.spec.channel_estimate is not None:
+            # DDIL build D1: the causal estimate in place of the channel's own.
+            offset, sigma = self.channel_estimate_db()
+            margin -= offset
+            if sigma == 0.0:
+                return 1.0 if margin > 0.0 else 0.0
+            return statistics.NormalDist().cdf(margin / sigma)
         sigma = math.sqrt(
             chan.shadow_sigma_db ** 2 + chan.interference_sigma_db ** 2  # type: ignore[union-attr]
             + chan.interference_amp_db ** 2 / 2.0  # type: ignore[union-attr]
@@ -1165,7 +1257,18 @@ class FerryRuntime:
             return ContactPlan.at_arrival(members, **common)
         link, chan = self.spec.link, self.spec.contact_channel
         stop = tuple(wp.position)
-        return ContactPlan.at_arrival(
+        spec = self.spec
+        d1: Dict[str, Any] = {}
+        if spec.session_t_out_s is not None:
+            d1.update(
+                rate_fn=lambda s: link.rate_bps(band, s),  # type: ignore[union-attr]
+                session_t_out_s=spec.session_t_out_s,
+                session_resumable=spec.session_resumable,
+                session_step_s=chan.noise_bin_s,  # type: ignore[union-attr]
+            )
+        if spec.contact_repoll and MissionPass(pass_kind) is MissionPass.COLLECT:
+            d1["repoll"] = True
+        plan = ContactPlan.at_arrival(
             members,
             band=band,
             band_index=band_index,
@@ -1174,8 +1277,48 @@ class FerryRuntime:
             snr_fn=lambda j, d, t: chan.snr_db(t, band, d, link_key=j, stop_pos=stop),  # type: ignore[union-attr]
             snr_floor_db=link.snr_floor_db,  # type: ignore[union-attr]
             dwell_fn=lambda n, s: link.dwell_s(n, band, s),  # type: ignore[union-attr]
-            **common,
+            **common, **d1,
         )
+        if spec.channel_estimate is not None:
+            self.record_arrival(plan, positions, range_planar_m)
+        return plan
+
+    def record_arrival(self, plan: ContactPlan, positions: Mapping[DeviceID, Sequence[float]],
+                       range_planar_m: float) -> None:
+        """Feed one stop's arrival readings to the causal channel estimate (DDIL D1).
+
+        Each member within the class's range gives one reading: its SNR at
+        arrival less the link's mean SNR on the plan's class at its distance.
+        These are the readings the contact gate already takes; the declared
+        assumption is that the mule reads them below the floor as well.
+        """
+        link = self.spec.link
+        assert link is not None and plan.band is not None and plan.stop is not None
+        for did in plan.members:
+            d = planar_distance_m(plan.stop, positions[did])
+            if d > range_planar_m:
+                continue
+            r = float(plan.snr_db[did]) - link.mean_snr_db(plan.band, d)
+            self._est_n += 1
+            self._est_s1 += r
+            self._est_s2 += r * r
+
+    def channel_estimate_db(self) -> Tuple[float, float]:
+        """The causal estimate's (mean offset, spread) in dB, from the readings so far.
+
+        The prior is :data:`CAUSAL_PRIOR_READINGS` pseudo-readings at offset 0
+        with the regime's default spread ``√(σ_sh² + σ_I² + A²/2)``, σ_sh the
+        link's and σ_I, A the regime's own (``CONTACT_REGIMES``), not the
+        channel's overrides.
+        """
+        link, chan = self.spec.link, self.spec.contact_channel
+        assert link is not None and chan is not None
+        amp0, sig0 = CONTACT_REGIMES[chan.regime]
+        var0 = link.shadow_sigma_db ** 2 + sig0 ** 2 + amp0 ** 2 / 2.0
+        k = CAUSAL_PRIOR_READINGS + self._est_n
+        mean = self._est_s1 / k
+        second = (CAUSAL_PRIOR_READINGS * var0 + self._est_s2) / k
+        return mean, math.sqrt(max(second - mean * mean, 0.0))
 
     def arrival_view(
         self,

@@ -67,6 +67,27 @@ SnrFn = Callable[[DeviceID, float, float], float]
 #: ``(bytes, SNR in dB) -> seconds``, or None when the SNR is below the floor,
 #: e.g. ``lambda n, s: link.dwell_s(n, band, s)``.
 DwellFn = Callable[[int, float], Optional[float]]
+#: ``SNR in dB -> bit/s`` on the contact's band, 0 below the floor, e.g.
+#: ``lambda s: link.rate_bps(band, s)`` (DDIL build D1's session model).
+RateFn = Callable[[float], float]
+
+#: DDIL build D1: the longest one session walk may run before it counts as
+#: failed, whatever ``session_t_out_s`` says (the step 0 replay's cap).
+SESSION_WALK_CAP_S = 600.0
+
+
+@dataclass(frozen=True)
+class SessionWalk:
+    """One session under D1's session model (:meth:`ContactPlan.session_walk`).
+
+    ``dur_s`` is the airtime it used, ``done`` whether every bit arrived, and
+    ``bits`` how many had arrived by its end (with the bits it started from).
+    """
+
+    dur_s: float
+    done: bool
+    bits: float
+    capped: bool = False
 
 
 def planar_distance_m(a: Sequence[float], b: Sequence[float]) -> float:
@@ -141,6 +162,22 @@ class ContactPlan:
       stamps it at the current time with no airtime and no listen, as a
       refused one. Disjoint from ``drop_uplink`` (a device with no update has
       no uplink to drop). Empty in every recorded run.
+
+    DDIL build D1 (the unified plan's step 1), every field off in every
+    recorded run:
+
+    * ``session_t_out_s``: the session model. None prices each session at the
+      SNR at its own start, the floor rate below the floor (the recorded
+      model). A number makes the rate follow the channel in steps of
+      ``session_step_s`` (:meth:`session_walk`, through ``rate_fn``): nothing
+      moves below the floor, and a session fails once the SNR has stayed
+      below it for ``session_t_out_s`` in a row. The host's commit retries a
+      failed session once, at the end of the stop's queue.
+    * ``session_resumable``: a retry sends only the bits the failed try did
+      not deliver (False: it starts again).
+    * ``repoll_candidates``: Pass 1, the unreachable members within the band's
+      range (gated by the floor at arrival). The host solicits those above the
+      floor once more at the stop's end. Empty: no re-poll.
     """
 
     arrival_ts: float
@@ -160,6 +197,11 @@ class ContactPlan:
     session_time_s: float = 1.0
     payload_bytes: Optional[int] = None
     not_ready: FrozenSet[DeviceID] = frozenset()
+    rate_fn: Optional[RateFn] = None
+    session_t_out_s: Optional[float] = None
+    session_resumable: bool = False
+    session_step_s: float = 1.0
+    repoll_candidates: Tuple[DeviceID, ...] = ()
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "arrival_ts", _finite(self.arrival_ts, "arrival_ts"))
@@ -216,6 +258,19 @@ class ContactPlan:
             object.__setattr__(
                 self, "stop", tuple(_finite(c, "stop coordinate") for c in self.stop),
             )
+        repoll = tuple(self.repoll_candidates)
+        stray = [did for did in repoll if did not in unreachable]
+        if stray or len(set(repoll)) != len(repoll):
+            raise ValueError(
+                f"repoll_candidates must be distinct unreachable members, got {repoll!r}")
+        object.__setattr__(self, "repoll_candidates", repoll)
+        object.__setattr__(self, "session_resumable", bool(self.session_resumable))
+        if self.session_resumable and self.session_t_out_s is None:
+            raise ValueError("session_resumable needs the session model (session_t_out_s)")
+        step = _finite(self.session_step_s, "session_step_s")
+        if step <= 0.0:
+            raise ValueError(f"session_step_s must be > 0, got {step!r}")
+        object.__setattr__(self, "session_step_s", step)
 
         if self.band is None:
             # The channel-free mode (critic A1): no link numbers at all, so a
@@ -226,10 +281,14 @@ class ContactPlan:
                     ("snr_floor_db", self.snr_floor_db),
                     ("dwell_fn", self.dwell_fn),
                     ("snr_at_fn", self.snr_at_fn),
+                    ("rate_fn", self.rate_fn),
+                    ("session_t_out_s", self.session_t_out_s),
                 ) if value is not None
             ]
             if self.snr_db:
                 extra.append("snr_db")
+            if repoll:
+                extra.append("repoll_candidates")
             if extra:
                 raise ValueError(
                     f"a ContactPlan without a band takes no link fields; got {extra}"
@@ -266,6 +325,62 @@ class ContactPlan:
                 raise ValueError(f"snr_db has no arrival SNR for member {did!r}")
             snr[did] = _finite(self.snr_db[did], f"snr_db[{did!r}]")
         object.__setattr__(self, "snr_db", MappingProxyType(snr))
+        if self.session_t_out_s is not None:
+            t_out = _finite(self.session_t_out_s, "session_t_out_s")
+            if t_out <= 0.0:
+                raise ValueError(f"session_t_out_s must be > 0, got {t_out!r}")
+            object.__setattr__(self, "session_t_out_s", t_out)
+            if not callable(self.rate_fn) or not callable(self.snr_at_fn):
+                raise TypeError(
+                    "the session model (session_t_out_s) needs rate_fn(snr_db) and snr_at_fn")
+        if self.rate_fn is not None and not callable(self.rate_fn):
+            raise TypeError("rate_fn must be callable or None")
+
+    @property
+    def session_model(self) -> bool:
+        """True when D1's session model prices this contact (``session_t_out_s`` set)."""
+        return self.session_t_out_s is not None
+
+    def session_walk(self, device_id: DeviceID, t0_s: float, nbytes: int,
+                     start_bits: float = 0.0) -> SessionWalk:
+        """One session of ``nbytes`` from ``t0_s`` under D1's session model.
+
+        The rate follows the member's SNR in steps of ``session_step_s``, read at
+        each step's start (``rate_fn(snr_at(device, t))``); nothing moves while
+        the rate is 0 (below the floor). The session fails once the SNR has been
+        below the floor for ``session_t_out_s`` in a row, and costs the time it
+        used up to then; it also fails, capped, at :data:`SESSION_WALK_CAP_S`.
+        ``start_bits`` were delivered by an earlier try (a resumable retry).
+        This is the step 0 replay's ``walk_follow``
+        (``scripts/exp5/ddil_replay.py``), so its pricing (s) carries over.
+        """
+        if not self.session_model:
+            raise ValueError("session_walk needs the session model (session_t_out_s)")
+        t_out = float(self.session_t_out_s)  # type: ignore[arg-type]
+        step = self.session_step_s
+        rate_fn = self.rate_fn
+        assert rate_fn is not None
+        need = 8.0 * float(nbytes) - float(start_bits)
+        got = 0.0
+        t = float(t0_s)
+        below_since: Optional[float] = None
+        while True:
+            if t - t0_s >= SESSION_WALK_CAP_S:
+                return SessionWalk(t - t0_s, False, start_bits + got, capped=True)
+            snr = self.snr_at(device_id, t)
+            rate = float(rate_fn(float(snr)))  # type: ignore[arg-type]
+            if rate <= 0.0:
+                if below_since is None:
+                    below_since = t
+                if t + step - below_since >= t_out:
+                    return SessionWalk(below_since + t_out - t0_s, False, start_bits + got)
+                t += step
+                continue
+            below_since = None
+            if got + rate * step >= need:
+                return SessionWalk(t - t0_s + (need - got) / rate, True, start_bits + need)
+            got += rate * step
+            t += step
 
     # ------------------------------------------------------------------ #
     # Construction at arrival (the gate)
@@ -290,6 +405,11 @@ class ContactPlan:
         listen_s: float = 1.0,
         session_time_s: float = 1.0,
         payload_bytes: Optional[int] = None,
+        rate_fn: Optional[RateFn] = None,
+        session_t_out_s: Optional[float] = None,
+        session_resumable: bool = False,
+        session_step_s: float = 1.0,
+        repoll: bool = False,
     ) -> "ContactPlan":
         """The plan for the stop the mule has just reached; ``arrival_ts = clock()``.
 
@@ -302,6 +422,11 @@ class ContactPlan:
 
         Without a band (``band=None``, critic A1): every member is a target, and
         the link arguments must be left out.
+
+        DDIL build D1: ``rate_fn``, ``session_t_out_s``, ``session_resumable``
+        and ``session_step_s`` pass to the plan as given (the session model);
+        ``repoll`` makes every unreachable member within range a re-poll
+        candidate. All off by default, the recorded plan.
         """
         members = list(members)
         if not members:
@@ -320,8 +445,11 @@ class ContactPlan:
                     ("band_index", band_index), ("positions", positions),
                     ("range_planar_m", range_planar_m), ("snr_fn", snr_fn),
                     ("snr_floor_db", snr_floor_db), ("dwell_fn", dwell_fn),
+                    ("rate_fn", rate_fn), ("session_t_out_s", session_t_out_s),
                 ) if value is not None
             ]
+            if repoll:
+                given.append("repoll")
             if given:
                 raise ValueError(f"without a band the plan takes no link arguments; got {given}")
             return cls(
@@ -339,7 +467,7 @@ class ContactPlan:
 
         distance: Dict[DeviceID, float] = {}
         snr: Dict[DeviceID, float] = {}
-        targets, unreachable = [], []
+        targets, unreachable, candidates = [], [], []
         for did in members:
             if did not in positions:
                 raise ValueError(f"no position for member {did!r}")
@@ -354,14 +482,24 @@ class ContactPlan:
                 targets.append(did)
             else:
                 unreachable.append(did)
+                if repoll and in_range:
+                    candidates.append(did)
 
         def snr_at(did: DeviceID, t_s: float, _fn=snr_fn, _d=distance) -> float:
             return _fn(did, _d[did], t_s)
 
+        d1: Dict[str, object] = {}
+        if rate_fn is not None:
+            d1["rate_fn"] = rate_fn
+        if session_t_out_s is not None:
+            d1.update(session_t_out_s=session_t_out_s, session_resumable=session_resumable,
+                      session_step_s=session_step_s)
+        if candidates:
+            d1["repoll_candidates"] = tuple(candidates)
         return cls(
             arrival_ts=arrival, targets=tuple(targets), unreachable=tuple(unreachable),
             band=band, band_index=band_index, stop=stop_t, snr_db=snr,
-            snr_floor_db=floor, dwell_fn=dwell_fn, snr_at_fn=snr_at, **common,
+            snr_floor_db=floor, dwell_fn=dwell_fn, snr_at_fn=snr_at, **common, **d1,
         )
 
     # ------------------------------------------------------------------ #
@@ -485,14 +623,25 @@ class ContactCommit:
     # uplink airtime, its bytes (the declared payload, or the update's
     # measured size) at the SNR its session started at; banded contacts only.
     uplink_dwell_s: Mapping[DeviceID, float] = field(default_factory=dict)
+    # DDIL build D1, each in member order and empty when the switch is off:
+    # the sessions the session model retried, those that failed on their
+    # last try (an answered target whose update or delivery was then lost),
+    # and the re-poll's targets (unreachable at arrival, above the floor at
+    # the stop's end, solicited then).
+    session_retried: Tuple[DeviceID, ...] = ()
+    session_failed: Tuple[DeviceID, ...] = ()
+    repolled: Tuple[DeviceID, ...] = ()
 
 
 __all__ = [
     "KIND_DWELL",
     "KIND_LISTEN",
+    "SESSION_WALK_CAP_S",
     "ContactCommit",
     "ContactPlan",
     "DwellFn",
+    "RateFn",
+    "SessionWalk",
     "SnrFn",
     "planar_distance_m",
 ]

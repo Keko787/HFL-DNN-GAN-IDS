@@ -1202,6 +1202,18 @@ class Builder:
                 st, "s515", arm=arm, n=n515, k=1, level=s.get("s515.budget"),
                 payload=s.get("s515.payload_bytes"), n_trials=int(s.get("s515.n_trials")),
                 tag_extra="_missionbh", footprint=True))
+        # DDIL build D1 (DeveloperDocs/FeRRy_DDIL_Unified_Plan.md, step 1): cells given
+        # whole in ``s515.d1_cells``, each {tag, args, arms?, budget?}, beside the axes
+        # above and on the same seeds. params.toml has none, so the recorded stage's jobs
+        # are unchanged; the DDIL1 probe (loss_probes.py) passes them with --set.
+        for cell in s.get("s515.d1_cells", None) or []:
+            for arm in cell.get("arms") or s.get("s515.arms") or []:
+                self.jobs.append(self._arm_job(
+                    st, "s515", arm=arm, n=n515, k=1,
+                    level=cell.get("budget") or s.get("s515.budget"),
+                    payload=s.get("s515.payload_bytes"), n_trials=int(s.get("s515.n_trials")),
+                    extra=base + [str(a) for a in cell["args"]], tag_extra=str(cell["tag"]),
+                    footprint=True))
         # 5.11 (c): FerrySim at each scale cell's knee, every policy.
         knees = s.get("s511c.knee_s", None)
         w = int(s.get("s511c.workers"))

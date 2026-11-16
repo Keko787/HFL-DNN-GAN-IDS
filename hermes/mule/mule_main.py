@@ -2316,6 +2316,16 @@ class MuleSupervisor:
             "uplink_dropped": _ids(commit.uplink_dropped) if commit is not None else [],
             "l1_choice": l1_choice,
         })
+        # DDIL build D1: written only while a switch is on, so a recorded
+        # run's trace keeps its keys.
+        if fx.spec.session_t_out_s is not None:
+            rec.flown[pass_kind][-1]["session_retried"] = (
+                _ids(commit.session_retried) if commit is not None else [])
+            rec.flown[pass_kind][-1]["session_failed"] = (
+                _ids(commit.session_failed) if commit is not None else [])
+        if fx.spec.contact_repoll and collect:
+            rec.flown[pass_kind][-1]["repolled"] = (
+                _ids(commit.repolled) if commit is not None else [])
         if fits is not None and collect:
             # Study 5.12: who had no update ready, and each collected update's
             # uplink airtime (the device's transmit energy; empty without a band).

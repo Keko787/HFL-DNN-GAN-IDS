@@ -458,6 +458,26 @@ class MuleConfig:
     # round time). None, every other arm and every recorded run, weighs as
     # recorded.
     plan_speed_alpha: Optional[float] = None
+    # DDIL build D1 (DeveloperDocs/FeRRy_DDIL_Unified_Plan.md, step 1): the
+    # environment switches and the planner's channel estimate, each None in
+    # every recorded run and then left out of ``ferry_params``. Simulated
+    # clock only; ``hermes/mule/ferry.py`` (``FerrySpec``) documents each.
+    # ``session_t_out_s``: the session model (the rate follows the channel; a
+    # session fails after this long below the floor and is retried once);
+    # ``session_resumable``: a retry sends only what is left;
+    # ``contact_repoll``: Pass 1 re-solicits members gated at arrival once the
+    # stop's sessions end; ``interference_shared``: the class whose
+    # interference every class takes (nested bands); the burst triple: a
+    # Gilbert-Elliott burst process on every class; ``channel_estimate``
+    # "causal": the plan score's outage from the arrival readings.
+    session_t_out_s: Optional[float] = None
+    session_resumable: Optional[bool] = None
+    contact_repoll: Optional[bool] = None
+    interference_shared: Optional[str] = None
+    burst_duty: Optional[float] = None
+    burst_mean_s: Optional[float] = None
+    burst_depth_db: Optional[float] = None
+    channel_estimate: Optional[str] = None
     # Critic B4 — the causal RF prior under the recorded ``mission`` backhaul
     # model with the L1 channel (``--l1-channel``). Entry r - 1 is the SNR
     # (dB) the L1 trace gives the carrier chosen for mission round r's upload
@@ -587,7 +607,23 @@ FERRY_SPEC_FIELDS: Dict[str, str] = {
     "energy_capacity_j": "energy_capacity_j",
     "p_move_w": "p_move_w",
     "p_hover_w": "p_hover_w",
+    # DDIL build D1.
+    "session_t_out_s": "session_t_out_s",
+    "session_resumable": "session_resumable",
+    "contact_repoll": "contact_repoll",
+    "interference_shared": "interference_shared",
+    "burst_duty": "burst_duty",
+    "burst_mean_s": "burst_mean_s",
+    "burst_depth_db": "burst_depth_db",
+    "channel_estimate": "channel_estimate",
 }
+
+#: DDIL build D1's ``MuleConfig`` fields (the unified plan's step 1), each None
+#: in every recorded run.
+DDIL_MULE_FIELDS: Tuple[str, ...] = (
+    "session_t_out_s", "session_resumable", "contact_repoll", "interference_shared",
+    "burst_duty", "burst_mean_s", "burst_depth_db", "channel_estimate",
+)
 
 #: Every ``MuleConfig`` field the Exp 5 addendum (Studies 5.11-5.15) adds, each
 #: at a default that is the recorded run, so a recorded trial's per-role JSON
@@ -598,7 +634,7 @@ ADDENDUM_MULE_FIELDS: Tuple[str, ...] = (
     "interference_amp_db", "interference_sigma_db",
     "device_train_time_s", "train_time_params",
     "narrow_range_ratio", "plan_speed_alpha",
-)
+) + DDIL_MULE_FIELDS
 
 #: Study 5.12's mule fields: each device's fit time on the simulated clock and
 #: the settings it was drawn from (``MuleConfig``'s training-time block).
@@ -611,7 +647,7 @@ TRAIN_TIME_MULE_FIELDS: Tuple[str, ...] = ("device_train_time_s", "train_time_pa
 #: sets one shows it.
 FERRY_PARAMS_OMITTED_AT_NONE: Tuple[str, ...] = (
     "interference_amp_db", "interference_sigma_db", "narrow_range_ratio",
-)
+) + DDIL_MULE_FIELDS
 
 #: ``MuleConfig``'s FeRRy Phase 4 plan fields: ``plan_mode`` and the plan
 #: options (:data:`PLAN_OPTION_FIELDS`). Not ferry-spec fields (the spec prices

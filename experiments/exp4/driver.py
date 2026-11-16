@@ -440,6 +440,9 @@ FERRY_PHYSICS_FIELDS = (
     "interference_amp_db", "interference_sigma_db",
     # Exp 5 addendum (unit U10, Study 5.4): the narrow class's reach / rf_range_m.
     "narrow_range_ratio",
+    # DDIL build D1 (the unified plan's step 1).
+    "session_t_out_s", "session_resumable", "contact_repoll", "interference_shared",
+    "burst_duty", "burst_mean_s", "burst_depth_db", "channel_estimate",
 )
 
 #: Marker written next to every kept trace: the ``status`` and ``error`` the

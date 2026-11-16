@@ -100,6 +100,7 @@ import hashlib
 import math
 import operator
 import random
+import threading
 from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any, Callable, Dict, Hashable, List, Mapping, Optional, Sequence, Tuple
@@ -288,6 +289,7 @@ _U = "_u"
 _PHASE = "_phase"
 _GAIN = "_gain"
 _SHADOW_POS = "_shadow_pos"
+_BURST = "_burst"
 
 _TWO_POW_53 = 9007199254740992.0  # 2**53: a double holds any 53-bit integer exactly
 
@@ -578,6 +580,23 @@ class ContactChannel:
     Every term is a pure function of its arguments (see the module docstring),
     so arms that share a salt are paired by construction. Treat an instance as
     immutable and build a new one to change a parameter.
+
+    DDIL build D1 adds two environment switches, both off (None) in every
+    recorded run, and both left out of :meth:`describe` while off:
+
+    * ``interference_shared`` names one class whose ``I_b(t)`` (its phase,
+      period multiplier and noise sequence) every class takes, for nested
+      bands on one centre frequency (the unified plan's decision 9). An arm
+      that flies only that class sees the recorded channel.
+    * ``burst_duty``, ``burst_mean_s`` and ``burst_depth_db`` (set together)
+      add a two-state Gilbert–Elliott burst process beside the sinusoid: in
+      bins of ``noise_bin_s``, a burst lowers every class's SNR, on every
+      link, by ``burst_depth_db``. The share of bins in a burst is
+      ``burst_duty`` and a burst lasts ``burst_mean_s`` on average
+      (geometric). The state of each bin is a pure function of the salt and
+      the bin: the chain runs forward from the epoch's bin and backward
+      before it (a stationary two-state chain is reversible), each step keyed
+      by ``sha256(salt|_burst|bin)``.
     """
 
     def __init__(
@@ -597,6 +616,10 @@ class ContactChannel:
         shadow_keying: str = "time",
         shadow_grid_m: float = SHADOW_GRID_M,
         epoch_s: float = DEFAULT_EPOCH_S,
+        interference_shared: Optional[str] = None,
+        burst_duty: Optional[float] = None,
+        burst_mean_s: Optional[float] = None,
+        burst_depth_db: Optional[float] = None,
     ) -> None:
         if not callable(mean_snr_db):
             raise TypeError("mean_snr_db must be a callable (band name, d_planar) -> dB")
@@ -635,6 +658,71 @@ class ContactChannel:
         self.shadow_grid_m = _positive(shadow_grid_m, "shadow_grid_m")
         self.epoch_s = _finite(epoch_s, "epoch_s")
         self.phases: Tuple[float, ...] = _contact_phases(self.salt, self.bands)
+        if interference_shared is not None and interference_shared not in self._index:
+            raise ValueError(
+                f"interference_shared must be one of the classes {self.bands}, "
+                f"got {interference_shared!r}")
+        self.interference_shared: Optional[str] = interference_shared
+        burst = (burst_duty, burst_mean_s, burst_depth_db)
+        if any(v is not None for v in burst) and any(v is None for v in burst):
+            raise ValueError(
+                "burst_duty, burst_mean_s and burst_depth_db are set together or not at all, "
+                f"got {burst!r}")
+        self.burst_duty: Optional[float] = None
+        self.burst_mean_s: Optional[float] = None
+        self.burst_depth_db: Optional[float] = None
+        if burst_duty is not None:
+            duty = _finite(burst_duty, "burst_duty")
+            if not 0.0 < duty < 1.0:
+                raise ValueError(f"burst_duty must be in (0, 1), got {burst_duty!r}")
+            mean = _positive(burst_mean_s, "burst_mean_s")
+            if mean < self.noise_bin_s:
+                raise ValueError(
+                    f"burst_mean_s ({mean!r}) must be at least one bin ({self.noise_bin_s!r} s)")
+            self.burst_duty = duty
+            self.burst_mean_s = mean
+            self.burst_depth_db = _non_negative(burst_depth_db, "burst_depth_db")
+            # Per bin: leave a burst with p_off, enter one with p_on, so the mean
+            # burst is mean / bin bins and the stationary share in a burst is duty.
+            self._burst_p_off = self.noise_bin_s / mean
+            self._burst_p_on = duty * self._burst_p_off / (1.0 - duty)
+            if self._burst_p_on > 1.0:
+                raise ValueError(
+                    f"burst_duty {duty!r} with burst_mean_s {mean!r} needs a gap shorter "
+                    "than one bin")
+            first = _unit(_digest(f"{self.salt}|{_BURST}|0")) < duty
+            self._burst_fwd: List[bool] = [first]    # bins 0, 1, 2, ... from the epoch
+            self._burst_back: List[bool] = []        # bins -1, -2, ...
+            self._burst_lock = threading.Lock()
+
+    def burst_on(self, t: float) -> bool:
+        """Whether time ``t`` falls in a burst (always False without the burst process)."""
+        if self.burst_duty is None:
+            return False
+        k = math.floor((_finite(t, "t") - self.epoch_s) / self.noise_bin_s)
+        with self._burst_lock:
+            if k >= 0:
+                chain = self._burst_fwd
+                while len(chain) <= k:
+                    chain.append(self._burst_step(chain[-1], len(chain)))
+                return chain[k]
+            chain = self._burst_back
+            while len(chain) < -k:
+                prev = chain[-1] if chain else self._burst_fwd[0]
+                chain.append(self._burst_step(prev, -(len(chain) + 1)))
+            return chain[-k - 1]
+
+    def _burst_step(self, prev: bool, k: int) -> bool:
+        u = _unit(_digest(f"{self.salt}|{_BURST}|{k}"))
+        if prev:
+            return u >= self._burst_p_off
+        return u < self._burst_p_on
+
+    def burst_db(self, t: float) -> float:
+        """The burst term at ``t``: ``-burst_depth_db`` inside a burst, else 0."""
+        if self.burst_duty is None or not self.burst_on(t):
+            return 0.0
+        return -float(self.burst_depth_db)  # type: ignore[arg-type]
 
     @classmethod
     def from_link(cls, link: Any, *, salt: int, **kwargs: Any) -> "ContactChannel":
@@ -710,8 +798,13 @@ class ContactChannel:
             self.salt, "shadow", link_key, t, self.shadow_corr_s, self.epoch_s)
 
     def interference_db(self, t: float, band: Any) -> float:
-        """``I_b(t)``: band ``b``'s interference term in dB, the same for every link."""
+        """``I_b(t)``: band ``b``'s interference term in dB, the same for every link.
+
+        With ``interference_shared`` set, every class takes that class's term.
+        The burst term is apart (:meth:`burst_db`)."""
         i = self.band_index(band)
+        if self.interference_shared is not None:
+            i = self._index[self.interference_shared]
         t = _finite(t, "t")
         tau = t - self.epoch_s
         period = self.interference_period_s * self.period_multipliers[i]
@@ -727,11 +820,16 @@ class ContactChannel:
         """The realized SNR of link ``link_key`` on ``band`` at time ``t``, in dB.
 
         This is ``pred_snr_db(band, d_planar) + shadow_db(t, link_key) +
-        interference_db(t, band)``, added in that order.
+        interference_db(t, band)``, added in that order, plus :meth:`burst_db`
+        when the burst process is on (added last, so the recorded sum is
+        unchanged bit for bit without it).
         """
-        return (self.pred_snr_db(band, d_planar)
-                + self.shadow_db(t, link_key, stop_pos=stop_pos)
-                + self.interference_db(t, band))
+        snr = (self.pred_snr_db(band, d_planar)
+               + self.shadow_db(t, link_key, stop_pos=stop_pos)
+               + self.interference_db(t, band))
+        if self.burst_duty is not None:
+            snr += self.burst_db(t)
+        return snr
 
     def snr_by_band(self, t: float, d_planar: float, link_key: Hashable, *,
                     stop_pos: Optional[Sequence[float]] = None) -> Tuple[float, ...]:
@@ -757,6 +855,12 @@ class ContactChannel:
             "shadow_keying": self.shadow_keying,
             "shadow_grid_m": self.shadow_grid_m,
             "epoch_s": self.epoch_s,
+            # DDIL build D1: only while on, so a recorded run's record is unchanged.
+            **({} if self.interference_shared is None
+               else {"interference_shared": self.interference_shared}),
+            **({} if self.burst_duty is None else {
+                "burst_duty": self.burst_duty, "burst_mean_s": self.burst_mean_s,
+                "burst_depth_db": self.burst_depth_db}),
         }
 
 

@@ -30,6 +30,7 @@ FeRRy Phase 3 (design section 4) gives the two contact routines one body,
 
 from __future__ import annotations
 
+import dataclasses
 import logging
 import math
 import threading
@@ -168,6 +169,11 @@ _NOT_READY = "not_ready"
 # solicited with no advert answering this contact's solicit.
 _UNREACHABLE = "unreachable"
 _SILENT = "silent"
+# DDIL build D1's session model: a session that answered (``REPLIED``) but
+# whose transfer failed on its last try, so its update (Pass 2: its delivery)
+# was lost. Committed as a reply that never came: TIMEOUT (UNDELIVERED), the
+# push's bytes sent, nothing received, no listen.
+_SESSION_FAILED = "session_failed"
 
 
 @dataclass(frozen=True)
@@ -194,6 +200,34 @@ class _FerryContext:
     min_utility: float
     drop_uplink: FrozenSet[DeviceID]
     not_ready: FrozenSet[DeviceID] = frozenset()
+
+
+@dataclass(frozen=True)
+class _Repoll:
+    """DDIL build D1: the re-poll's second solicit, as its workers finished it."""
+
+    targets: Tuple[DeviceID, ...]
+    t_from: float
+    reached: Tuple[DeviceID, ...]
+    answered: Dict[DeviceID, FLReadyAdv]
+    sessions: Dict[DeviceID, "_FerrySession"]
+    pushed: Dict[DeviceID, int]
+
+
+@dataclass
+class _Schedule:
+    """The commit's stamps and airtime, before anything is charged or written."""
+
+    klass: Dict[DeviceID, str]
+    push_bytes: Dict[DeviceID, int]
+    stamps: Dict[DeviceID, float]
+    snrs: Dict[DeviceID, Optional[float]]
+    dwell_by_device: Dict[DeviceID, float]
+    uplink_by_device: Dict[DeviceID, float]
+    missing: List[DeviceID]
+    t: float
+    retried: List[DeviceID] = dataclasses.field(default_factory=list)
+    failed: List[DeviceID] = dataclasses.field(default_factory=list)
 
 
 class _BufferSink:
@@ -1125,74 +1159,8 @@ class HFLHostMission:
         # 2. Nothing that belongs to another contact may be read as this one's.
         with self._lock:
             self._misrouted_advs = []
-        reached: List[DeviceID] = []
-        answered: Dict[DeviceID, FLReadyAdv] = {}
-        threads: List[threading.Thread] = []
-        if targets:
-            sink.stale("adv", self._drain(self.rf.recv_ready_adv))
-            for did in targets:
-                sink.stale("gradient", self._drain(
-                    lambda timeout, _d=did: self.rf.recv_gradient(_d, timeout=timeout)))
-                sink.stale("ack", self._drain(
-                    lambda timeout, _d=did: self.rf.recv_delivery_ack(_d, timeout=timeout)))
-
-            # 3. Targeted, numbered solicit. Exp 5 addendum (Study 5.12): the
-            #    targets with no update ready are named in it, so they wait for
-            #    no push; the field is left at its default otherwise.
-            not_ready = tuple(did for did in targets if did in ctx.not_ready)
-            solicit = FLOpenSolicit(
-                mule_id=self.mule_id,
-                mission_round=mission_round,
-                issued_at=plan.arrival_ts,
-                pass_kind=spec.kind,
-                solicit_id=solicit_id,
-                **({"not_ready": not_ready} if not_ready else {}),
-            )
-            try:
-                reached = list(self.rf.solicit(solicit, targets))
-            except RFLinkError as e:
-                # Nobody was reached: every target is silent, and the commit
-                # still writes every member's line and charges the listen.
-                log.warning("%s: targeted solicit failed: %s", spec.api, e)
-                reached = []
-
-            # 4. Gather, starting each target's worker as its advert arrives.
-            worker = (self._ferry_collect_worker if spec.kind is MissionPass.COLLECT
-                      else self._ferry_deliver_worker)
-            waiting = set(reached)
-            deadline = time.time() + self.session_ttl_s
-            late_polls = 0
-            while waiting - answered.keys():
-                # Wait for adverts until the deadline. Past it, still take the
-                # ones already queued, without waiting: an advert that arrived
-                # in time must not be lost because starting the workers of the
-                # adverts before it used up a short TTL on a loaded host. The
-                # cap ends the loop on a link that never runs dry.
-                remaining = deadline - time.time()
-                if remaining <= 0:
-                    late_polls += 1
-                    if late_polls > _DRAIN_LIMIT:
-                        break
-                try:
-                    adv = self.rf.recv_ready_adv(timeout=max(0.0, remaining))
-                except RFLinkError:
-                    break
-                did = adv.device_id
-                if did in waiting and did not in answered and adv.in_reply_to == solicit_id:
-                    answered[did] = adv
-                    t = threading.Thread(
-                        target=worker, args=(did, adv, ctx, sink), daemon=True,
-                        name=f"ferry-{spec.kind.value}-{did}",
-                    )
-                    t.start()
-                    threads.append(t)
-                else:
-                    sink.stale("adv")
-                    log.debug(
-                        "%s: discarded an advert from device=%s answering solicit %d "
-                        "(this contact's is %d)",
-                        spec.api, did, adv.in_reply_to, solicit_id,
-                    )
+        reached, answered, threads = self._ferry_gather(
+            spec, ctx, targets, sink, issued_at=plan.arrival_ts)
 
         # 5. One join deadline for the whole contact.
         join_deadline = time.time() + 2.0 * self.session_ttl_s
@@ -1200,11 +1168,127 @@ class HFLHostMission:
             t.join(timeout=max(0.0, join_deadline - time.time()))
         sessions, pushed, stale = sink.close()
 
+        # 5b. DDIL build D1, the re-poll (Pass 1, banded): the members in range
+        #     but below the floor at arrival that are above it once this stop's
+        #     sessions have ended are solicited once more then, under a solicit
+        #     number of their own, and committed after the stop's sessions.
+        repoll: Optional[_Repoll] = None
+        if spec.kind is MissionPass.COLLECT and plan.repoll_candidates:
+            t_from = self._ferry_schedule(spec, plan, members, answered, sessions, pushed).t
+            cand = set(plan.repoll_candidates)
+            again = [did for did in members if did in cand
+                     and float(plan.snr_at(did, t_from)) >= float(plan.snr_floor_db)]
+            if again:
+                with self._lock:
+                    self._solicit_seq += 1
+                    repoll_id = self._solicit_seq
+                ctx2 = dataclasses.replace(ctx, solicit_id=repoll_id)
+                sink2 = _BufferSink(spec.api)
+                reached2, answered2, threads2 = self._ferry_gather(
+                    spec, ctx2, again, sink2, issued_at=t_from)
+                join_deadline = time.time() + 2.0 * self.session_ttl_s
+                for t in threads2:
+                    t.join(timeout=max(0.0, join_deadline - time.time()))
+                sessions2, pushed2, stale2 = sink2.close()
+                for k, v in stale2.items():
+                    stale[k] = stale.get(k, 0) + v
+                repoll = _Repoll(
+                    targets=tuple(again), t_from=t_from, reached=tuple(reached2),
+                    answered=answered2, sessions=sessions2, pushed=pushed2,
+                )
+
         # 6. Commit in device order on the mission clock.
         return self._ferry_commit(
             spec, plan, members, ctx=ctx, reached=reached, answered=answered,
-            sessions=sessions, pushed=pushed, stale=stale,
+            sessions=sessions, pushed=pushed, stale=stale, repoll=repoll,
         )
+
+    def _ferry_gather(
+        self,
+        spec: _PassSpec,
+        ctx: _FerryContext,
+        targets: List[DeviceID],
+        sink: _BufferSink,
+        *,
+        issued_at: float,
+    ) -> Tuple[List[DeviceID], Dict[DeviceID, FLReadyAdv], List[threading.Thread]]:
+        """Steps 2-4 of :meth:`_ferry_contact` for ``targets``: drain, solicit, gather.
+
+        Returns who the solicit reached, the adverts taken, and the workers
+        started (not yet joined). Nothing is solicited without targets.
+        """
+        reached: List[DeviceID] = []
+        answered: Dict[DeviceID, FLReadyAdv] = {}
+        threads: List[threading.Thread] = []
+        if not targets:
+            return reached, answered, threads
+        solicit_id = ctx.solicit_id
+        mission_round = ctx.mission_round
+        sink.stale("adv", self._drain(self.rf.recv_ready_adv))
+        for did in targets:
+            sink.stale("gradient", self._drain(
+                lambda timeout, _d=did: self.rf.recv_gradient(_d, timeout=timeout)))
+            sink.stale("ack", self._drain(
+                lambda timeout, _d=did: self.rf.recv_delivery_ack(_d, timeout=timeout)))
+
+        # 3. Targeted, numbered solicit. Exp 5 addendum (Study 5.12): the
+        #    targets with no update ready are named in it, so they wait for
+        #    no push; the field is left at its default otherwise.
+        not_ready = tuple(did for did in targets if did in ctx.not_ready)
+        solicit = FLOpenSolicit(
+            mule_id=self.mule_id,
+            mission_round=mission_round,
+            issued_at=issued_at,
+            pass_kind=spec.kind,
+            solicit_id=solicit_id,
+            **({"not_ready": not_ready} if not_ready else {}),
+        )
+        try:
+            reached = list(self.rf.solicit(solicit, targets))
+        except RFLinkError as e:
+            # Nobody was reached: every target is silent, and the commit
+            # still writes every member's line and charges the listen.
+            log.warning("%s: targeted solicit failed: %s", spec.api, e)
+            reached = []
+
+        # 4. Gather, starting each target's worker as its advert arrives.
+        worker = (self._ferry_collect_worker if spec.kind is MissionPass.COLLECT
+                  else self._ferry_deliver_worker)
+        waiting = set(reached)
+        deadline = time.time() + self.session_ttl_s
+        late_polls = 0
+        while waiting - answered.keys():
+            # Wait for adverts until the deadline. Past it, still take the
+            # ones already queued, without waiting: an advert that arrived
+            # in time must not be lost because starting the workers of the
+            # adverts before it used up a short TTL on a loaded host. The
+            # cap ends the loop on a link that never runs dry.
+            remaining = deadline - time.time()
+            if remaining <= 0:
+                late_polls += 1
+                if late_polls > _DRAIN_LIMIT:
+                    break
+            try:
+                adv = self.rf.recv_ready_adv(timeout=max(0.0, remaining))
+            except RFLinkError:
+                break
+            did = adv.device_id
+            if did in waiting and did not in answered and adv.in_reply_to == solicit_id:
+                answered[did] = adv
+                t = threading.Thread(
+                    target=worker, args=(did, adv, ctx, sink), daemon=True,
+                    name=f"ferry-{spec.kind.value}-{did}",
+                )
+                t.start()
+                threads.append(t)
+            else:
+                sink.stale("adv")
+                log.debug(
+                    "%s: discarded an advert from device=%s answering solicit %d "
+                    "(this contact's is %d)",
+                    spec.api, did, adv.in_reply_to, solicit_id,
+                )
+        return reached, answered, threads
 
     def _check_plan(
         self, spec: _PassSpec, plan: ContactPlan, members: List[DeviceID],
@@ -1399,6 +1483,237 @@ class HFLHostMission:
             return
         sink.put(did, _FerrySession(_REPLIED, push_bytes=nbytes))
 
+    @staticmethod
+    def _session_nbytes(plan: ContactPlan, collect: bool, kind: str, sess: Optional[_FerrySession],
+                        push_bytes: int) -> int:
+        """The bytes a session's airtime is priced for (the commit's rule)."""
+        if kind == _REPLIED and collect:
+            assert sess is not None and sess.grad is not None
+            return plan.session_bytes(push_bytes + sess.grad.byte_count, 2)
+        return plan.session_bytes(push_bytes, 1)
+
+    def _ferry_schedule(
+        self,
+        spec: _PassSpec,
+        plan: ContactPlan,
+        members: List[DeviceID],
+        answered: Mapping[DeviceID, FLReadyAdv],
+        sessions: Mapping[DeviceID, _FerrySession],
+        pushed: Mapping[DeviceID, int],
+    ) -> _Schedule:
+        """Steps 1-2 of :meth:`_ferry_commit`: class, stamp and price every member.
+
+        Pure: nothing is charged or written, so the re-poll can read when the
+        stop's sessions end before its own solicit (DDIL build D1). Without the
+        session model (``plan.session_model`` False, every recorded run) this
+        is the recorded pricing, operation for operation.
+        """
+        collect = spec.kind is MissionPass.COLLECT
+        banded = plan.band is not None
+        unreachable = set(plan.unreachable)
+        t_arr = plan.arrival_ts
+
+        # 1. Classify every member once. A worker still running at the join
+        #    deadline is committed from what it had done: with its push out it
+        #    is a missing reply, without one the mule gave up on the push, as
+        #    on a failed one.
+        klass: Dict[DeviceID, str] = {}
+        push_bytes: Dict[DeviceID, int] = {}
+        for did in members:
+            sess = sessions.get(did)
+            if did in unreachable:
+                klass[did] = _UNREACHABLE
+            elif did not in answered:
+                klass[did] = _SILENT
+            elif sess is not None:
+                klass[did] = sess.kind
+                push_bytes[did] = sess.push_bytes
+            elif did in pushed:
+                klass[did] = _NO_REPLY
+                push_bytes[did] = pushed[did]
+            else:
+                klass[did] = _PUSH_FAILED
+
+        # 2. Stamps and airtime, in device order from the arrival.
+        stamps: Dict[DeviceID, float] = {}
+        snrs: Dict[DeviceID, Optional[float]] = {}
+        dwell_by_device: Dict[DeviceID, float] = {}
+        uplink_by_device: Dict[DeviceID, float] = {}
+        missing: List[DeviceID] = []
+
+        def charge(did: DeviceID, t: float, nbytes: int) -> float:
+            """Price one session starting at ``t``; return when it ends."""
+            snr = plan.snr_at(did, t)
+            snrs[did] = snr
+            if not banded:
+                return t
+            d = plan.session_dwell_s(nbytes, snr)
+            if d > 0.0:
+                dwell_by_device[did] = d
+            return t + d
+
+        t = t_arr if banded else t_arr + plan.session_time_s
+        if banded and plan.session_model:
+            sched = _Schedule(klass, push_bytes, stamps, snrs, dwell_by_device,
+                              uplink_by_device, missing, t)
+            self._schedule_sessions(plan, collect, members, sessions, sched)
+            return sched
+        for did in members:
+            kind = klass[did]
+            if kind == _UNREACHABLE:
+                stamps[did] = t_arr
+                snrs[did] = plan.snr_db[did]
+            elif kind == _SILENT:
+                snrs[did] = plan.snr_db[did] if banded else None
+                missing.append(did)
+            elif kind in (_REFUSED, _PUSH_FAILED, _NOT_READY):
+                snrs[did] = plan.snr_at(did, t)
+                stamps[did] = t
+            elif kind == _REPLIED:
+                if collect:
+                    grad = sessions[did].grad
+                    assert grad is not None
+                    nbytes = plan.session_bytes(push_bytes[did] + grad.byte_count, 2)
+                else:
+                    nbytes = plan.session_bytes(push_bytes[did], 1)
+                t = charge(did, t, nbytes)
+                stamps[did] = t
+                if collect and banded:
+                    # Study 5.12: the update's own share, for the device's
+                    # transmit energy; read only, nothing is charged for it.
+                    uplink_by_device[did] = plan.session_dwell_s(
+                        plan.session_bytes(grad.byte_count, 1), snrs[did])
+            else:  # _NO_REPLY: the push's airtime was spent, the reply never came
+                t = charge(did, t, plan.session_bytes(push_bytes[did], 1))
+                missing.append(did)
+        return _Schedule(klass, push_bytes, stamps, snrs, dwell_by_device,
+                         uplink_by_device, missing, t)
+
+    def _walk(self, plan: ContactPlan, sched: _Schedule, did: DeviceID, nbytes: int,
+              start_bits: float = 0.0):
+        """One try of one session from ``sched.t`` (D1's session model); moves ``sched.t``."""
+        w = plan.session_walk(did, sched.t, nbytes, start_bits)
+        if w.dur_s > 0.0:
+            sched.dwell_by_device[did] = sched.dwell_by_device.get(did, 0.0) + w.dur_s
+        sched.t += w.dur_s
+        sched.stamps[did] = sched.t
+        return w
+
+    def _schedule_sessions(self, plan: ContactPlan, collect: bool, members: List[DeviceID],
+                           sessions: Mapping[DeviceID, _FerrySession], sched: _Schedule) -> None:
+        """Step 2 under DDIL build D1's session model.
+
+        Each session that went on the link (a reply, or a push whose reply never
+        came) runs :meth:`ContactPlan.session_walk` from where the one before it
+        ended; one that fails is tried once more at the end of the stop's queue,
+        in the order they failed, from the bits it reached when the plan is
+        resumable. An answered session that fails its retry is
+        ``_SESSION_FAILED``: its update (Pass 2: its delivery) is lost. The SNR
+        recorded is the one at the session's first start. Refused, failed-push
+        and not-ready members, the unreachable and the silent are stamped as in
+        the recorded pricing.
+        """
+        klass, snrs = sched.klass, sched.snrs
+        retry: List[Tuple[DeviceID, int, float]] = []
+        for did in members:
+            kind = klass[did]
+            if kind == _UNREACHABLE:
+                sched.stamps[did] = plan.arrival_ts
+                snrs[did] = plan.snr_db[did]
+            elif kind == _SILENT:
+                snrs[did] = plan.snr_db[did]
+                sched.missing.append(did)
+            elif kind in (_REFUSED, _PUSH_FAILED, _NOT_READY):
+                snrs[did] = plan.snr_at(did, sched.t)
+                sched.stamps[did] = sched.t
+            else:  # _REPLIED or _NO_REPLY
+                nbytes = self._session_nbytes(plan, collect, kind, sessions.get(did),
+                                              sched.push_bytes[did])
+                snrs[did] = plan.snr_at(did, sched.t)
+                w = self._walk(plan, sched, did, nbytes)
+                if not w.done:
+                    retry.append((did, nbytes, w.bits if plan.session_resumable else 0.0))
+                if kind == _NO_REPLY:
+                    sched.missing.append(did)
+        for did, nbytes, bits in retry:
+            sched.retried.append(did)
+            w = self._walk(plan, sched, did, nbytes, bits)
+            if not w.done:
+                sched.failed.append(did)
+                if klass[did] == _REPLIED:
+                    klass[did] = _SESSION_FAILED
+        if collect:
+            self._uplink_shares(plan, members, sessions, sched)
+
+    @staticmethod
+    def _uplink_shares(plan: ContactPlan, members: List[DeviceID],
+                       sessions: Mapping[DeviceID, _FerrySession], sched: _Schedule) -> None:
+        """Study 5.12's read-only uplink share, for each collected update (session model)."""
+        for did in members:
+            if sched.klass[did] == _REPLIED and did not in sched.uplink_by_device:
+                grad = sessions[did].grad
+                assert grad is not None
+                sched.uplink_by_device[did] = plan.session_dwell_s(
+                    plan.session_bytes(grad.byte_count, 1), sched.snrs[did])
+
+    def _ferry_schedule_repoll(self, spec: _PassSpec, plan: ContactPlan,
+                               members: List[DeviceID], sched: _Schedule,
+                               repoll: _Repoll) -> None:
+        """Add the re-poll's targets to ``sched``, in member order, from ``sched.t``.
+
+        DDIL build D1. Each re-poll target is classed from its own solicit as a
+        target is (silent, refused, failed push, not ready, no reply or
+        replied) and priced from where the stop's sessions ended: one try
+        under the session model (no retry: the re-poll is already the second
+        chance, as in the step 0 replay), the recorded pricing without it.
+        """
+        collect = spec.kind is MissionPass.COLLECT
+        again = set(repoll.targets)
+        for did in members:
+            if did not in again:
+                continue
+            sess = repoll.sessions.get(did)
+            if did not in repoll.answered:
+                kind = _SILENT
+            elif sess is not None:
+                kind = sess.kind
+                sched.push_bytes[did] = sess.push_bytes
+            elif did in repoll.pushed:
+                kind = _NO_REPLY
+                sched.push_bytes[did] = repoll.pushed[did]
+            else:
+                kind = _PUSH_FAILED
+            sched.klass[did] = kind
+            sched.stamps.pop(did, None)
+            if kind == _SILENT:
+                sched.snrs[did] = plan.snr_at(did, repoll.t_from)
+                sched.missing.append(did)
+                continue
+            sched.snrs[did] = plan.snr_at(did, sched.t)
+            if kind in (_REFUSED, _PUSH_FAILED, _NOT_READY):
+                sched.stamps[did] = sched.t
+                continue
+            nbytes = self._session_nbytes(plan, collect, kind, sess, sched.push_bytes[did])
+            if plan.session_model:
+                w = self._walk(plan, sched, did, nbytes)
+                if not w.done:
+                    sched.failed.append(did)
+                    if kind == _REPLIED:
+                        sched.klass[did] = _SESSION_FAILED
+            else:
+                d = plan.session_dwell_s(nbytes, sched.snrs[did])
+                if d > 0.0:
+                    sched.dwell_by_device[did] = d
+                sched.t += d
+                sched.stamps[did] = sched.t
+            if kind == _NO_REPLY:
+                sched.missing.append(did)
+            elif collect and sched.klass[did] == _REPLIED:
+                grad = repoll.sessions[did].grad
+                assert grad is not None
+                sched.uplink_by_device[did] = plan.session_dwell_s(
+                    plan.session_bytes(grad.byte_count, 1), sched.snrs[did])
+
     def _ferry_commit(
         self,
         spec: _PassSpec,
@@ -1411,6 +1726,7 @@ class HFLHostMission:
         sessions: Dict[DeviceID, _FerrySession],
         pushed: Dict[DeviceID, int],
         stale: Dict[str, int],
+        repoll: Optional[_Repoll] = None,
     ) -> Dict[DeviceID, Any]:
         """Stamp, charge and write one ferry contact, in ``members`` order.
 
@@ -1457,75 +1773,19 @@ class HFLHostMission:
                 f"({t_arr!r} -> {plan.clock()!r}); only the commit may charge it"
             )
 
-        # 1. Classify every member once. A worker still running at the join
-        #    deadline is committed from what it had done: with its push out it
-        #    is a missing reply, without one the mule gave up on the push, as
-        #    on a failed one.
-        klass: Dict[DeviceID, str] = {}
-        push_bytes: Dict[DeviceID, int] = {}
-        for did in members:
-            sess = sessions.get(did)
-            if did in unreachable:
-                klass[did] = _UNREACHABLE
-            elif did not in answered:
-                klass[did] = _SILENT
-            elif sess is not None:
-                klass[did] = sess.kind
-                push_bytes[did] = sess.push_bytes
-            elif did in pushed:
-                klass[did] = _NO_REPLY
-                push_bytes[did] = pushed[did]
-            else:
-                klass[did] = _PUSH_FAILED
-
-        # 2. Stamps and airtime, in device order from the arrival.
-        stamps: Dict[DeviceID, float] = {}
-        snrs: Dict[DeviceID, Optional[float]] = {}
-        dwell_by_device: Dict[DeviceID, float] = {}
-        uplink_by_device: Dict[DeviceID, float] = {}
-        missing: List[DeviceID] = []
-
-        def charge(did: DeviceID, t: float, nbytes: int) -> float:
-            """Price one session starting at ``t``; return when it ends."""
-            snr = plan.snr_at(did, t)
-            snrs[did] = snr
-            if not banded:
-                return t
-            d = plan.session_dwell_s(nbytes, snr)
-            if d > 0.0:
-                dwell_by_device[did] = d
-            return t + d
-
-        t = t_arr if banded else t_arr + plan.session_time_s
-        for did in members:
-            kind = klass[did]
-            if kind == _UNREACHABLE:
-                stamps[did] = t_arr
-                snrs[did] = plan.snr_db[did]
-            elif kind == _SILENT:
-                snrs[did] = plan.snr_db[did] if banded else None
-                missing.append(did)
-            elif kind in (_REFUSED, _PUSH_FAILED, _NOT_READY):
-                snrs[did] = plan.snr_at(did, t)
-                stamps[did] = t
-            elif kind == _REPLIED:
-                if collect:
-                    grad = sessions[did].grad
-                    assert grad is not None
-                    nbytes = plan.session_bytes(push_bytes[did] + grad.byte_count, 2)
-                else:
-                    nbytes = plan.session_bytes(push_bytes[did], 1)
-                t = charge(did, t, nbytes)
-                stamps[did] = t
-                if collect and banded:
-                    # Study 5.12: the update's own share, for the device's
-                    # transmit energy; read only, nothing is charged for it.
-                    uplink_by_device[did] = plan.session_dwell_s(
-                        plan.session_bytes(grad.byte_count, 1), snrs[did])
-            else:  # _NO_REPLY: the push's airtime was spent, the reply never came
-                t = charge(did, t, plan.session_bytes(push_bytes[did], 1))
-                missing.append(did)
-        t_dwell = t
+        # 1-2. Classify every member once, then stamp and price the sessions
+        #      (:meth:`_ferry_schedule`); then the re-poll's (DDIL build D1).
+        sched = self._ferry_schedule(spec, plan, members, answered, sessions, pushed)
+        if repoll is not None:
+            self._ferry_schedule_repoll(spec, plan, members, sched, repoll)
+            answered = {**answered, **repoll.answered}
+            sessions = {**sessions, **repoll.sessions}
+            reached = list(reached) + list(repoll.reached)
+        klass, push_bytes = sched.klass, sched.push_bytes
+        stamps, snrs = sched.stamps, sched.snrs
+        dwell_by_device, uplink_by_device = sched.dwell_by_device, sched.uplink_by_device
+        missing = sched.missing
+        t_dwell = sched.t
         t_end = t_dwell + plan.listen_s if missing else t_dwell
         for did in missing:
             stamps[did] = t_end
@@ -1618,7 +1878,9 @@ class HFLHostMission:
                                      snr_at_contact=rec_snr)
                 self._record_outcome(outcome=outcome, bytes_received=0,
                                      bytes_sent=0, **common)
-            elif kind == _NO_REPLY:
+            elif kind in (_NO_REPLY, _SESSION_FAILED):
+                # DDIL build D1: a failed session lost its update on the link,
+                # after the push went out: committed as a reply that never came.
                 outcome = MissionOutcome.TIMEOUT
                 self._record_contact(adv, in_session=True, contact_ts=ts,
                                      snr_at_contact=rec_snr)
@@ -1666,8 +1928,12 @@ class HFLHostMission:
             stale_discarded=dict(stale),
             solicit_id=ctx.solicit_id,
             not_ready=tuple(did for did in members if klass[did] == _NOT_READY),
-            pushed=tuple(did for did in members if klass[did] in (_REPLIED, _NO_REPLY)),
+            pushed=tuple(did for did in members
+                         if klass[did] in (_REPLIED, _NO_REPLY, _SESSION_FAILED)),
             uplink_dwell_s=dict(uplink_by_device),
+            session_retried=tuple(did for did in members if did in set(sched.retried)),
+            session_failed=tuple(did for did in members if did in set(sched.failed)),
+            repolled=() if repoll is None else tuple(repoll.targets),
         )
         log.info(
             "ferry %s mule=%s round=%d band=%s members=%d targets=%d answered=%d "

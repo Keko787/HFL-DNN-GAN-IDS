@@ -105,6 +105,16 @@ def _build_grid(
     )
 
 
+def _bool_flag(text: str) -> bool:
+    """``true``/``false`` (also on/off, yes/no, 1/0) for a switch flag."""
+    t = str(text).strip().lower()
+    if t in ("true", "on", "yes", "1"):
+        return True
+    if t in ("false", "off", "no", "0"):
+        return False
+    raise argparse.ArgumentTypeError(f"expected true or false, got {text!r}")
+
+
 #: FeRRy Phase 3 physics flags -> ``Exp4Driver.ferry_physics`` keys
 #: (``MuleConfig`` fields). Only the flags given are passed; the rest keep the
 #: design's defaults (Phase 3 design section 1, decisions D1-D3).
@@ -136,6 +146,23 @@ _PHYSICS_FLAGS = (
                                  "clause on (binds only with a budget; default off)."),
     ("p_move_w", float, "D3: SIMULATED flight power (W; default Zeng 2019 at the speed)."),
     ("p_hover_w", float, "D3: SIMULATED hover power (W; default Zeng 2019, 168.5)."),
+    # DDIL build D1 (DeveloperDocs/FeRRy_DDIL_Unified_Plan.md, step 1); each off
+    # unless given.
+    ("session_t_out_s", float, "DDIL D1: the session model; the rate follows the channel, "
+                               "a session fails after this many seconds below the floor "
+                               "and is retried once (default off: priced at its start SNR)."),
+    ("session_resumable", _bool_flag, "DDIL D1: a retry sends only what is left (true/false; "
+                                      "needs --session-t-out-s)."),
+    ("contact_repoll", _bool_flag, "DDIL D1: Pass 1 re-solicits members gated at arrival once "
+                                   "the stop's sessions end (true/false; default off)."),
+    ("interference_shared", str, "DDIL D1: the class whose interference every class takes "
+                                 "(nested bands; default off, per class)."),
+    ("burst_duty", float, "DDIL D1: the burst process's share of time in a burst, in (0, 1); "
+                          "set with --burst-mean-s and --burst-depth-db."),
+    ("burst_mean_s", float, "DDIL D1: the mean burst length (s)."),
+    ("burst_depth_db", float, "DDIL D1: how far a burst lowers every class's SNR (dB)."),
+    ("channel_estimate", str, "DDIL D1: 'causal' plans the outage from the arrival readings "
+                              "(default off: the channel's own sigmas)."),
 )
 
 

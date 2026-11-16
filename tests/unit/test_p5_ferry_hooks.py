@@ -42,6 +42,8 @@ critic A3, B7 and C6):
 from __future__ import annotations
 
 import ast
+from collections import defaultdict
+from typing import Dict
 import dataclasses
 import importlib.util
 import math
@@ -836,6 +838,166 @@ def _from_config_without_the_addendum(source: str) -> str:
     return ast.dump(fn)
 
 
+#: DDIL build D1 (DeveloperDocs/FeRRy_DDIL_Unified_Plan.md, step 1): the spec's four new
+#: fields, ``from_config``'s eight new keyword arguments (the four fields and the four
+#: channel switches it forwards to ``ContactChannel.from_link``), its module constants and
+#: its two new runtime methods. Every one is off at None, and at the defaults the runtime
+#: is 386c275's (test_the_runtime_at_its_defaults_is_386c275s); tests/unit/test_ddil_d1.py
+#: pins what each does when on.
+D1_SPEC_FIELDS = ("session_t_out_s", "session_resumable", "contact_repoll", "channel_estimate")
+D1_FROM_CONFIG_ARGS = D1_SPEC_FIELDS + ("interference_shared", "burst_duty", "burst_mean_s",
+                                        "burst_depth_db")
+D1_CONSTANTS = ("CHANNEL_ESTIMATE_CAUSAL", "CHANNEL_ESTIMATES", "CAUSAL_PRIOR_READINGS")
+D1_RUNTIME_DEFS = ("record_arrival", "channel_estimate_db")
+D1_RUNTIME_STATE = ("_est_n", "_est_s1", "_est_s2")
+
+
+def _names_in(node) -> set:
+    return {n.id for n in ast.walk(node) if isinstance(n, ast.Name)} | {
+        n.attr for n in ast.walk(node) if isinstance(n, ast.Attribute)}
+
+
+def _cut_doc(fn, marker: str, indent: str) -> None:
+    doc = fn.body[0].value
+    cut = doc.value.index(marker)
+    doc.value = doc.value[:cut] + "\n" + indent
+
+
+def _without_d1(source: str) -> str:
+    """The live module with exactly build D1's change taken out, as source.
+
+    Taken out: the constants and the ``CONTACT_REGIMES`` import; the spec's four
+    fields, its docstring's D1 paragraph, ``__post_init__``'s D1 checks and
+    ``describe``'s ``**`` entries; ``from_config``'s eight keyword arguments, the
+    channel switches it forwards, its refusal of them without a band, the four fields it
+    passes on and its docstring's D1 paragraph; the runtime's estimate state, its two new
+    methods, ``outage_probability``'s estimate branch and ``contact_plan``'s D1 keywords
+    and arrival record. Every removal is counted, so a D1 change missing from the module
+    fails here; any change not listed is left in, so it still differs."""
+    tree = ast.parse(source)
+    seen: Dict[str, int] = defaultdict(int)
+    body = []
+    for node in tree.body:
+        if isinstance(node, (ast.Assign, ast.AnnAssign)):
+            targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+            if any(isinstance(t, ast.Name) and t.id in D1_CONSTANTS for t in targets):
+                seen["constants"] += 1
+                continue
+        if isinstance(node, ast.ImportFrom) and node.module == "hermes.l1.channel_model":
+            kept = [a for a in node.names if a.name != "CONTACT_REGIMES"]
+            seen["import"] += len(node.names) - len(kept)
+            node.names = kept
+        if isinstance(node, ast.ClassDef) and node.name == "FerrySpec":
+            _cut_doc(node, "\n\n    DDIL build D1", "    ")
+            kept = []
+            for sub in node.body:
+                if (isinstance(sub, ast.AnnAssign) and isinstance(sub.target, ast.Name)
+                        and sub.target.id in D1_SPEC_FIELDS):
+                    seen["fields"] += 1
+                    continue
+                kept.append(sub)
+            node.body = kept
+            for fn in node.body:
+                if not isinstance(fn, ast.FunctionDef):
+                    continue
+                if fn.name == "__post_init__":
+                    keep = [s for s in fn.body
+                            if not (isinstance(s, ast.If) and _names_in(s.test) & set(D1_SPEC_FIELDS))]
+                    seen["post_init"] += len(fn.body) - len(keep)
+                    fn.body = keep
+                elif fn.name == "describe":
+                    for ret in ast.walk(fn):
+                        if isinstance(ret, ast.Return) and isinstance(ret.value, ast.Dict):
+                            pairs = [(k, v) for k, v in zip(ret.value.keys, ret.value.values)
+                                     if k is not None]
+                            seen["describe"] += len(ret.value.keys) - len(pairs)
+                            ret.value.keys = [k for k, _ in pairs]
+                            ret.value.values = [v for _, v in pairs]
+                elif fn.name == "from_config":
+                    _cut_doc(fn, "\n\n        DDIL build D1", "        ")
+                    args = fn.args
+                    kept_args = [(a, d) for a, d in zip(args.kwonlyargs, args.kw_defaults)
+                                 if a.arg not in D1_FROM_CONFIG_ARGS]
+                    seen["kwargs"] += len(args.kwonlyargs) - len(kept_args)
+                    args.kwonlyargs = [a for a, _ in kept_args]
+                    args.kw_defaults = [d for _, d in kept_args]
+                    for s in ast.walk(fn):
+                        if (isinstance(s, ast.If) and isinstance(s.test, ast.Compare)
+                                and isinstance(s.test.left, ast.Name)
+                                and s.test.left.id == "contact_band"):
+                            first = s.body[0]
+                            assert isinstance(first, ast.Assign) and first.targets[0].id == "d1_channel"
+                            s.body = s.body[1:]
+                            seen["d1_channel"] += 1
+                            if s.orelse:
+                                s.orelse = []
+                                seen["refusal"] += 1
+                        if isinstance(s, ast.Call):
+                            kw = [k for k in s.keywords
+                                  if not (k.arg is None and isinstance(k.value, ast.Name)
+                                          and k.value.id == "d1_channel")
+                                  and k.arg not in D1_SPEC_FIELDS]
+                            seen["forwarded"] += len(s.keywords) - len(kw)
+                            s.keywords = kw
+        if isinstance(node, ast.ClassDef) and node.name == "FerryRuntime":
+            kept = [s for s in node.body
+                    if not (isinstance(s, ast.FunctionDef) and s.name in D1_RUNTIME_DEFS)]
+            seen["methods"] += len(node.body) - len(kept)
+            node.body = kept
+            for fn in node.body:
+                if not isinstance(fn, ast.FunctionDef):
+                    continue
+                if fn.name == "__init__":
+                    keep = [s for s in fn.body if not (
+                        isinstance(s, (ast.Assign, ast.AnnAssign))
+                        and any(isinstance(t, ast.Attribute) and t.attr in D1_RUNTIME_STATE
+                                for t in (s.targets if isinstance(s, ast.Assign) else [s.target])))]
+                    seen["state"] += len(fn.body) - len(keep)
+                    fn.body = keep
+                elif fn.name == "outage_probability":
+                    keep = [s for s in fn.body
+                            if not (isinstance(s, ast.If) and "channel_estimate" in _names_in(s.test))]
+                    seen["outage"] += len(fn.body) - len(keep)
+                    fn.body = keep
+                elif fn.name == "contact_plan":
+                    out = []
+                    for s in fn.body:
+                        if (isinstance(s, ast.Assign) and isinstance(s.targets[0], ast.Name)
+                                and s.targets[0].id == "spec"):
+                            seen["plan"] += 1
+                            continue
+                        if (isinstance(s, ast.AnnAssign) and isinstance(s.target, ast.Name)
+                                and s.target.id == "d1"):
+                            seen["plan"] += 1
+                            continue
+                        if isinstance(s, ast.If) and "spec" in _names_in(s.test) and (
+                                _names_in(s.test) & set(D1_SPEC_FIELDS)):
+                            seen["plan"] += 1
+                            continue
+                        if (isinstance(s, ast.Assign) and isinstance(s.targets[0], ast.Name)
+                                and s.targets[0].id == "plan"):
+                            call = s.value
+                            call.keywords = [k for k in call.keywords if not (
+                                k.arg is None and isinstance(k.value, ast.Name) and k.value.id == "d1")]
+                            out.append(ast.Return(value=call))
+                            seen["plan"] += 1
+                            continue
+                        if (isinstance(s, ast.Return) and isinstance(s.value, ast.Name)
+                                and s.value.id == "plan"):
+                            seen["plan"] += 1
+                            continue
+                        out.append(s)
+                    fn.body = out
+        body.append(node)
+    tree.body = body
+    assert dict(seen) == {
+        "constants": 3, "import": 1, "fields": 4, "post_init": 3, "describe": 3,
+        "kwargs": 8, "d1_channel": 1, "refusal": 1, "forwarded": 5, "methods": 2,
+        "state": 3, "outage": 1, "plan": 7,
+    }, dict(seen)
+    return ast.unparse(ast.fix_missing_locations(tree))
+
+
 def test_every_statement_386c275_had_is_unchanged():
     """Additive only: every definition is the recorded one; the module's other
     statements are too, except the docstring, the typing import, the
@@ -843,9 +1005,10 @@ def test_every_statement_386c275_had_is_unchanged():
     the four readers and ``StopPrice``. The Exp 5 addendum's two keyword
     arguments of ``FerrySpec.from_config`` are the one allowed change to a
     recorded definition, taken back out exactly
-    (:func:`_from_config_without_the_addendum`)."""
+    (:func:`_from_config_without_the_addendum`). DDIL build D1's change is taken
+    out exactly first (:func:`_without_d1`)."""
     ref_top, ref_defs = _shape(_ref_blob().decode("utf-8"))
-    live_source = (REPO / "hermes/mule/ferry.py").read_text(encoding="utf-8")
+    live_source = _without_d1((REPO / "hermes/mule/ferry.py").read_text(encoding="utf-8"))
     live_top, live_defs = _shape(live_source)
     assert set(live_defs) - set(ref_defs) == {f"FerryRuntime.{r}" for r in READERS}
     assert live_defs["FerrySpec.from_config"] != ref_defs["FerrySpec.from_config"]

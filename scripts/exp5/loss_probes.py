@@ -97,6 +97,81 @@ def _s53x(extra: Sequence[str]) -> List[str]:
     return ["s53x.K=[1]", "s53x.h0=false", *extra]
 
 
+# DDIL build D1, step 1 of DeveloperDocs/FeRRy_DDIL_Unified_Plan.md (its NOMS slice): every
+# environment switch on is the session model at t_out = 10 s with its retry, the re-poll and
+# shared interference (nested bands; every class takes the narrow class's term, so an arm on
+# narrow sees the recorded wave); FeRRy's arms plan from the causal estimate. Mission
+# backhaul, N = 6, knee, 1 MB, 20 trials on P1's seeds, the 8 arms unless a cell says.
+D1_ENV = ["--session-t-out-s", "10", "--contact-repoll", "true", "--interference-shared", "narrow"]
+D1_EST = ["--channel-estimate", "causal"]
+D1_ALL = D1_ENV + D1_EST
+D1_AMP = {11: ["--interference-amp-db", "11"], 17: ["--interference-amp-db", "17"]}
+
+
+def _bursts(duty: float, mean_s: float = 6.7) -> List[str]:
+    """The burst process: 17 dB deep on every class (decision 11; mean 6.7 s from step 0)."""
+    return ["--burst-duty", f"{duty:g}", "--burst-mean-s", f"{mean_s:g}", "--burst-depth-db", "17"]
+
+
+def _without(args: Sequence[str], flag: str) -> List[str]:
+    out, skip = [], False
+    for a in args:
+        if skip:
+            skip = False
+            continue
+        if a == flag:
+            skip = True
+            continue
+        out.append(a)
+    return out
+
+
+#: (tag, args, arms or None for the 8, budget or None for the knee)
+DDIL1_MAIN: List[Tuple[str, List[str], Optional[List[str]], Optional[str]]] = [
+    ("_d1base", D1_ALL, None, None),
+    ("_d1amp11", D1_ALL + D1_AMP[11], None, None),
+    ("_d1ampharsh", D1_ALL + D1_AMP[17], None, None),
+    ("_d1npl", D1_ALL + ["--n-pl", "2.7"], None, None),
+    ("_d1sigma8", D1_ALL + ["--shadow-sigma-db", "8"], None, None),
+    ("_d1burst10", D1_ALL + _bursts(0.1), None, None),
+    ("_d1burst40", D1_ALL + _bursts(0.4), None, None),
+    ("_d1ampharshpc", _without(D1_ALL, "--interference-shared") + D1_AMP[17], None, None),
+    # F-o and FX-o: the environment switches on, the planner reading the channel's own sigmas.
+    ("_d1baseo", D1_ENV, ["F", "FX"], None),
+    ("_d1ampharsho", D1_ENV + D1_AMP[17], ["F", "FX"], None),
+    ("_d1ampharsh", D1_ALL + D1_AMP[17], None, "stress"),
+]
+DDIL1_CHECKS: List[Tuple[str, List[str], Optional[List[str]], Optional[str]]] = [
+    # Each switch alone on the recorded 17 dB channel (per-class phases, recorded pricing).
+    ("_a1sess10", D1_AMP[17] + ["--session-t-out-s", "10"], None, None),
+    ("_a1sess2", D1_AMP[17] + ["--session-t-out-s", "2"], None, None),
+    ("_a1repoll", D1_AMP[17] + ["--contact-repoll", "true"], None, None),
+    ("_a1burst40", D1_AMP[17] + _bursts(0.4), None, None),
+    ("_a1est", D1_AMP[17] + D1_EST, None, None),
+    ("_d1ampharshres", D1_ALL + D1_AMP[17] + ["--session-resumable", "true"], None, None),
+    ("_d1burst10l", D1_ALL + _bursts(0.1, 20.0), None, None),
+    ("_d1burst40l", D1_ALL + _bursts(0.4, 20.0), None, None),
+]
+
+
+def _d1_cells(cells) -> str:
+    """``s515.d1_cells`` as a TOML array of inline tables, for --set."""
+    def lit(xs):
+        return "[" + ",".join(f"'{x}'" for x in xs) + "]"
+    rows = []
+    for tag, args, arms, budget in cells:
+        row = f"tag='{tag}',args={lit(args)},arms={lit(arms or EIGHT_ARMS)}"
+        if budget:
+            row += f",budget='{budget}'"
+        rows.append("{" + row + "}")
+    return "s515.d1_cells=[" + ",".join(rows) + "]"
+
+
+EIGHT_ARMS = ["F", "FX", "H1", "D1", "D2", "D3", "D4", "D5"]
+DDIL1_SETS = ["s515.backhaul='mission'", "s515.arms=[]", "s515.amps_db=[]",
+              "s515.shadow_sigmas_db=[]", "s515.mission_backhaul_arms=[]"]
+
+
 #: P6's 10 MB cells: the field's knee, and 12 x it with no limit in effect.
 P6_10MB = ["s59x.budgets=['knee','relaxed']", "s59x.payload_bytes=10000000",
            "batch2.relaxed_factor=12"]
@@ -158,6 +233,25 @@ PROBES: Dict[str, Probe] = {p.name: p for p in [
                 f"s59x.arms={EIGHT}", "s59x.N=[24]", "s59x.K=[1]",
                 "s59x.contact_regimes=['jittery']", "s59x.budgets=['knee']",
                 "s59x.payload_bytes=10000000"], "s59x"),
+    ]),
+    # DDIL plan step 5a (DeveloperDocs/FeRRy_DDIL_Unified_Plan.md): P1's radio cells at the
+    # measured payload (18.8 KB) and its knee (120 s), to see whether the 17 dB hover rise is
+    # a 1 MB effect. Flown 16 Nov 2026; recorded physics, P1's seeds.
+    Probe("DDIL5a", "Harsh radio at the measured payload", [
+        Flight("seconds backhaul", "batch3", "results/exp5_dds",
+               ["s515.payload_bytes='measured'", "s515.budget='knee_meas'", f"s515.arms={EIGHT}",
+                "s515.mission_backhaul_arms=[]", "s515.amps_db=[11.0]"], "s515"),
+        Flight("mission backhaul", "batch3", "results/exp5_ddm",
+               ["s515.payload_bytes='measured'", "s515.budget='knee_meas'", f"s515.arms={EIGHT}",
+                "s515.mission_backhaul_arms=[]", "s515.backhaul='mission'", "s515.amps_db=[]",
+                "s515.shadow_sigmas_db=[]"], "s515"),
+    ]),
+    # DDIL step 1 (build D1), the NOMS slice: the main cells, then the checks, on P1's seeds.
+    Probe("DDIL1", "Step 1: the honest DDIL channel", [
+        Flight("main", "batch3", "results/exp5_ddil1",
+               DDIL1_SETS + [_d1_cells(DDIL1_MAIN)], "s515"),
+        Flight("checks", "batch3", "results/exp5_ddil1",
+               DDIL1_SETS + [_d1_cells(DDIL1_CHECKS)], "s515"),
     ]),
     # The 4-mission cap lets F stop at about 335 s while the baselines fly about 800 s, so the
     # recorded compute cells compare unequal mission time. Ten missions gives every arm the
@@ -762,7 +856,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                     help="score a probe's trial CSVs that have no scored file yet")
     a = ap.parse_args(argv)
     sys.stdout.reconfigure(encoding="utf-8")
-    which = [w.upper() if w.lower() != "p9" else "p9" for w in a.which]
+    names = {k.lower(): k for k in list(PROBES) + ["p9", "P10"]}
+    which = [names.get(w.lower(), w.upper()) for w in a.which]
     if "ALL" in which:
         which = ["p9"] + list(PROBES) + ["P10"]
     unknown = [w for w in which if w not in ("p9", "P10") and w not in PROBES]
