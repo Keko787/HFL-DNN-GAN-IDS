@@ -2666,6 +2666,30 @@ python -m experiments.exp4.runner_main --csv results/exp5/s52/round.csv --arms F
 
 Tests: `tests/unit/test_exp5_u11.py`.
 
+### 20.13 The DDIL switches (build D1, the DDIL plan's step 1)
+
+Build D1 of [FeRRy_DDIL_Unified_Plan.md](FeRRy_DDIL_Unified_Plan.md) adds the environment switches
+of step 1 and the planner's channel estimate. Each is off (None) in every recorded run, left out of
+`ferry_params` while off, written to the trace only while on, and on the simulated clock only.
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `MuleConfig.session_t_out_s` (`--session-t-out-s`, `ferry_physics`) | None | The session model. The rate follows the channel in steps of `noise_bin_s` (1 s); nothing moves below the floor; a session fails once the SNR has stayed below the floor this long, and is retried once at the end of the stop's queue. An answered session that fails its retry loses its update (TIMEOUT; Pass 2: UNDELIVERED). None: each session at its start SNR, the floor rate below the floor (§17). |
+| `MuleConfig.session_resumable` (`--session-resumable true`) | None | A retry sends only the bits the failed try did not. Needs the session model. |
+| `MuleConfig.contact_repoll` (`--contact-repoll true`) | None | Pass 1: a member in range but below the floor at arrival is solicited once more when the stop's sessions have ended, if it is above the floor then; one try, no retry. Every arm. |
+| `MuleConfig.interference_shared` (`--interference-shared <class>`) | None | Every class takes the named class's interference term (its phase and noise): nested bands on one centre frequency. The DDIL cells name `narrow`, so an arm on narrow sees the recorded wave. |
+| `MuleConfig.burst_duty`, `burst_mean_s`, `burst_depth_db` (`--burst-duty`, `--burst-mean-s`, `--burst-depth-db`) | None | Set together. A two-state Gilbert–Elliott burst process beside the wave: in 1 s bins a burst lowers every class's SNR, on every link, by the depth. The share of time in a burst is the duty, and a burst lasts the mean on average. Keyed by the contact salt and the bin, so every arm of a trial sees the same bursts. |
+| `MuleConfig.channel_estimate` (`--channel-estimate causal`) | None | What the plan score's outage term reads. None (and the F-o, FX-o arms): the contact channel's own σ_sh, σ_I and A. `causal`: the mean offset and spread of every stop's arrival readings about the link's mean SNR, shrunk toward the regime's default spread by 12 pseudo-readings (`CAUSAL_PRIOR_READINGS`). The mule is taken to read every in-range member's SNR at arrival, below the floor as well. |
+
+The step 1 cells are the `DDIL1` probe in `scripts/exp5/loss_probes.py`, passed to batch 3's s515
+block through `s515.d1_cells` (none in `params.toml`).
+
+```bash
+python -m experiments.exp4.runner_main --csv results/exp5_ddil1/b3/s515/n6k1_knee_d1ampharsh__F.csv --arms F --mission-clock sim --contact-band wide --backhaul-model mission --interference-amp-db 17 --session-t-out-s 10 --contact-repoll true --interference-shared narrow --channel-estimate causal ...
+```
+
+Tests: `tests/unit/test_ddil_d1.py`.
+
 ---
 
 ## Cross-references

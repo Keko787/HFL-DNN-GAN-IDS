@@ -66,7 +66,7 @@ The loss is per mission, not per second: F arrives before devices finish trainin
 
 ## What "works under DDIL" means
 
-*Proposed 14 Nov 2026, for the user to fix. Once fixed, these become step 9's analysis plan and are not changed after step 9 flies.* "FeRRy" here is step 9's combined arm.
+*Proposed 14 Nov 2026, for the user to fix. Once fixed, these become step 9's analysis plan and are not changed after step 9 flies. **Fixed by the user on 16 Nov 2026 in the [unified plan](FeRRy_DDIL_Unified_Plan.md#criteria-c1-widened-c2-owned-c7-re-drawn-c8-and-c9-added): C2, C3, C5 and C6 as below, C1 with a 30 s margin, and C7, C8 and C9 added there. The bands are nested, so C3's wide-jammed clause is read on a wideband jam.*** "FeRRy" here is step 9's combined arm.
 
 | | Condition | Proposed criterion | How it is checked |
 |---|---|---|---|
