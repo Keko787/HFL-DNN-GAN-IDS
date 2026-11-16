@@ -1,6 +1,6 @@
 # FeRRy under DDIL conditions — the unified plan
 
-*15 Nov 2026. Nothing here has been built or flown. This page combines [FeRRy_DDIL_Robustness_Plan.md](FeRRy_DDIL_Robustness_Plan.md) (the DDIL plan, revised 14 Nov) and [Experiment_5_Per_Transfer_Band_Plan.md](Experiment_5_Per_Transfer_Band_Plan.md) (the per-transfer plan, 13 Nov) into one plan, and where they disagree it decides. They keep the detail it does not repeat (see [What the two pages keep](#what-the-two-pages-keep)). Every build that changes `hermes/` still needs the user's go-ahead, and step 9's analysis plan is fixed before it flies, never after. In the Builds and Order tables, D-numbers are builds; elsewhere D1–D5 are the baselines, as in the DDIL plan.*
+*15 Nov 2026; revised 16 Nov (step 3's guard limited to moves onto narrow, at the user's choice, the rule stated as a second layer on top of the per-stop decision, and an N = 12 cell in step 3 that tests the limited guard). Nothing here has been built or flown. This page combines [FeRRy_DDIL_Robustness_Plan.md](FeRRy_DDIL_Robustness_Plan.md) (the DDIL plan, revised 14 Nov) and [Experiment_5_Per_Transfer_Band_Plan.md](Experiment_5_Per_Transfer_Band_Plan.md) (the per-transfer plan, 13 Nov) into one plan, and where they disagree it decides. They keep the detail it does not repeat (see [What the two pages keep](#what-the-two-pages-keep)). Every build that changes `hermes/` still needs the user's go-ahead, and step 9's analysis plan is fixed before it flies, never after. In the Builds and Order tables, D-numbers are builds; elsewhere D1–D5 are the baselines, as in the DDIL plan.*
 
 ---
 
@@ -9,7 +9,7 @@
 The DDIL plan's structure stands, and the per-transfer plan becomes its step 3. Taking that alone would leave the misalignments below open, so this page also changes five things:
 
 1. **Step 0 prices the rule itself**, on the recorded physics and on the rate-following physics. The go/no-go then measures what the rule gains once the fixed-rate charge is gone, and how much of the gain P12 expected was that charge.
-2. **The rule is re-specified for step 1's model:** the narrower-band guard is in, step 1's session model replaces the floor-rate fallback, and there is no idle wait.
+2. **The rule is re-specified for step 1's model.** It stays a second decision inside each stop, on top of the per-stop decision, which is unchanged. A guard against moves onto narrow is in, step 1's session model replaces the floor-rate fallback, and there is no idle wait.
 3. **The band-independence assumption gets a control.** The simulator spreads the three classes' interference a third of a period apart by construction, so when one class is in a trough the other two are not. Switching class gains from that. A shared-interference cell goes into steps 0, 1, 3 and 9.
 4. **FQ gets a track** (step 3b) and an arm in step 9.
 5. **A criterion for improvement** (C7): the combined arm against F, so step 9 says whether the fixes did anything, not only whether FeRRy keeps pace with the baselines.
@@ -24,8 +24,8 @@ P12 is not flown as a separate probe. Its tuning moves to step 3 and its fresh-s
 |---|---|---|---|
 | M1 | **Order.** The DDIL plan flies step 3 on step 1's corrected simulator. The per-transfer plan flies its arms on the recorded physics, where a session's rate is fixed at its start | Step 1 first. The rule flies only on step 1's model; its gain on the recorded physics is sized by step 0's replay, not flown | Step 0, step 3 |
 | M2 | **Go/no-go.** Both use about 15 s a mission. The per-transfer plan measures it against the recorded pricing and for switching only; the DDIL plan measures switching against the rate-following pricing | One test: the rule itself (switching and deferral) must save at least 15 s a mission against the rate-following pricing at 17 dB | Step 0 |
-| M3 | **The rule.** DDIL step 3 serves the best current SNR first, waits up to `w` s, and never moves narrower on one arrival reading. The per-transfer rule is first in, first out with deferral, has no wait, and may move narrower | The per-transfer rule, with the guard (never narrower than the stop's class), no idle wait (with a trigger to add one), and step 1's session model in place of the floor-rate fallback | Step 3 |
-| M4 | **Time.** The DDIL plan budgets step 3 at about 320 trials, 0.8 h. The per-transfer plan's tuning and P12 are about 4,800 trials, 12 h, plus FQ's retraining | Step 3 is about 780 trials, 1.9 h; step 3b is gated (120 trials and 2–4 h of training); step 9 grows to about 14 h. About 29 h in all | [Order and time](#order-and-time) |
+| M3 | **The rule.** DDIL step 3 serves the best current SNR first, waits up to `w` s, and never moves narrower on one arrival reading. The per-transfer rule is first in, first out with deferral, has no wait, and may move narrower | The per-transfer rule, as a second layer under the unchanged per-stop decision, with the guard (no move onto narrow from a medium or wide stop; limited 16 Nov), no idle wait (with a trigger to add one), and step 1's session model in place of the floor-rate fallback | Step 3 |
+| M4 | **Time.** The DDIL plan budgets step 3 at about 320 trials, 0.8 h. The per-transfer plan's tuning and P12 are about 4,800 trials, 12 h, plus FQ's retraining | Step 3 is about 820 trials, 2.1 h; step 3b is gated (120 trials and 2–4 h of training); step 9 grows to about 14 h. About 29 h in all | [Order and time](#order-and-time) |
 | M5 | **FQ.** The DDIL plan leaves it out; the per-transfer plan has FQ-tx and FQ-txR. Step 9's combined arm is built on F, while the rule is an option of FX and FQ | FQ-tx flies in step 3, retraining is gated (step 3b), and the best FQ arm flies in step 9. The rule becomes a setting any FeRRy arm can carry, and the combined arm's base, FX or F, is chosen from step 1 | Step 3b, step 9 |
 | M6 | **Status.** The per-transfer plan's stage table calls P12 confirmatory; its Risks section says it is exploratory whatever it shows | Exploratory: step 3 tunes on seeds already seen. Step 9 stays the only pre-registered flight | Step 3, step 9 |
 | M7 | **Goal.** The DDIL plan asks for parity (C1: no baseline significantly faster). P12 asks for a lead (FX-tx beats FX and the FedEx route) | Parity is the bar for "works under DDIL". C1's tests are two-sided, so a lead shows as claims where there is one. The new C7 tests improvement over F | [Criteria](#criteria-c1-widened-c7-added) |
@@ -75,9 +75,21 @@ A script over P1's kept traces: `results/exp5_p1mbh/b3/s515/*_traces` (mission b
 
 *Replaces DDIL step 3, and the per-transfer plan's Stages 0–5 and P12. Built only if step 0 says go, and flown only on step 1's model (build D1).*
 
+**A second layer, not a replacement.** The per-stop decision stays exactly as each arm makes it now; the rule adds a decision inside each stop, after that one is made.
+
+| Layer | Made | Decides |
+|---|---|---|
+| Per stop (unchanged) | At arrival, as now: F's plan, FX's covering class, FQ's learned pair | Where the mule hovers and where it goes next, the stop's class, which members are served (the arrival gate), and the class Pass 2's route is flown on |
+| Per transfer (added) | Before each session at that stop | Which class serves this device now, among those that reach it from the stop, read above the floor and pass the guard; and whether to serve it now or move it to the back of the queue |
+
+The stop's class anchors the second layer: it is the reference price r_j, it wins ties, and it is always a candidate, so a session served without deferral is never slower than on the stop's class at that instant. With the rule off (θ = ∞, D_max = 0, the stop's class the only candidate) the arm flies as it does today, bit for bit. The per-stop decision does not yet account for the rule: F and FX choose their stops as if every session ran on the stop's class, and only FQ-txR (step 3b) learns its per-stop choice with the rule on.
+
 **The rule** is the per-transfer plan's `fastest_defer` and its invariants, with four changes for step 1's model:
 
-1. **The guard.** c\* is never narrower than the stop's class. With the rate following the channel, a long narrow session's cost depends on the channel over its whole length, not at its start. In the 6 Nov paired traces, moves from medium to narrow looked faster at 25 of 25 stops and were faster at 5. FX-tx-ng (no guard) measures what the guard costs.
+1. **The guard.** c\* is narrow only if the stop's class is narrow. At a medium or wide stop, narrow is not a candidate; every other class that reaches j from the stop and reads above the floor is. Against "never narrower than the stop's class", the only move this adds is wide to medium at a wide stop. *Limited to moves onto narrow at the user's choice, 16 Nov 2026.*
+   - **Why narrow.** In the 6 Nov paired traces' first band changes ([exploratory_band_energy.md](../results/exp5/scores/b2/exploratory_band_energy.md)), moves onto narrow were priced faster and mostly were not: medium to narrow was faster at 5 of 25 FX stops and 7 of 44 FQ stops, and wide to narrow at 0 of 6 FQ stops. Wide to medium won at 14 of 16 FX stops and 11 of 13 FQ stops, and moves to a wider class won at 52 of 55 FX stops and 39 of 48 FQ stops. With the rate following the channel, a long narrow session's cost depends on the channel over its whole length, not at its start; 1 MB on medium takes about 1–2 s at mean SNR, close to what the reading at its start prices.
+   - **What the evidence is.** Per-stop arrival choices on the default channel and the recorded physics, not the rule at 17 dB on step 1's model. The wide-to-medium sample is small (29 stops, all at N = 12 and 24, about 1–2 s saved a stop). FX-tx-ng (no guard) measures what the guard costs, and FX-tx-sg (the strict guard) at N = 12 measures what limiting it adds.
+   - **θ sets how often a wide stop uses medium.** Medium takes about 1.3 to 2.2 times wide's time at mean SNR (the configuration reference's worked numbers, 0–60 m at 25 m altitude), and the bar θ · r_j is priced on wide. So when wide reads in a trough and medium does not, medium clears the bar for every device at θ = 3, for all but the closest at θ = 2, and only for the farther ones at θ = 1.5; the rest are deferred as before.
 2. **No floor-rate fallback.** When no class is eligible, j is served on the stop's class and step 1's session model runs: the session completes, or it fails after `t_out` below the floor and takes the shared retry. The invariant "physics unchanged" now reads: the same physics as every other arm in the cell, step 1's.
 3. **No idle wait** (`w` = 0). Step 1's retry already gives a trough-started session a second try. B8 records the sessions served because the whole queue was deferred (`tx_forced`). If those fail partway and cost more than 5 s a mission in the development cells, a bounded wait is built before step 9.
 4. **Any arm can carry it.** `transfer_rule` is a mule setting, so F, FX, FQ and, as a control, the FedEx route can fly it.
@@ -95,7 +107,8 @@ The rule's price d_c is still the dwell at the SNR at the decision instant. On s
 | FX-tx, FX-txd | 17 dB with shared interference (step 1's new cell) | 40 |
 | FX-tx | 17 dB at the stress budget (75 s) | 20 |
 | FQ-g75 (not in step 1) and FQ-tx | default, 17 dB, bursty | 120 |
-| | | **780, about 1.9 h** |
+| At the chosen setting: FX-tx and FX-tx-sg (the strict guard: never narrower than the stop's class), paired by seed | N = 12, 17 dB, knee, on the recorded N = 12 cells' seeds (already seen) | 40 |
+| | | **820, about 2.1 h** (an N = 12 trial costs about two N = 6 trials) |
 
 **Choosing the setting.** As in the per-transfer plan's Stage 2: θ and D_max by mean time to τ = 0.71 over the 17 dB and bursty cells, with the default cell no worse than FX. Descriptive, no tests. The choice is written into this page before the remaining arms fly.
 
@@ -105,6 +118,7 @@ The rule's price d_c is still the dwell at the SNR at the decision instant. On s
 - FX-txd against FX-tx, and the shared-interference cell: how much of the gain needs the per-class phases.
 - D4-tx against D4: whether the gain is FeRRy's or the rule's.
 - FX-tx-ng against FX-tx: what the guard costs.
+- FX-tx against FX-tx-sg at N = 12, with B8's count of wide-to-medium sessions: what the move the limited guard adds is worth. The N = 6 cells cannot show it, because they have few wide stops: F made none and FX 14 of 174 (8%) in the 6 Nov traces (N = 6, knee, default channel, recorded physics), and in P1's 17 dB traces F made none and FX 5 of 83 (6%). FX's share is 22% at N = 12 and the knee in the 6 Nov traces. Without this cell the move would first fly in step 9, the pre-registered flight. If FX-tx is slower than FX-tx-sg here, the strict guard goes into step 9 instead.
 
 ### Step 3b — FQ (gated)
 
@@ -155,7 +169,7 @@ The DDIL plan's builds D0–D9, with D3 replaced by the per-transfer plan's B4�
 |---|---|---|---|
 | D0 | Scorer entries and the replay | The replay adds pricings (d), (e) and (e′) | small |
 | D1 | Honest DDIL channel | Adds the shared-interference switch | large |
-| B4–B8 | The per-transfer rule (replaces D3) | As the per-transfer plan, plus the guard, step 1's session model in place of the floor-rate fallback, the rule usable on F, FX, FQ and the FedEx route, and a `tx_forced` column in B8 | medium in all (B5 medium, the rest small) |
+| B4–B8 | The per-transfer rule (replaces D3) | As the per-transfer plan, plus the guard (narrow a candidate only at a narrow stop, with `strict` and `off` modes for FX-tx-sg and FX-tx-ng), step 1's session model in place of the floor-rate fallback, the rule usable on F, FX, FQ and the FedEx route, and `tx_forced` and `tx_wide_to_medium` columns in B8 | medium in all (B5 medium, the rest small) |
 | B9 | FerrySim with the rule | Gated on step 3b; the checkpoint header also binds step 1's settings | small |
 | D2, D4–D9 | As in the DDIL plan | D9's arm table takes the base chosen for step 9 | as there |
 
@@ -171,7 +185,7 @@ B4–B8 land as the per-transfer plan's §5o freeze entry (behind switches, no a
 | 2 | D1, then step 1 | go-ahead; `t_out` and resumable transfers decided | 5.4 |
 | 3 | D8, then step 7a | D1's band outage | 3.1 |
 | 4 | D2, then step 2 | D1's causal estimate | 0.8 |
-| 5 | B4–B8, then step 3, if step 0 says go | D1 | 1.9 |
+| 5 | B4–B8, then step 3, if step 0 says go | D1 | 2.1 |
 | 6 | Build D4, then step 4 | D1 | 0.9 |
 | 7 | B9, then FQ-s1 and FQ-txR, if FQ-tx passed | step 3 | 0.3, plus 2–4 h of training |
 | 8 | D6, then step 6 (optional before step 9) | — | 0.7 |
@@ -191,7 +205,7 @@ Builds take roughly 14 to 17 working days (D1 is 3–4 of them, B4–B8 about 3)
 | Question | From | Answer |
 |---|---|---|
 | Fly the rule before or after step 1 | per-transfer 8, DDIL 2 | After, and only if step 0 says go |
-| Step 3's wait, guard and order | DDIL step 3 against the per-transfer rule | Guard in; no wait, with a trigger; first in, first out with deferral |
+| Step 3's wait, guard and order | DDIL step 3 against the per-transfer rule | A second layer under the unchanged per-stop decision. Guard in, limited to moves onto narrow (user's choice, 16 Nov); no wait, with a trigger; first in, first out with deferral |
 | Pass 2 | per-transfer 1 | Both passes priced; FX-tx1 shows what Pass 2 adds |
 | Sensing and switching cost | per-transfer 2 | Zero, plus one cell at a declared retune cost |
 | FQ-txR's training | per-transfer 3 | `jittery56` on step 1's model, with FQ-s1 as its control; only if FQ-tx passes |
