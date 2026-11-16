@@ -1,6 +1,6 @@
 # Per-transfer band adaptation for FX and FQ — plan
 
-*Draft, 13 Nov 2026. Nothing here is built or flown. This page is the plan for the new arms and, once Stage 2 fixes their settings, the analysis plan of their probe (P12). As with the [loss probes](Experiment_5_Loss_Probes_Plan.md): change it before P12 flies, never after. **15 Nov 2026: [FeRRy_DDIL_Unified_Plan.md](FeRRy_DDIL_Unified_Plan.md) makes this page the DDIL plan's step 3. P12 is not flown; this page's Stages, P12 analysis plan and decisions are replaced there, and the rule takes four changes for the DDIL plan's step 1 model.***
+*Draft, 13 Nov 2026. Nothing here is built or flown. This page is the plan for the new arms and, once Stage 2 fixes their settings, the analysis plan of their probe (P12). As with the [loss probes](Experiment_5_Loss_Probes_Plan.md): change it before P12 flies, never after. **15 Nov 2026: [FeRRy_DDIL_Unified_Plan.md](FeRRy_DDIL_Unified_Plan.md) makes this page the DDIL plan's step 3. P12 is not flown; this page's Stages, P12 analysis plan and decisions are replaced there, and the rule takes five changes for the DDIL plan's step 1 model. Since 16 Nov that page's FQ track replaces FQ-txR: FQ is retrained on step 1's model and on a DDIL family whatever the rule does.***
 
 ---
 
