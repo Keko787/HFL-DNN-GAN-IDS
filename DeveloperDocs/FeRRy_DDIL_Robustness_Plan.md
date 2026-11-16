@@ -17,7 +17,7 @@ Interference amplitude A raised from 5 to 17 dB (`s515.harsher_amp_db`), from `r
 | Hover (dwell) per mission | 107 s | **133 s** | 112 s | 11 s | 9 s |
 | Mission length | 168 s | 193 s | 172 s | 223 s | 219 s |
 | Missions over budget | 4% | **30%** | 16% | 3% | 0% |
-| Missions that collect nothing | 5% | 20% | 10% | 5% | 25% |
+| Empty missions per trial (mean count, `missions_empty`) | 0.05 | 0.20 | 0.10 | 0.05 | 0.25 |
 | Updates merged per mission | 3.54 | 3.31 | 3.45 | 3.46 | 2.65 |
 | Time to τ = 0.71 | 194 s | 261 s | 216 s | 282 s | 265 s |
 
