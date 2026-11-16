@@ -39,7 +39,7 @@ Each coding phase starts a week after the proofs it tests, and week 6 is writing
 | Phase | Weeks | Kind | Exit check | Status |
 | --- | --- | --- | --- | --- |
 | 1. Write the problem down precisely | 1 | Proofs | The plan checker is right on five hand-built plans, and the stop and travel-time choices are written down | Done |
-| 2. Hardness proofs (T1) | 1 to 2 | Proofs | Both conversions are written in both directions | Not started |
+| 2. Hardness proofs (T1) | 1 to 2 | Proofs | Both conversions are written in both directions | In progress |
 | 3. Exact solver and test layouts (T2) | 2 to 3 | Code and runs | The solver equals enumeration, the planner's `exact` search equals the solver with the extra rules off, and the largest solvable size is known | Not started |
 | 4. Shortcut limits and tipping point (T3, T4) | 3 to 4 | Proofs | The placement limit is proved or countered, one route-search bad case is measured, and the formula has a test | Not started |
 | 5. Experiments and parallel test | 4 to 5 | Code and runs | One command reruns the grid, and every chart is rebuilt from the saved tables | Not started |
