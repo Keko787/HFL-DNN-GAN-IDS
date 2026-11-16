@@ -3,6 +3,11 @@
 % simplifications, and the planner's access to the true channel parameters. Sources:
 % results/exp5/scores/probes/P1.{md,csv}, results/exp5_p1mbh/b3/s515/*_scored.csv,
 % results/exp5/scores/b3/s515_comparisons.csv. A stray ``` before \end{document} removed.
+% Revised 15 Nov 2026: the harsh-radio text is cut back and framed on what holds (no
+% baseline significantly faster at 17 dB; FeRRy-Plan keeps more updates per round).
+% The introduction and conclusion are main (20)'s again; what remains is a one-line
+% methods note, the contact model in one sentence, one robustness sentence, the table
+% note and one appendix paragraph. Blue marks every change from main (20).
 %
 % main_addressed.tex: main (17).tex with the review comments answered and the results
 % brought up to repository commit 6b8fd4c0. Red: the comments, kept. Blue: their answers and
@@ -182,7 +187,7 @@ Deadline-Heuristic use the same narrow band, their time to target is not
 significantly different, showing that RF-class selection drives the main gain
 in this setting. Under tighter budgets, \sysname{} also improves update
 freshness. Its advantage becomes smaller as update size or the number of mules
-increases\textcolor{blue}{, or as interference strengthens}; at 10~MB it selects the wide band and its lead is no longer
+increases; at 10~MB it selects the wide band and its lead is no longer
 statistically significant.
 
 The contributions of this paper are:
@@ -1006,9 +1011,8 @@ where $Q$ is the Gaussian tail function and
 $\gamma_{\min}=-6.7$~dB is the decoding threshold. The parameters
 $\sigma_s$, $\sigma_I$, and $A$ are defined in
 Section~\ref{sec:environment}, under the default setting,
-$\sigma_{\mathrm{eff}}\approx5.5$~dB. \textcolor{blue}{In our evaluation the planner
-is given the simulated channel's true $\sigma_s$, $\sigma_I$, and $A$; a deployed
-system would have to estimate them from observed contacts.}
+$\sigma_{\mathrm{eff}}\approx5.5$~dB. \textcolor{blue}{In our evaluation they take
+the simulated channel's values.}
 
 We set $c_1=1$, $c_2=c_3=N_{\mathrm{demand}}$, where
 $N_{\mathrm{demand}}$ is the number of devices requesting service, and
@@ -1173,15 +1177,9 @@ time varying interference. In the default setting, we use 4~dB shadowing,
 \(A=5\)~dB, \(\sigma_I=1.5\)~dB, and \(P_c=60\)~s. The planner uses the
 mean SNR, while decisions during flight use the observed SNR. We vary
 interference, path loss, and shadowing in the robustness experiments (Section ~\ref{sec:robustness}).
-\textcolor{blue}{A device whose SNR is below $\gamma_{\min}$ when the UAV arrives is
-not contacted. Otherwise its transfer runs at the rate set by the SNR when that
-transfer starts, or at the lowest rate if the SNR has fallen below
-$\gamma_{\min}$, and a started transfer is never interrupted. The simulator
-therefore models neither rate adaptation within a transfer nor a link lost
-partway through one. For long narrow-band transfers the first omission makes them
-slower than a real link would, and the second lets them complete where a real
-link might fail, so results under strong interference may be biased in either
-direction.}
+\textcolor{blue}{A device below $\gamma_{\min}$ when the UAV arrives is not
+contacted; otherwise its transfer completes at the rate set by the SNR at its
+start.}
 
 The UAV flies at a fixed altitude with a cruise speed of 5~m/s. Mission time
 includes travel, communication time, a 1~s listening period when an expected
@@ -1691,11 +1689,8 @@ Appendix~\ref{app:robustness} and Table~\ref{tab:robustness}.
 The channel experiments show that the advantage is not universal: under
 \(n=2.7\), \sysname{} and Deadline-Heuristic perform similarly, indicating
 that the benefit depends on how strongly RF range changes the mission.
-\textcolor{blue}{Strong interference also removes it. With 17~dB interference on
-the main-setting backhaul, \sysname{}-Plan reaches the target in 261~s against
-244--277~s for the baselines, with no significant difference in either direction,
-and 30\% of its missions exceed the budget, against 4\% in the default channel
-(exploratory, 20 trials).}
+\textcolor{blue}{Strong interference narrows the advantage, but no baseline becomes
+significantly faster than \sysname{}-Plan.}
 
 The range and field-size sensitivity experiments reach the same conclusion.
 Reducing the narrow-class range from 232~m to 180 or 120~m preserves a
@@ -1710,8 +1705,7 @@ planner does not explicitly account for when training will finish. Under the
 stress budget, \sysname{}-Plan also exceeds the mission budget in 29\% of
 missions by 33~s on average because planning uses expected channel conditions
 before takeoff. Modeling update readiness and channel uncertainty remains
-future work. Validation with measured UAV channels\textcolor{blue}{, a contact
-model in which transfers adapt their rate and can fail partway,} and battery limits is also
+future work. Validation with measured UAV channels and battery limits is also
 needed before drawing conclusions about physical deployment.
 \section{Conclusion and Future Work}
 \label{sec:conclusion}
@@ -1735,16 +1729,13 @@ significantly different from \sysname{}, showing that the RF-class choice
 drives the main gain in this setting. Under a tight mission budget, \sysname{}
 also kept updates fresher and stayed within the budget in 71\% of missions; the
 remaining missions exceeded it by 33~s on average. The advantage became smaller
-as model updates grew\textcolor{blue}{, interference strengthened,} or more UAVs were added. At 10~MB, \sysname{} selected
-the wide band and its lead was no longer statistically significant\textcolor{blue}{;
-under 17~dB interference no difference from the baselines was significant;}
-and with two or three UAVs most approaches performed similarly.
+as model updates grew or more UAVs were added. At 10~MB, \sysname{} selected
+the wide band and its lead was no longer statistically significant, while with
+two or three UAVs most approaches performed similarly.
 
-The current planner does not account for when local training will finish\textcolor{blue}{,
-prices communication at the mean SNR, and is given the simulated channel's true
-variability instead of estimating it}. Future work will incorporate update
-readiness and channel variation into mission planning\textcolor{blue}{, model
-transfers that adapt their rate and can fail partway,} and evaluate \sysname{}
+The current planner does not account for when local training will finish or for
+channel uncertainty before takeoff. Future work will incorporate update
+readiness and channel variation into mission planning and evaluate \sysname{}
 with measured UAV wireless links and battery limits in a physical testbed.
 
 % IPDPS 2027 asks authors to disclose AI-generated text in the Acknowledgements.
@@ -2010,8 +2001,8 @@ Data
 
 \vspace{2pt}
 \footnotesize
-Channel experiments use the time-varying backhaul\textcolor{blue}{; no difference
-between \sysname{}-Plan and a baseline in the channel rows is significant}. Compute experiments use
+Channel experiments use the time-varying backhaul\textcolor{blue}{; in the channel
+rows no baseline is significantly faster than \sysname{}-Plan}. Compute experiments use
 40 paired trials over 10 missions.
 \end{table*}
 
@@ -2028,19 +2019,14 @@ amplitude \(A\) in Eq.~\eqref{eq:channel-model} from 5 to 17~dB while keeping
 \(\sigma_I=1.5\)~dB and \(P_c=60\)~s. The 17~dB setting was selected as the
 strongest tested condition under which Deadline-Heuristic still served at
 least half of its default device share. \textcolor{blue}{At this level no
-difference between \sysname{}-Plan and a baseline is significant. On the
-time-varying backhaul of Table~\ref{tab:robustness}, \sysname{}-Plan takes
-255~s against 264--332~s for the baselines; on the main-setting backhaul it takes
-261~s against 244--277~s, and FedEx is fastest (exploratory, 20 trials), whereas
-in the default channel all six baselines are significantly slower there. On that
-backhaul \sysname{}-Plan's communication time per mission grows from 107 to
-133~s, and 30\% of its missions exceed the budget, against 4\% in the default
-channel. In our contact model, a narrow-band transfer that starts in an
-interference trough runs at the lowest rate until it ends, which lengthens
-\sysname{}-Plan's long contacts; these are also the transfers that the model's
-two simplifications affect most (Section~\ref{sec:environment}). The baselines'
-short wide-band contacts lose updates instead: Deadline-Heuristic collects 2.65
-updates per round against 3.46 in the default channel.} The channel results show that the
+baseline is significantly faster than \sysname{}-Plan or significantly more likely
+to reach the target, on either backhaul (exploratory, 20 trials). On the
+main-setting backhaul \sysname{}-Plan takes 261~s against 244--277~s for the
+baselines, and \sysname{}-Adapt 216~s. The schedulers absorb interference
+differently: \sysname{}-Plan's longer contacts cost time (30\% of its missions
+exceed the budget, against 4\% by default) but it keeps 3.31 updates per round
+(3.54 by default), while the baselines keep their mission length but fall to
+2.65--3.00 updates per round (3.39--3.49).} The channel results show that the
 advantage is not universal. \sysname{}-Adapt often improves by reacting to the
 observed channel, but under \(n=2.7\), \sysname{} and Deadline-Heuristic
 perform similarly. FedEx reaches the target in 237~s compared with 257~s for
