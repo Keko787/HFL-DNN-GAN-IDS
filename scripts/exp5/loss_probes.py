@@ -100,6 +100,11 @@ class Probe:
     #: (arm, reference) pairs compared beside each arm against F, in each cell that holds
     #: both, on the same tests, in families of their own (<probe>/pairs/<kind>).
     pairs: List[Tuple[str, str]] = field(default_factory=list)
+    #: For a probe whose cells hold no F: the probe whose flights fly F in the same cells and
+    #: on the same seeds, and the script (in scripts/exp5) that compares the two and writes
+    #: this probe's report. main() leaves such a probe's report to that script.
+    f_from: Optional[str] = None
+    compared_by: str = ""
 
 
 def _s53x(extra: Sequence[str]) -> List[str]:
@@ -251,6 +256,15 @@ DDIL1_SETS =["s515.backhaul='mission'", "s515.arms=[]", "s515.amps_db=[]",
 #: A score setting: no runner job's arguments move, so the flown jobs stay done.
 DDIL_SCORE_SET = "score.s515.scorer_flags=['--ddil-columns']"
 
+# The DDIL1N probe (17 Nov 2026, the user's go-ahead): Deadline-Heuristic (H1) and FedEx (D4)
+# pinned to narrow, the band F chooses at N = 6, under step 1's model in its default and
+# 17 dB cells, on step 1's seeds (they follow the cell and trial, not the arm), so they pair
+# with step 1's F, FX and wide-band baselines. It asks how much of F's lead under the
+# stricter contact model is the band and how much the plan, as P10 asked on the recorded
+# physics. An out-root of its own: these jobs' names are step 1's wide-band ones.
+DDIL1N_CELLS = [("_d1base", D1_ALL, ["H1", "D4"], None),
+                ("_d1ampharsh", D1_ALL + D1_AMP[17], ["H1", "D4"], None)]
+
 
 #: P6's 10 MB cells: the field's knee, and 12 x it with no limit in effect.
 P6_10MB = ["s59x.budgets=['knee','relaxed']", "s59x.payload_bytes=10000000",
@@ -349,6 +363,13 @@ PROBES: Dict[str, Probe] = {p.name: p for p in [
                DDIL1_SETS + [_d1_cells(DDIL2_RECORDED), DDIL2_VARIANTS, DDIL_SCORE_SET],
                "s515"),
     ], ddil_endpoints=True, pairs=[("F-rpnl", "F-rp"), ("F-rp", "FX")]),
+    # The baselines on narrow under step 1's model (DDIL1N_CELLS above); compared with step
+    # 1's F, FX and wide-band runs by scripts/exp5/ddil_narrow_baselines.py.
+    Probe("DDIL1N", "Step 1: the baselines pinned to narrow", [
+        Flight("narrow", "batch3", "results/exp5_ddil1_bnarrow",
+               DDIL1_SETS + [_d1_cells(DDIL1N_CELLS), "campaign.baseline_contact_band='narrow'",
+                             DDIL_SCORE_SET], "s515"),
+    ], ddil_endpoints=True, f_from="DDIL1", compared_by="ddil_narrow_baselines.py"),
     # The 4-mission cap lets F stop at about 335 s while the baselines fly about 800 s, so the
     # recorded compute cells compare unequal mission time. Ten missions gives every arm the
     # time; n_missions is in the seed hash, so these 40 trials are new seeds, not an extension.
@@ -1085,6 +1106,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     L = _launcher()
     SC = L._scoring()
     for w in which:
+        probe = PROBES.get(w)
+        if probe is not None and probe.compared_by:
+            # Its cells hold no F; its own script compares it with f_from's F and writes its
+            # report, which a report from here would overwrite.
+            print(f"{w}: compared with {probe.f_from}'s F by scripts/exp5/{probe.compared_by}; "
+                  f"run that (score first with ddil_score_probes.py {w})\n")
+            continue
         lines = (p9_report(L, SC) if w == "p9"
                  else p10_report(L, SC, score=a.score) if w == "P10"
                  else p11_report(L, SC, score=a.score) if w == "P11"

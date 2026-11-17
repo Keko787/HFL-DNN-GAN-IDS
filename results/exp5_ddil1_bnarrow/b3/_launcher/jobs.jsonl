@@ -1,0 +1,8 @@
+{"event": "start", "job": "s515/n6k1_knee_d1base__H1", "pid": 58868, "at": "2026-11-17T03:28:35"}
+{"event": "start", "job": "s515/n6k1_knee_d1base__D4", "pid": 38984, "at": "2026-11-17T03:28:35"}
+{"event": "start", "job": "s515/n6k1_knee_d1ampharsh__H1", "pid": 10856, "at": "2026-11-17T03:28:35"}
+{"event": "start", "job": "s515/n6k1_knee_d1ampharsh__D4", "pid": 49472, "at": "2026-11-17T03:28:35"}
+{"event": "end", "job": "s515/n6k1_knee_d1base__H1", "rc": 0, "wall_s": 696.5, "rows": 20, "rows_not_ok": 0, "at": "2026-11-17T03:40:12"}
+{"event": "end", "job": "s515/n6k1_knee_d1base__D4", "rc": 0, "wall_s": 696.5, "rows": 20, "rows_not_ok": 0, "at": "2026-11-17T03:40:12"}
+{"event": "end", "job": "s515/n6k1_knee_d1ampharsh__H1", "rc": 0, "wall_s": 704.6, "rows": 20, "rows_not_ok": 0, "at": "2026-11-17T03:40:20"}
+{"event": "end", "job": "s515/n6k1_knee_d1ampharsh__D4", "rc": 0, "wall_s": 704.6, "rows": 20, "rows_not_ok": 0, "at": "2026-11-17T03:40:20"}

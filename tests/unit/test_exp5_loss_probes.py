@@ -153,9 +153,19 @@ def test_p11_reads_the_ten_mission_compute_cells_at_40_trials():
 
 @pytest.mark.parametrize("name", sorted(LP.PROBES))
 def test_every_registered_probe_builds_its_cells_with_f_beside_its_arms(name):
-    for flight in LP.PROBES[name].flights:
+    probe = LP.PROBES[name]
+    for flight in probe.flights:
         cells, plan = LP.flight_cells(L, SC, flight)
         assert cells, f"{name} / {flight.label or flight.study}: no cells"
+        if probe.f_from:
+            # Its F flies in another probe's cells, on the same seeds, and its own script
+            # compares them: every one of its cells must be a cell where that F flies.
+            assert probe.compared_by and (LP.HERE / probe.compared_by).exists()
+            with_f_there = {c.rpartition(": ")[2] for f in LP.PROBES[probe.f_from].flights
+                            for c, vs in LP.flight_cells(L, SC, f)[0].items() if "F" in vs}
+            mine = {c.rpartition(": ")[2] for c in cells}
+            assert mine <= with_f_there, f"{name}: no F in {probe.f_from} for {mine - with_f_there}"
+            continue
         with_f = [c for c, vs in cells.items() if "F" in vs]
         assert with_f, f"{name} / {flight.label or flight.study}: F in no cell"
         assert all(len(vs) > 1 for vs in cells.values())

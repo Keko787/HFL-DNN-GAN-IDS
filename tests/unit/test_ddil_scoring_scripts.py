@@ -43,6 +43,20 @@ def test_the_parallel_scorer_plans_each_flight_and_scores_a_shared_file_once():
     assert all("--ddil-columns" in j.args for f in got for j in f.todo)
 
 
+def test_a_probe_compared_elsewhere_is_left_to_its_script(monkeypatch, capsys):
+    """DDIL1N's cells hold no F: loss_probes.py must not write an F-less report over the one
+    ddil_narrow_baselines.py writes."""
+    probe = LP.PROBES["DDIL1N"]
+    assert (probe.f_from, probe.compared_by) == ("DDIL1", "ddil_narrow_baselines.py")
+
+    def refuse(*a, **k):
+        raise AssertionError("probe_report ran for a probe compared elsewhere")
+
+    monkeypatch.setattr(LP, "probe_report", refuse)
+    assert LP.main(["DDIL1N"]) == 0
+    assert "ddil_narrow_baselines.py" in capsys.readouterr().out
+
+
 def test_the_parallel_scorer_refuses_an_unknown_probe(capsys):
     with pytest.raises(SystemExit):
         SP.main(["--plan", "NOPE"])
