@@ -8,7 +8,7 @@
 | FeRRy-RL under the stricter model (FQ-s1) | in | in (identical) |
 | Step 2 (the risk-priced dwell) | in: an appendix paragraph and three clauses | not mentioned |
 | The three channel-uncertainty passages | keep the promise, now with the first attempt reported | cut back: no promise, no unproven cause |
-| Main text | about +150 words (9 two-column lines) | about +80 words (5 lines) |
+| Main text | about +170 words (10 two-column lines) | about +100 words (6 lines) |
 | Appendix | step 1's paragraph and Table `tab:session`, then step 2's paragraph | step 1's paragraph and Table `tab:session` |
 
 The main text was already about a third of a page over the 8-page limit before either.
@@ -24,7 +24,7 @@ Sources: `results/exp5/scores/probes/DDIL1.{md,csv}` (Holm per family) and `resu
 2. **Contact model (line ~1180)**, after the two simplifications:
    > Appendix~\ref{app:robustness} relaxes both simplifications.
 3. **Main text, Robustness and Limitations (line ~1692)**, after "no baseline becomes significantly faster than \sysname{}-Plan.":
-   > Under a stricter contact model, in which a transfer follows the channel and fails after 10~s below $\gamma_{\min}$, \sysname{}-Plan reaches the target at 17~dB in 151 instead of 261~s and stays within the budget, the baselines change little, and no baseline is significantly faster than \sysname{}-Plan in any of nine channel settings (Appendix~\ref{app:robustness}).
+   > Under a stricter contact model, in which a transfer follows the channel and fails after 10~s below $\gamma_{\min}$, \sysname{}-Plan reaches the target at 17~dB in 151 instead of 261~s and stays within the budget, the baselines change little, and no baseline is significantly faster than \sysname{}-Plan in any of nine channel settings. Pinned to \sysname{}-Plan's narrow band, Deadline-Heuristic and FedEx match it, so that lead comes from the band, while \sysname{}-Adapt stays 19--26~s faster (Appendix~\ref{app:robustness}).
 4. **Appendix, after the 17 dB paragraph (line ~2035)**: a paragraph headed **A stricter contact model** (what changes, the 17 dB result, that the rate following the channel gives it rather than the timeout, and mostly through the periodic interference's crests (with interference that never raises the SNR above its mean, FeRRy-Plan's hover falls only to 114 s), the nine settings, FedEx, the baselines pinned to narrow matching FeRRy-Plan (probe DDIL1N, `results/exp5/scores/probes/DDIL1N.md`), FeRRy-Adapt, the estimated channel) and **Table `tab:session`**:
 
    | Condition | FeRRy-Plan | FeRRy-Adapt | Deadline-Heuristic | FedEx | MAX-AoI, Oort, Value-Aware FL, FedCS |
