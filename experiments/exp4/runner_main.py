@@ -398,6 +398,15 @@ def _add_phase_5_flags(parser: argparse.ArgumentParser) -> None:
         help="Refuse H2 and H3 without --selector-weights, whose selector would then be "
              "random-init (decision 8 (a)). Off by default, as recorded.",
     )
+    g.add_argument(
+        "--checkpoint-off-switches", nargs="+", default=None, metavar="SWITCH",
+        help="Step 1's switches (DDIL build B10) on which a pair checkpoint trained on step "
+             "1's physics flies off its training conditions here, as a declared test (the "
+             "FQ track's per-class-phase sensitivity cell flies FQ-s1 with "
+             "interference_shared off). Each named switch must be one of step 1's and must "
+             "differ here from a given checkpoint's; every other switch is still refused. "
+             "Off by default.",
+    )
 
 
 def _checkpoint_flags(
@@ -503,7 +512,8 @@ def _check_checkpoint_plans(driver: Exp4Driver) -> None:
                 + "; a checkpoint flies on the plan it trained under")
 
 
-def _check_checkpoint_ddil(driver: Exp4Driver) -> None:
+def _check_checkpoint_ddil(driver: Exp4Driver,
+                           off_switches: Optional[Sequence[str]] = None) -> None:
     """Refuse a pair checkpoint trained on step 1's physics that would fly here on other
     switches (DDIL build B10), as a ValueError.
 
@@ -514,28 +524,57 @@ def _check_checkpoint_ddil(driver: Exp4Driver) -> None:
     A checkpoint that records none trained on the recorded physics and may fly on
     step 1's: the FQ track flies FQ-g75 there on purpose, outside the conditions
     it trained in, as a declared test (the DDIL unified plan, The FQ track).
-    """
-    if not driver.pair_checkpoints:
-        return
-    from experiments.ferrysim.checkpoints import ddil_differences, trained_ddil
-    from hermes.scheduler.selector.pair_q import verify_checkpoint
 
-    flown = dict(driver.ferry_physics or {})
-    for tag, path in driver.pair_checkpoints.items():
-        where = f"--pair-checkpoint {tag}={path}"
-        try:
-            trained = trained_ddil(verify_checkpoint(path))
-        except (TypeError, ValueError, OSError) as e:
-            raise ValueError(f"{where}: {e}") from e
-        if not trained:
-            continue
-        differ = ddil_differences(trained, flown)
-        if differ:
-            raise ValueError(
-                f"{where}: trained on other step-1 switches than this run flies (DDIL build "
-                f"B10): " + ", ".join(f"{name} (trained {a!r}, flown {b!r})"
-                                      for name, (a, b) in differ.items())
-                + "; a checkpoint trained on step 1's physics flies only on its own switches")
+    ``off_switches`` (``--checkpoint-off-switches``) declares the switches on which a
+    step-1 checkpoint flies off its training conditions here, as the FQ track's
+    sensitivity cell flies FQ-s1 with shared interference off. A declared switch
+    that is not one of step 1's, or that differs from no step-1 checkpoint given,
+    is refused, so the flag stands only where a run is off its checkpoint's
+    conditions; each one used is logged.
+    """
+    if not driver.pair_checkpoints and not off_switches:
+        return
+    from experiments.ferrysim.cells import DDIL_SWITCH_FIELDS
+
+    declared = list(dict.fromkeys(str(s) for s in off_switches or ()))
+    unknown = [s for s in declared if s not in DDIL_SWITCH_FIELDS]
+    if unknown:
+        raise ValueError(f"--checkpoint-off-switches: {', '.join(unknown)} is not one of step "
+                         f"1's switches ({', '.join(DDIL_SWITCH_FIELDS)})")
+    used: set = set()
+    if driver.pair_checkpoints:
+        from experiments.ferrysim.checkpoints import ddil_differences, trained_ddil
+        from hermes.scheduler.selector.pair_q import verify_checkpoint
+
+        flown = dict(driver.ferry_physics or {})
+        for tag, path in driver.pair_checkpoints.items():
+            where = f"--pair-checkpoint {tag}={path}"
+            try:
+                trained = trained_ddil(verify_checkpoint(path))
+            except (TypeError, ValueError, OSError) as e:
+                raise ValueError(f"{where}: {e}") from e
+            if not trained:
+                continue
+            differ = ddil_differences(trained, flown)
+            off = {name: pair for name, pair in differ.items() if name in declared}
+            refused = {name: pair for name, pair in differ.items() if name not in declared}
+            if refused:
+                raise ValueError(
+                    f"{where}: trained on other step-1 switches than this run flies (DDIL "
+                    f"build B10): " + ", ".join(f"{name} (trained {a!r}, flown {b!r})"
+                                                for name, (a, b) in refused.items())
+                    + "; a checkpoint trained on step 1's physics flies only on its own "
+                      "switches, or off those --checkpoint-off-switches declares")
+            for name, (a, b) in off.items():
+                log.warning("%s flies off its training conditions on %s (trained %r, flown "
+                            "%r), declared by --checkpoint-off-switches", where, name, a, b)
+            used.update(off)
+    idle = [s for s in declared if s not in used]
+    if idle:
+        raise ValueError(
+            f"--checkpoint-off-switches: {', '.join(idle)} differs here from no pair "
+            f"checkpoint trained on step 1's physics; declare only the switches a run "
+            f"flies off its checkpoint's conditions")
 
 
 def _phase_5_driver_kwargs(
@@ -1158,8 +1197,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         # plan it trained under.
         _check_checkpoint_plans(driver)
         # DDIL build B10: a checkpoint trained on step 1's physics flies only on
-        # its own switches.
-        _check_checkpoint_ddil(driver)
+        # its own switches, or off those --checkpoint-off-switches declares.
+        _check_checkpoint_ddil(driver, args.checkpoint_off_switches)
         # FeRRy Phase 4: a plan arm the driver cannot run (on the wall clock,
         # without a band, with a budgeted Pass 2, ...) is refused here, before
         # any trial, rather than as an error row per trial. FeRRy Phase 5: so

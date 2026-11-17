@@ -157,16 +157,22 @@ DDIL1_CHECKS: List[Tuple[str, List[str], Optional[List[str]], Optional[str]]] = 
 
 def _d1_cells(cells) -> str:
     """``s515.d1_cells`` as a TOML array of inline tables, for --set. A cell is
-    (tag, args, arms, budget) or, with its size, (tag, args, arms, budget, n)."""
+    (tag, args, arms, budget), or with its size (..., n), or with flags for some of its
+    arms alone (..., n, {arm: [flags]}), the launcher's ``arm_args``."""
     def lit(xs):
         return "[" + ",".join(f"'{x}'" for x in xs) + "]"
     rows = []
-    for tag, args, arms, budget, *size in cells:
+    for tag, args, arms, budget, *rest in cells:
+        size = rest[0] if rest else None
+        arm_args = rest[1] if len(rest) > 1 else None
         row = f"tag='{tag}',args={lit(args)},arms={lit(arms or EIGHT_ARMS)}"
         if budget:
             row += f",budget='{budget}'"
-        if size and size[0]:
-            row += f",n={int(size[0])}"
+        if size:
+            row += f",n={int(size)}"
+        if arm_args:
+            row += ",arm_args={" + ",".join(f"{arm}={lit(flags)}"
+                                             for arm, flags in arm_args.items()) + "}"
         rows.append("{" + row + "}")
     return "s515.d1_cells=[" + ",".join(rows) + "]"
 
@@ -181,14 +187,20 @@ def _d1_cells(cells) -> str:
 # the FQ arms: their jobs have step 1's arguments and CSVs, so a flight skips them (every row
 # is there) and the probe pairs FQ with them.
 FQ_ARMS = ["FQ-g75", "FQ-s1"]
-#: FQ-s1's checkpoint, repo-relative (results/exp5/checkpoints/<study>/g75/g0.75_s<seed>.npz),
-#: set once it is trained, evaluated on the held-out stream and picked by median validation.
-FQ_S1_CHECKPOINT: Optional[str] = None
+#: FQ-s1's checkpoint, repo-relative: trained 16 Nov 2026 from b0e84b8f (rl-sweep, out-root
+#: results/exp5_fqs1, γ = 0.75, ten seeds), evaluated on the held-out stream in step 1's four
+#: jittery cells, and picked as FQ-g75 was: the lower-median validation seed on Study 5.5's
+#: cells (their step-1 twins jit-n12-90-s1 and jit-n12-180-s1), seed 3.
+FQ_S1_CHECKPOINT: Optional[str] = "results/exp5_fqs1/checkpoints/5.5-jittery56-s1/g75/g0.75_s3.npz"
+#: The per-class-phase cell is the plan's sensitivity cell: it flies shared interference off,
+#: which FQ-s1 trained with on, so FQ-s1 flies it off its training conditions as a declared
+#: test (user, 16 Nov), the one switch the runner lets it fly off there.
+FQ_S1_OFF_SHARED = {"FQ-s1": ["--checkpoint-off-switches", "interference_shared"]}
 DDILFQ1_CELLS = [
     ("_d1base", D1_ALL, EIGHT_ARMS + FQ_ARMS, None),
     ("_d1ampharsh", D1_ALL + D1_AMP[17], EIGHT_ARMS + FQ_ARMS, None),
     ("_d1ampharshpc", _without(D1_ALL, "--interference-shared") + D1_AMP[17],
-     EIGHT_ARMS + FQ_ARMS, None),
+     EIGHT_ARMS + FQ_ARMS, None, None, FQ_S1_OFF_SHARED),
     ("_d1burst40", D1_ALL + _bursts(0.4), EIGHT_ARMS + FQ_ARMS, None),
     ("_d1ampharsh", D1_ALL + D1_AMP[17], ["F", "FX"] + FQ_ARMS, None, 12),
 ]

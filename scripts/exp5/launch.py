@@ -1224,12 +1224,20 @@ class Builder:
         # ``s515.learned_arms`` (a learned arm flown with its own checkpoint, so FQ-g75
         # and FQ-s1, both the runner's FQ-g75, fly side by side in one cell) or
         # ``s515.arm_variants`` (an arm flown with extra flags, as step 2's F with D2's
-        # switches): each flies the runner's ``arm`` under its own job name.
+        # switches): each flies the runner's ``arm`` under its own job name. A cell's
+        # ``arm_args`` ({name = [flags]}) adds flags to one arm in that cell only, as the
+        # FQ track's sensitivity cell declares FQ-s1's --checkpoint-off-switches.
         variants: Dict[str, Any] = dict(s.get("s515.learned_arms", None) or {})
         variants.update(s.get("s515.arm_variants", None) or {})
         for cell in s.get("s515.d1_cells", None) or []:
             n_cell = int(cell.get("n") or n515)
-            for name in cell.get("arms") or s.get("s515.arms") or []:
+            names = list(cell.get("arms") or s.get("s515.arms") or [])
+            arm_args = dict(cell.get("arm_args") or {})
+            stray = sorted(set(arm_args) - set(names))
+            if stray:
+                raise ValueError(f"s515.d1_cells {cell.get('tag')}: arm_args names "
+                                 f"{', '.join(stray)}, not among the cell's arms {names}")
+            for name in names:
                 own = variants.get(name)
                 more: List[str] = []
                 if own is None:
@@ -1247,7 +1255,8 @@ class Builder:
                     st, "s515", arm=arm, n=n_cell, k=1,
                     level=cell.get("budget") or s.get("s515.budget"),
                     payload=s.get("s515.payload_bytes"), n_trials=int(s.get("s515.n_trials")),
-                    extra=base + [str(a) for a in cell["args"]] + more,
+                    extra=base + [str(a) for a in cell["args"]] + more
+                    + [str(a) for a in arm_args.get(name) or []],
                     tag_extra=str(cell["tag"]), footprint=True, tag_arm=tag_arm,
                     learned_flags=flags)
                 job.blocked = sorted(set(job.blocked) | set(missing))

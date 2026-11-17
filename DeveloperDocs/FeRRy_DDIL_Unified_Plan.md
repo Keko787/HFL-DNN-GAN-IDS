@@ -1,6 +1,6 @@
 # FeRRy under DDIL conditions — the unified plan
 
-*15 Nov 2026; revised 16 Nov (step 3's guard limited to moves onto narrow, at the user's choice, the rule stated as a second layer on top of the per-stop decision, and an N = 12 cell in step 3 that tests the limited guard); revised again 16 Nov after a review against `hermes/` and P1's kept traces, and to make FQ a full track at the user's request (see [What the 16 Nov review changed](#what-the-16-nov-review-changed)); the user answered decisions 1 to 13 the same day (see [Decisions](#decisions)). Nothing here has been built or flown. This page combines [FeRRy_DDIL_Robustness_Plan.md](FeRRy_DDIL_Robustness_Plan.md) (the DDIL plan, revised 14 Nov) and [Experiment_5_Per_Transfer_Band_Plan.md](Experiment_5_Per_Transfer_Band_Plan.md) (the per-transfer plan, 13 Nov) into one plan, and where they disagree it decides. They keep the detail it does not repeat (see [What the two pages keep](#what-the-two-pages-keep)). Every build that changes `hermes/` still needs the user's go-ahead, and step 9's analysis plan is fixed before it flies, never after. In the Builds and Order tables, D-numbers are builds; elsewhere D1–D5 are the baselines, as in the DDIL plan.*
+*15 Nov 2026; revised 16 Nov (step 3's guard limited to moves onto narrow, at the user's choice, the rule stated as a second layer on top of the per-stop decision, and an N = 12 cell in step 3 that tests the limited guard); revised again 16 Nov after a review against `hermes/` and P1's kept traces, and to make FQ a full track at the user's request (see [What the 16 Nov review changed](#what-the-16-nov-review-changed)); the user answered decisions 1 to 13 the same day (see [Decisions](#decisions)). Since then (16 Nov), step 0 and 5a have been read, D1 has been built and step 1 has flown. What is left, with its hours and trials, is in [Tasks, hours and trials](#tasks-hours-and-trials). This page combines [FeRRy_DDIL_Robustness_Plan.md](FeRRy_DDIL_Robustness_Plan.md) (the DDIL plan, revised 14 Nov) and [Experiment_5_Per_Transfer_Band_Plan.md](Experiment_5_Per_Transfer_Band_Plan.md) (the per-transfer plan, 13 Nov) into one plan, and where they disagree it decides. They keep the detail it does not repeat (see [What the two pages keep](#what-the-two-pages-keep)). Every build that changes `hermes/` still needs the user's go-ahead, and step 9's analysis plan is fixed before it flies, never after. In the Builds and Order tables, D-numbers are builds; elsewhere D1–D5 are the baselines, as in the DDIL plan.*
 
 ---
 
@@ -226,13 +226,13 @@ FQ-s1 changes the physics alone. FQ-d changes the family and drops the phase blo
 - FerrySim cells at N = 6 and N = 12 at their knees, with step 1's environment switches on and shared interference throughout (the bands are nested): the default channel, 11 and 17 dB, the bursty process at both duty cycles, a narrow-band jam window and a wideband jam at finite power.
 - `FerryCell` gains optional fields for the interference amplitude and step 1's switches. At None they are left out of the cell's JSON, as `field_radius_m` is, so the existing families' hashes do not move.
 - n = 2.7 is left out of the family, so step 9's n = 2.7 cell tests the learned arm outside the conditions it trained on.
-- Features stay `pair_v1`; FQ-d flies the schema with its `phase` flag off. The family, step 1's settings, the phase flag and the rule's settings go in the checkpoint header, so the loader refuses a checkpoint on an arm that flies other settings.
+- Features stay `pair_v1`; FQ-d flies the schema with its `phase` flag off. The family, step 1's settings, the phase flag and the rule's settings go in the checkpoint header, so the loader refuses a checkpoint on an arm that flies other settings. *As built (16 Nov):* the runner refuses a checkpoint trained on step 1's physics on any other step-1 switch, except one a job declares with `--checkpoint-off-switches`. The sensitivity cell (17 dB with per-class phases) declares `interference_shared`, so FQ-s1 flies it off its training conditions as a declared test (user, 16 Nov), as FQ-g75 flies step 1's physics. A declared switch must differ in that job, and every other switch is still refused.
 - FerrySim's headroom report is run on the family first. It is a read, not a gate: it says how far the best per-stop choice is from FX's before any training is spent.
 
 **Training.** As FQ-g75's: γ = 0.75, 4,000 episodes, ten seeds, and the median-validation checkpoint flown. FQ-s1 and FQ-d are 20 trainings at 1–2 h each, 14 at a time: about 2–4 h of machine time. FQ-dR is 10 more, 1–2 h.
 
 **Cells**, 20 trials, step 1's model, seeds already seen:
-- N = 6, knee: default, 17 dB, 17 dB with per-class phases (the sensitivity), bursty (the higher duty cycle), and narrow jammed (6 missions);
+- N = 6, knee: default, 17 dB, 17 dB with per-class phases (the sensitivity, which every FQ arm trained on shared interference flies off its training conditions), bursty (the higher duty cycle), and narrow jammed (6 missions);
 - N = 12, knee: 17 dB, where the slot makes more than one decision a mission. FX flies this cell too, as the reference (step 1 has no N = 12 cell).
 
 FQ-g75, FQ-s1 and FQ-d fly all six: 380 trials with FX's, about 1.2 h. FQ-tx and FQ-dR add 240 trials, about 0.7 h, if step 3 is built. The other references come from steps 1, 3 and 7a on the same seeds.
@@ -288,8 +288,8 @@ FQ-g75, FQ-s1 and FQ-d fly all six: 380 trials with FX's, about 1.2 h. FQ-tx and
 
 **Step 2.** This is the main fix for the hover rise. It is the step that changes where the mule hovers, and it does not depend on the interference being periodic or per class.
 - **A leave-by time per stop** (16 Nov; build D2), so that C2 has a step that owns it. Each stop gets the plan's predicted end plus its share of the mission's slack (the sharing rule is fixed in D2). After it no session, retry, re-poll, deferral or wait starts, and members not served count as timeouts.
-- With the reserve and the re-check after the last Pass-1 stop, it is what has to hold C2's 10% bound. F overruns 30% and FX 16% at 17 dB today, before step 1's retries lengthen the stops.
-- Step 2's arm flies with and without it at the 17 dB knee and at stress: 40 more trials, so about 360 trials, 0.9 h.
+- With the reserve and the re-check after the last Pass-1 stop, it is what has to hold C2's 10% bound. *D2 as built (16 Nov) has the risk-priced dwell, the reserve and the leave-by time, but not the re-check after the last Pass-1 stop, so step 2 flies without it.* F overruns 30% and FX 16% at 17 dB today, before step 1's retries lengthen the stops.
+- Step 2's arm flies with and without it at the 17 dB knee and at stress: 40 more trials, so about 360 trials, 0.9 h. *As built (16 Nov): 280 trials, 0.7 h, in step 1's nine every-switch cells, the two cells without the leave-by time, and P1's three recorded mission-backhaul cells (row 4 of the task table).*
 
 **Step 4.** The re-poll moved to step 1, for every arm. Step 4 keeps the move-closer stop, and prices it on every class that reaches the device from the new stop, not only a wider one. At one distance narrow keeps about 12 dB more margin than wide (their 233.5 m and 65 m slant ranges at n = 2.2), so under interference that hits every class the stop that rescues a device is closer and no wider. *This last point was added while revising; it was not in the review.*
 
@@ -371,20 +371,20 @@ B4–B8 land as the per-transfer plan's §5o freeze entry (behind switches, no a
 
 ## Order and time
 
-| Order | What | Needs | ~h of flights |
-|---|---|---|---|
-| 1 | Step 0 (replay, (a) to (o)) and step 5a; both read before D1 is built | D0 | 1.6 |
-| 2 | D1, then step 1 | go-ahead | 7.1 |
-| 3 | B10, then FQ-s1 and FQ-d train and fly | D1 | 1.2, plus 2–4 h of training |
-| 4 | D8, then step 7a | D1's band outage | 4.7 |
-| 5 | D2, then step 2 | D1's causal estimate | 0.9 |
-| 6 | B4–B8, then step 3, if step 0 says go and 5a keeps 1 MB in scope | D1; D2's leave-by time | 2.1 |
-| 7 | B9, then FQ-tx and FQ-dR, if step 3 is built | step 3 | 0.7, plus 1–2 h of training |
-| 8 | Build D4, then step 4 | D1 | 0.9 |
-| 9 | D6, then step 6 (optional before step 9) | — | 0.7 |
-| 10 | Step 9a, the rehearsal | the steps that passed | 1.4 |
-| 11 | D9, then step 9 | the criteria fixed; step 9a's arm; the FQ arm chosen | ~22 |
-| 12 | D7, then step 8; D5, then step 5b; step 3c if its gate passes | 5a's result, for 5b; step 0's (o), for 3c | later |
+| Order | What | Status (16 Nov, 23:30 CST) | Needs | ~h of flights |
+|---|---|---|---|---|
+| 1 | Step 0 (replay, (a) to (o)) and step 5a; both read before D1 is built | **Done.** Both flown and read | D0 | 1.6 |
+| 2 | D1, then step 1 | **Partly done.** D1 built; step 1's 2,800 trials flown. Left: scoring | go-ahead | 7.1 |
+| 3 | B10, then FQ-s1 and FQ-d train and fly | **Partly done.** B10 built; FQ-s1 trained. Left: FQ-s1's flight, and FQ-d (after NOMS) | D1 | 1.2, plus 2–4 h of training |
+| 4 | D8, then step 7a | **Not started** | D1's band outage | 4.7 |
+| 5 | D2, then step 2 | **Partly done.** D2 built, without the last-stop check. Left: step 2's flight | D1's causal estimate | 0.9 |
+| 6 | B4–B8, then step 3, if step 0 says go and 5a keeps 1 MB in scope | **Not started** (held back, decision 10) | D1; D2's leave-by time | 2.1 |
+| 7 | B9, then FQ-tx and FQ-dR, if step 3 is built | **Not started** (held back with step 3) | step 3 | 0.7, plus 1–2 h of training |
+| 8 | Build D4, then step 4 | **Not started** | D1 | 0.9 |
+| 9 | D6, then step 6 (optional before step 9) | **Not started** (held back, optional) | — | 0.7 |
+| 10 | Step 9a, the rehearsal | **Not started** | the steps that passed | 1.4 |
+| 11 | D9, then step 9 | **Not started** | the criteria fixed; step 9a's arm; the FQ arm chosen | ~22 |
+| 12 | D7, then step 8; D5, then step 5b; step 3c if its gate passes | **Not started** (held back) | 5a's result, for 5b; step 0's (o), for 3c | later |
 
 About 43 h of flights before steps 8, 5b and 3c, plus 3–6 h of FQ training.
 
@@ -392,19 +392,20 @@ About 43 h of flights before steps 8, 5b and 3c, plus 3–6 h of FQ training.
 - **Where it can come down.** If step 3 fails step 0's go/no-go, or is skipped after 5a, about 2.8 h of flights, 1–2 h of training and about 4 build days come off.
 - **Against the NOMS deadline.** The paper is not yet submitted, and NOMS closes on 30 Nov 2026, firm (user, 16 Nov). Only order 1, step 0 and 5a, is sure to fit before it. D1 and step 1 (4–5 build days, about 7 h of flights) fit only if they start within days and nothing is re-flown. Everything after step 1 falls after the deadline, so where the fixes go is decided once step 0 and 5a are read (decision 4). Decided on 16 Nov, once both were read: this paper ([The NOMS slice](#the-noms-slice)).
 
-Builds take roughly 19 to 23 working days (D1 is 4–5 of them, B4–B8 about 3, B10 1–2). With time to re-fly, that is about 6 weeks on the one host. The DDIL plan's host notes stand: check the host's memory before long runs, and re-fly failed rows under a fresh out-root.
+Builds take roughly 19 to 23 working days (D1 is 4–5 of them, B4–B8 about 3, B10 1–2). With time to re-fly, that is about 6 weeks on the one host. These days assumed a person writing the code; [Tasks, hours and trials](#tasks-hours-and-trials) re-sizes the builds in session hours, from D1's build. The DDIL plan's host notes stand: check the host's memory before long runs, and re-fly failed rows under a fresh out-root.
 
 ### The NOMS slice
 
-The fixes go in the NOMS paper (decision 4; user, 16 Nov, after 5a was read). NOMS closes on 30 Nov 2026, 14 days out, so only D1 and step 1 are sure to fit, and one more piece only if D1 lands on time. Proposed (16 Nov), each build and flight still on the user's go-ahead:
+The fixes go in the NOMS paper (decision 4; user, 16 Nov, after 5a was read). NOMS closes on 30 Nov 2026, 14 days out. As first proposed, only D1 and step 1 were sure to fit, with one more piece if D1 landed on time. Both landed on 16 Nov, four days early, and [the task table](#tasks-hours-and-trials) showed that FQ-s1 and step 2 both fit, so both go in (user, 16 Nov). Each build and flight still needs the user's go-ahead:
 
 | Dates | What | Notes |
 |---|---|---|
-| 16–20 Nov | Build D1, on a branch, behind switches | Every default must reproduce the recorded traces, as the 5o freeze entries require |
-| 20–21 Nov | Step 1's flights | The main cells first, then the checks |
-| 21–22 Nov | Score step 1 | Side by side with the recorded numbers (decision 3) |
-| 23–25 Nov | One of: B10, then FQ-s1 trained and flown; or D2, then step 2 | Proposed: FQ-s1 (the RL arm is central), unless step 1 leaves F's overrun at 17 dB above C2's 10%, then step 2 |
-| 25–29 Nov | The paper | One or two sentences in the main text, the tables in the appendix; the main text is already about a third of a page over 8 pages |
+| 16 Nov, done | Build D1, on a branch, behind switches | Code 5a63b61d. With every switch off, it reproduces the recorded traces, as the 5o freeze entries require |
+| 16 Nov, done | Step 1's flights | The main cells (done 16:11 CST), then the checks (done 19:03 CST): 140 jobs, no failed trials. Results in `results/exp5_ddil1`, not yet scored |
+| 16 Nov, done | Build B10 and D2; train FQ-s1 | Both built and tested, committed locally as b0e84b8f (branch `ddil-d2`, not pushed). FQ-s1's 10 trainings and its held-out evaluation ran 19:44–21:52 CST; seed 3 is picked, as for FQ-g75 |
+| 17 Nov | Score step 1 | Side by side with the recorded numbers (decision 3), once D0's scorer entries are in |
+| 17–21 Nov | Fly FQ-s1's cells (240 trials) and step 2's (280) | Each flight needs the user's go-ahead. About 1.5 h of flights, then scoring (rows 3 and 4 of the task table) |
+| 22–29 Nov | The paper | One or two sentences in the main text, the tables in the appendix; the main text is already about a third of a page over 8 pages |
 | 30 Nov | Submit | |
 
 - **D1 for NOMS**, as scoped from the code on 16 Nov:
@@ -416,7 +417,7 @@ The fixes go in the NOMS paper (decision 4; user, 16 Nov, after 5a was read). NO
 - **Left out of D1 for NOMS:** the band outage (step 7a's) and band-dependent loss. Step 1 drops its band-dependent-loss cell (160 trials), so it is 2,800 trials.
 - **Step 1's order:** the main cells first (the 8 all-switches cells, F-o and FX-o, stress: 1,520 trials), then the switch-alone cells, the resumable cell and the 20 s bursts (1,280). 5a took 3.2 h against an estimate of 1.6 h, so allow up to about 14 h for step 1, not 7.
 - **What step 0 predicts for step 1.** Under shared interference with the rate following the channel, F's recorded schedules hover 59.8 s a mission at 17 dB against 78.0 s at 5 dB, so the sinusoid's 17 dB rise does not survive the honest session model. The bursty process only lowers the SNR, so it is the cell that can still show a rise. The flights replace both predictions.
-- **After the deadline:** step 3 (the per-transfer rule), the rest of the FQ track, steps 2, 4 and 7a if not flown, step 9a and step 9.
+- **After the deadline:** planned are the rest of D1, step 7a, the rest of the FQ track, step 4, step 9a and step 9. Step 3 (the per-transfer rule) and the tasks that follow from it are held back ([Tasks, hours and trials](#tasks-hours-and-trials)).
 - **D1 built on 16 Nov** (code 5a63b61d on branch `ddil-d1`), four days ahead of the table. All of 6,106 unit and golden tests that ran pass apart from four legacy Flower subprocess tests that fail on the host's `Config` import, which D1 does not touch, and 32 new tests in `tests/unit/test_ddil_d1.py`. The ferry module's freeze test now takes D1's counted changes out and still finds 386c275's module. With every switch off, two of P1's recorded 17 dB trials re-flown for F and two for H1 give identical traces and CSV rows, apart from ports and wall-clock timers.
 - **D1 as built** (16 Nov, branch `ddil-d1`; [Configuration Reference §20.13](HERMES_Configuration_Reference.md)). Choices made while building, each open to change before step 1 flies:
   - **Shared interference** names one class whose term every class takes. Step 1 names narrow, so F on narrow sees the recorded wave and step 0's predictions for F carry over; the wide-band baselines see the same wave shifted by a third of a period, which is statistically the same.
@@ -425,6 +426,95 @@ The fixes go in the NOMS paper (decision 4; user, 16 Nov, after 5a was read). NO
   - **The causal estimate** learns a mean offset as well as a spread, since bursts lower the mean. The prior is the regime's default spread, weighted as 12 readings (about two stops). It reads every in-range member's SNR at arrival, below the floor too, as the gate already does: a declared assumption.
   - **The switch-alone burst cell** flies the 40% duty cycle, the stronger of the two.
   - **Step 1's cells** are the `DDIL1` probe in `scripts/exp5/loss_probes.py`, on P1's seeds and mission backhaul: 19 cells, 2,800 trials, out-root `results/exp5_ddil1`.
+
+---
+
+## Tasks, hours and trials
+
+*16 Nov 2026, written while step 1's checks fly. This section lists every task left on this page, says whether it is planned or held back, and gives the development it needs, the trials left to fly, and the hours to build, test, fly and score it. All figures are estimates. Each command's dry run replaces its trial count, and every build and flight still needs the user's go-ahead. Brought up to date at 22:45 CST the same day: row 1 is done, and so are rows 3 and 4's builds and FQ-s1's training. Their rows keep their estimates so the totals stay comparable; what they took is under Done. Each task table's Status column says what is done and what is left.*
+
+**Done.**
+- Step 0's replay, read 16 Nov ([step0_replay.md](../results/exp5/scores/ddil/step0_replay.md)).
+- 5a: 1,280 trials, 3.2 h.
+- D1: code 5a63b61d on branch `ddil-d1`, not pushed.
+- Step 1's main flight: 76 jobs, 1,520 trials, 12:49–16:11 CST (3.4 h), with no failed trials.
+- Step 1's checks (row 1): 64 jobs, 1,280 trials, done 19:03 CST, with no failed trials. Step 1's 2,800 trials are all flown, in `results/exp5_ddil1`, and not yet scored.
+- B10 and D2 (rows 3 and 4's builds): tested and committed locally as b0e84b8f on branch `ddil-d2`, not pushed. The full suite passed apart from the four known failures. With D2 off, the code re-flies P1's and step 1's recorded trials with identical CSV rows and traces, apart from ports and wall-clock timers. Testing found one FerrySim bug, fixed before training: it did not count a member solicited by step 1's re-poll as a target.
+- FQ-s1's training (row 3): 10 trainings and the held-out evaluation in step 1's four jittery cells, 19:44–21:52 CST (2.1 h against 1.5 h estimated). The pick follows FQ-g75's rule, the lower-median validation seed on Study 5.5's two N = 12 cells (their step-1 twins): seed 3, `results/exp5_fqs1/checkpoints/5.5-jittery56-s1/g75/g0.75_s3.npz`. In FerrySim's held-out runs the ten seeds sit close together, between F and FX in all four cells. The flights are the test.
+- The sensitivity cell's declared exception for FQ-s1 (user, 16 Nov; [The FQ track](#the-fq-track)): built and tested, and committed on branch `ddil-d2` with this update of the page. A one-trial smoke run of that job flew with status ok.
+
+**Gates already read.**
+- **Step 3's go/no-go passes.** Under shared interference, the rule saves 24.9 s of hover a mission for F [21.5, 28.3] and 23.3 s for FX [19.8, 26.7], against the 15 s bar, with no fewer sessions completed. Whether step 3 is built still waits on decision 10, since 5a put the hover problem at 1 MB.
+- **Step 3c's gate fails.** The foresight bound beats the rule by only 5.2 s (F) and 6.1 s (FX), against the 10 s bar, so step 3c is held back and not sized.
+
+**Planned or held back.**
+- **Planned** means this page intends to run the task, in the order of its rows. Each build and flight still needs the user's go-ahead.
+- **Held back** means the task is not built or flown until the decision or result in its "Held back until" column releases it.
+- Step 6 and step 8 are held back because this page calls them optional and later. Every other held-back task waits on an open decision (5, 10 or 13) or on another task's result.
+- With step 3 held back, step 9a and step 9 are planned without the rule. If step 3 is released, its row carries the rehearsal's extra cells.
+
+**How the hours are counted.**
+- **Run** is machine hours on this host, 7 jobs at a time.
+  - The rate is 2.4 h per 1,000 trials at N = 6 with four missions. On 16 Nov, step 1's main flight measured 2.2 h per 1,000 and 5a measured 2.5 h.
+  - An N = 12 trial counts as two, a six-mission trial as 1.5 and a ten-mission trial as 2.5.
+  - FQ training is in this column too: 1.5 h for each set of 10 trainings run 14 at a time (the middle of the FQ track's 1–2 h).
+- **Dev and Test** are session hours, scaled from D1's build.
+  - The Builds table sized D1 at 4–5 working days. Its scope was read from the code beforehand, for the NOMS slice, and it then took about half an hour from the go-ahead (12:16 CST) to its commit (12:48 CST). That half hour includes the 32 new tests, the full suite, the freeze test and the re-flown recorded trials.
+  - The estimates below allow several times that pace: about 1 h of development for a small build, 2 h for a medium one and 4 h for B4–B8.
+  - Testing is 0.5 to 1.5 h a build: the suite, the freeze test with every switch off, smoke cells, and fixing what they find.
+  - They leave out the user's review and any redesign that a failed check forces.
+- **Score** is scoring, the read, and writing the result into this page. The paper row is writing.
+- Flights run while the next build is written, so the calendar is shorter than the sum. Machine time sets its floor.
+
+### Planned, for NOMS (30 Nov)
+
+| # | Task | Status | Development needed | Experiments left | Trials | Dev h | Test h | Run h | Score h | Total h |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | Step 1's checks | **Done** (19:03 CST, 16 Nov; all 64 jobs, no failed trials) | None (D1) | 8 cells × 8 arms at 17 dB: each switch alone (`t_out` 10 s and 2 s, the re-poll, 40% bursts, the causal estimate), resumable transfers, and 20 s bursts at 10% and 40% | 1,140 of 1,280 | — | — | 2.5 | — | 2.5 |
+| 2 | Score step 1, beside the recorded numbers (decision 3) | **Not started** | D0's scorer entries: hover and updates per mission as paired endpoints, and time to τ with a missed trial set to the trial's end (5a's hover tally was a scratch script) | — | — | 1.5 | 0.5 | — | 3 | 5.0 |
+| 3 | B10, then FQ-s1 | **Partly done.** Done: B10, the sensitivity cell's exception, FQ-s1's training (seed 3). Left: the flight and its scoring | B10: the DDIL family, `FerryCell`'s optional fields (existing hashes unchanged), the checkpoint header, the learned arms in batch 3 | FQ-s1 trains (10 trainings). FQ-g75 and FQ-s1 fly the five FQ cells without a jam, FQ-s1 the sensitivity cell off its training conditions, and F and FX fly the N = 12 cell (F added 16 Nov, so FQ has F beside it there; was 220) | 240 | 2 | 1 | 2.3 (1.5 training) | 1 | 6.3 |
+| 4 | D2, then step 2 (added for NOMS; user, 16 Nov) | **Partly done.** Done: D2, without the last-stop check. Left: the flight and its scoring | Risk-priced dwell, the reserve, the last-stop check and the leave-by time per stop | Step 2's arm in step 1's nine every-switch cells (180), without the leave-by time at the 17 dB knee and at stress (40), and on the recorded physics in P1's three mission-backhaul cells (60; P1 flew no σ = 8 dB cell there; was 360) | 280 | 2 | 1 | 0.7 | 1 | 4.7 |
+| 5 | The paper | **Not started** | — | — | — | — | — | — | 6 | 6.0 |
+| | **Subtotal** | | | | **1,660** | **5.5** | **2.5** | **5.5** | **11** | **24.5** |
+
+### Planned, after NOMS, through step 9
+
+| # | Task | Status | Development needed | Experiments left | Trials | Dev h | Test h | Run h | Score h | Total h |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 6 | The rest of D1, then step 1's last cell | **Not started** | The band outage (step 7a needs it) and band-dependent loss, both left out of D1 for NOMS | Band-dependent loss alone at the 17 dB knee, 8 arms | 160 | 1.5 | 0.5 | 0.4 | 0.5 | 2.9 |
+| 7 | D8, then step 7a | **Not started** | The dead-band rule, which replans inside the mission; the five jammed cells redrawn for nested bands; 6 missions; the window in seconds | 5 jammed cells, 6 missions a trial | 1,300 | 2 | 1 | 4.7 | 1.5 | 9.2 |
+| 8 | The rest of the FQ track | **Not started** | None once B10 is in | FQ-d trains (10 trainings) and flies all six FQ cells. FQ-g75 and FQ-s1 fly the narrow-jammed cell, which needs D8 | 160 | — | — | 2.0 (1.5 training) | 1.5 | 3.5 |
+| 9 | D4, then step 4 | **Not started** | The move-closer stop, priced on every class that reaches the device | Step 4's arm. The count is the DDIL plan's, made while step 4 still had the re-poll; the dry run will cut it | 380 | 1.5 | 0.5 | 0.9 | 0.5 | 3.4 |
+| 10 | Step 9a, the rehearsal | **Not started** | A probe entry (launcher only) | The combined arm, and one arm for each switch it carries (step 2, the move-closer stop, the dead-band rule) left out in turn, in 4 cells | 320 | 0.5 | 0.5 | 0.9 | 1 | 2.9 |
+| 11 | D9, then step 9 | **Not started** | D9's arm table; the analysis plan, written from the criteria before it flies | 13 cells and 10 arms at 40 trials (80 in C7's two cells), with 6-mission jammed cells and two measured-payload cells | 6,400 | 3 | 0.5 | 22 | 4 | 29.5 |
+| 12 | Before publication | **Not started** | — | A platform citation for `t_out`; the outage shares checked in their source | — | — | — | — | 1.5 | 1.5 |
+| | **Subtotal** | | | | **8,720** | **8.5** | **3** | **30.9** | **10.5** | **52.9** |
+
+### Held back
+
+| # | Task | Status | Held back until | Development needed | Experiments left | Trials | Dev h | Test h | Run h | Score h | Total h |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 13 | B4–B8, then step 3 | **Not started** | Decision 10. Step 0's go/no-go passed, but 5a put the hover problem at 1 MB | The per-transfer rule as a second layer. It takes the guard with its strict and off modes, step 1's session model in place of the floor-rate fallback, the bounded wait and the leave-by time; it can run on any arm; and B8 adds its columns | The tuning grid, the controls, F-tx, the retune cost, FX-txd and FX-tx-w, stress, and the N = 12 guard cell (840). In step 9a, the rule's leave-one-out arm and step 3's six settings at 17 dB with step 2 on (200) | 1,040 | 4 | 1.5 | 2.6 | 1.5 | 9.6 |
+| 14 | B9, then FQ-tx and FQ-dR | **Not started** | Row 13 is built; FQ-dR only if the rule passes there | FerrySim with the rule; the rule's settings in the checkpoint header | FQ-dR trains (10 trainings). FQ-tx and FQ-dR fly the six FQ cells | 240 | 1 | 0.5 | 2.2 (1.5 training) | 0.5 | 4.2 |
+| 15 | D6, then step 6 | **Not started** | Time before step 9 (optional) | The causal backhaul controller, and failed uploads carried forward | 5.15's seconds-backhaul cells: F+L1 against the causal controller, with and without carry-forward | 300 | 1.5 | 0.5 | 0.7 | 0.5 | 3.2 |
+| 16 | D7, then step 8 | **Not started** | After step 9 ("later" in Order and time) | Ready-time pricing in the feasibility test and the plan score | P11's two compute cells, 10 missions, 40 trials | 80 | 2 | 0.5 | 0.5 | 0.5 | 3.5 |
+| 17 | D5, then step 5b | **Not started** | Decision 5 (5a showed small payloads remove the hover rise) | Compression in the FL layer | Not sized | — | 3 | 1 | — | — | 4.0 plus flights |
+| 18 | FQ-dp | **Not started** | FQ-d trailing FQ-s1 on the sinusoid cells (row 8's read) | None (the phase flag) | 10 trainings; the six FQ cells | 120 | — | — | 1.9 (1.5 training) | 0.5 | 2.4 |
+| 19 | Step 3c | **Not started** | Decision 13. Its gate failed (5.2 s and 6.1 s against 10 s) | A new action space, `pair_v2` and a learner path | Not sized | — | — | — | — | — | — |
+| | **Subtotal** | | | | | **1,780** | **11.5** | **4** | **7.9** | **3.5** | **26.9** |
+
+### Totals
+
+| Scope | Trials | Dev h | Test h | Run h (training) | Score h | Total h |
+|---|---|---|---|---|---|---|
+| Planned, for NOMS (rows 1–5) | 1,660 | 5.5 | 2.5 | 5.5 (1.5) | 11 | 24.5 |
+| Planned, in all (rows 1–12) | 10,380 | 14 | 5.5 | 36.4 (3.0) | 21.5 | 77.4 |
+| Held back (rows 13–19; 5b and 3c not sized) | 1,780 | 11.5 | 4 | 7.9 (3.0) | 3.5 | 26.9 |
+| Everything (rows 1–19) | 12,160 | 25.5 | 9.5 | 44.3 (6.0) | 25 | 104.3 |
+
+- **The planned machine time is about 36.4 h**, 3 h of it training: about a day and a half of flying back to back, 22 h of it step 9. With the 6.6 h already flown (5a and step 1's main flight), that is about 40 h of flights. The 43 h in [Order and time](#order-and-time) counted steps 3 and 6 as well.
+- **If step 3 is released** (decision 10), rows 13 and 14 add 1,280 trials and 13.8 h.
+- **For NOMS**, rows 1–5 come to about 24.5 h with 14 days left. Step 2 joined FQ-s1 there once this table showed both fit (user, 16 Nov). At these rates, rows 6 and 7 (the band outage, D8 and step 7a, 12.1 h) would fit as well. The Still-open list's "none fits before NOMS" was written at the working-day pace. The tighter limit is likely the page count, since the main text is already about a third of a page over 8 pages.
 
 ---
 
@@ -468,7 +558,7 @@ The fixes go in the NOMS paper (decision 4; user, 16 Nov, after 5a was read). NO
 **Still open.**
 - **The go-ahead** (decision 8) for each build that changes `hermes/`, and for each flight. The first two waiting are D0, which is a script and scorer entries and changes nothing in `hermes/`, and the 5a flight (1.6 h).
 - **Now that step 0 and 5a are read** (both on 16 Nov): whether step 3 is skipped, now that the hover problem is a 1 MB one (decision 10); whether compression is built, now that small payloads remove the hover rise (decision 5); and whether step 3c is built, now that its gate has failed (decision 13). None of the three fits before NOMS. Where the fixes go is decided: this NOMS paper (decision 4).
-- **The NOMS slice's go-ahead:** D1 first, then step 1's flights ([The NOMS slice](#the-noms-slice)).
+- **The NOMS slice's go-ahead:** D1 and step 1 have theirs (16 Nov), and so do the B10 and D2 builds and FQ-s1's training (16 Nov). FQ-s1's flight and step 2's flight each still need theirs ([The NOMS slice](#the-noms-slice)).
 - **Before publication:** a platform citation for `t_out`, and the drone outage shares checked in their source.
 
 ---

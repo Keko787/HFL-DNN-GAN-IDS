@@ -4,13 +4,16 @@
   of a cell's JSON at None, so every recorded family hashes as it did;
 * the two DDIL families: ``jittery56-s1`` (FQ-s1's) and ``ddil`` (FQ-d's);
 * a training run's cells share one set of step 1's switches, which its manifest
-  records, and the runner flies a checkpoint trained on them only on them;
+  records, and the runner flies a checkpoint trained on them only on them, or off
+  the switches a run declares (the FQ track's sensitivity cell);
 * the launcher's variants: FQ-s1 beside FQ-g75 with its own checkpoint, and
-  step 2's F variants with their own flags, each under its own job name.
+  step 2's F variants with their own flags, each under its own job name; and a
+  cell's flags for one of its arms alone.
 """
 
 from __future__ import annotations
 
+import argparse
 import copy
 import dataclasses
 import json
@@ -177,6 +180,51 @@ def test_the_runner_flies_a_step_1_checkpoint_only_on_its_own_switches(monkeypat
                                                     if k != "channel_estimate"}))
 
 
+def test_a_declared_off_switch_lets_a_step_1_checkpoint_fly_off_that_switch_alone(
+        monkeypatch, caplog):
+    """The FQ track's sensitivity cell: FQ-s1 flies with shared interference off (user,
+    16 Nov), declared by --checkpoint-off-switches; every other switch is still refused,
+    and a declared switch must be one of step 1's and differ here."""
+    from experiments.exp4 import runner_main as RM
+    from hermes.scheduler.selector import pair_q
+
+    manifests = {"rec.npz": {"training": {"spec": {}}},
+                 "s1.npz": {"training": {"spec": {"ddil_switches": S1}}}}
+    monkeypatch.setattr(pair_q, "verify_checkpoint", lambda path: manifests[path])
+
+    def driver(path, physics):
+        return SimpleNamespace(pair_checkpoints={"g75": path}, ferry_physics=physics)
+
+    pc = {k: v for k, v in S1.items() if k != "interference_shared"}   # the per-class cell
+    with caplog.at_level(logging.WARNING, logger="experiments.exp4.runner_main"):
+        RM._check_checkpoint_ddil(driver("s1.npz", pc), ["interference_shared"])
+    assert "interference_shared (trained 'narrow', flown None)" in caplog.text
+    assert "declared by --checkpoint-off-switches" in caplog.text
+    with pytest.raises(ValueError, match="channel_estimate"):       # one more switch off
+        RM._check_checkpoint_ddil(
+            driver("s1.npz", {k: v for k, v in pc.items() if k != "channel_estimate"}),
+            ["interference_shared"])
+    with pytest.raises(ValueError, match="differs here from no pair checkpoint"):
+        RM._check_checkpoint_ddil(driver("s1.npz", dict(S1)), ["interference_shared"])
+    with pytest.raises(ValueError, match="differs here from no pair checkpoint"):
+        RM._check_checkpoint_ddil(driver("rec.npz", pc), ["interference_shared"])
+    with pytest.raises(ValueError, match="differs here from no pair checkpoint"):
+        RM._check_checkpoint_ddil(SimpleNamespace(pair_checkpoints={}, ferry_physics=pc),
+                                  ["interference_shared"])
+    with pytest.raises(ValueError, match="not one of step 1's switches"):
+        RM._check_checkpoint_ddil(driver("s1.npz", pc), ["interference_amp_db"])
+
+
+def test_the_runner_takes_the_off_switches_flag():
+    from experiments.exp4 import runner_main as RM
+
+    parser = argparse.ArgumentParser()
+    RM._add_phase_5_flags(parser)
+    assert parser.parse_args([]).checkpoint_off_switches is None
+    got = parser.parse_args(["--checkpoint-off-switches", "interference_shared"])
+    assert got.checkpoint_off_switches == ["interference_shared"]
+
+
 # --------------------------------------------------------------------------- #
 # The launcher's variants
 # --------------------------------------------------------------------------- #
@@ -206,6 +254,53 @@ def test_a_learned_variant_flies_its_own_checkpoint_under_its_own_name(tmp_path)
                                "learned_arms": {"FQ-s1": {"arm": "FQ-g75"}}})
     blocked = [j for j in unset if j.name.endswith("__FQ-s1")]
     assert blocked and blocked[0].blocked == ["s515.learned_arms.FQ-s1.checkpoint"]
+
+
+def test_a_cells_arm_args_go_to_that_arm_in_that_cell_alone(tmp_path):
+    off = ["--checkpoint-off-switches", "interference_shared"]
+    cells = [{"tag": "_dx", "args": ["--session-t-out-s", "10"], "arms": ["FQ-g75", "FQ-s1"],
+              "arm_args": {"FQ-s1": off}},
+             {"tag": "_dx", "args": [], "arms": ["FQ-s1"], "n": 12}]
+    learned = {"FQ-s1": {"arm": "FQ-g75", "checkpoint": "results/x/g75/g0.75_s4.npz"}}
+    jobs = _batch3(tmp_path, {"d1_cells": cells, "learned_arms": learned})
+    by = {j.name.split("/")[-1]: j.args for j in jobs}
+    mine = by["n6k1_knee_dx__FQ-s1"]
+    assert mine[mine.index("--checkpoint-off-switches"):][:2] == off
+    assert "--checkpoint-off-switches" not in by["n6k1_knee_dx__FQ-g75"]
+    assert "--checkpoint-off-switches" not in by["n12k1_knee_dx__FQ-s1"]
+    without = _batch3(tmp_path, {"d1_cells": [dict(cells[0], arm_args={})],
+                                 "learned_arms": learned})
+    plain = {j.name.split("/")[-1]: j.args for j in without}["n6k1_knee_dx__FQ-s1"]
+    assert [a for a in mine if a not in off] == plain        # the flags, and nothing else
+    with pytest.raises(ValueError, match="arm_args names FX"):
+        _batch3(tmp_path, {"d1_cells": [dict(cells[0], arm_args={"FX": off})],
+                           "learned_arms": learned})
+
+
+def test_ddilfq1_declares_fq_s1_off_shared_interference_in_the_sensitivity_cell_alone():
+    """The probe as flown: FQ-s1's job in the per-class-phase cell, and no other, says it
+    flies off shared interference; every FQ-s1 job flies FQ_S1_CHECKPOINT."""
+    import contextlib
+    import io
+    from tests.unit.test_exp5_scoring import EXP5, _load
+
+    LP = _load("exp5_loss_probes_b10", EXP5 / "loss_probes.py")
+    flight, = LP.PROBES["DDILFQ1"].flights
+    s, _ = L.load_settings(L.PARAMS)
+    ns = argparse.Namespace(trials=flight.trials, set=list(flight.sets), dataset=None,
+                            **{o: None for o, _, _ in L.LEVERS})
+    with contextlib.redirect_stdout(io.StringIO()):
+        L.apply_levers(s, ns)
+        jobs = [j for j in L.build(flight.stage, s, None, flight.out_root) if j.study == "s515"]
+    declared = sorted(j.name.split("/")[-1] for j in jobs
+                      if "--checkpoint-off-switches" in j.args)
+    assert declared == ["n6k1_knee_d1ampharshpc__FQ-s1"]
+    pc = next(j for j in jobs if j.name.endswith("n6k1_knee_d1ampharshpc__FQ-s1")).args
+    assert pc[pc.index("--checkpoint-off-switches") + 1] == "interference_shared"
+    assert "--interference-shared" not in pc
+    s1 = [j.args for j in jobs if j.name.endswith("__FQ-s1")]
+    assert len(s1) == 5 and not any(j.blocked for j in jobs)
+    assert all(a[a.index("--pair-checkpoint") + 1] == f"g75={LP.FQ_S1_CHECKPOINT}" for a in s1)
 
 
 def test_the_sweep_trains_fq_s1_and_reads_it_on_step_1s_cells(tmp_path):
