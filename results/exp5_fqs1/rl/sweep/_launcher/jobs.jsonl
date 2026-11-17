@@ -1,0 +1,22 @@
+{"event": "start", "job": "5.5-jittery56-s1/g75/g0.75_s0", "pid": 71364, "at": "2026-11-16T19:44:33"}
+{"event": "start", "job": "5.5-jittery56-s1/g75/g0.75_s1", "pid": 45480, "at": "2026-11-16T19:44:33"}
+{"event": "start", "job": "5.5-jittery56-s1/g75/g0.75_s2", "pid": 60908, "at": "2026-11-16T19:44:33"}
+{"event": "start", "job": "5.5-jittery56-s1/g75/g0.75_s3", "pid": 24308, "at": "2026-11-16T19:44:33"}
+{"event": "start", "job": "5.5-jittery56-s1/g75/g0.75_s4", "pid": 54700, "at": "2026-11-16T19:44:33"}
+{"event": "start", "job": "5.5-jittery56-s1/g75/g0.75_s5", "pid": 67552, "at": "2026-11-16T19:44:33"}
+{"event": "start", "job": "5.5-jittery56-s1/g75/g0.75_s6", "pid": 53188, "at": "2026-11-16T19:44:33"}
+{"event": "start", "job": "5.5-jittery56-s1/g75/g0.75_s7", "pid": 64680, "at": "2026-11-16T19:44:33"}
+{"event": "start", "job": "5.5-jittery56-s1/g75/g0.75_s8", "pid": 63928, "at": "2026-11-16T19:44:33"}
+{"event": "start", "job": "5.5-jittery56-s1/g75/g0.75_s9", "pid": 71652, "at": "2026-11-16T19:44:33"}
+{"event": "end", "job": "5.5-jittery56-s1/g75/g0.75_s4", "rc": 0, "wall_s": 2295.5, "rows": null, "rows_not_ok": null, "at": "2026-11-16T20:22:48"}
+{"event": "end", "job": "5.5-jittery56-s1/g75/g0.75_s9", "rc": 0, "wall_s": 2295.5, "rows": null, "rows_not_ok": null, "at": "2026-11-16T20:22:48"}
+{"event": "end", "job": "5.5-jittery56-s1/g75/g0.75_s1", "rc": 0, "wall_s": 2828.5, "rows": null, "rows_not_ok": null, "at": "2026-11-16T20:31:41"}
+{"event": "end", "job": "5.5-jittery56-s1/g75/g0.75_s3", "rc": 0, "wall_s": 2828.5, "rows": null, "rows_not_ok": null, "at": "2026-11-16T20:31:41"}
+{"event": "end", "job": "5.5-jittery56-s1/g75/g0.75_s2", "rc": 0, "wall_s": 3321.2, "rows": null, "rows_not_ok": null, "at": "2026-11-16T20:39:54"}
+{"event": "end", "job": "5.5-jittery56-s1/g75/g0.75_s6", "rc": 0, "wall_s": 3321.1, "rows": null, "rows_not_ok": null, "at": "2026-11-16T20:39:54"}
+{"event": "end", "job": "5.5-jittery56-s1/g75/g0.75_s7", "rc": 0, "wall_s": 4278.1, "rows": null, "rows_not_ok": null, "at": "2026-11-16T20:55:51"}
+{"event": "end", "job": "5.5-jittery56-s1/g75/g0.75_s5", "rc": 0, "wall_s": 4738.4, "rows": null, "rows_not_ok": null, "at": "2026-11-16T21:03:31"}
+{"event": "end", "job": "5.5-jittery56-s1/g75/g0.75_s0", "rc": 0, "wall_s": 5174.5, "rows": null, "rows_not_ok": null, "at": "2026-11-16T21:10:48"}
+{"event": "end", "job": "5.5-jittery56-s1/g75/g0.75_s8", "rc": 0, "wall_s": 5174.5, "rows": null, "rows_not_ok": null, "at": "2026-11-16T21:10:48"}
+{"event": "start", "job": "5.5-jittery56-s1/evaluate", "pid": 25500, "at": "2026-11-16T21:10:48"}
+{"event": "end", "job": "5.5-jittery56-s1/evaluate", "rc": 0, "wall_s": 2525.7, "rows": null, "rows_not_ok": null, "at": "2026-11-16T21:52:53"}

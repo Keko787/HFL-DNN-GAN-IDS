@@ -1,0 +1,54 @@
+{"event": "start", "job": "s515/n6k1_knee_base__F_scored_ddil", "pid": 53724, "at": "2026-11-17T01:23:39"}
+{"event": "start", "job": "s515/n6k1_knee_base__FX_scored_ddil", "pid": 57588, "at": "2026-11-17T01:23:39"}
+{"event": "start", "job": "s515/n6k1_knee_base__H1_scored_ddil", "pid": 38152, "at": "2026-11-17T01:23:39"}
+{"event": "start", "job": "s515/n6k1_knee_base__D1_scored_ddil", "pid": 68196, "at": "2026-11-17T01:23:39"}
+{"event": "start", "job": "s515/n6k1_knee_base__D2_scored_ddil", "pid": 42164, "at": "2026-11-17T01:23:39"}
+{"event": "start", "job": "s515/n6k1_knee_base__D3_scored_ddil", "pid": 4804, "at": "2026-11-17T01:23:39"}
+{"event": "start", "job": "s515/n6k1_knee_base__D4_scored_ddil", "pid": 45804, "at": "2026-11-17T01:23:39"}
+{"event": "end", "job": "s515/n6k1_knee_base__F_scored_ddil", "rc": 0, "wall_s": 4.1, "rows": null, "rows_not_ok": null, "at": "2026-11-17T01:23:43"}
+{"event": "end", "job": "s515/n6k1_knee_base__FX_scored_ddil", "rc": 0, "wall_s": 4.1, "rows": null, "rows_not_ok": null, "at": "2026-11-17T01:23:43"}
+{"event": "end", "job": "s515/n6k1_knee_base__H1_scored_ddil", "rc": 0, "wall_s": 4.0, "rows": null, "rows_not_ok": null, "at": "2026-11-17T01:23:43"}
+{"event": "end", "job": "s515/n6k1_knee_base__D1_scored_ddil", "rc": 0, "wall_s": 4.0, "rows": null, "rows_not_ok": null, "at": "2026-11-17T01:23:43"}
+{"event": "end", "job": "s515/n6k1_knee_base__D2_scored_ddil", "rc": 0, "wall_s": 4.0, "rows": null, "rows_not_ok": null, "at": "2026-11-17T01:23:43"}
+{"event": "end", "job": "s515/n6k1_knee_base__D3_scored_ddil", "rc": 0, "wall_s": 4.0, "rows": null, "rows_not_ok": null, "at": "2026-11-17T01:23:43"}
+{"event": "end", "job": "s515/n6k1_knee_base__D4_scored_ddil", "rc": 0, "wall_s": 4.0, "rows": null, "rows_not_ok": null, "at": "2026-11-17T01:23:43"}
+{"event": "start", "job": "s515/n6k1_knee_base__D5_scored_ddil", "pid": 30312, "at": "2026-11-17T01:23:43"}
+{"event": "start", "job": "s515/n6k1_knee_base__F-rp_scored_ddil", "pid": 35452, "at": "2026-11-17T01:23:43"}
+{"event": "start", "job": "s515/n6k1_knee_ampharsh__F_scored_ddil", "pid": 66056, "at": "2026-11-17T01:23:43"}
+{"event": "start", "job": "s515/n6k1_knee_ampharsh__FX_scored_ddil", "pid": 73512, "at": "2026-11-17T01:23:43"}
+{"event": "start", "job": "s515/n6k1_knee_ampharsh__H1_scored_ddil", "pid": 29064, "at": "2026-11-17T01:23:43"}
+{"event": "start", "job": "s515/n6k1_knee_ampharsh__D1_scored_ddil", "pid": 9040, "at": "2026-11-17T01:23:43"}
+{"event": "start", "job": "s515/n6k1_knee_ampharsh__D2_scored_ddil", "pid": 61588, "at": "2026-11-17T01:23:43"}
+{"event": "end", "job": "s515/n6k1_knee_base__D5_scored_ddil", "rc": 0, "wall_s": 4.1, "rows": null, "rows_not_ok": null, "at": "2026-11-17T01:23:47"}
+{"event": "end", "job": "s515/n6k1_knee_base__F-rp_scored_ddil", "rc": 0, "wall_s": 4.0, "rows": null, "rows_not_ok": null, "at": "2026-11-17T01:23:47"}
+{"event": "end", "job": "s515/n6k1_knee_ampharsh__F_scored_ddil", "rc": 0, "wall_s": 4.0, "rows": null, "rows_not_ok": null, "at": "2026-11-17T01:23:47"}
+{"event": "end", "job": "s515/n6k1_knee_ampharsh__FX_scored_ddil", "rc": 0, "wall_s": 4.0, "rows": null, "rows_not_ok": null, "at": "2026-11-17T01:23:47"}
+{"event": "end", "job": "s515/n6k1_knee_ampharsh__H1_scored_ddil", "rc": 0, "wall_s": 4.0, "rows": null, "rows_not_ok": null, "at": "2026-11-17T01:23:47"}
+{"event": "end", "job": "s515/n6k1_knee_ampharsh__D1_scored_ddil", "rc": 0, "wall_s": 4.0, "rows": null, "rows_not_ok": null, "at": "2026-11-17T01:23:47"}
+{"event": "end", "job": "s515/n6k1_knee_ampharsh__D2_scored_ddil", "rc": 0, "wall_s": 4.0, "rows": null, "rows_not_ok": null, "at": "2026-11-17T01:23:47"}
+{"event": "start", "job": "s515/n6k1_knee_ampharsh__D3_scored_ddil", "pid": 71932, "at": "2026-11-17T01:23:47"}
+{"event": "start", "job": "s515/n6k1_knee_ampharsh__D4_scored_ddil", "pid": 38984, "at": "2026-11-17T01:23:47"}
+{"event": "start", "job": "s515/n6k1_knee_ampharsh__D5_scored_ddil", "pid": 36732, "at": "2026-11-17T01:23:47"}
+{"event": "start", "job": "s515/n6k1_knee_ampharsh__F-rp_scored_ddil", "pid": 14800, "at": "2026-11-17T01:23:47"}
+{"event": "start", "job": "s515/n6k1_knee_npl__F_scored_ddil", "pid": 59672, "at": "2026-11-17T01:23:47"}
+{"event": "start", "job": "s515/n6k1_knee_npl__FX_scored_ddil", "pid": 66180, "at": "2026-11-17T01:23:47"}
+{"event": "start", "job": "s515/n6k1_knee_npl__H1_scored_ddil", "pid": 65220, "at": "2026-11-17T01:23:48"}
+{"event": "end", "job": "s515/n6k1_knee_ampharsh__D3_scored_ddil", "rc": 0, "wall_s": 4.1, "rows": null, "rows_not_ok": null, "at": "2026-11-17T01:23:52"}
+{"event": "end", "job": "s515/n6k1_knee_ampharsh__D4_scored_ddil", "rc": 0, "wall_s": 4.1, "rows": null, "rows_not_ok": null, "at": "2026-11-17T01:23:52"}
+{"event": "end", "job": "s515/n6k1_knee_ampharsh__D5_scored_ddil", "rc": 0, "wall_s": 4.1, "rows": null, "rows_not_ok": null, "at": "2026-11-17T01:23:52"}
+{"event": "end", "job": "s515/n6k1_knee_ampharsh__F-rp_scored_ddil", "rc": 0, "wall_s": 4.0, "rows": null, "rows_not_ok": null, "at": "2026-11-17T01:23:52"}
+{"event": "end", "job": "s515/n6k1_knee_npl__FX_scored_ddil", "rc": 0, "wall_s": 4.0, "rows": null, "rows_not_ok": null, "at": "2026-11-17T01:23:52"}
+{"event": "end", "job": "s515/n6k1_knee_npl__H1_scored_ddil", "rc": 0, "wall_s": 4.0, "rows": null, "rows_not_ok": null, "at": "2026-11-17T01:23:52"}
+{"event": "start", "job": "s515/n6k1_knee_npl__D1_scored_ddil", "pid": 69644, "at": "2026-11-17T01:23:52"}
+{"event": "start", "job": "s515/n6k1_knee_npl__D2_scored_ddil", "pid": 40920, "at": "2026-11-17T01:23:52"}
+{"event": "start", "job": "s515/n6k1_knee_npl__D3_scored_ddil", "pid": 73452, "at": "2026-11-17T01:23:52"}
+{"event": "start", "job": "s515/n6k1_knee_npl__D4_scored_ddil", "pid": 64944, "at": "2026-11-17T01:23:52"}
+{"event": "start", "job": "s515/n6k1_knee_npl__D5_scored_ddil", "pid": 55676, "at": "2026-11-17T01:23:52"}
+{"event": "start", "job": "s515/n6k1_knee_npl__F-rp_scored_ddil", "pid": 11768, "at": "2026-11-17T01:23:52"}
+{"event": "end", "job": "s515/n6k1_knee_npl__F_scored_ddil", "rc": 0, "wall_s": 6.1, "rows": null, "rows_not_ok": null, "at": "2026-11-17T01:23:54"}
+{"event": "end", "job": "s515/n6k1_knee_npl__D1_scored_ddil", "rc": 0, "wall_s": 4.1, "rows": null, "rows_not_ok": null, "at": "2026-11-17T01:23:56"}
+{"event": "end", "job": "s515/n6k1_knee_npl__D2_scored_ddil", "rc": 0, "wall_s": 4.0, "rows": null, "rows_not_ok": null, "at": "2026-11-17T01:23:56"}
+{"event": "end", "job": "s515/n6k1_knee_npl__D3_scored_ddil", "rc": 0, "wall_s": 4.0, "rows": null, "rows_not_ok": null, "at": "2026-11-17T01:23:56"}
+{"event": "end", "job": "s515/n6k1_knee_npl__D4_scored_ddil", "rc": 0, "wall_s": 4.0, "rows": null, "rows_not_ok": null, "at": "2026-11-17T01:23:56"}
+{"event": "end", "job": "s515/n6k1_knee_npl__D5_scored_ddil", "rc": 0, "wall_s": 4.0, "rows": null, "rows_not_ok": null, "at": "2026-11-17T01:23:56"}
+{"event": "end", "job": "s515/n6k1_knee_npl__F-rp_scored_ddil", "rc": 0, "wall_s": 4.0, "rows": null, "rows_not_ok": null, "at": "2026-11-17T01:23:56"}
