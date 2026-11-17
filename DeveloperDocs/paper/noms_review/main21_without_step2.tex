@@ -2115,8 +2115,8 @@ trials on the same seeds. Exploratory.}
 \textbf{FedEx} &
 \textbf{MAX-AoI, Oort, Value-Aware FL, FedCS} \\
 \hline
-Default & 194 / 167 & 178 / 148 & 282 / 286 & 264 / 246 & 266--282 / 266--290 \\
-\(A=17\) dB & 261 / 151 & 215 / 125 & 265 / 277 & 244 / 216 & 260--277 / 246--288\(^{\ast}\) \\
+Default & 194 / 167 & 178 / 148 & 282 / 286 (167) & 264 / 246 (167) & 266--282 / 266--290 \\
+\(A=17\) dB & 261 / 151 & 215 / 125 & 265 / 277 (151) & 244 / 216 (151) & 260--277 / 246--288\(^{\ast}\) \\
 \(n=2.7\) & 221 / 184 & 211 / 173 & 269 / 273 & 243 / 243 & 263--276 / 262--272 \\
 \hline
 \end{tabular}
@@ -2124,8 +2124,9 @@ Default & 194 / 167 & 178 / 148 & 282 / 286 & 264 / 246 & 266--282 / 266--290 \\
 \vspace{2pt}
 \footnotesize
 \(^{\ast}\)Oort and Value-Aware FL reach the target in 95\% of trials under the
-stricter model; every other entry is 100\%. Times are averaged over trials that
-reach the target. \changenote{Added table. Why: sets each approach's time to target under the recorded and the stricter contact model side by side.}
+stricter model; every other entry is 100\%. In parentheses: the baseline pinned
+to the narrow band, the one \sysname{}-Plan chooses, under the stricter model (not
+flown at \(n=2.7\)). Times are averaged over trials that reach the target. \changenote{Added table. Why: sets each approach's time to target under the recorded and the stricter contact model side by side, with Deadline-Heuristic and FedEx pinned to narrow in parentheses.}
 \end{table*}
 
 We also test whether the result depends on the large narrow-band range used in

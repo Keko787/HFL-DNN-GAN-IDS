@@ -29,11 +29,11 @@ Sources: `results/exp5/scores/probes/DDIL1.{md,csv}` (Holm per family) and `resu
 
    | Condition | FeRRy-Plan | FeRRy-Adapt | Deadline-Heuristic | FedEx | MAX-AoI, Oort, Value-Aware FL, FedCS |
    |---|---|---|---|---|---|
-   | Default | 194 / 167 | 178 / 148 | 282 / 286 | 264 / 246 | 266–282 / 266–290 |
-   | A = 17 dB | 261 / 151 | 215 / 125 | 265 / 277 | 244 / 216 | 260–277 / 246–288* |
+   | Default | 194 / 167 | 178 / 148 | 282 / 286 (167) | 264 / 246 (167) | 266–282 / 266–290 |
+   | A = 17 dB | 261 / 151 | 215 / 125 | 265 / 277 (151) | 244 / 216 (151) | 260–277 / 246–288* |
    | n = 2.7 | 221 / 184 | 211 / 173 | 269 / 273 | 243 / 243 | 263–276 / 262–272 |
 
-   Time to target (s), recorded / stricter; *Oort and Value-Aware FL reach the target in 95% of trials under the stricter model.
+   Time to target (s), recorded / stricter; in parentheses, the baseline pinned to narrow under the stricter model (probe DDIL1N; not flown at n = 2.7); *Oort and Value-Aware FL reach the target in 95% of trials under the stricter model.
 
 5. **A correction:** FeRRy-Adapt's recorded 17 dB time in the existing appendix sentence changes from 216 to **215 s**. The trials give 215.46 s; P1's report rounds that to 215.5, and the draft rounded it again to 216. Without this the new table and the sentence would disagree.
 
