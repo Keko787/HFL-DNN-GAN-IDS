@@ -126,8 +126,9 @@ def _without(args: Sequence[str], flag: str) -> List[str]:
     return out
 
 
+EIGHT_ARMS = ["F", "FX", "H1", "D1", "D2", "D3", "D4", "D5"]
 #: (tag, args, arms or None for the 8, budget or None for the knee)
-DDIL1_MAIN: List[Tuple[str, List[str], Optional[List[str]], Optional[str]]] = [
+DDIL1_MAIN:List[Tuple[str, List[str], Optional[List[str]], Optional[str]]] = [
     ("_d1base", D1_ALL, None, None),
     ("_d1amp11", D1_ALL + D1_AMP[11], None, None),
     ("_d1ampharsh", D1_ALL + D1_AMP[17], None, None),
@@ -155,20 +156,74 @@ DDIL1_CHECKS: List[Tuple[str, List[str], Optional[List[str]], Optional[str]]] = 
 
 
 def _d1_cells(cells) -> str:
-    """``s515.d1_cells`` as a TOML array of inline tables, for --set."""
+    """``s515.d1_cells`` as a TOML array of inline tables, for --set. A cell is
+    (tag, args, arms, budget) or, with its size, (tag, args, arms, budget, n)."""
     def lit(xs):
         return "[" + ",".join(f"'{x}'" for x in xs) + "]"
     rows = []
-    for tag, args, arms, budget in cells:
+    for tag, args, arms, budget, *size in cells:
         row = f"tag='{tag}',args={lit(args)},arms={lit(arms or EIGHT_ARMS)}"
         if budget:
             row += f",budget='{budget}'"
+        if size and size[0]:
+            row += f",n={int(size[0])}"
         rows.append("{" + row + "}")
     return "s515.d1_cells=[" + ",".join(rows) + "]"
 
 
-EIGHT_ARMS = ["F", "FX", "H1", "D1", "D2", "D3", "D4", "D5"]
-DDIL1_SETS = ["s515.backhaul='mission'", "s515.arms=[]", "s515.amps_db=[]",
+# DDIL build B10, the FQ track's cells for NOMS (DeveloperDocs/FeRRy_DDIL_Unified_Plan.md, The
+# FQ track; the task table's row 3): FQ-g75 (the recorded checkpoint, flown outside the physics
+# it trained on, as a declared test) and FQ-s1 (jittery56 on step 1's physics, family
+# jittery56-s1) in step 1's N = 6 cells, on the same tags and out-root as the DDIL1 probe; and
+# N = 12 at 17 dB, where F and FX fly too (step 1 has no N = 12 cell). The narrow-jammed cell
+# waits for build D8. FQ-s1 flies the runner's FQ-g75 arm with its own checkpoint; its job is
+# blocked until FQ_S1_CHECKPOINT names it. Each N = 6 cell lists step 1's eight arms beside
+# the FQ arms: their jobs have step 1's arguments and CSVs, so a flight skips them (every row
+# is there) and the probe pairs FQ with them.
+FQ_ARMS = ["FQ-g75", "FQ-s1"]
+#: FQ-s1's checkpoint, repo-relative (results/exp5/checkpoints/<study>/g75/g0.75_s<seed>.npz),
+#: set once it is trained, evaluated on the held-out stream and picked by median validation.
+FQ_S1_CHECKPOINT: Optional[str] = None
+DDILFQ1_CELLS = [
+    ("_d1base", D1_ALL, EIGHT_ARMS + FQ_ARMS, None),
+    ("_d1ampharsh", D1_ALL + D1_AMP[17], EIGHT_ARMS + FQ_ARMS, None),
+    ("_d1ampharshpc", _without(D1_ALL, "--interference-shared") + D1_AMP[17],
+     EIGHT_ARMS + FQ_ARMS, None),
+    ("_d1burst40", D1_ALL + _bursts(0.4), EIGHT_ARMS + FQ_ARMS, None),
+    ("_d1ampharsh", D1_ALL + D1_AMP[17], ["F", "FX"] + FQ_ARMS, None, 12),
+]
+
+
+def _learned_arms() -> str:
+    """``s515.learned_arms`` for --set: FQ-s1 as the runner's FQ-g75 with its own checkpoint."""
+    own = "arm='FQ-g75'" + (f",checkpoint='{FQ_S1_CHECKPOINT}'" if FQ_S1_CHECKPOINT else "")
+    return "s515.learned_arms={FQ-s1={" + own + "}}"
+
+
+# DDIL build D2, step 2 (DeveloperDocs/FeRRy_DDIL_Unified_Plan.md; the task table's row 4): F
+# with the risk-priced dwell, its reserve and the leave-by time (F-rp), and F-rp without the
+# leave-by time (F-rpnl), as variants of the runner's F. On step 1's model in step 1's cells
+# and out-root, so they pair with its F, FX and baselines; and on the recorded physics in
+# P1's mission-backhaul cells and out-root (base, 17 dB and n = 2.7: the cells P1 flew there),
+# so they pair with P1's recorded arms. Each cell lists the eight arms its out-root already
+# holds: their jobs have the recorded arguments and CSVs, so a flight skips them. The reserve
+# k = 1 is proposed, open to change before the flight.
+D2_ARGS = ["--dwell-pricing", "expected", "--dwell-reserve-k", "1", "--leave-by", "true"]
+D2_ARGS_NO_LEAVE = ["--dwell-pricing", "expected", "--dwell-reserve-k", "1"]
+DDIL2_VARIANTS = ("s515.arm_variants={F-rp={arm='F',args=["
+                  + ",".join(f"'{a}'" for a in D2_ARGS) + "]},F-rpnl={arm='F',args=["
+                  + ",".join(f"'{a}'" for a in D2_ARGS_NO_LEAVE) + "]}}")
+DDIL2_HONEST = [(tag, args, EIGHT_ARMS + ["F-rp"] + (["F-rpnl"] if tag == "_d1ampharsh" else []),
+                 budget) for tag, args, arms, budget in DDIL1_MAIN if arms is None]
+#: P1's mission-backhaul cells (recorded physics), by their axis tags and flags.
+DDIL2_RECORDED = [
+    ("_base", [], EIGHT_ARMS + ["F-rp"], None),
+    ("_ampharsh", D1_AMP[17], EIGHT_ARMS + ["F-rp"], None),
+    ("_npl", ["--n-pl", "2.7"], EIGHT_ARMS + ["F-rp"], None),
+]
+
+
+DDIL1_SETS =["s515.backhaul='mission'", "s515.arms=[]", "s515.amps_db=[]",
               "s515.shadow_sigmas_db=[]", "s515.mission_backhaul_arms=[]"]
 
 
@@ -252,6 +307,18 @@ PROBES: Dict[str, Probe] = {p.name: p for p in [
                DDIL1_SETS + [_d1_cells(DDIL1_MAIN)], "s515"),
         Flight("checks", "batch3", "results/exp5_ddil1",
                DDIL1_SETS + [_d1_cells(DDIL1_CHECKS)], "s515"),
+    ]),
+    # DDIL build B10: the FQ track's NOMS cells, in step 1's out-root (FQ_ARMS above).
+    Probe("DDILFQ1", "FQ-g75 and FQ-s1 on step 1's physics", [
+        Flight("", "batch3", "results/exp5_ddil1",
+               DDIL1_SETS + [_d1_cells(DDILFQ1_CELLS), _learned_arms()], "s515"),
+    ]),
+    # DDIL build D2, step 2: F-rp and F-rpnl beside step 1's arms and P1's recorded ones.
+    Probe("DDIL2", "Step 2: the risk-priced dwell and the leave-by time", [
+        Flight("honest", "batch3", "results/exp5_ddil1",
+               DDIL1_SETS + [_d1_cells(DDIL2_HONEST), DDIL2_VARIANTS], "s515"),
+        Flight("recorded", "batch3", "results/exp5_p1mbh",
+               DDIL1_SETS + [_d1_cells(DDIL2_RECORDED), DDIL2_VARIANTS], "s515"),
     ]),
     # The 4-mission cap lets F stop at about 335 s while the baselines fly about 800 s, so the
     # recorded compute cells compare unequal mission time. Ten missions gives every arm the

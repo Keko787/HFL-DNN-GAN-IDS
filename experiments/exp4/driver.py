@@ -443,6 +443,8 @@ FERRY_PHYSICS_FIELDS = (
     # DDIL build D1 (the unified plan's step 1).
     "session_t_out_s", "session_resumable", "contact_repoll", "interference_shared",
     "burst_duty", "burst_mean_s", "burst_depth_db", "channel_estimate",
+    # DDIL build D2 (the unified plan's step 2).
+    "dwell_pricing", "dwell_reserve_k", "leave_by",
 )
 
 #: Marker written next to every kept trace: the ``status`` and ``error`` the

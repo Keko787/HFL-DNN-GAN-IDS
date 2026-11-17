@@ -379,7 +379,9 @@ def test_jittery56_adds_study_5_6s_cells_and_moves_no_other_family():
     assert [c.name for c in C.FAMILIES["clean"]] == ["cln-n12-90", "cln-n12-180"]
     # The Exp 5 addendum's scale family (Study 5.11 (c)) follows them; it moves
     # none of them (tests/unit/test_exp5_ferrysim_scale.py).
-    assert list(C.FAMILIES) == ["jittery", "clean", "jittery56", "scale"]
+    # DDIL build B10's two families follow them and move none of them either
+    # (tests/unit/test_ddil_b10.py).
+    assert list(C.FAMILIES) == ["jittery", "clean", "jittery56", "scale", "jittery56-s1", "ddil"]
     assert C.FAMILIES["jittery56"] == C.FAMILIES["jittery"] + C.STUDY_5_6_CELLS
     assert C.family_sha256("jittery56") == JITTERY56_SHA256
     # the jittery regime's one score flies them, whichever family it practised over

@@ -202,6 +202,10 @@ class ContactPlan:
     session_resumable: bool = False
     session_step_s: float = 1.0
     repoll_candidates: Tuple[DeviceID, ...] = ()
+    #: DDIL build D2: the stop's leave-by time on the mission clock (None: no
+    #: limit, every recorded run). No session, retry or re-poll starts at or
+    #: after it (:meth:`leaves_at`); the members it cuts are committed as timeouts.
+    leave_by_ts: Optional[float] = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "arrival_ts", _finite(self.arrival_ts, "arrival_ts"))
@@ -271,6 +275,11 @@ class ContactPlan:
         if step <= 0.0:
             raise ValueError(f"session_step_s must be > 0, got {step!r}")
         object.__setattr__(self, "session_step_s", step)
+        if self.leave_by_ts is not None:
+            object.__setattr__(self, "leave_by_ts", _finite(self.leave_by_ts, "leave_by_ts"))
+            if self.band is None:
+                raise ValueError("a ContactPlan without a band takes no leave_by_ts: the "
+                                 "leave-by time cuts a banded stop's sessions (DDIL build D2)")
 
         if self.band is None:
             # The channel-free mode (critic A1): no link numbers at all, so a
@@ -340,6 +349,11 @@ class ContactPlan:
     def session_model(self) -> bool:
         """True when D1's session model prices this contact (``session_t_out_s`` set)."""
         return self.session_t_out_s is not None
+
+    def leaves_at(self, t_s: float) -> bool:
+        """DDIL build D2: True when a session starting at ``t_s`` would start at or
+        after the stop's leave-by time; always False without one."""
+        return self.leave_by_ts is not None and float(t_s) >= self.leave_by_ts
 
     def session_walk(self, device_id: DeviceID, t0_s: float, nbytes: int,
                      start_bits: float = 0.0) -> SessionWalk:
@@ -631,6 +645,11 @@ class ContactCommit:
     session_retried: Tuple[DeviceID, ...] = ()
     session_failed: Tuple[DeviceID, ...] = ()
     repolled: Tuple[DeviceID, ...] = ()
+    # DDIL build D2, in member order and empty without a leave-by time: the
+    # members whose session (or retry, or re-poll session) the leave-by time
+    # kept from starting. A first try cut is a timeout with nothing sent; a
+    # retry cut leaves its failed first try in ``session_failed``.
+    left: Tuple[DeviceID, ...] = ()
 
 
 __all__ = [

@@ -2004,6 +2004,9 @@ class MuleSupervisor:
                 index = 0
             wp = remainder.pop(index)
             arrival = {"remainder": remainder, "budget_end": budget_end} if decides else {}
+            if collect and getattr(fx.spec, "leave_by", False):
+                # DDIL build D2: the stop's leave-by time, from the stops left.
+                arrival["leave_by"] = (list(remainder), budget_end)
             outcomes = self._ferry_stop(
                 fx, wp, state, pass_kind=pass_kind, mission_round=mission_round,
                 synth=synth, energy_origin_j=energy_origin_j, rec=rec, **arrival,
@@ -2193,8 +2196,13 @@ class MuleSupervisor:
         rec: _FerryLog,
         remainder: Optional[List[ContactWaypoint]] = None,
         budget_end: Optional[float] = None,
+        leave_by: Optional[tuple] = None,
     ) -> Dict[DeviceID, Any]:
         """Fly to ``wp`` and serve it: the leg, the contact plan, the contact.
+
+        DDIL build D2: ``leave_by`` is ``(stops left, Pass 1's budget_end)``,
+        given only for a Pass-1 stop under ``FerrySpec.leave_by``; the plan then
+        carries the stop's leave-by time (``hermes.mule.leave_by``).
 
         The leg is charged as ``transit`` and the pose jumps to the stop; the
         contact plan is built on arrival, and the host's commit charges the
@@ -2255,6 +2263,15 @@ class MuleSupervisor:
                 wp, positions, pass_kind=pass_kind, mission_round=mission_round,
                 band=self._ferry_band_at_arrival(slot, fx, wp, positions, pass_kind),
             )
+        if leave_by is not None and plan.band is not None:
+            # DDIL build D2: the stop's leave-by time, from the planner's model on
+            # the class the stop is served on.
+            from hermes.mule.leave_by import model_on_class, stop_leave_by_ts
+
+            stops_left, end = leave_by
+            plan = dataclasses.replace(plan, leave_by_ts=stop_leave_by_ts(
+                model_on_class(self.scheduler.feasibility_model, fx, plan.band), wp,
+                stops_left, arrival_ts=plan.arrival_ts, budget_end=end))
         fits = getattr(self, "_fits", None)
         if fits is not None and collect:
             # Study 5.12: the members whose fit has not finished at the arrival
@@ -2326,6 +2343,11 @@ class MuleSupervisor:
         if fx.spec.contact_repoll and collect:
             rec.flown[pass_kind][-1]["repolled"] = (
                 _ids(commit.repolled) if commit is not None else [])
+        if fx.spec.leave_by and collect:
+            # DDIL build D2: the stop's leave-by time and the members it cut.
+            rec.flown[pass_kind][-1]["leave_by_ts"] = plan.leave_by_ts
+            rec.flown[pass_kind][-1]["left"] = (
+                _ids(commit.left) if commit is not None else [])
         if fits is not None and collect:
             # Study 5.12: who had no update ready, and each collected update's
             # uplink airtime (the device's transmit energy; empty without a band).

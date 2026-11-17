@@ -185,6 +185,18 @@ CHANNEL_ESTIMATES: Tuple[str, ...] = (CHANNEL_ESTIMATE_CAUSAL,)
 #: The prior's weight, in readings (about two stops of six members).
 CAUSAL_PRIOR_READINGS = 12.0
 
+#: DDIL build D2, ``FerrySpec.dwell_pricing``: how a member's dwell is priced
+#: besides the recorded mean-SNR price (None). ``expected``: the mean of the
+#: dwell over the SNR's spread (normal, the plan score's σ_eff), a draw below
+#: the floor priced at the floor rate, on :data:`DWELL_PRICE_NODES`
+#: equal-probability nodes.
+DWELL_PRICING_EXPECTED = "expected"
+DWELL_PRICINGS: Tuple[str, ...] = (DWELL_PRICING_EXPECTED,)
+DWELL_PRICE_NODES = 32
+_DWELL_Z: Tuple[float, ...] = tuple(
+    statistics.NormalDist().inv_cdf((k + 0.5) / DWELL_PRICE_NODES)
+    for k in range(DWELL_PRICE_NODES))
+
 #: The backhaul carrier policy. ``fixed``: ``argmax_c g_c``, the noise-free
 #: long-run best carrier (every arm but H3). ``adaptive``: H3's
 #: ``AdaptiveChannelController`` at every upload, holding its carrier across
@@ -342,6 +354,20 @@ class FerrySpec:
       and A. ``"causal"``: a mean offset and spread estimated from the stops'
       arrival readings (:meth:`FerryRuntime.record_arrival`), from the
       regime's default values as the prior.
+
+    DDIL build D2 (the unified plan's step 2), each off in every recorded run
+    and left out of :meth:`describe` while off:
+
+    * ``dwell_pricing``: ``"expected"`` prices each member's dwell as its mean
+      over the SNR's spread (:meth:`FerryRuntime.member_dwell_s`), with the
+      causal estimate's offset and spread when ``channel_estimate`` is on.
+      None: the recorded price at the mean SNR. A member whose mean SNR is
+      below the floor stays unpriced either way.
+    * ``dwell_reserve_k``: the reserve, k standard deviations of each member's
+      priced dwell added to its price (``expected`` pricing only).
+    * ``leave_by``: a leave-by time per Pass-1 stop (``ContactPlan.leave_by_ts``,
+      set by the mule at the arrival): no session, retry or re-poll starts
+      after it, and the members it cuts are committed as timeouts.
     """
 
     band: Optional[str] = None
@@ -362,8 +388,12 @@ class FerrySpec:
     session_resumable: bool = False
     contact_repoll: bool = False
     channel_estimate: Optional[str] = None
+    dwell_pricing: Optional[str] = None
+    dwell_reserve_k: Optional[float] = None
+    leave_by: bool = False
 
     def __post_init__(self) -> None:
+        self._check_d2()
         if self.session_t_out_s is not None:
             t_out = self.session_t_out_s
             if (isinstance(t_out, bool) or not isinstance(t_out, numbers.Real)
@@ -507,6 +537,9 @@ class FerrySpec:
         burst_mean_s: Optional[float] = None,
         burst_depth_db: Optional[float] = None,
         channel_estimate: Optional[str] = None,
+        dwell_pricing: Optional[str] = None,
+        dwell_reserve_k: Optional[float] = None,
+        leave_by: Optional[bool] = None,
     ) -> "FerrySpec":
         """A spec from plain values; every default is the design's.
 
@@ -632,7 +665,29 @@ class FerrySpec:
             session_resumable=bool(session_resumable),
             contact_repoll=bool(contact_repoll),
             channel_estimate=channel_estimate,
+            dwell_pricing=dwell_pricing,
+            dwell_reserve_k=dwell_reserve_k,
+            leave_by=bool(leave_by),
         )
+
+    def _check_d2(self) -> None:
+        """DDIL build D2's fields: refused when malformed or without a band."""
+        if self.dwell_pricing is not None:
+            _choice(self.dwell_pricing, DWELL_PRICINGS, "dwell_pricing")
+            if self.band is None:
+                raise ValueError("dwell_pricing needs a contact band: it prices member dwell")
+        k = self.dwell_reserve_k
+        if k is not None:
+            if (isinstance(k, bool) or not isinstance(k, numbers.Real) or not math.isfinite(k)
+                    or k < 0.0):
+                raise ValueError(f"dwell_reserve_k must be a finite number >= 0, got {k!r}")
+            if self.dwell_pricing is None:
+                raise ValueError("dwell_reserve_k needs dwell_pricing: the reserve is k standard "
+                                 "deviations of the priced dwell")
+            object.__setattr__(self, "dwell_reserve_k", float(k))
+        object.__setattr__(self, "leave_by", bool(self.leave_by))
+        if self.leave_by and self.band is None:
+            raise ValueError("leave_by needs a contact band: it cuts a stop's sessions")
 
     # ------------------------------------------------------------------ #
     # Introspection
@@ -714,6 +769,11 @@ class FerrySpec:
             **({"contact_repoll": True} if self.contact_repoll else {}),
             **({} if self.channel_estimate is None
                else {"channel_estimate": self.channel_estimate}),
+            # DDIL build D2: only while on, so a recorded run's record is unchanged.
+            **({} if self.dwell_pricing is None else {
+                "dwell_pricing": self.dwell_pricing,
+                "dwell_reserve_k": self.dwell_reserve_k or 0.0}),
+            **({"leave_by": True} if self.leave_by else {}),
         }
 
 
@@ -944,10 +1004,74 @@ class FerryRuntime:
 
         Priced on ``band``, or on :attr:`band` as it is when called; the
         physics binds its class instead (:meth:`physics`, critic B3).
+
+        DDIL build D2: under ``dwell_pricing="expected"`` the price is the
+        dwell's mean over the SNR's spread instead (:meth:`_expected_dwell_s`),
+        plus ``dwell_reserve_k`` of its standard deviations; a member whose
+        mean SNR is below the floor is still None, so the members priced are
+        the recorded ones.
         """
         link, band = self.spec.link, self._band(band)
         snr = link.mean_snr_db(band, d_planar) + float(snr_offset_db)  # type: ignore[union-attr]
+        if self.spec.dwell_pricing is not None:
+            return self._priced_dwell_s(band, pass_kind, snr)      # DDIL build D2
         return link.dwell_s(self.session_bytes(pass_kind), band, snr)  # type: ignore[union-attr]
+
+    def _priced_dwell_s(self, band: str, pass_kind: MissionPass,
+                        snr_mean_db: float) -> Optional[float]:
+        """DDIL build D2's price of one member: None below the floor at the mean SNR,
+        as recorded, else :meth:`_expected_dwell_s`."""
+        nbytes = self.session_bytes(pass_kind)
+        if self.spec.link.dwell_s(nbytes, band, snr_mean_db) is None:  # type: ignore[union-attr]
+            return None
+        return self._expected_dwell_s(band, nbytes, snr_mean_db)
+
+    def snr_spread_db(self) -> Tuple[float, float]:
+        """The (mean offset, spread) in dB the plan prices the SNR's spread with.
+
+        The plan score's own (:meth:`outage_probability`): the causal estimate
+        when ``channel_estimate`` is on, else offset 0 and σ_eff =
+        √(σ_sh² + σ_I² + A²/2) from the contact channel. DDIL build D2.
+        """
+        if self.spec.channel_estimate is not None:
+            return self.channel_estimate_db()
+        chan = self.spec.contact_channel
+        if chan is None:
+            return 0.0, 0.0
+        return 0.0, math.sqrt(chan.shadow_sigma_db ** 2 + chan.interference_sigma_db ** 2
+                              + chan.interference_amp_db ** 2 / 2.0)
+
+    def _expected_dwell_s(self, band: str, nbytes: int, snr_mean_db: float) -> float:
+        """DDIL build D2: E[dwell] + k·SD[dwell] over SNR ~ N(mean + offset, σ²).
+
+        On :data:`DWELL_PRICE_NODES` equal-probability nodes; a node below the
+        floor is priced at the floor rate (the longest a session that delivers
+        can take), so the price is finite. Cached per (class, bytes, mean,
+        offset, σ, k), since the planner prices the same members many times.
+        """
+        offset, sigma = self.snr_spread_db()
+        k = float(self.spec.dwell_reserve_k or 0.0)
+        key = (band, int(nbytes), float(snr_mean_db), float(offset), float(sigma), k)
+        cache = self.__dict__.setdefault("_d2_dwell_cache", {})
+        hit = cache.get(key)
+        if hit is not None:
+            return hit
+        link = self.spec.link
+        floor = link.dwell_s(nbytes, band, link.snr_floor_db)  # type: ignore[union-attr]
+        assert floor is not None  # at the floor the rate is CQI 1's, never 0
+        times = []
+        for z in _DWELL_Z:
+            t = link.dwell_s(nbytes, band, snr_mean_db + offset + sigma * z)  # type: ignore[union-attr]
+            times.append(floor if t is None else float(t))
+        mean = sum(times) / len(times)
+        price = mean
+        if k:
+            var = sum((t - mean) ** 2 for t in times) / len(times)
+            price = mean + k * math.sqrt(var)
+        if len(cache) > 65536:
+            cache.clear()
+        cache[key] = price
+        return price
 
     def held_carrier(self) -> Optional[int]:
         """The carrier the planner prices the upload on (None without a backhaul)."""

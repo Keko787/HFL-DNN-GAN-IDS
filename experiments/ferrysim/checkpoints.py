@@ -308,6 +308,48 @@ def plan_differences(trained: Mapping[str, Any], flown: Mapping[str, Any]
     return {name: (mine[name], theirs[name]) for name in mine if mine[name] != theirs[name]}
 
 
+def trained_ddil(manifest: Mapping[str, Any]) -> Optional[Dict[str, Any]]:
+    """Step 1's switches a checkpoint trained on (DDIL build B10), or None.
+
+    Its training spec's ``ddil_switches`` (``train.TrainSpec``), which a run on
+    step 1's physics records; ``{}`` when the spec is recorded without them (a run
+    on the recorded physics); None when the manifest records no spec at all. Like
+    the plan's record (:func:`trained_plan`) it is provenance, outside the sha.
+    """
+    training = manifest.get("training")
+    spec = training.get("spec") if isinstance(training, Mapping) else None
+    if not isinstance(spec, Mapping):
+        return None
+    switches = spec.get("ddil_switches", {})
+    if not isinstance(switches, Mapping):
+        raise ValueError(f"the training spec's ddil_switches is a mapping, got {switches!r}")
+    return dict(switches)
+
+
+def ddil_differences(trained: Mapping[str, Any], flown: Mapping[str, Any]
+                     ) -> Dict[str, Tuple[Any, Any]]:
+    """Where two sets of step 1's switches differ: {switch: (``trained``'s, ``flown``'s)}.
+
+    Each side holds the switches it sets (``cells.DDIL_SWITCH_FIELDS``); one left
+    out is off, and ``session_resumable`` False equals it left out. Numbers
+    compare as floats. In ``DDIL_SWITCH_FIELDS`` order (DDIL build B10).
+    """
+    def norm(side: Mapping[str, Any], name: str) -> Any:
+        value = side.get(name)
+        if name == "session_resumable" and value is False:
+            return None
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            return float(value)
+        return value
+
+    out: Dict[str, Tuple[Any, Any]] = {}
+    for name in C.DDIL_SWITCH_FIELDS:
+        mine, theirs = norm(trained, name), norm(flown, name)
+        if mine != theirs:
+            out[name] = (mine, theirs)
+    return out
+
+
 def kept_updates(manifest: Mapping[str, Any]) -> Optional[int]:
     """The updates the network a checkpoint keeps had taken; None when not recorded.
 
@@ -658,6 +700,8 @@ __all__ = [
     "kept_updates",
     "path_component",
     "plan_differences",
+    "ddil_differences",
+    "trained_ddil",
     "plan_score_settings",
     "record_held_out_score",
     "replace_refusal",

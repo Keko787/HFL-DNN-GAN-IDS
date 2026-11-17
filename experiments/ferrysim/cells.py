@@ -99,6 +99,30 @@ default (None), as every other cell's is. The learned score trains at N = 6
 and 12, so a score flown here is out of practice (its /N features shift), a
 declared test.
 
+**The DDIL families** (build B10 of the DDIL unified plan, its FQ track;
+``DeveloperDocs/FeRRy_DDIL_Unified_Plan.md``). A cell may carry the honest
+DDIL channel of build D1 (``hermes/l1/channel_model.py``, ``hermes/mule/ferry.py``):
+the channel's interference amplitude and burst process (:data:`DDIL_CHANNEL_FIELDS`,
+which vary by cell) and step 1's switches (:data:`DDIL_SWITCH_FIELDS`: the
+session model, the re-poll, shared interference and the causal estimate,
+which a run's cells share; ``train.TrainSpec`` refuses a mix). Each is a
+``ferry_physics`` key (``experiments.exp4.driver.FERRY_PHYSICS_FIELDS``), set in
+:meth:`FerryCell.driver_settings` when given and left out of the cell's JSON
+at None, as ``field_radius_m`` is, so every family above hashes as it did.
+Two families use them:
+
+* ``jittery56-s1`` (FQ-s1's): ``jittery56``'s cells on step 1's physics at
+  its primary settings (:data:`STEP1_SWITCHES`), the physics change alone;
+* ``ddil`` (FQ-d's): N = 6 and N = 12 at their knees, step 1's switches on
+  and shared interference throughout (the bands are nested, decision 9): the
+  default channel, 11 and 17 dB (step 1's amplitudes), and the burst process
+  at 10% and 40% of the time, 17 dB deep, 6.7 s on average (decision 11).
+  The jammed cells (a narrow-band jam window, a wideband jam at finite power)
+  join it with build D8, which brings the band outage; until then the family
+  holds no jam, and its hash moves when they join. The lossier path-loss
+  exponent (n = 2.7) stays out, so step 9's n = 2.7 cell tests the learned
+  arm outside what it trained on.
+
 **The seed streams** (the spec, other choices 8; critic B14). A FerrySim
 episode is one trial of a cell, and its trial seed (the driver's
 ``Cell.seed``: the layout, the availability, the channel's phases and every
@@ -158,6 +182,35 @@ FAMILY_SCALE = "scale"
 #: The reference size whose density the scale family keeps (N = 6 in the
 #: realism field's 100 m).
 SCALE_REF_N = 6
+#: The DDIL families (build B10; the module docstring): FQ-s1's, ``jittery56``'s
+#: cells on step 1's physics, and FQ-d's, the DDIL channels at the knees.
+FAMILY_JITTERY_56_S1 = "jittery56-s1"
+FAMILY_DDIL = "ddil"
+
+#: A cell's DDIL channel (build D1), which varies by cell: the interference
+#: amplitude (dB) and the Gilbert-Elliott burst process (share of time, mean
+#: length s, depth dB). Each is a ``ferry_physics`` key.
+DDIL_CHANNEL_FIELDS: Tuple[str, ...] = (
+    "interference_amp_db", "burst_duty", "burst_mean_s", "burst_depth_db")
+#: Step 1's switches (build D1), which a run's cells share: the session model's
+#: timeout and resumable transfers, the re-poll, the class whose interference
+#: every class takes, and the causal channel estimate. Each is a ``ferry_physics`` key.
+DDIL_SWITCH_FIELDS: Tuple[str, ...] = (
+    "session_t_out_s", "session_resumable", "contact_repoll", "interference_shared",
+    "channel_estimate")
+DDIL_FIELDS: Tuple[str, ...] = DDIL_CHANNEL_FIELDS + DDIL_SWITCH_FIELDS
+#: Step 1's primary settings (decisions 2 and 9; the ``DDIL1`` probe's every-switch
+#: cells, ``scripts/exp5/loss_probes.py``): ``t_out`` 10 s, not resumable, the
+#: re-poll on, every class on narrow's interference, and the causal estimate.
+STEP1_SWITCHES: Dict[str, Any] = {
+    "session_t_out_s": 10.0, "contact_repoll": True, "interference_shared": "narrow",
+    "channel_estimate": "causal"}
+#: Step 1's amplitudes beside the default channel's (dB), and its burst process:
+#: 17 dB deep, 6.7 s on average (step 0's below-floor stretches; decision 11).
+DDIL_AMPS_DB: Tuple[float, ...] = (11.0, 17.0)
+DDIL_BURST_DUTIES: Tuple[float, ...] = (0.1, 0.4)
+DDIL_BURST_MEAN_S = 6.7
+DDIL_BURST_DEPTH_DB = 17.0
 
 
 @dataclasses.dataclass(frozen=True)
@@ -177,7 +230,9 @@ class FerryCell:
     sets the realism field's half-width (None: the driver's 100 m), for the
     scale family (:data:`SCALE_CELLS`); at None it is left out of
     :meth:`to_json`, so the other cells' JSON, and their families' hashes,
-    are unchanged.
+    are unchanged. The DDIL fields (:data:`DDIL_FIELDS`, build B10) set build
+    D1's channel and step 1's switches, and are left out of :meth:`to_json`
+    at None in the same way.
     """
 
     name: str
@@ -194,6 +249,17 @@ class FerryCell:
     network_regime: str = NETWORK_REGIME
     interference_period_s: Optional[float] = None
     field_radius_m: Optional[float] = None
+    # DDIL build B10: build D1's channel (DDIL_CHANNEL_FIELDS) and step 1's
+    # switches (DDIL_SWITCH_FIELDS); None leaves each at the recorded physics.
+    interference_amp_db: Optional[float] = None
+    burst_duty: Optional[float] = None
+    burst_mean_s: Optional[float] = None
+    burst_depth_db: Optional[float] = None
+    session_t_out_s: Optional[float] = None
+    session_resumable: Optional[bool] = None
+    contact_repoll: Optional[bool] = None
+    interference_shared: Optional[str] = None
+    channel_estimate: Optional[str] = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.name, str) or not self.name or "|" in self.name:
@@ -214,6 +280,49 @@ class FerryCell:
         if field_m is not None and not (isinstance(field_m, (int, float))
                                         and not isinstance(field_m, bool) and field_m > 0.0):
             raise ValueError(f"field_radius_m must be > 0 or None, got {field_m!r}")
+        self._check_ddil()
+
+    def _check_ddil(self) -> None:
+        """The DDIL fields' types and ranges; the mule's ``FerrySpec`` checks the
+        rest (which class may be shared, which estimate) when the trial builds it."""
+        def number(name: str, *, low: float = 0.0, high: Optional[float] = None,
+                   zero_ok: bool = False) -> None:
+            value = getattr(self, name)
+            if value is None:
+                return
+            ok = (isinstance(value, (int, float)) and not isinstance(value, bool)
+                  and (value >= low if zero_ok else value > low)
+                  and (high is None or value < high))
+            if not ok:
+                span = f"in ({low:g}, {high:g})" if high is not None else (
+                    f">= {low:g}" if zero_ok else f"> {low:g}")
+                raise ValueError(f"{name} must be {span} or None, got {value!r}")
+
+        number("interference_amp_db", zero_ok=True)
+        number("burst_duty", high=1.0)
+        number("burst_mean_s")
+        number("burst_depth_db")
+        number("session_t_out_s")
+        bursts = [getattr(self, f) is None for f in ("burst_duty", "burst_mean_s",
+                                                     "burst_depth_db")]
+        if len(set(bursts)) != 1:
+            raise ValueError("burst_duty, burst_mean_s and burst_depth_db are set together "
+                             "or not at all (build D1's burst process)")
+        for name in ("session_resumable", "contact_repoll"):
+            value = getattr(self, name)
+            if value is not None and not isinstance(value, bool):
+                raise ValueError(f"{name} must be a bool or None, got {value!r}")
+        for name in ("interference_shared", "channel_estimate"):
+            value = getattr(self, name)
+            if value is not None and (not isinstance(value, str) or not value):
+                raise ValueError(f"{name} must be a non-empty string or None, got {value!r}")
+        if self.session_resumable and self.session_t_out_s is None:
+            raise ValueError("session_resumable needs session_t_out_s: a resumable transfer "
+                             "is the session model's (build D1)")
+
+    def ddil_switches(self) -> Dict[str, Any]:
+        """Step 1's switches this cell sets (:data:`DDIL_SWITCH_FIELDS`), None left out."""
+        return {f: getattr(self, f) for f in DDIL_SWITCH_FIELDS if getattr(self, f) is not None}
 
     def driver_settings(self) -> Dict[str, Any]:
         """The ``Exp4Driver`` settings of this cell's trials (Phase 4's pilot flags).
@@ -225,6 +334,11 @@ class FerryCell:
         physics: Dict[str, Any] = {"contact_regime": str(self.contact_regime)}
         if self.interference_period_s is not None:
             physics["interference_period_s"] = float(self.interference_period_s)
+        for name in DDIL_FIELDS:              # build B10: D1's channel and switches
+            value = getattr(self, name)
+            if value is not None:
+                physics[name] = float(value) if isinstance(value, (int, float)) and \
+                    not isinstance(value, bool) else value
         settings = dict(
             mission_clock="sim", realism=True, contact_band="wide",
             deadline_time_scale="t_nom", in_flight_response="replan",
@@ -260,6 +374,11 @@ class FerryCell:
             # The driver's field: left out, so a cell from before the scale
             # family hashes as it did.
             del out["field_radius_m"]
+        for name in DDIL_FIELDS:
+            if out[name] is None:
+                # The recorded physics: left out, so a cell from before the
+                # DDIL families (build B10) hashes as it did.
+                del out[name]
         return out
 
 
@@ -356,9 +475,44 @@ SCALE_CELLS: Tuple[FerryCell, ...] = (
     _scale_cell(96, 1330.0), _scale_cell(96, 1995.0),
 )
 
-#: Every cell by name: decision 3's, Study 5.6's and the scale family's.
+def _jittery56_s1_cells() -> Tuple[FerryCell, ...]:
+    """``jittery56``'s cells on step 1's physics (FQ-s1's family, build B10): each
+    renamed ``<name>-s1``, with :data:`STEP1_SWITCHES` and nothing else changed."""
+    base = tuple(c for c in CELLS if c.family == FAMILY_JITTERY) + STUDY_5_6_CELLS
+    return tuple(dataclasses.replace(c, name=f"{c.name}-s1", family=FAMILY_JITTERY_56_S1,
+                                     **STEP1_SWITCHES) for c in base)
+
+
+def _ddil_cells() -> Tuple[FerryCell, ...]:
+    """FQ-d's family (build B10; the module docstring): at each size's knee, the
+    default channel, 11 and 17 dB and the burst process at both duty cycles, each
+    with step 1's switches on and shared interference."""
+    channels: List[Tuple[str, Dict[str, Any]]] = [("def", {})]
+    channels += [(f"a{amp:g}", {"interference_amp_db": float(amp)}) for amp in DDIL_AMPS_DB]
+    channels += [(f"b{round(duty * 100):d}",
+                  {"burst_duty": float(duty), "burst_mean_s": DDIL_BURST_MEAN_S,
+                   "burst_depth_db": DDIL_BURST_DEPTH_DB}) for duty in DDIL_BURST_DUTIES]
+    out: List[FerryCell] = []
+    for n, role in ((6, ROLE_CONTROL), (12, ROLE_DECISION_RICH)):
+        knee, knee_role = BUDGETS_S[n][1], BUDGET_ROLES[n][1]
+        for suffix, channel in channels:
+            out.append(FerryCell(f"ddl-n{n}-{float(knee):g}-{suffix}", FAMILY_DDIL, role, n,
+                                 float(knee), knee_role, CAP_S[(n, "jittery")], "jittery",
+                                 **channel, **STEP1_SWITCHES))
+    return tuple(out)
+
+
+#: FQ-s1's family (build B10): ``jittery56``'s eight cells on step 1's physics.
+JITTERY_56_S1_CELLS: Tuple[FerryCell, ...] = _jittery56_s1_cells()
+#: FQ-d's family (build B10): ten cells, five channels at each size's knee; the
+#: jammed cells join with build D8.
+DDIL_CELLS: Tuple[FerryCell, ...] = _ddil_cells()
+
+#: Every cell by name: decision 3's, Study 5.6's, the scale family's and the
+#: DDIL families'.
 CELLS_BY_NAME: Dict[str, FerryCell] = {
-    c.name: c for c in CELLS + STUDY_5_6_CELLS + SCALE_CELLS}
+    c.name: c for c in CELLS + STUDY_5_6_CELLS + SCALE_CELLS + JITTERY_56_S1_CELLS
+    + DDIL_CELLS}
 
 #: One score per contact regime, practised over these cells (decision 3): the
 #: jittery family, both sizes and both budgets at the default P_c, and the clean
@@ -371,6 +525,9 @@ FAMILIES: Dict[str, Tuple[FerryCell, ...]] = {
     FAMILY_CLEAN: tuple(c for c in CELLS if c.family == FAMILY_CLEAN),
     FAMILY_JITTERY_56: tuple(c for c in CELLS if c.family == FAMILY_JITTERY) + STUDY_5_6_CELLS,
     FAMILY_SCALE: SCALE_CELLS,
+    # DDIL build B10: FQ-s1's and FQ-d's families; they move none of the above.
+    FAMILY_JITTERY_56_S1: JITTERY_56_S1_CELLS,
+    FAMILY_DDIL: DDIL_CELLS,
 }
 
 #: The cells Study 5.5 is read on (decision 5: N = 12, the jittery regime), by
@@ -567,11 +724,19 @@ __all__ = [
     "CAP_S",
     "CELLS",
     "CELLS_BY_NAME",
+    "DDIL_CELLS",
+    "DDIL_CHANNEL_FIELDS",
+    "DDIL_FIELDS",
+    "DDIL_SWITCH_FIELDS",
     "FAMILIES",
     "FAMILY_CLEAN",
+    "FAMILY_DDIL",
     "FAMILY_JITTERY",
     "FAMILY_JITTERY_56",
+    "FAMILY_JITTERY_56_S1",
     "FerryCell",
+    "JITTERY_56_S1_CELLS",
+    "STEP1_SWITCHES",
     "HELDOUT_STREAM",
     "N_MISSIONS",
     "PAYLOAD_BYTES",

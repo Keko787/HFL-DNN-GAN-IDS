@@ -478,6 +478,14 @@ class MuleConfig:
     burst_mean_s: Optional[float] = None
     burst_depth_db: Optional[float] = None
     channel_estimate: Optional[str] = None
+    # DDIL build D2 (the unified plan's step 2), each None in every recorded run
+    # and then left out of ``ferry_params``; ``FerrySpec`` documents each.
+    # ``dwell_pricing`` "expected": a member's dwell priced over the SNR's
+    # spread; ``dwell_reserve_k``: k standard deviations of it added;
+    # ``leave_by``: a leave-by time per Pass-1 stop.
+    dwell_pricing: Optional[str] = None
+    dwell_reserve_k: Optional[float] = None
+    leave_by: Optional[bool] = None
     # Critic B4 — the causal RF prior under the recorded ``mission`` backhaul
     # model with the L1 channel (``--l1-channel``). Entry r - 1 is the SNR
     # (dB) the L1 trace gives the carrier chosen for mission round r's upload
@@ -616,6 +624,10 @@ FERRY_SPEC_FIELDS: Dict[str, str] = {
     "burst_mean_s": "burst_mean_s",
     "burst_depth_db": "burst_depth_db",
     "channel_estimate": "channel_estimate",
+    # DDIL build D2.
+    "dwell_pricing": "dwell_pricing",
+    "dwell_reserve_k": "dwell_reserve_k",
+    "leave_by": "leave_by",
 }
 
 #: DDIL build D1's ``MuleConfig`` fields (the unified plan's step 1), each None
@@ -624,6 +636,10 @@ DDIL_MULE_FIELDS: Tuple[str, ...] = (
     "session_t_out_s", "session_resumable", "contact_repoll", "interference_shared",
     "burst_duty", "burst_mean_s", "burst_depth_db", "channel_estimate",
 )
+
+#: DDIL build D2's ``MuleConfig`` fields (the unified plan's step 2), each None
+#: in every recorded run.
+DDIL_D2_MULE_FIELDS: Tuple[str, ...] = ("dwell_pricing", "dwell_reserve_k", "leave_by")
 
 #: Every ``MuleConfig`` field the Exp 5 addendum (Studies 5.11-5.15) adds, each
 #: at a default that is the recorded run, so a recorded trial's per-role JSON
@@ -634,7 +650,7 @@ ADDENDUM_MULE_FIELDS: Tuple[str, ...] = (
     "interference_amp_db", "interference_sigma_db",
     "device_train_time_s", "train_time_params",
     "narrow_range_ratio", "plan_speed_alpha",
-) + DDIL_MULE_FIELDS
+) + DDIL_MULE_FIELDS + DDIL_D2_MULE_FIELDS
 
 #: Study 5.12's mule fields: each device's fit time on the simulated clock and
 #: the settings it was drawn from (``MuleConfig``'s training-time block).
@@ -647,7 +663,7 @@ TRAIN_TIME_MULE_FIELDS: Tuple[str, ...] = ("device_train_time_s", "train_time_pa
 #: sets one shows it.
 FERRY_PARAMS_OMITTED_AT_NONE: Tuple[str, ...] = (
     "interference_amp_db", "interference_sigma_db", "narrow_range_ratio",
-) + DDIL_MULE_FIELDS
+) + DDIL_MULE_FIELDS + DDIL_D2_MULE_FIELDS
 
 #: ``MuleConfig``'s FeRRy Phase 4 plan fields: ``plan_mode`` and the plan
 #: options (:data:`PLAN_OPTION_FIELDS`). Not ferry-spec fields (the spec prices

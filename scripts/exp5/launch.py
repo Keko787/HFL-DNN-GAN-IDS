@@ -724,11 +724,15 @@ class Builder:
                  payload: Any, n_trials: int, extra: Sequence[str] = (),
                  cap: Optional[str] = "S", tag_arm: Optional[str] = None,
                  footprint: bool = False, n_missions: Optional[int] = None,
-                 tag_extra: str = "", budget_s: Any = None, ttl_factor: float = 1.0) -> Job:
+                 tag_extra: str = "", budget_s: Any = None, ttl_factor: float = 1.0,
+                 learned_flags: Optional[Sequence[str]] = None) -> Job:
         before = len(self.s.missing)
         budget = self._budget(level, n) if budget_s is None else budget_s
         cap_value = self._cap(cap, n) if arm in PLAN_ARMS or arm.startswith("FQ") else None
-        learned, learned_missing = self._learned(arm)
+        if learned_flags is None:
+            learned, learned_missing = self._learned(arm)
+        else:                               # the caller's own checkpoint (DDIL build B10)
+            learned, learned_missing = list(learned_flags), []
         missing = self.s.missing[before:] + learned_missing
         del self.s.missing[before:]
         tag = f"n{n}k{k}_{level}{tag_extra}__{tag_arm or _arm_tag(arm)}"
@@ -768,6 +772,15 @@ class Builder:
         path = s.get(f"rl.checkpoints.{key}", None)
         return (["--pair-checkpoint", f"{tag}={path}"], []) if path else (
             [], [f"rl.checkpoints.{key}"])
+
+    def _pair_tag(self, arm: str) -> str:
+        """The ``--pair-checkpoint`` tag a learned FQ arm's checkpoint flies under."""
+        if arm in self._PAIR_TAG:
+            return self._PAIR_TAG[arm]
+        if arm.startswith("FQ-g"):
+            return arm[3:]
+        raise ValueError(f"{arm!r} is not a learned FQ arm (FQ, FQ-hand, FQ-dwell, FQ-cov, "
+                         f"FQ-g<X>)")
 
     def _arms(self, arms: Sequence[str]) -> Tuple[List[str], List[str]]:
         """The arms a batch-2 study flies, and what decides the rest: FQ arms are
@@ -1206,14 +1219,39 @@ class Builder:
         # whole in ``s515.d1_cells``, each {tag, args, arms?, budget?}, beside the axes
         # above and on the same seeds. params.toml has none, so the recorded stage's jobs
         # are unchanged; the DDIL1 probe (loss_probes.py) passes them with --set.
+        # DDIL builds B10 and D2: a cell may give its size (``n``, else s515.N), and an
+        # arm may be a variant, {name = {arm, checkpoint?, args?}}, from
+        # ``s515.learned_arms`` (a learned arm flown with its own checkpoint, so FQ-g75
+        # and FQ-s1, both the runner's FQ-g75, fly side by side in one cell) or
+        # ``s515.arm_variants`` (an arm flown with extra flags, as step 2's F with D2's
+        # switches): each flies the runner's ``arm`` under its own job name.
+        variants: Dict[str, Any] = dict(s.get("s515.learned_arms", None) or {})
+        variants.update(s.get("s515.arm_variants", None) or {})
         for cell in s.get("s515.d1_cells", None) or []:
-            for arm in cell.get("arms") or s.get("s515.arms") or []:
-                self.jobs.append(self._arm_job(
-                    st, "s515", arm=arm, n=n515, k=1,
+            n_cell = int(cell.get("n") or n515)
+            for name in cell.get("arms") or s.get("s515.arms") or []:
+                own = variants.get(name)
+                more: List[str] = []
+                if own is None:
+                    arm, tag_arm, flags, missing = name, None, None, []
+                else:
+                    arm, tag_arm = str(own["arm"]), str(name)
+                    more = [str(a) for a in own.get("args") or []]
+                    flags, missing = None, []
+                    if arm.startswith("FQ"):
+                        path = own.get("checkpoint")
+                        flags = (["--pair-checkpoint", f"{self._pair_tag(arm)}={path}"]
+                                 if path else [])
+                        missing = [] if path else [f"s515.learned_arms.{name}.checkpoint"]
+                job = self._arm_job(
+                    st, "s515", arm=arm, n=n_cell, k=1,
                     level=cell.get("budget") or s.get("s515.budget"),
                     payload=s.get("s515.payload_bytes"), n_trials=int(s.get("s515.n_trials")),
-                    extra=base + [str(a) for a in cell["args"]], tag_extra=str(cell["tag"]),
-                    footprint=True))
+                    extra=base + [str(a) for a in cell["args"]] + more,
+                    tag_extra=str(cell["tag"]), footprint=True, tag_arm=tag_arm,
+                    learned_flags=flags)
+                job.blocked = sorted(set(job.blocked) | set(missing))
+                self.jobs.append(job)
         # 5.11 (c): FerrySim at each scale cell's knee, every policy.
         knees = s.get("s511c.knee_s", None)
         w = int(s.get("s511c.workers"))
@@ -1376,9 +1414,13 @@ class Builder:
                 self.jobs.append(job)
                 names.append(job.name)
         ev = f"{self.root}/rl/s55/evaluation.json"
+        # rl.eval_cells: the held-out cells, when not the jittery family's (evaluate's
+        # default); FQ-s1 (DDIL build B10) is read on their step-1 twins.
+        cells = [str(c) for c in s.get("rl.eval_cells", None) or []]
         evaluate = self._rl_tool(
             "rl-sweep", study, "evaluate",
             ["evaluate", "--checkpoints", f"{self._ckpt_root()}/{study}", "--record",
+             *(["--cells", *cells] if cells else []),
              "--workers", str(w), "--out", ev], ev, deps=names, workers=w)
         self.jobs.append(evaluate)
         verdict = f"{self.root}/rl/s55/verdict.json"

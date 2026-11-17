@@ -163,6 +163,13 @@ _PHYSICS_FLAGS = (
     ("burst_depth_db", float, "DDIL D1: how far a burst lowers every class's SNR (dB)."),
     ("channel_estimate", str, "DDIL D1: 'causal' plans the outage from the arrival readings "
                               "(default off: the channel's own sigmas)."),
+    # DDIL build D2 (the unified plan's step 2); each off unless given.
+    ("dwell_pricing", str, "DDIL D2: 'expected' prices a member's dwell over the SNR's "
+                           "spread (default off: at the mean SNR)."),
+    ("dwell_reserve_k", float, "DDIL D2: the reserve, k standard deviations of each member's "
+                               "priced dwell (needs --dwell-pricing)."),
+    ("leave_by", _bool_flag, "DDIL D2: a leave-by time per Pass-1 stop; no session, retry or "
+                             "re-poll starts after it (true/false; default off)."),
 )
 
 
@@ -494,6 +501,41 @@ def _check_checkpoint_plans(driver: Exp4Driver) -> None:
                 + ", ".join(f"{name} (trained {trained!r}, flown {flown!r})"
                             for name, (trained, flown) in differ.items())
                 + "; a checkpoint flies on the plan it trained under")
+
+
+def _check_checkpoint_ddil(driver: Exp4Driver) -> None:
+    """Refuse a pair checkpoint trained on step 1's physics that would fly here on other
+    switches (DDIL build B10), as a ValueError.
+
+    A run on step 1's physics records its switches in the manifest's training spec
+    (``experiments.ferrysim.checkpoints.trained_ddil``); this run's are the
+    ``ferry_physics`` it flies (``--session-t-out-s``, ``--contact-repoll``,
+    ``--interference-shared``, ``--channel-estimate``, ``--session-resumable``).
+    A checkpoint that records none trained on the recorded physics and may fly on
+    step 1's: the FQ track flies FQ-g75 there on purpose, outside the conditions
+    it trained in, as a declared test (the DDIL unified plan, The FQ track).
+    """
+    if not driver.pair_checkpoints:
+        return
+    from experiments.ferrysim.checkpoints import ddil_differences, trained_ddil
+    from hermes.scheduler.selector.pair_q import verify_checkpoint
+
+    flown = dict(driver.ferry_physics or {})
+    for tag, path in driver.pair_checkpoints.items():
+        where = f"--pair-checkpoint {tag}={path}"
+        try:
+            trained = trained_ddil(verify_checkpoint(path))
+        except (TypeError, ValueError, OSError) as e:
+            raise ValueError(f"{where}: {e}") from e
+        if not trained:
+            continue
+        differ = ddil_differences(trained, flown)
+        if differ:
+            raise ValueError(
+                f"{where}: trained on other step-1 switches than this run flies (DDIL build "
+                f"B10): " + ", ".join(f"{name} (trained {a!r}, flown {b!r})"
+                                      for name, (a, b) in differ.items())
+                + "; a checkpoint trained on step 1's physics flies only on its own switches")
 
 
 def _phase_5_driver_kwargs(
@@ -1115,6 +1157,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         # FeRRy Phase 5 (resolution R23): a pair checkpoint flies only on the
         # plan it trained under.
         _check_checkpoint_plans(driver)
+        # DDIL build B10: a checkpoint trained on step 1's physics flies only on
+        # its own switches.
+        _check_checkpoint_ddil(driver)
         # FeRRy Phase 4: a plan arm the driver cannot run (on the wall clock,
         # without a band, with a budgeted Pass 2, ...) is refused here, before
         # any trial, rather than as an error row per trial. FeRRy Phase 5: so

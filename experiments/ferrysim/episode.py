@@ -332,13 +332,17 @@ def _sortie_of(service, result, closing: Mapping[str, Any]) -> SortieRecord:
     for k, f in enumerate(flown):
         last = k == len(flown) - 1
         devices = [str(d) for d in f["devices"]]
+        # DDIL build B10: a member below the floor at arrival that step 1's re-poll
+        # solicited (``repolled``, written only with contact_repoll on) is a target too.
+        targets = list(dict.fromkeys([str(d) for d in f["targets"]]
+                                     + [str(d) for d in f.get("repolled") or ()]))
         collected = [d for d in devices if outcome.get(d) is MissionOutcome.CLEAN]
         late = [d for d in collected if stamp[d] > deadlines.get(d, float(f["deadline_ts"]))]
         nxt = None if last else flown[k + 1]
         stops.append(StopRecord(
             t_s=float(f["arrival_s"]),
             devices=tuple(devices),
-            targets=tuple(str(d) for d in f["targets"]),
+            targets=tuple(targets),
             collected=tuple(collected),
             w=tuple(weights.get(d, 0.0) for d in collected),
             uplink_dropped=tuple(str(d) for d in f.get("uplink_dropped") or ()),

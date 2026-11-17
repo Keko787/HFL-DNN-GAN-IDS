@@ -270,6 +270,12 @@ class TrainSpec:
         bands = {cell.driver_settings()["contact_band"] for cell in cells}
         if len(bands) != 1:
             raise ValueError(f"a run's cells fly one contact band, got {sorted(bands)}")
+        # DDIL build B10: step 1's switches are the run's, as its band is, so the
+        # manifest can record one set and the runner fly the checkpoint only on it.
+        switches = {json.dumps(cell.ddil_switches(), sort_keys=True) for cell in cells}
+        if len(switches) != 1:
+            raise ValueError(f"a run's cells fly one set of step 1's switches (DDIL build "
+                             f"B10), got {sorted(switches)}")
         object.__setattr__(self, "cells", cells)
         if not isinstance(self.network, PairQConfig):
             raise TypeError(f"network is a PairQConfig, got {self.network!r}")
@@ -325,6 +331,12 @@ class TrainSpec:
         return dataclasses.replace(self.reward, expected_availability=False)
 
     @property
+    def ddil_switches(self) -> Dict[str, Any]:
+        """Step 1's switches the run's cells fly (``FerryCell.ddil_switches``; DDIL
+        build B10): ``{}`` on the recorded physics."""
+        return dict(self.cells[0].ddil_switches())
+
+    @property
     def family_sha256(self) -> str:
         """SHA-256 of the cells as JSON, ``cells.family_sha256``'s formula, so a
         family's own cells hash as the family does."""
@@ -362,6 +374,10 @@ class TrainSpec:
         }
         if self.plan_score_params:
             out["plan_score_params"] = dict(self.plan_score_params)
+        if self.ddil_switches:
+            # DDIL build B10: only when set, so a run on the recorded physics
+            # records the spec it always did (``checkpoints.trained_ddil``).
+            out["ddil_switches"] = self.ddil_switches
         return out
 
 

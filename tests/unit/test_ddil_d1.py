@@ -462,7 +462,9 @@ def test_the_d1_fields_are_ferry_fields_sim_only_and_left_out_of_ferry_params_at
         assert C.FERRY_SPEC_FIELDS[f] == f and f in C.SIM_ONLY_MULE_FIELDS
         assert f in C.FERRY_PARAMS_OMITTED_AT_NONE and f in C.ADDENDUM_MULE_FIELDS
         assert f in FERRY_PHYSICS_FIELDS
-    assert C.ADDENDUM_MULE_FIELDS[-len(C.DDIL_MULE_FIELDS):] == C.DDIL_MULE_FIELDS
+    # DDIL build D2's fields follow D1's (tests/unit/test_ddil_d2.py).
+    tail = C.ADDENDUM_MULE_FIELDS[-len(C.DDIL_MULE_FIELDS) - len(C.DDIL_D2_MULE_FIELDS):]
+    assert tail == C.DDIL_MULE_FIELDS + C.DDIL_D2_MULE_FIELDS
 
 
 def test_the_runner_takes_each_switch_as_a_flag():

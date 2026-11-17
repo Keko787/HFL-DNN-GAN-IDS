@@ -174,6 +174,12 @@ _SILENT = "silent"
 # was lost. Committed as a reply that never came: TIMEOUT (UNDELIVERED), the
 # push's bytes sent, nothing received, no listen.
 _SESSION_FAILED = "session_failed"
+# DDIL build D2's leave-by time: a member that answered (a reply, or a push
+# whose reply never came) but whose session would have started at or after the
+# stop's leave-by time, so the mule left without serving it. Committed as an
+# advert out of session and a TIMEOUT (UNDELIVERED in Pass 2): nothing sent,
+# nothing received, no airtime.
+_LEFT = "left"
 
 
 @dataclass(frozen=True)
@@ -228,6 +234,18 @@ class _Schedule:
     t: float
     retried: List[DeviceID] = dataclasses.field(default_factory=list)
     failed: List[DeviceID] = dataclasses.field(default_factory=list)
+    left: List[DeviceID] = dataclasses.field(default_factory=list)   # DDIL build D2
+
+    def leave(self, plan: ContactPlan, did: DeviceID) -> bool:
+        """DDIL build D2: cut ``did``'s session if it would start at or after the
+        stop's leave-by time; True when cut (classed :data:`_LEFT`, stamped now)."""
+        if not plan.leaves_at(self.t):
+            return False
+        self.klass[did] = _LEFT
+        self.stamps[did] = self.t
+        self.snrs[did] = plan.snr_at(did, self.t)
+        self.left.append(did)
+        return True
 
 
 class _BufferSink:
@@ -1176,8 +1194,10 @@ class HFLHostMission:
         if spec.kind is MissionPass.COLLECT and plan.repoll_candidates:
             t_from = self._ferry_schedule(spec, plan, members, answered, sessions, pushed).t
             cand = set(plan.repoll_candidates)
-            again = [did for did in members if did in cand
-                     and float(plan.snr_at(did, t_from)) >= float(plan.snr_floor_db)]
+            # DDIL build D2: no re-poll is solicited after the stop's leave-by time.
+            again = [] if plan.leaves_at(t_from) else [
+                did for did in members if did in cand
+                and float(plan.snr_at(did, t_from)) >= float(plan.snr_floor_db)]
             if again:
                 with self._lock:
                     self._solicit_seq += 1
@@ -1558,6 +1578,7 @@ class HFLHostMission:
                               uplink_by_device, missing, t)
             self._schedule_sessions(plan, collect, members, sessions, sched)
             return sched
+        left: List[DeviceID] = []                   # DDIL build D2's leave-by cuts
         for did in members:
             kind = klass[did]
             if kind == _UNREACHABLE:
@@ -1569,6 +1590,12 @@ class HFLHostMission:
             elif kind in (_REFUSED, _PUSH_FAILED, _NOT_READY):
                 snrs[did] = plan.snr_at(did, t)
                 stamps[did] = t
+            elif plan.leaves_at(t):
+                # DDIL build D2: past the stop's leave-by time, no session starts.
+                klass[did] = _LEFT
+                snrs[did] = plan.snr_at(did, t)
+                stamps[did] = t
+                left.append(did)
             elif kind == _REPLIED:
                 if collect:
                     grad = sessions[did].grad
@@ -1587,7 +1614,7 @@ class HFLHostMission:
                 t = charge(did, t, plan.session_bytes(push_bytes[did], 1))
                 missing.append(did)
         return _Schedule(klass, push_bytes, stamps, snrs, dwell_by_device,
-                         uplink_by_device, missing, t)
+                         uplink_by_device, missing, t, left=left)
 
     def _walk(self, plan: ContactPlan, sched: _Schedule, did: DeviceID, nbytes: int,
               start_bits: float = 0.0):
@@ -1626,6 +1653,8 @@ class HFLHostMission:
             elif kind in (_REFUSED, _PUSH_FAILED, _NOT_READY):
                 snrs[did] = plan.snr_at(did, sched.t)
                 sched.stamps[did] = sched.t
+            elif sched.leave(plan, did):
+                continue                # DDIL build D2: past the leave-by time
             else:  # _REPLIED or _NO_REPLY
                 nbytes = self._session_nbytes(plan, collect, kind, sessions.get(did),
                                               sched.push_bytes[did])
@@ -1636,6 +1665,14 @@ class HFLHostMission:
                 if kind == _NO_REPLY:
                     sched.missing.append(did)
         for did, nbytes, bits in retry:
+            if plan.leaves_at(sched.t):
+                # DDIL build D2: no retry starts after the leave-by time; the
+                # failed first try stands.
+                sched.failed.append(did)
+                sched.left.append(did)
+                if klass[did] == _REPLIED:
+                    klass[did] = _SESSION_FAILED
+                continue
             sched.retried.append(did)
             w = self._walk(plan, sched, did, nbytes, bits)
             if not w.done:
@@ -1693,6 +1730,8 @@ class HFLHostMission:
             if kind in (_REFUSED, _PUSH_FAILED, _NOT_READY):
                 sched.stamps[did] = sched.t
                 continue
+            if sched.leave(plan, did):
+                continue                # DDIL build D2: past the leave-by time
             nbytes = self._session_nbytes(plan, collect, kind, sess, sched.push_bytes[did])
             if plan.session_model:
                 w = self._walk(plan, sched, did, nbytes)
@@ -1838,7 +1877,9 @@ class HFLHostMission:
                            else DeliveryOutcome.UNDELIVERED)
                 self._record_delivery_line(
                     device_id=did, outcome=outcome, contact_ts=ts,
-                    band=band_index, bytes_sent=push_bytes.get(did, 0),
+                    band=band_index,
+                    # DDIL build D2: a member the leave-by time cut was sent nothing.
+                    bytes_sent=0 if kind == _LEFT else push_bytes.get(did, 0),
                 )
                 outcomes[did] = outcome
                 continue
@@ -1869,10 +1910,11 @@ class HFLHostMission:
                 outcome = MissionOutcome.TIMEOUT
                 self._record_outcome(outcome=outcome, bytes_received=0,
                                      bytes_sent=0, **common)
-            elif kind == _NOT_READY:
+            elif kind in (_NOT_READY, _LEFT):
                 # Exp 5 addendum (Study 5.12): the advert came, no update was
                 # ready, nothing was pushed. Recorded as a contact out of
                 # session and a TIMEOUT: the round got no update from it.
+                # DDIL build D2: so is a member the leave-by time cut.
                 outcome = MissionOutcome.TIMEOUT
                 self._record_contact(adv, in_session=False, contact_ts=ts,
                                      snr_at_contact=rec_snr)
@@ -1934,6 +1976,7 @@ class HFLHostMission:
             session_retried=tuple(did for did in members if did in set(sched.retried)),
             session_failed=tuple(did for did in members if did in set(sched.failed)),
             repolled=() if repoll is None else tuple(repoll.targets),
+            left=tuple(did for did in members if did in set(sched.left)),
         )
         log.info(
             "ferry %s mule=%s round=%d band=%s members=%d targets=%d answered=%d "

@@ -998,6 +998,97 @@ def _without_d1(source: str) -> str:
     return ast.unparse(ast.fix_missing_locations(tree))
 
 
+#: DDIL build D2 (DeveloperDocs/FeRRy_DDIL_Unified_Plan.md, step 2): the spec's three new
+#: fields, ``from_config``'s three keyword arguments, the module constants of the
+#: risk-priced dwell, and the runtime's three pricing methods with ``member_dwell_s``'s one
+#: guarded branch. Every one is off at None; tests/unit/test_ddil_d2.py pins what each does.
+D2_SPEC_FIELDS = ("dwell_pricing", "dwell_reserve_k", "leave_by")
+D2_CONSTANTS = ("DWELL_PRICING_EXPECTED", "DWELL_PRICINGS", "DWELL_PRICE_NODES", "_DWELL_Z")
+D2_SPEC_DEFS = ("_check_d2",)
+D2_RUNTIME_DEFS = ("_priced_dwell_s", "snr_spread_db", "_expected_dwell_s")
+
+
+def _without_d2(source: str) -> str:
+    """The live module with exactly build D2's change taken out, as source (then
+    :func:`_without_d1` takes D1's out). Taken out: the constants; the spec's three
+    fields, ``_check_d2`` and ``__post_init__``'s call of it, ``describe``'s two ``**``
+    entries; ``from_config``'s three keyword arguments and the three it passes on; the
+    runtime's three methods, and ``member_dwell_s``'s D2 branch and docstring paragraph.
+    The spec docstring's D2 paragraph follows D1's and goes with it. Every removal is
+    counted, so a D2 change missing from the module fails here."""
+    tree = ast.parse(source)
+    seen: Dict[str, int] = defaultdict(int)
+    body = []
+    for node in tree.body:
+        if isinstance(node, (ast.Assign, ast.AnnAssign)):
+            targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+            if any(isinstance(t, ast.Name) and t.id in D2_CONSTANTS for t in targets):
+                seen["constants"] += 1
+                continue
+        if isinstance(node, ast.ClassDef) and node.name == "FerrySpec":
+            kept = []
+            for sub in node.body:
+                if (isinstance(sub, ast.AnnAssign) and isinstance(sub.target, ast.Name)
+                        and sub.target.id in D2_SPEC_FIELDS):
+                    seen["fields"] += 1
+                    continue
+                if isinstance(sub, ast.FunctionDef) and sub.name in D2_SPEC_DEFS:
+                    seen["spec_defs"] += 1
+                    continue
+                kept.append(sub)
+            node.body = kept
+            for fn in node.body:
+                if not isinstance(fn, ast.FunctionDef):
+                    continue
+                if fn.name == "__post_init__":
+                    keep = [s for s in fn.body if not (
+                        isinstance(s, ast.Expr) and isinstance(s.value, ast.Call)
+                        and isinstance(s.value.func, ast.Attribute)
+                        and s.value.func.attr == "_check_d2")]
+                    seen["post_init"] += len(fn.body) - len(keep)
+                    fn.body = keep
+                elif fn.name == "describe":
+                    for ret in ast.walk(fn):
+                        if isinstance(ret, ast.Return) and isinstance(ret.value, ast.Dict):
+                            pairs = [(k, v) for k, v in zip(ret.value.keys, ret.value.values)
+                                     if not (k is None and _names_in(v) & set(D2_SPEC_FIELDS))]
+                            seen["describe"] += len(ret.value.keys) - len(pairs)
+                            ret.value.keys = [k for k, _ in pairs]
+                            ret.value.values = [v for _, v in pairs]
+                elif fn.name == "from_config":
+                    args = fn.args
+                    kept_args = [(a, d) for a, d in zip(args.kwonlyargs, args.kw_defaults)
+                                 if a.arg not in D2_SPEC_FIELDS]
+                    seen["kwargs"] += len(args.kwonlyargs) - len(kept_args)
+                    args.kwonlyargs = [a for a, _ in kept_args]
+                    args.kw_defaults = [d for _, d in kept_args]
+                    for s in ast.walk(fn):
+                        if isinstance(s, ast.Call):
+                            kw = [k for k in s.keywords if k.arg not in D2_SPEC_FIELDS]
+                            seen["forwarded"] += len(s.keywords) - len(kw)
+                            s.keywords = kw
+        if isinstance(node, ast.ClassDef) and node.name == "FerryRuntime":
+            kept = [s for s in node.body
+                    if not (isinstance(s, ast.FunctionDef) and s.name in D2_RUNTIME_DEFS)]
+            seen["methods"] += len(node.body) - len(kept)
+            node.body = kept
+            for fn in node.body:
+                if isinstance(fn, ast.FunctionDef) and fn.name == "member_dwell_s":
+                    _cut_doc(fn, "\n\n        DDIL build D2", "        ")
+                    seen["doc"] += 1
+                    keep = [s for s in fn.body
+                            if not (isinstance(s, ast.If) and "dwell_pricing" in _names_in(s.test))]
+                    seen["dwell"] += len(fn.body) - len(keep)
+                    fn.body = keep
+        body.append(node)
+    tree.body = body
+    assert dict(seen) == {
+        "constants": 4, "fields": 3, "spec_defs": 1, "post_init": 1, "describe": 2,
+        "kwargs": 3, "forwarded": 3, "methods": 3, "doc": 1, "dwell": 1,
+    }, dict(seen)
+    return ast.unparse(ast.fix_missing_locations(tree))
+
+
 def test_every_statement_386c275_had_is_unchanged():
     """Additive only: every definition is the recorded one; the module's other
     statements are too, except the docstring, the typing import, the
@@ -1005,10 +1096,11 @@ def test_every_statement_386c275_had_is_unchanged():
     the four readers and ``StopPrice``. The Exp 5 addendum's two keyword
     arguments of ``FerrySpec.from_config`` are the one allowed change to a
     recorded definition, taken back out exactly
-    (:func:`_from_config_without_the_addendum`). DDIL build D1's change is taken
-    out exactly first (:func:`_without_d1`)."""
+    (:func:`_from_config_without_the_addendum`). DDIL builds D2's and D1's changes
+    are taken out exactly first (:func:`_without_d2`, :func:`_without_d1`)."""
     ref_top, ref_defs = _shape(_ref_blob().decode("utf-8"))
-    live_source = _without_d1((REPO / "hermes/mule/ferry.py").read_text(encoding="utf-8"))
+    live_source = _without_d1(_without_d2(
+        (REPO / "hermes/mule/ferry.py").read_text(encoding="utf-8")))
     live_top, live_defs = _shape(live_source)
     assert set(live_defs) - set(ref_defs) == {f"FerryRuntime.{r}" for r in READERS}
     assert live_defs["FerrySpec.from_config"] != ref_defs["FerrySpec.from_config"]
