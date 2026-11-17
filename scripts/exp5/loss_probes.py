@@ -64,8 +64,9 @@ EIGHT = "['F','FX','H1','D1','D2','D3','D4','D5']"
 
 
 def is_ferry(variant: str) -> bool:
-    """FeRRy's own arms besides F: compared with F apart from the baselines."""
-    return variant.startswith("FX") or variant.startswith("FQ")
+    """FeRRy's own arms besides F: compared with F apart from the baselines. F's variants
+    with their own flags (step 2's F-rp and F-rpnl) are FeRRy's too."""
+    return variant.startswith(("FX", "FQ", "F-"))
 
 
 # --------------------------------------------------------------------- the probes
@@ -91,6 +92,13 @@ class Probe:
     #: cell -> the cell whose baselines stand in where this one has none flown (the
     #: baselines fly wide, so a setting that moves only the narrow band leaves them as is)
     ref_cells: Dict[str, str] = field(default_factory=dict)
+    #: DDIL build D0: each arm against F also on hover and updates per mission, and on
+    #: time to tau with a miss at the trial's end (D0_ENDPOINTS); the flights score with
+    #: --ddil-columns (DDIL_SCORE_SET), which writes the last of those.
+    ddil_endpoints: bool = False
+    #: (arm, reference) pairs compared beside each arm against F, in each cell that holds
+    #: both, on the same tests, in families of their own (<probe>/pairs/<kind>).
+    pairs: List[Tuple[str, str]] = field(default_factory=list)
 
 
 def _s53x(extra: Sequence[str]) -> List[str]:
@@ -237,6 +245,10 @@ DDIL2_RECORDED = [
 
 DDIL1_SETS =["s515.backhaul='mission'", "s515.arms=[]", "s515.amps_db=[]",
               "s515.shadow_sigmas_db=[]", "s515.mission_backhaul_arms=[]"]
+#: DDIL build D0: the DDIL probes score with the scorer's --ddil-columns, into scored files
+#: of their own (<csv stem>_scored_ddil.csv), so P1's and the campaign's are never rescored.
+#: A score setting: no runner job's arguments move, so the flown jobs stay done.
+DDIL_SCORE_SET = "score.s515.scorer_flags=['--ddil-columns']"
 
 
 #: P6's 10 MB cells: the field's knee, and 12 x it with no limit in effect.
@@ -316,22 +328,26 @@ PROBES: Dict[str, Probe] = {p.name: p for p in [
     # DDIL step 1 (build D1), the NOMS slice: the main cells, then the checks, on P1's seeds.
     Probe("DDIL1", "Step 1: the honest DDIL channel", [
         Flight("main", "batch3", "results/exp5_ddil1",
-               DDIL1_SETS + [_d1_cells(DDIL1_MAIN)], "s515"),
+               DDIL1_SETS + [_d1_cells(DDIL1_MAIN), DDIL_SCORE_SET], "s515"),
         Flight("checks", "batch3", "results/exp5_ddil1",
-               DDIL1_SETS + [_d1_cells(DDIL1_CHECKS)], "s515"),
-    ]),
-    # DDIL build B10: the FQ track's NOMS cells, in step 1's out-root (FQ_ARMS above).
+               DDIL1_SETS + [_d1_cells(DDIL1_CHECKS), DDIL_SCORE_SET], "s515"),
+    ], ddil_endpoints=True),
+    # DDIL build B10: the FQ track's NOMS cells, in step 1's out-root (FQ_ARMS above). The
+    # track's reads: FQ-s1 against FQ-g75 (the physics change alone) and both against FX.
     Probe("DDILFQ1", "FQ-g75 and FQ-s1 on step 1's physics", [
         Flight("", "batch3", "results/exp5_ddil1",
-               DDIL1_SETS + [_d1_cells(DDILFQ1_CELLS), _learned_arms()], "s515"),
-    ]),
-    # DDIL build D2, step 2: F-rp and F-rpnl beside step 1's arms and P1's recorded ones.
+               DDIL1_SETS + [_d1_cells(DDILFQ1_CELLS), _learned_arms(), DDIL_SCORE_SET],
+               "s515"),
+    ], ddil_endpoints=True, pairs=[("FQ-s1", "FQ-g75"), ("FQ-s1", "FX"), ("FQ-g75", "FX")]),
+    # DDIL build D2, step 2: F-rp and F-rpnl beside step 1's arms and P1's recorded ones. The
+    # leave-by time's own effect is F-rpnl against F-rp; FX is the other FeRRy reference.
     Probe("DDIL2", "Step 2: the risk-priced dwell and the leave-by time", [
         Flight("honest", "batch3", "results/exp5_ddil1",
-               DDIL1_SETS + [_d1_cells(DDIL2_HONEST), DDIL2_VARIANTS], "s515"),
+               DDIL1_SETS + [_d1_cells(DDIL2_HONEST), DDIL2_VARIANTS, DDIL_SCORE_SET], "s515"),
         Flight("recorded", "batch3", "results/exp5_p1mbh",
-               DDIL1_SETS + [_d1_cells(DDIL2_RECORDED), DDIL2_VARIANTS], "s515"),
-    ]),
+               DDIL1_SETS + [_d1_cells(DDIL2_RECORDED), DDIL2_VARIANTS, DDIL_SCORE_SET],
+               "s515"),
+    ], ddil_endpoints=True, pairs=[("F-rpnl", "F-rp"), ("F-rp", "FX")]),
     # The 4-mission cap lets F stop at about 335 s while the baselines fly about 800 s, so the
     # recorded compute cells compare unequal mission time. Ten missions gives every arm the
     # time; n_missions is in the seed hash, so these 40 trials are new seeds, not an extension.
@@ -402,6 +418,45 @@ def compare_time(ref, var, tau: float, family: str, plan, SC):
     return SC.compare_pair(ref, var, f"sim_s_to_tau{tau:g}", spec, plan)
 
 
+#: DDIL build D0's paired endpoints (DeveloperDocs/FeRRy_DDIL_Unified_Plan.md): (kind, the
+#: scored column, which way is better). Hover and updates per mission are the summary's
+#: sim_dwell_s_mean and update_yield; the time to tau with a miss at the trial's end is the
+#: scorer's --ddil-columns column, so no trial leaves that comparison.
+D0_ENDPOINTS: Tuple[Tuple[str, str, str], ...] = (
+    ("hover", "sim_dwell_s_mean", "lower"),
+    ("updates", "update_yield", "higher"),
+    ("time_or_end", "sim_s_to_tau{tau:g}_or_end", "lower"),
+)
+KIND_LABELS = {"time": "time to tau", "reach": "reach", "hover": "hover per mission",
+               "updates": "updates per mission", "time_or_end": "time to tau, miss at the end"}
+
+
+def compare_endpoint(ref, var, col: str, better: str, family: str, plan, SC):
+    """The scorer's paired comparison of one D0 endpoint, in ``family``."""
+    spec = SC.Spec(family, col, better, reference=ref.variant)
+    return SC.compare_pair(ref, var, col, spec, plan)
+
+
+def kind_of(metric: str) -> str:
+    """The kind of a comparison, from its metric's column."""
+    if metric.startswith("reached"):
+        return "reach"
+    if metric.endswith("_or_end"):
+        return "time_or_end"
+    return {"sim_dwell_s_mean": "hover", "update_yield": "updates"}.get(metric, "time")
+
+
+def _compare_all(ref, var, tau: float, family: str, plan, SC, ddil: bool) -> List[Any]:
+    """``var`` against ``ref`` on time and reach and, with ``ddil``, D0's endpoints; each
+    kind in a family of its own (``family`` + "/" + kind)."""
+    out = [fn(ref, var, tau, f"{family}/{kind}", plan, SC)
+           for kind, fn in (("time", compare_time), ("reach", compare_reach))]
+    if ddil:
+        out += [compare_endpoint(ref, var, col.format(tau=tau), better, f"{family}/{kind}",
+                                 plan, SC) for kind, col, better in D0_ENDPOINTS]
+    return out
+
+
 def reach_contradicts(favoured: str, reach) -> bool:
     """Whether the arm a time claim favours reached tau less often than the other arm
     (the reach comparison's point estimate)."""
@@ -415,12 +470,11 @@ def reach_contradicts(favoured: str, reach) -> bool:
 # --------------------------------------------------------------------- probe scoring
 def probe_comparisons(probe: Probe, cells: Dict[str, Dict[str, Any]], plan, SC,
                       tau: float = TAU) -> List[Any]:
-    """Every arm against F in each cell, on time and on reach; Holm per family."""
+    """Every arm against F in each cell, on time and on reach, and on D0's endpoints for a
+    DDIL probe; then the probe's other pairs, in each cell that holds both. Holm per
+    family: the baselines, FeRRy's other arms and the pairs apart, each kind apart."""
     comps = []
     for cell, variants in cells.items():
-        ref = variants.get(REFERENCE)
-        if ref is None or not ref.scored_rows:
-            continue
         pool = dict(variants)
         prefix, _, bare = cell.rpartition(": ")
         prefix = f"{prefix}: " if prefix else ""
@@ -429,12 +483,18 @@ def probe_comparisons(probe: Probe, cells: Dict[str, Dict[str, Any]], plan, SC,
             for v, e in cells.get(prefix + stand_in, {}).items():
                 if v != REFERENCE and (v not in pool or not pool[v].scored_rows):
                     pool[v] = e
-        for v, e in pool.items():
-            if v == REFERENCE or not e.scored_rows:
-                continue
-            group = "ferry" if is_ferry(v) else "baselines"
-            for kind, fn in (("time", compare_time), ("reach", compare_reach)):
-                c = fn(ref, e, tau, f"{probe.name}/{group}/{kind}", plan, SC)
+        todo: List[Tuple[Any, Any, str]] = []
+        ref = variants.get(REFERENCE)
+        if ref is not None and ref.scored_rows:
+            todo += [(ref, e, "ferry" if is_ferry(v) else "baselines")
+                     for v, e in pool.items() if v != REFERENCE and e.scored_rows]
+        for v, r in probe.pairs:
+            a, b = pool.get(r), pool.get(v)
+            if a is not None and b is not None and a.scored_rows and b.scored_rows:
+                todo.append((a, b, "pairs"))
+        for a, b, group in todo:
+            for c in _compare_all(a, b, tau, f"{probe.name}/{group}", plan, SC,
+                                  probe.ddil_endpoints):
                 c.cell = cell
                 comps.append(c)
     SC.holm(comps, plan)
@@ -507,6 +567,60 @@ def _write_csv(path: Path, rows: List[Dict[str, Any]]) -> None:
         w.writerows(rows)
 
 
+def _mean_of(entry, col: str, SC) -> Optional[float]:
+    vals = [SC._num(r.get(col)) for r in entry.scored_rows]
+    vals = [x for x in vals if x is not None]
+    return sum(vals) / len(vals) if vals else None
+
+
+def _holm(c) -> str:
+    return "" if c is None or c.p_holm is None else f"{c.p_holm:.4f}"
+
+
+def _d0_table(cell: str, variants, borrowed, stand_in, by, SC, tau: float = TAU) -> List[str]:
+    """A cell's D0 endpoints, each arm against F (DDIL build D0)."""
+    cols = {kind: col.format(tau=tau) for kind, col, _ in D0_ENDPOINTS}
+    lines = ["", f"D0's endpoints in {cell}, F − arm:", "",
+             "| arm | hover per mission (s) | hover: F − arm [95% CI] | Holm p | verdict | "
+             "updates per mission | updates: F − arm [95% CI] | Holm p | verdict | "
+             "time to τ, miss at the end (s) | time: F − arm [95% CI] | Holm p | verdict |",
+             "|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
+    for v, e in variants.items():
+        name = NAMES.get(v, v)
+        if not e.scored_rows and v != REFERENCE and v in borrowed:
+            e, name = borrowed[v], f"{name} ({stand_in})"
+        if not e.scored_rows:
+            lines.append(f"| {name} | not flown |" + " |" * 11)
+            continue
+        row = f"| {name} |"
+        for kind, nd in (("hover", 1), ("updates", 2), ("time_or_end", 1)):
+            c = by.get((cell, v, REFERENCE, kind))
+            row += (f" {_f(_mean_of(e, cols[kind], SC), nd)} | {_diff(c, nd)} | {_holm(c)} | "
+                    f"{_verdict(c)} |")
+        lines.append(row)
+    return lines
+
+
+def _pairs_table(comps) -> List[str]:
+    """The probe's other pairs, every kind, in every cell that holds both arms."""
+    pairs = [c for c in comps if c.study.split("/")[1:2] == ["pairs"]]
+    lines = ["", "## Other pairs", "",
+             "Difference = the second arm − the first (time and hover: negative when the "
+             "second is faster or hovers less; reach and updates: positive when the second "
+             "reaches τ more often or merges more).", "",
+             "| cell | arm | against | measure | arm | against | against − arm [95% CI] | "
+             "pairs | Holm p | verdict |",
+             "|---|---|---|---|---|---|---|---|---|---|"]
+    for c in pairs:
+        kind = kind_of(c.metric)
+        nd = 2 if kind in ("reach", "updates") else 1
+        lines.append(f"| {c.cell} | {NAMES.get(c.variant, c.variant)} | "
+                     f"{NAMES.get(c.reference, c.reference)} | {KIND_LABELS[kind]} | "
+                     f"{_f(c.variant_mean, nd)} | {_f(c.ref_mean, nd)} | {_diff(c, nd)} | "
+                     f"{c.n_pairs} | {_holm(c)} | {_verdict(c)} |")
+    return lines if pairs else lines[:3] + ["- none flown (so far)"]
+
+
 def probe_report(L, SC, probe: Probe, *, score: bool = False) -> List[str]:
     cells: Dict[str, Dict[str, Any]] = {}
     plan = None
@@ -514,22 +628,42 @@ def probe_report(L, SC, probe: Probe, *, score: bool = False) -> List[str]:
         got, plan = flight_cells(L, SC, flight, score=score)
         cells.update(got)
     comps = probe_comparisons(probe, cells, plan, SC)
-    by = {(c.cell, c.variant, c.metric.startswith("reached")): c for c in comps}
+    by = {(c.cell, c.variant, c.reference, kind_of(c.metric)): c for c in comps}
     arms = [(cell, v, e) for cell, vs in cells.items() for v, e in vs.items()]
     flown = sum(1 for *_, e in arms if e.scored_rows)
-    losses = [c for c in comps if c.claim and c.favours != REFERENCE and not is_ferry(c.variant)]
+    # Hover is a measure of what F's fixes act on, not an outcome: a baseline that leaves
+    # the members below the floor unserved hovers less and merges less, so its hover
+    # claims stay in the tables and the CSV, out of this list.
+    losses = [c for c in comps if c.claim and c.reference == REFERENCE
+              and c.favours != REFERENCE and not is_ferry(c.variant)
+              and kind_of(c.metric) != "hover"]
     lines = [f"# {probe.name}: {probe.title}", "",
              "Exploratory, not pre-registered (DeveloperDocs/Experiment_5_Loss_Probes_Plan.md). "
              f"Reference F. Time to tau = {TAU:g} over the trials both arms reach it, and reach "
              "at tau (exact McNemar on the paired outcomes), each with a 95% bootstrap CI. "
              "Holm per family: the baselines on time, on reach, and FX on each apart. "
              "Difference = F - arm: time, negative when F is faster; reach, positive when F "
-             "reaches tau more often.", "",
-             f"Flown and scored: {flown} of {len(arms)} arm-cells.", ""]
+             "reaches tau more often.", ""]
+    if probe.ddil_endpoints:
+        lines += ["DDIL build D0's endpoints (DeveloperDocs/FeRRy_DDIL_Unified_Plan.md), paired "
+                  "by trial and seed, each in a Holm family of its own: hover per mission "
+                  "(sim_dwell_s_mean, lower is better), updates merged per mission "
+                  "(update_yield, higher), and time to tau with a trial that missed it given "
+                  "the trial's end, so no trial is dropped (lower).", ""]
+    if probe.pairs:
+        lines += ["Other pairs, in families of their own: "
+                  + ", ".join(f"{NAMES.get(v, v)} against {NAMES.get(r, r)}"
+                              for v, r in probe.pairs)
+                  + "; the difference is the second arm minus the first.", ""]
+    lines += [f"Flown and scored: {flown} of {len(arms)} arm-cells.", ""]
     lines += ["## Where a baseline beats F", ""]
+    if probe.ddil_endpoints:
+        lines += ["On time to τ, reach, updates per mission, or time with misses at the end. "
+                  "A baseline's lower hover is listed in the cells' tables, not here: it comes "
+                  "from leaving the members below the floor unserved.", ""]
     lines += ([f"- {c.cell}: {NAMES.get(c.variant, c.variant)} "
-               f"({'reach' if c.metric.startswith('reached') else 'time to tau'}; "
-               f"Holm p {c.p_holm:.4f})" for c in losses] or ["- none (so far)"])
+               f"({KIND_LABELS[kind_of(c.metric)]}; Holm p {c.p_holm:.4f})" for c in losses]
+              or ["- none (so far)"])
     for cell, variants in cells.items():
         prefix, _, bare = cell.rpartition(": ")
         prefix = f"{prefix}: " if prefix else ""
@@ -554,13 +688,18 @@ def probe_report(L, SC, probe: Probe, *, score: bool = False) -> List[str]:
             reach = [x for x in reach if x is not None]
             times = [SC._num(r.get(f"sim_s_to_tau{TAU:g}")) for r in e.scored_rows]
             times = [x for x in times if x is not None]
-            t, r = by.get((cell, v, False)), by.get((cell, v, True))
+            t = by.get((cell, v, REFERENCE, "time"))
+            r = by.get((cell, v, REFERENCE, "reach"))
             lines.append(
                 f"| {name} | {n} | {_f(sum(reach) / len(reach) if reach else None, 2)} | "
                 f"{_f(sum(times) / len(times) if times else None)} | {_diff(t)} | "
                 f"{'' if t is None or t.p_holm is None else f'{t.p_holm:.4f}'} | {_verdict(t)} | "
                 f"{_diff(r, 2)} | {'' if r is None else r.note.split('; ')[-1]} | "
                 f"{'' if r is None or r.p_holm is None else f'{r.p_holm:.4f}'} | {_verdict(r)} |")
+        if probe.ddil_endpoints:
+            lines += _d0_table(cell, variants, borrowed, stand_in, by, SC)
+    if probe.pairs:
+        lines += _pairs_table(comps)
     OUT.mkdir(parents=True, exist_ok=True)
     (OUT / f"{probe.name}.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
     _write_csv(OUT / f"{probe.name}.csv", [c.row() for c in comps])

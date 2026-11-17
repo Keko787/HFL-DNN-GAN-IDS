@@ -8,7 +8,8 @@ launch.py's `score` command runs both steps for a stage:
    with its trial CSV as the status source, at [score] tau, written beside the
    CSV as <csv stem>_scored<suffix>.csv (the suffix names what the study adds:
    _cap<S> for an age cap, _det for 5.13's detection columns, _comp for 5.12's
-   compute columns), with the scorer's arguments in a .argv.json sidecar. A
+   compute columns, _ddil for the DDIL plan's time to tau with a miss at the
+   trial's end), with the scorer's arguments in a .argv.json sidecar. A
    scored file older than its CSV, or scored under other arguments, is scored
    again; the rest are kept.
 2. Compare. Per study, the scored rows are grouped by cell (the job's tag
@@ -50,8 +51,11 @@ SCORER = ["-m", "experiments.analysis.traces_scorer"]
 #: Every job is scored with these; each adds columns only (blank where a trace
 #: has nothing to say), so a scored row keeps every other column.
 DEFAULT_SCORER_FLAGS = ("--cost-columns", "--pair-columns")
-#: What a study may add, and the scored file's suffix for it.
-STUDY_SCORER_FLAGS = {"--detection-columns": "_det", "--compute-columns": "_comp"}
+#: What a study may add, and the scored file's suffix for it. The DDIL probes add
+#: --ddil-columns through their --set (score.s515.scorer_flags), so P1's and the
+#: campaign's scored files (no suffix) are never rescored or overwritten.
+STUDY_SCORER_FLAGS = {"--detection-columns": "_det", "--compute-columns": "_comp",
+                      "--ddil-columns": "_ddil"}
 
 
 # --------------------------------------------------------------------------- #

@@ -185,6 +185,15 @@ ended) and uplink seconds, with the device energy at the scorer's powers
 ``P_comp`` and ``P_tx`` (``--device-p-comp-w``, ``--device-p-tx-w``), in
 total and for the most loaded device.
 
+DDIL build D0 (DeveloperDocs/FeRRy_DDIL_Unified_Plan.md): time to τ with no
+trial dropped. With ``ddil_columns`` (``--ddil-columns``) :func:`ddil_columns`
+come last (:func:`ddil_report`), on the simulated clock: ``sim_s_trial_end``,
+from the fleet's first takeoff to the later of the last landing and the last
+evaluation, and per τ ``sim_s_to_<τ>_or_end``, the time to τ, or the trial's
+end for a trial that never reached it. The plan's other two endpoints, hover
+and updates per mission, are the summary's ``sim_dwell_s_mean`` and
+``update_yield``.
+
 Usage::
 
     python -m experiments.analysis.traces_scorer \\
@@ -1678,6 +1687,64 @@ def detection_report(obs: Exp4Observation, devices: Sequence[str],
 # One trial, and a whole trace root
 # --------------------------------------------------------------------------- #
 
+# --------------------------------------------------------------------------- #
+# DDIL build D0: time to τ with a miss at the trial's end
+# --------------------------------------------------------------------------- #
+
+def ddil_columns(taus: Sequence[float]) -> Tuple[str, ...]:
+    """The scorer's DDIL columns (DeveloperDocs/FeRRy_DDIL_Unified_Plan.md, build D0),
+    last in the row, and only with ``ddil_columns`` (``--ddil-columns``):
+    ``sim_s_trial_end``, then ``sim_s_to_<τ>_or_end`` for each τ. Scorer-only."""
+    return ("sim_s_trial_end",) + tuple(f"sim_s_to_{_tau_tag(t)}_or_end" for t in taus)
+
+
+@dataclass(frozen=True)
+class DdilReport:
+    """One trial's :func:`ddil_columns`; None is a blank column.
+
+    ``sim_s_trial_end`` is :func:`trial_sim_end_s`. Each τ's ``_or_end`` is the
+    trial's ``sim_s_to_<τ>`` when it reached τ, and its end when it did not, so no
+    trial leaves the time comparison (the plan: "a trial that misses τ is given the
+    trial's end time"). The end is a lower bound on a missed trial's time to τ.
+    """
+
+    sim_s_trial_end: Optional[float] = None
+    #: (τ, seconds), in the scorer's τ order
+    to_tau_or_end: Tuple[Tuple[float, Optional[float]], ...] = ()
+
+    def to_row(self) -> Dict[str, object]:
+        row: Dict[str, object] = {"sim_s_trial_end": _blank(self.sim_s_trial_end)}
+        for tau, value in self.to_tau_or_end:
+            row[f"sim_s_to_{_tau_tag(tau)}_or_end"] = _blank(value)
+        return row
+
+
+def trial_sim_end_s(obs: Exp4Observation) -> Optional[float]:
+    """The trial's end on the simulated mission clock, as :func:`tau_reach`'s
+    ``sim_s`` counts: from the fleet's first simulated takeoff to the later of
+    its last landing (``sim_end_s``) and its last evaluation (``sim_ts``), so no
+    time to τ the trial reached is later than its end. None on the wall clock,
+    or without a simulated takeoff or any simulated end."""
+    if obs.mission_clock != CLOCK_SIM:
+        return None
+    missions = _ordered(obs.missions, obs.mission_clock)
+    start = _fleet_sim_start(obs, missions)
+    if start is None:
+        return None
+    ends = [m.sim_end_s for m in missions if m.sim_end_s is not None]
+    ends += [e.sim_ts for e in obs.model_evals if e.sim_ts is not None]
+    return (max(ends) - start) if ends else None
+
+
+def ddil_report(obs: Exp4Observation, reaches: Sequence[TauReach]) -> DdilReport:
+    """:class:`DdilReport` of one trial, from its :func:`tau_reach` per τ."""
+    end = trial_sim_end_s(obs)
+    return DdilReport(
+        sim_s_trial_end=end,
+        to_tau_or_end=tuple((r.tau, r.sim_s if r.reached else end) for r in reaches),
+    )
+
+
 @dataclass(frozen=True)
 class TrialScore:
     key: TrialKey
@@ -1716,9 +1783,12 @@ class TrialScore:
     #: None leaves them out.
     detection: Optional[DetectionReport] = None
     #: Exp 5 addendum, Study 5.12: :data:`COMPUTE_COLUMNS`
-    #: (:func:`compute_report`), last, when scored with ``compute_columns``;
+    #: (:func:`compute_report`), when scored with ``compute_columns``;
     #: None leaves them out.
     compute: Optional[ComputeReport] = None
+    #: DDIL build D0: :func:`ddil_columns` (:func:`ddil_report`), last, when
+    #: scored with ``ddil_columns``; None leaves them out.
+    ddil: Optional[DdilReport] = None
 
     def provenance_key(self) -> Tuple[Tuple[str, object], ...]:
         """The provenance as a hashable, column-ordered tuple."""
@@ -1773,6 +1843,8 @@ class TrialScore:
             row.update(self.detection.to_row())
         if self.compute is not None:
             row.update(self.compute.to_row())
+        if self.ddil is not None:
+            row.update(self.ddil.to_row())
         return row
 
 
@@ -1789,6 +1861,7 @@ def score_trial(
     compute_columns: bool = False,
     device_p_comp_w: float = DEVICE_P_COMP_W,
     device_p_tx_w: float = DEVICE_P_TX_W,
+    ddil_columns: bool = False,
 ) -> TrialScore:
     """Score one retained trial directory.
 
@@ -1802,8 +1875,9 @@ def score_trial(
     ``cost_columns`` adds :data:`COST_COLUMNS` after those
     (:func:`cost_report`), ``detection_columns`` :data:`DETECTION_COLUMNS`
     (:func:`detection_report`), and ``compute_columns``
-    :data:`COMPUTE_COLUMNS` last (:func:`compute_report`, at the device powers
-    ``device_p_comp_w`` and ``device_p_tx_w``); without them the row has none
+    :data:`COMPUTE_COLUMNS` (:func:`compute_report`, at the device powers
+    ``device_p_comp_w`` and ``device_p_tx_w``), and ``ddil_columns`` the DDIL
+    plan's columns last (:func:`ddil_report`); without them the row has none
     of them.
 
     Raises :class:`~experiments.exp4.events_consumer.ClockDomainError`,
@@ -1843,13 +1917,14 @@ def score_trial(
         n_missions_target=int(mule_cfg.get("n_missions") or len(obs.missions)),
         tau=float(taus[0]),
     )
+    reaches = tuple(tau_reach(obs, t) for t in taus)
     return TrialScore(
         key=key,
         n_devices=len(devices),
         summary=summary,
         missions_empty=obs.missions_empty,
         backhaul_lost_missions=len(obs.backhaul_lost_keys),
-        tau=tuple(tau_reach(obs, t) for t in taus),
+        tau=reaches,
         ages=age_profile(obs, devices, weights=weights),
         deadlines=deadline_misses(obs),
         status=trial_status(trace_dir, status_csv).status,
@@ -1868,6 +1943,7 @@ def score_trial(
         compute=(compute_report(obs, [_read_json(p) for p in sorted(trace_dir.glob("mule-*.json"))],
                                 p_comp_w=device_p_comp_w, p_tx_w=device_p_tx_w)
                  if compute_columns else None),
+        ddil=ddil_report(obs, reaches) if ddil_columns else None,
     )
 
 
@@ -1898,6 +1974,7 @@ def score_traces(
     compute_columns: bool = False,
     device_p_comp_w: float = DEVICE_P_COMP_W,
     device_p_tx_w: float = DEVICE_P_TX_W,
+    ddil_columns: bool = False,
 ) -> List[TrialScore]:
     """Score every trial directory under ``trace_root``, in name order.
 
@@ -1906,7 +1983,8 @@ def score_traces(
     :func:`trial_status`): a timed-out or ``no_eval`` trial is not a valid
     observation, and the trial CSV's analysis drops it too. ``age_cap_s``,
     ``pair_columns``, ``cost_columns``, ``detection_columns``,
-    ``compute_columns`` and the device powers as in :func:`score_trial`.
+    ``compute_columns``, the device powers and ``ddil_columns`` as in
+    :func:`score_trial`.
     """
     index = _status_index(status_csv)
     scores: List[TrialScore] = []
@@ -1918,7 +1996,8 @@ def score_traces(
                                   detection_columns=detection_columns,
                                   compute_columns=compute_columns,
                                   device_p_comp_w=device_p_comp_w,
-                                  device_p_tx_w=device_p_tx_w))
+                                  device_p_tx_w=device_p_tx_w,
+                                  ddil_columns=ddil_columns))
     return scores
 
 
@@ -1987,6 +2066,12 @@ def main(argv=None) -> int:
                          "busy and uplink seconds with their energy (total, and the most "
                          "loaded device). "
                          "Off by default.")
+    ap.add_argument("--ddil-columns", action="store_true",
+                    help="Add the DDIL plan's columns last (build D0), on the simulated "
+                         "clock: the trial's end (from the first takeoff to the later of "
+                         "the last landing and the last evaluation) and, for each tau, the "
+                         "time to tau with a trial that missed it given its end, so no "
+                         "trial leaves the time comparison. Off by default.")
     ap.add_argument("--device-p-comp-w", type=float, default=DEVICE_P_COMP_W,
                     help=f"With --compute-columns: the device's power while it trains, W "
                          f"(default {DEVICE_P_COMP_W}, a placeholder; the row records it).")
@@ -2014,7 +2099,7 @@ def main(argv=None) -> int:
             age_cap_s=args.age_cap_s, pair_columns=args.pair_columns,
             cost_columns=args.cost_columns, detection_columns=args.detection_columns,
             compute_columns=args.compute_columns, device_p_comp_w=args.device_p_comp_w,
-            device_p_tx_w=args.device_p_tx_w,
+            device_p_tx_w=args.device_p_tx_w, ddil_columns=args.ddil_columns,
         ))
         statuses.extend(trial_statuses(root, arms=args.arms, status_csv=index))
 
