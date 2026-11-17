@@ -25,7 +25,7 @@ Sources: `results/exp5/scores/probes/DDIL1.{md,csv}` (Holm per family) and `resu
    > Appendix~\ref{app:robustness} relaxes both simplifications.
 3. **Main text, Robustness and Limitations (line ~1692)**, after "no baseline becomes significantly faster than \sysname{}-Plan.":
    > Under a stricter contact model, in which a transfer follows the channel and fails after 10~s below $\gamma_{\min}$, \sysname{}-Plan reaches the target at 17~dB in 151 instead of 261~s and stays within the budget, the baselines change little, and no baseline is significantly faster than \sysname{}-Plan in any of nine channel settings (Appendix~\ref{app:robustness}).
-4. **Appendix, after the 17 dB paragraph (line ~2035)**: a paragraph headed **A stricter contact model** (what changes, the 17 dB result, the timeout alone, the nine settings, FedEx, FeRRy-Adapt, the estimated channel) and **Table `tab:session`**:
+4. **Appendix, after the 17 dB paragraph (line ~2035)**: a paragraph headed **A stricter contact model** (what changes, the 17 dB result, that the rate following the channel gives it rather than the timeout, and mostly through the periodic interference's crests (with interference that never raises the SNR above its mean, FeRRy-Plan's hover falls only to 114 s), the nine settings, FedEx, the baselines pinned to narrow matching FeRRy-Plan (probe DDIL1N, `results/exp5/scores/probes/DDIL1N.md`), FeRRy-Adapt, the estimated channel) and **Table `tab:session`**:
 
    | Condition | FeRRy-Plan | FeRRy-Adapt | Deadline-Heuristic | FedEx | MAX-AoI, Oort, Value-Aware FL, FedCS |
    |---|---|---|---|---|---|

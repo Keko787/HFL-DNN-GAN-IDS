@@ -13,7 +13,8 @@
 % (215.46; P1.md's 215.5 had been rounded again to 216 in main_review3.tex). FeRRy-RL
 % under the stricter model (FQ-g75, and FQ-s1 retrained on it; DDIL build B10) closes
 % step 1's appendix paragraph and extends the learning section's conclusion; source:
-% results/exp5/scores/probes/DDILFQ1.{md,csv}.
+% results/exp5/scores/probes/DDILFQ1.{md,csv}. The baselines pinned to narrow under the
+% stricter model: results/exp5/scores/probes/DDIL1N.{md,csv}.
 % Nothing else differs from main_review3.tex.
 %
 % main_review3.tex (14 Nov 2026): main (20).tex with the harsh-radio limitation added in
@@ -2082,8 +2083,15 @@ one. The 17~dB weakness of \sysname{}-Plan was mostly the fixed-rate
 simplification: under the stricter model it reaches the target in 151 instead
 of 261~s (95\% CI of the paired difference 55--163~s), no longer exceeds the
 budget (30\% of missions before), and keeps 3.54 updates per round, while each
-baseline's time changes by at most 28~s. Turning on only the 10~s timeout gives
-the same gain (109~s). We ran nine settings under the stricter model: the
+baseline's time changes by at most 28~s. Turning on only the new session model
+gives the same gain (109~s); re-pricing the recorded trials' contacts with the
+rate following the channel and nothing else cuts \sysname{}-Plan's hover from
+133 to 60~s per mission, as much as the whole model, so the gain comes from the
+rate following the channel rather than from the timeout. Most of it comes from
+transfers running faster while the periodic interference is below its mean:
+re-priced with interference that never raises the SNR above its mean,
+\sysname{}-Plan's hover falls only to 114~s. We ran nine settings under the
+stricter model: the
 default channel, 11 and 17~dB, $n=2.7$, $\sigma=8$~dB, bursty interference that
 lowers the SNR by 17~dB for 10 or 40\% of the time, per-class interference at
 17~dB, and 17~dB under the stress budget. In none of them is a baseline
@@ -2091,7 +2099,12 @@ significantly faster than \sysname{}-Plan; it is significantly faster than five
 or six of the six baselines in six of them, and in the other three (40\%
 bursts, per-class 17~dB, and 17~dB under stress) no difference survives Holm's
 correction. At 17~dB, FedEx is the one baseline whose difference from
-\sysname{}-Plan is not significant (216~s). \sysname{}-Adapt reaches the target
+\sysname{}-Plan is not significant (216~s). Pinned to narrow, the band
+\sysname{}-Plan chooses, Deadline-Heuristic and FedEx reach the target within
+1~s of it (167~s on the default channel, 151~s at 17~dB), as on the recorded
+model, so its lead over the baselines comes from the band; \sysname{}-Adapt
+stays significantly faster than both on narrow, by 19 and 26~s, through its
+choice of band at each stop. \sysname{}-Adapt reaches the target
 at 17~dB in 125~s and is significantly faster than \sysname{}-Plan in seven of
 the nine settings, all but the 40\% bursts and per-class 17~dB. Estimating the
 channel instead of being given it changes \sysname{}-Plan's and

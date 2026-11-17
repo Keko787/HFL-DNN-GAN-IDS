@@ -5,7 +5,7 @@
 % the contact model's simplifications, the planner's channel parameters, the table
 % note), step 1 of the DDIL plan (the stricter contact model, Table tab:session),
 % FeRRy-RL under it (FQ-s1), no step 2, with the three overrun passages cut back, and three stray backticks before \end{document}
-% removed. Sources: results/exp5/scores/probes/{P1,DDIL1,DDILFQ1,DDIL2}.{md,csv} and
+% removed. Sources: results/exp5/scores/probes/{P1,DDIL1,DDIL1N,DDILFQ1,DDIL2}.{md,csv} and
 % results/exp5/scores/ddil/step1_beside_recorded.md.
 %
 % main_addressed.tex: main (17).tex with the review comments answered and the results
@@ -2060,8 +2060,15 @@ one. The 17~dB weakness of \sysname{}-Plan was mostly the fixed-rate
 simplification: under the stricter model it reaches the target in 151 instead
 of 261~s (95\% CI of the paired difference 55--163~s), no longer exceeds the
 budget (30\% of missions before), and keeps 3.54 updates per round, while each
-baseline's time changes by at most 28~s. Turning on only the 10~s timeout gives
-the same gain (109~s). We ran nine settings under the stricter model: the
+baseline's time changes by at most 28~s. Turning on only the new session model
+gives the same gain (109~s); re-pricing the recorded trials' contacts with the
+rate following the channel and nothing else cuts \sysname{}-Plan's hover from
+133 to 60~s per mission, as much as the whole model, so the gain comes from the
+rate following the channel rather than from the timeout. Most of it comes from
+transfers running faster while the periodic interference is below its mean:
+re-priced with interference that never raises the SNR above its mean,
+\sysname{}-Plan's hover falls only to 114~s. We ran nine settings under the
+stricter model: the
 default channel, 11 and 17~dB, $n=2.7$, $\sigma=8$~dB, bursty interference that
 lowers the SNR by 17~dB for 10 or 40\% of the time, per-class interference at
 17~dB, and 17~dB under the stress budget. In none of them is a baseline
@@ -2069,7 +2076,12 @@ significantly faster than \sysname{}-Plan; it is significantly faster than five
 or six of the six baselines in six of them, and in the other three (40\%
 bursts, per-class 17~dB, and 17~dB under stress) no difference survives Holm's
 correction. At 17~dB, FedEx is the one baseline whose difference from
-\sysname{}-Plan is not significant (216~s). \sysname{}-Adapt reaches the target
+\sysname{}-Plan is not significant (216~s). Pinned to narrow, the band
+\sysname{}-Plan chooses, Deadline-Heuristic and FedEx reach the target within
+1~s of it (167~s on the default channel, 151~s at 17~dB), as on the recorded
+model, so its lead over the baselines comes from the band; \sysname{}-Adapt
+stays significantly faster than both on narrow, by 19 and 26~s, through its
+choice of band at each stop. \sysname{}-Adapt reaches the target
 at 17~dB in 125~s and is significantly faster than \sysname{}-Plan in seven of
 the nine settings, all but the 40\% bursts and per-class 17~dB. Estimating the
 channel instead of being given it changes \sysname{}-Plan's and
@@ -2082,7 +2094,7 @@ setting. Retraining it on the stricter model, by the same procedure (ten seeds
 at discount 0.75, the median-validation seed), changes nothing measurable, and
 \sysname{}-Adapt remains 17~s faster than the retrained policy on the default
 channel. At \(N=12\), too few trials reach the target within four missions to
-compare.}\changenote{Added, with Table~\ref{tab:session}. Why: tests whether \sysname{}-Plan's 17~dB weakness came from the contact model's two simplifications (it largely did), whether the comparison with the baselines holds without them (it does), and whether the learned policy needs retraining for the stricter model (it does not).}
+compare.}\changenote{Added, with Table~\ref{tab:session}. Why: tests whether \sysname{}-Plan's 17~dB weakness came from the contact model's two simplifications (the fixed transfer rate largely did, though most of the gain needs the periodic interference to rise above its mean), whether the comparison with the baselines holds without them (it does, and pinned to narrow they match \sysname{}-Plan, so its lead is the band), and whether the learned policy needs retraining for the stricter model (it does not).}
 
 \begin{table*}[t]
 \centering
