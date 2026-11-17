@@ -27,7 +27,8 @@ the scored files the campaign wrote; Holm across each study and test. It lists e
 recorded time-to-tau claim whose favoured arm reached tau less often.
 
 --score runs the trace scorer on a probe's trial CSVs that have no scored file yet, as
-launch.py score does. Never run launch.py score with a probe's --set changes: it would
+launch.py score does, one file at a time (scripts/exp5/ddil_score_probes.py scores a
+probe's files in parallel with the launcher's job runner, then this writes the report). Never run launch.py score with a probe's --set changes: it would
 overwrite the pre-registered score files. P7 and P8 join the registry once their builds
 (B2, B3) exist. Outputs: results/exp5/scores/probes/<name>.{md,csv}.
 """

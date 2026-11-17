@@ -1,6 +1,6 @@
 # Step 1 beside the recorded numbers (decision 3)
 
-*17 Nov 2026, from the DDIL1 and P1 mission-backhaul trials' `_scored_ddil.csv` files (DDIL build D0's scorer, uncommitted at the time, on traces flown from 5a63b61d (step 1) and P1's recorded commit). Descriptive: each arm paired with itself on the same seeds, recorded physics against step 1's, with a 95% percentile bootstrap CI; no Holm, no claims. The probe reports (`results/exp5/scores/probes/DDIL1.md`) hold the paired, Holm-corrected comparisons against F. Time to tau is at tau = 0.71 with a missed trial given the trial's end.*
+*Written by `scripts/exp5/ddil_step1_beside_recorded.py` from the DDIL1 and P1 mission-backhaul trials' `_scored_ddil.csv` files (DDIL build D0's scorer; step 1 flown from 5a63b61d on 16 Nov, P1 from its recorded commit). Descriptive: each arm paired with itself on the same seeds, recorded physics against step 1's, with a 95% percentile bootstrap CI; no Holm, no claims. The probe reports (`results/exp5/scores/probes/DDIL1.md`) hold the paired, Holm-corrected comparisons against F. Time to tau is at tau = 0.71, with a missed trial given the trial's end.*
 
 
 ## default: recorded -> step 1 (step 1 - recorded [95% CI])
