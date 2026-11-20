@@ -795,19 +795,19 @@ def _band_shares(e) -> Dict[str, float]:
     return {k: v / n for k, v in acc.items()} if n else {}
 
 
-MECH_ROWS = [  # (label, stage, study, cell, variant, kind)
-    ("F (band chosen per mission)", S53, "s53x", "n6k1_knee", "F", "F"),
-    ("FX", S53, "s53x", "n6k1_knee", "FX", "FX"),
-    ("F, band pinned narrow", PINS, "s54", "n6k1_knee_1mb", "FBpnarrow", "pin"),
-    ("F, band pinned medium", PINS, "s54", "n6k1_knee_1mb", "FBpmedium", "pin"),
-    ("F, band pinned wide", PINS, "s54", "n6k1_knee_1mb", "FBpwide", "pin"),
-    ("D4 (FedEx route)", S53, "s53x", "n6k1_knee", "D4", "base"),
-    ("D2 (Oort)", S53, "s53x", "n6k1_knee", "D2", "base"),
-    ("D5 (FedCS)", S53, "s53x", "n6k1_knee", "D5", "base"),
-    ("D3 (Cui)", S53, "s53x", "n6k1_knee", "D3", "base"),
-    ("E3 (Chen)", S53, "s53x", "n6k1_knee", "E3", "base"),
-    ("D1 (MAX-AoI)", S53, "s53x", "n6k1_knee", "D1", "base"),
-    ("H1", S53, "s53x", "n6k1_knee", "H1", "base"),
+MECH_ROWS = [  # (label, stage, study, cell, variant, kind); labels are the paper's names
+    ("Ferry-Plan", S53, "s53x", "n6k1_knee", "F", "F"),
+    ("Ferry-Adapt", S53, "s53x", "n6k1_knee", "FX", "FX"),
+    ("Ferry-Plan, narrow only", PINS, "s54", "n6k1_knee_1mb", "FBpnarrow", "pin"),
+    ("Ferry-Plan, medium only", PINS, "s54", "n6k1_knee_1mb", "FBpmedium", "pin"),
+    ("Ferry-Plan, wide only", PINS, "s54", "n6k1_knee_1mb", "FBpwide", "pin"),
+    ("FedEx", S53, "s53x", "n6k1_knee", "D4", "base"),
+    ("Oort", S53, "s53x", "n6k1_knee", "D2", "base"),
+    ("FedCS", S53, "s53x", "n6k1_knee", "D5", "base"),
+    ("Value-Aware FL", S53, "s53x", "n6k1_knee", "D3", "base"),
+    ("Model-Aided RL", S53, "s53x", "n6k1_knee", "E3", "base"),
+    ("MAX-AoI", S53, "s53x", "n6k1_knee", "D1", "base"),
+    ("Deadline-Heuristic", S53, "s53x", "n6k1_knee", "H1", "base"),
 ]
 
 
@@ -825,8 +825,8 @@ def fig_mechanism(out: Path) -> None:
     H = 2.35
     fig = plt.figure(figsize=(COL2, H))
     bottom, height = 0.36, 1.72
-    ax = _axes_in(fig, COL2, H, 1.08, bottom, 2.03, height)
-    bx = _axes_in(fig, COL2, H, 3.21, bottom, 1.62, height)
+    ax = _axes_in(fig, COL2, H, 1.22, bottom, 1.93, height)
+    bx = _axes_in(fig, COL2, H, 3.25, bottom, 1.58, height)
     cx = _axes_in(fig, COL2, H, 5.57, bottom, 1.36, height)
     n = len(MECH_ROWS)
     for i, (label, stage, study, cell, var, kind) in enumerate(MECH_ROWS):
@@ -852,12 +852,11 @@ def fig_mechanism(out: Path) -> None:
     for a in (ax, bx):
         a.set_ylim(-0.6, n - 0.4)
         a.grid(axis="y", visible=False)
-    short = {"F (band chosen per mission)": "F (band chosen)"}
     ax.set_yticks(range(n))
-    ax.set_yticklabels([short.get(r[0], r[0]) for r in reversed(MECH_ROWS)])
+    ax.set_yticklabels([r[0] for r in reversed(MECH_ROWS)])
     ax.tick_params(axis="y", labelcolor=INK2)
     for lbl in ax.get_yticklabels():
-        if lbl.get_text().startswith("F (band") or lbl.get_text() == "FX":
+        if lbl.get_text() in ("Ferry-Plan", "Ferry-Adapt"):
             lbl.set_color(INK)
             lbl.set_fontweight("bold")
     bx.set_yticks(range(n))
@@ -868,7 +867,7 @@ def fig_mechanism(out: Path) -> None:
     ax.set_xlabel("(a) mission time (s), mean")
     bx.set_xlim(0, 420)
     bx.set_xticks([0, 200, 400])
-    bx.set_xlabel(r"(b) time to $\tau$ = 0.71 (s), mean, 95% CI")
+    bx.set_xlabel("(b) time to target accuracy (s), 95% CI")
     nc = len(BAND_CELLS)
     for i, (label, stage, study, cell) in enumerate(BAND_CELLS):
         y = nc - 1 - i
@@ -893,7 +892,7 @@ def fig_mechanism(out: Path) -> None:
     cx.set_ylim(-0.6, nc - 0.4)
     cx.set_xticks([0, 0.5, 1.0])
     cx.set_xticklabels(["0", "50%", "100%"])
-    cx.set_xlabel("(c) F's plans by band class")
+    cx.set_xlabel("(c) band chosen by Ferry-Plan")
     cx.grid(axis="y", visible=False)
     handles = [plt.Rectangle((0, 0), 1, 1, color=TRANSIT, label="transit"),
                plt.Rectangle((0, 0), 1, 1, color=DWELL, label="dwell"),
