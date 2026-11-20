@@ -49,6 +49,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 from matplotlib.lines import Line2D  # noqa: E402
+from matplotlib.patches import Patch  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[2]
 HERE = Path(__file__).resolve().parent
@@ -86,9 +87,14 @@ STAGE_SETS: Dict[str, Tuple[Optional[int], List[str], Optional[List[str]]]] = {
                         "s54.far_shares=[]", "s54.o1=false", "s54.n_trials=40"], ["s54"]),
     # 5.9's multi-mule cells as they were scored: 5.5 and 5.7 listed for their shared cells.
     "batch2s59x": (20, ["s59x.contact_regimes=['jittery']"], ["s59x", "s55", "s57"]),
+    # 5.3's N = 6 knee cell with two mules, for the scalability bars: flown 20 Nov 2026
+    # from a worktree at 393b246e, the commit that flew its one- and three-mule cells.
+    "batch2s53k2": (40, ["s53x.arms=['F','FX','H1','D3','D4']", "s53x.K=[2]",
+                         "s53x.budgets=['knee']", "s53x.d4_faithful=false",
+                         "s53x.h0=false"], ["s53x"]),
 }
 LAUNCH_STAGE = {"batch2fq": "batch2", "batch2s53": "batch2", "batch2pins": "batch2",
-                "batch2s59x": "batch2"}
+                "batch2s59x": "batch2", "batch2s53k2": "batch2"}
 S53 = "batch2s53"
 S59X = "batch2s59x"
 PINS = "batch2pins"
@@ -480,6 +486,93 @@ def fig_scale(out: Path) -> None:
     fig.legend(handles, labels, loc="upper center", bbox_to_anchor=(0.5, -0.03), ncol=7,
                handlelength=1.6, columnspacing=1.1)
     save(fig, out, "fig_exp5_scale")
+
+
+# The scalability figure as grouped bars, in the paper's names (advisor review, 19 Nov
+# 2026: the line panels of fig_exp5_scale were too crowded to follow). Planner time is
+# left to the text and the decision-cost table.
+BAR_ARMS = ["F", "FX", "D4", "H1", "D3"]
+BAR_NAME = {"F": "Ferry-Plan", "FX": "Ferry-Adapt", "D4": "FedEx",
+            "H1": "Deadline-Heuristic", "D3": "Value-Aware FL"}
+BAR_HATCH = {"D4": "\\\\\\\\\\", "H1": "/////", "D3": "....."}
+
+
+def _tint(color: str, keep: float) -> str:
+    """The colour mixed toward white: ``keep`` of it stays."""
+    r, g, b = (int(color[i:i + 2], 16) for i in (1, 3, 5))
+    return "#" + "".join(f"{round(255 - (255 - c) * keep):02x}" for c in (r, g, b))
+
+
+def _bar_groups(ax, labels: Sequence[str], stats_of) -> None:
+    """One group of bars per label, one bar per approach, each with its 95% CI. The two
+    Ferry variants are solid; baselines are tinted and hatched. A star: not every trial
+    reached the target."""
+    width = 0.16
+    for j, arm in enumerate(BAR_ARMS):
+        color = ARM_COLOR[arm]
+        ferry = arm in ("F", "FX")
+        for i in range(len(labels)):
+            got = stats_of(i, arm)
+            if got is None:          # a setting that was not flown
+                if j == 0:
+                    ax.text(i, 30, "not run", ha="center", va="bottom", fontsize=6.5,
+                            color=MUTED, style="italic")
+                continue
+            m, low, high, reach = got
+            x = i + (j - (len(BAR_ARMS) - 1) / 2) * width
+            ax.bar(x, m, width * 0.88, color=color if ferry else _tint(color, 0.30),
+                   edgecolor=color, linewidth=0.5, hatch=None if ferry else BAR_HATCH[arm],
+                   zorder=3)
+            ax.errorbar([x], [m], yerr=[[m - low], [high - m]], color=INK2, ls="none",
+                        elinewidth=0.6, capsize=1.1, capthick=0.6, zorder=4)
+            if reach < 0.995:
+                ax.text(x, high + 4, "*", ha="center", va="bottom", fontsize=8, color=INK,
+                        zorder=5)
+    ax.set_xticks(range(len(labels)))
+    ax.set_xticklabels(labels)
+    ax.tick_params(axis="x", length=0)
+    ax.set_ylim(0, 1080)
+    ax.grid(axis="x", visible=False)
+
+
+def fig_scale_bars(out: Path) -> None:
+    """Scalability at the knee as grouped bars: time to tau against K, one panel per
+    population (N = 6, 12, 24) on one y-axis, so every panel reads the same way."""
+    plt.rcParams["hatch.linewidth"] = 0.5
+    fig = plt.figure(figsize=(COL2, 2.2))
+    grid = fig.add_gridspec(1, 3, wspace=0.16)
+    axes = [fig.add_subplot(grid[0, i]) for i in range(3)]
+
+    # N = 6 is 5.3's, at 40 trials (its two-mule cell flown 20 Nov 2026); N = 12 and 24
+    # are 5.9's multi-mule cells, at 20.
+    ks = [1, 2, 3]
+    cells = {6: {1: (S53, "s53x", "n6k1_knee"), 2: ("batch2s53k2", "s53x", "n6k2_knee"),
+                 3: (S53, "s53x", "n6k3_knee")},
+             12: {k: (S59X, "s59x", f"n12k{k}_knee") for k in ks},
+             24: {k: (S59X, "s59x", f"n24k{k}_knee") for k in ks}}
+    for ax, (n, by_k), tag in zip(axes, cells.items(), "abc"):
+        def stats_of(i: int, arm: str, by_k=by_k):
+            if ks[i] not in by_k:
+                return None
+            e = entry(*by_k[ks[i]], arm)
+            return mean_ci(values(e, TAU_COL)) + (reach_rate(e),)
+
+        _bar_groups(ax, [str(k) for k in ks], stats_of)
+        ax.set_xlabel("drones")
+        ax.set_title(f"({tag}) {n} data sources", color=INK2, loc="left")
+        if ax is axes[0]:
+            ax.set_ylabel("time to target accuracy (s)")
+        else:
+            ax.tick_params(axis="y", labelleft=False, length=0)
+
+    handles = [Patch(facecolor=ARM_COLOR[a] if a in ("F", "FX") else _tint(ARM_COLOR[a], 0.30),
+                     edgecolor=ARM_COLOR[a], linewidth=0.5, hatch=BAR_HATCH.get(a),
+                     label=BAR_NAME[a]) for a in BAR_ARMS]
+    handles.append(Line2D([], [], ls="none", marker="$*$", ms=5, mfc=INK, mec=INK, mew=0.2,
+                          label="some trials miss the target"))
+    fig.legend(handles=handles, loc="upper center", bbox_to_anchor=(0.5, -0.02), ncol=6,
+               handlelength=1.5, handleheight=0.9, columnspacing=1.2)
+    save(fig, out, "fig_exp5_scale_bars")
 
 
 def fig_systems(out: Path) -> None:
@@ -1132,7 +1225,7 @@ def main(argv=None) -> int:
     out.mkdir(parents=True, exist_ok=True)
     style()
     figs = {"convergence": fig_convergence, "tau": fig_tau, "scale": fig_scale,
-            "systems": fig_systems, "claims": fig_claims, "compute": fig_compute,
+            "scale_bars": fig_scale_bars, "systems": fig_systems, "claims": fig_claims, "compute": fig_compute,
             "mechanism": fig_mechanism, "bands": fig_bands, "paired": fig_paired,
             "budget": fig_budget, "learning": fig_learning}
     for name, fn in figs.items():
