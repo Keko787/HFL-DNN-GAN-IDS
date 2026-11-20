@@ -106,8 +106,38 @@
 
 \maketitle
 
-% Abstract: the short hybrid of abstract_revision.md, adopted 8 Oct 2026
-% (the document keeps the earlier versions and the audit of the original).
+% Abstract: Prior to revision on 11/19
+% \begin{abstract}
+% Federated learning (FL) keeps training data on local devices, but it still
+% requires those devices to exchange model updates with a server. In disaster,
+% remote, and disrupted environments, some devices may be out of range or have
+% unreliable connections, causing their updates to be missed. UAVs can act as data
+% mules and physically carry model updates between these devices and the server,
+% but each UAV has limited mission time and its communication range affects where
+% it must fly. In this paper, We present \sysname{}, a Federated RF-aware Routing framework that selects the radio
+% band and UAV route for each mission. Before flight, \sysname{} chooses a communication
+% range and route based on device deadlines, expected communication time, and the
+% mission budget. During flight, it can change the radio band or revise the
+% remaining route when the observed channel differs from the planned condition.
+% The UAV collects device updates, carries them back to the edge server, and later
+% delivers the updated global model. We evaluate \sysname{} using a multi-process prototype that trains a real intrusion
+% detection model on CICIoT2023. The server, UAVs, and devices run as separate TCP
+% processes, while UAV movement, wireless conditions, mission time, and energy are
+% simulated. We compare \sysname{} with seven scheduling approaches, including FedEx,
+% Oort, FedCS, and a Whittle index scheduler based on update age. With six devices,
+% one UAV, a 1~MB model update, and a moderate mission budget, \sysname{} reaches the
+% target accuracy 23--32\% sooner than the baselines. The main gain comes from
+% selecting a narrow band with longer range, which greatly reduces UAV travel
+% between devices. In this setting, the baselines use the wide band; when FedEx
+% and Deadline-Heuristic are instead restricted to the same narrow band, their
+% time to target is not significantly different from \sysname{}. Under a tight budget,
+% \sysname{} also keeps updates fresher and stays within the mission budget in 71\% of
+% missions; the remaining missions exceed the budget by 33~s on average. The
+% advantage becomes smaller as model updates grow or more UAVs are added: at
+% 10~MB \sysname{} selects the wide band and its lead is no longer statistically
+% significant, while with two or three UAVs most approaches perform similarly.
+% \end{abstract}
+
 \begin{abstract}
 Federated learning (FL) \textcolor{blue}{trains a central model from data sources
 spread over a large area by sending} model updates\textcolor{blue}{, rather than raw
@@ -152,7 +182,7 @@ statistically significant, \textcolor{blue}{and} with two or three
 \end{abstract}
 
 \begin{IEEEkeywords}
-Federated learning, drone data mules, RF-aware route planning, disrupted networks, intrusion detection
+Decentralized learning, federated learning, UAV data mules, tactical edge computing, mobile relay networks
 \end{IEEEkeywords}
 
 \section{Introduction}
@@ -1633,14 +1663,17 @@ across all settings.
 \centering
 \includegraphics[width=\textwidth]{Figures/exp5/fig_exp5_scale_bars.pdf}
 \caption{\textcolor{blue}{Time to the target accuracy with one, two, and three
-drones serving (a) 6, (b) 12, and (c) 24 data sources. Bars show means with
-95\% bootstrap confidence intervals over 20 trials (40 for six data sources); a star marks a setting in which some
-trials do not reach the target.}}
+drones serving (a) 6, (b) 12, and (c) 24 data sources at each population's knee
+budget. Bars show means with 95\% bootstrap confidence intervals over 20 trials
+(40 for six data sources); a star marks a setting in which some trials do not
+reach the target.}\changenote{Changed. Why: the figure is now fig\_exp5\_scale\_bars, grouped bars with one panel per population and a new two-drone cell at six data sources; it has no planner-time panel, so the caption and the references to its panels are reworded.}
+}
 \label{fig:scalability}
 \end{figure*}
 
-The one-drone bars of Figure~\ref{fig:scalability} show how performance changes
-as the device population increases from panel (a) to panel (c). At \(N=24\), \sysname{}-Plan reaches
+\textcolor{blue}{The one-mule bars of Figure~\ref{fig:scalability}, from panel (a)
+to panel (c), show} how performance changes as the device
+population increases. At \(N=24\), \sysname{}-Plan reaches
 the target in 749~s, compared with 951~s for Deadline-Heuristic and 911~s for
 Value-Aware FL, and 752~s for FedEx. Under the stress budget,
 \sysname{}-Plan, \sysname{}-Adapt, Deadline-Heuristic, and Value-Aware FL are
@@ -1648,20 +1681,20 @@ close at 651--662~s, and the difference between \sysname{}-Plan and FedEx is
 not statistically significant. At \(N=12\), the evaluated approaches are also
 close.
 
-The planner itself remains inexpensive as the population grows. Mean planning time increases from 0.04~s at
+The planner itself remains inexpensive as the population grows\changenote{Removed: ``(Figure~\ref{fig:scalability}b)''. Why: the new figure has no planner-time panel.}. Mean planning time increases from 0.04~s at
 \(N=6\) to 1.53~s at \(N=96\), with a 95th-percentile time of 2.0~s at the
 largest setting \(N=96\). FerrySim, serves about 54--59\% of
 devices at the knee budget up to \(N=96\), showing that planner execution time
 does not become the main bottleneck.
 
 Adding mules provides another way to reduce collection time
-(Figure~\ref{fig:scalability}). \textcolor{blue}{At \(N=6\), \sysname{}-Plan takes 179, 84, and 53~s with one, two,
+(\textcolor{blue}{Figure~\ref{fig:scalability}}). \textcolor{blue}{At \(N=6\), \sysname{}-Plan takes 179, 84, and 53~s with one, two,
 and three mules, and its lead over the baselines falls from 53--83~s to 16--18~s
-and 7--10~s, no longer statistically significant beyond one mule.} At \(N=12\), \sysname{}-Plan takes \textcolor{blue}{486,} 226, and 151~s with one, two, and three mules respectively. At
+and 7--10~s, no longer statistically significant beyond one mule.}\changenote{Added. Why: the new figure includes a two-mule cell at six data sources, and the one-mule time at \(N=12\) was missing from the next sentence.} At \(N=12\), \sysname{}-Plan takes \textcolor{blue}{486,} 226, and 151~s with one, two, and three mules respectively. At
 \(N=24\), the corresponding times are 749, 327, and 198~s. The improvement
 comes from dividing the field into smaller regions that can be served at the
 same time. The advantage over other schedulers becomes smaller as more mules
-are added. At \(N=12\) with three mules, \sysname{}-Adapt's 102~s is significantly
+are added. At \(N=12\) with three mules, \sysname{}-Adapt's 102~\textcolor{blue}{s} is significantly
 faster than \sysname{}-Plan's 151~s. This suggests that decisions made during
 flight become more useful when each mule operates over a smaller region.
 
@@ -1711,8 +1744,10 @@ significantly faster than \sysname{}-Plan. Under a stricter contact model, in
 which a transfer follows the channel and fails after 10~s below
 $\gamma_{\min}$, \sysname{}-Plan reaches the target at 17~dB in 151 instead of
 261~s and stays within the budget, the baselines change little, and no baseline
-is significantly faster than \sysname{}-Plan in any of nine channel settings
-(Appendix~\ref{app:robustness}).}\changenote{Added. Why: summarises the 17~dB interference result and its re-run under a stricter contact model, where \sysname{}-Plan's 17~dB weakness largely disappears.}
+is significantly faster than \sysname{}-Plan in any of nine channel settings.
+Pinned to \sysname{}-Plan's narrow band, Deadline-Heuristic and FedEx match it,
+so that lead comes from the band, while \sysname{}-Adapt stays 19--26~s faster
+(Appendix~\ref{app:robustness}).}\changenote{Added. Why: summarises the 17~dB interference result and its re-run under a stricter contact model, where \sysname{}-Plan's 17~dB weakness largely disappears, and shows the lead over the baselines is the band: pinned to narrow, they match \sysname{}-Plan.}
 
 The range and field-size sensitivity experiments reach the same conclusion.
 Reducing the narrow-class range from 232~m to 180 or 120~m preserves a
