@@ -88,12 +88,23 @@ about three weeks of work follow, in the table's order.\par\vspace{2pt}
     & One command reruns all & Not started \\
   \bottomrule
 \end{tabularx}}\par\vspace{2pt}
-\emph{Scope changes since the proposal} (reasons under Problems): the routing
+\emph{Scope changes since the proposal} (reasons under Problems, below): the routing
 reduction starts from grid graphs, not the traveling salesman problem;
 NP-completeness is claimed for rounded flying times only; a deadline binds the
 end of a stop, not the drone's arrival; a setting's rate steps down with
 distance. \emph{Fallbacks:} sizes T2 cannot solve use the upper bound; if T3
 yields no proved bound, the report gives the largest gap found.
+
+\emph{Problems and failed approaches:} (1) The proposal's reduction from the
+Euclidean traveling salesman problem [2] fails under rounding, which
+lengthens different tours by different amounts; on a grid a leg takes time
+$1$ or at least $\sqrt2$, a gap that survives rounding (part 2 of the proof
+outline below). (2) The proposal timed a deadline at the drone's arrival; the
+planner's code times it at the end of the stop and steps rates down with
+distance, and \PLAN{} follows the code. (3) Membership in NP could not be
+shown for exact times, and the knapsack reduction does not reach FeRRy's own
+instances (parts 1 and 3 below). (4) Open: the proofs are complete on paper,
+but a machine check that no-instances convert to no-instances needs T2.
 
 \head{Evidence of progress.}
 \begin{itemize}
@@ -108,11 +119,11 @@ yields no proved bound, the report gives the largest gap found.
       \item \emph{\PLAN{} with rounded times is in NP.} A plan lists at most
         $n$ stops; reach is tested on squared distances, and rounded times are
         rational numbers, compared exactly. Exact times would need comparing
-        sums of square roots, with no known polynomial method [2].
+        sums of square roots, with no known polynomial method [3].
       \item \emph{Choosing the route alone is NP-hard: a reduction from
         Hamiltonian cycle on grid graphs} (points with whole-number
         coordinates, joined when $1$ apart; is there a cycle through every
-        point once? NP-complete [3]). Put a device with importance $1$, no
+        point once? NP-complete [4]). Put a device with importance $1$, no
         data and no deadline on each of the $n$ points; make the points the
         sites and one of them the dock; give the one setting reach
         $\tfrac12$, so each device is served only from its own point; let a
@@ -125,7 +136,7 @@ yields no proved bound, the report gives the largest gap found.
         most $n$, so this hardness is strong.
       \item \emph{Choosing the devices alone is NP-hard: a reduction from
         knapsack} (do some items, each with a size and a value, fit a
-        capacity and reach a target value? [4]). Make the dock the only site,
+        capacity and reach a target value? [5]). Make the dock the only site,
         with every device in reach; each item becomes a device that sends for
         the item's size and has its value as importance; $L$ is the capacity
         and $W$ the target value. The drone never flies, so valid plans are
@@ -137,8 +148,8 @@ yields no proved bound, the report gives the largest gap found.
         so for FeRRy the hardness lies in the route.
     \end{enumerate}
     \emph{Easy cases:} with a single site, or at most $k$ stops for fixed
-    $k$, dynamic programming solves \PLAN{} in pseudo-polynomial time [5];
-    with equal sending times a single site is solved greedily [6].
+    $k$, dynamic programming solves \PLAN{} in pseudo-polynomial time [6];
+    with equal sending times a single site is solved greedily [7].
   \item \textbf{Implementation and results.} In Python: \PLAN{} with a plan
     checker that validates a plan and adds up its importance (19 tests), and
     code that builds both reductions' instances (39 tests). All 58 pass; on
@@ -156,37 +167,27 @@ yields no proved bound, the report gives the largest gap found.
     $=6{,}480$ cases, with 95\% confidence intervals. For Q3, the setting the
     planner picks is compared with T4's prediction.
   \item \textbf{Literature.} Without data or deadlines \PLAN{} is
-    orienteering (most value on a round trip within a time limit) [7],
-    NP-hard with constant-factor approximations [8]; part 2 adds that it
+    orienteering (most value on a round trip within a time limit) [8],
+    NP-hard with constant-factor approximations [9]; part 2 adds that it
     stays strongly NP-hard for points in the plane with rounded times. With
-    stops anywhere it would be a TSP with neighbourhoods [9], which no exact
-    method solves at scale. T2 follows the Held--Karp dynamic program [10], and T4 a formula
-    for the length of a shortest tour through random points [11].
+    stops anywhere it would be a TSP with neighbourhoods [10], which no exact
+    method solves at scale. T2 follows the Held--Karp dynamic program [11], and T4 a formula
+    for the length of a shortest tour through random points [12].
 \end{itemize}
-
-\head{Problems and failed approaches.} (1) The proposal's reduction from the
-Euclidean traveling salesman problem [12] fails under rounding, which
-lengthens different tours by different amounts; the grid's gap between $1$
-and $\sqrt2$ survives it. (2) The proposal timed a deadline at the drone's
-arrival; the planner's code times it at the end of the stop and steps rates
-down with distance, and \PLAN{} follows the code. (3) Membership in NP could not be shown for exact times,
-and the knapsack reduction does not reach FeRRy's own instances (parts 1 and
-3). (4) Open: the proofs are complete on paper, but a machine check that
-no-instances convert to no-instances needs T2.
 
 \head{Sources} ($^*$ added since the proposal).
 {\footnotesize
 [1] Kostage et al., FeRRy, NOMS 2027 draft.
-[2]$^*$ Garey, Graham, Johnson, STOC 1976.
-[3]$^*$ Itai, Papadimitriou, Szwarcfiter, \emph{SIAM J. Comput.} 11(4), 1982.
-[4] Garey, Johnson, \emph{Computers and Intractability}, 1979.
-[5]$^*$ Lawler, Moore, \emph{Management Sci.} 16(1), 1969.
-[6]$^*$ Cormen et al., \emph{Introduction to Algorithms}, 3rd ed., \S16.5.
-[7] Golden, Levy, Vohra, \emph{Naval Res. Logistics} 34(3), 1987.
-[8] Blum et al., \emph{SIAM J. Comput.} 37(2), 2007.
-[9] Dumitrescu, Mitchell, \emph{J. Algorithms} 48(1), 2003.
-[10] Held, Karp, \emph{J. SIAM} 10(1), 1962.
-[11] Beardwood, Halton, Hammersley, \emph{Proc. Camb. Phil. Soc.} 55(4), 1959.
-[12] Papadimitriou, \emph{Theor. Comp. Sci.} 4(3), 1977.\par}
+[2] Papadimitriou, \emph{Theor. Comp. Sci.} 4(3), 1977.
+[3]$^*$ Garey, Graham, Johnson, STOC 1976.
+[4]$^*$ Itai, Papadimitriou, Szwarcfiter, \emph{SIAM J. Comput.} 11(4), 1982.
+[5] Garey, Johnson, \emph{Computers and Intractability}, 1979.
+[6]$^*$ Lawler, Moore, \emph{Management Sci.} 16(1), 1969.
+[7]$^*$ Cormen et al., \emph{Introduction to Algorithms}, 3rd ed., \S16.5.
+[8] Golden, Levy, Vohra, \emph{Naval Res. Logistics} 34(3), 1987.
+[9] Blum et al., \emph{SIAM J. Comput.} 37(2), 2007.
+[10] Dumitrescu, Mitchell, \emph{J. Algorithms} 48(1), 2003.
+[11] Held, Karp, \emph{J. SIAM} 10(1), 1962.
+[12] Beardwood, Halton, Hammersley, \emph{Proc. Camb. Phil. Soc.} 55(4), 1959.\par}
 
 \end{document}
