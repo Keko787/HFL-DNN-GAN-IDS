@@ -64,22 +64,28 @@ speed. \emph{A plan is valid} if every stop finishes by the deadline of each
 device it serves and the drone is back at the dock by time $L$. \PLAN{} asks
 whether a valid plan serves total importance at least $W$.
 
-\head{Status.} \emph{Completed since the proposal:} phases 1 and 2 below; Q1
-is answered, with T1's proof written in full in the report draft.
-\emph{Remaining:} phases 3 to 5, for Q2 and Q3; none is started.
-\emph{Updated plan:} work pauses until the FeRRy paper's deadline on 30
-November, then
-about three weeks of work follow, in the table's order.\par\vspace{2pt}
+\head{Project Progression Status.}\par\vspace{2pt}
+% \textbf{\emph{Completed since the proposal:}} phases 1 and 2 below; Q1
+% is answered, with T1's proof written in full in the report draft.
+% \textbf{\emph{Remaining:}} phases 3 to 5, for Q2 and Q3; none is started.
+% \textbf{\emph{Updated plan:}} work pauses until the FeRRy paper's deadline on 30
+% November, then
+% about three weeks of work follow, in the table's order.\par\vspace{2pt}
 {\small\noindent
 \begin{tabularx}{\linewidth}{@{}lXll@{}}
   \toprule
   Phase & Work & Done when & Status \\
   \midrule
+  \multicolumn{4}{@{}p{0.98\linewidth}}{\textbf{Completed since the proposal.}
+    Q1 is answered; T1's proof is written in full in the report draft.} \\
   1. Problem & \PLAN{} matched to the planner's code; a plan checker
     & Right on 5 hand-built plans & \textbf{Done} \\
   2. Hardness (T1) & The two reductions below; easy cases; reductions coded
     & Proved in both directions & \textbf{Done} \\
   \midrule
+  \multicolumn{4}{@{}p{0.98\linewidth}}{\textbf{Remaining,} for Q2 and Q3.
+    Work resumes after the FeRRy paper's deadline on 30 November and takes
+    about three weeks, in this order.} \\
   3. Exact solver (T2) & Test layouts; exact solver; planner harness; upper
     bound & Equals brute-force search & Not started \\
   4. Bounds (T3, T4) & Grouping bound; route-search bad cases; tipping point
@@ -88,14 +94,14 @@ about three weeks of work follow, in the table's order.\par\vspace{2pt}
     & One command reruns all & Not started \\
   \bottomrule
 \end{tabularx}}\par\vspace{2pt}
-\emph{Scope changes since the proposal} (reasons under Problems, below): the routing
+\textbf{\emph{Scope changes since the proposal}} (reasons under Problems, below): the routing
 reduction starts from grid graphs, not the traveling salesman problem;
 NP-completeness is claimed for rounded flying times only; a deadline binds the
 end of a stop, not the drone's arrival; a setting's rate steps down with
 distance. \emph{Fallbacks:} sizes T2 cannot solve use the upper bound; if T3
 yields no proved bound, the report gives the largest gap found.
 
-\emph{Problems and failed approaches:} (1) The proposal's reduction from the
+\textbf{\emph{Problems and failed approaches:}} (1) The proposal's reduction from the
 Euclidean traveling salesman problem [2] fails under rounding, which
 lengthens different tours by different amounts; on a grid a leg takes time
 $1$ or at least $\sqrt2$, a gap that survives rounding (part 2 of the proof
