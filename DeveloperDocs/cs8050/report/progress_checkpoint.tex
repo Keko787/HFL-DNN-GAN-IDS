@@ -35,45 +35,41 @@ K.~Kostage (solo project) \hfill 20 November 2026
 \head{The project.} FeRRy [1] is a federated-learning system for devices with
 no network: each device trains a shared model on its own data, and a drone
 flies from a dock, collects their model updates and carries them back. Before
-each flight, its \emph{planner} chooses one of three radio settings and a
-route. The wide-band setting sends fast but reaches about 60\,m; the
-narrow-band one sends slowly but reaches about 232\,m (a medium one lies
-between), so the setting decides where the drone must stop. The planner tries
-every plan only up to 6 devices. Beyond that it uses two heuristics with no
-guarantee: a \emph{grouping rule} that places stops (one stop for the most
-urgent device and every device in reach of it, repeated) and a \emph{route
-search} that starts from a short loop through the stops and improves it by
+each flight its \emph{planner} chooses one of three radio settings and a
+route. The widest-band setting sends fast but reaches about 60\,m; the
+narrowest sends slowly but reaches about 232\,m, so the setting decides where
+the drone must stop. The planner tries every plan only up to 6 devices; beyond
+that it uses two heuristics with no guarantee, a \emph{grouping rule} that
+places the stops and a \emph{route search} that improves a first route by
 small changes.
 \textbf{Q1:} how hard is the planning problem? (\textbf{T1}, a hardness
 proof.)
-\textbf{Q2:} how far is the planner from the best plan at 7 to 20 devices?
-(\textbf{T2}, an exact solver for small cases, and \textbf{T3}, worst-case
-bounds on the two heuristics.)
-\textbf{Q3:} for which numbers of devices, field sizes and data sizes does the
-long-reach setting give the better plan? (\textbf{T4}, a formula for that
-tipping point.)
+\textbf{Q2:} how far is the planner from the best plan beyond 6 devices?
+(\textbf{T2}, an exact solver; \textbf{T3}, worst-case bounds on the
+heuristics.)
+\textbf{Q3:} when does the long-reach setting give the better plan?
+(\textbf{T4}, a formula for that tipping point.)
 
-\head{The problem, \PLAN.} A simplified form of what the planner solves,
-checked against its code. \emph{Input:} $n$ devices, each with a position, an
-importance (the value of serving it), a deadline and a data size; radio
-settings, each with a reach and a sending rate that steps down as a device
-gets farther from the drone; a list of \emph{sites} where the drone may stop
-(for FeRRy, the stops its grouping rule proposes); the dock, the drone's
-speed, a time limit $L$ and a target $W$. \emph{A plan} chooses one setting
-and an ordered list of stops; each stop is a site and a chosen, non-empty set
-of devices within reach of it, and no device is served twice. The drone leaves
-the dock at time $0$. Devices at a stop send one after another, each for its
-data size divided by its rate; flying takes distance divided by speed. \emph{A
-plan is valid} if every stop finishes by the deadline of each device it serves
-and the drone is back at the dock by time $L$. \PLAN{} asks whether a valid
-plan serves total importance at least $W$.
+\head{The problem, \PLAN.} A simplified form of what the planner solves.
+\emph{Input:} $n$ devices, each with a position, an importance, a deadline
+and a data size; radio settings, each with a reach and a sending rate that
+steps down with distance; a list of
+\emph{sites} where the drone may stop (for FeRRy, the stops its grouping rule
+proposes); the dock, the drone's speed, a time limit $L$ and a target $W$.
+\emph{A plan} chooses one setting and an ordered list of stops, each a site
+and a chosen set of devices in reach of it; no device is served twice. The
+drone leaves the dock at time $0$; devices at a stop send one after another,
+each for its data size divided by its rate; flying takes distance divided by
+speed. \emph{A plan is valid} if every stop finishes by the deadline of each
+device it serves and the drone is back at the dock by time $L$. \PLAN{} asks
+whether a valid plan serves total importance at least $W$.
 
-\head{Status.} \emph{Completed since the proposal:} phases 1 and 2 in the
-table. Q1 is answered: T1's proof is written in full in the report draft and
-outlined below. \emph{Remaining:} phases 3 to 5, which answer Q2 and Q3; none
-is started. \emph{Updated plan:} work pauses until a paper deadline on 30
-November, then about three weeks of work follow, in the table's
-order.\par\vspace{2pt}
+\head{Status.} \emph{Completed since the proposal:} phases 1 and 2 below; Q1
+is answered, with T1's proof written in full in the report draft.
+\emph{Remaining:} phases 3 to 5, for Q2 and Q3; none is started.
+\emph{Updated plan:} work pauses until the FeRRy paper's deadline on 30
+November, then
+about three weeks of work follow, in the table's order.\par\vspace{2pt}
 {\small\noindent
 \begin{tabularx}{\linewidth}{@{}lXll@{}}
   \toprule
@@ -84,7 +80,7 @@ order.\par\vspace{2pt}
   2. Hardness (T1) & The two reductions below; easy cases; reductions coded
     & Proved in both directions & \textbf{Done} \\
   \midrule
-  3. Exact solver (T2) & Test layouts; exact solver; planner run code; upper
+  3. Exact solver (T2) & Test layouts; exact solver; planner harness; upper
     bound & Equals brute-force search & Not started \\
   4. Bounds (T3, T4) & Grouping bound; route-search bad cases; tipping point
     & Proved, or counterexample & Not started \\
@@ -92,109 +88,91 @@ order.\par\vspace{2pt}
     & One command reruns all & Not started \\
   \bottomrule
 \end{tabularx}}\par\vspace{2pt}
-\emph{Scope changes since the proposal} (the reasons are under Problems
-below): the routing reduction starts from Hamiltonian cycle on grid graphs,
-not the traveling salesman problem; NP-completeness is claimed only when
-flying times are rounded; a deadline now binds the end of the whole stop, not
-the drone's arrival; and a setting's sending rate steps down with distance, as
-in the planner's code, where the proposal had one rate per setting.
-\emph{Fallbacks:} if T2 cannot solve cases up to 20 devices, the sizes it
-misses use the upper bound; if T3 finds no provable bound on the route search,
-the report gives the largest gap found.
+\emph{Scope changes since the proposal} (reasons under Problems): the routing
+reduction starts from grid graphs, not the traveling salesman problem;
+NP-completeness is claimed for rounded flying times only; a deadline binds the
+end of a stop, not the drone's arrival; a setting's rate steps down with
+distance. \emph{Fallbacks:} sizes T2 cannot solve use the upper bound; if T3
+yields no proved bound, the report gives the largest gap found.
 
 \head{Evidence of progress.}
 \begin{itemize}
   \item \textbf{Proof outline (T1).} \emph{Claim:} \PLAN{} is strongly
     NP-hard, and strongly NP-complete when each leg's flying time is rounded
-    up to a multiple of a fixed step $\delta$. \emph{Strongly} means hard
-    even when every number in the input is at most polynomial in $n$, so
-    unless P${}={}$NP there is no pseudo-polynomial algorithm (one polynomial
-    in the numbers' values, like knapsack's dynamic program). Parts 2 and 3
-    are reductions: each converts any instance of a known NP-complete problem
-    into an instance of \PLAN{} with the same answer.
+    up to a multiple of a fixed step $\delta$. \emph{Strongly}: hard even
+    when every number in the input is at most polynomial in $n$, so unless
+    P${}={}$NP no algorithm is polynomial in the numbers' values (as
+    knapsack's dynamic program is). Parts 2 and 3 are reductions from known
+    NP-complete problems.
     \begin{enumerate}
-      \item \emph{Plans are quick to check, so \PLAN{} with rounded times is
-        in NP.} A plan lists at most $n$ stops and their devices. Reach is
-        tested by comparing squared distances, and rounded flying times make
-        every arrival and finishing time a rational number, compared exactly. Exact
-        times would need comparing sums of square roots, with no known
-        polynomial method [2], so NP-completeness is for rounded times only.
+      \item \emph{\PLAN{} with rounded times is in NP.} A plan lists at most
+        $n$ stops; reach is tested on squared distances, and rounded times are
+        rational numbers, compared exactly. Exact times would need comparing
+        sums of square roots, with no known polynomial method [2].
       \item \emph{Choosing the route alone is NP-hard: a reduction from
-        Hamiltonian cycle on grid graphs.} A grid graph is a finite set of points with
-        whole-number coordinates, joined when exactly $1$ apart; whether a
-        cycle visits every point once is NP-complete [3]. Put a
-        device with importance $1$, no data and no deadline on each of the
-        $n$ points; make the points the sites and one of them the dock; use
-        one setting of reach $\tfrac12$, so a device is served only from its
-        own point; let a unit of distance take one time unit (equal to
-        $\delta$ when times are rounded); set $L=n$ and $W=n$. A leg between
-        joined points takes time $1$; points not joined are at least
-        $\sqrt2$ apart, so a leg between them takes longer ($2$ once rounded
-        up). A plan worth $n$ visits all $n$ points and returns, so it has at
-        least $n$ legs; to finish by time $n$ every leg must take time $1$,
-        so the route is a Hamiltonian cycle. Conversely, a Hamiltonian cycle
-        flown from the dock is a valid plan worth $n$. All numbers are at
+        Hamiltonian cycle on grid graphs} (points with whole-number
+        coordinates, joined when $1$ apart; is there a cycle through every
+        point once? NP-complete [3]). Put a device with importance $1$, no
+        data and no deadline on each of the $n$ points; make the points the
+        sites and one of them the dock; give the one setting reach
+        $\tfrac12$, so each device is served only from its own point; let a
+        unit of distance take one time unit (with $\delta$ as that unit when
+        rounding); set $L=n$ and $W=n$. A leg between joined points takes
+        time $1$, and any other leg at least $\sqrt2$ ($2$ once rounded). A
+        plan worth $n$ visits all $n$ points and returns within time $n$, so
+        it has exactly $n$ legs, each of time $1$: a Hamiltonian cycle. Conversely such a cycle,
+        flown from the dock, is a valid plan worth $n$. All numbers are at
         most $n$, so this hardness is strong.
       \item \emph{Choosing the devices alone is NP-hard: a reduction from
-        knapsack}
-        (do some items, each with a size and a value, fit a capacity and
-        reach a target value? NP-complete [4]). Make the dock the only site,
-        with every device in reach. Each item becomes a device that sends
-        for the item's size and has its value as importance; $L$ is the
-        capacity and $W$ the target value. The drone never flies, so valid
-        plans are exactly the sets of items that fit. This hardness is only
-        weak (knapsack has a pseudo-polynomial algorithm), and it needs many
-        different sending times. FeRRy has few: every device sends the same
-        amount of data, and a setting has at most 15 rates, so one stop is
-        solved in polynomial time by trying every count of devices per rate.
-        Part 2, in contrast, still works with equal data and FeRRy's three
-        settings (space the grid wider than the longest reach), so the route
-        is what makes FeRRy's own planning hard.
+        knapsack} (do some items, each with a size and a value, fit a
+        capacity and reach a target value? [4]). Make the dock the only site,
+        with every device in reach; each item becomes a device that sends for
+        the item's size and has its value as importance; $L$ is the capacity
+        and $W$ the target value. The drone never flies, so valid plans are
+        exactly the sets of items that fit. This hardness is only weak
+        (knapsack has a pseudo-polynomial algorithm) and needs many different
+        sending times. FeRRy has few: every device sends the same amount of
+        data, at one of the at most 15 rates of its setting, so one stop is
+        solved in polynomial time. Part 2 still works with equal data and FeRRy's three settings,
+        so for FeRRy the hardness lies in the route.
     \end{enumerate}
-    \emph{Easy special cases.} With a single site, or at most $k$ stops for a
-    fixed $k$, dynamic programming solves \PLAN{} in pseudo-polynomial time
-    (single site: the scheduling recursion of [5]); if sending times are also
-    equal, a single site is solved greedily, as a matroid [6].
+    \emph{Easy cases:} with a single site, or at most $k$ stops for fixed
+    $k$, dynamic programming solves \PLAN{} in pseudo-polynomial time [5];
+    with equal sending times a single site is solved greedily [6].
   \item \textbf{Implementation and results.} In Python: \PLAN{} with a plan
     checker that validates a plan and adds up its importance (19 tests), and
-    code that builds both reductions' instances (39 tests). All 58 pass: on
-    an 8-point grid graph, for example, a Hamiltonian cycle finishes exactly
-    at time $L$ and a route with one diagonal leg is rejected. The planner is
-    not measured yet; that needs T2.
-  \item \textbf{Experiment design} (Q2, Q3). Gap $=1-{}$importance served by
-    the planner\,/\,importance served by the best plan. Sizes: 6, 7, 8, 10,
-    12, 14, 16, 18 and 20 devices against T2 (6 is a baseline, where the
-    planner still tries everything), and 24, 48 and 96 against a
+    code that builds both reductions' instances (39 tests). All 58 pass; on
+    an 8-point grid graph, a Hamiltonian cycle finishes exactly at time $L$
+    and a route with a diagonal leg is rejected. The planner is not measured
+    yet; that needs T2.
+  \item \textbf{Experiment design} (Q2, Q3). Gap $=1-{}$importance the
+    planner serves\,/\,importance the best plan serves, both choosing among
+    the same sites. Nine sizes from 6 to 20 devices (6 is a baseline: the planner
+    still tries everything) are compared with T2; 24, 48 and 96 with a
     linear-programming upper bound on the best plan, which can only overstate
-    the gap. The best plan is found over two site lists: the planner's own
-    stops, which shows what the route search loses, and a fuller list adding
-    every device position and every crossing of two devices' reach circles,
-    which also shows what the grouping rule loses. Layout families: spread
-    out, clustered, or constructed to defeat the heuristics; fields of 200,
-    300 and 500\,m; a loose or a tight time limit. In all, $12$ sizes
-    $\times\,3\times3\times2\times30$ random layouts $=6{,}480$ cases, with
-    95\% confidence intervals, reruns with one heuristic off, and, for Q3,
-    the setting the planner picks against the one T4 predicts.
-  \item \textbf{Literature.} With no data or deadlines \PLAN{} is
+    the gap. Layouts are spread out, clustered, or built to defeat the
+    heuristics, on fields of 200, 300 and 500\,m, with a loose or a tight time
+    limit: $12$ sizes $\times\,3\times3\times2\times30$ layouts
+    $=6{,}480$ cases, with 95\% confidence intervals. For Q3, the setting the
+    planner picks is compared with T4's prediction.
+  \item \textbf{Literature.} Without data or deadlines \PLAN{} is
     orienteering (most value on a round trip within a time limit) [7],
-    NP-hard with constant-factor approximations [8]; part 2 shows the
-    hardness survives straight-line travel times. If the drone could stop
-    anywhere, \PLAN{} would be a TSP with neighbourhoods [9], which no exact
-    method solves at scale; hence the site list. T2 follows the Held--Karp
-    dynamic program [10]; T4 uses a formula for the length of a shortest
-    tour through random points [11].
+    NP-hard with constant-factor approximations [8]; part 2 adds that it
+    stays strongly NP-hard for points in the plane with rounded times. With
+    stops anywhere it would be a TSP with neighbourhoods [9], which no exact
+    method solves at scale. T2 follows the Held--Karp dynamic program [10], and T4 a formula
+    for the length of a shortest tour through random points [11].
 \end{itemize}
 
-\head{Problems and failed approaches.} (1) The proposal planned to reduce from
-the Euclidean traveling salesman problem [12]; rounding lengthens different
-tours by different amounts, which breaks it, whereas the grid's gap between
-$1$ and $\sqrt2$ survives. (2) Membership in NP could not be shown
-for exact times (part 1). (3) The knapsack reduction does not cover FeRRy's
-own instances (part 3). (4) The proposal required the drone to arrive at a device
-before its deadline; the planner's code requires the whole stop to finish by
-then, and \PLAN{} now follows the code. (5) Open: the proofs are complete on
-paper, but a machine check that no-instances convert to no-instances needs
-T2.
+\head{Problems and failed approaches.} (1) The proposal's reduction from the
+Euclidean traveling salesman problem [12] fails under rounding, which
+lengthens different tours by different amounts; the grid's gap between $1$
+and $\sqrt2$ survives it. (2) The proposal timed a deadline at the drone's
+arrival; the planner's code times it at the end of the stop and steps rates
+down with distance, and \PLAN{} follows the code. (3) Membership in NP could not be shown for exact times,
+and the knapsack reduction does not reach FeRRy's own instances (parts 1 and
+3). (4) Open: the proofs are complete on paper, but a machine check that
+no-instances convert to no-instances needs T2.
 
 \head{Sources} ($^*$ added since the proposal).
 {\footnotesize
