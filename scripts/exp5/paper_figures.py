@@ -1032,11 +1032,11 @@ def fig_budget(out: Path) -> None:
     save(fig, out, "fig_exp5_budget")
 
 
-LEARN_ROWS = [  # (label, variant, has FeRRy's plan)
-    ("F (plan, committed in flight)", "F", True),
-    ("FX (plan + fixed per-stop rule)", "FX", True),
-    ("FQ (plan + learned per-stop score)", "FQ-g75", True),
-    ("E3 (learned scheduler, no plan)", "E3", False),
+LEARN_ROWS = [  # (label, variant, has FeRRy's plan); labels lead with the paper's names
+    ("Ferry-Plan\n(plan, committed in flight)", "F", True),
+    ("Ferry-Adapt\n(plan + fixed per-stop rule)", "FX", True),
+    ("Ferry-RL\n(plan + learned per-stop score)", "FQ-g75", True),
+    ("Model-Aided RL\n(learned scheduler, no plan)", "E3", False),
 ]
 
 
@@ -1082,8 +1082,8 @@ def fig_learning(out: Path) -> None:
     ax.set_yticklabels([r[0] for r in reversed(LEARN_ROWS)])
     ax.tick_params(axis="y", labelcolor=INK2)
     ax.set_xlim(0, 500)
-    ax.set_xlabel(r"simulated time to $\tau$ = 0.71 (s)")
-    ax.set_title(r"(a) time to $\tau$, mean and 95% CI", color=INK2, loc="left")
+    ax.set_xlabel("simulated time to target accuracy (s)")
+    ax.set_title("(a) time to target accuracy, mean and 95% CI", color=INK2, loc="left")
     ax.grid(axis="y", visible=False)
     bx.set_xlim(0, 330)
     bx.set_xlabel("simulated mission time at the knee (s), mean")
